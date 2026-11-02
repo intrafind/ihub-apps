@@ -293,6 +293,26 @@ browser → vendor consent → GET /api/integrations/oauth/callback (or its alia
 
 **In the chat.** A tool whose caller has no usable connection returns `INTEGRATION_AUTH_REQUIRED` before it calls the vendor. The chat draws one **Connect card** for it — the same for Jira, a cloud storage provider and a per-user MCP server: the integration, why iHub needs to act as the user for this request, the permissions (its enabled actions grouped as read / write), where the user will sign in, **Connect** and **Not now**. For a connection that expired or lacks a permission, the card says why and what changes, and offers **Reconnect**. After a successful connect the browser comes back to the same chat and the request that needed the connection is retried **once**: the chat sends one follow-up message ("I connected Jira. Please try again."), only when that answer is still the last one and has not been retried before. A call that failed inside the adapter or on the transport never produced a card and is never retried automatically, because a write may already have happened. The file browsers of the storage providers show the same card when they are not connected.
 
+### Settings → Integrations
+
+`/settings/integrations` (user menu → **Integrations**) is the user's one place for integrations (#2922). **Available to you** lists every integration the user's groups allow (`GET /api/integrations`), whether or not it needs a sign-in, one row each: logo, name, who iHub acts as, a short summary of what it can do with its effects (read · write), and the one action the user can take.
+
+| Status line | When | Action |
+| --- | --- | --- |
+| Connected as _account_ (· expires in _N days_) | personal, connected; the expiry only when iHub cannot renew the access itself | Disconnect |
+| Not connected | personal, no connection | Connect |
+| Reconnect needed · _why_ | personal, expired or revoked, or a new permission is needed | Reconnect |
+| Signed in via SSO | iFinder, iAssistant: the user's iHub sign-in | — |
+| Runs as service account (_group_) | an account the admin configured; the group is the user's group that grants it, when one does by name | — |
+| Shared key | an API key the admin configured | — |
+| No sign-in needed | | — |
+| Unavailable · _what an admin must do_ | unreachable, the shared key refused or expired, a credential missing, the sign-in not set up — the same signal as the admin list | — |
+
+- **Search**, a **category** filter (the definitions' categories) and a **Needs attention** filter (reconnect needed, unavailable, or access that ends within seven days without renewing).
+- A row opens its **detail**: how it runs for the user (signed in as, connected since, when access ends or that it renews, last used, where the user signs in, the group that shares it), what it can do (each action with its effect badge), what the user allowed (the actions grouped by effect, the technical scopes behind a disclosure) and the apps that use it (links).
+- **Connect** and **Reconnect** use the one connect flow and come back to this page, which shows the result ("Jira connected successfully.") in a live region. **Disconnect** asks first, then reloads that one entry, so the row changes without a page reload.
+- **Sign-in for background tasks** shows the stored sign-in iFinder calls use in the OIDC token-exchange mode (authorize, revoke). **Access to iHub** (connected apps, personal API keys, the Outlook add-in) is unchanged.
+
 ### Headless runs
 
 Scheduled tasks (and workflows) run as their owner: a tool that needs a connection resolves the **owner's** own connection when it is called, never anybody else's. A run is not refused up front because its app offers a tool whose integration the owner has not connected — most runs never call most of the app's tools. A tool call that finds no usable connection returns a structured result instead of throwing:
@@ -534,25 +554,32 @@ Every write is audited with resource `integration`; connects and disconnects wit
   "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
   "description": "…",
   "icon": null,                              // an http(s) icon URL of the definition, else null
+  "categories": ["ticketing"],              // the definition's categories (Settings → Integrations filters by them)
   "capabilities": ["tools"],                 // from the definition: tools, files, scopes, sources, search, views, model
   "actions": [                               // the enabled actions the models are offered
     { "name": "searchTickets", "title": "Search issues", "description": "…", "sideEffect": "read" }
   ],
   "effects": ["read", "write"],              // the distinct side effects of the actions (read, write, destructive, unknown)
+  "apps": [{ "id": "tickets", "name": "Ticket helper" }], // the apps the user may open that use it
   "connection": {
     "mode": "personal",                      // personal | sso | service_account | shared_key | none
-    "status": "connected",                   // connected | not_connected | needs_reconnect (personal), else = mode
-    "reason": null,                          // needs_reconnect / not_connected: not_connected | expired | insufficient_scope
+    "status": "connected",                   // connected | not_connected | needs_reconnect (personal), else = mode; or unavailable
+    "reason": null,                          // needs_reconnect / not_connected: not_connected | expired | insufficient_scope;
+                                             // unavailable: unreachable | credential_rejected | credential_missing | not_configured
     "account": "daniel@example.com",         // "connected as …", once known (read once from the vendor, then kept)
     "scopes": ["read:jira-work"],            // granted scopes
     "connectedAt": "…", "expiresAt": "…", "lastUsedAt": "…",
     "signInHost": "auth.atlassian.com",      // where the user signs in
-    "connectable": true                      // personal and configured: Connect / Reconnect can start
+    "connectable": true,                     // personal and configured: Connect / Reconnect can start
+    "renewable": true,                       // connected: iHub renews the access without the user (null: unknown)
+    "sharedWith": []                         // service_account / shared_key: the user's groups that grant it by name
   }
 }
 ```
 
-`mode` says who the integration acts as: `personal` (the user's own account, OAuth), `sso` (the user's iHub sign-in on every request: iFinder, iAssistant), `service_account` (an account the admin configured: `auth.mode` `service-account` or `oauth-client`, or a password-type secret), `shared_key` (an API key the admin configured), `none` (no sign-in). The listing reads the connection index only; it never sends a token anywhere. Disabled installations, ones whose definition cannot run or whose migration withholds them, and ones the user's groups do not grant are left out.
+`mode` says who the integration acts as: `personal` (the user's own account, OAuth), `sso` (the user's iHub sign-in on every request: iFinder, iAssistant), `service_account` (an account the admin configured: `auth.mode` `service-account` or `oauth-client`, or a password-type secret), `shared_key` (an API key the admin configured), `none` (no sign-in). The listing reads the connection index only; it never sends a token anywhere.
+
+`status: "unavailable"` means the user cannot use the integration until an admin acts; `reason` says why. It comes from the same sources as the admin list: the adapter's live status (the admin's **Unreachable**) gives `unreachable`, or `credential_rejected` when the last error says the shared key or token was refused or expired (the error text itself is never sent); a credential reference the credential store does not hold gives `credential_missing`; a per-user sign-in that is switched off or has no OAuth client gives `not_configured`. `sharedWith` names the user's groups that grant the installation by its id, definition or type (empty when only `*` grants it). `apps` lists the enabled apps the user may open that bind the installation (`app.integrations`), name one of its tools in `app.tools`, or use it as their web search engine (`websearch.provider`; `auto` is the first engine the user may use). Disabled installations, ones whose definition cannot run or whose migration withholds them, and ones the user's groups do not grant are left out.
 
 **Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
 

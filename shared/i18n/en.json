@@ -5512,45 +5512,10 @@
     },
     "page": {
       "title": "Integrations",
-      "subtitle": "Connect your external accounts to enhance your AI applications",
+      "subtitle": "The systems iHub can work with for you, and the tools that use iHub as you.",
       "loading": "Loading integrations...",
       "authRequiredTitle": "Authentication Required",
       "authRequiredBody": "Please log in to manage your integrations.",
-      "card": {
-        "connected": "Connected",
-        "notConnected": "Not Connected",
-        "availableFeatures": "Available Features:",
-        "connectAccount": "Connect {{name}} Account",
-        "disconnect": "Disconnect",
-        "tokenExpiring": "Token expires soon - consider reconnecting"
-      },
-      "jira": {
-        "description": "Atlassian JIRA integration for ticket management and project insights",
-        "features": {
-          "search": "Search and retrieve JIRA tickets",
-          "create": "Create new tickets and issues",
-          "update": "Update existing tickets",
-          "info": "Get project and user information"
-        },
-        "disconnected": "JIRA account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect JIRA: {{message}}",
-        "testSuccess": "JIRA connection test successful! Found {{count}} accessible tickets.",
-        "testFailed": "JIRA connection test failed: {{message}}"
-      },
-      "cloud": {
-        "description": {
-          "office365": "Microsoft Office 365 integration for cloud file access",
-          "googleDrive": "Google Drive integration for cloud file access"
-        },
-        "features": {
-          "browseOffice365": "Browse OneDrive and SharePoint files",
-          "browseGoogleDrive": "Browse Google Drive files",
-          "upload": "Upload cloud files to chats",
-          "oauth": "Secure OAuth 2.0 with PKCE"
-        },
-        "disconnected": "{{name}} account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}"
-      },
       "office": {
         "available": "Available",
         "deployHint": "Deploy this manifest in Microsoft 365 Admin Center to make the add-in available to your organization.",
@@ -5602,15 +5567,7 @@
         "rotateFailed": "Failed to rotate API key: {{message}}",
         "revokeFailed": "Failed to revoke API key: {{message}}"
       },
-      "empty": {
-        "title": "No Integrations Configured",
-        "body": "Contact your administrator to enable external integrations."
-      },
       "sections": {
-        "accounts": {
-          "title": "Your accounts",
-          "description": "Sign in to services so iHub can work with them on your behalf."
-        },
         "access": {
           "title": "Access to iHub",
           "description": "Tools and applications that use iHub Apps as you."
@@ -5646,21 +5603,125 @@
           "mcpResourcesRead": "Read iHub sources and skills available to you"
         }
       },
-      "mcp": {
-        "title": "MCP servers",
-        "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
-        "serverDescription": "MCP server",
-        "connect": "Connect {{name}}",
-        "disconnected": "{{name}} disconnected",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}"
-      },
       "iFinder": {
-        "title": "iFinder",
         "description": "iHub uses your {{provider}} sign-in to search iFinder for you, also in scheduled tasks and workflows while you are signed out.",
         "authorizedSince": "Authorized via {{provider}} on {{date}}",
         "authorize": "Sign in via {{provider}}",
         "revoked": "iFinder authorization revoked",
-        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}"
+        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}",
+        "sectionTitle": "Sign-in for background tasks",
+        "notAuthorized": "Not authorized",
+        "revoke": "Revoke"
+      },
+      "dismissMessage": "Dismiss message",
+      "showDetails": "Show details",
+      "disconnect": "Disconnect",
+      "disconnectNamed": "Disconnect {{name}}",
+      "connectNamed": "Connect {{name}}",
+      "reconnectNamed": "Reconnect {{name}}",
+      "disconnectTitle": "Disconnect {{name}}",
+      "disconnectConfirm": "iHub will no longer act as you in {{name}}. Chats that need it will ask you to connect again.",
+      "disconnected": "{{name}} disconnected.",
+      "disconnectFailed": "Could not disconnect {{name}}: {{message}}",
+      "moreActions": "+{{count}} more",
+      "available": {
+        "title": "Available to you ({{count}})",
+        "description": "Everything your groups allow, and who iHub acts as in each. Connect once; chats use it afterwards.",
+        "empty": "No integration is available to you yet.",
+        "loadFailed": "Your integrations could not be loaded. Reload the page to try again."
+      },
+      "filters": {
+        "search": "Search integrations",
+        "searchPlaceholder": "Search…",
+        "category": "Category",
+        "allCategories": "All categories",
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "needsAttention": "Needs attention",
+        "noMatches": "No integration matches the filters.",
+        "count": "Showing {{shown}} of {{total}}"
+      },
+      "status": {
+        "connected": "Connected",
+        "connectedAs": "Connected as {{account}}",
+        "expires": "expires {{when}}",
+        "notConnected": "Not connected",
+        "needsReconnect": "Reconnect needed · {{reason}}",
+        "reconnectReasons": {
+          "expired": "your sign-in expired or was revoked",
+          "insufficientScope": "a new permission is needed"
+        },
+        "sso": "Signed in via SSO",
+        "serviceAccount": "Runs as service account",
+        "serviceAccountFor": "Runs as service account ({{groups}})",
+        "sharedKey": "Shared key",
+        "none": "No sign-in needed",
+        "unavailable": "Unavailable · {{reason}}",
+        "unavailableReasons": {
+          "unreachable": "the system cannot be reached; an administrator must check it",
+          "credentialRejected": "the shared key was refused or has expired; an administrator must renew it",
+          "credentialMissing": "the shared key is missing; an administrator must set it",
+          "notConfigured": "the sign-in is not set up; an administrator must finish it"
+        },
+        "unknown": "Status unknown"
+      },
+      "capabilities": {
+        "tools": "Actions in chat",
+        "files": "Files",
+        "search": "Search",
+        "views": "Interactive views",
+        "triggers": "Events",
+        "agent": "Agent"
+      },
+      "categories": {
+        "a2a": "A2A",
+        "admin": "Administration",
+        "agents": "Agents",
+        "analytics": "Analytics",
+        "assistant": "Assistant",
+        "automation": "Automation",
+        "content": "Content",
+        "customer": "Customer",
+        "data": "Data",
+        "design": "Design",
+        "development": "Development",
+        "directory": "Directory",
+        "documentation": "Documentation",
+        "documents": "Documents",
+        "files": "Files",
+        "finance": "Finance",
+        "internal": "Internal",
+        "mcp": "MCP",
+        "open-data": "Open data",
+        "people": "People",
+        "productivity": "Productivity",
+        "public-sector": "Public sector",
+        "research": "Research",
+        "search": "Search",
+        "storage": "Storage",
+        "ticketing": "Ticketing",
+        "web": "Web"
+      },
+      "detail": {
+        "identity": "How it runs for you",
+        "account": "Signed in as",
+        "connectedAt": "Connected since",
+        "access": "Access",
+        "expiresOn": "Ends {{when}} ({{date}}); then connect again",
+        "renews": "Renewed automatically until you disconnect",
+        "untilDisconnect": "Until you disconnect or it is revoked",
+        "lastUsed": "Last used",
+        "neverUsed": "Not used yet",
+        "signInHost": "You sign in at",
+        "sharedWith": "Shared with your group",
+        "actions": "What it can do",
+        "noActions": "It offers no actions in chat.",
+        "permissions": "What you allowed",
+        "permissionLine": "{{effect}}: {{actions}}",
+        "actAsYou": "iHub acts as you in {{name}}.",
+        "scopes": "Technical permissions ({{count}})",
+        "apps": "Apps that use it",
+        "noApps": "None of the apps you can open uses it yet."
       }
     },
     "connect": {

@@ -5477,45 +5477,10 @@
     },
     "page": {
       "title": "Integrationen",
-      "subtitle": "Verbinden Sie Ihre externen Konten, um Ihre KI-Anwendungen zu erweitern",
+      "subtitle": "Die Systeme, mit denen iHub für Sie arbeiten kann, und die Werkzeuge, die iHub in Ihrem Namen nutzen.",
       "loading": "Integrationen werden geladen...",
       "authRequiredTitle": "Authentifizierung erforderlich",
       "authRequiredBody": "Bitte melden Sie sich an, um Ihre Integrationen zu verwalten.",
-      "card": {
-        "connected": "Verbunden",
-        "notConnected": "Nicht verbunden",
-        "availableFeatures": "Verfügbare Funktionen:",
-        "connectAccount": "{{name}}-Konto verbinden",
-        "disconnect": "Trennen",
-        "tokenExpiring": "Token läuft bald ab - erneute Verbindung empfohlen"
-      },
-      "jira": {
-        "description": "Atlassian-JIRA-Integration für Ticketverwaltung und Projekteinblicke",
-        "features": {
-          "search": "JIRA-Tickets suchen und abrufen",
-          "create": "Neue Tickets und Vorgänge erstellen",
-          "update": "Bestehende Tickets aktualisieren",
-          "info": "Projekt- und Benutzerinformationen abrufen"
-        },
-        "disconnected": "JIRA-Konto erfolgreich getrennt",
-        "disconnectFailed": "Trennen von JIRA fehlgeschlagen: {{message}}",
-        "testSuccess": "JIRA-Verbindungstest erfolgreich! {{count}} zugängliche Tickets gefunden.",
-        "testFailed": "JIRA-Verbindungstest fehlgeschlagen: {{message}}"
-      },
-      "cloud": {
-        "description": {
-          "office365": "Microsoft-Office-365-Integration für Cloud-Dateizugriff",
-          "googleDrive": "Google-Drive-Integration für Cloud-Dateizugriff"
-        },
-        "features": {
-          "browseOffice365": "OneDrive- und SharePoint-Dateien durchsuchen",
-          "browseGoogleDrive": "Google-Drive-Dateien durchsuchen",
-          "upload": "Cloud-Dateien zu Chats hinzufügen",
-          "oauth": "Sicheres OAuth 2.0 mit PKCE"
-        },
-        "disconnected": "{{name}}-Konto erfolgreich getrennt",
-        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}"
-      },
       "office": {
         "available": "Verfügbar",
         "deployHint": "Stellen Sie dieses Manifest im Microsoft 365 Admin Center bereit, um das Add-in für Ihre Organisation verfügbar zu machen.",
@@ -5567,15 +5532,7 @@
         "rotateFailed": "API-Schlüssel konnte nicht erneuert werden: {{message}}",
         "revokeFailed": "API-Schlüssel konnte nicht widerrufen werden: {{message}}"
       },
-      "empty": {
-        "title": "Keine Integrationen konfiguriert",
-        "body": "Wenden Sie sich an Ihren Administrator, um externe Integrationen zu aktivieren."
-      },
       "sections": {
-        "accounts": {
-          "title": "Ihre Konten",
-          "description": "Melden Sie sich bei Diensten an, damit iHub in Ihrem Namen mit ihnen arbeiten kann."
-        },
         "access": {
           "title": "Zugriff auf iHub",
           "description": "Werkzeuge und Anwendungen, die iHub Apps in Ihrem Namen nutzen."
@@ -5611,21 +5568,125 @@
           "mcpResourcesRead": "Für Sie verfügbare iHub-Quellen und -Skills lesen"
         }
       },
-      "mcp": {
-        "title": "MCP-Server",
-        "description": "Die Tools dieser Server handeln mit Ihrem eigenen Konto. Verbinden Sie einen Server, um seine Tools in Chats zu nutzen.",
-        "serverDescription": "MCP-Server",
-        "connect": "{{name}} verbinden",
-        "disconnected": "{{name}} getrennt",
-        "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}"
-      },
       "iFinder": {
-        "title": "iFinder",
         "description": "iHub nutzt Ihre {{provider}}-Anmeldung, um für Sie in iFinder zu suchen – auch in geplanten Aufgaben und Workflows, während Sie abgemeldet sind.",
         "authorizedSince": "Autorisiert über {{provider}} am {{date}}",
         "authorize": "Über {{provider}} anmelden",
         "revoked": "iFinder-Autorisierung widerrufen",
-        "revokeFailed": "Die iFinder-Autorisierung konnte nicht widerrufen werden: {{message}}"
+        "revokeFailed": "Die iFinder-Autorisierung konnte nicht widerrufen werden: {{message}}",
+        "sectionTitle": "Anmeldung für Hintergrundaufgaben",
+        "notAuthorized": "Nicht autorisiert",
+        "revoke": "Widerrufen"
+      },
+      "dismissMessage": "Meldung schließen",
+      "showDetails": "Details anzeigen",
+      "disconnect": "Trennen",
+      "disconnectNamed": "{{name}} trennen",
+      "connectNamed": "{{name}} verbinden",
+      "reconnectNamed": "{{name}} erneut verbinden",
+      "disconnectTitle": "{{name}} trennen",
+      "disconnectConfirm": "iHub handelt in {{name}} nicht mehr in Ihrem Namen. Chats, die es brauchen, bitten Sie, sich erneut zu verbinden.",
+      "disconnected": "{{name}} getrennt.",
+      "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}",
+      "moreActions": "+{{count}} weitere",
+      "available": {
+        "title": "Für Sie verfügbar ({{count}})",
+        "description": "Alles, was Ihre Gruppen erlauben, und als wer iHub dort jeweils handelt. Einmal verbinden; Chats nutzen es danach.",
+        "empty": "Für Sie ist noch keine Integration verfügbar.",
+        "loadFailed": "Ihre Integrationen konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen."
+      },
+      "filters": {
+        "search": "Integrationen durchsuchen",
+        "searchPlaceholder": "Suchen…",
+        "category": "Kategorie",
+        "allCategories": "Alle Kategorien",
+        "status": "Status",
+        "allStatuses": "Alle Status",
+        "needsAttention": "Handlungsbedarf",
+        "noMatches": "Keine Integration passt zu den Filtern.",
+        "count": "{{shown}} von {{total}} angezeigt"
+      },
+      "status": {
+        "connected": "Verbunden",
+        "connectedAs": "Verbunden als {{account}}",
+        "expires": "läuft {{when}} ab",
+        "notConnected": "Nicht verbunden",
+        "needsReconnect": "Erneut verbinden · {{reason}}",
+        "reconnectReasons": {
+          "expired": "Ihre Anmeldung ist abgelaufen oder wurde widerrufen",
+          "insufficientScope": "eine neue Berechtigung wird benötigt"
+        },
+        "sso": "Angemeldet über SSO",
+        "serviceAccount": "Läuft als Dienstkonto",
+        "serviceAccountFor": "Läuft als Dienstkonto ({{groups}})",
+        "sharedKey": "Gemeinsamer Schlüssel",
+        "none": "Keine Anmeldung nötig",
+        "unavailable": "Nicht verfügbar · {{reason}}",
+        "unavailableReasons": {
+          "unreachable": "das System ist nicht erreichbar; ein Administrator muss es prüfen",
+          "credentialRejected": "der gemeinsame Schlüssel wurde abgelehnt oder ist abgelaufen; ein Administrator muss ihn erneuern",
+          "credentialMissing": "der gemeinsame Schlüssel fehlt; ein Administrator muss ihn hinterlegen",
+          "notConfigured": "die Anmeldung ist nicht eingerichtet; ein Administrator muss sie fertigstellen"
+        },
+        "unknown": "Status unbekannt"
+      },
+      "capabilities": {
+        "tools": "Aktionen im Chat",
+        "files": "Dateien",
+        "search": "Suche",
+        "views": "Interaktive Ansichten",
+        "triggers": "Ereignisse",
+        "agent": "Agent"
+      },
+      "categories": {
+        "a2a": "A2A",
+        "admin": "Administration",
+        "agents": "Agenten",
+        "analytics": "Analysen",
+        "assistant": "Assistent",
+        "automation": "Automatisierung",
+        "content": "Inhalte",
+        "customer": "Kunden",
+        "data": "Daten",
+        "design": "Design",
+        "development": "Entwicklung",
+        "directory": "Verzeichnis",
+        "documentation": "Dokumentation",
+        "documents": "Dokumente",
+        "files": "Dateien",
+        "finance": "Finanzen",
+        "internal": "Intern",
+        "mcp": "MCP",
+        "open-data": "Offene Daten",
+        "people": "Personen",
+        "productivity": "Produktivität",
+        "public-sector": "Öffentlicher Sektor",
+        "research": "Recherche",
+        "search": "Suche",
+        "storage": "Speicher",
+        "ticketing": "Tickets",
+        "web": "Web"
+      },
+      "detail": {
+        "identity": "So läuft es für Sie",
+        "account": "Angemeldet als",
+        "connectedAt": "Verbunden seit",
+        "access": "Zugriff",
+        "expiresOn": "Endet {{when}} ({{date}}); danach erneut verbinden",
+        "renews": "Wird automatisch erneuert, bis Sie trennen",
+        "untilDisconnect": "Bis Sie trennen oder er widerrufen wird",
+        "lastUsed": "Zuletzt verwendet",
+        "neverUsed": "Noch nicht verwendet",
+        "signInHost": "Sie melden sich an bei",
+        "sharedWith": "Freigegeben für Ihre Gruppe",
+        "actions": "Was es kann",
+        "noActions": "Es bietet keine Aktionen im Chat.",
+        "permissions": "Was Sie erlaubt haben",
+        "permissionLine": "{{effect}}: {{actions}}",
+        "actAsYou": "iHub handelt in {{name}} in Ihrem Namen.",
+        "scopes": "Technische Berechtigungen ({{count}})",
+        "apps": "Apps, die es nutzen",
+        "noApps": "Noch keine der Apps, die Sie öffnen können, nutzt es."
       }
     },
     "connect": {

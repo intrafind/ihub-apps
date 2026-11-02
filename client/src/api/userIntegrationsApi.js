@@ -10,11 +10,19 @@ import { apiClient } from './client';
  *
  * An integration entry:
  * ```
- * { id, definition, type, protocol, name, description, icon, capabilities,
+ * { id, definition, type, protocol, name, description, icon, categories, capabilities,
  *   actions: [{ name, title, description, sideEffect }], effects,
+ *   apps: [{ id, name }],                       // the user's apps that use it
  *   connection: { mode, status, reason, account, scopes, connectedAt, expiresAt,
- *                 lastUsedAt, signInHost, connectable } }
+ *                 lastUsedAt, signInHost, connectable,
+ *                 renewable,                     // connected: renewed without the user
+ *                 sharedWith: [{ id, name }] } } // service account / shared key: the user's granting groups
  * ```
+ *
+ * `connection.status` is `connected`, `not_connected`, `needs_reconnect`
+ * (personal), the mode itself (`sso`, `service_account`, `shared_key`,
+ * `none`), or `unavailable` with `reason` `unreachable`,
+ * `credential_rejected`, `credential_missing` or `not_configured`.
  *
  * @module api/userIntegrationsApi
  */

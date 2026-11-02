@@ -535,6 +535,26 @@ app that uses the installation.
   visible to groups that may use all apps; untick it to create the app disabled.
 - Integration definitions from the marketplace can ship example apps too (`exampleApps`).
 
+## Settings → Integrations Shows Everything You May Use, and Who iHub Acts As
+
+**Settings → Integrations** now lists every integration your groups allow, not only the ones you
+sign in to yourself, and says truthfully who iHub acts as in each: _Connected as you_, _Signed in
+via SSO_, _Runs as service account (your group)_, _Shared key_, _Not connected_, _Reconnect
+needed_ or _Unavailable_ with what an administrator has to do.
+
+- **One list, one look:** iFinder, people directories, shared-key MCP servers and web search
+  appear next to Jira, cloud storage and per-user MCP servers, with a short summary of what each
+  can do (read · write).
+- **Connect, Reconnect, Disconnect** use the same sign-in as the Connect card in the chat;
+  disconnecting asks first and updates the row in place.
+- **Details:** open a row to see its actions with read / write badges, the apps that use it,
+  when it was last used, when your access ends, and what you allowed, in plain words.
+- **Find things:** search, filter by category, or show only what **needs attention** (a
+  reconnect, an unavailable integration, access that is about to end).
+- **Unavailable means the same as for admins:** an integration the admin list shows as
+  unreachable — for example because its shared key expired — shows as unavailable here too.
+- _Access to iHub_ (connected apps, personal API keys, the Outlook add-in) is unchanged.
+
 ## Chat: Tool Calls Name the Action and the System They Asked
 
 The list of tool calls above an answer now reads the way users think about it: each call shows

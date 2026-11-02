@@ -49,7 +49,14 @@ import {
   IntegrationAuthRequiredError,
   integrationAuthRequiredResult
 } from '../../services/integrations/auth/integrationAuthRequired.js';
-import { connectionStatusOf, sharedModeOf } from '../../services/integrations/userIntegrations.js';
+import {
+  appUsesIntegration,
+  connectionStatusOf,
+  credentialMissingOf,
+  sharedModeOf,
+  sharedWithOf,
+  unavailableReasonOf
+} from '../../services/integrations/userIntegrations.js';
 import { fakeTokenEndpoint } from '../helpers/integrationConnect.js';
 
 const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'user-integrations-'));
@@ -516,5 +523,148 @@ describe('connection status (pure)', () => {
     assert.equal(sharedModeOf({ auth: { mode: 'service-account' } }, {}), 'service_account');
     assert.equal(sharedModeOf({ auth: { mode: 'oauth-client' } }, {}), 'service_account');
     assert.equal(sharedModeOf({ auth: { mode: 'none' } }, { install: [] }), 'none');
+  });
+
+  it('says unavailable with the reason an admin has to act on (#2922)', () => {
+    const instance = { id: 'x', auth: { mode: 'none' } };
+    const keyed = { install: [{ key: 'apiKeyRef', type: 'credential' }] };
+    // The admin list's "Unreachable" (live status) is the user's "Unavailable".
+    const rejected = connectionStatusOf({
+      descriptor: null,
+      instance,
+      definition: keyed,
+      live: { unhealthy: true, lastError: 'Streamable HTTP error: 401 Unauthorized' },
+      sharedWith: [{ id: 'legal', name: 'Legal' }]
+    });
+    assert.deepEqual(
+      { mode: rejected.mode, status: rejected.status, reason: rejected.reason },
+      { mode: 'shared_key', status: 'unavailable', reason: 'credential_rejected' }
+    );
+    assert.deepEqual(rejected.sharedWith, [{ id: 'legal', name: 'Legal' }]);
+    assert.equal(
+      unavailableReasonOf({ live: { unhealthy: true, lastError: 'connect ECONNREFUSED' } }),
+      'unreachable'
+    );
+    assert.equal(unavailableReasonOf({ live: { unhealthy: false, lastError: '401' } }), null);
+    assert.equal(unavailableReasonOf({ credentialMissing: true }), 'credential_missing');
+    const sso = connectionStatusOf({
+      descriptor: { kind: 'sso' },
+      instance,
+      sharedWith: [{ id: 'legal', name: 'Legal' }]
+    });
+    assert.deepEqual(sso.sharedWith, [], 'SSO is not shared by a group');
+    // A per-user sign-in an admin switched off or did not set up.
+    const off = connectionStatusOf({
+      descriptor: { kind: 'oauth-user', configured: false },
+      resolved: null,
+      instance
+    });
+    assert.deepEqual(
+      { status: off.status, reason: off.reason, connectable: off.connectable },
+      { status: 'unavailable', reason: 'not_configured', connectable: false }
+    );
+    // Connected: whether the access renews itself (a refresh token is held).
+    const connected = connectionStatusOf({
+      descriptor: { kind: 'oauth-user' },
+      resolved: { ok: true },
+      record: { expiresAt: '2026-11-02T12:00:00Z' },
+      instance,
+      renewable: true
+    });
+    assert.equal(connected.renewable, true);
+  });
+
+  it('finds a credential the store does not hold', () => {
+    const saved = credentialService.has;
+    credentialService.has = ref => ref === 'present';
+    try {
+      const definition = { install: [{ key: 'apiKeyRef', type: 'credential', required: true }] };
+      assert.equal(credentialMissingOf({ values: { apiKeyRef: 'present' } }, definition), false);
+      assert.equal(credentialMissingOf({ values: { apiKeyRef: 'gone' } }, definition), true);
+      assert.equal(
+        credentialMissingOf({ values: {} }, definition),
+        false,
+        'not set is not missing'
+      );
+      assert.equal(
+        credentialMissingOf({ auth: { mode: 'service-account', credentialRef: 'gone' } }, null),
+        true
+      );
+    } finally {
+      credentialService.has = saved;
+    }
+  });
+
+  it('names the groups that share an installation, never "*"', () => {
+    const savedGroups = configCache.getGroups;
+    configCache.getGroups = () => ({
+      data: {
+        groups: {
+          users: { name: 'Users', permissions: { integrations: ['*'] } },
+          legal: {
+            name: { en: 'Legal team', de: 'Rechtsabteilung' },
+            permissions: { integrations: ['enaio'] }
+          },
+          dms: { name: 'DMS', permissions: { integrations: ['com.example/enaio'] } }
+        }
+      }
+    });
+    try {
+      const instance = { id: 'enaio', definition: 'com.example/enaio' };
+      assert.deepEqual(sharedWithOf(instance, { groups: ['users', 'legal', 'dms'] }, 'de'), [
+        { id: 'legal', name: 'Rechtsabteilung' }
+      ]);
+      assert.deepEqual(sharedWithOf(instance, { groups: ['users', 'dms'] }, 'en'), [
+        { id: 'dms', name: 'DMS' }
+      ]);
+      assert.deepEqual(sharedWithOf(instance, { groups: ['users'] }, 'en'), []);
+    } finally {
+      configCache.getGroups = savedGroups;
+    }
+  });
+
+  it('knows which apps use an installation', () => {
+    const instance = { id: 'jira', definition: 'com.intrafind/jira' };
+    const bindingKeyFor = (app, inst) =>
+      app.integrations && Object.hasOwn(app.integrations, inst.id) ? inst.id : null;
+    const tools = [{ id: 'jira__searchTickets', _integration: { instanceId: 'jira' } }];
+    assert.equal(
+      appUsesIntegration({ integrations: { jira: {} } }, instance, tools, bindingKeyFor),
+      true
+    );
+    assert.equal(appUsesIntegration({ tools: ['jira'] }, instance, tools, bindingKeyFor), true);
+    assert.equal(appUsesIntegration({ tools: ['other'] }, instance, tools, bindingKeyFor), false);
+  });
+});
+
+describe('GET /api/integrations: apps and categories (#2922)', () => {
+  let savedApps;
+  before(() => {
+    savedApps = configCache.getAppsForUser;
+    configCache.getAppsForUser = async () => ({
+      data: [
+        { id: 'tickets', name: { en: 'Tickets', de: 'Tickets' }, integrations: { jira: {} } },
+        { id: 'research', name: 'Research', websearch: { enabled: true, provider: 'auto' } },
+        { id: 'off', name: 'Off', enabled: false, integrations: { jira: {} } },
+        { id: 'plain', name: 'Plain' }
+      ]
+    });
+  });
+  after(() => {
+    configCache.getAppsForUser = savedApps;
+  });
+
+  it('lists the apps the user may open that use each integration', async () => {
+    const res = await request(app).get('/api/integrations').set('x-test-user', 'member');
+    assert.equal(res.status, 200);
+    const byId = Object.fromEntries(res.body.integrations.map(entry => [entry.id, entry]));
+    assert.deepEqual(byId.jira.apps, [{ id: 'tickets', name: 'Tickets' }]);
+    // `websearch.provider: "auto"` uses the first engine the user may use.
+    assert.deepEqual(byId.brave.apps, [{ id: 'research', name: 'Research' }]);
+    assert.deepEqual(byId['nc-main'].apps, []);
+    for (const entry of res.body.integrations) {
+      assert.ok(Array.isArray(entry.categories), entry.id);
+      assert.ok(Array.isArray(entry.connection.sharedWith), entry.id);
+    }
   });
 });

@@ -165,15 +165,15 @@ describe('PersonalApiKeysCard', () => {
 
 describe('integrations page strings', () => {
   test.each([
-    ['en', en, '1 permission', '6 permissions', 'Your accounts', 'Access to iHub'],
-    ['de', de, '1 Berechtigung', '6 Berechtigungen', 'Ihre Konten', 'Zugriff auf iHub']
-  ])('exist in %s', async (lng, resources, one, other, accounts, access) => {
+    ['en', en, '1 permission', '6 permissions', 'Available to you (3)', 'Access to iHub'],
+    ['de', de, '1 Berechtigung', '6 Berechtigungen', 'Für Sie verfügbar (3)', 'Zugriff auf iHub']
+  ])('exist in %s', async (lng, resources, one, other, available, access) => {
     const i18n = i18next.createInstance();
     await i18n.init({ lng, resources: { [lng]: { translation: resources } } });
     const key = 'integrations.page.connections.permissionCount';
     expect(i18n.t(key, { count: 1 })).toBe(one);
     expect(i18n.t(key, { count: 6 })).toBe(other);
-    expect(i18n.t('integrations.page.sections.accounts.title')).toBe(accounts);
+    expect(i18n.t('integrations.page.available.title', { count: 3 })).toBe(available);
     expect(i18n.t('integrations.page.sections.access.title')).toBe(access);
     for (const name of ['search', 'noMatches', 'showAll', 'showFewer']) {
       expect(i18n.exists(`integrations.page.connections.${name}`)).toBe(true);
