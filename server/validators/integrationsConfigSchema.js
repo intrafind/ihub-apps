@@ -13,9 +13,10 @@ import {
 /**
  * `contents/config/integrations.json`: the admin's installed integrations
  * (04-architecture §1.3). One definition can be installed several times, each
- * instance pointing at another endpoint, with its own label, values, groups and
- * action policy. Sensitive values never land here; `auth.credentialRef` points
- * at the credential store.
+ * instance pointing at another endpoint, with its own label, values and action
+ * policy. Sensitive values never land here; `auth.credentialRef` points at the
+ * credential store. Which groups may use an instance is not stored here but on
+ * the groups (`groups.json` → `permissions.integrations`).
  */
 
 const instanceIdSchema = zSafeId.min(1).max(64);
@@ -60,8 +61,8 @@ export const installedIntegrationSchema = z.object({
   values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
-  /** Groups allowed to use the instance; empty means everyone who may use the app. */
-  allowedGroups: z.array(z.string().min(1)).prefault([]),
+  // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
+  // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),
   /** Written by health checks, never by admins. */
   health: healthSchema.optional(),

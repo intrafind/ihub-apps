@@ -14,8 +14,7 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": []
+      }
     },
     {
       "id": "drawio",
@@ -29,8 +28,7 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": []
+      }
     },
     {
       "id": "excalidraw",
@@ -44,8 +42,7 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": []
+      }
     },
     {
       "id": "x500bund",
@@ -77,8 +74,7 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": ["authenticated"]
+      }
     }
   ],
   "security": {

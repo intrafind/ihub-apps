@@ -8,8 +8,7 @@ import configCache from '../configCache.js';
  * so a resource open to `users` is open to `admins`, who inherit it. Group
  * membership on a user is the direct list; permissions are resolved through
  * inheritance when the user is enhanced, and access lists that name groups
- * (an installation's `allowedGroups`, a directory's `groups`) are read the
- * same way here.
+ * (a directory's `browse.groups`) are read the same way here.
  *
  * @param {string[]} groups - The user's direct groups
  * @returns {Set<string>}

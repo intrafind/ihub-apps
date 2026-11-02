@@ -139,12 +139,13 @@ Google Drive is the built-in installed integration **Google Drive** (`com.intraf
         "sourceSharedDrives": true,
         "sourceSharedWithMe": true
       },
-      "auth": { "mode": "oauth-user" },
-      "allowedGroups": []
+      "auth": { "mode": "oauth-user" }
     }
   ]
 }
 ```
+
+> **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
 > The client secret is a credential reference, never a value. Migration V200 moved the former `platform.cloudStorage` provider here; a provider id other than `googledrive` became the installation's **Provider id** value.
 

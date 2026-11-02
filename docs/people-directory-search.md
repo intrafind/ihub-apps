@@ -47,8 +47,7 @@ Directories live in `contents/config/integrations.json` as installations of `com
         "de": "Mitarbeitende unseres Unternehmens: Name, E-Mail, Telefon, Abteilung, Vorgesetzte."
       },
       "values": { "authProvider": "corp-ad" }, // name in platform.json ldapAuth.providers[]
-      "auth": { "mode": "none" },
-      "allowedGroups": ["authenticated"]
+      "auth": { "mode": "none" }
     },
     {
       // External and anonymous: everything stated here (shipped, disabled)
@@ -68,14 +67,13 @@ Directories live in `contents/config/integrations.json` as installations of `com
         "maxResults": 25,
         "timeoutMs": 8000
       },
-      "auth": { "mode": "none" },
-      "allowedGroups": ["authenticated"]
+      "auth": { "mode": "none" }
     }
   ]
 }
 ```
 
-The installation's **label** is the directory's name and its **description** the model-facing description, each per language (the wizard edits the current language). `allowedGroups` are the groups who may use the directory; empty means every caller who may use an app that binds it. The install values (**Settings** in the wizard; fields marked _advanced_ are folded away):
+The installation's **label** is the directory's name and its **description** the model-facing description, each per language (the wizard edits the current language). Who may use a directory is granted on the groups (`groups.json` → `permissions.integrations`): the directory's id (`x500bund`), the definition (`com.intrafind/ldap-directory`, every LDAP directory) or `type:people-directory` (every people directory, Entra included). The shipped groups grant every installation to signed-in users and none of the directories to anonymous callers. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration). The install values (**Settings** in the wizard; fields marked _advanced_ are folded away):
 
 | Value | Meaning |
 | --- | --- |
@@ -148,7 +146,7 @@ An app binds directories under `integrations` (**Admin → Apps → Edit → Ins
 
 A group's `permissions.tools` still selects a directory's tools by the directory id (`"x500bund"`) or an exact tool id (`"x500bund__search_people"`), and an `app.tools` entry naming a directory id keeps working for apps written that way.
 
-The installation's `allowedGroups` hold on top of that: an app that binds `x500bund`, or a `"*"` tool grant, does not give the directory to a user outside its groups. Inherited groups count (`admins` inherit `users`). The check runs in the tools listing, an app's tools, direct tool runs, the MCP gateway, and again when the tool runs.
+The group grant (`permissions.integrations`) holds on top of that: an app that binds `x500bund`, or a `"*"` tool grant, does not give the directory to a user whose groups do not grant it. Inherited grants count (`admins` inherit `users`). The check runs in the tools listing, an app's tools, direct tool runs, the MCP gateway, and again when the tool runs.
 
 ## LDAP browser (for admins)
 
@@ -160,7 +158,6 @@ Switch it on per directory with **LDAP browser for admins** in the install wizar
 {
   "id": "corp",
   "definition": "com.intrafind/ldap-directory",
-  "allowedGroups": ["authenticated"],
   "values": {
     "authProvider": "corp-ad",
     "browse": true,                        // default false
@@ -178,7 +175,7 @@ Switch it on per directory with **LDAP browser for admins** in the install wizar
 | Field | Meaning |
 | --- | --- |
 | `browse` | The browse tools exist only while this is on and the directory itself is enabled and usable. |
-| `browseGroups` | Who may browse. Separate from the installation's `allowedGroups`: neither grants the other. Only signed-in users; `"*"` is refused. Personal API keys, OAuth clients and tokens and agents never browse, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API. A browse-only directory switches its search actions off in the wizard's **Actions** step. |
+| `browseGroups` | Who may browse. A browsing admin also needs the directory granted to one of their groups (`permissions.integrations`); `browseGroups` does not grant it, and the grant does not grant browsing. Only signed-in users; `"*"` is refused. Personal API keys, OAuth clients and tokens and agents never browse, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API. A browse-only directory switches its search actions off in the wizard's **Actions** step. |
 | `browseMaxResults` | The most entries one search returns. |
 | `browseBase` | The DN the browser is confined to. Defaults to the directory's base DN — the whole directory, not just the people search base — so groups and other branches are in reach. Set a narrower branch to limit what admins can see. |
 | `browseBindMode`, `browseBindDn`, `browseBindPasswordRef` | A separate account for browsing, same shape as the directory's access. **Without it, the browser reads whatever the directory's bind account can read**, minus the deny list. Use a read-only account with the reach you want. |

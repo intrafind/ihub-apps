@@ -19,6 +19,7 @@ import CatalogTile from '../components/integrations/CatalogTile';
 import InboundIntegrations from '../components/integrations/InboundIntegrations';
 import { groupIntegrations } from '../components/integrations/integrationGroups';
 import { appsBindingInstallation } from '../components/integrations/integrationBindings';
+import { groupsGranting } from '../utils/groupIntegrationAccess';
 import {
   CALLOUT_CLASS,
   INPUT_CLASS,
@@ -35,6 +36,7 @@ import {
 } from '../../../api/integrationsAdminApi';
 import {
   fetchAdminApps,
+  fetchAdminGroups,
   fetchAdminPlatformConfig,
   getAdminApiErrorMessage
 } from '../../../api/adminApi';
@@ -119,6 +121,8 @@ function AdminIntegrationsPage() {
   const [installed, setInstalled] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [apps, setApps] = useState([]);
+  // The groups (id → group), for who grants each installation; null when unknown.
+  const [groups, setGroups] = useState(null);
   const [platform, setPlatform] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -140,14 +144,17 @@ function AdminIntegrationsPage() {
       ]);
       setInstalled(installedRes?.items || []);
       setCatalog(catalogRes?.items || []);
-      // Which apps bind each installation, for the remove and disable
-      // warnings; the page works without the list.
-      try {
-        const appList = await fetchAdminApps();
-        setApps(Array.isArray(appList) ? appList : []);
-      } catch {
-        setApps([]);
-      }
+      // Which apps bind each installation (for the remove and disable
+      // warnings) and which groups grant it (for the tiles); the page works
+      // without either list.
+      const [appList, groupsResult] = await Promise.all([
+        fetchAdminApps().catch(() => null),
+        fetchAdminGroups().catch(() => null)
+      ]);
+      setApps(Array.isArray(appList) ? appList : []);
+      setGroups(
+        groupsResult?.groups && typeof groupsResult.groups === 'object' ? groupsResult.groups : null
+      );
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     } finally {
@@ -454,6 +461,7 @@ function AdminIntegrationsPage() {
                           key={item.id}
                           item={item}
                           installations={installed}
+                          grantedTo={groups ? groupsGranting(item, groups) : null}
                           busy={busy === item.id}
                           onTest={runTest}
                           onToggle={requestToggle}

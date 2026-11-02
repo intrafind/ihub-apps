@@ -11,13 +11,11 @@ import {
   updateInstalledIntegration
 } from '../../../../../api/integrationsAdminApi';
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../../api/adminApi';
+import { groupsGranting } from '../../../utils/groupIntegrationAccess';
 
-/** `GET /api/admin/groups` as `GroupMultiSelect` options. */
-function groupOptions(groupsResult) {
-  if (groupsResult?.groups) {
-    return Object.entries(groupsResult.groups).map(([id, g]) => ({ id, name: g.name || id }));
-  }
-  return Array.isArray(groupsResult) ? groupsResult : [];
+/** `GET /api/admin/groups` → `groups` (id → group), or an empty object. */
+function groupsOf(groupsResult) {
+  return groupsResult?.groups && typeof groupsResult.groups === 'object' ? groupsResult.groups : {};
 }
 
 /** The server's validation details as one line, e.g. `baseUrl: must be a URL`. */
@@ -33,7 +31,7 @@ function detailText(err) {
 /**
  * The state every dedicated installation editor shares, so an editor only
  * owns its install values: the label and description (in the admin's
- * language, other languages kept), the groups, the action switches, the test
+ * language, other languages kept), the groups that grant it, the action switches, the test
  * of the unsaved values and the save.
  *
  * - **Test** sends the edited installation to
@@ -55,10 +53,11 @@ export default function useInstallationEditor({ instance, definition, onSaved })
   const { i18n } = useTranslation();
   const lang = i18n.language || 'en';
 
-  const [groups, setGroups] = useState([]);
+  // The groups that grant this installation (`permissions.integrations`),
+  // null until loaded.
+  const [grantedTo, setGrantedTo] = useState(null);
   const [label, setLabel] = useState(() => pickText(instance.labelLocalized, lang) || '');
   const [description, setDescription] = useState(() => pickText(instance.description, lang) || '');
-  const [allowedGroups, setAllowedGroups] = useState(() => instance.allowedGroups || []);
   const [{ knownActions, checked: initialChecked }] = useState(() =>
     initialCheckedActions({ definition, instance, liveActions: instance.liveActions || [] })
   );
@@ -69,19 +68,23 @@ export default function useInstallationEditor({ instance, definition, onSaved })
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const grantId = instance.id;
+  const grantDefinition = instance.definition;
+  const grantType = definition?.type || null;
   useEffect(() => {
+    const grantTarget = { id: grantId, definition: grantDefinition, type: grantType };
     let cancelled = false;
     fetchAdminGroups()
       .then(result => {
-        if (!cancelled) setGroups(groupOptions(result));
+        if (!cancelled) setGrantedTo(groupsGranting(grantTarget, groupsOf(result)));
       })
       .catch(() => {
-        if (!cancelled) setGroups([]);
+        if (!cancelled) setGrantedTo(null);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [grantId, grantDefinition, grantType]);
 
   const toggleAction = (name, on) =>
     setCheckedActions(prev => {
@@ -98,7 +101,6 @@ export default function useInstallationEditor({ instance, definition, onSaved })
       lang,
       label,
       description,
-      allowedGroups,
       actions: buildActionsPolicy({
         knownActions,
         checkedActions,
@@ -156,13 +158,11 @@ export default function useInstallationEditor({ instance, definition, onSaved })
 
   return {
     lang,
-    groups,
+    grantedTo,
     label,
     setLabel,
     description,
     setDescription,
-    allowedGroups,
-    setAllowedGroups,
     knownActions,
     checkedActions,
     toggleAction,

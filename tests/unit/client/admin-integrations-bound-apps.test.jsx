@@ -34,6 +34,7 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
+  fetchAdminGroups: jest.fn().mockResolvedValue({ groups: {} }),
   fetchAdminPlatformConfig: jest.fn().mockResolvedValue(null),
   getAdminApiErrorMessage: err => err?.message || 'error',
   makeAdminApiCall: jest.fn()

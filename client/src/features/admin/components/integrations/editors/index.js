@@ -21,7 +21,7 @@ import IAssistantEditor from './IAssistantEditor';
  *
  * | Prop         | Type                      | Meaning |
  * | ------------ | ------------------------- | ------- |
- * | `instance`   | `Object`                  | The installation as `GET /api/admin/integrations/installed/:id` returns it in `instance` (`id`, `definition`, `labelLocalized`, `description`, `enabled`, `auth`, `allowedGroups`, `actions`, …), with `values` replaced by the **effective** values (`values` of the response: defaults applied, sensitive fields left out) and `liveActions` set to the response's `actions` (what the system lists now, for MCP / A2A). |
+ * | `instance`   | `Object`                  | The installation as `GET /api/admin/integrations/installed/:id` returns it in `instance` (`id`, `definition`, `labelLocalized`, `description`, `enabled`, `auth`, `actions`, …), with `values` replaced by the **effective** values (`values` of the response: defaults applied, sensitive fields left out) and `liveActions` set to the response's `actions` (what the system lists now, for MCP / A2A). |
  * | `definition` | `Object`                  | The definition detail (`definition` of the same response): `install` fields, `actions`, `authModes`, `dynamicActions`, `name`, … |
  * | `onSaved`    | `(saved: Object) => void` | Called with the stored installation after a successful `PUT …/installed/:id`. |
  * | `onCancel`   | `() => void`              | The admin discards the edits. |

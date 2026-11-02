@@ -54,8 +54,9 @@ function emptyConfig() {
 
 /**
  * The installation an always-installed built-in (`alwaysInstalled`, iHub's
- * own tools) has when the file does not hold one: enabled, every action on,
- * open to everyone. It is served from here until an admin edits it, which
+ * own tools) has when the file does not hold one: enabled, every action on.
+ * Who may use it is up to the groups (`permissions.integrations`), as for
+ * every installation. It is served from here until an admin edits it, which
  * writes it to the file.
  * @param {object} definition
  */
@@ -67,9 +68,25 @@ function builtInInstance(definition) {
     enabled: true,
     values: {},
     auth: { mode: definition.auth?.default || 'none' },
-    actions: { enabled: ['*'], disabled: [], overrides: {} },
-    allowedGroups: []
+    actions: { enabled: ['*'], disabled: [], overrides: {} }
   };
+}
+
+/**
+ * Refuse a payload that still carries `allowedGroups`. Installations have no
+ * groups of their own since #3093 (V203): the groups decide, in
+ * `groups.json` → `permissions.integrations`, edited on the group page. A
+ * client that still sends the field (an install dialog from before) gets a
+ * 400 naming the place to go instead of a save that silently drops it.
+ * @param {object|undefined} payload - Admin create/update/test payload
+ * @throws {IntegrationError} `ALLOWED_GROUPS_REMOVED`
+ */
+export function rejectAllowedGroups(payload) {
+  if (!payload || typeof payload !== 'object' || !Object.hasOwn(payload, 'allowedGroups')) return;
+  throw new IntegrationError(
+    '"allowedGroups" is no longer a setting of an installed integration. Which groups may use an integration is set on the group page (Admin → Groups → a group → Integrations, groups.json permissions.integrations).',
+    { status: 400, code: 'ALLOWED_GROUPS_REMOVED' }
+  );
 }
 
 function credentialIdFor(instanceId, fieldKey) {
@@ -142,7 +159,7 @@ export class InstalledIntegrationService {
   /**
    * The config with an installation for every always-installed built-in the
    * file lacks, and with those it holds switched on: they can be edited
-   * (actions, groups) but never removed or disabled.
+   * (actions) but never removed or disabled.
    */
   _withBuiltIns(config) {
     for (const definition of this._alwaysInstalledDefinitions()) {
@@ -237,6 +254,7 @@ export class InstalledIntegrationService {
    * instance (without secrets) and the secrets to store.
    */
   async _prepare(payload, { existing } = {}) {
+    rejectAllowedGroups(payload);
     await this.registry.ensureLoaded();
     const { secrets, ...rest } = payload || {};
     const parsed = validateInstalledIntegration({

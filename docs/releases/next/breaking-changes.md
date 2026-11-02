@@ -91,13 +91,13 @@ Qwant) into the installed integration `websearch` and the credentials
 - **Tools:** the four tools are no longer listed under **Admin → Tools** and cannot be disabled
   there; switch the installation's actions off instead. A `tools` entry naming one of them (an
   app's, a workflow node's) still selects it, now from the installation and only while the
-  installation is enabled and its groups include the user. The migration removes `braveSearch`,
+  installation is enabled and one of the user's groups grants it (`permissions.integrations`). The migration removes `braveSearch`,
   `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
   an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
   named instead (logged per app). `read_url` entries stay.
 - **Apps with web search on** stay available while the `websearch` installation is disabled or
   missing, without the search toggle and without native search; `websearch.required: true` hides
-  the app instead, like a required integration binding. The installation's groups apply to them
+  the app instead, like a required integration binding. The group grant applies to them
   — to native search on Google, OpenAI and Anthropic models as well, not only to the
   script-backed search tools.
 - **Deployments that write `providers.json` or the tool files themselves** have to write the
@@ -154,7 +154,8 @@ integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
   shipped `ldap-browser` app binds the browse actions of every directory instead of
   `requiredIntegrations`.
 - **Groups:** a directory's `groups` became the installation's `allowedGroups`; `["*"]` became
-  "everyone" (an empty list). A browse-only directory (empty `groups`) keeps its people search
+  "everyone" (an empty list). Migration V203 then moves them onto the groups (see
+  [Installed Integrations No Longer Carry Groups](#installed-integrations-no-longer-carry-groups)). A browse-only directory (empty `groups`) keeps its people search
   closed because the migration switches its search actions off; switch them on in the wizard to
   open it.
 - **Deployments that write `peopleDirectories.json`** (Helm values, templates, scripts) have to
@@ -172,21 +173,32 @@ Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `eviden
 `write_inbox.json`, `create_task.json`, `list_tasks.json`, `mark_task_done.json`,
 `schedule_task.json`, `list_scheduled_tasks.json`, `update_scheduled_task.json`,
 `delete_scheduled_task.json`, `run_scheduled_task_now.json`, `list_task_runs.json` and
-`get_task_run.json` when they are the shipped files; the always-installed integration `ihub`
-(`com.intrafind/ihub`) owns these tools under the same ids.
+`get_task_run.json` when they are the shipped files, and iHub no longer copies them back on
+start. The tools keep their ids: `ask_user` and the scheduled-task tools are actions of the
+always-installed integration `ihub` (`com.intrafind/ihub`), the knowledge tools belong to
+projects, and the agent workspace and evidence tools to workflows and agents.
 
-- **Admin → Tools** no longer lists them and they cannot be switched off there; switch the
-  action off on the `ihub` installation instead (a file that was `enabled: false` is migrated
-  into `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a
-  warning in the log and keeps serving its tool in place of the installation's action until it
-  is deleted; move the change over first.
+- **Admin → Tools** no longer lists them. Switch `ask_user` or a scheduled-task tool off on the
+  `ihub` installation instead (a file that was `enabled: false` is migrated into
+  `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a warning in
+  the log and keeps serving its tool until it is deleted; move the change over first.
+- **The knowledge tools can no longer be switched off:** a disabled `knowledge.json`, or a
+  knowledge action switched off on the `ihub` installation, no longer applies — every request that
+  reaches a project gets them while the projects feature is on. An edited `knowledge.json` is not
+  read any more (migration V202 warns about it); delete it.
+- **The agent workspace and evidence tools are no longer listed under the iHub integration**
+  (migration V202 removes them from the installation's actions). One that was switched off there
+  stays off: V202 writes its tool file to `contents/tools/` with `enabled: false`. A single
+  evidence function cannot be switched off on its own; V202 names one in a warning.
 - **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
-  grants keep selecting the tools. `tools: ["ihub"]` selects nothing.
+  grants keep selecting the tools. `tools: ["ihub"]` selects nothing, and neither does
+  `tools: ["knowledge"]`: the knowledge tools come with the request's projects.
 - **The `ihub` installation** cannot be removed or disabled: `DELETE
   /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
-- **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
-  shipped copy is deleted on the next start.
+- **Deployments that ship these tool files themselves** (templates, scripts) have to drop them:
+  the migrations remove a shipped copy once, and a copy written later takes the place of the
+  built-in tool again, out of reach of the `ihub` installation's switches.
 
 ## Cloud Storage Providers Moved Out of `platform.json`
 
@@ -219,6 +231,37 @@ restored from a backup after the upgrade fails validation until the block is rem
   `docs/nextcloud-integration.md`. There were no `IHUB_PLATFORM__CLOUD_STORAGE__*` environment
   overrides in use by the shipped configuration; an override of that path no longer applies.
 - **Validator:** `server/validators/cloudStorageSchema.js` is removed.
+
+## Installed Integrations No Longer Carry Groups
+
+Who may use an installed integration is now granted on the groups (`groups.json` →
+`permissions.integrations`, **Admin → Groups → a group → Integrations**). The `allowedGroups`
+field of an installation in `contents/config/integrations.json` is gone.
+
+- **Migrated for you:** migration V203 grants every group what it could use before. A group that
+  could use every installation (each one open to everyone, or naming the group or a group it
+  inherits) gets `*`, so it also gets the ones installed later; any other group gets the ids of
+  the installations it could use. Then `allowedGroups` is removed from every installation. Groups
+  that already have `permissions.integrations` are left alone.
+- **Groups that exist only outside `groups.json`:** an `allowedGroups` entry naming a group that
+  `groups.json` does not define has nowhere to go; the migration logs a warning per group. Create
+  the group and grant it the integrations, or its members lose them.
+- **New groups grant nothing:** a group created after the upgrade lists no integrations until an
+  admin ticks them; its members still get what their other groups grant (`authenticated` grants
+  every integration in the shipped configuration).
+- **Admin API:** `POST` and `PUT /api/admin/integrations/installed` and the connection tests
+  refuse a payload with `allowedGroups` (400, code `ALLOWED_GROUPS_REMOVED`, naming the group
+  page), and `GET` no longer returns the field. Scripts that installed integrations with groups
+  have to grant them on the groups instead (`PUT /api/admin/groups/:id`, `permissions.integrations`).
+- **Storage providers:** `/api/auth/status` lists in `cloudStorage.providers` only the providers
+  the user's groups grant, and connecting, browsing or importing from another one is refused
+  (403).
+- **Machine OAuth clients** (client credentials, static API keys) are in no group: they may use
+  every integration an app in their **allowed apps** binds, where an installation limited to some
+  groups refused them before.
+
+**Before upgrading:** nothing is required. After the upgrade, check **Admin → Groups** for the
+grants V203 wrote, and the server log for warnings about groups it could not find.
 
 ## Admin → Integrations → Installed Merged Into Admin → Integrations
 

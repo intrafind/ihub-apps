@@ -22,6 +22,7 @@ import {
   isSecretField
 } from '../../../client/src/features/admin/components/integrations/integrationFacts';
 import { appsBindingInstallation } from '../../../client/src/features/admin/components/integrations/integrationBindings';
+import { groupsGranting } from '../../../client/src/features/admin/utils/groupIntegrationAccess';
 import {
   buildInstallationPayload,
   mergedLabel
@@ -336,7 +337,6 @@ describe('the save body of an editor', () => {
     description: { en: 'Search', de: 'Suche' },
     enabled: false,
     auth: { mode: 'none' },
-    allowedGroups: ['staff'],
     actions: { enabled: ['*'], disabled: ['discover'], overrides: {} }
   };
 
@@ -358,10 +358,35 @@ describe('the save body of an editor', () => {
       enabled: false,
       values: { baseUrl: 'https://ifinder.example.com' },
       auth: { mode: 'none' },
-      allowedGroups: ['staff'],
       actions: { enabled: ['*'], disabled: ['discover'], overrides: {} }
     });
+    // Groups are granted on the group page (#3093): the body carries none.
+    expect(body).not.toHaveProperty('allowedGroups');
     expect(mergedLabel({ en: 'A', de: 'B' }, 'en', '')).toEqual({ de: 'B' });
     expect(mergedLabel(null, 'en', '')).toBeUndefined();
+  });
+});
+
+describe('groupsGranting', () => {
+  const groups = {
+    admins: { inherits: ['users'], permissions: { integrations: [] } },
+    users: { permissions: { integrations: ['*'] } },
+    people: { permissions: { integrations: ['type:people-directory'] } },
+    ldap: { permissions: { integrations: ['com.intrafind/ldap-directory'] } },
+    one: { permissions: { integrations: ['x500bund'] } },
+    none: { permissions: {} }
+  };
+
+  test('lists the groups whose own grants cover the installation', () => {
+    const directory = {
+      id: 'x500bund',
+      definition: 'com.intrafind/ldap-directory',
+      type: 'people-directory'
+    };
+    expect(groupsGranting(directory, groups)).toEqual(['ldap', 'one', 'people', 'users']);
+    expect(groupsGranting({ id: 'jira', definition: 'com.intrafind/jira' }, groups)).toEqual([
+      'users'
+    ]);
+    expect(groupsGranting(directory, null)).toEqual([]);
   });
 });

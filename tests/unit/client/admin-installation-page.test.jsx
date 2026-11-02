@@ -45,7 +45,12 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
   fetchAdminPlatformConfig: (...args) => mockApi.fetchAdminPlatformConfig(...args),
-  fetchAdminGroups: jest.fn().mockResolvedValue({ groups: { staff: { name: 'Staff' } } }),
+  fetchAdminGroups: jest.fn().mockResolvedValue({
+    groups: {
+      staff: { name: 'Staff', permissions: { integrations: ['ifinder'] } },
+      guests: { name: 'Guests', permissions: { integrations: ['type:storage'] } }
+    }
+  }),
   getAdminApiErrorMessage: err => err?.message || 'error',
   makeAdminApiCall: jest.fn(),
   listCredentials: jest.fn().mockResolvedValue([])
@@ -133,7 +138,6 @@ const IFINDER_DETAIL = {
     builtIn: true,
     type: null,
     auth: { mode: 'none' },
-    allowedGroups: ['staff'],
     actions: { enabled: ['*'], disabled: [], overrides: {} }
   },
   values: {
@@ -168,7 +172,6 @@ const CKAN_DETAIL = {
     protocol: 'openapi',
     builtIn: false,
     auth: { mode: 'none' },
-    allowedGroups: [],
     actions: { enabled: ['*'], disabled: [], overrides: {} }
   },
   values: { baseUrl: 'https://www.govdata.de/ckan', maxRows: 10 },
@@ -311,7 +314,7 @@ describe('installation page: settings', () => {
     expectNoMissingKeys();
   });
 
-  test('the iFinder editor checks the base URL, then saves values, label and groups', async () => {
+  test('the iFinder editor checks the base URL, then saves values and label, and shows the granting groups', async () => {
     renderAt('/admin/integrations/ifinder?tab=settings');
     const editor = await screen.findByTestId('ifinder-editor');
     const baseUrl = within(editor).getByLabelText(/iFinder base URL/);
@@ -339,7 +342,9 @@ describe('installation page: settings', () => {
       timeout: 30000
     });
     expect(body.label).toEqual({ en: 'Search', de: 'Unser iFinder' });
-    expect(body.allowedGroups).toEqual(['staff']);
+    expect(body).not.toHaveProperty('allowedGroups');
+    // Who may use it comes from the groups that grant the installation.
+    expect(within(editor).getByTestId('granted-groups')).toHaveTextContent('Granted to: staff');
     expect(body.actions).toEqual({ enabled: ['*'], disabled: [], overrides: {} });
     expect(await screen.findByText('Integration "ifinder" saved.')).toBeInTheDocument();
   });

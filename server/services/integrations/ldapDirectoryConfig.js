@@ -8,6 +8,10 @@
  * `validators/peopleDirectorySchema.js`; this module is the bridge: it reads
  * the installations from the cache and turns each into that shape.
  *
+ * Who may use a directory is not part of the directory shape: the groups
+ * grant installations (`permissions.integrations`, see
+ * `integrationAccess.js`).
+ *
  * Kept free of service imports so the people directory service, the
  * connector and the migration can all use it without an import cycle.
  */
@@ -58,17 +62,6 @@ export function isDirectoryInstallation(instance) {
 }
 
 /**
- * The installation's `allowedGroups` as the directory's `groups`: an empty
- * list opens an installation to everyone, which the directory spells `*`.
- * @param {object} instance
- * @returns {string[]}
- */
-export function directoryGroupsOf(instance) {
-  const groups = Array.isArray(instance?.allowedGroups) ? instance.allowedGroups : [];
-  return groups.length ? groups : ['*'];
-}
-
-/**
  * A directory entry (the shape of `peopleDirectorySchema`) from an
  * installation's values. Unset values are left out, so the schema's defaults,
  * the sign-in provider's values and the preset's apply as before.
@@ -109,7 +102,6 @@ export function directoryFromInstance(instance) {
   for (const key of ['maxResults', 'timeoutMs', 'concurrency', 'requestDelayMs']) {
     put(directory, key, number(values[key]));
   }
-  directory.groups = directoryGroupsOf(instance);
   directory.dataFlow = values.dataFlow === 'external' ? 'external' : 'internal';
   if (values.browse === true) {
     const browse = { enabled: true };

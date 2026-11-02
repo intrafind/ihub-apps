@@ -136,8 +136,9 @@ const bindSchema = z.discriminatedUnion('mode', [
  * The admin LDAP browser of a directory: raw entries for admins, off unless
  * switched on. It shares the directory's connection, and by default its bind.
  *
- * - `groups`: who may browse, separate from the directory's `groups`. Never
- *   `*`: raw directory content is not for every caller.
+ * - `groups`: who may browse, separate from who may use the directory (the
+ *   groups' `permissions.integrations`). Never `*`: raw directory content is
+ *   not for every caller.
  * - `base`: the DN the browser is confined to; the directory's base DN when
  *   left out.
  * - `bind`: a separate (ideally read-only) account for browsing.
@@ -260,9 +261,6 @@ export const peopleDirectorySchema = z
       .min(0)
       .max(PEOPLE_DIRECTORY_LIMITS.requestDelayMs)
       .prefault(PEOPLE_DIRECTORY_DEFAULTS.requestDelayMs),
-    // Who may use the directory, ANDed with the tool grants. "*" opens it to
-    // every caller, anonymous ones included; an empty list closes it.
-    groups: z.array(z.string().trim().min(1)).prefault(['authenticated']),
     dataFlow: z.enum(['internal', 'external']).prefault('internal'),
     browse: browseSchema.optional(),
     name: localizedStringSchema.optional(),

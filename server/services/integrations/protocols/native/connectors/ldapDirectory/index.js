@@ -12,8 +12,9 @@
  * The LDAP code is reused as it is: the installation is read in the directory
  * shape (`ldapDirectoryConfig.directoryFromInstance`), the tool listing stays
  * free of the LDAP client (the runner is imported when a tool runs or an admin
- * tests), and the directory's own access rules (`groups`, `browse.groups`)
- * keep holding through the `_peopleDirectory` marker on every tool.
+ * tests), and the directory's access rules (the group grant of the
+ * installation, `browse.groups`) keep holding through the `_peopleDirectory`
+ * marker on every tool.
  */
 import {
   BROWSE_ACTIONS,

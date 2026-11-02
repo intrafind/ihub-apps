@@ -8,7 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { loadConfiguredTools, runTool } from '../../toolLoader.js';
+import { loadLocalTools, runTool } from '../../toolLoader.js';
 import {
   filterDirectoryToolsForUser,
   mayUseDirectory
@@ -38,7 +38,7 @@ import { workflowAnswerParts } from '../workflow/answerParts.js';
 /**
  * Coerce a possibly-localized value (`string` or `{ en, de, ... }`) to a plain
  * string for use as a JSON Schema `description`. Nested tool parameters may
- * still carry localized descriptions that `loadConfiguredTools` did not flatten.
+ * still carry localized descriptions that `loadLocalTools` did not flatten.
  */
 function localizedToString(value) {
   if (typeof value === 'string') return value;
@@ -227,7 +227,7 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
   // Never re-expose tools discovered from external (outbound) MCP servers —
   // that would proxy another server's tools (and their credentials) to inbound
-  // callers. loadConfiguredTools already excludes these, but guard anyway.
+  // callers. loadLocalTools already excludes these, but guard anyway.
   if (tool._mcp) return false;
   // Likewise for skills of remote A2A agents (#2546): iHub is their client,
   // not a proxy that hands its agent credentials to inbound callers.
@@ -293,15 +293,16 @@ export async function buildMcpServer({ user, platform }) {
   };
 
   // ---- Tools (iHub-native, local-only) ------------------------------------
-  // loadConfiguredTools excludes outbound MCP-discovered tools so the gateway
-  // never re-proxies another server's tools to inbound callers.
+  // loadLocalTools (the configured tools and the platform tools of workflows
+  // and agents) excludes outbound MCP-discovered tools so the gateway never
+  // re-proxies another server's tools to inbound callers.
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
     const visibleToolIds = await getVisibleToolIds(user, platform);
     const language = platform?.defaultLanguage || 'en';
-    const configuredTools = await loadConfiguredTools(language);
+    const localTools = await loadLocalTools(language);
     // People directory tools are iHub's own (its connection, not a proxied
-    // server's), offered to callers in the installation's and the directory's
-    // groups. They are actions of the `com.intrafind/ldap-directory`
+    // server's), offered to callers whose groups grant the installation
+    // (`permissions.integrations`; `browse.groups` for the LDAP browser). They are actions of the `com.intrafind/ldap-directory`
     // installations; the other installed integrations stay out, as before.
     const { discoverIntegrationTools, filterIntegrationToolsForUser } =
       await import('../integrations/integrationTools.js');
@@ -312,7 +313,7 @@ export async function buildMcpServer({ user, platform }) {
       ),
       user
     );
-    const tools = [...configuredTools, ...directoryTools];
+    const tools = [...localTools, ...directoryTools];
     for (const tool of tools) {
       if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
       registerTool(

@@ -346,6 +346,43 @@ describe('installed instances', () => {
     expect(sensitive.body.details[0].key).toBe('apiToken');
   });
 
+  it('refuses allowedGroups on install, update and test, naming the group page (#3093)', async () => {
+    const install = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed')
+        .send({ ...payload, allowedGroups: ['admins'] })
+    ).expect(400);
+    expect(install.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+    expect(install.body.error).toMatch(/Admin → Groups/);
+    expect(install.body.error).toMatch(/permissions\.integrations/);
+    expect(state.integrations.installed).toEqual([]);
+
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    // Even an empty list: the field is gone, not merely ignored.
+    const update = await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo')
+        .send({ ...payload, allowedGroups: [] })
+    ).expect(400);
+    expect(update.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+    expect(state.integrations.installed[0]).not.toHaveProperty('allowedGroups');
+
+    const draft = await admin(
+      request(app)
+        .post(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}/_test`)
+        .send({ ...payload, allowedGroups: ['admins'] })
+    ).expect(400);
+    expect(draft.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+
+    // The admin API no longer reports groups on an installation.
+    const list = await admin(request(app).get('/api/admin/integrations/installed')).expect(200);
+    expect(list.body.items[0]).not.toHaveProperty('allowedGroups');
+    const detail = await admin(
+      request(app).get('/api/admin/integrations/installed/ckan-demo')
+    ).expect(200);
+    expect(detail.body.instance).not.toHaveProperty('allowedGroups');
+  });
+
   it('stores the service-account secret in the credential store, never in integrations.json', async () => {
     const res = await admin(
       request(app)

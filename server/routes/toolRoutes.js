@@ -47,8 +47,8 @@ function resolveCaller(req, platformConfig) {
  * MCP server id, A2A agent reference, people directory (see
  * `isToolSelected`). An admin, who can grant themselves any tool, runs every
  * tool (testing a tool this way is how tool authors check it) — except a
- * people directory's tool, whose own `groups` (`browse.groups` for the LDAP
- * browser) hold for every caller.
+ * people directory's tool, whose group grant (`permissions.integrations`;
+ * `browse.groups` for the LDAP browser) holds for every caller.
  *
  * @param {Object} user
  * @param {Object} platformConfig
@@ -56,8 +56,8 @@ function resolveCaller(req, platformConfig) {
  * @returns {Promise<boolean>}
  */
 export async function mayRunTool(user, platformConfig, toolId) {
-  // A directory's tool id names the directory, so its groups (or, for the LDAP
-  // browser, `browse.groups`) are checked without waiting for the full tool
+  // A directory's tool id names the directory, so its group grant (or, for
+  // the LDAP browser, `browse.groups`) is checked without waiting for the full tool
   // list (MCP and A2A discovery).
   const directoryTool = directoryToolOfId(toolId);
   if (directoryTool && !mayUseDirectoryTool(user, directoryTool)) return false;

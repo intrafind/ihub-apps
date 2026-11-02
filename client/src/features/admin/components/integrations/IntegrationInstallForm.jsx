@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 import IntegrationTestResults from '../IntegrationTestResults';
-import GroupMultiSelect from '../GroupMultiSelect';
+import { GrantedGroups } from './editors/InstallationEditorParts';
+import { groupsGranting } from '../../utils/groupIntegrationAccess';
 import ConfigFieldInput, { pickText } from './ConfigFieldInput';
 import ActionToggleList from './ActionToggleList';
 import { buildActionsPolicy, initialCheckedActions } from './actionsPolicy';
@@ -66,12 +67,11 @@ function detailText(err) {
   return details.map(detailLine).filter(Boolean).join('; ');
 }
 
-/** The group list for `GroupMultiSelect` from `GET /api/admin/groups`. */
-function groupOptions(groupsResult) {
-  if (groupsResult?.groups) {
-    return Object.entries(groupsResult.groups).map(([id, g]) => ({ id, name: g.name || id }));
-  }
-  return Array.isArray(groupsResult) ? groupsResult : [];
+/** `GET /api/admin/groups` → `groups` (id → group), or null when it failed. */
+function groupsOf(groupsResult) {
+  return groupsResult?.groups && typeof groupsResult.groups === 'object'
+    ? groupsResult.groups
+    : null;
 }
 
 /**
@@ -167,7 +167,8 @@ function IntegrationInstallForm({
   // The actions the form offers: the definition's, or (dynamic actions,
   // MCP) what the system listed in the edit view or the last test.
   const [knownActions, setKnownActions] = useState([]);
-  const [groups, setGroups] = useState([]);
+  // The groups (id → group), for who grants the installation; null when unknown.
+  const [groups, setGroups] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState(null);
@@ -195,7 +196,7 @@ function IntegrationInstallForm({
         if (cancelled) return;
         setDefinition(def);
         onLoaded?.(def);
-        setGroups(groupOptions(groupsResult));
+        setGroups(groupsOf(groupsResult));
         const values = initialValues(def, existing, isEdit, prefill);
         const instance = existing?.instance;
         const { knownActions: actions, checked } = initialCheckedActions({
@@ -219,7 +220,6 @@ function IntegrationInstallForm({
           values,
           authMode: instance?.auth?.mode || def.defaultAuthMode || def.authModes?.[0] || 'none',
           secret: '',
-          allowedGroups: instance?.allowedGroups || [],
           checkedActions: checked,
           // Kept as stored and sent back: other languages of the label and
           // the per-action overrides have no editor here yet.
@@ -284,7 +284,6 @@ function IntegrationInstallForm({
       enabled: form.enabled,
       values,
       auth: { mode: form.authMode },
-      allowedGroups: form.allowedGroups,
       actions: buildActionsPolicy({
         knownActions,
         checkedActions: form.checkedActions,
@@ -577,16 +576,15 @@ function IntegrationInstallForm({
           <legend className={legendClass}>
             {t('admin.integrationCatalog.wizard.who', '4 · Who may use it')}
           </legend>
-          <GroupMultiSelect
-            id="integration-allowed-groups"
-            label={t('admin.integrationCatalog.wizard.groups', 'Groups')}
-            value={form.allowedGroups}
-            onChange={groupsValue => setForm(prev => ({ ...prev, allowedGroups: groupsValue }))}
-            availableGroups={groups}
-            helpText={t(
-              'admin.integrationCatalog.wizard.groupsHelp',
-              'Leave empty for everyone who may use an app that binds this integration.'
-            )}
+          <GrantedGroups
+            grantedTo={
+              groups
+                ? groupsGranting(
+                    { id: form.id.trim(), definition: definition.id, type: definition.type },
+                    groups
+                  )
+                : null
+            }
           />
           {definition.alwaysInstalled ? (
             <p className={HELP_CLASS}>

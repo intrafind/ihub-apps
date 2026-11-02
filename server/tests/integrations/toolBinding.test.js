@@ -132,6 +132,16 @@ before(async () => {
   configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/a2aAgents.json', { agents: [] });
   configCache.setCacheEntry('config/platform.json', {});
+  // Who may use what (#3093): by installation id, by definition id, by type.
+  configCache.setCacheEntry('config/groups.json', {
+    groups: {
+      anonymous: { id: 'anonymous', permissions: { integrations: ['portal'] } },
+      users: { id: 'users', permissions: { integrations: ['portal'] } },
+      'data-team': { id: 'data-team', permissions: { integrations: ['test.portal'] } },
+      'typed-team': { id: 'typed-team', permissions: { integrations: ['type:people-directory'] } },
+      nobody: { id: 'nobody', permissions: { integrations: [] } }
+    }
+  });
   configCache.setCacheEntry('config/integrations.json', {
     installed: [
       {
@@ -140,16 +150,14 @@ before(async () => {
         enabled: true,
         values: { baseUrl: `http://127.0.0.1:${port}`, maxRows: 3 },
         auth: { mode: 'none' },
-        actions: { enabled: ['*', 'list_organizations'], disabled: [], overrides: {} },
-        allowedGroups: []
+        actions: { enabled: ['*', 'list_organizations'], disabled: [], overrides: {} }
       },
       {
         id: 'restricted',
         definition: 'test.portal',
         enabled: true,
         values: { baseUrl: `http://127.0.0.1:${port}` },
-        auth: { mode: 'none' },
-        allowedGroups: ['data-team']
+        auth: { mode: 'none' }
       },
       {
         id: 'off',
@@ -200,7 +208,7 @@ describe('integration tools', () => {
     assert.equal(isToolSelected(search, ['restricted']), false);
   });
 
-  it('binds installations through app.integrations, honouring actions and groups', async () => {
+  it('binds installations through app.integrations, honouring actions and group grants', async () => {
     const app = {
       id: 'open-data',
       tools: [],
@@ -235,6 +243,12 @@ describe('integration tools', () => {
     const unbound = await getToolsForApp({ id: 'plain', tools: [] }, 'en', { user: { id: 'u' } });
     assert.equal(
       unbound.some(t => t._integration),
+      false
+    );
+    // A group that grants nothing gets none of the bound tools.
+    const ungranted = await getToolsForApp(app, 'en', { user: { id: 'u', groups: ['nobody'] } });
+    assert.equal(
+      ungranted.some(t => t._integration),
       false
     );
   });
@@ -319,10 +333,29 @@ describe('integration tools', () => {
         other.some(t => t._integration),
         false
       );
+      // A group that grants the type key may use every installation of it.
+      const typed = await getToolsForApp(app, 'en', { user: { id: 'u', groups: ['typed-team'] } });
+      assert.deepEqual(
+        typed
+          .filter(t => t._integration)
+          .map(t => t.id)
+          .sort(),
+        ['portal__list_organizations', 'portal__search_datasets', 'restricted__search_datasets']
+      );
     } finally {
       delete entry.definition.type;
       publishDefinitionTypes(registry.list());
     }
+    // Without the type, the type grant grants nothing.
+    const untyped = await getToolsForApp(
+      { id: 'typed', tools: [], integrations: { portal: {}, restricted: {} } },
+      'en',
+      { user: { id: 'u', groups: ['typed-team'] } }
+    );
+    assert.equal(
+      untyped.some(t => t._integration),
+      false
+    );
   });
 
   it('dispatches runTool to the adapter with the picked scope and strips context keys', async () => {
@@ -382,7 +415,7 @@ describe('integration tools', () => {
     });
   });
 
-  it('offers no scope picker to a user outside the installation groups', async () => {
+  it('offers no scope picker to a user whose groups do not grant the installation', async () => {
     const provider = getScopeProvider('restricted');
     assert.ok(provider);
     const app = { id: 'open-data', integrations: { restricted: {} } };

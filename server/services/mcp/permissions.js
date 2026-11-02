@@ -71,7 +71,8 @@ export async function getVisibleToolIds(user, platform) {
  * Set of installed-integration ids bound by the apps the user can access
  * (the keys of `app.integrations`). An installation's tools, and for an MCP
  * installation the server itself, are reachable through such a binding; the
- * installation's own `allowedGroups` are checked separately.
+ * group grant of the installation (`permissions.integrations`) is checked
+ * separately.
  *
  * @param {Object} user
  * @param {Object} platform
@@ -102,8 +103,8 @@ export async function getBoundIntegrationIds(user, platform) {
  *   an app or group that references the agent by id sees all its skills.
  * @param {string} [peopleDirectoryId] - Directory of a people directory tool;
  *   an app or group that references the directory
- *   sees its tools. The directory's own `groups` are checked separately
- *   (`mayUseDirectory`).
+ *   sees its tools. The group grant of the directory's installation is
+ *   checked separately (`mayUseDirectory`).
  */
 export function toolVisibleInSet(toolId, visibleSet, mcpServerId, a2aAgentId, peopleDirectoryId) {
   if (!(visibleSet instanceof Set)) return false;

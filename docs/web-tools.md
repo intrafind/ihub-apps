@@ -102,8 +102,11 @@ The script-backed search tools and the page reader are the actions of the
 `websearch` installation. The resolution above only happens while that
 installation exists and is enabled; an installation that is off offers no
 search tool and no page reader, and **Admin → Apps** names it as missing for
-every app with `websearch.enabled: true`. The installation's **groups**
-(`allowedGroups`) apply as well: a user outside them gets no search tool and no
+every app with `websearch.enabled: true`. The **group grant**
+applies as well (`groups.json` → `permissions.integrations`: `*`, `websearch`,
+`com.intrafind/web-search` or `type:web-search`; see
+[Integrations → Who may use an integration](integrations.md#who-may-use-an-integration)):
+a user whose groups do not grant the installation gets no search tool and no
 page reader, whatever the app says — and no native search either (see
 [Native Search and the Installation](#native-search-and-the-installation)).
 
@@ -491,7 +494,7 @@ Three safeguards apply to every native search call:
 
 #### Native Search and the Installation
 
-Native search is run by the model's provider, but it is still the app's web search, which belongs to the `websearch` installation: `resolveAppNativeWebSearch` resolves it only while the installation is enabled and its groups (when it has any) include the user. A user outside the groups gets no native search on a Gemini, OpenAI or Anthropic model, just as they get no script-backed search tool on any other — the groups decide who gets web search at all, not which kind. Workflow nodes that list the generic `webSearch` marker resolve native search per node and are not gated by the installation; their fallback to `braveSearch`, and any `braveSearch` / `read_url` they list directly, is.
+Native search is run by the model's provider, but it is still the app's web search, which belongs to the `websearch` installation: `resolveAppNativeWebSearch` resolves it only while the installation is enabled and one of the user's groups grants it (`permissions.integrations`). A user whose groups do not grant it gets no native search on a Gemini, OpenAI or Anthropic model, just as they get no script-backed search tool on any other — the group grant decides who gets web search at all, not which kind. Workflow nodes that list the generic `webSearch` marker resolve native search per node and are not gated by the installation; their fallback to `braveSearch`, and any `braveSearch` / `read_url` they list directly, is.
 - **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
 
 The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
@@ -774,8 +777,9 @@ The web content extractor includes protection against Server-Side Request Forger
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Migration V195 moves the Brave and Staan keys from **Admin → Providers** into the
      credentials `integration-websearch-brave` / `integration-websearch-staan` and creates the
-     `websearch` installation; check that it exists and is enabled under **Admin → Integrations** (**Admin → Apps** names it as missing otherwise) and that its groups include
-     the user
+     `websearch` installation; check that it exists and is enabled under **Admin → Integrations**
+     (**Admin → Apps** names it as missing otherwise) and that one of the user's groups grants it
+     (**Admin → Groups → Integrations**)
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 

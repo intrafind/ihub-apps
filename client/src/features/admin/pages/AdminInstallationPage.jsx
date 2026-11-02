@@ -39,7 +39,9 @@ import {
   setInstalledIntegrationEnabled,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
-import { fetchAdminApps, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { groupsGranting } from '../utils/groupIntegrationAccess';
+import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
 
 /** The tabs of the page; Releases only when the definition has a release history. */
 const TABS = new Set(['overview', 'settings', 'releases']);
@@ -134,16 +136,22 @@ function InstallationPageContent({ instanceId }) {
   const [showConnections, setShowConnections] = useState(false);
   // Bumped after a save or a cancel: remounts the editor with the stored values.
   const [editorKey, setEditorKey] = useState(0);
+  // The groups (id → group), for who grants the installation; null when unknown.
+  const [groups, setGroups] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [detailResult, listResult, appList] = await Promise.all([
+      const [detailResult, listResult, appList, groupsResult] = await Promise.all([
         fetchInstalledIntegration(instanceId),
         fetchInstalledIntegrations().catch(() => ({ items: [] })),
-        fetchAdminApps().catch(() => [])
+        fetchAdminApps().catch(() => []),
+        fetchAdminGroups().catch(() => null)
       ]);
       setDetail(detailResult);
+      setGroups(
+        groupsResult?.groups && typeof groupsResult.groups === 'object' ? groupsResult.groups : null
+      );
       setInstallations(listResult?.items || []);
       setApps(Array.isArray(appList) ? appList : []);
     } catch (err) {
@@ -540,9 +548,20 @@ function InstallationPageContent({ instanceId }) {
                   {t('admin.integrations.page.groups', 'Groups')}
                 </dt>
                 <dd className="text-gray-800 dark:text-gray-200">
-                  {instance.allowedGroups?.length > 0
-                    ? instance.allowedGroups.join(', ')
-                    : t('admin.integrations.page.everyone', 'Everyone who may use a bound app')}
+                  <GrantedGroups
+                    grantedTo={
+                      groups
+                        ? groupsGranting(
+                            {
+                              id: instance.id,
+                              definition: instance.definition,
+                              type: definition?.type
+                            },
+                            groups
+                          )
+                        : null
+                    }
+                  />
                 </dd>
                 {definition?.publisher?.name && (
                   <>

@@ -4,13 +4,13 @@
 
 **Admin → Integrations** is the first piece of the unified integrations platform
 (epic #2911). An integration is a definition in a catalog; installing it creates an instance with
-its own URL, sign-in mode, groups and set of actions; apps bind instances and the model gets their
-actions as tools.
+its own URL, sign-in mode and set of actions; apps bind instances and the model gets their actions
+as tools. Which groups may use an installation is set on the groups (see below).
 
 - **Catalog and install wizard:** the wizard is generated from the definition's install fields
   (URL, numbers, switches, choices, a secret), offers the sign-in modes the definition declares
   (no sign-in, or a shared service account whose token goes to the credential store), lets you
-  choose groups and actions, and tests the connection before anything is saved. One definition
+  choose the actions, and tests the connection before anything is saved. One definition
   can be installed several times.
 - **Actions with guard rails:** each action carries its side effect (read, write, destructive).
   Install values are enforced on every call: a result cap the model cannot raise, a filter that
@@ -115,9 +115,10 @@ The search engines and the page reader are the built-in integration **Web search
 **Admin → Integrations**, and no longer a category on the Providers page.
 
 - **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
-  as credential references, the **default search engine** every app on `auto` uses, and the
-  groups that may search — these hold for native search on Google, OpenAI and Anthropic models
-  too, so a user outside them gets no web search on any model. Qwant still needs no key.
+  as credential references and the **default search engine** every app on `auto` uses. The groups
+  granted the installation may search — the grant holds for native search on Google, OpenAI and
+  Anthropic models too, so a user without it gets no web search on any model. Qwant still needs
+  no key.
 - **Test:** the installation's **Test** reports which engines have a key and runs one live search
   with the default engine, with the same verdicts and hints as the former connectivity test.
 - **Apps unchanged:** an app still switches web search on in its own settings and may name an
@@ -140,8 +141,8 @@ Atlassian Jira is the built-in integration **Atlassian Jira** under **Admin → 
   URL to register. The "users connected" count follows connects and disconnects as they happen.
 - **Apps bind instead of listing tools:** an app binds `integrations.jira` and picks actions by
   name; the six tools keep their ids (`jira_searchTickets` and friends). An app that binds Jira is
-  offered only while the installation is enabled, and the installation's groups decide who may use
-  it.
+  offered only while the installation is enabled, and the groups' integration grants decide who may
+  use it.
 - **Users connect as before:** the "Connect to Jira" prompt in the chat and **Settings →
   Integrations** are unchanged, and existing connections keep working.
 - **Migrated for you:** migration V196 moves `platform.jira` into the installation (keeping its
@@ -160,8 +161,8 @@ variables alone.
   acquires a token with the client credentials and lists one user, with hints when Graph refuses.
 - **Apps bind instead of listing tools:** an app binds `integrations.entra` and picks actions by
   name; the six tools keep their ids (`entraPeopleSearch_findUser` and friends). An app that
-  binds the directory is offered only while the installation is enabled, and the installation's
-  groups decide who may use it.
+  binds the directory is offered only while the installation is enabled, and the groups'
+  integration grants decide who may use it.
 - **Migrated for you:** migration V197 creates the installation (enabled when the three variables
   were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
   into the binding.
@@ -199,8 +200,7 @@ installations of the built-in integration **LDAP people directory** under **Admi
 - **One wizard per directory:** the install wizard holds everything the directory editor had —
   reuse an LDAP sign-in provider or connect directly, access (anonymous or a service account whose
   password is a credential), preset and mapping, units, data flow, limits, trusted certificates and
-  the admin **LDAP browser** — with the groups who may use the directory as the installation's
-  groups. **Test connection** runs the known directory test, and a field next to the button takes
+  the admin **LDAP browser**. **Test connection** runs the known directory test, and a field next to the button takes
   a surname for the sample search. **Use for people search** on an LDAP sign-in provider opens the
   wizard with the provider selected.
 - **Same tools, same ids:** every directory keeps its id, so `<id>__search_people`,
@@ -219,23 +219,30 @@ installations of the built-in integration **LDAP people directory** under **Admi
 
 See [People Directory Search](../../people-directory-search.md).
 
-## iHub's Own Tools Are the Always-Installed iHub Integration
+## Asking the User and Scheduled Tasks Are the Always-Installed iHub Integration
 
-`ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
-tools and the scheduled-task tools are the actions of the built-in integration **iHub**
-(installation `ihub`) under **Admin → Integrations**, instead of tool files.
+`ask_user` and the scheduled-task tools (`schedule_task`, `list_scheduled_tasks`,
+`update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`,
+`get_task_run`) are the actions of the built-in integration **iHub** (installation `ihub`) under
+**Admin → Integrations**, instead of tool files.
 
 - **Always there:** the installation exists and is enabled at all times — it is created when
   missing and shows **Always installed** without a remove or disable switch. Edit it to switch
-  single actions off for every app (what `enabled: false` on a tool file did) or to limit the
-  groups.
+  single actions off for every app (what `enabled: false` on a tool file did); which groups may
+  use it is granted on the groups.
 - **Nothing changes for apps:** the tools keep their ids, so `tools: ["ask_user"]`,
-  `["knowledge"]`, `["write_artifact"]` and group grants work as before; the rules for
-  `ask_user` (kept through a chat's tool narrowing) and the scheduled-task tools are unchanged.
-  Every action carries its side effect (read, write, destructive).
-- **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
-  (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
-  lists only custom tools from now on.
+  `["schedule_task"]` and group grants work as before; the rules for `ask_user` (kept through a
+  chat's tool narrowing) and the scheduled-task tools are unchanged. Every action carries its
+  side effect (read, write, destructive).
+- **Project knowledge works whenever projects are on:** `knowledge_search`, `knowledge_read` and
+  `knowledge_list` belong to projects, not to an integration. Every request that reaches a project
+  gets them while the projects feature is on, whatever the app's `tools` or an installation says.
+- **Agent and evidence tools stay with workflows and agents:** artifacts, agent memory, inboxes
+  and tasks and the evidence tools are not listed under the iHub integration. Workflows, agent
+  profiles and apps name them in `tools` as before, and group grants select them.
+- **Migrated for you:** migrations V199 and V202 remove the shipped tool files from
+  `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
+  **Admin → Tools** lists only custom tools from now on.
 
 ## Cloud Storage Providers Are Installed Integrations
 
@@ -258,6 +265,31 @@ pages of their own with a shared provider editor.
 - **Migrated for you:** migration V200 moves the `platform.cloudStorage` providers into the
   three installations (Office 365's tenant id back into the clear, a plain-text secret into the
   credential store) and removes the block.
+
+## Groups Decide Which Integrations Their Members May Use
+
+Admins grant installed integrations per group, like apps: **Admin → Groups → a group →
+Integrations** lists every installation, grouped like the Integrations page (people directories,
+web search, storage providers, MCP servers, agents, built-in, from the catalog). In `groups.json`
+the list is `permissions.integrations`.
+
+- **All, one, a kind or a definition:** **All integrations** (`*`) includes ones installed later;
+  **All people directories**, **All web search engines** and **All storage providers**
+  (`type:people-directory`, `type:web-search`, `type:storage`) grant every installation of that
+  kind; a definition with several installations has an **All … installations** row; or tick
+  single installations.
+- **Inherited like apps:** a group gets what the groups it inherits grant; the editor shows those
+  rows ticked and greyed out with the group they come from ("via users").
+- **Everywhere the integration is used:** chat, workflows, scheduled tasks, direct tool runs, the
+  MCP and A2A gateways, web search (native search included) and the LDAP people directories hold
+  to the grant. Storage providers do too: users see, connect, browse and import only from the
+  providers their groups grant.
+- **Tokens and API keys:** a token acting for a user and a personal API key keep the user's grant;
+  a machine OAuth client may use what the apps it is allowed to use bind.
+- **Shipped groups:** `admins`, `users` and `authenticated` may use every integration; `anonymous`
+  may use iHub's own tools and web search.
+
+See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
 
 ## Integrations: One Admin Page, Grouped Tiles and a Page per Installation
 

@@ -48,11 +48,11 @@ const DIRECTORIES = [
     preset: 'activeDirectory',
     bind: { mode: 'service', dn: `cn=svc,${BASE}`, passwordRef: 'svc' },
     name: { en: 'Company directory' },
-    groups: ['users'],
     browse: { enabled: true, maxResults: 3, denyAttributes: ['info'] }
   },
   {
-    // Browse-only: nobody may use its people search.
+    // Browse-only: nobody may use its people search (V198 switches the search
+    // actions off for a directory without groups).
     id: 'infra',
     url: 'ldaps://ldap.infra.example:636',
     baseDn: 'o=infra',
@@ -65,21 +65,22 @@ const DIRECTORIES = [
     url: 'ldaps://x500.bund.de:636',
     baseDn: 'o=Bund,c=DE',
     preset: 'ivbb',
-    bind: { mode: 'anonymous' },
-    groups: ['authenticated']
+    bind: { mode: 'anonymous' }
   }
 ];
 
 configCache.setCacheEntry('config/tools.json', []);
 configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
+// Which directories each group may use (`permissions.integrations`, #3093);
+// the LDAP browser needs `browse.groups` on top.
 configCache.getGroups = () => ({
   data: {
     groups: {
       admins: { inherits: ['users'], permissions: { adminAccess: true } },
-      users: { inherits: ['authenticated'] },
-      authenticated: {},
-      ops: {}
+      users: { inherits: ['authenticated'], permissions: { integrations: ['corp'] } },
+      authenticated: { permissions: { integrations: ['infra', 'x500bund'] } },
+      ops: { permissions: { integrations: ['infra'] } }
     }
   }
 });
@@ -220,7 +221,7 @@ describe('LDAP browser', () => {
       ]);
     });
 
-    it('checks browse.groups, never the directory groups', () => {
+    it('checks browse.groups, never the group grant of the installation alone', () => {
       assert.equal(mayBrowseDirectory(admin, 'corp'), true);
       assert.equal(mayBrowseDirectory(member, 'corp'), false);
       assert.equal(mayBrowseDirectory(operator, 'infra'), true);
@@ -251,6 +252,19 @@ describe('LDAP browser', () => {
       const forMember = await configCache.getToolsForUser(member, platform, 'en');
       assert.deepEqual(browseIds(forMember.data), []);
       assert.ok(forMember.data.some(tool => tool.id === 'corp__search_people'));
+    });
+
+    it('needs the installation granted to the groups too, browse.groups alone lists nothing', async () => {
+      const platform = { defaultLanguage: 'en' };
+      const granted = await configCache.getToolsForUser(operator, platform, 'en');
+      assert.deepEqual(browseIds(granted.data), [
+        'infra__browse_children',
+        'infra__browse_read',
+        'infra__browse_search'
+      ]);
+      const ungranted = { ...operator, permissions: { ...everything, integrations: new Set() } };
+      const listed = await configCache.getToolsForUser(ungranted, platform, 'en');
+      assert.deepEqual(browseIds(listed.data), []);
     });
 
     it('is selected only by "ldapBrowse" or an explicit binding of the browse actions', async () => {

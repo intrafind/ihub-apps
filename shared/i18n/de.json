@@ -3275,8 +3275,6 @@
         "laterRelease": "(spätere Version)",
         "secretStored": "Gespeichert. Leer lassen, um es zu behalten.",
         "who": "4 · Wer darf sie nutzen",
-        "groups": "Gruppen",
-        "groupsHelp": "Leer lassen für alle, die eine App nutzen dürfen, die diese Integration einbindet.",
         "enabled": "Aktiv",
         "actions": "5 · Aktionen, die das Modell aufrufen darf",
         "requires": "Benötigt {{requirement}}",
@@ -3368,7 +3366,6 @@
         "actionUnavailable": "Nicht verfügbar",
         "about": "Über",
         "groups": "Gruppen",
-        "everyone": "Alle, die eine gebundene App nutzen dürfen",
         "docs": "Dokumentation",
         "opensInNewTab": "(öffnet in einem neuen Tab)",
         "apps": "Apps, die sie nutzen",
@@ -3391,7 +3388,7 @@
         "description": "Was sich mit iHub verbindet: andere Anwendungen, die iHub einbetten oder seine Apps aufrufen. Jede wird auf ihrer eigenen Seite konfiguriert."
       },
       "tile": {
-        "everyone": "Gruppen: alle, die eine gebundene App nutzen dürfen"
+        "noGroup": "Noch keine Gruppe gibt sie frei"
       },
       "facts": {
         "credential": "Zugangsdaten",
@@ -3578,6 +3575,12 @@
         "accessSection": "Wer sie nutzen darf",
         "actionsSection": "Aktionen, die das Modell aufrufen darf",
         "actionsSectionHelp": "Eine App, die diese Integration bindet, bietet die angehakten Aktionen an; sie kann sie weiter einschränken."
+      },
+      "access": {
+        "grantedTo": "Freigegeben für: {{groups}}",
+        "noGroup": "Noch keine Gruppe gibt sie frei: niemand kann sie nutzen.",
+        "help": "Gruppen legen fest, welche Integrationen ihre Mitglieder nutzen dürfen (vererbt wie Apps).",
+        "editOnGroups": "Unter Admin → Gruppen bearbeiten"
       }
     },
     "sidebar": {
@@ -3668,7 +3671,39 @@
       "projectSharing": "Projekte teilen",
       "projectSharingHint": "Mitglieder dürfen andere Benutzer, Gruppen oder alle zu Projekten hinzufügen, die sie besitzen oder bearbeiten.",
       "contentAdmin": "Inhalts-Admin (Apps, Prompts, Projekte)",
-      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten"
+      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten",
+      "integrations": {
+        "title": "Integrationen",
+        "help": "Welche installierten Integrationen Mitglieder nutzen dürfen. Eine App, die eine Integration einbindet, bietet sie nur Mitgliedern einer Gruppe an, die sie gewährt. Gruppen, die diese Gruppe erben, erhalten dasselbe.",
+        "inheritedHelp": "Angehakt und ausgegraut: von einer geerbten Gruppe gewährt. Dort ändern.",
+        "all": "Alle Integrationen",
+        "allHelp": "Jede installierte Integration, auch später installierte.",
+        "none": "Mitglieder dieser Gruppe dürfen keine Integration nutzen.",
+        "loading": "Integrationen werden geladen…",
+        "loadError": "Die installierten Integrationen konnten nicht geladen werden: {{error}}",
+        "sections": {
+          "peopleDirectories": "Personenverzeichnisse",
+          "webSearch": "Websuche",
+          "storage": "Speicheranbieter",
+          "mcp": "MCP-Server",
+          "a2a": "Agenten",
+          "builtIn": "Integriert",
+          "catalog": "Aus dem Katalog"
+        },
+        "allPeopleDirectories": "Alle Personenverzeichnisse",
+        "allWebSearch": "Alle Websuchmaschinen",
+        "allStorage": "Alle Speicheranbieter",
+        "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
+        "allInstallations": "Alle Installationen von {{name}}",
+        "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
+        "noneInstalled": "Noch nichts installiert.",
+        "disabled": "deaktiviert",
+        "via": "über {{groups}}",
+        "with": "mit {{name}}",
+        "other": "Weitere Einträge",
+        "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
+        "remove": "{{key}} entfernen"
+      }
     },
     "contentAccess": {
       "title": "Gruppenzugriff",

@@ -38,6 +38,7 @@ const QUICK_DANGER_BUTTON = `${QUICK_BUTTON_BASE} border-red-300 dark:border-red
  * @param {Object} props
  * @param {Object} props.item - an installation as `GET /api/admin/integrations/installed` lists it
  * @param {Object[]} props.installations - all installations (to name an `instance` value)
+ * @param {string[]|null} [props.grantedTo] - the groups that grant it (`permissions.integrations`); null hides the line
  * @param {boolean} props.busy - an action on this installation is running
  * @param {(item: Object) => void} props.onTest
  * @param {(item: Object) => void} props.onToggle - enable / disable (asks first when apps bind it)
@@ -47,6 +48,7 @@ const QUICK_DANGER_BUTTON = `${QUICK_BUTTON_BASE} border-red-300 dark:border-red
 function InstallationTile({
   item,
   installations,
+  grantedTo = null,
   busy,
   onTest,
   onToggle,
@@ -117,11 +119,12 @@ function InstallationTile({
       )}
 
       <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex-1">
-        {item.allowedGroups?.length > 0
-          ? t('admin.integrationCatalog.groupsLine', 'Groups: {{groups}}', {
-              groups: item.allowedGroups.join(', ')
-            })
-          : t('admin.integrations.tile.everyone', 'Groups: everyone who may use a bound app')}
+        {Array.isArray(grantedTo) &&
+          (grantedTo.length > 0
+            ? t('admin.integrationCatalog.groupsLine', 'Groups: {{groups}}', {
+                groups: grantedTo.join(', ')
+              })
+            : t('admin.integrations.tile.noGroup', 'No group grants it yet'))}
       </p>
 
       <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-end gap-1.5">

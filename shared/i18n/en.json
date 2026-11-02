@@ -2984,8 +2984,6 @@
         "laterRelease": "(later release)",
         "secretStored": "Stored. Leave empty to keep it.",
         "who": "4 · Who may use it",
-        "groups": "Groups",
-        "groupsHelp": "Leave empty for everyone who may use an app that binds this integration.",
         "enabled": "Enabled",
         "actions": "5 · Actions the model may call",
         "requires": "Requires {{requirement}}",
@@ -3077,7 +3075,6 @@
         "actionUnavailable": "Unavailable",
         "about": "About",
         "groups": "Groups",
-        "everyone": "Everyone who may use a bound app",
         "docs": "Documentation",
         "opensInNewTab": "(opens in a new tab)",
         "apps": "Apps that use it",
@@ -3100,7 +3097,7 @@
         "description": "What connects to iHub: other applications that embed iHub or call its apps. Each one is configured on its own page."
       },
       "tile": {
-        "everyone": "Groups: everyone who may use a bound app"
+        "noGroup": "No group grants it yet"
       },
       "facts": {
         "credential": "Credential",
@@ -3287,6 +3284,12 @@
         "accessSection": "Who may use it",
         "actionsSection": "Actions the model may call",
         "actionsSectionHelp": "An app that binds this integration offers the checked actions; it can narrow them further."
+      },
+      "access": {
+        "grantedTo": "Granted to: {{groups}}",
+        "noGroup": "No group grants it yet: nobody can use it.",
+        "help": "Groups decide which integrations their members may use (inherited like apps).",
+        "editOnGroups": "Edit on Admin → Groups"
       }
     },
     "sidebar": {
@@ -3377,7 +3380,39 @@
       "projectSharing": "Project sharing",
       "projectSharingHint": "Allow members to add other users, groups or everyone to the projects they own or edit.",
       "contentAdmin": "Content Admin (Apps, Prompts, Projects)",
-      "contentAdminHint": "Allow members to manage Apps, Prompts, and Projects without full admin access"
+      "contentAdminHint": "Allow members to manage Apps, Prompts, and Projects without full admin access",
+      "integrations": {
+        "title": "Integrations",
+        "help": "Which installed integrations members may use. An app that binds an integration offers it only to members of a group that grants it. Groups that inherit this one get the same.",
+        "inheritedHelp": "Ticked and greyed out: granted by a group this one inherits. Change it there.",
+        "all": "All integrations",
+        "allHelp": "Every installed integration, including ones installed later.",
+        "none": "Members of this group may use no integration.",
+        "loading": "Loading integrations…",
+        "loadError": "Could not load the installed integrations: {{error}}",
+        "sections": {
+          "peopleDirectories": "People directories",
+          "webSearch": "Web search",
+          "storage": "Storage providers",
+          "mcp": "MCP servers",
+          "a2a": "Agents",
+          "builtIn": "Built-in",
+          "catalog": "From the catalog"
+        },
+        "allPeopleDirectories": "All people directories",
+        "allWebSearch": "All web search engines",
+        "allStorage": "All storage providers",
+        "allOfTypeHelp": "Every installation of this kind, including ones installed later ({{count}} now).",
+        "allInstallations": "All {{name}} installations",
+        "allInstallationsHelp": "Every installation of this integration, including ones installed later ({{count}} now).",
+        "noneInstalled": "Nothing installed yet.",
+        "disabled": "disabled",
+        "via": "via {{groups}}",
+        "with": "with {{name}}",
+        "other": "Other entries",
+        "otherHelp": "Entries the list above does not show: definition ids, or installations that no longer exist.",
+        "remove": "Remove {{key}}"
+      }
     },
     "contentAccess": {
       "title": "Group access",

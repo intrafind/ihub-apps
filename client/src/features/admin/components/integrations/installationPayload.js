@@ -55,13 +55,12 @@ export function cleanInstallValues(values) {
  *
  * @param {Object} instance - the installation as the editor received it
  *   (see `editors/index.js`): `id`, `definition`, `labelLocalized`,
- *   `description`, `enabled`, `auth`, `allowedGroups`, `actions`
+ *   `description`, `enabled`, `auth`, `actions`
  * @param {Object} changes
  * @param {Object} changes.values - the install values to store (cleaned here)
  * @param {string} changes.lang - the language `label` and `description` are edited in
  * @param {string} [changes.label] - the label in `lang`; omitted keeps the stored label
  * @param {string} [changes.description] - the description in `lang`; omitted keeps it
- * @param {string[]} [changes.allowedGroups] - omitted keeps the stored groups
  * @param {Object} [changes.actions] - the action policy; omitted keeps the stored one
  * @param {Object} [changes.secrets] - a new secret for the sign-in mode, never stored in `values`
  * @returns {Object} the PUT body
@@ -84,7 +83,6 @@ export function buildInstallationPayload(instance, changes) {
     enabled: instance.enabled !== false,
     values: cleanInstallValues(changes.values),
     auth: { mode: instance.auth?.mode || 'none' },
-    allowedGroups: changes.allowedGroups ?? instance.allowedGroups ?? [],
     actions: changes.actions ?? instance.actions ?? undefined
   };
   if (changes.secrets && Object.keys(changes.secrets).length) payload.secrets = changes.secrets;

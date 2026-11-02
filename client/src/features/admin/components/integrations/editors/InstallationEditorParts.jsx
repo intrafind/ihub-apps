@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
-import GroupMultiSelect from '../../GroupMultiSelect';
+import { Link } from 'react-router-dom';
 import IntegrationTestResults from '../../IntegrationTestResults';
 import ActionToggleList from '../ActionToggleList';
 import {
@@ -99,7 +99,8 @@ export function NameSection({ editor, definition, idPrefix }) {
 }
 
 /**
- * The groups that may use the installation.
+ * Who may use the installation: the groups that grant it, granted on the
+ * group page (`permissions.integrations`, #3093), with a link there.
  *
  * @param {Object} props
  * @param {Object} props.editor
@@ -112,18 +113,41 @@ export function AccessSection({ editor, idPrefix }) {
       id={`${idPrefix}-access`}
       title={t('admin.integrations.editors.accessSection', 'Who may use it')}
     >
-      <GroupMultiSelect
-        id={`${idPrefix}-groups`}
-        label={t('admin.integrationCatalog.wizard.groups', 'Groups')}
-        value={editor.allowedGroups}
-        onChange={editor.setAllowedGroups}
-        availableGroups={editor.groups}
-        helpText={t(
-          'admin.integrationCatalog.wizard.groupsHelp',
-          'Leave empty for everyone who may use an app that binds this integration.'
-        )}
-      />
+      <GrantedGroups grantedTo={editor.grantedTo} />
     </EditorSection>
+  );
+}
+
+/**
+ * The groups that grant an installation, or a hint that none does, and the
+ * link to the group page where grants are edited.
+ *
+ * @param {Object} props
+ * @param {string[]|null} props.grantedTo - null while unknown
+ */
+export function GrantedGroups({ grantedTo }) {
+  const { t } = useTranslation();
+  return (
+    <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+      {Array.isArray(grantedTo) && (
+        <p data-testid="granted-groups">
+          {grantedTo.length > 0
+            ? t('admin.integrations.access.grantedTo', 'Granted to: {{groups}}', {
+                groups: grantedTo.join(', ')
+              })
+            : t('admin.integrations.access.noGroup', 'No group grants it yet: nobody can use it.')}
+        </p>
+      )}
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        {t(
+          'admin.integrations.access.help',
+          'Groups decide which integrations their members may use (inherited like apps).'
+        )}{' '}
+        <Link to="/admin/groups" className="text-indigo-700 dark:text-indigo-300 hover:underline">
+          {t('admin.integrations.access.editOnGroups', 'Edit on Admin → Groups')}
+        </Link>
+      </p>
+    </div>
   );
 }
 
