@@ -69,17 +69,6 @@ export const fetchAdminApps = async (options = {}) => {
   return handleApiResponse(() => apiClient.get('/admin/apps'), cacheKey, DEFAULT_CACHE_TTL.SHORT);
 };
 
-  if (language) {
-    params.language = language;
-  }
-
-  return handleApiResponse(
-    () => apiClient.get('/admin/tools', { params }),
-    cacheKey,
-    DEFAULT_CACHE_TTL.SHORT
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Admin skill endpoints
 // ---------------------------------------------------------------------------

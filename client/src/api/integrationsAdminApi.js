@@ -161,3 +161,47 @@ export const resetIntegrationRegistration = async id =>
  */
 export const fetchPeopleDirectoryEditorContext = async () =>
   (await makeAdminApiCall(`${BASE}/people-directories/editor-context`)).data;
+
+// --- Integration builder (Admin → Integrations → Add manually) -------------
+// Server: `server/routes/admin/integrationBuilder.js`.
+
+const BUILDER = `${BASE}/builder`;
+
+/** The builder draft of a custom integration (by installation id). */
+export const fetchBuilderDraft = async id =>
+  (await makeAdminApiCall(`${BUILDER}/${encodeURIComponent(id)}`)).data;
+
+/** Create a custom integration from a builder draft. */
+export const createCustomIntegration = async draft =>
+  (await makeAdminApiCall(BUILDER, { method: 'POST', ...json(draft) })).data;
+
+/** Save a custom integration (its definition gets the next patch version). */
+export const saveCustomIntegration = async (id, draft) =>
+  (
+    await makeAdminApiCall(`${BUILDER}/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      ...json(draft)
+    })
+  ).data;
+
+/**
+ * List the actions of a source before saving: `kind` is `openapi`
+ * (`source: { type: 'url', url } | { type: 'inline', spec }`), `mcp` or
+ * `a2a` (`source`: the draft's source block, `auth`: its sign-in).
+ */
+export const importBuilderActions = async ({ kind, source, auth }) =>
+  (
+    await makeAdminApiCall(`${BUILDER}/_import`, {
+      method: 'POST',
+      ...json({ kind, source, ...(auth ? { auth } : {}) })
+    })
+  ).data;
+
+/** The registry package of a custom integration: `{ catalogItem, files }`. */
+export const exportCustomIntegration = async id =>
+  (
+    await makeAdminApiCall(`${BUILDER}/_export/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      ...json({})
+    })
+  ).data;

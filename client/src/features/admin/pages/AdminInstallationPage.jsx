@@ -442,6 +442,17 @@ function InstallationPageContent({ instanceId }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* A custom integration (built here or migrated from a tool file) is
+              edited in the integration builder. */}
+          {String(instance.definition || '').startsWith('custom/') && (
+            <Link
+              to={`/admin/integrations/builder/${encodeURIComponent(instance.id)}`}
+              className={SECONDARY_BUTTON_CLASS}
+            >
+              <Icon name="pencil" size="sm" />
+              {t('admin.integrationBuilder.editInBuilder', 'Edit in builder')}
+            </Link>
+          )}
           {instance.perUser && (
             <button
               type="button"

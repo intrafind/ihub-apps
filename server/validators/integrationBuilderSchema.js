@@ -127,7 +127,8 @@ export const builderDraftSchema = z
       .object({
         /** The parsed OpenAPI document (stored as `openapi.json`), or an https URL of it. */
         document: z.union([z.record(z.string(), z.any()), z.string().max(2048)]),
-        baseUrl: z.string().min(1).max(2048),
+        /** Absent: the document's first `servers[]` entry. */
+        baseUrl: z.string().min(1).max(2048).optional(),
         headers: headerRecordSchema.optional()
       })
       .optional(),

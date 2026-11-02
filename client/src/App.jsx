@@ -158,6 +158,9 @@ const AdminNextcloudEmbedPage = lazyWithRetry(
 const AdminInstallationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminInstallationPage')
 );
+const AdminIntegrationBuilderPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationBuilderPage')
+);
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
@@ -734,6 +737,12 @@ function App() {
             <Route
               path="integrations"
               element={<LazyAdminRoute component={AdminIntegrationsPage} />}
+            />
+            {/* The integration builder: "Add manually" (new) and "Edit in
+                builder" of a custom integration (by installation id). */}
+            <Route
+              path="integrations/builder/:instanceId"
+              element={<LazyAdminRoute component={AdminIntegrationBuilderPage} />}
             />
             {/* One installation: overview, settings (dedicated editor or the
                 generic form), releases. */}
