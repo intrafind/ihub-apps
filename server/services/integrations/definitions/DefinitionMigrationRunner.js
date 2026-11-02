@@ -479,7 +479,21 @@ export class DefinitionMigrationRunner {
         unitResult: unit
       };
     }
-    await this._commit({ units: [unit], trigger });
+    try {
+      await this._commit({ units: [unit], trigger });
+    } catch (error) {
+      // A lost lock or a concurrent change is not the migration's failure:
+      // the installation belongs to whoever holds it now, or the admin just
+      // runs it again. Anything else failed the commit, which rolled back.
+      if (
+        error instanceof IntegrationError &&
+        ['MIGRATION_LOCK_LOST', 'MIGRATION_CONFLICT'].includes(error.code)
+      ) {
+        throw error;
+      }
+      const failed = await this._markCommitFailed(unit, error);
+      return { error: this._failureError(failed), changed: true, unitResult: failed };
+    }
     await this._writeBoundarySnapshots(unit, { by, trigger });
     return {
       result: 'migrated',
@@ -488,6 +502,32 @@ export class DefinitionMigrationRunner {
       changed: true,
       unitResult: unit
     };
+  }
+
+  /**
+   * Record a commit that failed (and was rolled back) as a failed
+   * migration: the entry as it was, `migrationFailed` with the error, a
+   * failed log entry. Best effort; the error itself is what the caller sees.
+   */
+  async _markCommitFailed(unit, error) {
+    const reason = `the commit failed and was rolled back: ${error.message}`.slice(0, 4000);
+    const logEntry = { ...unit.logEntry, result: 'failed', reason };
+    const after = {
+      ...unit.before,
+      status: 'migrationFailed',
+      statusReason: reason,
+      migrationLog: appendLog(unit.before.migrationLog, logEntry)
+    };
+    try {
+      await this._writeEntries([after]);
+    } catch (writeError) {
+      logger.error('Could not record a failed integration migration', {
+        component: COMPONENT,
+        instanceId: unit.instanceId,
+        error: writeError.message
+      });
+    }
+    return { ...unit, failed: true, reason, logEntry, after, appWrites: [] };
   }
 
   _assertMigratable(instance, entry) {
