@@ -214,7 +214,7 @@ The built-in `ifinder` and `iassistant` installations are bound the same way, an
 
 An app is offered to users only while every installation it **requires** exists and is enabled (for `iassistant`, the iFinder installation too). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools. A binding is required unless it says `"required": false`: an optional binding keeps the app available, and its actions, scopes and sources are simply not there while the installation is disabled or missing (**Required** switch per binding in the app editor). Web search works the other way round, since most apps work without it and native search needs no engine: `websearch.enabled` leaves the app available while no engine is, and only `websearch.required: true` hides it — on `auto` while no engine installation is enabled (missing: `type:web-search`), on a named engine while that one is missing or disabled.
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named _Label: Action_ (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The tools menu shows one switch per installation (the instance id is the tool reference), on by default. An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named _Label: Action_ (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The chat's integrations picker shows one row per installation (the instance id is the tool reference), on by default; see [In the chat: the integrations picker](#in-the-chat-the-integrations-picker). An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs
 
@@ -292,6 +292,41 @@ browser → vendor consent → GET /api/integrations/oauth/callback (or its alia
 - The POST routes need a JSON body (`415` otherwise), so a cross-site form cannot start or end a connection; delegated callers (OAuth clients, agents) are refused with `403`. Starting a sign-in is limited to 20 per user and minute.
 
 **In the chat.** A tool whose caller has no usable connection returns `INTEGRATION_AUTH_REQUIRED` before it calls the vendor. The chat draws one **Connect card** for it — the same for Jira, a cloud storage provider and a per-user MCP server: the integration, why iHub needs to act as the user for this request, the permissions (its enabled actions grouped as read / write), where the user will sign in, **Connect** and **Not now**. For a connection that expired or lacks a permission, the card says why and what changes, and offers **Reconnect**. After a successful connect the browser comes back to the same chat and the request that needed the connection is retried **once**: the chat sends one follow-up message ("I connected Jira. Please try again."), only when that answer is still the last one and has not been retried before. A call that failed inside the adapter or on the transport never produced a card and is never retried automatically, because a write may already have happened. The file browsers of the storage providers show the same card when they are not connected.
+
+### In the chat: the integrations picker
+
+The "+" menu of the chat input is the integrations picker (#2923, concept 03 §7.2):
+
+```
+ Search integrations…
+ Attach            Upload file · SharePoint · Google Drive …
+ Use in this chat  Web search
+                   iFinder                     read          Search in: Contracts ▸
+                   Jira & Confluence (EU)      read · write
+                   HubSpot                     Connect →
+                   Image generation
+ Use as default for new chats
+ Manage integrations…
+```
+
+- **One row per integration, never per action.** The rows come from the server (`GET /api/integrations/picker?app=`): one per installation, MCP server or remote agent the app offers the user, and one per other tool reference of the app. Each row carries the tool references that switch it on (`refs`), the other references that keep it on (`coveredBy`, an app binding such as `type:storage` that covers several installations), the side effects of the actions the app offers (`effects`, shown as "read · write") and, for an installation, its connection status. The client never derives a row from a tool id. The ask-the-user channel (`ask_user`) is never a row.
+- **Attach** holds the upload and the storage integrations that hand over files. **Web search** and **image generation** (the aspect ratio and quality, for a model that draws images) are rows of the same list. **Search** filters the list.
+- **Scopes.** A row whose integration offers scopes (#3050) shows the scope in use with a submenu to change it ("iFinder · Search in: Contracts ▸"); an integration that only offers a scope (iAssistant) has a row of its own. An app can show the scope as a dropdown right in the chat input instead (`scopePicker: "inline"`, see [Apps → Integration scopes](apps.md)).
+- **Connect →.** A personal integration the user has not connected (or must reconnect) shows **Connect →** instead of a switch. It switches the row on in this chat and opens the vendor's consent in a **new tab**, which comes back to the same chat; the first tab reloads the rows when the user returns to it (and when the other tab says it finished), so the row shows as connected. The connect flow is the one above.
+- **Chips under the composer** show what the next turn can reach: web search (one click turns it off), and the logo, name and status of every integration switched on in this chat, with its scope.
+- **`@` in the composer** lists the integrations beside the workflows; picking one switches it on for this chat.
+- **Manage integrations…** opens [Settings → Integrations](#settings--integrations) in a new tab.
+
+**Where the state lives.** Two levels, both on the server:
+
+| Level | Stored | Read by |
+| --- | --- | --- |
+| The user's default for an app: the integrations on (`enabledTools`), web search and the scope per integration | `GET` / `PUT /api/integrations/preferences?app=`, storage namespace `integration-preferences`, one document per (user, app), owned by the user | a **new** chat of that app, in any browser |
+| The chat's own copy | the chat's `settings` (`enabledTools`, `websearchEnabled`, `integrationScopes`), written by every turn | that chat, when it is reopened |
+
+A switch, a scope or `@` changes the chat's copy only, so switching an integration on in one chat does not switch it on in another chat. The default changes only through **Use as default for new chats**, which saves what the open chat uses. A reference the app has added since the default was saved is on (the default stores the references the app offered when it was saved). Scheduled tasks and workflows keep their own set, taken when they are created (`enabledTools`, `websearchEnabled`, `integrationScopes` on the task; a workflow node's `config.integrationScopes`), and never read either level. Guests (anonymous access) start from the app's own defaults; `PUT` answers them `401`.
+
+The browser used to keep this state per app in `sessionStorage` (`ai_hub_app_settings_<appId>`: `enabledTools`, `websearchEnabled`, `integrationScopes`). The first load after the upgrade imports it once (`PUT … { "import": true }` writes only when the user has no default yet) and removes those keys from the browser.
 
 ### Settings → Integrations
 
@@ -538,6 +573,8 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/integrations/:id/connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
 | `POST /api/integrations/:id/reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
 | `POST /api/integrations/:id/disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ success, removed, revoked }` |
+| `GET /api/integrations/picker?app=<appId>` | the chat picker's rows for an app the user may open, `{ app, rows: [{ id, kind, integration, refs, coveredBy, name, description, icon, effects, capabilities, connection }] }`; see [In the chat](#in-the-chat-the-integrations-picker); `?lang=` |
+| `GET` / `PUT /api/integrations/preferences?app=<appId>` | what a new chat of the app starts with for the signed-in user, `{ app, stored, available, preferences: { enabledTools, websearchEnabled, integrationScopes } }`; `PUT` takes the same three keys and `import: true` (write only when none is stored); `401` for guests, `403` for delegated callers, `415` without a JSON body, `404` for an app the user may not open |
 | `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it, `409 INTEGRATION_AUTH_REQUIRED` (with `integration`, `reason`, `connectUrl`) when the user has no usable connection |
 
@@ -643,6 +680,8 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
 | `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and the vendor-registered aliases of Jira and the storage providers |
 | `server/routes/integrations/userIntegrations.js`, `server/services/integrations/userIntegrations.js` | `GET /api/integrations`, `POST /api/integrations/:id/connect`, `…/reconnect`, `…/disconnect`: the user's integrations and the one connect flow |
+| `server/services/integrations/integrationPicker.js`, `server/services/integrations/IntegrationPreferencesRepository.js` | the picker rows of an app, the per-user default for new chats |
+| `client/src/features/integrations/picker/` | the chat's integrations picker (`IntegrationPicker.jsx`), the chips under the composer (`IntegrationChips.jsx`), the rows (`useIntegrationPicker.js`), the default and its one-time import (`useIntegrationDefaults.js`) |
 | `client/src/features/integrations/connect/` | the chat's Connect card (`ConnectCard.jsx`), the sign-in result (`connectResult.js`), the retry once after connecting (`connectRetry.js`, `useConnectRetry.js`); `client/src/api/userIntegrationsApi.js` |
 | `server/validators/integrationConnectionSchema.js` | the connection record |
 | `server/routes/admin/integrationExampleApps.js`, `server/services/integrations/exampleApps.js` | example apps of an installation: the templates (shipped or generated), the binding moved to the installation, the free app id |

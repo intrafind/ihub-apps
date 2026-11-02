@@ -311,6 +311,7 @@ describe('the cleanup', () => {
       'scheduledTasks',
       'chats',
       'userPrompts',
+      'integrationPreferences',
       'userProjects',
       'userSkills',
       'shortLinks'

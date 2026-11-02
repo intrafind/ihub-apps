@@ -12,6 +12,7 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { loadAppSettings } from '../../../utils/appSettings';
 import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
+import useIntegrationDefaults from '../../integrations/picker/useIntegrationDefaults';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
 import { ATTACH_PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
@@ -189,23 +190,32 @@ export default function AppChatStarter({
     });
   }, [appDetails, compatibleModels]);
 
-  // Seed the actions-menu toggles from the app config, then let anything the
-  // user already chose for this app in the current session win — the same
-  // precedence `useAppSettings` applies inside the app, so the `+` menu shows
-  // the same state on both surfaces.
+  // Seed the actions-menu toggles: the integrations from the user's default
+  // for the app (server-side, #2923), the image settings from what this
+  // session last used — the same precedence `useAppSettings` applies inside
+  // the app, so the `+` menu shows the same state on both surfaces.
+  const integrationDefaults = useIntegrationDefaults(appDetails?.id);
+  const defaultPreferences = integrationDefaults.preferences;
   useEffect(() => {
     if (!appDetails) {
       setEnabledTools(null);
       return;
     }
+    if (integrationDefaults.loading) return;
     const saved = loadAppSettings(appDetails.id) || {};
     setEnabledTools(
-      Array.isArray(saved.enabledTools) ? saved.enabledTools : appToolRefs(appDetails)
+      Array.isArray(defaultPreferences?.enabledTools)
+        ? defaultPreferences.enabledTools
+        : appToolRefs(appDetails)
     );
-    setWebsearchEnabled(saved.websearchEnabled ?? appDetails.websearch?.enabledByDefault ?? false);
+    setWebsearchEnabled(
+      typeof defaultPreferences?.websearchEnabled === 'boolean'
+        ? defaultPreferences.websearchEnabled
+        : (appDetails.websearch?.enabledByDefault ?? false)
+    );
     setImageAspectRatio(saved.imageAspectRatio || appDetails.imageGeneration?.aspectRatio || '1:1');
     setImageQuality(saved.imageQuality || appDetails.imageGeneration?.quality || 'Medium');
-  }, [appDetails]);
+  }, [appDetails, integrationDefaults.loading, defaultPreferences]);
 
   // Platform-wide kill switch for tools, mirroring AppChat: `null` keeps the
   // tools section out of the actions menu entirely.

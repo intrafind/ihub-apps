@@ -11,6 +11,9 @@
  *   POST /api/integrations/:id/connect        { returnUrl? }           → { url }
  *   POST /api/integrations/:id/reconnect      { returnUrl?, scopes? }  → { url }
  *   POST /api/integrations/:id/disconnect     → { success, removed, revoked }
+ *   GET  /api/integrations/picker?app=        the chat picker's rows for an app (#2923)
+ *   GET  /api/integrations/preferences?app=   what a new chat of the app starts with
+ *   PUT  /api/integrations/preferences?app=   save that default
  *
  * `url` is the vendor's authorization URL: the browser goes there, the user
  * consents, and the one callback (`GET /api/integrations/oauth/callback`, or
@@ -44,7 +47,7 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
-import { SAFE_ID_PATTERN, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
+import { SAFE_ID_PATTERN, isValidId, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
 import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
@@ -61,6 +64,17 @@ import {
   getUserIntegration,
   listUserIntegrations
 } from '../../services/integrations/userIntegrations.js';
+import {
+  appCandidateRefs,
+  appIntegrationDefaults,
+  pickerRowsForApp
+} from '../../services/integrations/integrationPicker.js';
+import {
+  effectivePreferences,
+  getIntegrationPreferencesRepository
+} from '../../services/integrations/IntegrationPreferencesRepository.js';
+import { canUserAccessResource } from '../../utils/authorization.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'UserIntegrations';
 
@@ -269,6 +283,174 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
     return res.json({ integrations });
   } catch (error) {
     return sendInternalError(res, error, 'list the integrations');
+  }
+});
+
+/**
+ * The app a picker or preferences request is about (`?app=`), or null with
+ * the response sent. An app the user may not open answers like one that does
+ * not exist, so app ids cannot be probed.
+ *
+ * @returns {Object|null}
+ */
+function appOfRequest(req, res) {
+  const appId = req.query.app;
+  if (typeof appId !== 'string' || !isValidId(appId)) {
+    res.status(400).json({ error: 'A valid app is required', code: 'INVALID_APP' });
+    return null;
+  }
+  const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
+  if (!app || app.enabled === false || !canUserAccessResource(req.user, 'apps', app.id)) {
+    res.status(404).json({ error: 'App not found', code: 'APP_NOT_FOUND' });
+    return null;
+  }
+  return app;
+}
+
+/**
+ * @swagger
+ * /api/integrations/picker:
+ *   get:
+ *     summary: The rows of the chat's integrations picker for an app
+ *     description: |
+ *       One row per integration, MCP server, remote agent or tool the app
+ *       offers this user — never one per action — with the tool references
+ *       that switch it on (`refs`), the other references that keep it on
+ *       (`coveredBy`), the side effects of its actions (`effects`) and, for
+ *       an installed integration, its connection status.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - { name: app, in: query, required: true, schema: { type: string } }
+ *       - { name: lang, in: query, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: "{ app, rows: [...] }"
+ *       404:
+ *         description: Not an app the user may open
+ */
+router.get('/picker', authRequired, async (req, res) => {
+  const app = appOfRequest(req, res);
+  if (!app) return;
+  try {
+    const rows = await pickerRowsForApp({ app, user: req.user, language: languageOf(req) });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({ app: app.id, rows });
+  } catch (error) {
+    return sendInternalError(res, error, 'list the integrations of the app');
+  }
+});
+
+/**
+ * @swagger
+ * /api/integrations/preferences:
+ *   get:
+ *     summary: What a new chat of an app starts with, for the signed-in user
+ *     description: |
+ *       The integrations switched on (`enabledTools`, tool references), web
+ *       search and the scope per integration. `stored` says whether the user
+ *       saved a default; without one, the app's own defaults are answered.
+ *       A chat keeps its own copy; scheduled tasks and workflows keep theirs.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - { name: app, in: query, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: "{ app, stored, available, preferences: { enabledTools, websearchEnabled, integrationScopes } }"
+ *       404:
+ *         description: Not an app the user may open
+ *   put:
+ *     summary: Save what new chats of an app start with
+ *     description: |
+ *       Replaces the default. With `import: true` it is written only when the
+ *       user has none yet (the one-time carry-over of what the browser kept).
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - { name: app, in: query, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               enabledTools: { type: array, items: { type: string } }
+ *               websearchEnabled: { type: boolean }
+ *               integrationScopes: { type: object, additionalProperties: { type: string } }
+ *               import: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Same shape as the GET
+ *       401:
+ *         description: Not signed in
+ *       503:
+ *         description: No storage to keep it in
+ */
+router.get('/preferences', authRequired, async (req, res) => {
+  const app = appOfRequest(req, res);
+  if (!app) return;
+  const defaults = appIntegrationDefaults(app);
+  res.setHeader('Cache-Control', 'private, no-store');
+  // A guest has no default of their own: new chats start with the app's.
+  if (isAnonymous(req.user)) {
+    return res.json({
+      app: app.id,
+      stored: false,
+      available: false,
+      preferences: effectivePreferences(null, defaults)
+    });
+  }
+  try {
+    const repository = getIntegrationPreferencesRepository();
+    const available = repository.isAvailable();
+    const stored = available ? await repository.get(String(req.user.id), app.id) : null;
+    return res.json({
+      app: app.id,
+      stored: Boolean(stored),
+      available,
+      preferences: effectivePreferences(stored, defaults)
+    });
+  } catch (error) {
+    return sendInternalError(res, error, 'load the integration preferences');
+  }
+});
+
+router.put('/preferences', authRequired, async (req, res) => {
+  if (isAnonymous(req.user)) return sendAuthRequired(res);
+  if (isDelegated(req.user)) {
+    return res.status(403).json({
+      error: 'Only an interactive session can change these preferences',
+      code: 'INTERACTIVE_SESSION_REQUIRED'
+    });
+  }
+  if (!req.is('application/json')) {
+    return res.status(415).json({ error: 'Send a JSON body', code: 'JSON_REQUIRED' });
+  }
+  const app = appOfRequest(req, res);
+  if (!app) return;
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const repository = getIntegrationPreferencesRepository();
+  if (!repository.isAvailable()) {
+    return res
+      .status(503)
+      .json({ error: 'Preferences cannot be stored here', code: 'PREFERENCES_UNAVAILABLE' });
+  }
+  try {
+    // Preferences are bookkeeping, not content: keep them out of the audit log.
+    req._auditLogged = true;
+    const { stored } = await repository.set(String(req.user.id), app.id, body, {
+      knownRefs: appCandidateRefs(app),
+      onlyIfAbsent: body.import === true
+    });
+    return res.json({
+      app: app.id,
+      stored: Boolean(stored),
+      available: true,
+      preferences: effectivePreferences(stored, appIntegrationDefaults(app))
+    });
+  } catch (error) {
+    return sendInternalError(res, error, 'save the integration preferences');
   }
 });
 

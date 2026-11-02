@@ -7,6 +7,7 @@ import { fetchModels, fetchStyles } from '../../api';
 import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { appToolRefs } from '../utils/boundIntegrationRefs';
+import useIntegrationDefaults from '../../features/integrations/picker/useIntegrationDefaults';
 
 /**
  * Custom hook for managing app settings across chat and canvas modes
@@ -14,8 +15,14 @@ import { appToolRefs } from '../utils/boundIntegrationRefs';
  *
  * Three layers, applied in this order, each overriding the last:
  *
- * 1. the app's own defaults,
- * 2. what this browser last used for the app (`localStorage`),
+ * 1. the app's own defaults — for the integrations (`enabledTools`, web
+ *    search, scopes) the user's default for the app, which the server keeps
+ *    (`GET /api/integrations/preferences`, #2923) so it follows the user to
+ *    another browser;
+ * 2. what this browser last used for the app (`sessionStorage`): model,
+ *    style, output format and the other answering settings, but no longer the
+ *    integrations — those are the chat's own, and a change in one chat must
+ *    not reach the next one;
  * 3. `chatSettings` — what the chat being opened was last answered with.
  *
  * The third layer only exists for a stored chat. Reopening one used to come
@@ -43,10 +50,11 @@ import { appToolRefs } from '../utils/boundIntegrationRefs';
  * @param {boolean} [options.withTranscription=false] - Offer transcription models
  *   in the model list too (the chat, where one answers an audio file with its
  *   transcript).
- * @param {boolean} [options.isolated=false] - Skip layer 2 and leave the page
- *   alone: nothing this browser saved for the app is read or written, and the
- *   header color is not changed. The admin app editor's test panel uses it so a
- *   test starts from the app's own defaults, as a new user would see it.
+ * @param {boolean} [options.isolated=false] - Skip layer 2 and the user's
+ *   integration default, and leave the page alone: nothing this browser or the
+ *   server saved for the app is read or written, and the header color is not
+ *   changed. The admin app editor's test panel uses it so a test starts from
+ *   the app's own defaults, as a new user would see it.
  */
 /** Whether a value is a stored scope map (`{ [integrationId]: scopeId }`). */
 function isScopeMap(value) {
@@ -82,6 +90,13 @@ function useAppSettings(
   // Empty means each integration's default; `useIntegrationScopes` checks a
   // value against what the integration still offers.
   const [integrationScopes, setIntegrationScopes] = useState({});
+
+  // The user's default for the app's integrations (server-side, #2923).
+  const integrationDefaults = useIntegrationDefaults(app?.id ?? appId, {
+    enabled: Boolean(app) && !isolated
+  });
+  const defaultsLoading = integrationDefaults.loading;
+  const defaultPreferences = integrationDefaults.preferences;
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -130,7 +145,7 @@ function useAppSettings(
 
   // Initialize settings from app data when app loads
   useEffect(() => {
-    if (!app || modelsLoading) return;
+    if (!app || modelsLoading || defaultsLoading) return;
 
     // Set header color. Above the signature check on purpose: it is an
     // idempotent side effect on a context another page may have changed, not
@@ -182,11 +197,20 @@ function useAppSettings(
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingLevel: app.thinking?.level ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: appToolRefs(app),
-      websearchEnabled: app.websearch?.enabledByDefault ?? false,
+      // The user's default for the app when the server answered one, else
+      // the app's own: every tool reference on.
+      enabledTools: Array.isArray(defaultPreferences?.enabledTools)
+        ? defaultPreferences.enabledTools
+        : appToolRefs(app),
+      websearchEnabled:
+        typeof defaultPreferences?.websearchEnabled === 'boolean'
+          ? defaultPreferences.websearchEnabled
+          : (app.websearch?.enabledByDefault ?? false),
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
       imageQuality: app.imageGeneration?.quality || 'Medium',
-      integrationScopes: {}
+      integrationScopes: isScopeMap(defaultPreferences?.integrationScopes)
+        ? defaultPreferences.integrationScopes
+        : {}
     };
 
     // Set initial states
@@ -228,16 +252,11 @@ function useAppSettings(
       if (savedSettings.thinkingLevel !== undefined) setThinkingLevel(savedSettings.thinkingLevel);
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
-      if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
-      if (savedSettings.websearchEnabled !== undefined)
-        setWebsearchEnabled(savedSettings.websearchEnabled);
       if (savedSettings.hostContextFlags && typeof savedSettings.hostContextFlags === 'object')
         setHostContextFlags(savedSettings.hostContextFlags);
       if (savedSettings.imageAspectRatio !== undefined)
         setImageAspectRatio(savedSettings.imageAspectRatio);
       if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
-      if (isScopeMap(savedSettings.integrationScopes))
-        setIntegrationScopes(savedSettings.integrationScopes);
     }
 
     // The chat's own settings are the last word. Only the keys it actually
@@ -270,7 +289,17 @@ function useAppSettings(
           setSelectedModel(chatSettings.modelId);
       }
     }
-  }, [app, settingsAppId, chatSettings, setHeaderColor, models, modelsLoading, isolated]);
+  }, [
+    app,
+    settingsAppId,
+    chatSettings,
+    setHeaderColor,
+    models,
+    modelsLoading,
+    isolated,
+    defaultsLoading,
+    defaultPreferences
+  ]);
 
   // Save settings when they change
   useEffect(() => {
@@ -284,12 +313,9 @@ function useAppSettings(
         thinkingEnabled,
         thinkingLevel,
         thinkingThoughts,
-        enabledTools,
-        websearchEnabled,
         hostContextFlags,
         imageAspectRatio,
-        imageQuality,
-        integrationScopes
+        imageQuality
       });
     }
   }, [
@@ -304,12 +330,9 @@ function useAppSettings(
     thinkingEnabled,
     thinkingLevel,
     thinkingThoughts,
-    enabledTools,
-    websearchEnabled,
     hostContextFlags,
     imageAspectRatio,
-    imageQuality,
-    integrationScopes
+    imageQuality
   ]);
 
   // Settings object for easy passing to components

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
@@ -34,18 +34,52 @@ const mockApp = {
 
 const mockModelList = [{ id: 'gpt', name: { en: 'GPT' } }];
 
+const mockPreferences = { current: null };
 jest.mock('../../../client/src/api', () => ({
   fetchAppDetails: jest.fn(() => Promise.resolve(mockApp)),
   fetchModels: jest.fn(() => Promise.resolve(mockModelList)),
-  // The server localizes tool metadata, so names arrive as plain strings.
-  fetchToolsBasic: jest.fn(() =>
+  // The picker rows come from the server (#2923), names localized there.
+  fetchIntegrationPicker: jest.fn(() =>
     Promise.resolve([
-      { id: 'braveSearch', name: 'Brave Search' },
-      { id: 'jira', name: 'Jira' }
+      {
+        id: 'tool:braveSearch',
+        kind: 'tool',
+        refs: ['braveSearch'],
+        coveredBy: [],
+        name: 'Brave Search',
+        effects: ['read']
+      },
+      {
+        id: 'integration:jira',
+        kind: 'integration',
+        integration: 'jira',
+        refs: ['jira'],
+        coveredBy: [],
+        name: 'Jira',
+        effects: ['read', 'write']
+      }
     ])
+  ),
+  // The user's default for the app: none stored unless a case says so.
+  fetchIntegrationPreferences: jest.fn(() =>
+    Promise.resolve(
+      mockPreferences.current || {
+        stored: false,
+        available: true,
+        preferences: {
+          enabledTools: ['braveSearch', 'jira'],
+          websearchEnabled: false,
+          integrationScopes: {}
+        }
+      }
+    )
+  ),
+  saveIntegrationPreferences: jest.fn((_appId, preferences) =>
+    Promise.resolve({ stored: true, available: true, preferences })
   ),
   generateMagicPrompt: jest.fn(() => Promise.resolve({ prompt: 'enhanced' }))
 }));
+const api = require('../../../client/src/api');
 
 jest.mock('../../../client/src/shared/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', name: 'Ada' } })
@@ -110,21 +144,16 @@ function openActionsMenu() {
   return screen.getByRole('menu');
 }
 
-/** The switch belonging to the menu row labelled `text`. */
-function switchFor(text) {
-  let node = screen.getByText(text);
-  while (node && !node.querySelector?.('input[type="checkbox"]')) node = node.parentElement;
-  return node?.querySelector('input[type="checkbox"]');
-}
-
-/** The tool row labelled `text` (role=menuitemcheckbox carries its state). */
+/** The row labelled `text` (role=menuitemcheckbox carries its state). */
 function toolRow(text) {
-  return screen.getByText(text).closest('[role="menuitemcheckbox"]');
+  return within(screen.getByRole('menu')).getByText(text).closest('[role="menuitemcheckbox"]');
 }
 
 describe('start page chat input features', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockPreferences.current = null;
+    api.saveIntegrationPreferences.mockClear();
     sessionStorage.clear();
     consumePendingChatStart('chat'); // drop any handoff a previous case left
   });
@@ -133,19 +162,19 @@ describe('start page chat input features', () => {
     await renderStartPage();
     openActionsMenu();
 
-    expect(switchFor('Web Search')).not.toBeChecked();
+    expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'false');
     // Transcription is a model to select now, not a toggle.
     expect(screen.queryByText('Transcription')).toBeNull();
 
-    fireEvent.click(switchFor('Web Search'));
-    expect(switchFor('Web Search')).toBeChecked();
+    fireEvent.click(toolRow('Web Search'));
+    expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'true');
   });
 
   it("starts the app's tools switched on and lets them be toggled", async () => {
     await renderStartPage();
     openActionsMenu();
 
-    await screen.findByText('Brave Search');
+    await within(screen.getByRole('menu')).findByText('Brave Search');
     expect(toolRow('Brave Search')).toHaveAttribute('aria-checked', 'true');
 
     fireEvent.click(toolRow('Brave Search'));
@@ -155,9 +184,9 @@ describe('start page chat input features', () => {
   it('carries the picked features into the app when the chat starts', async () => {
     await renderStartPage();
     openActionsMenu();
-    fireEvent.click(switchFor('Web Search'));
+    fireEvent.click(toolRow('Web Search'));
 
-    await screen.findByText('Jira');
+    await within(screen.getByRole('menu')).findByText('Jira');
     fireEvent.click(toolRow('Jira'));
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } });
@@ -172,18 +201,41 @@ describe('start page chat input features', () => {
     });
   });
 
-  it('seeds the toggles from settings the viewer already chose for the app', async () => {
+  it("seeds the toggles from the user's default for the app, kept on the server", async () => {
+    mockPreferences.current = {
+      stored: true,
+      available: true,
+      preferences: { enabledTools: ['jira'], websearchEnabled: true, integrationScopes: {} }
+    };
+
+    await renderStartPage();
+    await waitFor(() => expect(api.fetchIntegrationPreferences).toHaveBeenCalled());
+    openActionsMenu();
+
+    await within(screen.getByRole('menu')).findByText('Brave Search');
+    await waitFor(() => expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'true'));
+    expect(toolRow('Brave Search')).toHaveAttribute('aria-checked', 'false');
+    expect(toolRow('Jira')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('imports what this browser kept once, then forgets it', async () => {
     sessionStorage.setItem(
       'ai_hub_app_settings_chat',
-      JSON.stringify({ websearchEnabled: true, enabledTools: ['jira'] })
+      JSON.stringify({ websearchEnabled: true, enabledTools: ['jira'], selectedStyle: 'concise' })
     );
 
     await renderStartPage();
+    await waitFor(() => expect(api.saveIntegrationPreferences).toHaveBeenCalled());
+    expect(api.saveIntegrationPreferences).toHaveBeenCalledWith(
+      'chat',
+      { websearchEnabled: true, enabledTools: ['jira'] },
+      { importOnce: true }
+    );
     openActionsMenu();
-
-    expect(switchFor('Web Search')).toBeChecked();
-    await screen.findByText('Brave Search');
+    await within(screen.getByRole('menu')).findByText('Brave Search');
+    await waitFor(() => expect(toolRow('Jira')).toHaveAttribute('aria-checked', 'true'));
     expect(toolRow('Brave Search')).toHaveAttribute('aria-checked', 'false');
-    expect(toolRow('Jira')).toHaveAttribute('aria-checked', 'true');
+    const kept = JSON.parse(sessionStorage.getItem('ai_hub_app_settings_chat'));
+    expect(kept).toEqual({ selectedStyle: 'concise' });
   });
 });

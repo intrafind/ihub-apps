@@ -410,6 +410,32 @@ shows what matters at a glance.
 - **Inbound** lists what connects to iHub: Outlook add-in, browser extension, Microsoft 365
   Copilot, Nextcloud embed and the MCP gateway, each with its status.
 
+## Chat: One Row per Integration in the "+" Menu, Chips Under the Composer, Defaults on the Server
+
+The "+" menu of the chat is now the integrations picker: one row per integration the app offers,
+never one per action, with what it does ("read · write"). Chips under the composer show what the
+next answer can reach, and the default for new chats follows the user to any browser.
+
+- **Search, Attach, Use in this chat:** search the list; upload and the storage integrations that
+  hand over files are under **Attach**; web search, every integration and image generation are
+  rows under **Use in this chat**. An integration with a scope (iFinder search profile, iAssistant)
+  shows it on its row, with a submenu to change it.
+- **Connect →:** a personal integration the user has not connected yet shows **Connect →**
+  instead of a switch. The consent opens in a new tab and comes back to the same chat, and the row
+  is switched on there.
+- **Chips under the composer:** the logo, name and status of every integration switched on in the
+  chat, with its scope; web search turns off with one click. An app can show the scope as a
+  dropdown right in the chat input (`scopePicker: "inline"`, also in the app editor).
+- **`@` in the composer** finds the app's integrations beside its workflows and switches one on.
+- **Per chat, with a default on the server:** a switch changes the open chat only — it no longer
+  carries over to the next chat in the same browser tab. **Use as default for new chats** saves
+  the open chat's set (integrations, web search, scopes) for the app on the server, so it applies
+  in every browser. What the browser remembered is taken over once, on the first visit after the
+  upgrade. Scheduled tasks and workflows keep the set they were created with.
+- **Manage integrations…** opens Settings → Integrations.
+
+See [Integrations → In the chat](../../integrations.md#in-the-chat-the-integrations-picker).
+
 ## People Search Uses Every People Directory, Entra ID Included
 
 The LDAP directory integration is now called **People directory (LDAP)** (German:

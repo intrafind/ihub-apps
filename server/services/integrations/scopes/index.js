@@ -26,7 +26,7 @@
  *     for "none picked") or `{ ok: false, code, message }`.
  *
  * Per-app settings live under `app.integrations.<id>` (see
- * `validators/appConfigSchema.js`): `scopePicker` (`menu | hidden`),
+ * `validators/appConfigSchema.js`): `scopePicker` (`inline | menu | hidden`),
  * `defaultScope` and `pinnedScope`.
  */
 import { isScopeIdShape } from './common.js';

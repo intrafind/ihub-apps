@@ -179,6 +179,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // What the user's new chats start with, per app (#2923).
+    name: 'integrationPreferences',
+    kind: 'content',
+    run: async userId => {
+      const { getIntegrationPreferencesRepository } =
+        await import('./integrations/IntegrationPreferencesRepository.js');
+      return { removed: await getIntegrationPreferencesRepository().deleteAllOfUser(userId) };
+    }
+  },
+  {
     // Owned projects go with the user (their uploaded knowledge is theirs);
     // a membership in someone else's project is simply dropped.
     name: 'userProjects',
