@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V201 — the iHub integration keeps only the tools users call in chats
+ * Migration V202 — the iHub integration keeps only the tools users call in chats
  *
  * The always-installed integration `ihub` (`com.intrafind/ihub`) owns
  * `ask_user` and the scheduled-task tools only. The tools of other iHub
@@ -42,7 +42,7 @@
  * A missing file or installation is a no-op; a second run changes nothing.
  */
 
-export const version = '201';
+export const version = '202';
 export const description = 'ihub_integration_chat_tools_only';
 
 const INTEGRATIONS_FILE = 'config/integrations.json';

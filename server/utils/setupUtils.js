@@ -28,7 +28,7 @@ import { getContentsPath } from './contentsPath.js';
 
 /**
  * The tool files of iHub's own features, retired from `contents/tools/` by
- * migrations V195 (`read_url`), V199 and V201. They are read in place
+ * migrations V195 (`read_url`), V199 and V202. They are read in place
  * (`services/tools/shippedToolDefinitions.js`): by the iHub integration
  * (`ask_user`, the scheduled-task tools), by the platform tools of workflows,
  * agents and the web search feature (the page reader `read_url`), and by the

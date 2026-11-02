@@ -59,7 +59,7 @@ function setIntegrations(installed = []) {
   });
 }
 
-/** The `ihub` installation with every moved tool switched off, as a pre-V201 file could say. */
+/** The `ihub` installation with every moved tool switched off, as a pre-V202 file could say. */
 const ihubSwitchingEverythingOff = {
   id: 'ihub',
   definition: 'com.intrafind/ihub',

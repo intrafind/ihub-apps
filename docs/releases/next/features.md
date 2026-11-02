@@ -249,7 +249,7 @@ See [People Directory Search](../../people-directory-search.md).
 - **Agent and evidence tools stay with workflows and agents:** artifacts, agent memory, inboxes
   and tasks and the evidence tools are not listed under the iHub integration. Workflows, agent
   profiles and apps name them in `tools` as before, and group grants select them.
-- **Migrated for you:** migrations V199 and V201 remove the shipped tool files from
+- **Migrated for you:** migrations V199 and V202 remove the shipped tool files from
   `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
   **Admin → Tools** lists only custom tools from now on.
 
