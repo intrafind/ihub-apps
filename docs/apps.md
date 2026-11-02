@@ -1123,7 +1123,7 @@ any installed integration (**Admin → Apps → Edit → Integrations → Storag
 - Picked files are processed like uploads and follow `upload.enabled` and the `fileUpload`
   extraction options (`trackedChanges`, `comments`, `speakerNotes`); `upload.enabled: false` turns
   the picker off too.
-- `upload.cloudStorageUpload` is retired: migration V205 turned every
+- `upload.cloudStorageUpload` is retired: migration V206 turned every
   `upload.cloudStorageUpload.enabled: true` into `"type:storage": { "required": false }`, and the
   app schema refuses the key.
 

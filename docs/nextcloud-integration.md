@@ -86,7 +86,7 @@ Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/ne
 
 > **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/nextcloud` for every Nextcloud installation, or `type:storage`). See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
 
-> **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V205 renamed it to the provider's former id (e.g. `nextcloud-main`) and installed a second Nextcloud provider V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs, the users' connections and the embed plugin's `ihub_provider_id` stay valid.
+> **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed it to the provider's former id (e.g. `nextcloud-main`) and installed a second Nextcloud provider V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs, the users' connections and the embed plugin's `ihub_provider_id` stay valid.
 
 ---
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V206 — integration definition version baseline
+ * Migration V207 — integration definition version baseline
  *
  * Phase 2 of the integration versioning concept
  * (`concepts/2026-10-31 Integration Versioning and Migrations/README.md` §3)
@@ -30,7 +30,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 
-export const version = '206';
+export const version = '207';
 export const description = 'integration_definition_version_baseline';
 
 const INTEGRATIONS_FILE = 'config/integrations.json';
@@ -38,7 +38,7 @@ const DEFINITIONS_DIR = 'integration-definitions';
 const DEFINITION_FILE = 'integration.json';
 
 // Snapshot of `isStrictSemver` (validators/integrationDefinitionSchema.js) as
-// of V206: MAJOR.MINOR.PATCH with an optional prerelease, no leading zeros,
+// of V207: MAJOR.MINOR.PATCH with an optional prerelease, no leading zeros,
 // no `v` prefix, no build metadata. Do NOT replace with an import —
 // migrations must be self-contained.
 

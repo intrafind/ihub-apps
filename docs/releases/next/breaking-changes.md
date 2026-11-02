@@ -238,7 +238,7 @@ restored from a backup after the upgrade fails validation until the block is rem
   [Storage Providers](#storage-providers-apps-bind-them-requests-name-the-installation) for what
   they require now.
 - **Installation id = provider id.** Each provider becomes an installation whose id is the
-  provider's former `id` (migration V205 renames what V200 created and installs the further
+  provider's former `id` (migration V206 renames what V200 created and installs the further
   providers of a type V200 kept in `contents/config/cloudStorage.unmigrated.json`, then deletes the
   file), so callback URLs, stored user tokens and the Nextcloud embed plugin's `ihub_provider_id`
   keep working. Group grants (`permissions.integrations`) and app bindings naming the old
@@ -342,7 +342,7 @@ An app offers storage providers (Office 365, Google Drive, Nextcloud) by binding
 request to a storage provider names the installation it means, since a provider can be installed
 several times.
 
-- **`upload.cloudStorageUpload` is removed.** Migration V205 turned every
+- **`upload.cloudStorageUpload` is removed.** Migration V206 turned every
   `upload.cloudStorageUpload.enabled: true` into the binding
   `"integrations": { "type:storage": { "required": false } }` (all storage providers, optional) and
   removed the key from every app. The app schema refuses it from now on: saving such an app under
@@ -370,7 +370,7 @@ leaves **Redirect URI** empty, register the new URI
 `https://<host>/ihub/api/integrations/<provider>/<installation id>/callback` with the provider (the
 installation's **Settings** tab shows it) — or set the old, working URI as the installation's
 **Redirect URI**. If you set one of the `*_OAUTH_REDIRECT_URI` variables, enter its value as the
-installation's **Redirect URI**. After the upgrade, check the server log for V205 warnings
+installation's **Redirect URI**. After the upgrade, check the server log for V206 warnings
 (installations that kept their id, tenant ids to enter).
 
 ## Integrations: Migration State in the Admin API and Stricter Definition Versions
@@ -385,7 +385,7 @@ migrations). Three things change for scripts and hand-written files:
   `liveStatus`.
 - **An installation needs a valid `definitionVersion`.** One without it (or with a value that is
   not a version like `1.2.0`) needs a review and offers no actions until an admin adopts the
-  current version or restores a backup. Migration V206 stamps every existing installation with the
+  current version or restores a backup. Migration V207 stamps every existing installation with the
   version of its definition, so only installations written by hand after the upgrade are
   affected. Saving an installation (`PUT …/installed/:id`) is refused with `409` and
   `MIGRATION_PENDING`, `MIGRATION_FAILED` or `NEEDS_REVIEW` while it is in one of these states.
@@ -397,4 +397,4 @@ migrations). Three things change for scripts and hand-written files:
 **Before upgrading:** scripts that read the live connection status from `status` read
 `liveStatus` instead. Hand-written entries in `contents/config/integrations.json` carry a
 `definitionVersion`; after the upgrade, check **Admin → Integrations** for installations that need
-a review (definitions that could not be found by V206 are named in the server log).
+a review (definitions that could not be found by V207 are named in the server log).
