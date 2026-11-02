@@ -93,6 +93,24 @@ export const migrateInstalledIntegration = async id =>
   (await makeAdminApiCall(`${instancePath(id)}/_migrate`, { method: 'POST', ...json({}) })).data;
 
 /**
+ * Revert an installation to a backup the admin picked, in any state
+ * (`POST …/installed/:id/_revert`): the definition folder of the backup's
+ * version, the installation's entry, its app bindings and the marketplace
+ * manifest entry go back together.
+ *
+ * @param {string} id - installation id
+ * @param {string} backup - a backup id from `migration.backups`
+ * @returns {Promise<{ success: boolean, backup: Object, logEntry: Object, instance: Object }>}
+ */
+export const revertInstalledIntegration = async (id, backup) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/_revert`, {
+      method: 'POST',
+      ...json({ backup })
+    })
+  ).data;
+
+/**
  * Restore a backup of an installation whose migration failed or that needs a
  * review (`POST …/installed/:id/_restore`).
  *

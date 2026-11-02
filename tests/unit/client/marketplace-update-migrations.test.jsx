@@ -247,6 +247,24 @@ test('an item without installations shows no migration preview', async () => {
   expect(within(dialog).queryByTestId('update-migration-preview')).not.toBeInTheDocument();
 });
 
+test('a pinned registry updates to the offered version, named in the dialog and sent explicitly', async () => {
+  detail = { ...ITEM, version: '1.5.0', offeredVersion: '1.4.0', pin: '1.4.x' };
+  mockApi.updateMarketplaceItem.mockResolvedValue({ version: '1.4.0' });
+  const dialog = await openUpdateDialog();
+  expect(dialog).toHaveTextContent('Update 1.2.0 → 1.4.0');
+  expect(screen.getByTestId('version-pin')).toHaveTextContent('Pinned to 1.4.x');
+  expect(screen.getByTestId('offered-version')).toHaveTextContent('offered here: v1.4.0');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Update' }));
+  await waitFor(() =>
+    expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith(
+      'reg',
+      'integration',
+      'org.ckan__open-data-portal',
+      { version: '1.4.0' }
+    )
+  );
+});
+
 test('after the update it reports each installation’s migration with a link to its page', async () => {
   mockApi.updateMarketplaceItem.mockResolvedValue({
     version: '1.4.0',
@@ -279,7 +297,8 @@ test('after the update it reports each installation’s migration with a link to
   expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith(
     'reg',
     'integration',
-    'org.ckan__open-data-portal'
+    'org.ckan__open-data-portal',
+    { version: undefined }
   );
   // A failure makes the report an alert.
   expect(report).toHaveAttribute('role', 'alert');

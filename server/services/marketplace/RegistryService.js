@@ -18,13 +18,14 @@
  */
 
 import configStore from '../../services/config/ConfigStore.js';
-import { validateCatalog } from '../../validators/catalogSchema.js';
+import { catalogItemVersionSchema, validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
 import { getLocalContentIds, installationStatusFor } from './localContent.js';
-import { marketplaceFetch } from './marketplaceFetch.js';
+import { marketplaceFetch, sharesCredentialScope } from './marketplaceFetch.js';
+import { offeredVersion, versionPolicyFields } from './versionPolicy.js';
 import {
   checkCompatibility,
   describeIncompatibility
@@ -246,6 +247,31 @@ function resolveItemUrl(itemSource, registrySource) {
   }
 
   return null;
+}
+
+/**
+ * Where the descriptor of one listed version of an item lives: its `ref`
+ * (an absolute URL, or a path relative to the catalog), or the catalog URL
+ * with `type`, `name` and `version` as query parameters.
+ *
+ * @param {{ type: string, name: string }} item
+ * @param {{ version: string, ref?: string }} listed - the `versions[]` entry
+ * @param {{ source: string }} registry
+ * @returns {string}
+ */
+export function versionDescriptorUrl(item, listed, registry) {
+  if (typeof listed.ref === 'string' && /^https:\/\//i.test(listed.ref)) return listed.ref;
+  if (typeof listed.ref === 'string' && listed.ref) {
+    return resolveItemUrl(
+      { type: 'relative', path: listed.ref.replace(/^\.?\//, '') },
+      registry.source
+    );
+  }
+  const url = new URL(getCatalogUrl(registry.source));
+  url.searchParams.set('type', item.type);
+  url.searchParams.set('name', item.name);
+  url.searchParams.set('version', listed.version);
+  return url.toString();
 }
 
 // ---------------------------------------------------------------------------
@@ -865,9 +891,14 @@ class RegistryService {
           ...item,
           registryId: registry.id,
           registryName: registry.name,
-          installationStatus: installationStatusFor(installation, existsLocally, item.version),
+          installationStatus: installationStatusFor(
+            installation,
+            existsLocally,
+            offeredVersion(item, registry)
+          ),
           installation: installation || null,
-          ...compatibilityFields(item)
+          ...compatibilityFields(item),
+          ...versionPolicyFields(item, registry)
         });
       }
     }
@@ -1000,9 +1031,14 @@ class RegistryService {
       ...item,
       registryId,
       registryName: registry?.name,
-      installationStatus: installationStatusFor(installation, existsLocally, item.version),
+      installationStatus: installationStatusFor(
+        installation,
+        existsLocally,
+        offeredVersion(item, registry)
+      ),
       installation: installation || null,
       ...compatibilityFields(item),
+      ...versionPolicyFields(item, registry),
       contentPreview
     };
   }
@@ -1078,6 +1114,16 @@ class RegistryService {
       auth: encryptRegistryAuth(auth),
       updatedAt: new Date().toISOString()
     };
+    // The version policy (channel, pins) is checked like on create; a pin
+    // that is not a semver range would otherwise hide every version.
+    const validation = validateRegistryConfig(updated);
+    if (!validation.success) {
+      throw new Error(`Invalid registry config: ${validation.errors.join(', ')}`);
+    }
+    for (const field of ['channel', 'pins']) {
+      if (validation.data[field] === undefined) delete updated[field];
+      else updated[field] = validation.data[field];
+    }
 
     data.registries[idx] = updated;
     await this._saveRegistries(data);
@@ -1173,6 +1219,56 @@ class RegistryService {
    */
   resolveItemUrl(item, registry) {
     return resolveItemUrl(item.source, registry.source);
+  }
+
+  /**
+   * The catalog item of one version a catalog item lists (`versions[]`, the
+   * pinned install and update of versioning phase 3). The current version is
+   * the item itself; any other is fetched from its version descriptor:
+   * `versions[].ref` (relative to the catalog, or absolute), or, without a
+   * ref, `<catalog URL>?type=…&name=…&version=…` from a registry that serves
+   * versions itself. The descriptor is a catalog item of that version (its
+   * own `source`, companions and integrity) and must name the same type, name
+   * and version. The registry's credentials travel only where the registry
+   * itself lives (`sharesCredentialScope`).
+   *
+   * @param {object} registry - registry config (auth decrypted or encrypted)
+   * @param {object} item - the catalog item
+   * @param {string} version - a version the item lists
+   * @returns {Promise<object>} the catalog item of that version
+   * @throws {Error} `VERSION_NOT_LISTED`, `VERSION_DESCRIPTOR_INVALID`, or the fetch error
+   */
+  async fetchItemVersion(registry, item, version) {
+    if (version === item.version) return item;
+    const listed = (Array.isArray(item.versions) ? item.versions : []).find(
+      entry => entry?.version === version
+    );
+    if (!listed) {
+      const error = new Error(
+        `Version ${version} of ${item.type} '${item.name}' is not listed by registry '${registry.id}'`
+      );
+      error.code = 'VERSION_NOT_LISTED';
+      throw error;
+    }
+    const url = versionDescriptorUrl(item, listed, registry);
+    const authHeaders = sharesCredentialScope(url, [registry.source])
+      ? buildAuthHeaders(registry.auth)
+      : {};
+    const data = await fetchContent(url, authHeaders, registry);
+    const parsed = catalogItemVersionSchema.safeParse(data);
+    if (
+      !parsed.success ||
+      parsed.data.type !== item.type ||
+      parsed.data.name !== item.name ||
+      parsed.data.version !== version
+    ) {
+      const error = new Error(
+        `The descriptor of ${item.type} '${item.name}' ${version} from registry '${registry.id}' is not a catalog item of that version`
+      );
+      error.code = 'VERSION_DESCRIPTOR_INVALID';
+      throw error;
+    }
+    return parsed.data;
   }
 
   /**

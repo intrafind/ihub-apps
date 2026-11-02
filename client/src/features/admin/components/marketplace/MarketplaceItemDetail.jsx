@@ -104,6 +104,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const isLocal = item?.installationStatus === 'local';
   // This server version does not satisfy the item's `compatibility.ihub`
   const incompatible = item?.compatible === false;
+  // The version install and update take: the newest the registry offers this
+  // server (its channel and the item's pin applied), else the catalog's.
+  const targetVersion = item?.offeredVersion || item?.version;
   const hasReleases = item?.type === 'integration' && (item?.releases?.length || 0) > 0;
   const tabs = hasReleases ? ['overview', 'content', 'releases'] : ['overview', 'content'];
   const tabLabels = {
@@ -150,7 +153,10 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           replaceLocal: true
         });
       } else if (action === 'update') {
-        const updated = await updateMarketplaceItem(item.registryId, item.type, item.name);
+        // The update takes exactly the version the dialog showed.
+        const updated = await updateMarketplaceItem(item.registryId, item.type, item.name, {
+          version: item.offeredVersion || undefined
+        });
         // The preview held the installation labels; the results carry ids only.
         setUpdateReport(
           Array.isArray(updated?.integrationMigrations) && updated.integrationMigrations.length > 0
@@ -206,6 +212,26 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
               </span>
               {item?.version && (
                 <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
+              )}
+              {item?.pin && (
+                <span
+                  className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                  data-testid="version-pin"
+                >
+                  {t('admin.marketplace.versionPolicy.pinned', 'Pinned to {{pin}}', {
+                    pin: item.pin
+                  })}
+                </span>
+              )}
+              {item?.offeredVersion && item.offeredVersion !== item.version && (
+                <span
+                  className="text-xs text-gray-500 dark:text-gray-400"
+                  data-testid="offered-version"
+                >
+                  {t('admin.marketplace.versionPolicy.offered', 'offered here: v{{version}}', {
+                    version: item.offeredVersion
+                  })}
+                </span>
               )}
               {isInstalled && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
@@ -303,7 +329,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 : item?.installation?.version
                   ? t('admin.marketplace.updateTo', 'Update {{from}} → {{to}}', {
                       from: item.installation.version,
-                      to: item.version
+                      to: targetVersion
                     })
                   : t('admin.marketplace.update', 'Update')}
             </button>
@@ -385,7 +411,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
             <p className="text-sm font-medium text-orange-900 dark:text-orange-100 mb-1">
               {t('admin.marketplace.updateTo', 'Update {{from}} → {{to}}', {
                 from: item?.installation?.version || '?',
-                to: item?.version
+                to: targetVersion
               })}
             </p>
             {item?.requires && (
@@ -410,7 +436,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                   releases={releasesBetween(
                     item.releases,
                     item.installation?.version,
-                    item.version
+                    targetVersion
                   )}
                   loadFile={loadNoteFile}
                   emptyText={t(

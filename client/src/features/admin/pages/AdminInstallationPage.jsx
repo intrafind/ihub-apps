@@ -17,6 +17,7 @@ import IntegrationReleaseNotes from '../components/integrations/IntegrationRelea
 import IntegrationFactList from '../components/integrations/IntegrationFactList';
 import { InstallationStatusPills, Pill } from '../components/integrations/IntegrationPills';
 import InstallationMigrationPanel from '../components/integrations/InstallationMigrationPanel';
+import InstallationBackups from '../components/integrations/InstallationBackups';
 import {
   MigrationConfirmDialog,
   MigrationLog,
@@ -115,8 +116,9 @@ function bindingViaLabel(app, instance, t) {
  *
  * - **Overview**: the key facts of its values (never a secret), description,
  *   docs link, groups, the actions with their side effects, the apps that
- *   bind it (by installation id, by definition id or by `type:<type>`) and
- *   the migration log (the last 10 runs).
+ *   bind it (by installation id, by definition id or by `type:<type>`), the
+ *   migration log (the last 10 runs) and the backups the migration runner
+ *   kept, each with **Revert to this version** (`InstallationBackups`).
  * - **Settings**: the dedicated editor of its definition (`editors/index.js`),
  *   or the generic form built from the install fields; read-only while a
  *   migration state makes `PUT` refuse the save.
@@ -609,6 +611,14 @@ function InstallationPageContent({ instanceId }) {
                 <MigrationLog log={instance.migrationLog} appName={appName} />
               </section>
             )}
+
+            <InstallationBackups
+              instance={instance}
+              onRequest={migration.request}
+              busy={busy || migration.running === instance.id}
+              cardClassName={CARD_CLASS}
+              titleClassName={CARD_TITLE_CLASS}
+            />
           </div>
 
           <div className="space-y-5">
@@ -759,6 +769,7 @@ function InstallationPageContent({ instanceId }) {
         pending={migration.pending}
         onConfirm={migration.confirm}
         onCancel={migration.cancel}
+        onSelectBackup={migration.selectBackup}
       />
 
       <ConfirmDialog

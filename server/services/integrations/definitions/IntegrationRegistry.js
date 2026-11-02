@@ -14,10 +14,11 @@ import {
   definitionSchemaRevision,
   unsupportedSchemaMessage,
   dirNameToDefinitionId,
-  definitionIdToDirName
+  definitionIdToDirName,
+  migrationModuleFiles
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
-import { checkScriptCodeFiles } from './scriptModule.js';
+import { checkMigrationModuleFiles, checkScriptCodeFiles } from './scriptModule.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
 import { publishDefinitionTypes } from '../integrationTypes.js';
 
@@ -247,6 +248,10 @@ export class IntegrationRegistry {
       if (definition.protocol.type === 'script') {
         await fs.access(path.join(staging, definition.protocol.module));
       }
+      // Sequential on purpose: the first missing migration module fails the copy.
+      for (const file of migrationModuleFiles(definition.migrations)) {
+        await fs.access(path.join(staging, file));
+      }
       const { type, document } = definition.protocol;
       if (type === 'openapi' && !isHttpUrl(document)) {
         await this._readDocument(staging, document);
@@ -364,6 +369,7 @@ export class IntegrationRegistry {
       }
       checkScriptCodeFiles(validation.data, files);
     }
+    if (files) checkMigrationModuleFiles(validation.data, files);
     if (validation.data.protocol.type === 'mcp') {
       // A registry may only publish remote servers with a fixed transport: a
       // local process (`stdio`) is the admin's own decision, taken in the
