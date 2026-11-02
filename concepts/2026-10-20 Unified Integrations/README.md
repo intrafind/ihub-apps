@@ -34,6 +34,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [2026-11-02 · Web search engines](2026-11-02%20Web%20search%20engines.md) | Implementation notes: one integration per engine, Auto's order, native search without an engine, the page reader as a platform tool, migration V204, the engine contract |
 | [2026-11-02 · People directories and the LDAP browser](2026-11-02%20People%20directories%20and%20the%20LDAP%20browser.md) | Implementation notes: People directory (LDAP), the LDAP browser as its own integration, migration V205, the dedicated directory, browser and Entra editors |
 | [2026-11-02 · Storage providers as installations](2026-11-02%20Storage%20providers%20as%20installations.md) | Implementation notes: several installations per provider (installation id = provider id), migration V206, the per-app binding, the base-path-aware redirect URI, the storage editor |
+| [2026-11-02 · Example apps and chat test for integrations](2026-11-02%20Example%20apps%20and%20chat%20test%20for%20integrations.md) | Definitions ship example apps as companion files; the installation page creates one bound to the installation with one click and tests it in a chat panel beside the page |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

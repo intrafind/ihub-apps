@@ -7,8 +7,8 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import apiPkg from '@opentelemetry/api';
-const { diag, DiagConsoleLogger, DiagLogLevel, metrics: metricsApi } = apiPkg;
+// Named imports: @opentelemetry/api 1.10 ships a real ESM build without a default export.
+import { diag, DiagConsoleLogger, DiagLogLevel, metrics as metricsApi } from '@opentelemetry/api';
 import { ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
@@ -160,14 +160,15 @@ export async function initTelemetry(rawConfig = {}) {
   // `logRecordProcessors`.
   const logsEnabled = config.logs?.enabled === true || config.logs === true;
   const logRecordProcessors = logsEnabled
-    ? [new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())]
+    ? [new SimpleLogRecordProcessor({ exporter: new ConsoleLogRecordExporter() })]
     : undefined;
 
   sdk = new NodeSDK({
     resource,
     traceExporter,
     instrumentations: config.autoInstrumentation === true ? [getNodeAutoInstrumentations()] : [],
-    metricReader,
+    // NodeSDK 0.300 takes a list of readers; the singular option is gone.
+    metricReaders: metricReader ? [metricReader] : [],
     logRecordProcessors
   });
 

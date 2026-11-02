@@ -125,15 +125,22 @@ describe('WebSearchSection switches', () => {
 
 describe('IAssistantSection switch', () => {
   it('turns iAssistant on, named by its label', () => {
-    const onChange = jest.fn();
-    render(<IAssistantSection app={{ id: 'demo', iassistant: {} }} onChange={onChange} />);
+    const onEnabledChange = jest.fn();
+    render(
+      <IAssistantSection
+        app={{ id: 'demo', iassistant: {} }}
+        onChange={jest.fn()}
+        enabled={false}
+        onEnabledChange={onEnabledChange}
+      />
+    );
 
     const control = screen.getByRole('switch', { name: 'Enable iAssistant' });
     expect(control).toHaveAttribute('aria-checked', 'false');
 
     fireEvent.click(control);
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange.mock.calls[0][0].iassistant).toEqual({ enabled: true });
+    expect(onEnabledChange).toHaveBeenCalledTimes(1);
+    expect(onEnabledChange.mock.calls[0][0]).toBe(true);
   });
 });
 
