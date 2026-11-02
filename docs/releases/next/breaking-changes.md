@@ -322,6 +322,11 @@ apps keep working unchanged.
 - **`INTEGRATION_AUTH_REQUIRED` results:** `connectUrl` is the connect route
   (`/api/integrations/<id>/connect`, or `/reconnect` with `scopes` for a missing permission). MCP
   results no longer carry the `authRequired` marker or the URL in `message`.
+- **Run events:** `tool/completed` carries `authRequired` as `{ "integration", "name",
+  "reason", "action"?, "scopes"? }` for any integration (was `{ "serverId", "serverName",
+  "connectUrl" }`, MCP servers only). `reason` is `not_connected`, `expired` or
+  `insufficient_scope`; no URL is sent. A client that renders a Connect card from the event starts
+  the sign-in with `POST /api/integrations/<integration>/connect` (or `/reconnect` with `scopes`).
 - **File browsers:** browsing a storage provider without a usable connection answers `409` with
   `INTEGRATION_AUTH_REQUIRED` (was `401` or `500`).
 - **Stored chats:** Connect cards stored with answers before the upgrade (MCP servers only) are
