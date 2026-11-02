@@ -129,9 +129,11 @@ export function createOAuthIntegrationRouter(
           code: error.code,
           error: error.message
         });
+        // To the settings page, not the caller's return URL: nothing taken
+        // from the request goes into this redirect.
         return res.redirect(
           returnPathWith(
-            returnUrl,
+            buildServerPath(DEFAULT_RETURN_PATH),
             resultParams(
               { stack, resultKey: providerKey, installationId },
               { ok: false, code: error.code }

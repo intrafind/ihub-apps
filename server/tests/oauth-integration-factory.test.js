@@ -252,6 +252,14 @@ for (const p of providers) {
   if (p.multi) {
     const noProvider = await run(authHandler, { user: { id: 'u1' } });
     check('/auth without providerId is a 400', noProvider.status === 400);
+    const unknown = await run(authHandler, {
+      query: { providerId: 'no-such-installation', returnUrl: '/apps/chat' },
+      user: member('u1')
+    });
+    check(
+      '/auth that cannot start redirects to the settings page, not to a URL from the request',
+      typeof unknown.location === 'string' && unknown.location.startsWith('/settings/integrations?')
+    );
   }
 
   // What the browser's requests carry; the callback arrives at the redirect
