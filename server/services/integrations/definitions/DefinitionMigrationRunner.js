@@ -942,6 +942,35 @@ export class DefinitionMigrationRunner {
   }
 
   /**
+   * Read, while the lock is held, the committed state the boundary backups
+   * of `unit` are built from (`integrations.json` and the marketplace
+   * manifest), and return the job that fetches the boundary packages and
+   * writes the backups once the lock and the write queue are released; null
+   * when the run passed no boundary, or when that state cannot be read
+   * (logged). It runs after the commit, so a failure here never turns the
+   * committed migration into an error.
+   *
+   * @returns {Promise<(() => Promise<void>)|null>}
+   */
+  async _boundarySnapshotJob(unit, options) {
+    if (!(unit.plan?.boundaries || []).length) return null;
+    let integrations;
+    let manifest;
+    try {
+      integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
+      manifest = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || { installations: {} };
+    } catch (error) {
+      logger.warn('Could not prepare the backups of the migration boundaries', {
+        component: COMPONENT,
+        instanceId: unit.instanceId,
+        error: error.message
+      });
+      return null;
+    }
+    return () => this._writeBoundarySnapshots(unit, { ...options, integrations, manifest });
+  }
+
+  /**
    * Keep the state at every migration boundary a run passed (best effort,
    * after the commit): the installation's entry and its app bindings as they
    * were at that version and, for a definition installed from a registry, the
@@ -952,22 +981,6 @@ export class DefinitionMigrationRunner {
    * without it the backup holds no folder and a revert to it is refused
    * while another version is loaded.
    */
-  /**
-   * Read, while the lock is held, the committed state the boundary backups
-   * of `unit` are built from (`integrations.json` and the marketplace
-   * manifest), and return the job that fetches the boundary packages and
-   * writes the backups once the lock and the write queue are released; null
-   * when the run passed no boundary.
-   *
-   * @returns {Promise<(() => Promise<void>)|null>}
-   */
-  async _boundarySnapshotJob(unit, options) {
-    if (!(unit.plan?.boundaries || []).length) return null;
-    const integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
-    const manifest = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || { installations: {} };
-    return () => this._writeBoundarySnapshots(unit, { ...options, integrations, manifest });
-  }
-
   async _writeBoundarySnapshots(
     unit,
     { by, trigger, source, fetchDefinitionVersion, integrations: committed, manifest }

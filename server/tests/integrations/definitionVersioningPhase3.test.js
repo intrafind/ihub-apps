@@ -934,3 +934,41 @@ describe('revert to an intermediate version', () => {
     assert.equal((await entryOf('builtin')).definitionVersion, '1.4.0', 'nothing changed');
   });
 });
+
+describe('boundary backups after the commit', () => {
+  // The boundary job reads integrations.json and the manifest after the
+  // commit; a failure there must not turn the committed migration into an error.
+  for (const [id, unreadable] of [
+    ['unread-integrations', INTEGRATIONS],
+    ['unread-manifest', MANIFEST]
+  ]) {
+    it(`a migration whose ${unreadable} cannot be read after the commit is still migrated, without a boundary backup`, async () => {
+      await resetInstallation(installation(id, BUILTIN));
+      let committed = false;
+      const store = {
+        ...configStore,
+        listDocuments: ns => configStore.listDocuments(ns),
+        readJson: async rel => {
+          if (committed && rel === unreadable) throw new Error('read failed');
+          return configStore.readJson(rel);
+        },
+        writeJson: async (rel, data) => {
+          const result = await configStore.writeJson(rel, data);
+          if (rel === INTEGRATIONS) committed = true;
+          return result;
+        }
+      };
+      const outcome = await runner({ store }).migrate(id, { notify: false });
+      assert.equal(outcome.result, 'migrated');
+      assert.equal(committed, true, 'the commit wrote integrations.json');
+      assert.equal((await entryOf(id)).definitionVersion, '1.4.0');
+      const snapshots = await backups.listSnapshots({ instanceId: id });
+      assert.ok(snapshots.length > 0, 'the pre-migration backup is kept');
+      assert.equal(
+        snapshots.find(s => s.manifest.kind === 'boundary'),
+        undefined,
+        'no boundary backup'
+      );
+    });
+  }
+});
