@@ -13,7 +13,7 @@ import {
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS
 } from '../formStyles';
-import { Pill } from './IntegrationPills';
+import Badge from '../../../../shared/components/Badge';
 
 /** Longest note the server takes. */
 const MAX_NOTE_LENGTH = 500;
@@ -39,23 +39,25 @@ function StatusPill({ status }) {
   const { t } = useTranslation();
   switch (status) {
     case 'open':
-      return <Pill tone="blue">{t('admin.integrations.requests.status.open', 'Open')}</Pill>;
+      return <Badge tone="info">{t('admin.integrations.requests.status.open', 'Open')}</Badge>;
     case 'approved':
       return (
-        <Pill tone="green">
+        <Badge tone="success">
           {t('admin.integrations.requests.status.approved', 'Approved, not installed yet')}
-        </Pill>
+        </Badge>
       );
     case 'declined':
       return (
-        <Pill tone="gray">{t('admin.integrations.requests.status.declined', 'Declined')}</Pill>
+        <Badge tone="neutral">{t('admin.integrations.requests.status.declined', 'Declined')}</Badge>
       );
     case 'fulfilled':
       return (
-        <Pill tone="green">{t('admin.integrations.requests.status.fulfilled', 'Installed')}</Pill>
+        <Badge tone="success">
+          {t('admin.integrations.requests.status.fulfilled', 'Installed')}
+        </Badge>
       );
     default:
-      return <Pill>{status}</Pill>;
+      return <Badge tone="neutral">{status}</Badge>;
   }
 }
 
