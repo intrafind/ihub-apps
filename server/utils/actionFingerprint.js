@@ -91,7 +91,8 @@ const SIDE_EFFECT_VALUES = new Set(['read', 'write', 'destructive', 'unknown']);
 function sortedValue(value) {
   if (Array.isArray(value)) return value.map(sortedValue);
   if (!value || typeof value !== 'object') return value;
-  const out = {};
+  // Null prototype: a `__proto__` key stays an own property and is hashed.
+  const out = Object.create(null);
   for (const key of Object.keys(value).sort(compareCodeUnits)) out[key] = sortedValue(value[key]);
   return out;
 }
@@ -110,13 +111,14 @@ function sortedValue(value) {
 export function canonicalSchema(schema) {
   if (Array.isArray(schema)) return schema.map(canonicalSchema);
   if (!schema || typeof schema !== 'object') return schema;
-  const out = {};
+  // Null prototype, as in sortedValue: a property named `__proto__` counts.
+  const out = Object.create(null);
   for (const key of Object.keys(schema).sort(compareCodeUnits)) {
     if (DOCUMENTATION_KEYWORDS.has(key)) continue;
     const value = schema[key];
     if (value === undefined) continue;
     if (NAMED_SCHEMA_MAPS.has(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      const named = {};
+      const named = Object.create(null);
       for (const name of Object.keys(value).sort(compareCodeUnits))
         named[name] = canonicalSchema(value[name]);
       out[key] = named;
