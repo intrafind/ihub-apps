@@ -17,7 +17,8 @@ export const DEFINITION_ID = 'com.intrafind/ldap-directory';
 
 /** The installation of one directory entry, without the removed `allowedGroups`. */
 function installationOf(directory) {
-  const { allowedGroups: _removed, ...instance } = instanceFrom(directory);
+  const instance = instanceFrom(directory);
+  delete instance.allowedGroups;
   return instance;
 }
 
