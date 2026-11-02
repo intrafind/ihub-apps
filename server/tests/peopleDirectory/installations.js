@@ -9,9 +9,9 @@
  * describing directories and browsers.
  *
  * Who may use a directory or a browser is not part of the installation
- * (#3093, V202): the tests grant it on the groups
+ * (#3093, V203): the tests grant it on the groups
  * (`permissions.integrations`). A directory's old `groups` field, which V198
- * turned into `allowedGroups`, is dropped here as V202 drops it; its old
+ * turned into `allowedGroups`, is dropped here as V203 drops it; its old
  * `browse` block is not supported any more (V205 moved it into a browser).
  */
 import { instanceFrom } from '../../migrations/V198__people_directories_installed_integrations.js';

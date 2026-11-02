@@ -61,7 +61,7 @@ export const installedIntegrationSchema = z.object({
   values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
-  // No `allowedGroups` (removed in #3093, moved onto the groups by V202): who
+  // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),
   /** Written by health checks, never by admins. */

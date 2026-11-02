@@ -209,7 +209,7 @@ export function splitActionPolicy(policy) {
 
 /**
  * A group and every group it inherits, transitively (cycles tolerated).
- * Snapshot of V202's `reachOf`.
+ * Snapshot of V203's `reachOf`.
  * @param {string} groupId
  * @param {Object<string, object>} groups
  * @returns {Set<string>}
