@@ -451,3 +451,16 @@ says where the answer searched (**Searched in Contracts**) or which iAssistant i
 - **Reopened chats:** the labels are stored with the answer, so they show the same after reopening.
 - The names come from the same per-user list as the search profile picker; a profile whose name
   is unknown shows its id. Shared chats leave the labels out, like the documents themselves.
+
+## Chat: Tool Calls Name the Action and the System They Asked
+
+The list of tool calls above an answer now reads the way users think about it: each call shows
+the action ("Search people") and the integration, MCP server or remote agent it ran against
+("Munich AD"), instead of an internal id like `muc-ad__search_people`.
+
+- The collapsed summary names the systems the answer asked: _4 tool calls · Munich AD, Microsoft
+  Entra ID directory_.
+- The action title comes from the integration definition, in the user's language; an MCP tool
+  shows the title its server declares, else its own name.
+- The internal id stays available as the tooltip of the action, for admins tracing a call.
+- Tools without a title (custom tools) keep showing their name as before.

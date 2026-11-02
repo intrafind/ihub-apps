@@ -295,7 +295,11 @@ export function buildToolActivity(run) {
         id: tool.callId,
         kind,
         toolId: tool.toolId,
-        name: tool.name || tool.toolId,
+        // The action as the user reads it ("Search people"), else the id the model used.
+        name: tool.title || tool.name || tool.toolId,
+        titled: Boolean(tool.title),
+        // The integration, MCP server or agent it ran against ("Munich AD").
+        integration: tool.integration || null,
         status,
         scope: kind === 'tool' ? null : searchScope(tool.toolId),
         query,

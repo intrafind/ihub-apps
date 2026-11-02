@@ -264,6 +264,10 @@ export const toolCallData = z.object({
   callId: z.string(),
   toolId: z.string(),
   name: z.string(),
+  /** The action as the user reads it ("Search people"), when the tool names one. */
+  title: z.string().optional(),
+  /** The integration, MCP server or remote agent the call ran against ("Munich AD"). */
+  integration: z.string().optional(),
   args: z.any(),
   argsRepaired: z.boolean().optional(),
   /** Execution class decided by the segment planner. */

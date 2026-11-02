@@ -520,6 +520,39 @@ describe('ToolActivity', () => {
     expect(screen.getByText('Document not found: IPD-531')).toBeInTheDocument();
   });
 
+  test('an integration call reads as its action and the system it ran against, not its id', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        call(2, 'tool/started', 'c1', 'muc-ad__search_people', {
+          title: 'Search people',
+          integration: 'Munich AD',
+          args: { query: 'Daniel Manzke' },
+          execution: 'server'
+        }),
+        call(3, 'tool/completed', 'c1', 'muc-ad__search_people', { durationMs: 40 }),
+        call(4, 'tool/started', 'c2', 'legacy_tool', { args: {}, execution: 'server' }),
+        call(5, 'tool/completed', 'c2', 'legacy_tool', { durationMs: 10 }),
+        ended(6)
+      ])
+    );
+    expect(activity.items[0]).toMatchObject({
+      name: 'Search people',
+      titled: true,
+      integration: 'Munich AD'
+    });
+    render(<ToolActivity activity={activity} loading={false} />);
+    // The summary names the system the answer came from.
+    expect(screen.getByRole('button')).toHaveTextContent('Munich AD');
+    fireEvent.click(screen.getByRole('button'));
+    const action = screen.getByText('Search people');
+    expect(action).toHaveAttribute('title', 'muc-ad__search_people');
+    expect(screen.getByTitle('Data from Munich AD')).toHaveTextContent('Munich AD');
+    expect(screen.queryByText('muc-ad__search_people')).not.toBeInTheDocument();
+    // A tool without a title still reads by its name.
+    expect(screen.getByText('Ran legacy_tool')).toBeInTheDocument();
+  });
+
   test('renders nothing without activity', () => {
     const { container } = render(<ToolActivity activity={{ items: [], reading: null }} />);
     expect(container).toBeEmptyDOMElement();

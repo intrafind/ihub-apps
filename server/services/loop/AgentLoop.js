@@ -32,6 +32,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
+import { toolDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
 import { runToolCallScope } from '../sources/toolCallScope.js';
 import {
@@ -907,6 +908,7 @@ export class AgentLoop {
     const started = Date.now();
     const messages = [];
     const info = { call, toolDef, toolId, name, args, argsRepaired, iteration, groupIndex };
+    const display = toolDisplayOf(toolDef);
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
 
@@ -918,6 +920,7 @@ export class AgentLoop {
         callId: call.id || `${call.index}`,
         toolId,
         name,
+        ...display,
         args,
         argsRepaired,
         execution: handled.execution || (toolDef?.passthrough ? 'passthrough' : 'clarification'),
@@ -933,6 +936,7 @@ export class AgentLoop {
       callId: call.id || `${call.index}`,
       toolId,
       name,
+      ...display,
       args,
       argsRepaired,
       execution: toolExecution,

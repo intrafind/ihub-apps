@@ -427,6 +427,9 @@ export function reduceRunEvent(state, envelope) {
         step: data.step,
         toolId: data.toolId,
         name: data.name,
+        // What the user reads instead of the id (server `utils/toolDisplay`).
+        title: data.title || null,
+        integration: data.integration || null,
         args: data.args,
         execution: data.execution || 'server',
         status: 'running',

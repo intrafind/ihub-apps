@@ -75,3 +75,14 @@ from any other host only when it has a public address.
   catalog has to serve them from the catalog's host.
 
 See [Marketplace → Security](../../marketplace.md#security).
+
+## Answer Badge: "Based on Connected Systems" for Integration and MCP Answers
+
+Answers built from an MCP server, a remote agent or an installed integration such as a people
+directory were badged "Based on AI knowledge", although the data came from that system; a Jira
+search was badged "Based on web search". They now show **Based on connected systems**.
+
+- Web search integrations (Brave, Qwant, STAAN) keep "Based on web search", iFinder keeps "Based
+  on iFinder documents".
+- A call that only returned an error does not count, and iHub's own tools (asking the user,
+  scheduled tasks) do not either.
