@@ -239,6 +239,35 @@ describe('integration tools', () => {
     );
   });
 
+  it('keeps the tools of a definition binding in a chat that names the definition', async () => {
+    const app = { id: 'by-definition', tools: [], integrations: { 'test.portal': {} } };
+    const user = { id: 'u', groups: ['data-team'] };
+    const all = await getToolsForApp(app, 'en', { user });
+    const ids = all
+      .filter(t => t._integration)
+      .map(t => t.id)
+      .sort();
+    assert.deepEqual(ids, [
+      'portal__list_organizations',
+      'portal__search_datasets',
+      'restricted__search_datasets'
+    ]);
+    const chat = await getToolsForApp(app, 'en', { user, enabledTools: ['test.portal'] });
+    assert.deepEqual(
+      chat
+        .filter(t => t._integration)
+        .map(t => t.id)
+        .sort(),
+      ids
+    );
+    // The installation id still narrows to that installation.
+    const one = await getToolsForApp(app, 'en', { user, enabledTools: ['restricted'] });
+    assert.deepEqual(
+      one.filter(t => t._integration).map(t => t.id),
+      ['restricted__search_datasets']
+    );
+  });
+
   it('binds every installation of a type through a type key', async () => {
     // The test definition has no type; give it one for this test only.
     const entry = registry.get('test.portal');
@@ -254,6 +283,21 @@ describe('integration tools', () => {
           .map(t => t.id)
           .sort(),
         ['portal__list_organizations', 'portal__search_datasets', 'restricted__search_datasets']
+      );
+      // A chat names the binding by its key: the type key keeps every
+      // installation it binds, another reference keeps none of them.
+      const chat = await getToolsForApp(app, 'en', {
+        user: { id: 'u', groups: ['data-team'] },
+        enabledTools: ['type:people-directory']
+      });
+      assert.equal(chat.filter(t => t._integration).length, 3);
+      const switchedOff = await getToolsForApp(app, 'en', {
+        user: { id: 'u', groups: ['data-team'] },
+        enabledTools: ['something-else']
+      });
+      assert.equal(
+        switchedOff.some(t => t._integration),
+        false
       );
       // An installation's own binding wins over the type's.
       const narrowed = await getToolsForApp(

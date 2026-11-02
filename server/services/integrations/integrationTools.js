@@ -4,6 +4,7 @@
 import logger from '../../utils/logger.js';
 import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
 import { expandUserGroups } from '../../utils/groupInheritance.js';
+import { isToolSelected } from '../../utils/toolSelection.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
 import { bindingKeyOfType, getDefinitionTypes } from './integrationTypes.js';
 import { getProtocolAdapter } from './protocols/index.js';
@@ -87,6 +88,30 @@ function toolFromAction(resolved, action, language) {
 }
 
 /**
+ * The key under `app.integrations` that binds an installation: its own id,
+ * else its definition id, else its definition's type key (`type:<type>`).
+ * Null when the app binds none of them.
+ * @param {object} app
+ * @param {{ id: string, definition?: string }|null|undefined} instance
+ * @returns {string|null}
+ */
+export function bindingKeyFor(app, instance) {
+  const bindings = app?.integrations;
+  if (!bindings || typeof bindings !== 'object' || !instance?.id) return null;
+  if (Object.hasOwn(bindings, instance.id)) return instance.id;
+  if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
+    return instance.definition;
+  }
+  const types = getDefinitionTypes();
+  const type =
+    instance.definition && Object.hasOwn(types, instance.definition)
+      ? types[instance.definition]
+      : null;
+  if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) return bindingKeyOfType(type);
+  return null;
+}
+
+/**
  * The binding an app has for an installation: its own, else the one of its
  * definition, else the one of its definition's type (`type:<type>`). Null
  * when the app binds none of them.
@@ -95,21 +120,26 @@ function toolFromAction(resolved, action, language) {
  * @returns {object|null}
  */
 export function appBindingFor(app, instance) {
-  const bindings = app?.integrations;
-  if (!bindings || typeof bindings !== 'object' || !instance?.id) return null;
-  if (Object.hasOwn(bindings, instance.id)) return bindings[instance.id] || {};
-  if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
-    return bindings[instance.definition] || {};
-  }
-  const types = getDefinitionTypes();
-  const type =
-    instance.definition && Object.hasOwn(types, instance.definition)
-      ? types[instance.definition]
-      : null;
-  if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) {
-    return bindings[bindingKeyOfType(type)] || {};
-  }
-  return null;
+  const key = bindingKeyFor(app, instance);
+  return key === null ? null : app.integrations[key] || {};
+}
+
+/**
+ * Whether a chat's `enabledTools` keeps a tool the app binds under
+ * `app.integrations`. The chat names a bound integration by the key the app
+ * binds it with, so a definition id (`com.intrafind/office365`) or a type key
+ * (`type:storage`) keeps the tools of every installation it binds, exactly as
+ * an installation id keeps its own.
+ * @param {object} app
+ * @param {object} tool - a tool `getIntegrationToolsForApp` returned
+ * @param {string[]} enabledTools
+ * @returns {boolean}
+ */
+export function isBoundToolEnabled(app, tool, enabledTools) {
+  if (isToolSelected(tool, enabledTools)) return true;
+  const instance = installedIntegrationService.get(tool?._integration?.instanceId);
+  const key = bindingKeyFor(app, instance);
+  return key !== null && enabledTools.includes(key);
 }
 
 /**
