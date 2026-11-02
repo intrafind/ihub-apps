@@ -709,7 +709,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
           toolId: issue.toolId,
           ...(issue.integration ? { integration: issue.integration } : {}),
           reason: issue.reason || INTEGRATION_AUTH_REASONS.EXPIRED,
-          ...(issue.connectUrl ? { connectUrl: issue.connectUrl } : {})
+          // The owner reconnects in Settings → Integrations (a page, not the
+          // connect API route a tool result names).
+          connectUrl: SETTINGS_INTEGRATIONS_PATH
         }),
         { ledgerRunIds, usage: addUsage(run.usage), watched }
       );
