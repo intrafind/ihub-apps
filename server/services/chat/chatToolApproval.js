@@ -69,7 +69,9 @@ export function isChatToolApproval(interaction) {
     typeof interaction.source?.chatId === 'string' &&
     interaction.source.chatId.length > 0 &&
     !interaction.source.checkpointId &&
-    !interaction.source.scheduledTaskId
+    !interaction.source.scheduledTaskId &&
+    // An MCP App view's own call is answered beside the view, not by the next message.
+    !interaction.source.viewCall
   );
 }
 

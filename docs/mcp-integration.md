@@ -382,7 +382,10 @@ the tool's side effect, but they are the server's own claim: a tool that says
 it only reads is still asked for under **Ask unless it only reads** until an
 admin confirms it as a read (an action override with `sideEffect: "read"`).
 Through the inbound MCP gateway nobody can approve: a gated tool answers
-`APPROVAL_REQUIRED_NO_USER` instead of running.
+`APPROVAL_REQUIRED_NO_USER` instead of running. An MCP App view's own call to
+a gated tool waits for the user's approval in the chat (the card appears below
+the view, the view gets the result once approved); see
+[Tool Approval → MCP App views](tool-approval.md#mcp-app-views).
 
 ### How tools surface
 

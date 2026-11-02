@@ -23,13 +23,52 @@ export const fetchMcpAppResource = async (appId, toolId) => {
 
 /**
  * A `tools/call` made by the view, proxied to the view's own MCP server.
- * @returns {Promise<Object>} CallToolResult
+ *
+ * A tool that needs a person's approval (#2945) does not run: the answer is
+ * `{ awaitingApproval: true, interaction }`, the host shows the approval card
+ * and sends the decision with {@link answerMcpAppToolApproval}. `chatId` and
+ * `toolApprovalCapable` say where the card can be shown; without them such a
+ * call is refused (`APPROVAL_REQUIRED_NO_USER`).
+ *
+ * @returns {Promise<Object>} CallToolResult, or `{ awaitingApproval, interaction }`
  */
-export const callMcpAppTool = async ({ appId, toolId, name, args }) => {
+export const callMcpAppTool = async ({
+  appId,
+  toolId,
+  name,
+  args,
+  chatId = null,
+  toolApprovalCapable = false
+}) => {
   const { data } = await apiClient.post(
     '/mcp-apps/tools/call',
-    { appId, toolId, name, arguments: args || {} },
+    {
+      appId,
+      toolId,
+      name,
+      arguments: args || {},
+      ...(chatId ? { chatId } : {}),
+      ...(toolApprovalCapable ? { toolApprovalCapable: true } : {})
+    },
     // A tool call may run as long as the server's MCP timeout allows.
+    { timeout: 10 * 60 * 1000 }
+  );
+  return data;
+};
+
+/**
+ * The decision on a view's call that waits for approval (#2945). On approve
+ * the server runs the stored call: the answer is the view's CallToolResult.
+ * Reject and expiry answer with a tool error (`USER_REJECTED`,
+ * `APPROVAL_EXPIRED`).
+ *
+ * @param {{appId: string, toolId: string, interactionId: string, decision: 'approve'|'reject'}} params
+ * @returns {Promise<Object>} CallToolResult
+ */
+export const answerMcpAppToolApproval = async ({ appId, toolId, interactionId, decision }) => {
+  const { data } = await apiClient.post(
+    '/mcp-apps/tools/call/approval',
+    { appId, toolId, interactionId, decision },
     { timeout: 10 * 60 * 1000 }
   );
   return data;

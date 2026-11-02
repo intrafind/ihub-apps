@@ -96,7 +96,12 @@ search was badged "Based on web search". They now show **Based on connected syst
 
 ## Workflows Continue as Their Own User After a Person Answers
 
-A workflow or agent run that paused for a `human` step or a question now continues as the user (or
-agent) it started with. Before, the steps after the answer ran as the person who answered, with
-their groups and their connected accounts. The person who answered is still recorded with the
-answer. Runs started before this release continue as before.
+A workflow or agent run that paused for a `human` step, a question or a tool approval now continues
+as the user (or agent) it started with. Before, the steps after the answer ran as the person who
+answered, with their groups and their connected accounts — although anyone in an approver group
+could be the one answering. Who answered is now documented on the answer and in the run's history:
+their id, display name, the approver groups that let them answer, and the time.
+
+**Workflows and agent runs that are paused when you upgrade must be started again.** They do not
+record who they run as, so they cannot be continued after an answer: they stop with
+`EXECUTION_PRINCIPAL_UNKNOWN` ("started before this version; start it again").
