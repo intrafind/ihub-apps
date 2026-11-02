@@ -2878,6 +2878,11 @@
       }
     },
     "integrationCatalog": {
+      "field": {
+        "choose": "Choose…",
+        "custom": "Custom…",
+        "customValue": "Custom value for {{field}}"
+      },
       "install": "Install",
       "reload": "Reload catalog",
       "reloaded": "Catalog reloaded.",
