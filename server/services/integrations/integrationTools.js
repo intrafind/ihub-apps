@@ -74,6 +74,8 @@ function toolFromAction(resolved, action, language) {
       instanceId: instance.id,
       instanceLabel: label,
       action: action.name,
+      // The action's own title ("Search people"), which the chat shows beside the label.
+      actionTitle: title,
       definition: definition.id,
       // A built-in that kept the tool id it had before (`iFinder_search`).
       fixedToolId: action.toolId !== `${instance.id}__${action.name}`,

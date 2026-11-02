@@ -39,6 +39,7 @@
  */
 import { APPROVAL_ERROR_CODES, needsApproval } from '../../../../shared/toolApproval.js';
 import { resolveToolApproval } from '../../../utils/toolApproval.js';
+import { toolDisplayOf } from '../../../utils/toolDisplay.js';
 
 /** Payload of the tool result a refused call (nobody can approve) hands the model. */
 export function noUserPayload(toolName) {
@@ -86,18 +87,28 @@ function textOf(value) {
  */
 export function approvalDisplayData(info, policy, { justification } = {}) {
   const toolDef = info?.toolDef || {};
+  // The same names the chat's activity list uses ("Add comment" on "Jira (EU)").
+  const display = toolDisplayOf(toolDef);
   const integration = toolDef._integration
     ? {
         id: String(toolDef._integration.instanceId),
-        name: textOf(toolDef._integration.instanceLabel) || String(toolDef._integration.instanceId),
+        name:
+          display.integration ||
+          textOf(toolDef._integration.instanceLabel) ||
+          String(toolDef._integration.instanceId),
         action: String(toolDef._integration.action || '')
       }
-    : null;
+    : display.integration
+      ? {
+          id: String(toolDef._mcp?.serverId || toolDef._a2a?.agentId || ''),
+          name: display.integration
+        }
+      : null;
   const note =
     typeof justification === 'string' ? justification.trim().slice(0, MAX_JUSTIFICATION_CHARS) : '';
   return {
     toolId: String(info?.toolId || toolDef.id || ''),
-    toolName: textOf(toolDef.name) || String(info?.name || info?.toolId || ''),
+    toolName: display.title || textOf(toolDef.name) || String(info?.name || info?.toolId || ''),
     ...(integration ? { integration } : {}),
     sideEffect: policy?.sideEffect || 'unknown',
     ...(policy?.sideEffectSource ? { sideEffectSource: policy.sideEffectSource } : {}),

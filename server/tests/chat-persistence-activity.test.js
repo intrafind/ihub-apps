@@ -86,6 +86,8 @@ function emitSearchingTurn(stream) {
     callId: 'call-web',
     toolId: 'braveSearch',
     name: 'braveSearch',
+    activityKind: 'search',
+    activityScope: 'web',
     args: { query: 'wind power 2026', count: 5 }
   });
   stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
@@ -118,6 +120,8 @@ function emitSearchingTurn(stream) {
     callId: 'call-docs',
     toolId: 'iFinder_search',
     name: 'iFinder_search',
+    activityKind: 'search',
+    activityScope: 'documents',
     args: { query: 'Windpark Stellungnahme' }
   });
   stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
@@ -367,6 +371,8 @@ describe('recording what a turn did', () => {
       callId: 'c1',
       toolId: 'read_url',
       name: 'read_url',
+      activityKind: 'fetch',
+      activityScope: 'web',
       args: { url: 'https://example.org' }
     });
     // No run/ended: the run was superseded or failed around the call.
@@ -784,6 +790,8 @@ const LEDGER = [
       callId: 'c1',
       toolId: 'iFinder_search',
       name: 'iFinder_search',
+      activityKind: 'search',
+      activityScope: 'documents',
       args: { query: 'q' }
     }
   },

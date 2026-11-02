@@ -11,8 +11,11 @@
  * Sources of the list:
  *  - `run.tools` (`tool/started` / `tool/completed`): every server-executed
  *    tool call, with the sources it reported (`sources/added` with its
- *    callId, see `shared/sources`). A search is scoped to the web or to the organisation's
- *    documents (iFinder, configured sources), see `searchScope`. Clarifications (`ask_user`) and
+ *    callId, see `shared/sources`). Whether a call is a search, a page or
+ *    document read or a plain call, and whether it looked at the web or the
+ *    organisation's documents, is the server's decision (`activityKind`,
+ *    `activityScope` on `tool/started`, see server `utils/toolDisplay.js`):
+ *    nothing here infers it from the tool id. Clarifications (`ask_user`) and
  *    chat-launched workflows are left out: each has its own UI.
  *  - `tool/progress{skill.activation}` frames: one `skill` row per activation,
  *    placed among the tool calls by time, saying who activated the skill (the
@@ -36,37 +39,6 @@
  * activated and a call that was refused (no frame, so no row).
  */
 const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
-
-/**
- * Same heuristic as the server's `isCitationProducingTool`: search tools,
- * the page extractor and configured source lookups; reading an iFinder
- * document is a fetch too. A people-directory search finds no pages or
- * documents (and the server never counts it as a web search), so it is a plain
- * tool call.
- * @param {string} toolId
- * @returns {'search'|'fetch'|'tool'}
- */
-export function toolKind(toolId) {
-  const id = String(toolId || '').toLowerCase();
-  if (id === 'read_url' || id === 'ifinder_getcontent' || id === 'knowledge_read') return 'fetch';
-  if (id.includes('people')) return 'tool';
-  if (id.includes('search') || id.startsWith('source_') || id === 'knowledge_list') return 'search';
-  return 'tool';
-}
-
-/**
- * Where a search or fetch tool looks: the organisation's own documents
- * (iFinder, a configured source) or the public web. Only the latter is a web
- * search.
- * @param {string} toolId
- * @returns {'documents'|'web'}
- */
-export function searchScope(toolId) {
-  const id = String(toolId || '').toLowerCase();
-  return id.startsWith('ifinder') || id.startsWith('source_') || id.startsWith('knowledge_')
-    ? 'documents'
-    : 'web';
-}
 
 function queryOf(args) {
   if (!args || typeof args !== 'object') return null;
@@ -282,7 +254,9 @@ export function buildToolActivity(run) {
     if ((tool.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(tool.toolId)) {
       continue;
     }
-    const kind = toolKind(tool.toolId);
+    // The server decides the row (`utils/toolDisplay`); a call it said nothing
+    // about is a plain call.
+    const kind = ['search', 'fetch'].includes(tool.activityKind) ? tool.activityKind : 'tool';
     // A call the turn never saw finish (stopped, failed elsewhere) is not
     // still running once the turn is over.
     const status = tool.status === 'running' && finished ? 'stopped' : tool.status;
@@ -295,9 +269,13 @@ export function buildToolActivity(run) {
         id: tool.callId,
         kind,
         toolId: tool.toolId,
-        name: tool.name || tool.toolId,
+        // The action as the user reads it ("Search people"), else the id the model used.
+        name: tool.title || tool.name || tool.toolId,
+        titled: Boolean(tool.title),
+        // The integration, MCP server or agent it ran against ("Munich AD").
+        integration: tool.integration || null,
         status,
-        scope: kind === 'tool' ? null : searchScope(tool.toolId),
+        scope: kind === 'tool' ? null : tool.activityScope === 'documents' ? 'documents' : 'web',
         query,
         url,
         documentId,

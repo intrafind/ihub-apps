@@ -27,6 +27,7 @@ import crypto from 'node:crypto';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { resolveToolApproval } from '../../utils/toolApproval.js';
 import { approvalDisplayData, justificationOf } from '../loop/seams/approvalSeam.js';
+import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -319,6 +320,8 @@ export function chatToolSeam({
         callId: callIdOf(info),
         toolId: String(info.toolId),
         name: String(info.name || info.toolId),
+        // What the user reads instead of the id: the action and the system it ran against.
+        ...toolDisplayOf(info.toolDef),
         args: info.args,
         execution: info.toolDef?.passthrough
           ? 'passthrough'
