@@ -48,7 +48,6 @@
     {
       "key": "tenantId",
       "type": "string",
-      "required": true,
       "title": {
         "en": "Tenant ID",
         "de": "Mandanten-ID"
@@ -61,7 +60,6 @@
     {
       "key": "clientId",
       "type": "string",
-      "required": true,
       "title": {
         "en": "Application (client) ID",
         "de": "Anwendungs-ID (Client-ID)"

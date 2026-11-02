@@ -21,7 +21,7 @@ import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../uti
  * derived value shown as the placeholder — typing one only overrides it.
  *
  * "Use for people search" on a saved provider opens the install wizard of the
- * LDAP people directory integration prefilled to reuse it
+ * People directory (LDAP) integration prefilled to reuse it
  * (`/admin/integrations?install=com.intrafind__ldap-directory&v.authProvider=…`).
  * It leaves the page, so while anything here is unsaved it only says to save
  * first; a provider that is not saved yet gets nothing (a directory could not

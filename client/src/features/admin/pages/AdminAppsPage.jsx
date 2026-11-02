@@ -48,13 +48,24 @@ function AppNameCell({ app, currentLanguage }) {
   );
 }
 
-/** Names of the integrations an app can require, as shown to admins. */
+/** Names of the integrations an app can require, as shown to admins: [i18n key, English]. */
 const INTEGRATION_NAMES = {
-  websearch: 'Web search integration',
-  jira: 'Jira integration',
-  ifinder: 'iFinder integration',
-  iassistant: 'iAssistant integration',
-  'com.intrafind/ldap-directory': 'LDAP people directory (any installation)'
+  websearch: ['admin.apps.integrationNames.websearch', 'Web search integration'],
+  jira: ['admin.apps.integrationNames.jira', 'Jira integration'],
+  ifinder: ['admin.apps.integrationNames.ifinder', 'iFinder integration'],
+  iassistant: ['admin.apps.integrationNames.iassistant', 'iAssistant integration'],
+  'type:people-directory': [
+    'admin.apps.integrationNames.peopleDirectories',
+    'People directories (any installation)'
+  ],
+  'com.intrafind/ldap-directory': [
+    'admin.apps.integrationNames.ldapDirectory',
+    'People directory (LDAP) (any installation)'
+  ],
+  'com.intrafind/ldap-browser': [
+    'admin.apps.integrationNames.ldapBrowser',
+    'LDAP browser (any installation)'
+  ]
 };
 
 /**
@@ -96,9 +107,9 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
   const websearch = app.websearch?.enabled && app.websearch.required === true ? ['websearch'] : [];
   for (const id of new Set([...bound, ...connection, ...websearch])) {
     if (integrationStatus[id] === true) continue;
-    const name =
-      INTEGRATION_NAMES[id] ||
-      t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
+    const name = INTEGRATION_NAMES[id]
+      ? t(INTEGRATION_NAMES[id][0], INTEGRATION_NAMES[id][1])
+      : t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
     if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
   }
   return [...missingFeatures, ...missingIntegrations];

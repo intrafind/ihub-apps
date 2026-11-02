@@ -94,13 +94,19 @@ export default function useInstallationEditor({ instance, definition, onSaved })
       return next;
     });
 
-  /** The PUT / test body with these install values and everything else from the editor. */
-  const buildPayload = values =>
+  /**
+   * The PUT / test body with these install values and everything else from
+   * the editor. `extra.labelMap` / `extra.descriptionMap` replace the label
+   * and description in every language (an editor that edits all of them).
+   */
+  const buildPayload = (values, extra = {}) =>
     buildInstallationPayload(instance, {
       values,
       lang,
       label,
       description,
+      labelMap: extra.labelMap,
+      descriptionMap: extra.descriptionMap,
       actions: buildActionsPolicy({
         knownActions,
         checkedActions,
@@ -121,13 +127,20 @@ export default function useInstallationEditor({ instance, definition, onSaved })
     setError(detail ? `${message} (${detail})` : message);
   };
 
-  /** Test the unsaved values. */
-  const runTest = async values => {
+  /**
+   * Test the unsaved values. `extra.testInput` is what the definition's
+   * `test.input` asks for (a people directory's sample search).
+   */
+  const runTest = async (values, extra = {}) => {
     setTesting(true);
     setError(null);
     setTestResult(null);
     try {
-      setTestResult(await testInstalledIntegration(instance.id, buildPayload(values)));
+      const body = buildPayload(values, extra);
+      if (extra.testInput && Object.keys(extra.testInput).length > 0) {
+        body.testInput = extra.testInput;
+      }
+      setTestResult(await testInstalledIntegration(instance.id, body));
     } catch (err) {
       applyError(err);
     } finally {
@@ -135,13 +148,13 @@ export default function useInstallationEditor({ instance, definition, onSaved })
     }
   };
 
-  /** Save the values; `onSaved` gets the stored installation. */
-  const save = async values => {
+  /** Save the values (see `buildPayload` for `extra`); `onSaved` gets the stored installation. */
+  const save = async (values, extra = {}) => {
     setSaving(true);
     setError(null);
     setFieldErrors({});
     try {
-      const saved = await updateInstalledIntegration(instance.id, buildPayload(values));
+      const saved = await updateInstalledIntegration(instance.id, buildPayload(values, extra));
       onSaved?.(saved);
     } catch (err) {
       applyError(err);

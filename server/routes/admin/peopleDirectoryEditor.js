@@ -27,7 +27,9 @@ import {
  *   empty;
  * - the person fields a mapping fills, the defaults and upper bounds of the
  *   limits (people search and LDAP browser);
- * - the LDAP sign-in providers a directory can reuse, without their secrets.
+ * - the LDAP sign-in providers a directory can reuse, without their secrets;
+ * - for the Entra ID directory editor, which `AZURE_*` environment variables
+ *   are set (names and booleans, never values).
  *
  * Read-only and behind `adminAuth`; the values are the server's own, so the
  * client never mirrors them.
@@ -63,12 +65,35 @@ export function ldapProviderSummaries(platform) {
     });
 }
 
+/** The variables the Entra ID directory falls back to when a field is empty. */
+const ENTRA_ENVIRONMENT = Object.freeze({
+  tenantId: 'AZURE_TENANT_ID',
+  clientId: 'AZURE_CLIENT_ID',
+  clientSecret: 'AZURE_CLIENT_SECRET'
+});
+
+/**
+ * Which `AZURE_*` variables are set on the server: names and booleans only,
+ * never a value.
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {Object<string, {variable: string, set: boolean}>}
+ */
+export function entraEnvironmentOf(env = process.env) {
+  return Object.fromEntries(
+    Object.entries(ENTRA_ENVIRONMENT).map(([field, variable]) => [
+      field,
+      { variable, set: typeof env[variable] === 'string' && env[variable].trim() !== '' }
+    ])
+  );
+}
+
 /**
  * The editor context as the route returns it.
  * @param {Object} platform
+ * @param {NodeJS.ProcessEnv} [env]
  * @returns {Object}
  */
-export function peopleDirectoryEditorContext(platform) {
+export function peopleDirectoryEditorContext(platform, env = process.env) {
   return {
     presets: Object.values(SEARCH_PRESETS).map(preset => ({
       id: preset.id,
@@ -84,7 +109,8 @@ export function peopleDirectoryEditorContext(platform) {
     defaults: { ...PEOPLE_DIRECTORY_DEFAULTS },
     limits: { ...PEOPLE_DIRECTORY_LIMITS },
     browse: { defaults: { ...LDAP_BROWSE_DEFAULTS }, limits: { ...LDAP_BROWSE_LIMITS } },
-    ldapProviders: ldapProviderSummaries(platform)
+    ldapProviders: ldapProviderSummaries(platform),
+    entraEnvironment: entraEnvironmentOf(env)
   };
 }
 
@@ -96,8 +122,9 @@ export default function registerAdminPeopleDirectoryEditorRoutes(app) {
    *     summary: Context of the people directory and LDAP browser editors
    *     description: |
    *       The search presets with their mappings, the person fields, the
-   *       defaults and upper bounds of the limits, and the LDAP sign-in
-   *       providers a directory can reuse (without secrets).
+   *       defaults and upper bounds of the limits, the LDAP sign-in
+   *       providers a directory can reuse (without secrets) and which
+   *       AZURE_* variables are set (booleans only).
    *     tags: [Admin]
    *     security:
    *       - adminAuth: []
