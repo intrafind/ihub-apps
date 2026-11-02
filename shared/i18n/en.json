@@ -2964,13 +2964,13 @@
       },
       "confirmRemove": {
         "title": "Remove integration?",
-        "message": "Apps that bind \"{{id}}\" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it."
+        "message": "Apps that use \"{{id}}\" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it."
       },
       "confirmDisable": {
         "title": "Disable integration?",
-        "message": "Apps that bind \"{{id}}\" are hidden from users while it is disabled."
+        "message": "Apps that use \"{{id}}\" go without it while it is disabled. An app that requires it is hidden from users."
       },
-      "boundApps": "Bound by: {{apps}}",
+      "boundApps": "Used by: {{apps}}",
       "sideEffect": {
         "read": "read",
         "write": "write",

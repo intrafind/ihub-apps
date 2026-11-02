@@ -3255,13 +3255,13 @@
       },
       "confirmRemove": {
         "title": "Integration entfernen?",
-        "message": "Apps, die \"{{id}}\" einbinden, verlieren ihre Aktionen und sind für Nutzer ausgeblendet, bis die Einbindung entfernt ist. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
+        "message": "Apps, die \"{{id}}\" verwenden, verlieren ihre Aktionen. Eine App, die sie voraussetzt, ist für Nutzer ausgeblendet, bis ihre Konfiguration geändert ist. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
       },
       "confirmDisable": {
         "title": "Integration deaktivieren?",
-        "message": "Apps, die \"{{id}}\" einbinden, sind für Nutzer ausgeblendet, solange sie deaktiviert ist."
+        "message": "Apps, die \"{{id}}\" verwenden, arbeiten ohne sie, solange sie deaktiviert ist. Eine App, die sie voraussetzt, ist für Nutzer ausgeblendet."
       },
-      "boundApps": "Eingebunden von: {{apps}}",
+      "boundApps": "Verwendet von: {{apps}}",
       "sideEffect": {
         "read": "lesend",
         "write": "schreibend",
