@@ -120,7 +120,8 @@ const USERS = {
   bob: { id: 'bob', name: 'Bob', groups: ['users'] },
   carol: { id: 'carol', name: 'Carol', groups: ['users', 'legal'] },
   admin: { id: 'admin', name: 'Admin', groups: ['admins'] },
-  client: { id: 'alice', name: 'Alice', groups: ['users'], isOAuthClient: true }
+  client: { id: 'alice', name: 'Alice', groups: ['users'], isOAuthClient: true },
+  aliceKey: { id: 'alice', name: 'Alice', groups: ['users'], authMode: 'oauth_personal_key' }
 };
 
 const app = express();
@@ -216,6 +217,10 @@ describe('the user side', () => {
     const delegated = await ask('client', { definition: 'com.example/docs' });
     assert.equal(delegated.status, 403);
     assert.equal(delegated.body.code, 'INTERACTIVE_SESSION_REQUIRED');
+    // A personal API key is a bearer token too, even with the user's own groups.
+    const personalKey = await ask('aliceKey', { definition: 'com.example/docs' });
+    assert.equal(personalKey.status, 403);
+    assert.equal(personalKey.body.code, 'INTERACTIVE_SESSION_REQUIRED');
     const form = await asUser('alice', 'post', '/api/integrations/requests')
       .type('form')
       .send('definition=com.example/docs');

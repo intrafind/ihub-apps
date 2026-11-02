@@ -15,7 +15,8 @@
  * Security:
  * - Signed-in users only: `authRequired`, and the anonymous principal is
  *   refused even when anonymous access is on (a request needs someone to
- *   answer). Delegated callers (OAuth clients, agents) cannot request.
+ *   answer). Delegated callers (OAuth clients, agents, API keys including
+ *   personal ones) cannot request.
  * - `definition` must match the definition id grammar and name an entry the
  *   caller could request; anything else answers 404, so hidden definitions
  *   and ones already available cannot be told apart from unknown ones.
@@ -29,6 +30,7 @@
  */
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { sanitizeLanguageCode } from '../../utils/pathSecurity.js';
 import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers.js';
@@ -60,8 +62,14 @@ function isAnonymous(user) {
   return !user?.id || user.id === 'anonymous';
 }
 
+/**
+ * Delegated callers act on behalf of someone and may not file requests in
+ * their name: the principals that can never be admins (OAuth clients, agents,
+ * and the bearer-token auth modes, personal API keys included), as for the
+ * connect routes.
+ */
 function isDelegated(user) {
-  return Boolean(user?.isOAuthClient || user?.isAgent === true);
+  return !isAdminEligiblePrincipal(user);
 }
 
 /** What the requester sees of their own request. */
