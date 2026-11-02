@@ -147,7 +147,8 @@ function PeopleDirectoryEditor({ instance, definition, onSaved, onCancel }) {
     });
   };
 
-  const status = instance.status;
+  // The live status the connector reports (`liveStatus`; `status` is the migration state).
+  const status = instance.liveStatus;
   const statusIssues = [...(status?.problems || []), ...(status?.warnings || [])];
 
   return (

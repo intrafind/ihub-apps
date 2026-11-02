@@ -253,6 +253,13 @@ export async function runIntegrationTool(tool, params = {}, options = {}) {
       `Integration ${instanceId} cannot run: its definition ${resolved.statusReason || 'is incompatible with this server version'}`
     );
   }
+  if (resolved.blocked) {
+    // A failed or pending migration, or an installation that needs a
+    // review: its values are not served against the loaded definition.
+    throw new Error(
+      `Integration ${instanceId} cannot run: ${resolved.migration?.status || 'migration'} (${resolved.migration?.statusReason || 'see Admin → Integrations'})`
+    );
+  }
   if (resolved.instance.enabled === false) {
     throw new Error(`Integration ${instanceId} is disabled`);
   }

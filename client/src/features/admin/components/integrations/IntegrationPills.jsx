@@ -154,22 +154,25 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
           {t(`admin.integrationCatalog.authModes.short.${item.auth.mode}`, item.auth.mode)}
         </Pill>
       )}
-      {item.status && enabled && (
-        <Pill tone={statusTone(item.status)}>
+      {item.liveStatus && enabled && (
+        <Pill tone={statusTone(item.liveStatus)}>
           <span data-testid="live-status">
-            {statusLabel(item.status, t)}
-            {typeof item.status.toolCount === 'number' &&
-              ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.status.toolCount })}`}
+            {statusLabel(item.liveStatus, t)}
+            {typeof item.liveStatus.toolCount === 'number' &&
+              ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.liveStatus.toolCount })}`}
           </span>
         </Pill>
       )}
-      {item.status?.transport && enabled && (
+      {item.liveStatus?.transport && enabled && (
         // People directories: how the LDAP connection is protected.
-        <Pill tone={transportTone(item.status.transport)}>
-          {t(`admin.integrationCatalog.transport.${item.status.transport}`, item.status.transport)}
+        <Pill tone={transportTone(item.liveStatus.transport)}>
+          {t(
+            `admin.integrationCatalog.transport.${item.liveStatus.transport}`,
+            item.liveStatus.transport
+          )}
         </Pill>
       )}
-      {item.status?.external && (
+      {item.liveStatus?.external && (
         <Pill tone="yellow">{t('admin.integrationCatalog.status.external', 'External')}</Pill>
       )}
     </>

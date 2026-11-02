@@ -505,8 +505,28 @@ export function describeCollisions(collisions) {
 }
 
 /**
+ * Stored values with the definition's defaults filled in where an admin
+ * field holds none: the rule of `effectiveValues` (`installedValues.js`),
+ * without its URL normalization, for validation only.
+ *
+ * @param {object} definition
+ * @param {Record<string, unknown>} [values]
+ * @returns {Record<string, unknown>}
+ */
+export function withDefaults(definition, values = {}) {
+  const out = { ...(values || {}) };
+  for (const field of definition.install || []) {
+    if (field.sensitive || (field.scope && field.scope !== 'admin')) continue;
+    if (field.default === undefined || !isEmptyValue(out[field.key])) continue;
+    out[field.key] = field.default;
+  }
+  return out;
+}
+
+/**
  * Validate a planned result against the target definition before anything
- * is written (concept §3 step 2): the values against the install fields
+ * is written (concept §3 step 2): the values, with the definition's defaults
+ * filled in as the runtime reads them, against the install fields
  * (`checkInstallValues`), every action name of the policy and of the bound
  * apps' `actions` (own and definition bindings) against the definition's
  * actions, a static `defaultScope`/`pinnedScope` against a definition that
@@ -546,7 +566,10 @@ export function validateMigrationResult({
       message: `sign-in mode "${mode}" is not offered by ${definition.id} ${definition.version}`
     });
   }
-  for (const issue of checkInstallValues(definition, after?.values || {}, {
+  // The runtime reads the values with the definition's defaults filled in
+  // (`effectiveValues`), so a field that became required but has a default
+  // is satisfied; the defaults are only used for the check, never stored.
+  for (const issue of checkInstallValues(definition, withDefaults(definition, after?.values), {
     authMode: mode,
     hasCredential: Boolean(after?.auth?.credentialRef)
   })) {

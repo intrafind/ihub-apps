@@ -18,6 +18,7 @@ import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSc
 import { localized } from '../../services/integrations/definitions/installedValues.js';
 import { findDefinitionUpdates } from '../../services/integrations/definitions/definitionUpdates.js';
 import { serverVersion } from '../../services/integrations/definitions/compatibility.js';
+import definitionMigrationRunner from '../../services/integrations/definitions/DefinitionMigrationRunner.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -35,6 +36,9 @@ import logger from '../../utils/logger.js';
  *   DELETE /api/admin/integrations/installed/:id               uninstall the instance
  *   POST /api/admin/integrations/installed/:id/_test           test the saved instance
  *   POST /api/admin/integrations/installed/:id/_enable|_disable
+ *   POST /api/admin/integrations/installed/:id/_migrate        run (or re-run) the definition migration
+ *   POST /api/admin/integrations/installed/:id/_restore        restore a backup (body `{ backup? }`)
+ *   POST /api/admin/integrations/installed/:id/_adopt          adopt the loaded definition version (needsReview)
  *
  * The `catalog` and `installed` segments keep these routes apart from the
  * older `/api/admin/integrations/ifinder/*` and `.../iassistant/*` endpoints.
@@ -164,19 +168,31 @@ function definitionDetailView(entry, language, instances, updates) {
   };
 }
 
-function instanceView(instance, resolved, language, updates) {
+function instanceView(instance, resolved, language, updates, migration = null) {
   const adapter = resolved?.definition
     ? getProtocolAdapter(resolved.definition.protocol.type)
     : null;
-  let status = null;
+  let liveStatus = null;
   try {
-    status = adapter?.status && !resolved?.incompatible ? adapter.status(instance) : null;
+    liveStatus = adapter?.status && !resolved?.incompatible ? adapter.status(instance) : null;
   } catch {
-    status = null;
+    liveStatus = null;
   }
   const update = resolved?.definition ? updates?.get(resolved.definition.id) || null : null;
+  const state = resolved?.migration || null;
   return {
     ...instance,
+    /**
+     * The migration state (versioning concept §3): `migrationPending`,
+     * `migrationFailed`, `needsReview`, or null. Derived from the stored
+     * state and the loaded definition; `statusReason` says why.
+     */
+    status: state?.status || null,
+    statusReason: state?.statusReason || null,
+    definitionVersion: instance.definitionVersion || null,
+    migrationLog: instance.migrationLog || [],
+    /** Pending migrations, their planned changes, warnings and the backups (null when nothing applies). */
+    migration,
     label: resolved?.label || instance.id,
     /**
      * The stored label (`{ en, de }`, or null when the installation has none):
@@ -191,7 +207,7 @@ function instanceView(instance, resolved, language, updates) {
     type: resolved?.definition?.type || null,
     builtIn: resolved?.definition?.builtIn === true,
     /** Live connection health, for adapters that keep connections (MCP). */
-    status,
+    liveStatus,
     /** Whether the installation signs every user in (per-user connections to manage). */
     perUser: instance.auth?.mode === 'oauth-user',
     /** The version of the definition on disk (`definitionVersion` is what the values were written for). */
@@ -214,6 +230,23 @@ async function definitionUpdates() {
     return await findDefinitionUpdates(integrationRegistry.list());
   } catch (error) {
     logger.warn('Could not check the marketplace catalogs for integration updates', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return new Map();
+  }
+}
+
+/**
+ * The migration view of installations (`DefinitionMigrationRunner.describe`),
+ * or an empty map when it cannot be built: the list must not fail because a
+ * backup folder is unreadable.
+ */
+async function migrationViews(instances) {
+  try {
+    return await definitionMigrationRunner.describe(instances);
+  } catch (error) {
+    logger.warn('Could not describe the migration state of the installations', {
       component: COMPONENT,
       error: error.message
     });
@@ -404,10 +437,14 @@ export default function registerAdminIntegrationsRoutes(app) {
       const language = languageOf(req);
       await integrationRegistry.ensureLoaded();
       const updates = await definitionUpdates();
+      const instances = installedIntegrationService.list();
+      const migrations = await migrationViews(instances);
       const items = [];
-      for (const instance of installedIntegrationService.list()) {
+      for (const instance of instances) {
         const resolved = await installedIntegrationService.resolve(instance, language);
-        items.push(instanceView(instance, resolved, language, updates));
+        items.push(
+          instanceView(instance, resolved, language, updates, migrations.get(instance.id) || null)
+        );
       }
       res.json({
         success: true,
@@ -453,8 +490,9 @@ export default function registerAdminIntegrationsRoutes(app) {
       if (!resolved) return sendNotFound(res, 'Integration');
       let actions = [];
       // An incompatible definition offers no tools; asking its adapter for
-      // actions would run it.
-      if (resolved.definition && !resolved.incompatible) {
+      // actions would run it. Neither does an installation whose migration
+      // state withholds them: its values are not for the loaded definition.
+      if (resolved.definition && !resolved.incompatible && !resolved.blocked) {
         const adapter = getProtocolAdapter(resolved.definition.protocol.type);
         if (adapter) {
           actions = await adapter.discoverActions({
@@ -468,9 +506,16 @@ export default function registerAdminIntegrationsRoutes(app) {
         }
       }
       const updates = await definitionUpdates();
+      const migrations = await migrationViews([resolved.instance]);
       res.json({
         success: true,
-        instance: instanceView(resolved.instance, resolved, language, updates),
+        instance: instanceView(
+          resolved.instance,
+          resolved,
+          language,
+          updates,
+          migrations.get(resolved.instance.id) || null
+        ),
         values: resolved.values,
         actions: actions.map(a => ({ ...a, parameters: a.parameters, sources: undefined })),
         definition: resolved.definition
@@ -555,6 +600,271 @@ export default function registerAdminIntegrationsRoutes(app) {
       }
     );
   }
+
+  // --- Definition migrations (versioning concept §3) -----------------------
+
+  /**
+   * The installation as the migration actions answer with it: the admin
+   * view, its migration state and its backups.
+   */
+  async function migratedView(id, req) {
+    const language = languageOf(req);
+    const resolved = await installedIntegrationService.resolve(id, language);
+    if (!resolved) return null;
+    const migrations = await migrationViews([resolved.instance]);
+    return instanceView(
+      resolved.instance,
+      resolved,
+      language,
+      await definitionUpdates(),
+      migrations.get(resolved.instance.id) || null
+    );
+  }
+
+  /** Answer a failed migration action: 422 with the reason and the state it left. */
+  async function sendMigrationError(res, req, id, error, context) {
+    if (error instanceof IntegrationError && error.code === 'MIGRATION_FAILED') {
+      let instance = null;
+      try {
+        instance = await migratedView(id, req);
+      } catch {
+        instance = null;
+      }
+      return res.status(422).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+        reason: error.details?.reason || error.message,
+        logEntry: error.details?.logEntry || null,
+        details: error.details,
+        instance
+      });
+    }
+    if (error instanceof IntegrationError) {
+      return res.status(error.status).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+        reason: error.message,
+        details: error.details
+      });
+    }
+    return sendInternalError(res, error, context);
+  }
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/_migrate:
+   *   post:
+   *     summary: Run the definition migration of an installation
+   *     description: |
+   *       Brings the installation (install values, action policy, the bindings of the apps
+   *       that bind it) from its `definitionVersion` to the loaded definition with the
+   *       definition's declarative migrations, after taking a backup. Also re-runs a
+   *       migration that failed. A pending installation with no migration between the
+   *       versions only gets the new version stamped.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Installation id
+   *     responses:
+   *       200:
+   *         description: Migrated, stamped or already current; `logEntry` is null when nothing ran
+   *       404:
+   *         description: Installation not found (`NOT_FOUND`)
+   *       409:
+   *         description: >
+   *           `MIGRATION_LOCKED` (another migration of the installation runs),
+   *           `MIGRATION_NOT_APPLICABLE` (needs a review, or a downgrade),
+   *           `MIGRATION_LOCK_LOST` or `MIGRATION_CONFLICT` (try again)
+   *       422:
+   *         description: >
+   *           `MIGRATION_FAILED` with `reason`, `logEntry` and the installation now
+   *           `migrationFailed`; `DEFINITION_MISSING`; `INCOMPATIBLE_DEFINITION`
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/_migrate'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const outcome = await definitionMigrationRunner.migrate(id, {
+          by: adminName(req),
+          trigger: 'manual'
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Migrated integration "${id}" (${outcome.result})`
+        });
+        res.json({
+          success: true,
+          result: outcome.result,
+          logEntry: outcome.logEntry,
+          instance: await migratedView(id, req)
+        });
+      } catch (error) {
+        if (error instanceof IntegrationError && error.code === 'MIGRATION_FAILED') {
+          logAudit({
+            req,
+            action: 'update',
+            resource: 'integration',
+            resourceId: id,
+            summary: `Migration of integration "${id}" failed`,
+            result: 'failure'
+          });
+        }
+        await sendMigrationError(res, req, id, error, 'migrate installed integration');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/_restore:
+   *   post:
+   *     summary: Restore a backup of an installation
+   *     description: |
+   *       For an installation whose migration failed or that needs a review. Without
+   *       `backup`, takes the newest backup of the loaded definition's version
+   *       (`needsReview`) or the newest backup taken before a migration
+   *       (`migrationFailed`). Restores the installation's entry, the bindings of its
+   *       apps and, when the backup holds the definition folder of another version, the
+   *       definition and its marketplace manifest entry.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               backup:
+   *                 type: string
+   *                 description: A backup id from `migration.backups`
+   *     responses:
+   *       200:
+   *         description: Restored; `backup` names the backup, `logEntry` the log entry
+   *       400:
+   *         description: Invalid id or backup id
+   *       404:
+   *         description: "`NOT_FOUND` or `BACKUP_NOT_FOUND`"
+   *       409:
+   *         description: "`RESTORE_NOT_APPLICABLE` or `MIGRATION_LOCKED`"
+   *       422:
+   *         description: "`BACKUP_INVALID` or `DEFINITION_MISSING`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/_restore'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const backup = req.body?.backup;
+      if (backup !== undefined && backup !== null && !validateIdForPath(backup, 'backup', res)) {
+        return;
+      }
+      try {
+        const outcome = await definitionMigrationRunner.restore(id, {
+          backup: backup || undefined,
+          by: adminName(req)
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Restored backup ${outcome.backup.id} of integration "${id}"`
+        });
+        res.json({
+          success: true,
+          backup: outcome.backup,
+          logEntry: outcome.logEntry,
+          instance: await migratedView(id, req)
+        });
+      } catch (error) {
+        await sendMigrationError(res, req, id, error, 'restore installed integration');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/_adopt:
+   *   post:
+   *     summary: Adopt the loaded definition version for an installation that needs a review
+   *     description: |
+   *       The admin asserts that the stored values fit the loaded definition. They are
+   *       validated like the result of a migration (install values with the definition's
+   *       defaults, action names of the policy and the app bindings, scopes); only then
+   *       is `definitionVersion` stamped and the state cleared.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Adopted
+   *       404:
+   *         description: Installation not found (`NOT_FOUND`)
+   *       409:
+   *         description: "`ADOPT_NOT_APPLICABLE` (not `needsReview`) or `MIGRATION_LOCKED`"
+   *       422:
+   *         description: "`ADOPT_INVALID` (`details` lists the problems), `DEFINITION_MISSING` or `INCOMPATIBLE_DEFINITION`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/_adopt'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const outcome = await definitionMigrationRunner.adopt(id, { by: adminName(req) });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Adopted definition version ${outcome.instance.definitionVersion} for integration "${id}"`
+        });
+        res.json({
+          success: true,
+          logEntry: outcome.logEntry,
+          instance: await migratedView(id, req)
+        });
+      } catch (error) {
+        await sendMigrationError(res, req, id, error, 'adopt definition version');
+      }
+    }
+  );
 
   // --- Per-user connections (installations that sign every user in) --------
 
