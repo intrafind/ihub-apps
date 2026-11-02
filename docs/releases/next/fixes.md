@@ -29,6 +29,13 @@ keyboard and with a screen reader.
 - Workflow editor: for a workflow file without an `enabled` setting, the first click on the
   **Enabled** switch did nothing. It now turns the workflow off.
 
+## MCP Servers over WebSocket Honor the SSL Whitelist
+
+An MCP server reached over `wss://` with a certificate from a private CA failed with "unable to
+verify the first certificate", even when its host was listed in **SSL → Domain whitelist** with
+**Ignore invalid certificates** on. WebSocket MCP servers now follow the whitelist like every other
+outbound connection; hosts that are not whitelisted are still verified.
+
 ## OpenAPI Tools: Array Parameters
 
 Array query parameters of OpenAPI tools declared in `form` style are now sent as the document

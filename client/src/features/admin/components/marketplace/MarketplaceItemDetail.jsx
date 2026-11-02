@@ -15,6 +15,7 @@ import {
   detachMarketplaceItem
 } from '../../../../api/adminApi';
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
+import MarketplaceIntegrationSection from './MarketplaceIntegrationFacts';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
 import { UPDATE_RETRY_CODES, previewLabels } from './updateMigrationRows';
@@ -566,6 +567,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                   </div>
                 </div>
               )}
+
+              {/* Integrations: the four fixed facts and the declared actions */}
+              {item?.type === 'integration' && <MarketplaceIntegrationSection facts={item.facts} />}
 
               {/* Metadata table */}
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">

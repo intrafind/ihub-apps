@@ -13,11 +13,11 @@
  * installation.
  */
 import credentialService from '../../../../../CredentialService.js';
+import { stripTrailingSlashes } from '../../../../../ModelEndpointDiscovery.js';
 import { httpFetch } from '../../../../../../utils/httpConfig.js';
 import {
   CLOUD_STORAGE_PROVIDERS,
   cloudStorageCallbackPath,
-  getCloudStorageInstallation,
   isCloudStorageProviderConfigured,
   listCloudStorageConnections,
   providerFromInstance,
@@ -69,15 +69,22 @@ export function resetCloudStorageConnectionCounts() {
   counts.clear();
 }
 
-/** The URL the test reaches to see that the provider's authorization server answers. */
-function probeUrl(provider) {
+/**
+ * The URL the test reaches to see that the provider's authorization server
+ * answers. A Nextcloud server URL loses its trailing slashes first, so
+ * `https://cloud.example.com/` probes `https://cloud.example.com/status.php`.
+ *
+ * @param {{ type: string, tenantId?: string, serverUrl?: string }} provider
+ * @returns {string|null} null for an unknown provider type
+ */
+export function probeUrl(provider) {
   switch (provider.type) {
     case 'office365':
       return `https://login.microsoftonline.com/${encodeURIComponent(provider.tenantId)}/v2.0/.well-known/openid-configuration`;
     case 'googledrive':
       return 'https://accounts.google.com/.well-known/openid-configuration';
     case 'nextcloud':
-      return `${provider.serverUrl.replace(/\/+$/, '')}/status.php`;
+      return `${stripTrailingSlashes(provider.serverUrl)}/status.php`;
     default:
       return null;
   }
@@ -117,13 +124,18 @@ function settingsStep(provider) {
   if (provider.type === 'nextcloud' && !provider.serverUrl) {
     return { ...step, status: 'fail', message: 'No Nextcloud server URL' };
   }
-  const details =
-    provider.type === 'office365'
-      ? `Tenant ${provider.tenantId}`
-      : provider.type === 'nextcloud'
-        ? provider.serverUrl
-        : 'Google OAuth 2.0';
-  return { ...step, status: 'ok', message: `${details}; installation "${provider.id}"` };
+  return {
+    ...step,
+    status: 'ok',
+    message: `${providerSettingsSummary(provider)}; installation "${provider.id}"`
+  };
+}
+
+/** The provider's own setting the settings step names: tenant, server URL or Google. */
+function providerSettingsSummary(provider) {
+  if (provider.type === 'office365') return `Tenant ${provider.tenantId}`;
+  if (provider.type === 'nextcloud') return provider.serverUrl;
+  return 'Google OAuth 2.0';
 }
 
 /**
@@ -250,14 +262,26 @@ async function test(type, { instance, values, user, req }) {
   }
   const connections = await listCloudStorageConnections(type, provider.id);
   setCount(provider.id, connections.length);
-  const mine = user?.id ? connections.some(c => c.userId === user.id) : false;
   steps.push({
     id: 'connections',
     label: 'Connected users',
     status: 'ok',
-    message: `${connections.length} user(s) connected${user?.id ? (mine ? ', including you' : ', not you yet') : ''}`
+    message: `${connections.length} user(s) connected${ownConnectionNote(connections, user)}`
   });
   return steps;
+}
+
+/**
+ * The suffix of the connected-users step for the admin running the test:
+ * whether their own account is among the connections; empty without a user.
+ *
+ * @param {Array<{ userId: string }>} connections
+ * @param {{ id?: string }|undefined} user
+ * @returns {string}
+ */
+function ownConnectionNote(connections, user) {
+  if (!user?.id) return '';
+  return connections.some(c => c.userId === user.id) ? ', including you' : ', not you yet';
 }
 
 function connectorFor(type) {
@@ -298,4 +322,4 @@ export const googleDriveConnector = connectorFor('googledrive');
 export const nextcloudConnector = connectorFor('nextcloud');
 
 /** A storage installation by id, for callers that have the connector only. */
-export { getCloudStorageInstallation };
+export { getCloudStorageInstallation } from '../../../../cloudStorageConfig.js';
