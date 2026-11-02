@@ -76,7 +76,7 @@ function toolFromAction(resolved, action, language) {
       definition: definition.id,
       // A built-in that kept the tool id it had before (`iFinder_search`).
       fixedToolId: action.toolId !== `${instance.id}__${action.name}`,
-      // Bound only when a binding names the action (a directory's LDAP browser).
+      // Bound only when a binding names the action (`bindExplicitly` in the definition).
       ...(action.bindExplicitly ? { bindExplicitly: true } : {})
     },
     sideEffect: action.sideEffect,
@@ -85,7 +85,7 @@ function toolFromAction(resolved, action, language) {
     examples: action.examples,
     sources: action.sources,
     instructions: localized(definition.instructions, language) || undefined,
-    // A connector may add fields of its own (a people directory's marker).
+    // A connector may add fields of its own (a people directory's or an LDAP browser's marker).
     ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
   };
 }

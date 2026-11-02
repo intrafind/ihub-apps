@@ -323,14 +323,8 @@ describe('areAppIntegrationsEnabled', () => {
     const shipped = {
       iassistant: { integrations: { iassistant: { actions: [] } } },
       'ifinder-search': { integrations: { ifinder: { scopePicker: 'menu' } } },
-      'people-directory': { integrations: { 'com.intrafind/ldap-directory': {} } },
-      'ldap-browser': {
-        integrations: {
-          'com.intrafind/ldap-directory': {
-            actions: ['browse_search', 'browse_read', 'browse_children']
-          }
-        }
-      }
+      'people-directory': { integrations: { 'type:people-directory': {} } },
+      'ldap-browser': { integrations: { 'com.intrafind/ldap-browser': {} } }
     };
     for (const [id, expected] of Object.entries(shipped)) {
       const app = JSON.parse(await fs.readFile(path.join(APPS_DIR, `${id}.json`), 'utf8'));

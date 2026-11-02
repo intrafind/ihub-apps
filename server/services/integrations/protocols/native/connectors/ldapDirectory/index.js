@@ -3,34 +3,34 @@
 
 /**
  * Built-in connector of the people directory installations
- * (`com.intrafind/ldap-directory`, one installation per directory): the
- * people search tools `<id>__search_people`, `<id>__get_person`,
- * `<id>__list_units` and the admin LDAP browser tools `<id>__browse_*` of
+ * (`com.intrafind/ldap-directory`, "People directory (LDAP)", one
+ * installation per directory): the people search tools
+ * `<id>__search_people`, `<id>__get_person` and `<id>__list_units` of
  * `services/peopleDirectory/`, with the parameters and descriptions each
  * directory had before it was an installation.
+ *
+ * The admin LDAP browser is a connector of its own (`ldapBrowser`), whose
+ * installations reuse a directory's connection.
  *
  * The LDAP code is reused as it is: the installation is read in the directory
  * shape (`ldapDirectoryConfig.directoryFromInstance`), the tool listing stays
  * free of the LDAP client (the runner is imported when a tool runs or an admin
- * tests), and the directory's access rules (the group grant of the
- * installation, `browse.groups`) keep holding through the `_peopleDirectory`
- * marker on every tool.
+ * tests), and the directory's access rule (the group grant of the
+ * installation) keeps holding through the `_peopleDirectory` marker on every
+ * tool.
  */
 import {
-  BROWSE_ACTIONS,
-  buildBrowseTools,
   buildDirectoryTools,
   reportDirectoryProblemOnce,
   resolveDirectory,
   summarizeDirectory
 } from '../../../../../peopleDirectory/PeopleDirectoryService.js';
 import {
-  DIRECTORY_BROWSE_ACTIONS,
   DIRECTORY_SEARCH_ACTIONS,
   directoryFromInstance
 } from '../../../../ldapDirectoryConfig.js';
 
-/** Resolved directories per instance object, for the six actions of one listing. */
+/** Resolved directories per instance object, for the three actions of one listing. */
 const resolvedByInstance = new WeakMap();
 
 function resolvedOf(ctx) {
@@ -42,71 +42,50 @@ function resolvedOf(ctx) {
   return resolved;
 }
 
-/** The tool definition of one action as `buildDirectoryTools` / `buildBrowseTools` shape it. */
+/** The tool definition of one action as `buildDirectoryTools` shapes it. */
 function toolOf(ctx, actionName) {
   const resolved = resolvedOf(ctx);
   const language = ctx.language || 'en';
-  let tools;
-  if (BROWSE_ACTIONS.includes(actionName)) {
-    tools = resolved.browse ? buildBrowseTools(resolved, language) : [];
-  } else if (actionName === 'list_units') {
-    // The action exists in the definition whether or not units are on; its
-    // schema is built as if they were, and `requires` decides availability.
-    tools = buildDirectoryTools({ ...resolved, units: true }, language);
-  } else {
-    tools = buildDirectoryTools(resolved, language);
-  }
+  // The action `list_units` exists in the definition whether or not units are
+  // on; its schema is built as if they were, and `requires` decides availability.
+  const tools =
+    actionName === 'list_units'
+      ? buildDirectoryTools({ ...resolved, units: true }, language)
+      : buildDirectoryTools(resolved, language);
   return tools.find(tool => tool._peopleDirectory?.action === actionName) || null;
 }
 
-/**
- * Whether the directory can serve the action: the configuration resolves
- * (reported once per directory), and for the browser its own settings hold.
- */
-function available(ctx, actionName) {
+/** Whether the directory can serve its actions: the configuration resolves (reported once). */
+function available(ctx) {
   const resolved = resolvedOf(ctx);
-  if (resolved.problems.length > 0) {
-    reportDirectoryProblemOnce(
-      `problems:${resolved.id}`,
-      resolved.problems.join('|'),
-      'People directory is not usable; its tools are not offered',
-      { directoryId: resolved.id, problems: resolved.problems }
-    );
-    return false;
-  }
-  if (!BROWSE_ACTIONS.includes(actionName)) return true;
-  if (!resolved.browse) return false;
-  if (resolved.browse.problems.length > 0) {
-    reportDirectoryProblemOnce(
-      `browse:${resolved.id}`,
-      resolved.browse.problems.join('|'),
-      'LDAP browser of a people directory is not usable; its tools are not offered',
-      { directoryId: resolved.id, problems: resolved.browse.problems }
-    );
-    return false;
-  }
-  return true;
+  if (resolved.problems.length === 0) return true;
+  reportDirectoryProblemOnce(
+    `problems:${resolved.id}`,
+    resolved.problems.join('|'),
+    'People directory is not usable; its tools are not offered',
+    { directoryId: resolved.id, problems: resolved.problems }
+  );
+  return false;
 }
 
 function action(name) {
-  const browse = BROWSE_ACTIONS.includes(name);
   return {
     parameters: ctx =>
       toolOf(ctx, name)?.parameters || { type: 'object', properties: {}, required: [] },
     description: ctx => toolOf(ctx, name)?.description || '',
     dataFlow: ctx => resolvedOf(ctx).dataFlow,
-    available: ctx => available(ctx, name),
+    available: ctx => available(ctx),
     /** The marker the access rules, `isToolSelected` and the MCP gateway read. */
     extras: ctx => ({
       readOnly: true,
-      _peopleDirectory: { id: ctx.instance.id, action: name, ...(browse ? { browse: true } : {}) }
+      _peopleDirectory: { id: ctx.instance.id, action: name }
     }),
     async run(_args, ctx) {
       const { runPeopleDirectoryTool } =
         await import('../../../../../peopleDirectory/peopleDirectoryRunner.js');
       const tool = {
         id: `${ctx.instance.id}__${name}`,
-        _peopleDirectory: { id: ctx.instance.id, action: name, ...(browse ? { browse: true } : {}) }
+        _peopleDirectory: { id: ctx.instance.id, action: name }
       };
       // `params` is everything the tool call received: the model's arguments
       // and iHub's context (`user`, `chatId`, `appConfig`), as the runner expects.
@@ -137,9 +116,7 @@ async function test({ instance, values, testInput }) {
 
 const connector = {
   id: 'ldapDirectory',
-  actions: Object.fromEntries(
-    [...DIRECTORY_SEARCH_ACTIONS, ...DIRECTORY_BROWSE_ACTIONS].map(name => [name, action(name)])
-  ),
+  actions: Object.fromEntries(DIRECTORY_SEARCH_ACTIONS.map(name => [name, action(name)])),
   test,
   /**
    * For the installed list: whether the configuration resolves, the transport
@@ -151,7 +128,6 @@ const connector = {
       connected: summary.problems.length === 0,
       transport: summary.transport,
       external: summary.external,
-      browse: summary.browse,
       problems: summary.problems,
       warnings: summary.warnings
     };

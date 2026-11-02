@@ -19,6 +19,7 @@ import {
   directoryToolOfId,
   mayUseDirectoryTool
 } from '../services/peopleDirectory/PeopleDirectoryService.js';
+import { browserToolOfId, mayUseBrowser } from '../services/peopleDirectory/LdapBrowserService.js';
 
 /**
  * The caller with permissions resolved: an anonymous caller (when anonymous
@@ -47,8 +48,9 @@ function resolveCaller(req, platformConfig) {
  * MCP server id, A2A agent reference, people directory (see
  * `isToolSelected`). An admin, who can grant themselves any tool, runs every
  * tool (testing a tool this way is how tool authors check it) — except a
- * people directory's tool, whose group grant (`permissions.integrations`;
- * `browse.groups` for the LDAP browser) holds for every caller.
+ * people directory's tool, whose group grant (`permissions.integrations`)
+ * holds for every caller, and an LDAP browser's tool, whose grant and own
+ * rules (`LdapBrowserService.mayUseBrowser`) do.
  *
  * @param {Object} user
  * @param {Object} platformConfig
@@ -56,11 +58,13 @@ function resolveCaller(req, platformConfig) {
  * @returns {Promise<boolean>}
  */
 export async function mayRunTool(user, platformConfig, toolId) {
-  // A directory's tool id names the directory, so its group grant (or, for
-  // the LDAP browser, `browse.groups`) is checked without waiting for the full tool
-  // list (MCP and A2A discovery).
+  // A directory's (or a browser's) tool id names its installation, so its
+  // access rule is checked without waiting for the full tool list (MCP and
+  // A2A discovery).
   const directoryTool = directoryToolOfId(toolId);
   if (directoryTool && !mayUseDirectoryTool(user, directoryTool)) return false;
+  const browserTool = browserToolOfId(toolId);
+  if (browserTool && !mayUseBrowser(user, browserTool.id)) return false;
   if (user.permissions?.adminAccess === true) return true;
   const visible = await getVisibleToolIds(user, platformConfig);
   if (visible.has('*')) return true;

@@ -54,17 +54,19 @@ describe('isToolSelected', () => {
       expect(isToolSelected({ id: 'jira_searchTickets' }, ['x500bund'])).toBe(false);
     });
 
-    test('an LDAP browser tool is selected only by ldapBrowse or its exact id', () => {
+    test('an LDAP browser tool is selected by its installation id or exact id, never by ldapBrowse', () => {
       const browse = {
-        id: 'corp__browse_search',
-        _peopleDirectory: { id: 'corp', action: 'browse_search', browse: true }
+        id: 'corp-browser__browse_search',
+        _integration: { instanceId: 'corp-browser', action: 'browse_search' },
+        _ldapBrowser: { id: 'corp-browser', directory: 'corp', action: 'browse_search' }
       };
-      expect(isToolSelected(browse, ['ldapBrowse'])).toBe(true);
-      expect(isToolSelected(browse, ['corp__browse_search'])).toBe(true);
+      expect(isToolSelected(browse, ['corp-browser__browse_search'])).toBe(true);
+      expect(isToolSelected(browse, ['corp-browser'])).toBe(true);
+      // The retired reference and the directory's id select nothing of the browser.
+      expect(isToolSelected(browse, ['ldapBrowse'])).toBe(false);
       expect(isToolSelected(browse, ['corp'])).toBe(false);
       expect(isToolSelected(browse, ['peopleDirectories'])).toBe(false);
       expect(isToolSelected(corp, ['ldapBrowse'])).toBe(false);
-      expect(isToolSelected({ id: 'ldapBrowse_x' }, ['ldapBrowse'])).toBe(false);
     });
   });
 });
