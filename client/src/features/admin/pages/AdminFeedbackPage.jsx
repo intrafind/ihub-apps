@@ -17,32 +17,10 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
+import Switch from '../../../shared/components/Switch';
 import FeedbackReview from '../components/feedback/FeedbackReview';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
-
-function ToggleSwitch({ checked, onChange, disabled = false, label }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-      } ${checked ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  );
-}
 
 function SettingRow({ title, description, children }) {
   return (
@@ -238,10 +216,10 @@ function AdminFeedbackPage() {
               'Show the star rating under AI responses and accept submissions. Off hides it in every chat surface and answers POST /api/feedback with 403. The same switch appears in Admin → Features → Content.'
             )}
           >
-            <ToggleSwitch
+            <Switch
               checked={draft.collectionEnabled}
               onChange={value => setDraft(prev => ({ ...prev, collectionEnabled: value }))}
-              label={t('admin.feedback.collect.title', 'Collect feedback')}
+              aria-label={t('admin.feedback.collect.title', 'Collect feedback')}
             />
           </SettingRow>
           <SettingRow
@@ -251,10 +229,10 @@ function AdminFeedbackPage() {
               'Write submitted feedback to contents/data/feedback.jsonl and the usage statistics. Off keeps the rating control visible but nothing is kept — iAssistant feedback still reaches iFinder.'
             )}
           >
-            <ToggleSwitch
+            <Switch
               checked={draft.storageEnabled}
               onChange={value => setDraft(prev => ({ ...prev, storageEnabled: value }))}
-              label={t('admin.feedback.store.title', 'Store feedback')}
+              aria-label={t('admin.feedback.store.title', 'Store feedback')}
             />
           </SettingRow>
           <SettingRow
@@ -321,11 +299,11 @@ function AdminFeedbackPage() {
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">{app.id}</div>
                 </div>
-                <ToggleSwitch
+                <Switch
                   checked={app.feedbackEnabled}
                   disabled={appSaving === app.id}
                   onChange={value => handleAppToggle(app.id, value)}
-                  label={app.name}
+                  aria-label={app.name}
                 />
               </div>
             ))

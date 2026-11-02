@@ -26,7 +26,7 @@ const FOCUSABLE_SELECTOR = [
  * @param {HTMLElement} container - The DOM element to search within
  * @returns {HTMLElement[]} Array of focusable elements in DOM order
  */
-function getFocusableElements(container) {
+export function getFocusableElements(container) {
   if (!container) return [];
   const elements = Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
   return elements.filter(el => {

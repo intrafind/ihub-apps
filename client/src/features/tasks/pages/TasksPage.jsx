@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import Switch from '../../../shared/components/Switch';
 import useApps from '../../../shared/hooks/useApps';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchScheduledTasks, pauseScheduledTask, resumeScheduledTask } from '../../../api';
@@ -17,28 +18,6 @@ import {
   isRunActive,
   reasonText
 } from '../utils/taskFormat';
-
-function Toggle({ checked, disabled, onChange, label }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-        checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'
-      }`}
-    >
-      <span
-        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  );
-}
 
 /**
  * `/tasks` — the viewer's scheduled tasks: what runs, when, how the last run
@@ -247,14 +226,14 @@ export default function TasksPage() {
                       <span className="text-gray-500">—</span>
                     )}
                   </div>
-                  <Toggle
+                  <Switch
                     checked={task.status === 'active'}
                     disabled={
                       busy === task.id ||
                       task.status === 'disabled' ||
                       (task.status !== 'active' && !mayCreate)
                     }
-                    label={
+                    aria-label={
                       task.status === 'active'
                         ? t('scheduledTasks.pause', 'Pause')
                         : t('scheduledTasks.resume', 'Resume')
