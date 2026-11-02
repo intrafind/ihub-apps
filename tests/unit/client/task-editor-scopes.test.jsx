@@ -126,9 +126,8 @@ async function renderEditor(entry) {
 const scopeSelect = () => screen.getByLabelText('iFinder: Search in');
 
 async function submit(name) {
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name }));
-  });
+  // fireEvent already wraps the click in act(); flush() then lets the save settle.
+  fireEvent.click(screen.getByRole('button', { name }));
   await flush();
 }
 
