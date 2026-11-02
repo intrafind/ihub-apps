@@ -192,16 +192,37 @@ function stripAllowedGroups(config) {
   return removed;
 }
 
+/** `groups.json` → `groups`, or null when the file holds none. */
+function groupsOf(groupsData) {
+  const groups = groupsData?.groups;
+  return groups && typeof groups === 'object' ? groups : null;
+}
+
+/** Grant the groups and write `groups.json` when a group changed. */
+async function grantAndWriteGroups(ctx, groupsData, groups, installed) {
+  if (!grantGroups(groups, installed, ctx)) return;
+  if (groupsData.metadata && typeof groupsData.metadata === 'object') {
+    groupsData.metadata.lastModified = new Date().toISOString();
+  }
+  await ctx.writeJson(GROUPS_FILE, groupsData);
+}
+
+/** Remove `allowedGroups` from the installations and write the file when one had it. */
+async function stripAndWriteInstallations(ctx, config) {
+  if (!Array.isArray(config?.installed)) return;
+  const removed = stripAllowedGroups(config);
+  if (removed === 0) return;
+  await ctx.writeJson(INTEGRATIONS_FILE, config);
+  ctx.log(`Removed allowedGroups from ${removed} installed integration(s)`);
+}
+
 export async function up(ctx) {
   if (!(await ctx.fileExists(GROUPS_FILE))) {
     ctx.log('No groups.json: nothing to grant');
     return;
   }
   const groupsData = await ctx.readJson(GROUPS_FILE);
-  const groups =
-    groupsData && typeof groupsData.groups === 'object' && groupsData.groups !== null
-      ? groupsData.groups
-      : null;
+  const groups = groupsOf(groupsData);
 
   const hasIntegrationsFile = await ctx.fileExists(INTEGRATIONS_FILE);
   const config = hasIntegrationsFile ? await ctx.readJson(INTEGRATIONS_FILE) : null;
@@ -212,23 +233,12 @@ export async function up(ctx) {
 
   // 1. Grant each group what it could use before.
   if (groups) {
-    if (grantGroups(groups, installed, ctx)) {
-      if (groupsData.metadata && typeof groupsData.metadata === 'object') {
-        groupsData.metadata.lastModified = new Date().toISOString();
-      }
-      await ctx.writeJson(GROUPS_FILE, groupsData);
-    }
+    await grantAndWriteGroups(ctx, groupsData, groups, installed);
     warnUnknownGroups(groups, installed, ctx);
   } else {
     ctx.warn('groups.json holds no groups: no group was granted integrations');
   }
 
   // 2. Installations carry no groups any more.
-  if (hasIntegrationsFile && Array.isArray(config?.installed)) {
-    const removed = stripAllowedGroups(config);
-    if (removed > 0) {
-      await ctx.writeJson(INTEGRATIONS_FILE, config);
-      ctx.log(`Removed allowedGroups from ${removed} installed integration(s)`);
-    }
-  }
+  if (hasIntegrationsFile) await stripAndWriteInstallations(ctx, config);
 }

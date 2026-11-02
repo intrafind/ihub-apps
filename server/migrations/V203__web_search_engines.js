@@ -160,6 +160,83 @@ export async function isFreshInstall(ctx, now = Date.now()) {
 }
 
 /**
+ * Where the key of a keyed engine was configured on `websearch`: the
+ * credential it referenced, or else the environment variable.
+ *
+ * @param {object} engine - an entry of {@link ENGINES}
+ * @param {object} values - the install values of `websearch`
+ * @param {object} [env] - the environment (`process.env`)
+ * @returns {{ ref: string }|{ env: string }|null} null for no key, or an engine that needs none
+ */
+function engineKey(engine, values, env) {
+  if (!engine.keyField) return null;
+  if (nonEmptyString(values[engine.keyField])) return { ref: values[engine.keyField] };
+  if (nonEmptyString(env?.[engine.keyEnv])) return { env: engine.keyEnv };
+  return null;
+}
+
+/**
+ * Whether a keyed engine is installed: it is where its key was configured.
+ *
+ * @param {{ ref?: string, env?: string }|null} key - from {@link engineKey}
+ * @returns {{ reason: string }|{ skipped: string }}
+ */
+function keyedEngineVerdict(key) {
+  if (key?.ref) return { reason: `credential "${key.ref}"` };
+  if (key?.env) return { reason: `environment variable ${key.env}` };
+  return { skipped: 'no API key was configured' };
+}
+
+/**
+ * Whether Qwant is installed. It needs no key: it worked where something
+ * could reach it — the default engine, an app naming it, or `auto` with
+ * neither key (except on a fresh install, where `auto` is no evidence).
+ *
+ * @param {object} evidence
+ * @param {string} evidence.defaultProvider - the default engine of `websearch`, or `auto`
+ * @param {boolean} evidence.appNamesQwant - an app has `websearch.provider: "qwant"`
+ * @param {boolean} evidence.anyKey - a Brave or Staan key was configured
+ * @param {boolean} evidence.fresh - a fresh install
+ * @returns {{ reason: string }|{ skipped: string }}
+ */
+function qwantVerdict({ defaultProvider, appNamesQwant, anyKey, fresh }) {
+  if (defaultProvider === 'qwant') return { reason: 'the default search engine was Qwant' };
+  if (appNamesQwant) return { reason: 'an app names Qwant' };
+  if (defaultProvider !== 'auto' || anyKey) return { skipped: 'Qwant was not used' };
+  if (fresh) return { skipped: 'fresh install: no engine is installed' };
+  return { reason: 'Auto used Qwant (no Brave or Staan key)' };
+}
+
+/**
+ * The installation of one engine, taking over the enabled state of
+ * `websearch` and, when `websearch` had switched the engine's action off, with
+ * its `search` action off.
+ *
+ * @param {object} engine - an entry of {@link ENGINES}
+ * @param {{ ref?: string }|null} key - from {@link engineKey}
+ * @param {object} websearch - the `websearch` installation
+ * @param {string} timestamp - ISO timestamp for `installedAt` / `updatedAt`
+ * @returns {object} the installation for `integrations.json` → `installed`
+ */
+function engineInstallation(engine, key, websearch, timestamp) {
+  return {
+    id: engine.id,
+    definition: engine.definition,
+    definitionVersion: DEFINITION_VERSION,
+    enabled: websearch?.enabled !== false,
+    values: key?.ref ? { [API_KEY_FIELD]: key.ref } : {},
+    auth: { mode: 'none' },
+    actions: {
+      enabled: ['*'],
+      disabled: oldActionEnabled(websearch, engine.oldAction) ? [] : ['search'],
+      overrides: {}
+    },
+    installedAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+/**
  * The engine installations `websearch` becomes, and why.
  *
  * @param {object} websearch - the `websearch` installation
@@ -177,53 +254,28 @@ export function planEngines(websearch, { apps = [], env = {}, fresh = false, now
   const defaultProvider = ENGINE_IDS.includes(values.defaultProvider)
     ? values.defaultProvider
     : 'auto';
-  const keyOf = engine => {
-    if (!engine.keyField) return null;
-    if (nonEmptyString(values[engine.keyField])) return { ref: values[engine.keyField] };
-    if (nonEmptyString(env?.[engine.keyEnv])) return { env: engine.keyEnv };
-    return null;
-  };
-  const hasKey = id => Boolean(keyOf(ENGINES.find(engine => engine.id === id)));
-  const appNamesQwant = apps.some(app => app?.websearch?.provider === 'qwant');
+  const keys = Object.fromEntries(
+    ENGINES.map(engine => [engine.id, engineKey(engine, values, env)])
+  );
+  const qwant = qwantVerdict({
+    defaultProvider,
+    appNamesQwant: apps.some(app => app?.websearch?.provider === 'qwant'),
+    anyKey: Boolean(keys.brave || keys.staan),
+    fresh
+  });
 
   const reasons = {};
   const skipped = {};
   for (const engine of ENGINES) {
-    if (engine.keyField) {
-      const key = keyOf(engine);
-      if (key?.ref) reasons[engine.id] = `credential "${key.ref}"`;
-      else if (key?.env) reasons[engine.id] = `environment variable ${key.env}`;
-      else skipped[engine.id] = 'no API key was configured';
-      continue;
-    }
-    // Qwant needs no key: it worked where something could reach it.
-    if (defaultProvider === 'qwant') reasons.qwant = 'the default search engine was Qwant';
-    else if (appNamesQwant) reasons.qwant = 'an app names Qwant';
-    else if (defaultProvider === 'auto' && !hasKey('brave') && !hasKey('staan')) {
-      if (fresh) skipped.qwant = 'fresh install: no engine is installed';
-      else reasons.qwant = 'Auto used Qwant (no Brave or Staan key)';
-    } else skipped.qwant = 'Qwant was not used';
+    const verdict = engine.keyField ? keyedEngineVerdict(keys[engine.id]) : qwant;
+    if (verdict.reason) reasons[engine.id] = verdict.reason;
+    else skipped[engine.id] = verdict.skipped;
   }
 
   const timestamp = now || new Date().toISOString();
-  const engines = ENGINES.filter(engine => reasons[engine.id]).map(engine => {
-    const key = keyOf(engine);
-    return {
-      id: engine.id,
-      definition: engine.definition,
-      definitionVersion: DEFINITION_VERSION,
-      enabled: websearch?.enabled !== false,
-      values: key?.ref ? { [API_KEY_FIELD]: key.ref } : {},
-      auth: { mode: 'none' },
-      actions: {
-        enabled: ['*'],
-        disabled: oldActionEnabled(websearch, engine.oldAction) ? [] : ['search'],
-        overrides: {}
-      },
-      installedAt: timestamp,
-      updatedAt: timestamp
-    };
-  });
+  const engines = ENGINES.filter(engine => reasons[engine.id]).map(engine =>
+    engineInstallation(engine, keys[engine.id], websearch, timestamp)
+  );
 
   return {
     engines,
@@ -232,6 +284,58 @@ export function planEngines(websearch, { apps = [], env = {}, fresh = false, now
     defaultEngine: defaultProvider === 'auto' ? null : defaultProvider,
     readerOff: Boolean(websearch) && !oldActionEnabled(websearch, OLD_READER_ACTION)
   };
+}
+
+/**
+ * Pin an app on `auto` (or with no engine) to the former default engine.
+ * Changes `next` in place.
+ *
+ * @param {object} next - a copy of the app
+ * @param {string|null} defaultEngine - the explicit former default, or null
+ * @returns {string|null} the change, or null when nothing changed
+ */
+function pinDefaultEngine(next, defaultEngine) {
+  if (!defaultEngine || !next.websearch || typeof next.websearch !== 'object') return null;
+  const provider = next.websearch.provider;
+  const onAuto =
+    provider === undefined || provider === null || provider === '' || provider === 'auto';
+  if (!onAuto) return null;
+  next.websearch = { ...next.websearch, provider: defaultEngine };
+  return `websearch.provider "${provider || 'auto'}" → "${defaultEngine}"`;
+}
+
+/**
+ * Remove an app's `app.integrations` bindings of `websearch` or
+ * `com.intrafind/web-search` (and `integrations` with them when nothing else
+ * is bound). Changes `next` in place.
+ *
+ * @param {object} next - a copy of the app
+ * @returns {string|null} the change, or null when nothing changed
+ */
+function dropStaleBindings(next) {
+  if (!next.integrations || typeof next.integrations !== 'object') return null;
+  const stale = Object.keys(next.integrations).filter(key => OLD_KEYS.includes(key));
+  if (!stale.length) return null;
+  const integrations = { ...next.integrations };
+  for (const key of stale) delete integrations[key];
+  if (Object.keys(integrations).length) next.integrations = integrations;
+  else delete next.integrations;
+  return `integration binding(s) ${stale.join(', ')} removed`;
+}
+
+/**
+ * Remove an app's `tools` entry `websearch` (and `tools` with it when it was
+ * the only one). Changes `next` in place.
+ *
+ * @param {object} next - a copy of the app
+ * @returns {string|null} the change, or null when nothing changed
+ */
+function dropStaleTool(next) {
+  if (!Array.isArray(next.tools) || !next.tools.includes(OLD_INSTANCE_ID)) return null;
+  const tools = next.tools.filter(ref => ref !== OLD_INSTANCE_ID);
+  if (tools.length) next.tools = tools;
+  else delete next.tools;
+  return `tools entry "${OLD_INSTANCE_ID}" removed`;
 }
 
 /**
@@ -245,34 +349,11 @@ export function planEngines(websearch, { apps = [], env = {}, fresh = false, now
 export function migrateApp(app, defaultEngine) {
   if (!app || typeof app !== 'object') return { app, changes: [] };
   const next = { ...app };
-  const changes = [];
-
-  if (defaultEngine && next.websearch && typeof next.websearch === 'object') {
-    const provider = next.websearch.provider;
-    if (provider === undefined || provider === null || provider === '' || provider === 'auto') {
-      next.websearch = { ...next.websearch, provider: defaultEngine };
-      changes.push(`websearch.provider "${provider || 'auto'}" → "${defaultEngine}"`);
-    }
-  }
-
-  if (next.integrations && typeof next.integrations === 'object') {
-    const stale = Object.keys(next.integrations).filter(key => OLD_KEYS.includes(key));
-    if (stale.length) {
-      const integrations = { ...next.integrations };
-      for (const key of stale) delete integrations[key];
-      if (Object.keys(integrations).length) next.integrations = integrations;
-      else delete next.integrations;
-      changes.push(`integration binding(s) ${stale.join(', ')} removed`);
-    }
-  }
-
-  if (Array.isArray(next.tools) && next.tools.includes(OLD_INSTANCE_ID)) {
-    const tools = next.tools.filter(ref => ref !== OLD_INSTANCE_ID);
-    if (tools.length) next.tools = tools;
-    else delete next.tools;
-    changes.push(`tools entry "${OLD_INSTANCE_ID}" removed`);
-  }
-
+  const changes = [
+    pinDefaultEngine(next, defaultEngine),
+    dropStaleBindings(next),
+    dropStaleTool(next)
+  ].filter(Boolean);
   return { app: changes.length ? next : app, changes };
 }
 
@@ -396,16 +477,46 @@ async function migrateGroups(ctx) {
   if (changed) await ctx.writeJson(GROUPS_FILE, file);
 }
 
+/**
+ * Every app with its file, read in parallel (the reads are independent; the
+ * result keeps the order of the files). An app that cannot be read is left
+ * as it is, with a warning.
+ *
+ * @param {object} ctx - migration context
+ * @returns {Promise<Array<{ rel: string, app: object }>>}
+ */
 async function readApps(ctx) {
-  const apps = [];
-  for (const file of await ctx.listFiles('apps', '*.json')) {
-    try {
-      apps.push({ rel: `apps/${file}`, app: await ctx.readJson(`apps/${file}`) });
-    } catch (error) {
-      ctx.warn(`apps/${file} could not be read and is left as it is: ${error.message}`);
-    }
+  const files = await ctx.listFiles('apps', '*.json');
+  const read = await Promise.all(
+    files.map(async file => {
+      const rel = `apps/${file}`;
+      try {
+        return { rel, app: await ctx.readJson(rel) };
+      } catch (error) {
+        return { rel, error };
+      }
+    })
+  );
+  for (const { rel, error } of read) {
+    if (error) ctx.warn(`${rel} could not be read and is left as it is: ${error.message}`);
   }
-  return apps;
+  return read.filter(entry => !entry.error);
+}
+
+/**
+ * Write every app {@link migrateApp} changes. The files are independent, so
+ * they are written in parallel; the log follows the order of the files.
+ *
+ * @param {object} ctx - migration context
+ * @param {Array<{ rel: string, app: object }>} apps - from {@link readApps}
+ * @param {string|null} defaultEngine - the explicit former default, or null
+ */
+async function migrateApps(ctx, apps, defaultEngine) {
+  const changed = apps
+    .map(({ rel, app }) => ({ rel, ...migrateApp(app, defaultEngine) }))
+    .filter(entry => entry.changes.length);
+  await Promise.all(changed.map(({ rel, app }) => ctx.writeJson(rel, app)));
+  for (const { rel, changes } of changed) ctx.log(`${rel}: ${changes.join('; ')}`);
 }
 
 export async function up(ctx) {
@@ -416,11 +527,5 @@ export async function up(ctx) {
   );
   if (plan.readerOff) await keepReaderOff(ctx);
   await migrateGroups(ctx);
-
-  for (const { rel, app } of apps) {
-    const { app: next, changes } = migrateApp(app, plan.defaultEngine);
-    if (!changes.length) continue;
-    await ctx.writeJson(rel, next);
-    ctx.log(`${rel}: ${changes.join('; ')}`);
-  }
+  await migrateApps(ctx, apps, plan.defaultEngine);
 }
