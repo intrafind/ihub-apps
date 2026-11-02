@@ -77,12 +77,12 @@ Option **B**: groups get `permissions.integrations` (`*`, installation ids, defi
 | PR | Content | Config migration |
 | --- | --- | --- |
 | Types | `type`, type bindings, one admin page, tiles, installation page, iFinder and iAssistant editors, the grouped app editor, this document | — |
-| iHub | §7 | V201 |
-| Group access | §9, #3093 | V202 |
+| iHub | §7 | V202 |
+| Group access | §9, #3093 | V203 |
 | Web search | §4, web search editor | V204 |
 | People directories | §6, directory and browser editors, People search app on `type:people-directory` | V205 |
 | Storage | §5, storage editor, app binding, #3094 | V206 |
 
 Group access goes before the three type PRs so that web search engines, the LDAP browser and the storage providers are built on the group model of §9. The release entries of #3092 for the LDAP directory and the storage definitions ship with the PR that rewrites each definition.
 
-Numbers are assigned in merge order; the baseline stamp of versioning phase 2 (#3090) takes the next free number after these.
+Numbers are assigned in merge order: the iFinder hotfix #3119 merged first and took V201, which moved these up by one. The baseline stamp of versioning phase 2 (#3090) takes the next free number after these (V207).

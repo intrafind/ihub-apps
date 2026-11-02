@@ -175,7 +175,7 @@ integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
   [LDAP Browser Moved Into Its Own Integration](#ldap-browser-moved-into-its-own-integration)).
   The shipped `ldap-browser` app binds the LDAP browsers instead of `requiredIntegrations`.
 - **Groups:** a directory's `groups` became the installation's `allowedGroups`; `["*"]` became
-  "everyone" (an empty list). Migration V202 then moves them onto the groups (see
+  "everyone" (an empty list). Migration V203 then moves them onto the groups (see
   [Installed Integrations No Longer Carry Groups](#installed-integrations-no-longer-carry-groups)). A browse-only directory (empty `groups`) keeps its people search
   closed because the migration switches its search actions off; switch them on in the wizard to
   open it.
@@ -263,7 +263,7 @@ Who may use an installed integration is now granted on the groups (`groups.json`
 `permissions.integrations`, **Admin → Groups → a group → Integrations**). The `allowedGroups`
 field of an installation in `contents/config/integrations.json` is gone.
 
-- **Migrated for you:** migration V202 grants every group what it could use before. A group that
+- **Migrated for you:** migration V203 grants every group what it could use before. A group that
   could use every installation (each one open to everyone, or naming the group or a group it
   inherits) gets `*`, so it also gets the ones installed later; any other group gets the ids of
   the installations it could use. Then `allowedGroups` is removed from every installation. Groups
@@ -286,7 +286,7 @@ field of an installation in `contents/config/integrations.json` is gone.
   groups refused them before.
 
 **Before upgrading:** nothing is required. After the upgrade, check **Admin → Groups** for the
-grants V202 wrote, and the server log for warnings about groups it could not find.
+grants V203 wrote, and the server log for warnings about groups it could not find.
 
 ## Admin → Integrations → Installed Merged Into Admin → Integrations
 

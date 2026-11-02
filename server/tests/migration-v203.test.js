@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-/** V202: an installation's `allowedGroups` move onto the groups as `permissions.integrations`. */
+/** V203: an installation's `allowedGroups` move onto the groups as `permissions.integrations`. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -13,7 +13,7 @@ import {
   admits,
   grantFor,
   installationsOf
-} from '../migrations/V202__integration_access_on_groups.js';
+} from '../migrations/V203__integration_access_on_groups.js';
 
 function makeCtx(files) {
   const logs = [];
@@ -79,9 +79,9 @@ function integrationsFile(installed) {
 
 const integrationsOf = files => files['config/groups.json'].groups;
 
-describe('V202 integration access on groups', () => {
+describe('V203 integration access on groups', () => {
   it('declares its version and description', () => {
-    assert.equal(version, '202');
+    assert.equal(version, '203');
     assert.equal(description, 'integration_access_on_groups');
   });
 

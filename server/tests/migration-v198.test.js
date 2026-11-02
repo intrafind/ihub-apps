@@ -122,7 +122,7 @@ describe('V198 people directories → installed integrations', () => {
       const parsed = peopleDirectorySchema.safeParse(back);
       assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
       assert.equal(back.id, directory.id);
-      // Groups are no part of the directory shape (V202 moved them onto the
+      // Groups are no part of the directory shape (V203 moved them onto the
       // groups); V198 wrote them as `allowedGroups`, `["*"]` as everyone (`[]`).
       assert.deepEqual(
         instance.allowedGroups,
