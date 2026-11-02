@@ -4,8 +4,9 @@
 /**
  * An installation that apps bind:
  *
- *   - Admin → Integrations → Installed names those apps when an installation
- *     is removed or disabled, and says they will be hidden;
+ *   - Admin → Integrations (Installed tab) names those apps when an
+ *     installation is removed or disabled from its tile, and says they will be
+ *     hidden — whether an app binds it by id, by definition or by type;
  *   - disabling one nobody binds asks nothing;
  *   - the app editor lists a binding whose installation is gone as "not
  *     installed", and its Unbind control drops the key from `app.integrations`.
@@ -33,8 +34,14 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
+  fetchAdminGroups: jest.fn().mockResolvedValue({ groups: {} }),
+  fetchAdminPlatformConfig: jest.fn().mockResolvedValue(null),
   getAdminApiErrorMessage: err => err?.message || 'error',
   makeAdminApiCall: jest.fn()
+}));
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => ({ isEnabled: () => true })
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
@@ -61,14 +68,22 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } })
 }));
 
-const AdminInstalledIntegrationsPage =
-  require('../../../client/src/features/admin/pages/AdminInstalledIntegrationsPage').default;
+const AdminIntegrationsPage =
+  require('../../../client/src/features/admin/pages/AdminIntegrationsPage').default;
 const IntegrationsConfigSection =
   require('../../../client/src/features/admin/components/app-form/IntegrationsConfigSection').default;
 
 const INSTALLED = [
   { id: 'ckan-demo', label: 'Demo portal', definitionName: 'CKAN', enabled: true },
-  { id: 'lonely', label: 'Lonely', definitionName: 'CKAN', enabled: true }
+  { id: 'lonely', label: 'Lonely', definitionName: 'CKAN', enabled: true },
+  {
+    id: 'x500bund',
+    label: 'X.500 Bund',
+    definition: 'com.intrafind/ldap-directory',
+    definitionName: 'LDAP people directory',
+    type: 'people-directory',
+    enabled: true
+  }
 ];
 const APPS = [
   {
@@ -77,7 +92,8 @@ const APPS = [
     integrations: { 'ckan-demo': {} }
   },
   { id: 'chat', name: { en: 'Chat' } },
-  { id: 'research', name: { en: 'Research' }, integrations: { 'ckan-demo': { actions: ['x'] } } }
+  { id: 'research', name: { en: 'Research' }, integrations: { 'ckan-demo': { actions: ['x'] } } },
+  { id: 'people', name: { en: 'People search' }, integrations: { 'type:people-directory': {} } }
 ];
 
 beforeEach(() => {
@@ -91,12 +107,12 @@ beforeEach(() => {
 
 const renderPage = () =>
   render(
-    <MemoryRouter initialEntries={['/admin/integrations/installed']}>
-      <AdminInstalledIntegrationsPage />
+    <MemoryRouter initialEntries={['/admin/integrations']}>
+      <AdminIntegrationsPage />
     </MemoryRouter>
   );
 
-describe('AdminInstalledIntegrationsPage: bound apps', () => {
+describe('AdminIntegrationsPage: bound apps', () => {
   test('the remove dialog names the apps that bind the installation', async () => {
     renderPage();
     await screen.findByText('Demo portal');
@@ -128,6 +144,16 @@ describe('AdminInstalledIntegrationsPage: bound apps', () => {
     await waitFor(() =>
       expect(mockApi.setInstalledIntegrationEnabled).toHaveBeenCalledWith('ckan-demo', false)
     );
+  });
+
+  test('an app binding the type of an installation counts as binding it', async () => {
+    renderPage();
+    await screen.findByText('X.500 Bund');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable x500bund' }));
+
+    expect(mockApi.setInstalledIntegrationEnabled).not.toHaveBeenCalled();
+    expect(screen.getByTestId('bound-apps')).toHaveTextContent('Bound by: People search');
   });
 
   test('disabling an installation no app binds asks nothing', async () => {

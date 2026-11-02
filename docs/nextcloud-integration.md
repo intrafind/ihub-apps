@@ -52,7 +52,7 @@ Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/ne
 ### Option A: Admin UI (recommended)
 
 1. Sign in to iHub Apps as an administrator.
-2. Navigate to **Admin → Integrations → Installed**, open the **Catalog** tab and click **Install** on **Nextcloud** (or edit the `nextcloud` installation an upgrade created).
+2. Navigate to **Admin → Integrations**, open the **Catalog** tab and click **Install** on **Nextcloud** (or edit the `nextcloud` installation an upgrade created).
 3. Fill in:
    - **Label** — the friendly name shown to end users (e.g. `Company Nextcloud`).
    - **Nextcloud server URL** — base URL of the instance, no trailing slash (e.g. `https://nextcloud.example.com`).

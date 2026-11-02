@@ -119,7 +119,8 @@
     "selectLanguage": "Select language",
     "export": "Export",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "saving": "Saving…"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2287,7 +2288,6 @@
       "logging": "Logging",
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
-      "installedIntegrations": "Installed integrations",
       "telemetry": "Telemetry",
       "systemResources": "System Resources",
       "voiceInput": "Voice Input",
@@ -2874,14 +2874,11 @@
       }
     },
     "integrationCatalog": {
-      "title": "Installed integrations",
-      "subtitle": "Install an integration from the catalog, point it at your system and bind it to apps. Each installation brings its actions to the model.",
       "install": "Install",
       "reload": "Reload catalog",
       "reloaded": "Catalog reloaded.",
       "saved": "Integration \"{{id}}\" saved.",
       "removed": "Integration \"{{id}}\" removed.",
-      "searchPlaceholder": "Search the catalog",
       "catalogEmpty": "No definitions match. Integrations can also be installed from the Marketplace.",
       "installedCount": "{{count}} installed",
       "notInstalled": "Not installed",
@@ -2982,8 +2979,6 @@
         "laterRelease": "(later release)",
         "secretStored": "Stored. Leave empty to keep it.",
         "who": "4 · Who may use it",
-        "groups": "Groups",
-        "groupsHelp": "Leave empty for everyone who may use an app that binds this integration.",
         "enabled": "Enabled",
         "actions": "5 · Actions the model may call",
         "requires": "Requires {{requirement}}",
@@ -2998,7 +2993,8 @@
         "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust.",
         "description": "Description",
         "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.",
-        "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead."
+        "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead.",
+        "onePerLine": "One entry per line"
       },
       "connections": {
         "title": "Connected users",
@@ -3024,14 +3020,6 @@
     "integrations": {
       "backToIntegrations": "Back to Integrations",
       "cards": {
-        "installed": {
-          "title": "Installed integrations",
-          "description": "Install integrations from the catalog or the marketplace (e.g. a CKAN open data portal), point them at your systems and bind their actions to apps."
-        },
-        "nextcloud": {
-          "title": "Nextcloud",
-          "description": "Let users browse and attach files from any Nextcloud instance during a chat. Installed as the integration \"nextcloud\"."
-        },
         "nextcloudEmbed": {
           "title": "Nextcloud Embed",
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
@@ -3040,14 +3028,263 @@
           "title": "Microsoft 365 Copilot",
           "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
         },
-        "peopleDirectories": {
-          "description": "Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de. Each directory is an installation of the LDAP people directory integration.",
-          "title": "People directories"
+        "outlook": {
+          "title": "Outlook Add-in",
+          "description": "Embed iHub apps inside the Outlook task pane. Users sign in with their iHub account and run prompts against the currently selected email."
+        },
+        "browserExtension": {
+          "title": "Browser Extension",
+          "description": "Side-panel extension for Chrome / Edge / Firefox. Run any iHub app against the page the user is reading."
+        },
+        "mcpGateway": {
+          "title": "MCP gateway",
+          "description": "Let external MCP clients use iHub's apps as tools, signed in through iHub's own OAuth server."
         }
       },
-      "categories": {
-        "data": "Data & APIs",
-        "directories": "Directories"
+      "tabs": {
+        "inbound": "Inbound"
+      },
+      "searchPlaceholder": "Search integrations…",
+      "noMatch": "Nothing matches \"{{query}}\".",
+      "featureFlagOff": "The \"integrations\" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.",
+      "title": "Integrations",
+      "subtitle": "The systems iHub works with: install an integration from the catalog, point it at your system and bind it to apps. Inbound lists what connects to iHub.",
+      "closeTestResults": "Close test results",
+      "page": {
+        "loadError": "Could not load the installation",
+        "tabs": {
+          "overview": "Overview",
+          "settings": "Settings",
+          "releases": "Releases"
+        },
+        "remove": "Remove",
+        "definitionMissing": "The definition \"{{definition}}\" of this installation is not loaded: it offers no actions and cannot be edited. Install the definition again from the marketplace, or remove the installation.",
+        "tabsLabel": "Installation",
+        "facts": "Configuration",
+        "noFacts": "Nothing configured beyond the defaults.",
+        "editSettings": "Edit settings",
+        "actions": "Actions",
+        "noLiveActions": "The system lists its actions when iHub connects. Test the connection to see them.",
+        "noActions": "This integration offers no actions to the model; apps use it through their own settings.",
+        "actionOff": "Off",
+        "actionUnavailable": "Unavailable",
+        "about": "About",
+        "groups": "Groups",
+        "docs": "Documentation",
+        "opensInNewTab": "(opens in a new tab)",
+        "apps": "Apps that use it",
+        "noApps": "No app binds this installation yet. Bind it in an app’s Integrations section.",
+        "via": {
+          "installation": "by this installation",
+          "definition": "every {{name}} installation",
+          "type": "every installation of its type"
+        },
+        "notEditable": "This installation cannot be edited while its definition is missing or incompatible."
+      },
+      "catalog": {
+        "installAria": "Install {{name}}"
+      },
+      "inbound": {
+        "status": {
+          "on": "On",
+          "available": "Available"
+        },
+        "description": "What connects to iHub: other applications that embed iHub or call its apps. Each one is configured on its own page."
+      },
+      "tile": {
+        "noGroup": "No group grants it yet"
+      },
+      "facts": {
+        "credential": "Credential",
+        "sources": "Sources",
+        "baseUrl": "Base URL",
+        "authentication": "Authentication",
+        "oidcProvider": "OIDC provider",
+        "signingKey": "Signing key",
+        "privateKey": "Private key",
+        "defaultSearchProfile": "Default search profile",
+        "runsOn": "Runs on",
+        "defaultProfile": "Default profile",
+        "groundedOnly": "Answers from documents only",
+        "signInProvider": "Sign-in provider",
+        "directoryUrl": "Directory URL",
+        "baseDn": "Base DN",
+        "bindPassword": "Bind password",
+        "browse": "LDAP browser",
+        "tenantId": "Tenant ID",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "defaultEngine": "Default engine",
+        "braveKey": "Brave API key",
+        "staanKey": "Staan API key",
+        "serverUrl": "Server URL",
+        "siteUrl": "Site URL",
+        "portalUrl": "Portal URL",
+        "defaultFilter": "Filter",
+        "maxRows": "Results per search",
+        "command": "Command",
+        "transport": "Transport",
+        "agentCard": "Agent Card",
+        "endpoint": "Endpoint",
+        "choices": {
+          "ihubSigned": "JWT signed by iHub",
+          "oidcTokenExchange": "OIDC token exchange",
+          "auto": "Auto",
+          "brave": "Brave Search",
+          "staan": "Staan",
+          "qwant": "Qwant",
+          "streamableHttp": "Streamable HTTP",
+          "sse": "SSE",
+          "websocket": "WebSocket",
+          "stdio": "Local process (stdio)",
+          "oidcKeyPair": "iHub OIDC key pair"
+        },
+        "secretSet": "set",
+        "secretNotSet": "not set",
+        "yes": "yes",
+        "no": "no"
+      },
+      "groups": {
+        "peopleDirectories": {
+          "title": "People directories",
+          "description": "LDAP and Entra ID directories the model looks people up in."
+        },
+        "webSearch": {
+          "title": "Web search",
+          "description": "The search engines and the page reader of apps with web search on."
+        },
+        "storage": {
+          "title": "Storage providers",
+          "description": "Cloud storage users browse and attach files from in the chat and in projects."
+        },
+        "mcp": {
+          "title": "MCP servers",
+          "description": "Model Context Protocol servers; their tools are the actions."
+        },
+        "agents": {
+          "title": "Agents",
+          "description": "Remote agents (A2A) the model hands tasks to; their skills are the actions."
+        },
+        "builtIn": {
+          "title": "Built-in",
+          "description": "Integrations that ship with iHub, such as iFinder, iAssistant and Jira."
+        },
+        "catalog": {
+          "title": "From the catalog",
+          "description": "Integrations from the catalog or a marketplace registry."
+        }
+      },
+      "editors": {
+        "iassistant": {
+          "connectionRequired": "Pick the iFinder installation iAssistant runs on.",
+          "connectionSection": "Connection",
+          "connectionSectionHelp": "iAssistant uses the base URL and the sign-in of an iFinder installation; configure those there.",
+          "settingsSection": "iAssistant settings",
+          "defaultProfileId": "Default profile ID",
+          "defaultProfileIdHelp": "The iAssistant profile used when an app names none (plain text or base64 encoded).",
+          "defaultSearchProfile": "Default search profile",
+          "defaultSearchProfileHelp": "The search profile iAssistant conversations search when neither the app nor the model names one.",
+          "testResults": "iAssistant connection test",
+          "testHelp": "The test reaches iAssistant through the selected iFinder installation as your own admin account, with the values above (unsaved)."
+        },
+        "ifinder": {
+          "privateKey": "Private key",
+          "privateKeyHelp": "The stored credential holding the RSA or EC private key (PEM) that signs the iFinder JWT. Alternatively set the IFINDER_PRIVATE_KEY environment variable on the server.",
+          "algorithm": "JWT algorithm",
+          "issuer": "JWT issuer",
+          "audience": "JWT audience",
+          "tokenExpiration": "Token lifetime (seconds)",
+          "effectiveIssuer": "Effective OAuth issuer URL",
+          "issuerNotAvailable": "Not available",
+          "autoDetected": "Auto-detected",
+          "effectiveIssuerConfiguredHelp": "Configured under Admin → OAuth Server.",
+          "effectiveIssuerAutoHelp": "Detected from your server URL. Set a custom issuer under Admin → OAuth Server if needed.",
+          "oidcKeyPairReady": "OIDC key pair ready",
+          "oidcKeyPairReadyHelp": "Configure iFinder with:",
+          "oidcKeyPairMissingIssuer": "OAuth issuer URL required",
+          "oidcKeyPairMissingIssuerHelp": "Set the OAuth issuer URL under Admin → Authentication → OAuth Server before saving.",
+          "info": {
+            "title": "iFinder JWT authentication",
+            "description": "Every call runs as the signed-in user: iHub signs a JWT for the user, or exchanges the user’s sign-in token at a shared OIDC provider. iAssistant runs on this connection."
+          },
+          "connectionSection": "iFinder connection",
+          "baseUrl": "iFinder base URL",
+          "baseUrlHelp": "Your iFinder / iAssistant server; the API paths are appended.",
+          "authMode": {
+            "label": "Token issuer",
+            "ihubSigned": "iHub signs the token",
+            "oidcTokenExchange": "Shared OIDC provider (token exchange)",
+            "oidcTokenExchangeHelp": "iHub and iFinder share one OIDC provider. iHub keeps the sign-in token of each user and exchanges it at the provider for a token for iFinder. Users must sign in to iHub through that provider; background runs use the stored refresh token.",
+            "ihubSignedHelp": "iHub signs the iFinder token itself, with a private key or the iHub OIDC key pair. iFinder trusts iHub as the issuer."
+          },
+          "useOidcKeyPair": "Sign with the iHub OIDC key pair",
+          "useOidcKeyPairHelp": "Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed.",
+          "defaultScope": "Token scope",
+          "jwtSubjectField": "User identity sent to iFinder",
+          "jwtSubject": {
+            "custom": "Custom template",
+            "email": "Email address",
+            "username": "Username",
+            "id": "User ID",
+            "name": "Display name",
+            "domainUsername": "Domain\\Username (NTLM-style)"
+          },
+          "jwtSubjectFieldHelp": "The \"sub\" claim of the iFinder JWT: which user attribute identifies the user, as iFinder knows them.",
+          "jwtSubjectTemplate": "Custom subject template",
+          "jwtSubjectTemplateHelp": "Placeholders: ${user.email}, ${user.username}, ${user.domain}, ${user.id}, ${user.name}.",
+          "searchSection": "Search profiles",
+          "searchSectionHelp": "Which iFinder search profile a chat searches, and which ones users may pick.",
+          "defaultSearchProfile": "Default search profile",
+          "defaultSearchProfileHelp": "The search profile a chat searches until the user picks another one.",
+          "allowedSearchProfiles": "Search profiles users may pick",
+          "allowedSearchProfilesPlaceholder": "All of the user's profiles",
+          "allowedSearchProfilesHelp": "One search profile id per line. Empty offers every profile the user has in iFinder.",
+          "allowUserSearchProfileChange": "Users may change the search profile",
+          "allowUserSearchProfileChangeHelp": "Off: every chat searches the default search profile, and neither the user nor the model can pick another.",
+          "advancedSection": "Advanced",
+          "advancedToggle": "Request timeout, download directory and API paths",
+          "testResults": "iFinder connection test",
+          "diagnostics": {
+            "exchangeDescription": "The test exchanges your own stored sign-in token at the OIDC provider and calls the endpoints the integration uses, with the values above (unsaved). It always runs as you: the exchange needs your sign-in.",
+            "description": "The test signs a JWT for your own admin account and calls the endpoints the integration uses, with the values above (unsaved)."
+          },
+          "tokenExchange": {
+            "provider": "OIDC provider",
+            "selectProvider": "Select a provider…",
+            "providerDisabled": "disabled",
+            "noProviders": "No OIDC provider is configured. Add the provider iFinder uses under Admin → Authentication first.",
+            "providerHelp": "The provider iHub and iFinder share. Its sign-in tokens are kept (encrypted) and exchanged for iFinder tokens with the client ID and secret configured for it under Admin → Authentication. Add \"offline_access\" to its scopes so background runs keep working.",
+            "grantType": "Grant type",
+            "grantEntraObo": "On-Behalf-Of (Microsoft Entra ID)",
+            "grantTokenExchange": "Token exchange (RFC 8693: Zitadel, Keycloak)",
+            "audience": "Audience",
+            "audienceObo": "Not used by On-Behalf-Of: Entra takes the audience from the scope (api://<ifinder-app-id>/.default).",
+            "audienceHelp": "The client or project id of iFinder at the provider. The issued token carries it as \"aud\".",
+            "scopeMap": "Scope map",
+            "scopeMapHelp": "Translates the scopes iHub asks for into the scopes of the provider (Zitadel role scopes, Entra api://…/.default). An empty value sends the iHub scope unchanged.",
+            "providerScopeFor": "Provider scope for {{scope}}",
+            "unchanged": "(unchanged)",
+            "extraScopes": "Additional scopes",
+            "extraScopesHelp": "Space-separated scopes sent with every exchange.",
+            "ifinderSetupTitle": "Configure iFinder with:",
+            "providerIssuer": "issuer URL of the provider",
+            "ifinderSetupHelp": "The token iHub sends must also carry the fa_* claims iFinder reads, either as requested scopes or added by a claim mapper on the provider. The connection test shows which ones are present.",
+            "providerRequired": "Select the OIDC provider iHub shares with iFinder."
+          },
+          "baseUrlRequired": "Enter the iFinder base URL.",
+          "oidcKeyPairNeedsIssuer": "Signing with the OIDC key pair needs an OAuth issuer URL. It is detected from your server URL, or set it under Admin → Authentication → OAuth Server."
+        },
+        "nameSection": "Name",
+        "nameSectionHelp": "How users see this integration in the chat. The id stays fixed.",
+        "accessSection": "Who may use it",
+        "actionsSection": "Actions the model may call",
+        "actionsSectionHelp": "An app that binds this integration offers the checked actions; it can narrow them further."
+      },
+      "access": {
+        "grantedTo": "Granted to: {{groups}}",
+        "noGroup": "No group grants it yet: nobody can use it.",
+        "help": "Groups decide which integrations their members may use (inherited like apps).",
+        "editOnGroups": "Edit on Admin → Groups"
       }
     },
     "sidebar": {

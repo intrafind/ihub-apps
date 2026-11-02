@@ -2,7 +2,7 @@
 
 ## Installed Integrations: Install from a Catalog, Configure, Bind to Apps
 
-**Admin → Integrations → Installed** is the first piece of the unified integrations platform
+**Admin → Integrations** is the first piece of the unified integrations platform
 (epic #2911). An integration is a definition in a catalog; installing it creates an instance with
 its own URL, sign-in mode and set of actions; apps bind instances and the model gets their actions
 as tools. Which groups may use an installation is set on the groups (see below).
@@ -37,8 +37,7 @@ See [Integrations](../../integrations.md).
 
 ## iFinder and iAssistant Are Installed Integrations
 
-iFinder and iAssistant are the first two built-in integrations under **Admin → Integrations →
-Installed**, and no longer a block in `platform.json` or an editor on the Providers page.
+iFinder and iAssistant are the first two built-in integrations under **Admin → Integrations**, and no longer a block in `platform.json` or an editor on the Providers page.
 
 - **One place for the connection:** the iFinder installation holds the base URL, the sign-in
   mode (iHub-signed JWT or OIDC token exchange), the signing key as a credential-store
@@ -59,7 +58,7 @@ Installed**, and no longer a block in `platform.json` or an editor on the Provid
 
 ## MCP Servers Are Installed Integrations
 
-Outbound MCP servers are installed under **Admin → Integrations → Installed** like any other
+Outbound MCP servers are installed under **Admin → Integrations** like any other
 integration, and no longer on a page of their own.
 
 - **Catalog:** the hosted servers of the former built-in catalog (Microsoft Learn, Context7,
@@ -83,7 +82,7 @@ integration, and no longer on a page of their own.
 ## Remote A2A Agents Are Installed Integrations
 
 Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** definition under
-**Admin → Integrations → Installed**, and no longer on a page of their own.
+**Admin → Integrations**, and no longer on a page of their own.
 
 - **One wizard:** Agent Card URL, sign-in (none, a shared token or API key, or an OAuth client)
   and the call budget; **Test connection** fetches the card and lists the skills, each of which
@@ -113,7 +112,7 @@ integration takes effect at once, for its actions and for the scopes it offers i
 ## Web Search Is an Installed Integration
 
 The search engines and the page reader are the built-in integration **Web search** under
-**Admin → Integrations → Installed**, and no longer a category on the Providers page.
+**Admin → Integrations**, and no longer a category on the Providers page.
 
 - **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
   as credential references and the **default search engine** every app on `auto` uses. The groups
@@ -132,8 +131,7 @@ The search engines and the page reader are the built-in integration **Web search
 
 ## Jira Is an Installed Integration
 
-Atlassian Jira is the built-in integration **Atlassian Jira** under **Admin → Integrations →
-Installed**, and no longer a page of its own under **Admin → Integrations**.
+Atlassian Jira is the built-in integration **Atlassian Jira** under **Admin → Integrations**, and no longer a page of its own.
 
 - **One place for the OAuth app:** the installation `jira` holds the client id, the client secret
   as a credential reference, the redirect URI and the site URL; **Test** checks them and the route
@@ -154,7 +152,7 @@ Installed**, and no longer a page of its own under **Admin → Integrations**.
 ## Entra ID Directory Is an Installed Integration
 
 The Microsoft Entra ID people search is the built-in integration **Microsoft Entra ID directory**
-under **Admin → Integrations → Installed**, instead of a tool configured through environment
+under **Admin → Integrations**, instead of a tool configured through environment
 variables alone.
 
 - **Configured in the admin UI:** the installation `entra` holds the tenant id, the application
@@ -178,7 +176,7 @@ versions, so the marketplace can tell you before you install or update anything.
   an item this server cannot run and says why ("needs iHub >=6.0.0, this server runs 5.7.2");
   **Install** and **Update** are disabled, and the API refuses them too. A definition already on
   disk that no longer matches (after a downgrade, or copied in by hand) is listed under **Admin →
-  Integrations → Installed** as **Incompatible** with the reason; its installations stay as they
+  Integrations** as **Incompatible** with the reason; its installations stay as they
   are but offer no actions until the definition fits again.
 - **Release notes:** every version of a definition has a date, a one-line summary and Markdown
   notes per category (features, fixes, breaking changes). The marketplace detail of an integration
@@ -197,8 +195,7 @@ and [Marketplace](../../marketplace.md).
 ## People Directories Are Installed Integrations
 
 LDAP people directories — the company directory and external ones such as x500.bund.de — are
-installations of the built-in integration **LDAP people directory** under **Admin → Integrations →
-Installed**, one installation per directory, and no longer a page of their own.
+installations of the built-in integration **LDAP people directory** under **Admin → Integrations**, one installation per directory, and no longer a page of their own.
 
 - **One wizard per directory:** the install wizard holds everything the directory editor had —
   reuse an LDAP sign-in provider or connect directly, access (anonymous or a service account whose
@@ -226,7 +223,7 @@ See [People Directory Search](../../people-directory-search.md).
 
 `ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
 tools and the scheduled-task tools are the actions of the built-in integration **iHub**
-(installation `ihub`) under **Admin → Integrations → Installed**, instead of tool files.
+(installation `ihub`) under **Admin → Integrations**, instead of tool files.
 
 - **Always there:** the installation exists and is enabled at all times — it is created when
   missing and shows **Always installed** without a remove or disable switch. Edit it to switch
@@ -244,7 +241,7 @@ tools and the scheduled-task tools are the actions of the built-in integration *
 
 Office 365 (OneDrive / SharePoint), Google Drive and Nextcloud are the built-in integrations
 **Microsoft Office 365**, **Google Drive** and **Nextcloud** (installations `office365`,
-`googledrive`, `nextcloud`) under **Admin → Integrations → Installed**, and no longer three
+`googledrive`, `nextcloud`) under **Admin → Integrations**, and no longer three
 pages of their own with a shared provider editor.
 
 - **One wizard per provider:** the install wizard holds the OAuth app — client id, client secret
@@ -286,3 +283,25 @@ the list is `permissions.integrations`.
   may use iHub's own tools and web search.
 
 See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
+
+## Integrations: One Admin Page, Grouped Tiles and a Page per Installation
+
+**Admin → Integrations** is one page with the tabs **Installed**, **Catalog** and **Inbound**.
+Installations and catalog definitions are grouped (people directories, web search, storage
+providers, MCP servers, agents, built-in, from the catalog), and each installation is a tile that
+shows what matters at a glance.
+
+- **Tiles:** label, definition, version, enabled or disabled, update available, incompatible,
+  live status (connected, unreachable, connected users), sign-in mode, groups and two to four key
+  facts of its settings — the iFinder base URL and sign-in, a directory's URL and base DN, the
+  Nextcloud server, which web search keys are set. A secret only ever shows as set or not set.
+  Test, enable or disable, remove and the connected users stay one click away on the tile.
+- **A page per installation:** a tile opens `/admin/integrations/<id>` with **Overview** (facts,
+  actions with their side effects, documentation link and the apps that bind it), **Settings**
+  and, where the definition has a history, **Releases**.
+- **iFinder and iAssistant get their editor back:** the Settings tab of the two installations is
+  the well-structured editor they had on the Providers page — token issuer, OIDC key pair with the
+  iFinder settings to copy, token exchange, search profiles — and tests the unsaved values. Other
+  installations use the form generated from their definition.
+- **Inbound** lists what connects to iHub: Outlook add-in, browser extension, Microsoft 365
+  Copilot, Nextcloud embed and the MCP gateway, each with its status.

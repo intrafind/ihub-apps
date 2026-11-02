@@ -1069,7 +1069,7 @@ For key generation instructions see [JWT Key Generation](ifinder-jwt-key-generat
 
 ## iFinder Integration
 
-iFinder is no longer configured in `platform.json`. It is a [built-in installed integration](integrations.md#built-in-integrations): the `ifinder` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → Installed → iFinder** (**Install**, later **Edit**; **Test** checks the connection). Migration V192 moves an existing `iFinder` block of `platform.json` into that installation, keeping `enabled`. The installation's values are documented in [iFinder Integration → Configuration](iFinder-Integration.md#configuration); in short:
+iFinder is no longer configured in `platform.json`. It is a [built-in installed integration](integrations.md#built-in-integrations): the `ifinder` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → iFinder** (**Install**, later **Edit**; **Test** checks the connection). Migration V192 moves an existing `iFinder` block of `platform.json` into that installation, keeping `enabled`. The installation's values are documented in [iFinder Integration → Configuration](iFinder-Integration.md#configuration); in short:
 
 ```json
 {
@@ -1130,7 +1130,7 @@ For integration details see [iFinder Integration](iFinder-Integration.md).
 
 ## iAssistant Integration
 
-iAssistant is no longer configured in `platform.json` either. It is the built-in `iassistant` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → Installed → iAssistant**, and runs on the iFinder installation its `connection` field names. Individual apps can override these settings via their `iassistant` property, and an app on the iAssistant model binds the installation (`"integrations": { "iassistant": { "actions": [] } }`; see [Apps → iAssistant Configuration](apps.md#iassistant-configuration)). Migration V192 moves an existing `iAssistant` block into the installation.
+iAssistant is no longer configured in `platform.json` either. It is the built-in `iassistant` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → iAssistant**, and runs on the iFinder installation its `connection` field names. Individual apps can override these settings via their `iassistant` property, and an app on the iAssistant model binds the installation (`"integrations": { "iassistant": { "actions": [] } }`; see [Apps → iAssistant Configuration](apps.md#iassistant-configuration)). Migration V192 moves an existing `iAssistant` block into the installation.
 
 ```json
 {
@@ -1232,7 +1232,7 @@ For setup and client registration see [OAuth Integration Guide](oauth-integratio
 
 ## Cloud Storage Configuration
 
-Retired in migration V200: the cloud storage providers (Office 365, Google Drive, Nextcloud) are the installed integrations `office365`, `googledrive` and `nextcloud` in `contents/config/integrations.json` (**Admin → Integrations → Installed**), and the platform schema no longer accepts a `cloudStorage` key. The app-side switch stays `upload.cloudStorageUpload.enabled`. See [Office 365 Integration](office365-integration.md), [Google Drive Integration](google-drive-integration.md), [Nextcloud Integration](nextcloud-integration.md) and [Integrations](integrations.md#built-in-integrations).
+Retired in migration V200: the cloud storage providers (Office 365, Google Drive, Nextcloud) are the installed integrations `office365`, `googledrive` and `nextcloud` in `contents/config/integrations.json` (**Admin → Integrations**), and the platform schema no longer accepts a `cloudStorage` key. The app-side switch stays `upload.cloudStorageUpload.enabled`. See [Office 365 Integration](office365-integration.md), [Google Drive Integration](google-drive-integration.md), [Nextcloud Integration](nextcloud-integration.md) and [Integrations](integrations.md#built-in-integrations).
 
 ## Skills Configuration
 

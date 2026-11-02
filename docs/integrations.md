@@ -1,6 +1,6 @@
 # Integrations
 
-An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**, including the built-in iFinder, iAssistant, web search, Jira, Entra ID directory, LDAP people directory, iHub and cloud storage (Office 365, Google Drive, Nextcloud) integrations; the MCP servers and A2A agents are installations too (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
+An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations**, including the built-in iFinder, iAssistant, web search, Jira, Entra ID directory, LDAP people directory, iHub and cloud storage (Office 365, Google Drive, Nextcloud) integrations; the MCP servers and A2A agents are installations too (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
 
 The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the [built-in integrations](#built-in-integrations) **iFinder**, **iAssistant**, **Web search**, **Atlassian Jira**, **Microsoft Entra ID directory**, **LDAP people directory**, **iHub** (iHub's own tools), **Microsoft Office 365**, **Google Drive** and **Nextcloud**.
 
@@ -59,17 +59,84 @@ A shipped definition never uses `script` (it is `native`); the shipped IntraFind
 
 A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a` protocol, installed from the shipped **A2A agent** definition (`com.intrafind/a2a-agent`): the Agent Card URL, a sign-in mode (none, a shared token or API key, or an OAuth client) and the call budget are its install values. The card's skills are the installation's actions, listed after **Test connection**; tool ids stay `a2a__<id>__<skill>`. Calling an agent, its conversations and the inbound side are described in [A2A Agents](a2a-agents.md). Migration V194 turned every agent of the former `config/a2aAgents.json` into an installation under the same id.
 
+## The Integrations page
+
+**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has three tabs (`?tab=` in the URL):
+
+| Tab                       | Contents                                                                                                                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Installed** (default)   | every installation as a tile, grouped                                                                                                                                                                                                          |
+| **Catalog** (`catalog`)   | every definition you can install, in the same groups                                                                                                                                                                                           |
+| **Inbound** (`inbound`)   | what connects _to_ iHub, each with its status and a link to its page: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway                                                                                    |
+
+**Groups.** Installed and Catalog list their entries under the same headings, in this order; a group with nothing in it is left out, and each heading shows the count and a one-line description:
+
+| Group              | Contains                                                         |
+| ------------------ | ---------------------------------------------------------------- |
+| People directories | definitions of `type: "people-directory"` (LDAP, Entra ID)       |
+| Web search         | `type: "web-search"`                                             |
+| Storage providers  | `type: "storage"` (Office 365, Google Drive, Nextcloud)          |
+| MCP servers        | protocol `mcp`                                                   |
+| Agents             | protocol `a2a`                                                   |
+| Built-in           | any other built-in definition (iFinder, iAssistant, Jira, iHub)  |
+| From the catalog   | everything else (CKAN, marketplace definitions)                  |
+
+A search box above the groups filters by label, name, id and description.
+
+**Tiles.** An installation's tile shows its label, definition and id; the pills of its state (enabled or disabled, version with the version on disk as tooltip, _Incompatible_ with the reason, _Update to vX available_ linking to the marketplace, _Always installed_, _Definition missing_); its sign-in mode; the live status (connected, unreachable, the tool count of an MCP server, the number of connected users of a per-user installation, how a directory's LDAP connection is protected); its groups; and two to four **key facts** from its values, chosen per definition:
+
+| Definition                 | Facts                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| iFinder                    | base URL, authentication (JWT signed by iHub or OIDC token exchange), signing key or OIDC provider, default search profile |
+| iAssistant                 | the iFinder installation it runs on, default profile, default search profile               |
+| LDAP people directory      | directory URL (or the sign-in provider it reuses), base DN, bind password                  |
+| Entra ID directory         | tenant ID, client ID, client secret                                                        |
+| Web search                 | default engine, whether the Brave and Staan keys are set                                   |
+| Office 365 / Google Drive  | tenant ID (Office 365), client ID, client secret, sources                                  |
+| Nextcloud                  | server URL, client ID, client secret                                                       |
+| Jira                       | site URL, client ID, client secret                                                         |
+| CKAN                       | portal URL, filter, results per search, credential                                         |
+| MCP server                 | server URL (or the command of a local process), transport, credential                     |
+| A2A agent                  | Agent Card URL, credential                                                                 |
+| any other                  | its endpoint (`baseUrl`, `url`, …) and credential                                          |
+
+A secret is never shown: a `secret` or `credential` field, a field marked `sensitive`, a key that names one (`…Ref`, `…Secret`, `password`, `apiKey`, `apiToken`) and the managed service-account secret only show **set** or **not set**.
+
+The tile opens the installation's page. Its quick actions are separate buttons: **Test** (the results open above the groups), **Edit** (the page's Settings tab), **Enable**/**Disable**, **Remove** and, for an installation that signs every user in, **Connected users** (disconnect a user, reset iHub's OAuth client registration). Disabling an installation that apps bind and removing any installation ask first and name the apps that bind it (by its id, by its definition, or by its type, `type:people-directory`). Removing an installation deletes its managed secret. Removing a _definition_ (uninstalling it from the marketplace) is refused while installations of it exist. **Reload catalog** re-reads the definition folders.
+
+### The installation page
+
+`/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
+
+- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive) and whether they are off or unavailable, and the apps that bind it, each linking to the app editor.
+- **Settings** (`settings`): the installation's editor (below).
+- **Releases** (`releases`): the release history of its definition, when it has one.
+
+An installation whose definition is missing or incompatible cannot be edited or tested; its page says why.
+
+### Editors
+
+**Settings** shows a **dedicated editor** when the definition has one and the **generic form** otherwise. The generic form is the install form (below), built from the definition's install fields.
+
+| Definition                                 | Editor                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iFinder (`com.intrafind/ifinder`)          | The base URL; the token issuer (_iHub signs the token_ or _Shared OIDC provider_); for iHub-signed tokens the OIDC key pair switch with the effective issuer and the lines to configure iFinder with, or the private key, algorithm, lifetime, issuer and audience; the token scope and the user identity sent to iFinder (email, username, id, name, `domain\username` or a template); for token exchange the provider, grant, audience, scope map and extra scopes; the search profiles; under **Advanced** the request timeout, download directory and API paths. |
+| iAssistant (`com.intrafind/iassistant`)    | The iFinder installation it runs on, the default conversation profile and search profile, the search profile access check, answering only from documents, and the profile cache.                                                                                                                                 |
+
+Both editors also edit the label, the description, the groups and the actions, check their own cross-field rules before saving (the iFinder base URL, the OIDC provider for token exchange, an issuer URL for the OIDC key pair), and **Test connection** tests the values as entered, unsaved, as the signed-in admin.
+
+For developers: an editor is a React component registered under its definition id in `client/src/features/admin/components/integrations/editors/index.js`. It receives `instance` (the installation with its effective `values` and `liveActions`), `definition`, `onSaved` and `onCancel`, and builds on `useInstallationEditor` (label, groups, actions, test, save) and `InstallationEditorParts` (the shared sections).
+
 ## Installing
 
-1. **Admin → Integrations → Installed → Catalog** lists every definition: shipped ones and those installed from the [Marketplace](marketplace.md) (type **Integrations**).
-2. **Install** opens a wizard generated from the definition's install fields:
+1. **Admin → Integrations → Catalog** lists every definition: shipped ones and those installed from the [Marketplace](marketplace.md) (type **Integrations**). The marketplace's **Set up integration** and other pages link here with `?install=<definition folder name>`, optionally prefilling values (`v.<field>=<value>`) and the label (`label=`).
+2. **Install** opens a form generated from the definition's install fields:
    - **Name**: the instance id apps refer to, and a label users see in the chat.
    - **Settings**: the definition's fields (URL, numbers, switches, choices). Advanced fields are folded away.
    - **Sign-in**: the modes the definition offers and the protocol can run. _No sign-in_ for public APIs; _Shared service account_ stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; _OAuth client_ (client credentials) and _Each user signs in_ (per-user OAuth) are available for MCP servers, the other protocols get them in a later release. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
+   - **Who may use it**: the groups that grant the installation, read-only, with a link to **Admin → Groups**, where grants are edited (see [Who may use an integration](#who-may-use-an-integration)). The tiles and the installation page show the same list; an installation no group grants shows **No group grants it yet**.
    - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is _none_; actions with a requirement (for example SQL on a DataStore) appear once the setting is on. For an MCP server the list is what the server reports after a test (or on edit); a tool the server adds later is on by default.
 3. **Test connection** runs the definition's health action with the values as entered and lists the actions the model would get (for an MCP server: connects and lists its tools). A definition may ask for one free-text input next to the button (`test.input`; the LDAP people directory takes a sample name to search for). Nothing is saved until **Install**.
-
-Installed instances can be tested, edited, disabled and removed from the **Installed** tab, which also shows the connection health of an MCP installation (connected, unreachable, the number of connected users of a per-user server) and, for a per-user server, the **Connected users** dialog (disconnect a user, reset iHub's OAuth client registration). Removing an instance deletes its managed secret. Removing a _definition_ (uninstalling it from the marketplace) is refused while instances of it exist.
 
 ## Who may use an integration
 
@@ -229,7 +296,7 @@ A field may carry a `when` clause so it applies only in some cases: `{ "field": 
 
 ### Version, compatibility and release notes
 
-`version` is the definition's semantic version; every installation records the `definitionVersion` it was written for, and **Admin → Integrations → Installed** shows it per row. `compatibility.ihub` is a semver range (`">=5.7.0"`, `">=5.7.0 <7"`) the server version (the root `package.json`) must satisfy; prereleases compare with `includePrerelease`, so `5.7.0-rc.1` satisfies `>=5.7.0`. A definition without it runs on every version. A definition the server does not satisfy still loads, with status **incompatible**: its installations are listed with the reason, but they offer no tools and no scopes, cannot be edited or tested, and nothing is written for them; the catalog greys the definition and the marketplace refuses to install or update it (`INCOMPATIBLE_IHUB_VERSION`). `compatibility.schema` (integer, default 1) is the revision of the definition format the file is written in; it is read from the raw file before anything else, and a revision this server does not know is refused whole (the registry skips the folder with a warning, the marketplace rejects the item with `UNSUPPORTED_DEFINITION_SCHEMA`) instead of being loaded with its unknown fields dropped.
+`version` is the definition's semantic version; every installation records the `definitionVersion` it was written for, and **Admin → Integrations** shows it on the installation's tile and page. `compatibility.ihub` is a semver range (`">=5.7.0"`, `">=5.7.0 <7"`) the server version (the root `package.json`) must satisfy; prereleases compare with `includePrerelease`, so `5.7.0-rc.1` satisfies `>=5.7.0`. A definition without it runs on every version. A definition the server does not satisfy still loads, with status **incompatible**: its installations are listed with the reason, but they offer no tools and no scopes, cannot be edited or tested, and nothing is written for them; the catalog greys the definition and the marketplace refuses to install or update it (`INCOMPATIBLE_IHUB_VERSION`). `compatibility.schema` (integer, default 1) is the revision of the definition format the file is written in; it is read from the raw file before anything else, and a revision this server does not know is refused whole (the registry skips the folder with a warning, the marketplace rejects the item with `UNSUPPORTED_DEFINITION_SCHEMA`) instead of being loaded with its unknown fields dropped.
 
 `releases` is the release history, newest first, and `releases[0].version` must equal `version`. Each entry carries the `date` (`YYYY-MM-DD`), a one-line localized `summary` for lists and the update dialog, and under `notes` the Markdown files with the full notes per category, named like iHub's own `docs/releases/<version>/` files: `features` (`releases/<version>/features.md`), `fixes` (`fixes.md`), `breaking` (`breaking-changes.md`). A category without changes has no file. The files are companion files of the folder, fetched and served one by one (`GET …/catalog/:definitionId/_file?path=…`), so the marketplace renders a release's notes without downloading the package; a note file missing from the folder is logged and left out. `migration` names the definition migration a release needs (phase 2 of the versioning concept; not run yet). The shipped definitions (iFinder, iAssistant, web search, Jira, Entra, the MCP server and A2A agent definitions, CKAN) carry a `1.0.0` release whose notes describe what the config migrations V192–V197 did.
 
@@ -267,7 +334,8 @@ Every write is audited with resource `integration`.
 | `server/services/integrations/integrationTools.js`                                                                                                                                                                                                                                                     | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                                                 |
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |
-| `client/src/features/admin/pages/AdminInstalledIntegrationsPage.jsx`, `components/integrations/*`                                                                                                                                                                                                      | Installed and Catalog page, install wizard                                                                                                                                                          |
+| `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`)                |
+| `client/src/features/admin/components/integrations/editors/`                                                                                                                                                                                                                                           | the dedicated editors and their registry (iFinder, iAssistant)                                                                                                                                      |
 | `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx`                                                                                                                                                                                                                          | app editor binding                                                                                                                                                                                  |
 | `server/defaults/integration-definitions/org.ckan__open-data-portal/`                                                                                                                                                                                                                                  | the shipped CKAN definition                                                                                                                                                                         |
 | `server/defaults/integration-definitions/com.intrafind__mcp-server/`, `mcp__*/`                                                                                                                                                                                                                        | the generic MCP server definition and the shipped hosted MCP servers                                                                                                                                |

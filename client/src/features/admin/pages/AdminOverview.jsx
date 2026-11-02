@@ -456,7 +456,7 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
                   ? 'text-red-700 dark:text-red-400'
                   : undefined
             }
-            href="/admin/integrations/installed"
+            href="/admin/integrations"
           />
         )}
         <InfoRow

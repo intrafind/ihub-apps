@@ -178,6 +178,12 @@ function instanceView(instance, resolved, language, updates) {
   return {
     ...instance,
     label: resolved?.label || instance.id,
+    /**
+     * The stored label (`{ en, de }`, or null when the installation has none):
+     * `label` is the one language the request asked for, so an editor sends
+     * this one back with its own language changed and keeps the others.
+     */
+    labelLocalized: instance.label ?? null,
     definitionName: resolved?.definition ? localized(resolved.definition.name, language) : null,
     definitionMissing: !resolved?.definition,
     protocol: resolved?.definition?.protocol?.type || null,

@@ -39,7 +39,7 @@ prefix (the migration log says which servers fell back and why). Endpoint and OA
 verbatim, trailing slash included, so per-user sign-ins and client registrations stay valid.
 
 - **Admin page and API:** **Admin → MCP servers** and its catalog dialog are gone, replaced by
-  **Admin → Integrations → Installed**. The routes `/api/admin/mcp/servers*`,
+  **Admin → Integrations**. The routes `/api/admin/mcp/servers*`,
   `/api/admin/mcp/catalog`, `/api/admin/mcp/status`, `/api/admin/mcp/tools` and
   `/api/admin/mcp/test` are removed; use `/api/admin/integrations/catalog` and
   `/api/admin/integrations/installed`. Per-user connections of a server are managed through
@@ -63,8 +63,7 @@ verbatim, trailing slash included, so per-user sign-ins and client registrations
 Migration V194 turns every agent of `contents/config/a2aAgents.json` into an installed integration
 of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
 
-- **Admin page and API:** **Admin → A2A agents** is gone, replaced by **Admin → Integrations →
-  Installed**; the routes `/api/admin/a2a/agents*`, `/api/admin/a2a/test`, `/api/admin/a2a/status`
+- **Admin page and API:** **Admin → A2A agents** is gone, replaced by **Admin → Integrations**; the routes `/api/admin/a2a/agents*`, `/api/admin/a2a/test`, `/api/admin/a2a/status`
   and `/api/admin/a2a/skills` are removed. The inbound side (iHub as an A2A agent) is unchanged.
 - **Apps:** an `app.tools` entry naming an agent (`"langdock"`, `"a2a__langdock"`) or one of its
   skills (`"a2a__langdock__ask"`) selects nothing any more; the migration turns each into the
@@ -111,7 +110,7 @@ Migration V196 moves `platform.jira` into the installed integration `jira`
 no longer carries a `jira` key.
 
 - **Admin page:** **Admin → Integrations → Jira** (`/admin/integrations/jira`) is gone; use
-  **Admin → Integrations → Installed → Atlassian Jira**. The user-facing routes
+  **Admin → Integrations → Atlassian Jira**. The user-facing routes
   `/api/integrations/jira/*` (auth, callback, status, refresh, disconnect, attachment, test) are
   unchanged.
 - **Apps:** `tools: ["jira"]` or `["jira_searchTickets", …]` selects nothing any more; the
@@ -142,7 +141,7 @@ integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
 
 - **Admin page and API:** **Admin → Integrations → People directories**
   (`/admin/integrations/people-directories`, `.../new`, `.../<id>`) is gone, replaced by
-  **Admin → Integrations → Installed**; the routes `GET`/`PUT /api/admin/people-directories`,
+  **Admin → Integrations**; the routes `GET`/`PUT /api/admin/people-directories`,
   `GET /api/admin/people-directories/presets` and `POST /api/admin/people-directories/test` are
   removed. Test a directory with `POST /api/admin/integrations/installed/<id>/_test` (an unsaved
   one with `POST /api/admin/integrations/catalog/com.intrafind%2Fldap-directory/_test`); the
@@ -202,7 +201,7 @@ restored from a backup after the upgrade fails validation until the block is rem
 - **Admin pages:** **Admin → Integrations → Office 365 / Google Drive / Nextcloud**
   (`/admin/integrations/office365`, `/admin/integrations/google-drive`,
   `/admin/integrations/nextcloud`) and the shared provider editor are gone; use
-  **Admin → Integrations → Installed**. The user-facing routes
+  **Admin → Integrations**. The user-facing routes
   `/api/integrations/{office365,googledrive,nextcloud}/*` and `/api/auth/status` (its
   `cloudStorage` payload is filled from the installations) are unchanged.
 - **One installation per provider type.** Each definition is a singleton; the first enabled
@@ -252,3 +251,19 @@ field of an installation in `contents/config/integrations.json` is gone.
 
 **Before upgrading:** nothing is required. After the upgrade, check **Admin → Groups** for the
 grants V202 wrote, and the server log for warnings about groups it could not find.
+
+## Admin → Integrations → Installed Merged Into Admin → Integrations
+
+The separate page **Installed integrations** (`/admin/integrations/installed`) and its sidebar
+item are removed; its tabs are now part of **Admin → Integrations**. There is no redirect: the old
+address opens an installation page that does not exist.
+
+- The links inside iHub (marketplace **Set up integration**, the LDAP sign-in providers' **Use
+  for people search**, the admin start page) point to the new page. Install links keep their
+  parameters: `/admin/integrations?install=<definition folder>&v.<field>=<value>&label=<label>`.
+- The cloud storage and people directory cards of the former Integrations hub are gone; those
+  are installations on the **Installed** tab.
+
+**Before upgrading:** update bookmarks, runbooks and wiki links that point to
+`/admin/integrations/installed` to `/admin/integrations` (or `/admin/integrations/<installation id>`
+for one installation).

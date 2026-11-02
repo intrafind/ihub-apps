@@ -28,6 +28,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [05 · Roadmap](05-roadmap.md) | Phases, risks, open questions |
 | [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
 | [07 · Types and built-in configuration](07-types-and-built-in-configuration.md) | Integration types, one admin page with dedicated editors, web search per engine, storage providers, people directories, the iHub integration (decided 2026-11-01) |
+| [2026-11-01 · Admin integrations page and installation editors](2026-11-01%20Admin%20integrations%20page%20and%20installation%20editors.md) | Implementation notes: the one admin page, groups, tiles, the installation page, the editor registry and how to add an editor |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

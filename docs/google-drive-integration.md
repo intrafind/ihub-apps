@@ -108,7 +108,7 @@ Google Drive is the built-in installed integration **Google Drive** (`com.intraf
 ### Via Admin UI
 
 1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → Integrations → Installed**. Open the **Catalog** tab and click **Install** on **Google Drive**, or edit the `googledrive` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
+2. Navigate to **Admin → Integrations**. Open the **Catalog** tab and click **Install** on **Google Drive**, or edit the `googledrive` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
 3. Fill in the settings:
    | Field | Value |
    |-------|-------|

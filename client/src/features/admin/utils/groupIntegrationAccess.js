@@ -193,3 +193,20 @@ export function toggleKey(keys, key, on) {
   }
   return list.filter(entry => entry !== key);
 }
+
+/**
+ * The groups whose own grants (`permissions.integrations`) include an
+ * installation: `*`, its id, its definition id or its type key. Groups that
+ * only inherit the grant are not listed; their members get it through the
+ * listed group.
+ * @param {{ id: string, definition?: string, type?: string|null }} item
+ * @param {Object<string, Object>} groups - `GET /api/admin/groups` → `groups`
+ * @returns {string[]} group ids, sorted
+ */
+export function groupsGranting(item, groups) {
+  if (!item?.id || !groups || typeof groups !== 'object') return [];
+  return Object.entries(groups)
+    .filter(([, group]) => grantingKey(item, group?.permissions?.integrations || []))
+    .map(([id]) => id)
+    .sort();
+}

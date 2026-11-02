@@ -57,6 +57,21 @@ export function mergeInstallationDetails(results) {
   return { ...results[0], actions: [...actions.values()] };
 }
 
+/** Load one installation, or null when it fails. */
+function loadInstallation(instanceId) {
+  return fetchInstalledIntegration(instanceId).catch(() => null);
+}
+
+/**
+ * The detail of one row: the installations it covers, loaded together and
+ * merged (see {@link mergeInstallationDetails}).
+ * @param {string[]} instanceIds
+ */
+async function loadRowDetail(instanceIds) {
+  const results = await Promise.all(instanceIds.map(loadInstallation));
+  return mergeInstallationDetails(results.filter(Boolean));
+}
+
 function Card({ title, description, children, testId }) {
   return (
     <div
@@ -230,13 +245,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       await Promise.all(
         ids.map(async id => {
           const row = definitionRows.find(entry => entry.id === id);
-          const instanceIds = row ? row.instanceIds : [id];
-          const results = (
-            await Promise.all(
-              instanceIds.map(instanceId => fetchInstalledIntegration(instanceId).catch(() => null))
-            )
-          ).filter(Boolean);
-          loaded[id] = mergeInstallationDetails(results);
+          loaded[id] = await loadRowDetail(row ? row.instanceIds : [id]);
         })
       );
       if (!cancelled) setDetails(prev => ({ ...prev, ...loaded }));
@@ -258,25 +267,22 @@ function IntegrationsConfigSection({ app, onChange }) {
     return Object.keys(bindings).filter(id => !known.has(id));
   }, [bindings, installed, definitionRows, directoryRows, loading, error]);
 
-  const webSearchInstallation = installed.find(i => i.id === WEBSEARCH_INSTANCE_ID);
+  const webSearchInstalled = installed.some(i => i.id === WEBSEARCH_INSTANCE_ID);
   const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
-  const showWebSearch = Boolean(webSearchInstallation) || app.websearch?.enabled === true;
+  const showWebSearch = webSearchInstalled || app.websearch?.enabled === true;
   const showIAssistant =
     Boolean(iAssistantInstallation) ||
     app.iassistant?.enabled === true ||
     Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID);
 
   const notInstalledNotice = name => (
-    <p
-      className="text-sm rounded-md px-3 py-2 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
-      role="status"
-    >
+    <output className="block text-sm rounded-md px-3 py-2 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
       {t(
         'admin.apps.edit.integrations.panelNotInstalled',
         '{{name}} is not installed. Install it under Integrations to use these settings.',
         { name }
       )}
-    </p>
+    </output>
   );
 
   const groupTitle = id =>
@@ -304,7 +310,7 @@ function IntegrationsConfigSection({ app, onChange }) {
           app={app}
           onChange={onChange}
           notice={
-            webSearchInstallation
+            webSearchInstalled
               ? null
               : notInstalledNotice(t('admin.apps.edit.websearch', 'Web Search'))
           }
