@@ -151,6 +151,10 @@ const SERVER = {
 /** The routes under test: the MCP callback and CIMD, and the one connect flow. */
 function mountRoutes(target) {
   target.use(express.json());
+  // The global authentication of the real server sets `req.user` before any
+  // router (the anonymous principal when nobody signed in); the routes rely
+  // on it before their own `authRequired`.
+  target.use(testUser);
   registerMcpOAuthRoutes(target);
   target.use('/api/integrations', userIntegrationRoutes);
   return target;
