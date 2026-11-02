@@ -206,11 +206,11 @@ projects, and the agent workspace and evidence tools to workflows and agents.
 - **The knowledge tools can no longer be switched off:** a disabled `knowledge.json`, or a
   knowledge action switched off on the `ihub` installation, no longer applies — every request that
   reaches a project gets them while the projects feature is on. An edited `knowledge.json` is not
-  read any more (migration V201 warns about it); delete it.
+  read any more (migration V202 warns about it); delete it.
 - **The agent workspace and evidence tools are no longer listed under the iHub integration**
-  (migration V201 removes them from the installation's actions). One that was switched off there
-  stays off: V201 writes its tool file to `contents/tools/` with `enabled: false`. A single
-  evidence function cannot be switched off on its own; V201 names one in a warning.
+  (migration V202 removes them from the installation's actions). One that was switched off there
+  stays off: V202 writes its tool file to `contents/tools/` with `enabled: false`. A single
+  evidence function cannot be switched off on its own; V202 names one in a warning.
 - **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
   grants keep selecting the tools. `tools: ["ihub"]` selects nothing, and neither does
   `tools: ["knowledge"]`: the knowledge tools come with the request's projects.
