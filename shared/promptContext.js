@@ -32,6 +32,20 @@
  * and uploads as `fileData`; they never assemble tags themselves. The client
  * imports the same renderer only to estimate tokens.
  *
+ * The host item reaches the renderer in one of two forms that produce the same
+ * bytes. As `hostContext` it is ephemeral: it is sent with one message only.
+ * As a stored chat file it is durable: an Outlook email, a meeting or a web page
+ * is a `fileData` entry with `origin: 'email' | 'meeting' | 'page'`, kept in the
+ * chat's file store (Files drawer, quotas, retention, sharing) and rebuilt from
+ * there on later turns, after a reload and on another device. Such an entry is
+ * not a `type="document"` block: it is rendered as the very tags above —
+ * `meta.isCurrent === true` is `origin="open"`, any other email `origin="added"`
+ * — from the leading `Header: value` block of `content` (see {@link buildHostItemText})
+ * with the rest of it as the body; a header the block lacks comes from `meta`
+ * (`from`, `to`, `cc`, `date`, `subject`, `mailboxUser`; meeting and page fields
+ * likewise). When a message carries both forms of the same
+ * item it is rendered once.
+ *
  * App prompts refer to the tags and attribute values by name, so renaming one
  * is a breaking change for every app prompt — see docs/apps.md, "What
  * {{content}} contains".
@@ -177,17 +191,17 @@ function renderOpenMeeting(meeting) {
   return contentBlock('meeting', 'open', lines);
 }
 
+function renderAddedEmail(email) {
+  if (!email || typeof email !== 'object') return '';
+  const lines = emailHeaderLines(email);
+  bodyLine(lines, 'body', email.body);
+  return contentBlock('email', 'added', lines);
+}
+
 /** Emails the user added to the chat ("Add email(s)" in Outlook), one block each. */
 function renderAddedEmails(added) {
   if (!Array.isArray(added)) return [];
-  return added
-    .filter(p => p && typeof p === 'object')
-    .map(p => {
-      const lines = emailHeaderLines(p);
-      bodyLine(lines, 'body', p.body);
-      return contentBlock('email', 'added', lines);
-    })
-    .filter(Boolean);
+  return added.map(renderAddedEmail).filter(Boolean);
 }
 
 /** A message's `fileData` — one object for one upload, an array for several. */
@@ -209,6 +223,163 @@ function fileAttributes(file) {
 }
 
 /**
+ * Emails, meetings and web pages that are stored as chat files. Their `fileData`
+ * entries carry one of these as `origin` and are rendered like the host item they
+ * came from, not as documents.
+ */
+export const HOST_ITEM_ORIGINS = Object.freeze(['email', 'meeting', 'page']);
+
+/**
+ * Header fields of a host item's text, in order: `[key in hostContext / meta,
+ * label of the line]`. `buildHostItemText` writes them, the renderer reads them.
+ */
+const HOST_ITEM_HEADERS = Object.freeze({
+  email: [
+    ['from', 'From'],
+    ['to', 'To'],
+    ['cc', 'Cc'],
+    ['date', 'Date'],
+    ['subject', 'Subject'],
+    ['mailboxUser', 'Mailbox-User']
+  ],
+  meeting: [
+    ['subject', 'Subject'],
+    ['yourRole', 'Your-Role'],
+    ['when', 'When'],
+    ['location', 'Location'],
+    ['organizer', 'Organizer'],
+    ['requiredAttendees', 'Required-Attendees'],
+    ['optionalAttendees', 'Optional-Attendees']
+  ],
+  page: [
+    ['title', 'Title'],
+    ['url', 'URL']
+  ]
+});
+
+/** The text field that is the body of a host item. */
+const HOST_ITEM_BODY_KEY = Object.freeze({ email: 'body', meeting: 'description', page: 'body' });
+
+function headerValue(value) {
+  return typeof value === 'string' ? value.replaceAll(/\s*[\r\n]+\s*/g, ' ').trim() : '';
+}
+
+/**
+ * The text of a stored host item: its header lines (`From: …`, `Subject: …`;
+ * `Title:`/`URL:` for a page), a blank line, then the body — what a `.eml` yields
+ * when the server extracts it. Clients send this as `content` of the `fileData`
+ * entry next to the same values as `meta`; the renderer reads it back.
+ *
+ * @param {'email'|'meeting'|'page'} kind
+ * @param {Object} fields - The `hostContext` shape of the item: `{ from, to, cc, date,
+ *   subject, mailboxUser, body }`, `{ subject, yourRole, when, location, organizer,
+ *   requiredAttendees, optionalAttendees, description }` or `{ title, url, body }`.
+ * @returns {string}
+ */
+export function buildHostItemText(kind, fields) {
+  const headers = HOST_ITEM_HEADERS[kind];
+  if (!headers || !fields || typeof fields !== 'object') return '';
+  const lines = [];
+  for (const [key, label] of headers) {
+    const value = headerValue(fields[key]);
+    if (value) lines.push(`${label}: ${value}`);
+  }
+  const body =
+    typeof fields[HOST_ITEM_BODY_KEY[kind]] === 'string'
+      ? fields[HOST_ITEM_BODY_KEY[kind]].trim()
+      : '';
+  return [lines.join('\n'), body].filter(Boolean).join('\n\n');
+}
+
+/**
+ * The reverse of {@link buildHostItemText}: the leading `Header: value` block of
+ * a stored item's text (continuation lines indented), and what follows the blank
+ * line as the body. Text that does not start with a known header is all body.
+ *
+ * @param {'email'|'meeting'|'page'} kind
+ * @param {string} text
+ * @returns {{ fields: Object<string,string>, body: string }}
+ */
+export function parseHostItemText(kind, text) {
+  const headers = HOST_ITEM_HEADERS[kind] || [];
+  const source = typeof text === 'string' ? text.replaceAll('\r\n', '\n') : '';
+  const lines = source.split('\n');
+  const fields = {};
+  let i = 0;
+  let current = null;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (current && /^[ \t]+\S/.test(line)) {
+      fields[current] = `${fields[current]} ${line.trim()}`;
+      continue;
+    }
+    const m = /^([A-Za-z][A-Za-z-]*):[ \t]*(.*)$/.exec(line);
+    const match = m && headers.find(([, label]) => label.toLowerCase() === m[1].toLowerCase());
+    if (!match) break;
+    current = match[0];
+    fields[current] = m[2].trim();
+  }
+  // A header block ends at a blank line or at the end of the text; a "header"
+  // followed directly by prose is prose.
+  const ended = i >= lines.length || lines[i].trim() === '';
+  if (Object.keys(fields).length === 0 || !ended) return { fields: {}, body: source.trim() };
+  return { fields, body: lines.slice(i).join('\n').trim() };
+}
+
+/**
+ * A stored host item as the `hostContext` object it stands for, plus whether it is
+ * the open one. The header block of the text wins over `meta`: `meta` is capped in
+ * size (a long recipient list is shortened there) while the text is complete.
+ */
+function hostItemOf(file) {
+  const kind = file.origin;
+  const meta = file.meta && typeof file.meta === 'object' ? file.meta : {};
+  const raw = typeof file.content === 'string' ? file.content : '';
+  const { fields: parsed, body } = parseHostItemText(kind, raw);
+  const item = { [HOST_ITEM_BODY_KEY[kind]]: body };
+  for (const [key] of HOST_ITEM_HEADERS[kind]) {
+    const value = parsed[key] || (typeof meta[key] === 'string' ? meta[key] : '');
+    if (value) item[key] = value;
+  }
+  return { kind, item, isCurrent: kind !== 'email' || meta.isCurrent === true };
+}
+
+/**
+ * Stored emails, meetings and pages, rendered exactly like the `hostContext`
+ * renderers do, grouped by where they go in the message. `host` holds what
+ * `hostContext` already rendered: an open item that the message carries both
+ * ways is rendered once (the host copy), as is an added email.
+ *
+ * @param {Object|Array} fileData
+ * @param {{ added: string[], email: string, page: string, meeting: string }} host
+ */
+function renderStoredItems(fileData, host) {
+  const out = { added: [], email: '', page: '', meeting: '' };
+  const seenAdded = new Set(host.added);
+  for (const file of normalizeFiles(fileData)) {
+    if (!HOST_ITEM_ORIGINS.includes(file.origin)) continue;
+    const { kind, item, isCurrent } = hostItemOf(file);
+    if (kind === 'email' && !isCurrent) {
+      const block = renderAddedEmail(item);
+      if (block && !seenAdded.has(block)) {
+        seenAdded.add(block);
+        out.added.push(block);
+      }
+      continue;
+    }
+    // One open item per kind: the host's copy, else the first stored one.
+    if (host[kind] || out[kind]) continue;
+    out[kind] =
+      kind === 'email'
+        ? renderOpenEmail(item)
+        : kind === 'meeting'
+          ? renderOpenMeeting(item)
+          : renderOpenPage(item);
+  }
+  return out;
+}
+
+/**
  * Uploaded files and email attachments, one block each. A document whose pages
  * were rendered as images carries no text of its own; it is listed with
  * `pages_as_images` so the model can connect the images attached to the
@@ -217,6 +388,7 @@ function fileAttributes(file) {
 function renderDocuments(fileData) {
   const blocks = [];
   for (const file of normalizeFiles(fileData)) {
+    if (HOST_ITEM_ORIGINS.includes(file.origin)) continue; // an email, meeting or page, not a document
     const text = sourceText(typeof file.content === 'string' ? file.content : '');
     const pageCount = Array.isArray(file.pageImages) ? file.pageImages.length : 0;
     if (!text && pageCount === 0) continue;
@@ -248,17 +420,27 @@ function renderDocuments(fileData) {
  *                        requiredAttendees,optionalAttendees,description} }`
  *   — every value a display-ready string.
  * @param {Object|Array} [args.files] - The message's `fileData`; entries with
- *   `origin: 'attachment'` came from an email, all others were uploaded.
+ *   `origin: 'attachment'` came from an email, entries with `origin: 'email' | 'meeting'
+ *   | 'page'` are stored host items (see the top of this file) and all others were
+ *   uploaded.
  * @returns {string}
  */
 export function renderUserMessage({ content, hostContext, files } = {}) {
   const typed = typeof content === 'string' ? content : content == null ? '' : String(content);
   const host = hostContext && typeof hostContext === 'object' ? hostContext : {};
+  const hostBlocks = {
+    added: renderAddedEmails(host.addedEmails),
+    email: renderOpenEmail(host.currentEmail),
+    page: renderOpenPage(host.currentPage),
+    meeting: renderOpenMeeting(host.currentMeeting)
+  };
+  const stored = renderStoredItems(files, hostBlocks);
   const segments = [
-    ...renderAddedEmails(host.addedEmails),
-    renderOpenEmail(host.currentEmail),
-    renderOpenPage(host.currentPage),
-    renderOpenMeeting(host.currentMeeting),
+    ...hostBlocks.added,
+    ...stored.added,
+    hostBlocks.email || stored.email,
+    hostBlocks.page || stored.page,
+    hostBlocks.meeting || stored.meeting,
     ...renderDocuments(files)
   ].filter(Boolean);
   if (segments.length === 0) return typed;

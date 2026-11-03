@@ -1115,8 +1115,37 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               store: repository.fileStore?.()
             })
           : [];
+        // An e-mail, meeting or page is sent with every turn and stored once per
+        // chat: when this turn carries it again, earlier turns do not repeat it.
+        const currentItemIds = new Set(
+          [preparedPromptMessage?.fileData]
+            .flat()
+            .filter(file => file && ['email', 'meeting', 'page'].includes(file.origin))
+            .map(file => file.fileId || file.id)
+            .filter(Boolean)
+        );
+        const dedupedHistory =
+          currentItemIds.size === 0
+            ? hydratedHistory
+            : hydratedHistory
+                .map(entry =>
+                  entry.fileData
+                    ? {
+                        ...entry,
+                        fileData: entry.fileData.filter(
+                          file => !currentItemIds.has(file.fileId || file.id)
+                        )
+                      }
+                    : entry
+                )
+                .map(entry =>
+                  entry.fileData && entry.fileData.length === 0
+                    ? (({ fileData: _dropped, ...rest }) => rest)(entry)
+                    : entry
+                )
+                .filter(entry => entry.fileData || (entry.content || '').trim());
         conversation = includeHistory
-          ? [...historyForPrompt(hydratedHistory), preparedPromptMessage]
+          ? [...historyForPrompt(dedupedHistory), preparedPromptMessage]
           : [preparedPromptMessage];
 
         persistence = {
