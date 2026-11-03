@@ -547,6 +547,45 @@ caller's groups grant — the same rule the composer's picker applies
 not run leaves the mention as ordinary text; one the app does not list is
 refused with `WORKFLOW_UNAVAILABLE`.
 
+### What earlier turns give the model
+
+The history the model gets is each earlier message's text, plus the files the
+user attached. Everything else a turn found or produced stays out of the
+prompt, and the model looks it up when it needs it, with tools offered for the
+kinds the chat has:
+
+| Kind | Tools | What the model gets |
+|---|---|---|
+| Sources earlier answers found (web results, pages read, documents) | `chat_sources_list`, `chat_sources_read` | The stored source: title, link, snippet and the passages taken from it, by turn. The full text of a web page is not stored; the model reads the link again with the page reader when it needs more. A source read this way is reported again, so the new answer can cite it with a badge. |
+| Files uploaded to the chat | `chat_files_list`, `chat_files_read` | The extracted text, in pages of 20,000 characters (`offset` / `nextOffset`). |
+| Files the turns created (documents, spreadsheets, presentations, code, web artifacts, images) | `chat_artifacts_list`, `chat_artifacts_read` | The text of code and text files, the extracted text of PDF, Word, PowerPoint and Excel files, paged the same way. Images and archives are listed but cannot be read as text. Artifacts are write-once: the model changes a file by creating a new one. |
+
+- A pair is offered only when the chat has something of its kind, so a new
+  chat's prompt carries none of them. They do not appear in the tools menu and
+  need no configuration.
+- Every call authorizes the chat again with the requesting user, never with
+  an id the model names. A chat the user may not read, a chat that is not
+  stored, and a headless `agent:` chat get no tools.
+- An app with `sendChatHistory: false`, and a turn sent without history, get
+  no tools either.
+- The tools are read-only: no approval prompt.
+
+**Files of earlier turns within a budget.** The files of the turn being
+answered always go in full. The files of earlier turns go in full, newest
+first, until they take a quarter of the model's context window (at least 8,000
+tokens). Each older file is replaced by an empty block that names it,
+`<content type="document" id="file_…" name="…" omitted="true" chars="…"/>`,
+and the model reads it with `chat_files_read` when the question needs it.
+Before this, every earlier file was re-sent in full on every turn, and a chat
+with a few large documents could fill the context window with no way to
+recover. E-mails, meetings and pages sent with a turn are not affected. The
+composer's context meter applies the same budget.
+
+Code: `services/chat/chatContextTools.js` (inventory and dispatch),
+`tools/chatSources.js`, `tools/chatFiles.js`, `tools/chatArtifacts.js`, the
+definitions in `server/defaults/tools/chat_*.json`, and the budget in
+`shared/historyFileBudget.js`.
+
 ## Ownership and identity
 
 `chatAuthRequired` authorizes the *app*, never the chat id. That was harmless

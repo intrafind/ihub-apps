@@ -294,8 +294,12 @@ function ChatInput({
   // Re-tokenized only when the message list actually changes, and per-fragment
   // counts are memoized, so a long conversation is not re-scanned per render.
   const historyFragments = useMemo(
-    () => conversationTokenFragments(messages, { includeHistory: sendChatHistory !== false }),
-    [messages, sendChatHistory]
+    () =>
+      conversationTokenFragments(messages, {
+        includeHistory: sendChatHistory !== false,
+        contextWindow: selectedModelData?.contextWindow
+      }),
+    [messages, sendChatHistory, selectedModelData?.contextWindow]
   );
   const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
 

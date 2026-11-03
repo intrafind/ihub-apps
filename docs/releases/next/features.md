@@ -322,6 +322,10 @@ can carry reference documents and templates of their own.
   browser. Originals older than the retention period (14 days by default) are removed and their
   text stays with the chat. Limits per file, chat or task, user and server; the server-wide limit
   is counted in a shared counter, so several instances enforce it together.
+- **Long chats stay within the context window:** the files of earlier turns go back to the model in
+  full while they take up to a quarter of the model's context window. Older files are named but
+  not repeated, and the assistant reads them again when a question needs them. The context meter
+  under the composer counts the same way.
 - **Templates and forms:** an uploaded Word, PowerPoint, Excel or PDF file can be used by the
   document skills: `create_docx` and `create_pptx` take its styles, master and layouts
   (`templateFileId`, `templateMode`), `create_pdf` fills its form fields or prints on it as
@@ -391,3 +395,22 @@ chat, without the conversation it came from. Open the Artifacts panel, select th
   (off by default).
 
 See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).
+
+## Chat: The Assistant Can Look Back at Earlier Sources, Files and Created Files
+
+On a follow-up the assistant used to see only the text of earlier answers. Now it can look up what
+earlier turns of the chat found, were given and produced, without everything being sent again on
+every turn.
+
+- **Sources:** "what did the second source say?" or "open that article again" works. The assistant
+  reads the stored title, link, snippet and passages of a source an earlier answer found, and can
+  cite it again with a badge. For more of a web page, it reads the page again.
+- **Uploaded files:** files from earlier turns can be read again in full, also those that were
+  left out of the prompt to save space.
+- **Created files:** documents, spreadsheets, presentations, code and web pages the chat created
+  can be read again, for example to revise a document into a new version. Pictures and ZIP
+  archives are listed but not read.
+- Only for kinds the chat actually has, only in stored chats that send their history, and only for
+  people who may read the chat. Nothing to configure; the lookups never ask for approval.
+
+See [Chat Persistence](../../chat-persistence.md#what-earlier-turns-give-the-model).

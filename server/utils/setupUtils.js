@@ -62,6 +62,15 @@ export const RETIRED_IHUB_TOOL_FILES = Object.freeze(
 );
 
 /**
+ * Tool files of iHub's own features that were never in `contents/tools/` and
+ * are read in place from the start: the chat context tools
+ * (`services/chat/chatContextTools.js`). Paths relative to server/defaults.
+ */
+export const IN_PLACE_IHUB_TOOL_FILES = Object.freeze(
+  ['chat_artifacts', 'chat_files', 'chat_sources'].map(id => `tools/${id}.json`)
+);
+
+/**
  * Shipped defaults that are never seeded into contents: plaintext files that
  * only exist to be imported into an admin project (the FAQ, the meeting
  * knowledge base, the consolidated documentation). The startup import
@@ -77,12 +86,14 @@ export const RETIRED_IHUB_TOOL_FILES = Object.freeze(
 // `tools/iFinder.json` (V192) and `config/mcpServers.json` (V193) are retired:
 // the iFinder built-in and the installed MCP integrations own them now. Both
 // files are kept only for the older migrations that read them. iHub's own
-// tool files ({@link RETIRED_IHUB_TOOL_FILES}) are read in place by the server.
+// tool files ({@link RETIRED_IHUB_TOOL_FILES}, {@link IN_PLACE_IHUB_TOOL_FILES}) are
+// read in place by the server.
 export const IMPORT_ONLY_DEFAULT_FILES = [
   'sources/',
   'integration-definitions/',
   'tools/iFinder.json',
   ...RETIRED_IHUB_TOOL_FILES,
+  ...IN_PLACE_IHUB_TOOL_FILES,
   'config/mcpServers.json'
 ];
 
