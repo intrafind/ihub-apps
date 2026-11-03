@@ -164,4 +164,12 @@ describe('ArtifactViewerHost', () => {
     mount('/chat?artifact=missing');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('stepping to a live file drops ?artifact=, and closing clears it', async () => {
+    mount('/chat?artifact=f1');
+    expect(await screen.findByRole('dialog', { name: 'Artifact: a.html' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next artifact' }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/chat$/));
+    expect(screen.getByRole('dialog', { name: 'Artifact: live.html' })).toBeInTheDocument();
+  });
 });

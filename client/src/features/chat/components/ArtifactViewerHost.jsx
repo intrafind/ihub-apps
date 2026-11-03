@@ -94,32 +94,40 @@ export default function ArtifactViewerHost({
       setOpened(artifact);
       setSiblings(Array.isArray(list) ? list : null);
       if (!isLiveArtifact(artifact)) {
-        pushedRef.current = !paramId;
+        // Only a fresh push sets the flag; replacing an entry must not clear it.
+        if (!paramId) pushedRef.current = true;
         writeParam(artifact.id, Boolean(paramId));
+      } else if (paramId) {
+        // A live file has no URL: do not leave the previous artifact's in it.
+        writeParam(null, true);
+        pushedRef.current = false;
       }
     },
     [paramId, writeParam, collected]
   );
 
   const close = useCallback(() => {
-    const wasStored = opened && !isLiveArtifact(opened);
     setOpened(null);
     setSiblings(null);
-    if (wasStored && paramId) {
+    if (paramId) {
       // Undo the entry this host pushed so Back does not reopen the viewer;
       // a deep link has no earlier entry of ours, so just drop the parameter.
       if (pushedRef.current) navigate(-1);
       else writeParam(null, true);
       pushedRef.current = false;
     }
-  }, [opened, paramId, navigate, writeParam]);
+  }, [paramId, navigate, writeParam]);
 
   const select = useCallback(
     artifact => {
       setOpened(artifact);
       if (!isLiveArtifact(artifact)) writeParam(artifact.id, true);
+      else if (paramId) {
+        writeParam(null, true);
+        pushedRef.current = false;
+      }
     },
-    [writeParam]
+    [writeParam, paramId]
   );
 
   const getBlob = useCallback(

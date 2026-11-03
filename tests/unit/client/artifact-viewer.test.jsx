@@ -324,4 +324,20 @@ describe('ArtifactViewer', () => {
     const embedded = await frameOf();
     expect(embedded.getAttribute('sandbox')).toBe('allow-scripts');
   });
+
+  it('beside the chat (split), Esc outside the viewer is left to the chat', () => {
+    const onClose = jest.fn();
+    render(<Harness onClose={onClose} extra={{ splitAvailable: true }} />);
+    fireEvent.click(screen.getByTestId('artifact-viewer-chat-toggle'));
+    const chatInput = document.createElement('input');
+    document.body.appendChild(chatInput);
+    chatInput.focus();
+    fireEvent.keyDown(chatInput, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    // Inside the viewer it still closes.
+    screen.getByTestId('artifact-viewer-close').focus();
+    fireEvent.keyDown(screen.getByTestId('artifact-viewer-close'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    chatInput.remove();
+  });
 });

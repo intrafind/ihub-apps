@@ -217,6 +217,9 @@ export default function ArtifactViewer({
         return;
       }
       const active = document.activeElement;
+      // Beside a usable chat, Esc belongs to the chat (cancel an edit, close its
+      // dropdowns) unless focus is in the viewer.
+      if (split && !containerRef.current?.contains(active)) return;
       if (
         active &&
         !containerRef.current?.contains(active) &&
@@ -229,7 +232,7 @@ export default function ArtifactViewer({
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [isDialog, onClose]);
+  }, [isDialog, onClose, split]);
 
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement === containerRef.current);
@@ -674,6 +677,14 @@ export default function ArtifactViewer({
             )}
           </div>
         </header>
+      )}
+      {notice?.tone === 'error' && (
+        <p
+          role="alert"
+          className="flex-none bg-red-50 dark:bg-red-900/30 px-3 py-1 text-xs text-red-800 dark:text-red-200 md:hidden"
+        >
+          {notice.text}
+        </p>
       )}
       {body}
     </div>
