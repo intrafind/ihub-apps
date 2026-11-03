@@ -16,10 +16,19 @@ import { bindingKeyOfType, typeOfBindingKey } from '../integrationTypes.js';
  * bind it, and whether the result is valid against the definition.
  *
  * Pure: no I/O, no clock, no registry. The runner
- * (`DefinitionMigrationRunner.js`) reads the files, calls {@link planMigration}
- * and {@link validateMigrationResult}, and writes only when both say yes; the
- * marketplace preview calls {@link planMigration} with a catalog item's copy
- * of the migrations and writes nothing.
+ * (`DefinitionMigrationRunner.js`) reads the files, calls
+ * {@link planMigrationAsync} and {@link validateMigrationResult}, and writes
+ * only when both say yes; the marketplace preview and the admin view call
+ * {@link planMigration} with a catalog item's copy of the migrations (or the
+ * loaded definition) and write nothing.
+ *
+ * A `module` step (phase 3) runs code: the planner hands the step's module a
+ * copy of the working state through the `runModule` callback of
+ * {@link planMigrationAsync} (the runner loads and checks the module,
+ * `migrationModules.js`) and takes back only what a module may change. The
+ * synchronous {@link planMigration} never runs code: it skips a module step
+ * and warns that the plan does not include what the module changes
+ * (`MODULE_STEP_NOT_PLANNED`).
  *
  * Which app bindings a migration rewrites. An app binds an installation by
  * one of three keys of `app.integrations` (`integrationTools.appBindingFor`):
@@ -49,7 +58,9 @@ export const MIGRATION_WARNINGS = Object.freeze({
   /** A removed action was named in an app binding; the app offers it no more. */
   ACTION_REMOVED_FROM_APP: 'ACTION_REMOVED_FROM_APP',
   /** A type binding names a renamed or removed action or scope; type bindings are not rewritten. */
-  TYPE_BINDING_NOT_REWRITTEN: 'TYPE_BINDING_NOT_REWRITTEN'
+  TYPE_BINDING_NOT_REWRITTEN: 'TYPE_BINDING_NOT_REWRITTEN',
+  /** A module step runs code when the migration runs; a plan made without running it leaves its changes out. */
+  MODULE_STEP_NOT_PLANNED: 'MODULE_STEP_NOT_PLANNED'
 });
 
 /** An install value that counts as not set (as `effectiveValues` skips it). */
@@ -130,6 +141,9 @@ export function describeStep(migrationId, step) {
       break;
     case 'removeAction':
       text = `removeAction ${body.name}`;
+      break;
+    case 'module':
+      text = `module ${step.module}`;
       break;
     default:
       text = String(type);
@@ -525,14 +539,21 @@ function materialize(instance, state, to) {
     actions: {
       enabled: [...state.policy.enabled],
       disabled: [...state.policy.disabled],
-      overrides: clone(state.policy.overrides)
+      overrides: clone(state.policy.overrides),
+      // The accepted fingerprints (#2916) stay as they are: a renamed action
+      // is new until an admin reviews it, like any action a vendor adds.
+      ...(instance.actions?.fingerprints
+        ? { fingerprints: clone(instance.actions.fingerprints) }
+        : {}),
+      ...(instance.actions?.reviewedAt ? { reviewedAt: instance.actions.reviewedAt } : {})
     }
   };
   if (instance.approval) {
     const approvalActions = clone(state.policy.approvalActions);
     const approval = {
       ...(instance.approval.default ? { default: instance.approval.default } : {}),
-      ...(Object.keys(approvalActions).length ? { actions: approvalActions } : {})
+      ...(Object.keys(approvalActions).length ? { actions: approvalActions } : {}),
+      ...(instance.approval.newOrChanged ? { newOrChanged: instance.approval.newOrChanged } : {})
     };
     if (Object.keys(approval).length) out.approval = approval;
     else delete out.approval;
@@ -543,28 +564,224 @@ function materialize(instance, state, to) {
   };
 }
 
+/** The fields of an installation a module may change. */
+const MODULE_WRITABLE_FIELDS = new Set(['values', 'actions']);
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
- * Plan the migration of one installation from `from` to `to`.
- *
- * @param {object} input
- * @param {object} input.instance - the stored installation (not modified)
- * @param {Array<{ path: string, app: object }>} [input.apps] - the app files
- *   binding it (by id, definition or type key); not modified
- * @param {{ id?: string, type?: string, version?: string, migrations?: Array }} [input.definition]
- *   - the target definition (its `type` decides the type key)
- * @param {string} input.from - the installation's version
- * @param {string} [input.to] - the version to reach (default: `definition.version`)
- * @param {Array<{ id: string, steps: Array }>} [input.migrations] - the
- *   migrations to pick from (default: `definition.migrations`)
- * @returns {{
- *   ok: boolean, from: string, to: string, migrations: string[], steps: string[],
- *   instance: object, apps: Array<{ path: string, appId: string, app: object, changed: boolean }>,
- *   boundaries: Array<{ version: string, instance: object, apps: Array<{ path: string, app: object }> }>,
- *   summary: { values: number, actions: number, apps: number },
- *   warnings: Array<object>, collisions: Array<object>
- * }}
+ * What a module step is handed: copies of the working state, never the
+ * installation's `auth` block. `instance` is the installation as it stands
+ * after the steps before (its `definitionVersion` the version the migration
+ * starts from), `apps` one entry per bound app with only the binding keys a
+ * migration rewrites (own and definition). Returns the request the planner
+ * yields and the pristine copy it compares the result with.
  */
-export function planMigration({ instance, apps = [], definition = {}, from, to, migrations }) {
+function moduleRequest({ instance, state, keys, definition, migrationId, previous, file }) {
+  const base = clone(instance);
+  delete base.auth;
+  const handed = {
+    ...base,
+    definitionVersion: previous,
+    values: clone(state.values),
+    actions: clone(state.policy)
+  };
+  const apps = state.apps.map(entry => ({
+    path: entry.path,
+    id: entry.app?.id || entry.path,
+    integrations: Object.fromEntries(
+      rewrittenKeys(entry.app, keys).map(key => [key, clone(entry.app.integrations[key])])
+    )
+  }));
+  const pristine = { instance: clone(handed), apps: clone(apps) };
+  return {
+    request: {
+      migrationId,
+      file,
+      context: {
+        instance: handed,
+        apps,
+        definition: deepFreeze(clone(definition)),
+        from: previous,
+        to: migrationId
+      }
+    },
+    pristine
+  };
+}
+
+function deepFreeze(value) {
+  if (value && typeof value === 'object') {
+    for (const inner of Object.values(value)) deepFreeze(inner);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+/** Record a problem of a module step (it fails the plan, like a collision). */
+function moduleProblem(run, file, message) {
+  collide(run, 'module', file, `module ${file}: ${message}`);
+}
+
+/**
+ * Check what a module returned and take it into the working state: the
+ * instance's `values` and `actions`, and the binding entries of the apps it
+ * was handed. Anything else a module changed, an `auth` it returned, a
+ * binding key it was not handed, or a malformed value fails the plan; nothing
+ * of a refused result is taken.
+ */
+function applyModuleResult(run, { request, pristine }, returned) {
+  const { file } = request;
+  if (!isPlainObject(returned)) {
+    moduleProblem(run, file, 'up() must return the installation (an object)');
+    return;
+  }
+  if (Object.hasOwn(returned, 'auth')) {
+    moduleProblem(run, file, 'a migration never touches the sign-in block (auth)');
+    return;
+  }
+  const fields = new Set([...Object.keys(pristine.instance), ...Object.keys(returned)]);
+  const changed = [...fields].filter(
+    field =>
+      !MODULE_WRITABLE_FIELDS.has(field) &&
+      canonicalJson(pristine.instance[field]) !== canonicalJson(returned[field])
+  );
+  if (changed.length > 0) {
+    moduleProblem(
+      run,
+      file,
+      `a module may change values and actions only; it changed ${changed.join(', ')}`
+    );
+    return;
+  }
+  const values = returned.values ?? {};
+  if (!isPlainObject(values)) {
+    moduleProblem(run, file, 'values must be an object');
+    return;
+  }
+  const policy = modulePolicy(returned.actions, run.state.policy);
+  if (!policy) {
+    moduleProblem(
+      run,
+      file,
+      'actions must be { enabled: string[], disabled: string[], overrides: object }'
+    );
+    return;
+  }
+  const bindings = moduleBindings(run, request, pristine);
+  if (!bindings) return;
+  takeModuleValues(run, values);
+  takeModulePolicy(run, policy);
+  for (const { entry, key, binding } of bindings) {
+    if (binding === undefined) delete entry.app.integrations[key];
+    else entry.app.integrations[key] = binding;
+    markBindingChanged(run, entry, key);
+  }
+}
+
+/** The action policy a module returned, or null when it is malformed. */
+function modulePolicy(actions, current) {
+  if (actions === undefined) return current;
+  if (!isPlainObject(actions)) return null;
+  const list = value => Array.isArray(value) && value.every(name => typeof name === 'string');
+  const enabled = actions.enabled ?? current.enabled;
+  const disabled = actions.disabled ?? current.disabled;
+  const overrides = actions.overrides ?? current.overrides;
+  if (!list(enabled) || !list(disabled) || !isPlainObject(overrides)) return null;
+  // A module does not see or change the tool approval; its per-action modes
+  // carry over so later steps (a renameAction) still find them.
+  return {
+    enabled: [...enabled],
+    disabled: [...disabled],
+    overrides: clone(overrides),
+    approvalActions: clone(current.approvalActions || {})
+  };
+}
+
+/**
+ * The bindings a module changed, read back from the app entries it was
+ * handed: `[{ entry, key, binding }]`, or null (with a problem recorded) when
+ * it touched a key it was not handed or wrote something that is no binding.
+ */
+function moduleBindings(run, request, pristine) {
+  const { file, context } = request;
+  const out = [];
+  for (const [index, given] of pristine.apps.entries()) {
+    const handed = context.apps[index];
+    const entry = run.state.apps.find(candidate => candidate.path === given.path);
+    if (!entry || !handed || handed.path !== given.path) {
+      moduleProblem(run, file, 'the apps list must keep its entries in place');
+      return null;
+    }
+    const integrations = isPlainObject(handed.integrations) ? handed.integrations : {};
+    const extra = Object.keys(integrations).filter(key => !Object.hasOwn(given.integrations, key));
+    if (extra.length > 0) {
+      moduleProblem(
+        run,
+        file,
+        `app "${given.id}": a module changes the bindings it was handed only, not ${extra.join(', ')}`
+      );
+      return null;
+    }
+    for (const key of Object.keys(given.integrations)) {
+      const binding = integrations[key];
+      if (binding !== undefined && !isPlainObject(binding)) {
+        moduleProblem(run, file, `app "${given.id}": the binding ${key} must be an object`);
+        return null;
+      }
+      if (canonicalJson(binding) === canonicalJson(given.integrations[key])) continue;
+      out.push({ entry, key, binding: clone(binding) });
+    }
+  }
+  return out;
+}
+
+/** Take the values a module returned; every key whose value changed counts. */
+function takeModuleValues(run, values) {
+  const before = run.state.values;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(values)])) {
+    if (canonicalJson(before[key]) !== canonicalJson(values[key])) run.out.valueKeys.add(key);
+  }
+  run.state.values = clone(values);
+}
+
+/** Take the policy a module returned; every action name whose entry changed counts. */
+function takeModulePolicy(run, policy) {
+  const before = run.state.policy;
+  const names = new Set([
+    ...before.enabled,
+    ...before.disabled,
+    ...Object.keys(before.overrides),
+    ...policy.enabled,
+    ...policy.disabled,
+    ...Object.keys(policy.overrides)
+  ]);
+  for (const name of names) {
+    if (name === '*') continue;
+    const was = [
+      before.enabled.includes(name),
+      before.disabled.includes(name),
+      canonicalJson(before.overrides[name])
+    ];
+    const is = [
+      policy.enabled.includes(name),
+      policy.disabled.includes(name),
+      canonicalJson(policy.overrides[name])
+    ];
+    if (canonicalJson(was) !== canonicalJson(is)) run.out.policyActions.add(name);
+  }
+  run.state.policy = policy;
+}
+
+/**
+ * The plan as a generator: declarative steps are applied in place, a module
+ * step is yielded as `{ request, pristine }` and the driver answers with
+ * `{ result }` (what `up()` returned), `{ error }`, or `{ deferred: true }`
+ * (not run). Returns the plan.
+ */
+function* planSteps({ instance, apps = [], definition = {}, from, to, migrations }) {
   const target = to || definition.version;
   const selected = migrationsBetween(migrations ?? definition.migrations, from, target);
   const keys = bindingKeysOf(instance, definition);
@@ -578,15 +795,53 @@ export function planMigration({ instance, apps = [], definition = {}, from, to, 
   };
   const steps = [];
   const boundaries = [];
-  selected.forEach((migration, index) => {
+  const modules = [];
+  for (const [index, migration] of selected.entries()) {
+    const previous = index === 0 ? from : selected[index - 1].id;
     for (const step of migration.steps || []) {
       steps.push(describeStep(migration.id, step));
-      applyStep(state, step, { migrationId: migration.id, keys }, out);
+      if (!Object.hasOwn(step, 'module')) {
+        applyStep(state, step, { migrationId: migration.id, keys }, out);
+        continue;
+      }
+      const run = {
+        state,
+        type: 'module',
+        body: step.module,
+        migrationId: migration.id,
+        keys,
+        out
+      };
+      const handed = moduleRequest({
+        instance,
+        state,
+        keys,
+        definition,
+        migrationId: migration.id,
+        previous,
+        file: step.module
+      });
+      modules.push(`${migration.id}: ${step.module}`);
+      const response = yield handed;
+      if (response?.deferred) {
+        out.warnings.push({
+          code: MIGRATION_WARNINGS.MODULE_STEP_NOT_PLANNED,
+          message: `${migration.id}: the module ${step.module} runs code when the migration runs; what it changes is not part of this plan`,
+          key: step.module
+        });
+      } else if (response?.error) {
+        moduleProblem(run, step.module, `failed: ${response.error.message || response.error}`);
+      } else {
+        for (const line of (response?.logs || []).slice(0, 20)) {
+          steps.push(`${migration.id}: module ${step.module}: ${String(line)}`.slice(0, 500));
+        }
+        applyModuleResult(run, handed, response?.result);
+      }
     }
     if (index < selected.length - 1) {
       boundaries.push({ version: migration.id, ...materialize(instance, state, migration.id) });
     }
-  });
+  }
   const result = materialize(instance, state, target);
   const changedPaths = new Set([...out.changedBindings].map(entry => entry.split('\u0000')[0]));
   return {
@@ -595,6 +850,7 @@ export function planMigration({ instance, apps = [], definition = {}, from, to, 
     to: target,
     migrations: selected.map(m => m.id),
     steps,
+    modules,
     instance: result.instance,
     apps: result.apps.map(entry => ({
       path: entry.path,
@@ -611,6 +867,71 @@ export function planMigration({ instance, apps = [], definition = {}, from, to, 
     warnings: out.warnings,
     collisions: out.collisions
   };
+}
+
+/**
+ * Plan the migration of one installation from `from` to `to` without
+ * running code: a `module` step is skipped with a `MODULE_STEP_NOT_PLANNED`
+ * warning (the admin view and the marketplace preview). The runner uses
+ * {@link planMigrationAsync}.
+ *
+ * @param {object} input
+ * @param {object} input.instance - the stored installation (not modified)
+ * @param {Array<{ path: string, app: object }>} [input.apps] - the app files
+ *   binding it (by id, definition or type key); not modified
+ * @param {{ id?: string, type?: string, version?: string, migrations?: Array }} [input.definition]
+ *   - the target definition (its `type` decides the type key)
+ * @param {string} input.from - the installation's version
+ * @param {string} [input.to] - the version to reach (default: `definition.version`)
+ * @param {Array<{ id: string, steps: Array }>} [input.migrations] - the
+ *   migrations to pick from (default: `definition.migrations`)
+ * @returns {{
+ *   ok: boolean, from: string, to: string, migrations: string[], steps: string[],
+ *   modules: string[],
+ *   instance: object, apps: Array<{ path: string, appId: string, app: object, changed: boolean }>,
+ *   boundaries: Array<{ version: string, instance: object, apps: Array<{ path: string, app: object }> }>,
+ *   summary: { values: number, actions: number, apps: number },
+ *   warnings: Array<object>, collisions: Array<object>
+ * }}
+ */
+export function planMigration(input) {
+  const plan = planSteps(input);
+  let next = plan.next();
+  while (!next.done) next = plan.next({ deferred: true });
+  return next.value;
+}
+
+/**
+ * Plan the migration of one installation, running its `module` steps: each
+ * is handed to `runModule({ migrationId, file, context })`, where `context`
+ * is `{ instance, apps, definition, from, to }` (copies; the instance without
+ * `auth`; `definition` frozen) and the callback answers with
+ * `{ result, logs? }` — `result` is what the module's `up(context)` returned,
+ * the new instance; the apps are read back from `context.apps`. A module
+ * that throws, returns no instance, returns an `auth`, changes anything but
+ * `values`, `actions` and the bindings it was handed, fails the plan (a
+ * collision of kind `module`). Declarative steps and their collision rules
+ * are those of {@link planMigration}; steps run in semver order of their
+ * migrations and in listed order within one.
+ *
+ * @param {object} input - as {@link planMigration}
+ * @param {{ runModule: (request: { migrationId: string, file: string, context: object }) => Promise<{ result: unknown, logs?: string[] }> }} driver
+ * @returns {Promise<ReturnType<typeof planMigration>>}
+ */
+export async function planMigrationAsync(input, { runModule }) {
+  const plan = planSteps(input);
+  let next = plan.next();
+  while (!next.done) {
+    let response;
+    try {
+      // Sequential on purpose: each module sees the state the steps before it left.
+      response = await runModule(next.value.request);
+    } catch (error) {
+      response = { error };
+    }
+    next = plan.next(response);
+  }
+  return next.value;
 }
 
 /**

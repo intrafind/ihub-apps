@@ -25,9 +25,12 @@
  * | 2 | Tool config               | tool file `approval` (per function, else the tool's), `requiresApproval: true` = `always` |
  * | 2 | Installation default      | `integrations.json` → `installed[].approval.default`         |
  * | 3 | Installation action       | `installed[].approval.actions[<action name>]`                |
+ * | 3 | New or changed action     | `installed[].approval.newOrChanged` (default `always`) while the action's fingerprint is not the one an admin accepted (#2916) |
  * | 4 | App override              | app `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default` |
  *
- * Nothing configured resolves to `never`: approval is opt-in.
+ * Nothing configured resolves to `never`: approval is opt-in. The new-or-changed
+ * layer applies only to an installation that has an `approval` setting and a
+ * fingerprint baseline (`actions.fingerprints`, see `actionFingerprint.js`).
  *
  * An app value looser than the admin floor is ignored and logged once.
  * Annotations a remote MCP server puts on its tools feed `sideEffect` only;
@@ -41,6 +44,7 @@
  * @module utils/toolApproval
  */
 import logger from './logger.js';
+import { actionReviewState } from './actionFingerprint.js';
 import { redact } from '../middleware/auditLogger.js';
 import {
   APPROVAL_MODES,
@@ -96,15 +100,15 @@ export function toolApprovalConfigProblem(value) {
     return 'toolApproval must be an object';
   }
   const defaults = value.defaults;
-  if (defaults === undefined || defaults === null) return null;
-  if (typeof defaults !== 'object' || Array.isArray(defaults)) {
+  if (defaults === undefined) return null;
+  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) {
     return 'toolApproval.defaults must be an object';
   }
   for (const [key, mode] of Object.entries(defaults)) {
     if (!['default', ...DATA_FLOWS].includes(key)) {
       return `toolApproval.defaults.${key} is not a known key (default, internal, external)`;
     }
-    if (mode !== undefined && mode !== null && !isApprovalMode(mode)) {
+    if (mode !== undefined && !isApprovalMode(mode)) {
       return `toolApproval.defaults.${key} must be one of ${APPROVAL_MODES.join(', ')}`;
     }
   }
@@ -179,8 +183,8 @@ export function resolveSideEffect(toolDef, installation = null) {
 /**
  * Where a tool's data goes. The installation's admin override
  * (`actions.overrides[action].dataFlow`, set in the integration builder for
- * an MCP tool or an A2A skill) wins, then the declared value; remote MCP
- * servers and A2A agents are external; everything else is iHub's own
+ * an MCP tool or an A2A skill) wins; then declared values; remote MCP servers
+ * and A2A agents are external; everything else is iHub's own
  * (`internal`).
  *
  * @param {Object} toolDef
@@ -282,6 +286,16 @@ export function resolveToolApproval(toolDef, app, platform, options = {}) {
     // 3. the action, by its original name
     const action = actionNameOf(toolDef);
     if (action) apply(installationApproval.actions?.[action], 'action');
+    // 3. new or changed since the last admin review (#2916): at least `newOrChanged`
+    const review = actionReviewState(installation, action, toolDef?._integration?.fingerprint);
+    if (review) {
+      apply(
+        isApprovalMode(installationApproval.newOrChanged)
+          ? installationApproval.newOrChanged
+          : 'always',
+        'newOrChanged'
+      );
+    }
   }
 
   // 4. the app: may only tighten
@@ -344,7 +358,7 @@ export function toolNeedsApproval(toolDef, app = null, platform = null) {
 
 /**
  * Whether a call that reaches a tool outside the agent loop — the MCP gateway,
- * the direct tool API for a token caller, an MCP App view — needs a person's
+ * the direct tool API for a token caller — needs a person's
  * approval. Nobody on those paths can give it, so such a call is refused
  * (`APPROVAL_REQUIRED_NO_USER`). Resolved like in a chat without an app:
  * platform default, tool or installation, action.

@@ -1,0 +1,4 @@
+# A test fixture, not a secret: the token value in a redaction test
+# (actionTester.test.js) of a commit already pushed, which cannot be
+# rewritten. The line itself now uses a stopword value (.gitleaks.toml).
+c3986d01bb25d1088497ca1d17ce5038987b7e4e:server/tests/integrations/actionTester.test.js:generic-api-key:60

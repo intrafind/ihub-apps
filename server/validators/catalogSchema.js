@@ -117,8 +117,36 @@ const catalogItemSchema = z.object({
    * kept as it came, so one bad item never drops the catalog, and the update
    * preview reports it (`validateDefinitionMigrations`).
    */
-  migrations: z.union([z.array(definitionMigrationSchema), z.array(z.unknown())]).optional()
+  migrations: z.union([z.array(definitionMigrationSchema), z.array(z.unknown())]).optional(),
+  /**
+   * The versions the registry can still serve besides the current one,
+   * newest first (integrations; the marketplace generator emits them from the
+   * git tags `integrations/<id>@<version>`). `ref` locates the version
+   * descriptor: a catalog item of that version (its own `source`, with the
+   * companions and integrity of that version), as a path relative to the
+   * catalog or an absolute URL. Without `ref`, the registry answers
+   * `<catalog URL>?type=<type>&name=<name>&version=<version>` with the
+   * descriptor. A pinned install or update fetches it
+   * (`RegistryService.fetchItemVersion`).
+   */
+  versions: z
+    .array(
+      z
+        .object({
+          version: z.string().min(1).max(64),
+          ref: z.string().min(1).max(2048).optional()
+        })
+        .passthrough()
+    )
+    .max(200)
+    .optional()
 });
+
+/**
+ * A version descriptor (`versions[].ref`): a catalog item of one version.
+ * Validated like an item of the catalog itself.
+ */
+export const catalogItemVersionSchema = catalogItemSchema;
 
 /**
  * Top-level catalog document fetched from a registry's catalog.json endpoint.

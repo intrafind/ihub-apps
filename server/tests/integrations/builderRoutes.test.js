@@ -287,6 +287,38 @@ describe('create, load, save', () => {
     expect(definition.name).toEqual({ en: 'Orders', de: 'Bestellungen' });
   });
 
+  it('keeps the action detail overrides, the review and newOrChanged on a save', async () => {
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    const fingerprint = `sha256:${'a'.repeat(64)}`;
+    stored.actions = {
+      ...stored.actions,
+      overrides: {
+        get_order: { guidance: { en: 'Ask for the order id first' }, dataFlow: 'external' },
+        gone: { guidance: { en: 'An action the draft no longer has' } }
+      },
+      fingerprints: { get_order: fingerprint },
+      reviewedAt: '2026-11-01T00:00:00.000Z'
+    };
+    stored.approval = { ...stored.approval, newOrChanged: 'writes' };
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    await admin(request(app).put('/api/admin/integrations/builder/orders'))
+      .send(loaded.body)
+      .expect(200);
+    const instance = state.integrations.installed.find(i => i.id === 'orders');
+    expect(instance.actions.overrides).toEqual({
+      get_order: { guidance: { en: 'Ask for the order id first' }, dataFlow: 'external' }
+    });
+    expect(instance.actions.fingerprints).toEqual({ get_order: fingerprint });
+    expect(instance.actions.reviewedAt).toBe('2026-11-01T00:00:00.000Z');
+    expect(instance.approval).toEqual({
+      default: 'writes',
+      actions: { get_order: 'never' },
+      newOrChanged: 'writes'
+    });
+  });
+
   it('keeps only the tool ids a migrated tool brought', async () => {
     // As migration V211 wrote it: the action keeps the tool file's id.
     const dir = path.join(contentsDir, 'custom__legacy');
@@ -400,6 +432,40 @@ describe('export', () => {
       request(app).post('/api/admin/integrations/builder/_export/legacy')
     ).expect(200);
     expect(res.body.files['integration.json'].actions[0].toolId).toBeUndefined();
+  });
+
+  it('decides the remote overrides and keeps the action detail texts', () => {
+    const existingInstance = {
+      id: 'remote',
+      actions: {
+        overrides: {
+          search: {
+            description: { en: 'Old' },
+            sideEffect: 'write',
+            guidance: { en: 'Prefer exact titles' },
+            examples: [{ en: 'Find the handbook' }]
+          }
+        }
+      }
+    };
+    const { installation } = draftToPackage(
+      {
+        instanceId: 'remote',
+        name: { en: 'Remote' },
+        source: 'mcp',
+        auth: { mode: 'none' },
+        mcp: { transport: 'streamableHttp', url: 'https://mcp.example.com/mcp' },
+        actions: [{ name: 'search', sideEffect: 'read', dataFlow: 'external' }]
+      },
+      { existingInstance }
+    );
+    expect(installation.actions.overrides).toEqual({
+      search: {
+        sideEffect: 'read',
+        guidance: { en: 'Prefer exact titles' },
+        examples: [{ en: 'Find the handbook' }]
+      }
+    });
   });
 
   it('refuses to publish a local MCP process', async () => {

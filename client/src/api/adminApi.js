@@ -1240,12 +1240,15 @@ export const fetchMarketplaceItemFile = async (registryId, name, path) => {
  * @param {string} registryId - The registry ID the item belongs to
  * @param {string} type - The item type (app, model, prompt, skill, workflow)
  * @param {string} name - The item name identifier
+ * @param {Object} [options]
+ * @param {string} [options.version] - A version the item lists; without it the server
+ *   takes the version the registry offers (its channel and the item's pin applied)
  * @returns {Promise<Object>} Result of the update operation
  */
-export const updateMarketplaceItem = async (registryId, type, name) => {
+export const updateMarketplaceItem = async (registryId, type, name, { version } = {}) => {
   const response = await makeAdminApiCall(
     `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_update`,
-    { method: 'POST' }
+    { method: 'POST', ...(version ? { body: { version } } : {}) }
   );
   return response.data;
 };

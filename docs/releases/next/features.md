@@ -94,6 +94,40 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
 
+## Integrations: Every Action Has a Detail With Guidance and a Test Runner
+
+Every action on the page of an installation (**Admin → Integrations → an installation**) now has
+**Details**, a panel that answers what the action does, how the model should use it, and whether
+it works, without a chat:
+
+- **What it does:** the description and the parameter schema exactly as the model receives them.
+  Vendor descriptions are often written for developers; replace the description for the model
+  per language, or reset it to the vendor's.
+- **Side effect, data flow, approval:** each value with where it came from (integration
+  definition, vendor annotation, admin override, platform default). Override the side effect or
+  data flow, set the action's approval mode, or mark a new or changed action as reviewed.
+  For an OpenAPI operation without a declared side effect, the HTTP method's suggestion is shown.
+- **How to use:** **model guidance** and **example prompts** per action, editable per language.
+  The guidance of every action a chat offers, with the integration's own **instructions**, is now
+  added to the system prompt while the integration is active (it used to be appended to the tool
+  description). The instructions are editable on the Overview, for MCP servers too, whose own
+  `instructions` are shown when the server sends them. The panel also lists the apps, workflows
+  and scheduled tasks that use the action.
+- **Test:** a form built from the parameter schema runs the action directly, without a model, as
+  you or with the installation's shared credential. It shows status, duration, the request as
+  sent (credentials, secret parameters and every resolved secret redacted), the raw response and
+  the Answer Sources it produced. An action that is not a confirmed read only runs after you tick
+  the confirmation; the server refuses it otherwise. Every test is written to the audit log
+  (`action.test`, with the arguments redacted).
+- **Usage:** calls, approvals, rejections, expired approvals, errors and admin tests in the last
+  7 days, counted per action from this version on.
+- **Try in chat** opens the installation's chat test from the panel.
+
+The built-in iFinder, Jira, Entra ID, iHub (asking the user, scheduled tasks) and web search
+integrations ship guidance and example prompts for their actions (definition version 1.1.0; no
+migration, no action shows as changed). The web search engines' instructions are now written for
+the model.
+
 ## Integrations Can Bring Their Own Code
 
 A definition in a registry may ship a connector module (`"protocol": { "type": "script",
@@ -234,6 +268,35 @@ brings your installations along by itself.
 
 See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes),
 [Integrations → Migrations](../../integrations.md#migrations) and [Marketplace](../../marketplace.md).
+
+## Integrations: Revert to an Earlier Version, Version Pins and Code Migrations
+
+An integration from the marketplace can now be held on a version range, and an installation can go
+back to any version it was at — also to one in the middle of an update that skipped versions.
+
+- **Revert:** the installation's page has a **Backups** card that lists every backup iHub took —
+  before each migration, at each version an update passed through, before each restore — with the
+  version, the reason and the date. **Revert to this version** puts the definition of that version,
+  the installation's settings and action selection, the bindings of its apps and its marketplace
+  entry back together, after asking. If anything fails on the way, nothing is changed. The current
+  state is backed up first, so you can go forward again the same way. **Restore backup** now lets
+  you pick which backup to restore.
+- **Every version an update passes is kept:** when an update skips versions (1.2.0 → 1.4.0), iHub
+  also downloads the definitions of the versions in between and keeps them with the backup of that
+  version, so 1.3.0 can be restored later even though it was never installed.
+- **Channel and pins per registry:** **Admin → Marketplace → Manage Registries → Edit** has a
+  **Versions** section. The channel is **Stable releases only** (the default) or **All releases,
+  including pre-releases**. A **version pin** keeps one item on a range such as `1.3.x`: install
+  and the **Update** badge then offer only versions inside it, and the item shows **Pinned to
+  1.3.x**. An update never goes back to an older version; revert the installation instead.
+- **Code migrations from trusted registries:** a definition can migrate its installations with a
+  small JavaScript module when renames and defaults are not enough. It runs only for the built-in
+  integrations and for integrations from a registry you trust for code, and only when the file
+  matches the hash the catalog listed; a module never sees the sign-in or credentials of the
+  installation and may change only its settings, action selection and app bindings.
+
+See [Integrations → Migrations](../../integrations.md#migrations) and
+[Marketplace → Versions, channel and pins](../../marketplace.md#versions-channel-and-pins).
 
 ## People Directories Are Installed Integrations
 
@@ -403,6 +466,15 @@ a mode.
   shows the card below the view, and the view gets the result once you approve.
 - **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
   under "ask unless it only reads" until an admin confirms the tool as a read.
+- **New and changed actions ask until reviewed:** iHub fingerprints every action of an
+  integration (name, what it does, its input). When a vendor adds an action or changes one, it
+  is badged **New** or **Changed** on the integration page and asks every time (configurable) until
+  you choose **Mark reviewed** or **Mark all reviewed**. This applies to integrations you have set
+  approval for.
+- **Sensible start for new integrations:** installing an integration preselects "ask unless it
+  only reads", and "always ask" for MCP servers, A2A agents and other external integrations that
+  do not declare what their actions do. You can change it before saving; existing integrations
+  are left as they are.
 - **Where nobody can approve** (OpenAI-compatible API, apps as tools, the MCP and A2A gateways,
   workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
   step that names approver groups parks the approval for them instead. Scheduled tasks keep

@@ -2574,7 +2574,19 @@
           "autoRefresh": "Auto Refresh",
           "hours": "hours",
           "trustCode": "May deliver integrations that run code on this server",
-          "trustCodeHelp": "Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install."
+          "trustCodeHelp": "Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install.",
+          "versionPolicy": "Versions",
+          "channel": "Channel",
+          "channelStable": "Stable releases only",
+          "channelAll": "All releases, including pre-releases",
+          "channelHelp": "Stable hides versions such as 2.0.0-rc.1 from install and the update badge.",
+          "pins": "Version pins",
+          "pinsHelp": "Keep an item on a version range, for example 1.3.x or ~1.3.0. Install and the update badge offer only versions inside the pin.",
+          "pinItem": "Item",
+          "pinRange": "Version range",
+          "removePin": "Remove pin",
+          "addPin": "Add pin",
+          "pinInvalid": "Each pin needs an item as <type>:<name> (for example integration:org.ckan__open-data-portal) and a version range."
         }
       },
       "detail": {
@@ -2643,6 +2655,10 @@
         "actionsDynamicHint": "The server lists its actions when iHub connects to it; install and test the integration to see them.",
         "noActions": "This integration declares no actions.",
         "unavailable": "The definition could not be read from the registry, so its facts are not shown."
+      },
+      "versionPolicy": {
+        "pinned": "Pinned to {{pin}}",
+        "offered": "offered here: v{{version}}"
       }
     },
     "apps": {
@@ -3695,7 +3711,8 @@
           "actionRemoved": "The action “{{action}}” is removed from the app “{{app}}” (binding {{key}}); the app no longer offers it.",
           "typeBindingAction": "The app “{{app}}” names the action “{{action}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
           "typeBindingScope": "The app “{{app}}” sets the scope “{{scope}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
-          "openApp": "Open the app"
+          "openApp": "Open the app",
+          "moduleNotPlanned": "The migration runs the code module {{module}}; what it changes is known only when it runs and is not counted here."
         },
         "log": {
           "title": "Migration log",
@@ -3716,7 +3733,8 @@
             "rolledBack": "Rolled back",
             "restored": "Backup restored",
             "adopted": "Version adopted",
-            "skipped": "Skipped"
+            "skipped": "Skipped",
+            "reverted": "Reverted"
           },
           "triggers": {
             "manual": "run by hand",
@@ -3725,7 +3743,8 @@
             "recovery": "recovery at start",
             "restore": "restore",
             "downgrade": "downgrade",
-            "adopt": "adopt"
+            "adopt": "adopt",
+            "revert": "revert"
           }
         },
         "actions": {
@@ -3734,7 +3753,8 @@
           "restore": "Restore backup",
           "adopt": "Adopt current version",
           "uninstall": "Uninstall",
-          "forInstallation": "{{action}}: {{label}}"
+          "forInstallation": "{{action}}: {{label}}",
+          "revert": "Revert to this version"
         },
         "confirm": {
           "restore": {
@@ -3746,6 +3766,11 @@
             "title": "Adopt v{{version}} for {{label}}?",
             "message": "You confirm that the stored values already fit {{definition}} v{{version}}. iHub checks them like the result of a migration and only then records the version; no value is changed. Values that do not fit are listed and nothing is recorded.",
             "confirm": "Adopt version"
+          },
+          "revert": {
+            "title": "Revert {{label}} to v{{version}}?",
+            "message": "The installation’s values, its action policy, the bindings of its apps and its marketplace entry go back to the backup {{backup}} (v{{version}}, taken {{date}}). What changed since then is replaced; iHub backs up the current state first, so you can revert forward again.",
+            "definition": "The definition goes back to v{{version}} too. Other installations of the same definition follow it: each gets its own backup of v{{version}} restored, or needs a review."
           }
         },
         "outcome": {
@@ -3759,7 +3784,9 @@
           "migrateFailed": "The migration of {{label}} failed.",
           "retry": "Nothing was written. Try again in a moment.",
           "open": "Open {{label}}",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "reverted": "{{label}} was reverted to the backup {{backup}}; it is at v{{to}} now.",
+          "revertFailed": "{{label}} could not be reverted; nothing was changed."
         },
         "panel": {
           "title": "Definition migration",
@@ -3780,7 +3807,23 @@
         },
         "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
         "settingsReadOnlyLegend": "Settings (read-only)",
-        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
+        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version.",
+        "backups": {
+          "title": "Backups",
+          "help": "iHub keeps a backup before every migration and at every version a multi-step update passes. Reverting puts back the definition of that version, the installation’s values and action policy, the bindings of its apps and its marketplace entry together.",
+          "withDefinition": "with definition",
+          "loaded": "loaded version",
+          "taken": "Taken {{date}} by {{by}}",
+          "definitionMissing": "Cannot be reverted to while v{{loaded}} is loaded: this backup does not hold the definition of v{{version}}.",
+          "revertTo": "Revert to v{{version}} ({{date}})",
+          "pick": "Backup",
+          "option": "v{{version}} · {{kind}} · {{date}}",
+          "kinds": {
+            "preMigration": "before a migration",
+            "boundary": "between two migrations",
+            "preRestore": "before a restore"
+          }
+        }
       },
       "testChat": {
         "title": "Test in chat",
@@ -3810,6 +3853,132 @@
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
         "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+      },
+      "actionReview": {
+        "new": "New",
+        "changed": "Changed",
+        "newHint": "Added since the last review. It asks for approval until you mark it reviewed.",
+        "changedHint": "Its side effect or input changed since the last review. It asks for approval until you mark it reviewed.",
+        "pending": "{{count}} actions are new or changed since the last review.",
+        "markAll": "Mark all reviewed",
+        "markOne": "Mark reviewed",
+        "markOneLabel": "Mark {{action}} reviewed",
+        "marked": "Marked as reviewed: {{actions}}"
+      },
+      "actionDetail": {
+        "source": {
+          "platform": "platform default",
+          "admin": "admin override",
+          "definition": "integration definition",
+          "annotation": "vendor annotation (not trusted)",
+          "protocol": "remote system (always external)",
+          "tool": "tool",
+          "installation": "integration setting",
+          "action": "this action’s setting",
+          "newOrChanged": "new or changed since the last review",
+          "app": "app",
+          "default": "default"
+        },
+        "edited": "Edited",
+        "reset": "Reset to default",
+        "test": {
+          "noParameters": "This action takes no input.",
+          "title": "Test",
+          "connectionShared": "Shared credential of the installation ({{ref}})",
+          "connectionSharedNoRef": "Shared credential of the installation",
+          "connectionPersonal": "My own connection ({{user}})",
+          "connectionMe": "As me ({{user}})",
+          "errorRequired": "Required",
+          "errorNumber": "Enter a number",
+          "errorInteger": "Enter a whole number",
+          "errorJson": "Enter valid JSON",
+          "choose": "Choose…",
+          "notSet": "(not set)",
+          "requiredSr": "(required)",
+          "statusOk": "Succeeded",
+          "statusError": "Failed",
+          "statusTimeout": "Timed out",
+          "result": "Result",
+          "httpStatus": "HTTP {{status}}",
+          "duration": "{{ms}} ms",
+          "sourceCount": "Answer Sources: {{count}}",
+          "request": "Request as sent",
+          "noHttp": "No HTTP request was recorded (the action ran in iHub, or its system is reached another way).",
+          "response": "Raw response",
+          "truncated": "(shortened)",
+          "sources": "Answer Sources",
+          "noSources": "The result produced no Answer Sources.",
+          "notRunnable": "This action cannot run with the current settings: {{reason}}",
+          "help": "Runs the action directly, without the model. Every run is written to the audit log.",
+          "runAs": "Run as",
+          "confirm": "I understand that this test can change data in {{integration}} (side effect: {{effect}}).",
+          "running": "Running…",
+          "run": "Run test"
+        },
+        "parameters": "Parameters",
+        "paramName": "Name",
+        "paramType": "Type",
+        "paramDescription": "Description",
+        "paramRequired": "required",
+        "schemaAsSent": "Schema as sent to the model",
+        "saved": "Saved.",
+        "title": "Action",
+        "tryInChat": "Try in chat",
+        "what": "What it does",
+        "modelDescription": "Description for the model",
+        "modelDescriptionHelp": "The tool description the model reads to decide when to call this action. Saved for the current language.",
+        "effect": "Side effect, data flow, approval",
+        "sideEffect": "Side effect",
+        "from": "from {{source}}",
+        "dataFlowLabel": "Data flow",
+        "approval": "Approval",
+        "methodHint": "The OpenAPI method {{method}} suggests “{{effect}}”. Confirm it with an override below.",
+        "overrideSideEffect": "Side effect override",
+        "asDeclared": "As declared ({{value}})",
+        "overrideDataFlow": "Data flow override",
+        "asDeclaredPlain": "As declared",
+        "actionApproval": "Approval for this action",
+        "effectHelp": "An override is your decision and is trusted: it can make a gate stricter or, for a confirmed read, looser. The strictest of the platform default, the integration, this action and the app wins.",
+        "howToUse": "How to use",
+        "guidance": "Model guidance",
+        "noGuidance": "No guidance.",
+        "guidanceHelp": "Added to the system prompt while this integration is active in a chat. Saved for the current language.",
+        "examples": "Example prompts",
+        "noExamples": "No example prompts.",
+        "examplesHelp": "One prompt per line, shown to users as ideas for what to ask. Saved for the current language.",
+        "integrationInstructions": "Integration instructions",
+        "instructionsHint": "Edited on the Overview of the installation; added to the system prompt with the guidance of each action.",
+        "usedBy": "Used by",
+        "unused": "No app, workflow or scheduled task binds this action.",
+        "bindingApp": "App",
+        "bindingWorkflow": "Workflow",
+        "bindingTask": "Scheduled task",
+        "usage": "Usage in the last {{days}} days",
+        "usageCalls": "Calls",
+        "usageApproved": "Approved",
+        "usageRejected": "Rejected",
+        "usageExpired": "Approvals expired",
+        "usageErrors": "Errors",
+        "usageTests": "Admin tests",
+        "usageUnavailable": "The usage could not be read.",
+        "usageHelp": "Counted by this server since this version: calls from chats, workflows and scheduled runs, answers to approval requests, and admin tests (not counted as calls).",
+        "openLabel": "Details of {{action}}: what it does, how to use it, test it",
+        "open": "Details",
+        "dataFlow": {
+          "internal": "Stays in iHub",
+          "external": "Leaves iHub"
+        }
+      },
+      "instructions": {
+        "sourceAdmin": "Your text",
+        "sourceDefinition": "From the integration definition",
+        "sourceServer": "Sent by the server",
+        "title": "Instructions for the model",
+        "help": "Added to the system prompt while this integration is active in a chat, together with the guidance of each action it offers.",
+        "languageHint": "Saved for the current language; an empty text uses the integration’s own again.",
+        "none": "No instructions.",
+        "edit": "Edit instructions",
+        "reset": "Use the integration’s own"
       }
     },
     "sidebar": {
@@ -4999,7 +5168,12 @@
       "installationMode": "Ask before an action runs",
       "installationModeHelp": "The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.",
       "saveApproval": "Save approval",
-      "installationSaved": "Approval settings saved."
+      "installationSaved": "Approval settings saved.",
+      "newOrChangedMode": "New or changed actions",
+      "newOrChangedDefault": "Always ask (default)",
+      "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
+      "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
+      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
     },
     "integrationBuilder": {
       "a2a": {

@@ -30,10 +30,11 @@ Implementation notes for whoever continues this work. The product side is [03 §
 8. **Per-action data flow for MCP tools / A2A skills** is an installation override (`actions.overrides[name].dataFlow`), read by `resolveDataFlow`.
 9. **The admin pickers** (app/agent tool selector, workflow tool/prompt/planner nodes, agent memory) moved from `GET /api/admin/tools` (tool files only) to `GET /api/admin/integrations/tools` (`loadTools()`: platform tools, remaining tool files, actions of enabled installations). The user listing `GET /api/tools` was not usable: it filters by the admin's own `permissions.tools`, which is empty on a fresh install.
 10. **Group grants.** V211 adds each new installation to every group with an explicit `permissions.integrations` list (no `*`): before, a tool was usable by everyone who could open an app listing it. `permissions.tools` stays as it is (gateways still select by tool id); its general move to `permissions.integrations` is #2915 item 2, not done here.
+11. **A builder save and the action detail (#2974, #2916).** `draftToPackage` keeps the stored overrides of every action the draft still has; for MCP tools / A2A skills it replaces only `description`, `sideEffect` and `dataFlow` (the builder's fields), keeping `guidance` and `examples`. `approval.newOrChanged` is carried over; the fingerprints and `reviewedAt` are kept by `InstalledIntegrationService.update`. A custom integration's actions are fingerprinted by the same discovery path as any other, so an action the builder changes is new or changed until reviewed.
 
 ## Not done here (follow-ups)
 
-- An action test from the builder for an unsaved draft (the per-action test belongs to the action detail, #2974). Today: save, then **Test connection** on the installation page (runs the first read action).
+- An action test from the builder for an unsaved draft (the per-action test belongs to the action detail, #2974). Today: save, then test the action in its action detail on the installation page (#2974).
 - `permissions.tools` → `permissions.integrations` for all tools (#2915 item 2), `iassistant.*` on bindings (#2915 item 3), the migration dry run (#2915 item 4).
 - Rendering a definition's icon on the tiles (the icon URL is stored and exported only).
 - Removing the leftover admin-search category `tools` in `server/routes/admin/search.js` (the command palette no longer shows it).

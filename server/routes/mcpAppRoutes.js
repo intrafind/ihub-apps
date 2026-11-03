@@ -312,7 +312,13 @@ export default function registerMcpAppRoutes(app) {
       const { appId, toolId, name, chatId = null } = req.body;
       const args = req.body.arguments || {};
       try {
-        const { run, user, serverId, tool: viewTool } = await resolveMcpApp(req, appId, toolId);
+        const {
+          app: appConfig,
+          run,
+          user,
+          serverId,
+          tool: viewTool
+        } = await resolveMcpApp(req, appId, toolId);
         if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
           return res.status(413).json({ error: 'Tool arguments too large' });
         }
@@ -327,6 +333,7 @@ export default function registerMcpAppRoutes(app) {
           const gate = await requestViewToolCall({
             user,
             appId,
+            app: appConfig,
             viewTool,
             serverId,
             name,

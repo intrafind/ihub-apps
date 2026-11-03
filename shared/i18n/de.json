@@ -2866,7 +2866,19 @@
           "autoRefresh": "Automatische Aktualisierung",
           "hours": "Stunden",
           "trustCode": "Darf Integrationen liefern, die Code auf diesem Server ausführen",
-          "trustCodeHelp": "Nur für einen Herausgeber, dem Sie vertrauen. Eine solche Integration führt ihr Connector-Modul im Serverprozess aus; jede Code-Datei muss im Katalog einen Hash tragen, der bei der Installation geprüft wird."
+          "trustCodeHelp": "Nur für einen Herausgeber, dem Sie vertrauen. Eine solche Integration führt ihr Connector-Modul im Serverprozess aus; jede Code-Datei muss im Katalog einen Hash tragen, der bei der Installation geprüft wird.",
+          "versionPolicy": "Versionen",
+          "channel": "Kanal",
+          "channelStable": "Nur stabile Versionen",
+          "channelAll": "Alle Versionen, auch Vorabversionen",
+          "channelHelp": "Stabil blendet Versionen wie 2.0.0-rc.1 bei der Installation und im Update-Hinweis aus.",
+          "pins": "Versionsfestlegungen",
+          "pinsHelp": "Hält einen Eintrag in einem Versionsbereich, zum Beispiel 1.3.x oder ~1.3.0. Installation und Update-Hinweis bieten nur Versionen innerhalb der Festlegung an.",
+          "pinItem": "Eintrag",
+          "pinRange": "Versionsbereich",
+          "removePin": "Festlegung entfernen",
+          "addPin": "Festlegung hinzufügen",
+          "pinInvalid": "Jede Festlegung braucht einen Eintrag als <Typ>:<Name> (zum Beispiel integration:org.ckan__open-data-portal) und einen Versionsbereich."
         }
       },
       "detail": {
@@ -2935,6 +2947,10 @@
         "actionsDynamicHint": "Der Server listet seine Aktionen, wenn iHub sich mit ihm verbindet; installieren und testen Sie die Integration, um sie zu sehen.",
         "noActions": "Diese Integration gibt keine Aktionen an.",
         "unavailable": "Die Definition konnte nicht aus der Registry gelesen werden, daher werden ihre Eckdaten nicht angezeigt."
+      },
+      "versionPolicy": {
+        "pinned": "Festgelegt auf {{pin}}",
+        "offered": "hier angeboten: v{{version}}"
       }
     },
     "apps": {
@@ -3987,7 +4003,8 @@
           "actionRemoved": "Die Aktion „{{action}}“ wird aus der App „{{app}}“ entfernt (Einbindung {{key}}); die App bietet sie nicht mehr an.",
           "typeBindingAction": "Die App „{{app}}“ nennt die Aktion „{{action}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
           "typeBindingScope": "Die App „{{app}}“ setzt den Bereich „{{scope}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
-          "openApp": "App öffnen"
+          "openApp": "App öffnen",
+          "moduleNotPlanned": "Die Migration führt das Code-Modul {{module}} aus; was es ändert, steht erst fest, wenn es läuft, und ist hier nicht mitgezählt."
         },
         "log": {
           "title": "Migrationsprotokoll",
@@ -4008,7 +4025,8 @@
             "rolledBack": "Zurückgerollt",
             "restored": "Sicherung wiederhergestellt",
             "adopted": "Version übernommen",
-            "skipped": "Übersprungen"
+            "skipped": "Übersprungen",
+            "reverted": "Zurückgesetzt"
           },
           "triggers": {
             "manual": "von Hand gestartet",
@@ -4017,7 +4035,8 @@
             "recovery": "Wiederherstellung beim Start",
             "restore": "Wiederherstellung",
             "downgrade": "Downgrade",
-            "adopt": "Übernahme"
+            "adopt": "Übernahme",
+            "revert": "Zurücksetzen"
           }
         },
         "actions": {
@@ -4026,7 +4045,8 @@
           "restore": "Sicherung wiederherstellen",
           "adopt": "Aktuelle Version übernehmen",
           "uninstall": "Deinstallieren",
-          "forInstallation": "{{action}}: {{label}}"
+          "forInstallation": "{{action}}: {{label}}",
+          "revert": "Auf diese Version zurücksetzen"
         },
         "confirm": {
           "restore": {
@@ -4038,6 +4058,11 @@
             "title": "v{{version}} für {{label}} übernehmen?",
             "message": "Sie bestätigen, dass die gespeicherten Werte bereits zu {{definition}} v{{version}} passen. iHub prüft sie wie das Ergebnis einer Migration und vermerkt die Version erst dann; kein Wert wird geändert. Passen Werte nicht, werden sie aufgelistet und nichts wird vermerkt.",
             "confirm": "Version übernehmen"
+          },
+          "revert": {
+            "title": "{{label}} auf v{{version}} zurücksetzen?",
+            "message": "Die Werte der Installation, ihre Aktionsrichtlinie, die Bindungen ihrer Apps und ihr Marketplace-Eintrag werden auf die Sicherung {{backup}} (v{{version}}, erstellt {{date}}) zurückgesetzt. Was sich seitdem geändert hat, wird ersetzt; iHub sichert zuerst den aktuellen Stand, sodass Sie wieder vorwärts zurücksetzen können.",
+            "definition": "Auch die Definition geht auf v{{version}} zurück. Andere Installationen derselben Definition folgen ihr: Für jede wird ihre eigene Sicherung von v{{version}} wiederhergestellt, oder sie muss geprüft werden."
           }
         },
         "outcome": {
@@ -4051,7 +4076,9 @@
           "migrateFailed": "Die Migration von {{label}} ist fehlgeschlagen.",
           "retry": "Es wurde nichts geschrieben. Versuchen Sie es gleich noch einmal.",
           "open": "{{label}} öffnen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "reverted": "{{label}} wurde auf die Sicherung {{backup}} zurückgesetzt und steht jetzt auf v{{to}}.",
+          "revertFailed": "{{label}} konnte nicht zurückgesetzt werden; es wurde nichts geändert."
         },
         "panel": {
           "title": "Definitionsmigration",
@@ -4072,7 +4099,23 @@
         },
         "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
         "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
-        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
+        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion.",
+        "backups": {
+          "title": "Sicherungen",
+          "help": "iHub erstellt vor jeder Migration und bei jeder Version, die ein mehrstufiges Update durchläuft, eine Sicherung. Beim Zurücksetzen werden die Definition dieser Version, die Werte und die Aktionsrichtlinie der Installation, die Bindungen ihrer Apps und ihr Marketplace-Eintrag gemeinsam wiederhergestellt.",
+          "withDefinition": "mit Definition",
+          "loaded": "geladene Version",
+          "taken": "Erstellt {{date}} von {{by}}",
+          "definitionMissing": "Solange v{{loaded}} geladen ist, kann nicht auf diese Sicherung zurückgesetzt werden: Sie enthält die Definition von v{{version}} nicht.",
+          "revertTo": "Auf v{{version}} zurücksetzen ({{date}})",
+          "pick": "Sicherung",
+          "option": "v{{version}} · {{kind}} · {{date}}",
+          "kinds": {
+            "preMigration": "vor einer Migration",
+            "boundary": "zwischen zwei Migrationen",
+            "preRestore": "vor einer Wiederherstellung"
+          }
+        }
       },
       "testChat": {
         "title": "Im Chat testen",
@@ -4102,6 +4145,132 @@
         "notGranted": "Ihre Gruppen geben diese Installation nicht frei, daher läuft der Chat ohne ihre Aktionen. Geben Sie sie unter Administration → Gruppen frei.",
         "openGroups": "Gruppen öffnen",
         "appDisabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren Sie sie im App-Editor, um sie zu testen."
+      },
+      "actionReview": {
+        "new": "Neu",
+        "changed": "Geändert",
+        "newHint": "Seit der letzten Prüfung hinzugekommen. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "changedHint": "Wirkung oder Eingabe haben sich seit der letzten Prüfung geändert. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "pending": "{{count}} Aktionen sind seit der letzten Prüfung neu oder geändert.",
+        "markAll": "Alle als geprüft markieren",
+        "markOne": "Als geprüft markieren",
+        "markOneLabel": "{{action}} als geprüft markieren",
+        "marked": "Als geprüft markiert: {{actions}}"
+      },
+      "actionDetail": {
+        "source": {
+          "platform": "Plattform-Standard",
+          "admin": "Admin-Überschreibung",
+          "definition": "Integrationsdefinition",
+          "annotation": "Herstellerangabe (nicht vertrauenswürdig)",
+          "protocol": "entferntes System (immer extern)",
+          "tool": "Werkzeug",
+          "installation": "Einstellung der Integration",
+          "action": "Einstellung dieser Aktion",
+          "newOrChanged": "neu oder geändert seit der letzten Prüfung",
+          "app": "App",
+          "default": "Standard"
+        },
+        "edited": "Bearbeitet",
+        "reset": "Auf Standard zurücksetzen",
+        "test": {
+          "noParameters": "Diese Aktion hat keine Eingaben.",
+          "title": "Testen",
+          "connectionShared": "Gemeinsame Zugangsdaten der Installation ({{ref}})",
+          "connectionSharedNoRef": "Gemeinsame Zugangsdaten der Installation",
+          "connectionPersonal": "Meine eigene Verbindung ({{user}})",
+          "connectionMe": "Als ich ({{user}})",
+          "errorRequired": "Pflichtfeld",
+          "errorNumber": "Gib eine Zahl ein",
+          "errorInteger": "Gib eine ganze Zahl ein",
+          "errorJson": "Gib gültiges JSON ein",
+          "choose": "Auswählen…",
+          "notSet": "(nicht gesetzt)",
+          "requiredSr": "(Pflichtfeld)",
+          "statusOk": "Erfolgreich",
+          "statusError": "Fehlgeschlagen",
+          "statusTimeout": "Zeitüberschreitung",
+          "result": "Ergebnis",
+          "httpStatus": "HTTP {{status}}",
+          "duration": "{{ms}} ms",
+          "sourceCount": "Antwortquellen: {{count}}",
+          "request": "Anfrage, wie gesendet",
+          "noHttp": "Keine HTTP-Anfrage aufgezeichnet (die Aktion lief in iHub, oder ihr System wird anders erreicht).",
+          "response": "Rohe Antwort",
+          "truncated": "(gekürzt)",
+          "sources": "Antwortquellen",
+          "noSources": "Das Ergebnis hat keine Antwortquellen erzeugt.",
+          "notRunnable": "Diese Aktion kann mit den aktuellen Einstellungen nicht laufen: {{reason}}",
+          "help": "Führt die Aktion direkt aus, ohne das Modell. Jeder Lauf wird im Audit-Log festgehalten.",
+          "runAs": "Ausführen als",
+          "confirm": "Mir ist klar, dass dieser Test Daten in {{integration}} ändern kann (Nebenwirkung: {{effect}}).",
+          "running": "Läuft…",
+          "run": "Test ausführen"
+        },
+        "parameters": "Parameter",
+        "paramName": "Name",
+        "paramType": "Typ",
+        "paramDescription": "Beschreibung",
+        "paramRequired": "Pflicht",
+        "schemaAsSent": "Schema, wie es an das Modell geht",
+        "saved": "Gespeichert.",
+        "title": "Aktion",
+        "tryInChat": "Im Chat ausprobieren",
+        "what": "Was sie tut",
+        "modelDescription": "Beschreibung für das Modell",
+        "modelDescriptionHelp": "Die Werkzeugbeschreibung, nach der das Modell entscheidet, wann es diese Aktion aufruft. Wird für die aktuelle Sprache gespeichert.",
+        "effect": "Nebenwirkung, Datenfluss, Freigabe",
+        "sideEffect": "Nebenwirkung",
+        "from": "aus {{source}}",
+        "dataFlowLabel": "Datenfluss",
+        "approval": "Freigabe",
+        "methodHint": "Die OpenAPI-Methode {{method}} legt „{{effect}}“ nahe. Bestätige das unten mit einer Überschreibung.",
+        "overrideSideEffect": "Nebenwirkung überschreiben",
+        "asDeclared": "Wie angegeben ({{value}})",
+        "overrideDataFlow": "Datenfluss überschreiben",
+        "asDeclaredPlain": "Wie angegeben",
+        "actionApproval": "Freigabe für diese Aktion",
+        "effectHelp": "Eine Überschreibung ist deine Entscheidung und gilt als vertrauenswürdig: Sie kann eine Freigabe strenger machen oder, bei einem bestätigten Lesen, lockerer. Es gilt die strengste Einstellung aus Plattform-Standard, Integration, dieser Aktion und App.",
+        "howToUse": "So wird sie genutzt",
+        "guidance": "Hinweise für das Modell",
+        "noGuidance": "Keine Hinweise.",
+        "guidanceHelp": "Wird dem Systemprompt hinzugefügt, solange diese Integration in einem Chat aktiv ist. Wird für die aktuelle Sprache gespeichert.",
+        "examples": "Beispiel-Prompts",
+        "noExamples": "Keine Beispiel-Prompts.",
+        "examplesHelp": "Ein Prompt pro Zeile; Benutzer sehen sie als Ideen, was sie fragen können. Wird für die aktuelle Sprache gespeichert.",
+        "integrationInstructions": "Hinweise der Integration",
+        "instructionsHint": "Werden in der Übersicht der Installation bearbeitet und zusammen mit den Hinweisen jeder Aktion dem Systemprompt hinzugefügt.",
+        "usedBy": "Verwendet von",
+        "unused": "Keine App, kein Workflow und keine geplante Aufgabe bindet diese Aktion.",
+        "bindingApp": "App",
+        "bindingWorkflow": "Workflow",
+        "bindingTask": "Geplante Aufgabe",
+        "usage": "Nutzung in den letzten {{days}} Tagen",
+        "usageCalls": "Aufrufe",
+        "usageApproved": "Freigegeben",
+        "usageRejected": "Abgelehnt",
+        "usageExpired": "Freigaben abgelaufen",
+        "usageErrors": "Fehler",
+        "usageTests": "Admin-Tests",
+        "usageUnavailable": "Die Nutzung konnte nicht gelesen werden.",
+        "usageHelp": "Von diesem Server seit dieser Version gezählt: Aufrufe aus Chats, Workflows und geplanten Läufen, Antworten auf Freigabeanfragen und Admin-Tests (nicht als Aufrufe gezählt).",
+        "openLabel": "Details zu {{action}}: was sie tut, wie sie genutzt wird, testen",
+        "open": "Details",
+        "dataFlow": {
+          "internal": "Bleibt in iHub",
+          "external": "Verlässt iHub"
+        }
+      },
+      "instructions": {
+        "sourceAdmin": "Dein Text",
+        "sourceDefinition": "Aus der Integrationsdefinition",
+        "sourceServer": "Vom Server gesendet",
+        "title": "Hinweise für das Modell",
+        "help": "Werden dem Systemprompt hinzugefügt, solange diese Integration in einem Chat aktiv ist, zusammen mit den Hinweisen jeder Aktion, die sie anbietet.",
+        "languageHint": "Wird für die aktuelle Sprache gespeichert; ein leerer Text verwendet wieder die Hinweise der Integration.",
+        "none": "Keine Hinweise.",
+        "edit": "Hinweise bearbeiten",
+        "reset": "Hinweise der Integration verwenden"
       }
     },
     "sidebar": {
@@ -5291,7 +5460,12 @@
       "installationMode": "Vor einer Aktion fragen",
       "installationModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung, der Aktion und der App. Eine Wirkung, die nur der Server selbst angibt, zählt nicht als Lesen.",
       "saveApproval": "Freigabe speichern",
-      "installationSaved": "Freigabe-Einstellungen gespeichert."
+      "installationSaved": "Freigabe-Einstellungen gespeichert.",
+      "newOrChangedMode": "Neue oder geänderte Aktionen",
+      "newOrChangedDefault": "Immer fragen (Standard)",
+      "newOrChangedHelp": "Eine Aktion, die seit der letzten Prüfung hinzugekommen ist oder deren Wirkung oder Eingabe sich geändert hat, fragt mindestens so, bis Sie sie als geprüft markieren. Gilt, sobald an dieser Integration eine Freigabe eingestellt ist.",
+      "presetAlwaysHelp": "Vorausgewählt: immer fragen. Diese Integration sendet Daten nach außen und gibt nicht verlässlich an, welche ihrer Aktionen nur lesen. Sie können das jetzt oder später auf der Seite der Integration ändern.",
+      "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern."
     },
     "integrationBuilder": {
       "a2a": {

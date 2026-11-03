@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { withOutboundRecording } from '../../utils/outboundRecorder.js';
 import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
@@ -169,6 +170,12 @@ function makePinnedAgent(pinnedAddress, family, isHttps, tlsOptions = {}) {
  * cert validation still works against the public name.
  */
 export async function safeFetch(input, init = {}, opts = {}) {
+  // An admin's action test shows the requests it sent (#2974).
+  return withOutboundRecording(input, init, () => guardedFetch(input, init, opts));
+}
+
+/** {@link safeFetch} without the recording. */
+async function guardedFetch(input, init = {}, opts = {}) {
   const url = typeof input === 'string' ? new URL(input) : input;
   if (!['http:', 'https:'].includes(url.protocol)) {
     const e = new Error(`Unsupported protocol: ${url.protocol}`);

@@ -1358,8 +1358,8 @@ export class InteractionService extends EventEmitter {
   /** Actor id in the run's identity mode (`anonymous` for anonymous users). */
   /**
    * Who answers and on what authority, documented on the answer (#2945): the
-   * actor id (in the run's identity mode), the display name unless the mode
-   * is pseudonymized, and `via` — an approver group (with the groups that
+   * actor id (in the run's identity mode), the display name in the `full`
+   * mode only, and `via` — an approver group (with the groups that
    * matched), admin rights, or owning the run. Only ever documentation: a
    * resumed run never acts as this person.
    *
@@ -1388,7 +1388,9 @@ export class InteractionService extends EventEmitter {
     ) {
       via = 'admin';
     }
-    const name = mode !== 'pseudonymized' && typeof user?.name === 'string' ? user.name : null;
+    // A display name is personal data: only the `full` mode records it
+    // (`default` keeps the stable id only, see runIdentity.js).
+    const name = mode === 'full' && typeof user?.name === 'string' ? user.name : null;
     return { id: by, ...(name ? { name } : {}), via, groups: matched };
   }
 

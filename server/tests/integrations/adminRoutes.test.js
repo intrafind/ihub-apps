@@ -530,3 +530,143 @@ describe('installed instances', () => {
     expect(updates.body).toEqual({ success: true, definitions: [], installations: [], count: 0 });
   });
 });
+
+describe('action review (#2916)', () => {
+  const payload = {
+    id: 'ckan-demo',
+    definition: 'org.ckan/portal',
+    label: { en: 'Demo' },
+    values: { baseUrl: 'https://portal.example', maxRows: 5 },
+    auth: { mode: 'none' }
+  };
+  const OTHER = `sha256:${'a'.repeat(64)}`;
+  const integrationWrites = () =>
+    state.writes.filter(w => w.file === 'config/integrations.json').length;
+  const detailOf = async () =>
+    (await admin(request(app).get('/api/admin/integrations/installed/ckan-demo')).expect(200)).body;
+  const reviewOf = body => Object.fromEntries(body.actions.map(a => [a.name, a.review]));
+
+  it('preselects an approval default per definition', async () => {
+    const detail = await admin(
+      request(app).get(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}`)
+    ).expect(200);
+    // Both actions declare `read`: ask on writes.
+    expect(detail.body.definition.approvalPreset).toBe('writes');
+  });
+
+  it('takes no baseline and writes nothing for an installation without approval', async () => {
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    const before = integrationWrites();
+    const body = await detailOf();
+    expect(integrationWrites()).toBe(before);
+    expect(state.integrations.installed[0].actions.fingerprints).toBeUndefined();
+    expect(Object.values(reviewOf(body))).toEqual([null, null]);
+  });
+
+  it('takes the baseline when approval is turned on', async () => {
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo/approval')
+        .send({ approval: { newOrChanged: 'writes' } })
+    ).expect(200);
+    const stored = state.integrations.installed[0];
+    expect(stored.approval).toEqual({ newOrChanged: 'writes' });
+    expect(Object.keys(stored.actions.fingerprints).sort()).toEqual(['search', 'secret_only']);
+    expect(stored.actions.fingerprints.search).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('baselines once, badges new and changed actions, keeps them on a save and clears them on review', async () => {
+    await admin(
+      request(app)
+        .post('/api/admin/integrations/installed')
+        .send({ ...payload, approval: { default: 'writes' } })
+    ).expect(201);
+    expect(state.integrations.installed[0].approval).toEqual({ default: 'writes' });
+
+    // The first look at the complete list takes the baseline, once.
+    let writes = integrationWrites();
+    let body = await detailOf();
+    expect(integrationWrites()).toBe(writes + 1);
+    expect(reviewOf(body)).toEqual({ search: null, secret_only: null });
+    const baseline = structuredClone(state.integrations.installed[0].actions.fingerprints);
+    expect(Object.keys(baseline).sort()).toEqual(['search', 'secret_only']);
+
+    // An unchanged discovery writes nothing.
+    writes = integrationWrites();
+    await detailOf();
+    await detailOf();
+    expect(integrationWrites()).toBe(writes);
+
+    // The accepted state differs from what the system lists now: `search`
+    // changed, `secret_only` was never accepted (new). Still no write.
+    state.integrations.installed[0].actions.fingerprints = { search: OTHER };
+    body = await detailOf();
+    expect(reviewOf(body)).toEqual({ search: 'changed', secret_only: 'new' });
+    expect(integrationWrites()).toBe(writes);
+
+    // A settings save neither drops nor sets the accepted fingerprints.
+    await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo')
+        .send({
+          ...payload,
+          actions: { enabled: ['*'], disabled: [], fingerprints: { search: baseline.search } },
+          approval: { default: 'writes' }
+        })
+    ).expect(200);
+    expect(state.integrations.installed[0].actions.fingerprints).toEqual({ search: OTHER });
+
+    // Mark one reviewed: only that one is accepted.
+    const one = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/ckan-demo/actions/review')
+        .send({ actions: ['search'] })
+    ).expect(200);
+    expect(one.body.reviewed).toEqual(['search']);
+    expect(audits.at(-1)).toMatchObject({
+      action: 'update',
+      resource: 'integration',
+      resourceId: 'ckan-demo'
+    });
+    expect(audits.at(-1).summary).toContain('search');
+    body = await detailOf();
+    expect(reviewOf(body)).toEqual({ search: null, secret_only: 'new' });
+    expect(state.integrations.installed[0].actions.reviewedAt).toEqual(expect.any(String));
+
+    // Mark all reviewed.
+    const all = await admin(
+      request(app).post('/api/admin/integrations/installed/ckan-demo/actions/review').send({})
+    ).expect(200);
+    expect(all.body.reviewed).toEqual(['search', 'secret_only']);
+    expect(state.integrations.installed[0].actions.fingerprints).toEqual(baseline);
+    body = await detailOf();
+    expect(reviewOf(body)).toEqual({ search: null, secret_only: null });
+  });
+
+  it('refuses unknown and malformed action lists', async () => {
+    await admin(
+      request(app)
+        .post('/api/admin/integrations/installed')
+        .send({ ...payload, approval: { default: 'writes' } })
+    ).expect(201);
+    const unknown = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/ckan-demo/actions/review')
+        .send({ actions: ['nope'] })
+    ).expect(400);
+    expect(unknown.body.code).toBe('UNKNOWN_ACTION');
+    await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/ckan-demo/actions/review')
+        .send({ actions: 'search' })
+    ).expect(400);
+    await admin(
+      request(app).post('/api/admin/integrations/installed/missing/actions/review').send({})
+    ).expect(404);
+    await request(app)
+      .post('/api/admin/integrations/installed/ckan-demo/actions/review')
+      .send({})
+      .expect(401);
+  });
+});

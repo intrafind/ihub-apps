@@ -223,11 +223,24 @@ function renameOf(nameSchema) {
 }
 
 /**
- * The declarative migration steps (versioning concept §1), each an object
- * with exactly one of these keys. They reach an installation's `values`, its
- * action policy (`actions.enabled`, `actions.disabled`, `actions.overrides`)
- * and the app bindings of the installation (`actions`, `defaultScope`,
- * `pinnedScope`); nothing else, and never `auth` or a credential.
+ * The path of a migration module inside the definition folder:
+ * `migrations/<name>.js` (or `.mjs`), one level below `migrations/`, no
+ * dot segments. Like a `script` connector it is one bundled file that
+ * imports nothing from the folder (`definitions/migrationModules.js`).
+ */
+export const MIGRATION_MODULE_PATTERN =
+  /^migrations\/[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.m?js$/;
+
+/**
+ * The migration steps (versioning concept §1), each an object with exactly
+ * one of these keys. The seven declarative steps reach an installation's
+ * `values`, its action policy (`actions.enabled`, `actions.disabled`,
+ * `actions.overrides`) and the app bindings of the installation (`actions`,
+ * `defaultScope`, `pinnedScope`); nothing else, and never `auth` or a
+ * credential. A `module` step (versioning phase 3) names a JavaScript module
+ * of the definition folder whose `up()` rewrites the same parts in code; it
+ * runs only for a built-in definition or one from a registry trusted for code
+ * whose catalog hashed the file (`definitions/migrationModules.js`).
  */
 export const MIGRATION_STEP_SCHEMAS = Object.freeze({
   /** Move an install value to another key; a destination that holds a value is a collision. */
@@ -255,33 +268,29 @@ export const MIGRATION_STEP_SCHEMAS = Object.freeze({
   /** Drop an action from the policy and from the app bindings (apps that named it get a warning). */
   removeAction: z.object({ name: identifierSchema }).strict(),
   /** Rewrite the default and pinned scope of the app bindings. */
-  renameScope: renameOf(migrationScopeSchema)
+  renameScope: renameOf(migrationScopeSchema),
+  /** Run the `up()` of a migration module of the definition folder (`migrations/<name>.js`). */
+  module: z
+    .string()
+    .max(256)
+    .regex(
+      MIGRATION_MODULE_PATTERN,
+      'a migration module is a file migrations/<name>.js (or .mjs) of the definition folder'
+    )
 });
 
 /** The step types, in the order the concept lists them. */
 export const MIGRATION_STEP_TYPES = Object.freeze(Object.keys(MIGRATION_STEP_SCHEMAS));
 
 /**
- * The message for a `module` step: code migrations need a registry trusted
- * for code and an integrity hash (versioning phase 3), so this server refuses
- * them instead of dropping them silently.
- */
-export const MODULE_STEP_MESSAGE =
-  'a "module" step (code migration) is not supported by this server: migrations are declarative only (renameValue, setValue, removeValue, mapValue, renameAction, removeAction, renameScope)';
-
-/**
- * One declarative step: an object with exactly one key out of
- * {@link MIGRATION_STEP_TYPES}. A `module` step is refused with
- * {@link MODULE_STEP_MESSAGE}, an unknown key with the list of known ones.
+ * One step: an object with exactly one key out of
+ * {@link MIGRATION_STEP_TYPES}; an unknown key is refused with the list of
+ * known ones.
  */
 export const migrationStepSchema = z
   .record(z.string(), z.unknown())
   .superRefine((step, ctx) => {
     const keys = Object.keys(step);
-    if (keys.includes('module')) {
-      ctx.addIssue({ code: 'custom', path: ['module'], message: MODULE_STEP_MESSAGE });
-      return;
-    }
     const unknown = keys.filter(key => !MIGRATION_STEP_TYPES.includes(key));
     if (unknown.length > 0) {
       ctx.addIssue({
@@ -310,6 +319,24 @@ export const migrationStepSchema = z
     const [type] = Object.keys(step);
     return { [type]: MIGRATION_STEP_SCHEMAS[type].parse(step[type]) };
   });
+
+/**
+ * The migration module files a list of migrations names
+ * (`{ module: 'migrations/1.4.0.js' }` steps), each once, in order.
+ *
+ * @param {Array<{ steps?: Array<object> }>|undefined} migrations
+ * @returns {string[]}
+ */
+export function migrationModuleFiles(migrations) {
+  const files = [];
+  for (const migration of Array.isArray(migrations) ? migrations : []) {
+    for (const step of Array.isArray(migration?.steps) ? migration.steps : []) {
+      const file = step && typeof step === 'object' ? step.module : undefined;
+      if (typeof file === 'string' && !files.includes(file)) files.push(file);
+    }
+  }
+  return files;
+}
 
 /**
  * A definition migration: `id` is the version it brings an installation up

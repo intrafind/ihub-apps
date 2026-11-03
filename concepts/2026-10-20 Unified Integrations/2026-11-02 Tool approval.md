@@ -75,10 +75,9 @@ history is text again, exactly as before.
 
 ## Left for later
 
-- **#2916:** fingerprints and `approval.newOrChanged`, the "changed" badge, the install wizard
-  preselecting a mode, per-action controls on the Actions tab / action detail (#2974). The
-  `approval: { default, actions }` shape on installations is the one #2916 describes; it only adds
-  fields.
+- **#2916:** done in [2026-11-02 Action approval and fingerprints.md](2026-11-02%20Action%20approval%20and%20fingerprints.md)
+  (fingerprints, `approval.newOrChanged`, new/changed badges, install preselection, `dataFlow`
+  override). Per-action controls on the Actions tab / action detail remain for #2974.
 - Taint-based gating (ask only when the chat holds internal source data).
 - Editing arguments before approving (needs schema re-validation).
 - A persistent per-user "always allow".

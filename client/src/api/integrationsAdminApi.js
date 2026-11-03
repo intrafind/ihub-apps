@@ -76,6 +76,65 @@ export const setInstalledIntegrationApproval = async (id, approval) =>
     })
   ).data.instance;
 
+/**
+ * Mark actions of an installation as reviewed (#2916): their current
+ * fingerprints become the accepted ones. `actions` null marks every action.
+ * Returns `{ instance, reviewed }`.
+ */
+export const markInstalledIntegrationActionsReviewed = async (id, actions = null) => {
+  const { data } = await makeAdminApiCall(`${instancePath(id)}/actions/review`, {
+    method: 'POST',
+    ...json(Array.isArray(actions) ? { actions } : {})
+  });
+  return { instance: data.instance, reviewed: data.reviewed || [] };
+};
+
+/** The path of one action of an installation. */
+const actionPath = (id, action) => `${instancePath(id)}/actions/${encodeURIComponent(action)}`;
+
+/**
+ * The detail of one action (#2974): what the model sees, side effect, data
+ * flow and approval with their sources, guidance, examples, bindings, usage
+ * and the connections a test can run with.
+ */
+export const fetchIntegrationAction = async (id, action) =>
+  (await makeAdminApiCall(actionPath(id, action))).data.detail;
+
+/**
+ * Change the admin override of one action: `{ description?, guidance?,
+ * examples?, sideEffect?, dataFlow? }`; null removes a part. Returns
+ * `{ override, detail }`.
+ */
+export const saveIntegrationActionOverride = async (id, action, patch) => {
+  const { data } = await makeAdminApiCall(actionPath(id, action), {
+    method: 'PUT',
+    ...json(patch)
+  });
+  return { override: data.override, detail: data.detail };
+};
+
+/**
+ * Run one action without a model: `{ args, connection, confirm }`. Returns
+ * the test result; a refused test (e.g. 409 `CONFIRMATION_REQUIRED`) throws
+ * with `err.response.data.code`.
+ */
+export const testIntegrationAction = async (id, action, { args, connection, confirm }) =>
+  (
+    await makeAdminApiCall(`${actionPath(id, action)}/_test`, {
+      method: 'POST',
+      ...json({ args, connection, confirm: confirm === true })
+    })
+  ).data.result;
+
+/** Set (or with null remove) the installation's own model instructions. */
+export const saveIntegrationInstructions = async (id, instructions) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/instructions`, {
+      method: 'PUT',
+      ...json({ instructions })
+    })
+  ).data.instance;
+
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
 };
@@ -125,6 +184,24 @@ export const testInstalledIntegration = async (id, draft = {}) =>
  */
 export const migrateInstalledIntegration = async id =>
   (await makeAdminApiCall(`${instancePath(id)}/_migrate`, { method: 'POST', ...json({}) })).data;
+
+/**
+ * Revert an installation to a backup the admin picked, in any state
+ * (`POST …/installed/:id/_revert`): the definition folder of the backup's
+ * version, the installation's entry, its app bindings and the marketplace
+ * manifest entry go back together.
+ *
+ * @param {string} id - installation id
+ * @param {string} backup - a backup id from `migration.backups`
+ * @returns {Promise<{ success: boolean, backup: Object, logEntry: Object, instance: Object }>}
+ */
+export const revertInstalledIntegration = async (id, backup) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/_revert`, {
+      method: 'POST',
+      ...json({ backup })
+    })
+  ).data;
 
 /**
  * Restore a backup of an installation whose migration failed or that needs a

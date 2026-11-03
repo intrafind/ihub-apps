@@ -459,6 +459,25 @@ test.describe('Accessibility — a user project page', () => {
   });
 });
 
+// The action detail of an installed integration (#2974): the drawer over the
+// installation page, opened by its `?action=` link on a built-in installation
+// a fresh contents/ ships, with every section (schema table, overrides, the
+// generated test form) rendered.
+test.describe('Accessibility — the integration action detail', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+  });
+
+  test('has no critical or serious violations when open', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/integrations/ihub?action=list_scheduled_tasks');
+    const drawer = page.getByTestId('integration-action-drawer');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId('action-test-panel')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Integration action detail');
+  });
+});
+
 // axe's WCAG tag set does not include the landmark rules (they are best
 // practices), so they are run explicitly: a screen-reader user navigates by
 // landmark, and a second <main> (or an unlabelled duplicate) makes that list

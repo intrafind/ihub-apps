@@ -21,6 +21,26 @@ import { serverVersion } from '../../services/integrations/definitions/compatibi
 import definitionMigrationRunner from '../../services/integrations/definitions/DefinitionMigrationRunner.js';
 import { describeStep } from '../../services/integrations/definitions/migrationPlanner.js';
 import logger from '../../utils/logger.js';
+import {
+  currentActionsOf,
+  observeActionFingerprints,
+  reviewStatesOf
+} from '../../services/integrations/actionReview.js';
+import { installApprovalPreset } from '../../../shared/toolApproval.js';
+import configCache from '../../configCache.js';
+import {
+  integrationInstructionsOf,
+  withActionOverrides
+} from '../../services/integrations/actionGuidance.js';
+import { describeAction } from '../../services/integrations/actionDetail.js';
+import {
+  ActionTestError,
+  auditArgs,
+  testAction
+} from '../../services/integrations/tester/ActionTester.js';
+
+/** An action name in a route: what MCP tools, OpenAPI operations and connectors use. */
+const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /**
  * Admin API of the integrations platform (#3061):
@@ -39,7 +59,12 @@ import logger from '../../utils/logger.js';
  *   POST /api/admin/integrations/installed/:id/_enable|_disable
  *   POST /api/admin/integrations/installed/:id/_migrate        run (or re-run) the definition migration
  *   POST /api/admin/integrations/installed/:id/_restore        restore a backup (body `{ backup? }`)
+ *   POST /api/admin/integrations/installed/:id/_revert         revert to a backup the admin picked (body `{ backup }`)
  *   POST /api/admin/integrations/installed/:id/_adopt          adopt the loaded definition version (needsReview)
+ *   GET  /api/admin/integrations/installed/:id/actions/:action  action detail (#2974)
+ *   PUT  /api/admin/integrations/installed/:id/actions/:action  the action's admin override (texts, side effect, data flow)
+ *   POST /api/admin/integrations/installed/:id/actions/:action/_test  run the action without a model
+ *   PUT  /api/admin/integrations/installed/:id/instructions     the installation's own model guidance
  *
  * The `catalog` and `installed` segments keep these routes apart from the
  * older `/api/admin/integrations/ifinder/*` and `.../iassistant/*` endpoints.
@@ -51,6 +76,48 @@ function languageOf(req) {
   const raw =
     req.query.lang || req.headers['accept-language']?.split(',')[0]?.split(';')[0] || 'en';
   return /^[a-z]{2}(-[A-Z]{2})?$/.test(raw) ? raw : 'en';
+}
+
+/**
+ * Compare an installation's current action fingerprints with the accepted
+ * ones and take the baseline when there is none (#2916). A failure is logged
+ * and never fails the admin request it rides on.
+ * @param {string} instanceId
+ * @param {Object<string,string>} fingerprints - from a complete action list
+ */
+async function observeFingerprints(instanceId, fingerprints) {
+  try {
+    await observeActionFingerprints(instanceId, fingerprints, { complete: true });
+  } catch (error) {
+    logger.warn('Could not compare the action fingerprints of an installed integration', {
+      component: COMPONENT,
+      instanceId,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * The integration-level model guidance as the installation page shows it:
+ * the text that applies, where it comes from, and the stored override.
+ * @param {Object} resolved
+ * @param {Object} instance - the stored installation
+ * @param {string} language
+ * @returns {{text: string, source: string|null, own: Object|string|null}}
+ */
+function instructionsView(resolved, instance, language) {
+  if (!resolved?.definition) return { text: '', source: null, own: instance?.instructions ?? null };
+  const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+  let fromSystem = null;
+  try {
+    fromSystem = adapter?.serverInstructions?.(instance) || null;
+  } catch {
+    fromSystem = null;
+  }
+  return {
+    ...integrationInstructionsOf(resolved.definition, instance, language, fromSystem),
+    own: instance?.instructions ?? null
+  };
 }
 
 function definitionIdOf(req, res) {
@@ -158,6 +225,15 @@ function definitionDetailView(entry, language, instances, updates) {
         }
       : null,
     instructions: localized(def.instructions, language),
+    /**
+     * The approval default the install form preselects for a new installation
+     * (#2916): `always` for an external integration without trusted side
+     * effects (MCP, A2A, undeclared), else `writes`.
+     */
+    approvalPreset: installApprovalPreset({
+      dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
+      actions: def.actions
+    }),
     actions: def.actions.map(a => ({
       name: a.name,
       operationId: a.operationId,
@@ -545,36 +621,39 @@ export default function registerAdminIntegrationsRoutes(app) {
       const language = languageOf(req);
       const resolved = await installedIntegrationService.resolve(id, language);
       if (!resolved) return sendNotFound(res, 'Integration');
-      let actions = [];
       // An incompatible definition offers no tools; asking its adapter for
       // actions would run it. Neither does an installation whose migration
       // state withholds them: its values are not for the loaded definition.
-      if (resolved.definition && !resolved.incompatible && !resolved.blocked) {
-        const adapter = getProtocolAdapter(resolved.definition.protocol.type);
-        if (adapter) {
-          actions = await adapter.discoverActions({
-            definition: resolved.definition,
-            instance: resolved.instance,
-            document: resolved.document,
-            security: resolved.security,
-            language,
-            includeUnavailable: true
-          });
-        }
-      }
+      // (`currentActionsOf` lists nothing for those.)
+      const { actions, fingerprints } = await currentActionsOf(resolved, language);
+      // The complete list: takes the fingerprint baseline once (#2916).
+      await observeFingerprints(id, fingerprints);
+      const instance = installedIntegrationService.get(id) || resolved.instance;
+      const review = reviewStatesOf(instance, fingerprints);
       const updates = await definitionUpdates();
-      const migrations = await migrationViews([resolved.instance]);
+      const migrations = await migrationViews([instance]);
       res.json({
         success: true,
         instance: instanceView(
-          resolved.instance,
+          instance,
           resolved,
           language,
           updates,
-          migrations.get(resolved.instance.id) || null
+          migrations.get(instance.id) || null
         ),
         values: resolved.values,
-        actions: actions.map(a => ({ ...a, parameters: a.parameters, sources: undefined })),
+        // The model guidance of the installation (#2974): the admin's own, the
+        // definition's or what the system sent (MCP `instructions`).
+        instructions: instructionsView(resolved, instance, language),
+        actions: actions.map(a => ({
+          // The admin's texts (#2974): the description the model reads.
+          ...withActionOverrides(a, instance, language),
+          defaults: undefined,
+          parameters: a.parameters,
+          sources: undefined,
+          // `new` or `changed` since the last admin review, else null (#2916).
+          review: review[a.name] || null
+        })),
         definition: resolved.definition
           ? definitionDetailView(
               integrationRegistry.get(resolved.definition.id),
@@ -624,11 +703,22 @@ export default function registerAdminIntegrationsRoutes(app) {
         // explicit `null` clears the gate.
         if (!req.body || typeof req.body !== 'object' || !Object.hasOwn(req.body, 'approval')) {
           return res.status(400).json({
-            error: 'The body needs "approval": { default?, actions? } or null',
+            error: 'The body needs "approval": { default?, actions?, newOrChanged? } or null',
             code: 'APPROVAL_REQUIRED_FIELD'
           });
         }
-        const instance = await installedIntegrationService.setApproval(id, req.body.approval);
+        let instance = await installedIntegrationService.setApproval(id, req.body.approval);
+        // Turning approval on takes the fingerprint baseline when there is none
+        // yet (#2916): the actions the admin sees now count as reviewed.
+        if (instance.approval && !instance.actions?.fingerprints) {
+          const language = languageOf(req);
+          const resolved = await installedIntegrationService.resolve(id, language);
+          const { fingerprints } = await currentActionsOf(resolved, language).catch(() => ({
+            fingerprints: {}
+          }));
+          await observeFingerprints(id, fingerprints);
+          instance = installedIntegrationService.get(id) || instance;
+        }
         logAudit({
           req,
           action: 'update',
@@ -639,6 +729,406 @@ export default function registerAdminIntegrationsRoutes(app) {
         res.json({ success: true, instance });
       } catch (error) {
         sendIntegrationError(res, error, 'update integration approval');
+      }
+    }
+  );
+
+  /**
+   * Mark actions as reviewed (#2916): `{ actions?: string[] }`, every current
+   * action when absent. Their current fingerprints become the accepted ones,
+   * so they are no longer new or changed and `approval.newOrChanged` stops
+   * applying to them.
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/review'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const names = req.body?.actions;
+      if (
+        names !== undefined &&
+        names !== null &&
+        (!Array.isArray(names) ||
+          names.length === 0 ||
+          names.some(n => typeof n !== 'string' || !n || n.length > 128))
+      ) {
+        return sendBadRequest(res, 'actions must be a non-empty list of action names');
+      }
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        const { fingerprints } = await currentActionsOf(resolved, language);
+        const { instance, reviewed } = await installedIntegrationService.markActionsReviewed(
+          id,
+          fingerprints,
+          Array.isArray(names) ? names : null
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Marked ${Array.isArray(names) ? 'actions' : 'all actions'} of integration "${id}" as reviewed: ${reviewed.join(', ') || '(none listed)'}`
+        });
+        res.json({ success: true, instance, reviewed });
+      } catch (error) {
+        sendIntegrationError(res, error, 'mark integration actions as reviewed');
+      }
+    }
+  );
+
+  // --- Action detail, guidance and the test runner (#2974) -----------------
+
+  /** The action name of the route, or null after answering 400. */
+  function actionNameOf(req, res) {
+    const name = String(req.params.action || '');
+    if (!ACTION_NAME_PATTERN.test(name)) {
+      sendBadRequest(res, 'Invalid action name');
+      return null;
+    }
+    return name;
+  }
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}:
+   *   get:
+   *     summary: Detail of one action of an installed integration
+   *     description: |
+   *       What the model sees (the tool description and the parameter schema as sent),
+   *       the side effect, data flow and approval mode with the source of each (admin
+   *       override, definition, MCP annotation, OpenAPI method hint), the model guidance
+   *       and example prompts, the apps, workflows and scheduled tasks that bind the
+   *       action, its usage in the last 7 days, and the connections a test can run with.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Installation id
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: "The action's own name (not the prefixed tool id)"
+   *     responses:
+   *       200:
+   *         description: "`{ success, detail }`"
+   *       400:
+   *         description: Invalid id or action name
+   *       404:
+   *         description: Installation or action not found
+   */
+  app.get(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        if (!resolved.definition) return sendNotFound(res, 'Integration definition');
+        const detail = await describeAction(resolved, actionName, {
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        if (!detail) return sendNotFound(res, 'Action');
+        res.json({ success: true, detail });
+      } catch (error) {
+        sendInternalError(res, error, 'read integration action');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}:
+   *   put:
+   *     summary: Change the admin override of one action
+   *     description: |
+   *       Any of `description` (the tool description the model reads), `guidance` (added
+   *       to the system prompt while the integration is active), `examples` (example
+   *       prompts), each `{ en, de }` or a string, and `sideEffect` / `dataFlow` (trusted
+   *       by the approval resolver). A key set to null removes that part of the override;
+   *       a key left out keeps it. Audited as an action policy change.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               description:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *               guidance:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *               examples:
+   *                 type: array
+   *               sideEffect:
+   *                 type: string
+   *                 enum: [read, write, destructive, unknown]
+   *               dataFlow:
+   *                 type: string
+   *                 enum: [internal, external]
+   *     responses:
+   *       200:
+   *         description: "`{ success, override, detail }`"
+   *       400:
+   *         description: "`INVALID_OVERRIDE`, an invalid id or action name"
+   *       404:
+   *         description: Installation or action not found
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        // Only an action the installation lists can carry an override.
+        const before = resolved.definition
+          ? await describeAction(resolved, actionName, { language })
+          : null;
+        if (!before) return sendNotFound(res, 'Action');
+        const { override } = await installedIntegrationService.setActionOverride(
+          id,
+          actionName,
+          req.body || {}
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `action.policyChange: override of action "${actionName}" of integration "${id}" set to ${Object.keys(override || {}).join(', ') || '(none)'}`
+        });
+        const after = await installedIntegrationService.resolve(id, language);
+        const detail = await describeAction(after, actionName, {
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        res.json({ success: true, override, detail });
+      } catch (error) {
+        sendIntegrationError(res, error, 'update integration action override');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}/_test:
+   *   post:
+   *     summary: Run one action without a model (admin test)
+   *     description: |
+   *       Runs the action through its protocol adapter with the given arguments, as the
+   *       acting admin (`connection: me`) or with the installation's shared credential
+   *       (`connection: shared`). Answers with the status, the duration, the request as
+   *       sent (credential headers, secret keys and resolved secrets redacted), the raw
+   *       response (redacted, capped) and the Answer Sources the result produced. An
+   *       action that is not a trusted read (write, destructive, unknown, or a read the
+   *       MCP server only claims) is refused with 409 `CONFIRMATION_REQUIRED` unless the
+   *       body has `confirm: true`. Every run is audited (`action.test`, arguments
+   *       redacted). A failed call is a 200 with `result.status` `error` or `timeout`.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               args:
+   *                 type: object
+   *                 description: The action's arguments, as the model would send them
+   *               connection:
+   *                 type: string
+   *                 enum: [me, shared]
+   *               confirm:
+   *                 type: boolean
+   *                 description: Required for an action that is not a trusted read
+   *     responses:
+   *       200:
+   *         description: "`{ success, result }`"
+   *       400:
+   *         description: "`INVALID_ARGUMENTS`, `INVALID_CONNECTION`, an invalid id or action name"
+   *       404:
+   *         description: "`ACTION_NOT_FOUND`, or the installation is not found"
+   *       409:
+   *         description: "`CONFIRMATION_REQUIRED`, `ACTION_UNAVAILABLE` or `NOT_RUNNABLE`"
+   *       422:
+   *         description: "`DEFINITION_MISSING`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action/_test'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const args = body.args === undefined ? {} : body.args;
+      const connection = typeof body.connection === 'string' ? body.connection : undefined;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        const result = await testAction({
+          resolved,
+          actionName,
+          args,
+          connection,
+          confirm: body.confirm === true,
+          user: req.user,
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        logAudit({
+          req,
+          action: 'execute',
+          resource: 'integration',
+          resourceId: id,
+          summary: `action.test: "${actionName}" of integration "${id}" as ${result.connection}${result.confirmed ? ' (confirmed ' + result.sideEffect + ')' : ''}: ${result.status} in ${result.durationMs} ms; args ${auditArgs(args)}`,
+          result: result.status === 'ok' ? 'success' : 'failure'
+        });
+        res.json({ success: true, result });
+      } catch (error) {
+        if (error instanceof ActionTestError) {
+          // A refused test is audited too: an admin tried to run the action.
+          logAudit({
+            req,
+            action: 'execute',
+            resource: 'integration',
+            resourceId: id,
+            summary: `action.test: "${actionName}" of integration "${id}" refused (${error.code}); args ${auditArgs(args)}`,
+            result: 'failure'
+          });
+          return res.status(error.status).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+            details: error.details
+          });
+        }
+        sendIntegrationError(res, error, 'test integration action');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/instructions:
+   *   put:
+   *     summary: Set the installation's own model guidance
+   *     description: |
+   *       `{ instructions }` (`{ en, de }` or a string) replaces the definition's
+   *       instructions (an MCP server's own, or the connector's guidance) in the system
+   *       prompt while the integration is active in a chat. Null or an empty text removes
+   *       it, so the definition's apply again.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               instructions:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *     responses:
+   *       200:
+   *         description: "`{ success, instance }`"
+   *       400:
+   *         description: "`INVALID_INSTRUCTIONS` or an invalid id"
+   *       404:
+   *         description: Installation not found
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/instructions'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const instance = await installedIntegrationService.setInstructions(
+          id,
+          req.body?.instructions ?? null
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
+        });
+        res.json({ success: true, instance });
+      } catch (error) {
+        sendIntegrationError(res, error, 'update integration instructions');
       }
     }
   );
@@ -847,6 +1337,94 @@ export default function registerAdminIntegrationsRoutes(app) {
         });
       } catch (error) {
         await sendMigrationError(res, req, id, error, 'restore installed integration');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/_revert:
+   *   post:
+   *     summary: Revert an installation to a backup the admin picked
+   *     description: |
+   *       Offered in every state, to any backup of the installation listed in
+   *       `migration.backups` (including the ones kept at each migration boundary of a
+   *       multi-step update). Puts back, together and under the installation's lock,
+   *       the definition folder of the backup's version (when it is not the loaded
+   *       one), the installation's entry, the binding keys of its apps and the
+   *       definition's marketplace manifest entry; the files are merged, so unrelated
+   *       changes made since stay. The current state is backed up first (`pre-restore`).
+   *       Other installations of the definition follow a changed folder like after a
+   *       restore. Credentials are never touched.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [backup]
+   *             properties:
+   *               backup:
+   *                 type: string
+   *                 description: A backup id from `migration.backups`
+   *     responses:
+   *       200:
+   *         description: 'Reverted; `backup` names the backup, `logEntry` the log entry (`result: reverted`)'
+   *       400:
+   *         description: "Invalid id, or no backup named (`BACKUP_REQUIRED`)"
+   *       404:
+   *         description: "`NOT_FOUND` or `BACKUP_NOT_FOUND`"
+   *       409:
+   *         description: "`MIGRATION_LOCKED`, `MIGRATION_LOCK_LOST` or `MIGRATION_CONFLICT`"
+   *       422:
+   *         description: "`REVERT_DEFINITION_MISSING` (the backup holds no definition of its version and another version is loaded), `BACKUP_INVALID` or `DEFINITION_MISSING`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/_revert'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const backup = req.body?.backup;
+      if (backup === undefined || backup === null || backup === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'A revert names the backup to go back to',
+          code: 'BACKUP_REQUIRED'
+        });
+      }
+      if (!validateIdForPath(backup, 'backup', res)) return;
+      try {
+        const outcome = await definitionMigrationRunner.revert(id, {
+          backup,
+          by: adminName(req)
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Reverted integration "${id}" to backup ${outcome.backup.id} (v${outcome.backup.representedVersion})`
+        });
+        res.json({
+          success: true,
+          backup: outcome.backup,
+          logEntry: outcome.logEntry,
+          instance: await migratedView(id, req)
+        });
+      } catch (error) {
+        await sendMigrationError(res, req, id, error, 'revert installed integration');
       }
     }
   );

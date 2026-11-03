@@ -239,6 +239,35 @@ function remoteOverridesOf(actions) {
   return overrides;
 }
 
+/** What the builder decides in an override of an MCP tool or A2A skill. */
+const REMOTE_OVERRIDE_FIELDS = ['description', 'sideEffect', 'dataFlow'];
+
+/**
+ * The installation's per-action overrides after a builder save. The action
+ * detail (#2974) writes overrides too (guidance, examples, and for an action
+ * the definition declares also its description, side effect and data flow):
+ * the builder keeps what it does not edit itself, for every action the draft
+ * still has. For an MCP tool or A2A skill the description, side effect and
+ * data flow are the builder's (`remoteOverridesOf`).
+ *
+ * @param {Array<Object>} actions - the draft's actions
+ * @param {boolean} declaresActions - whether the definition lists its actions
+ * @param {Object|null} existingInstance - the stored installation, if any
+ * @returns {Object<string,Object>}
+ */
+function overridesOf(actions, declaresActions, existingInstance) {
+  const stored = existingInstance?.actions?.overrides || {};
+  const decided = declaresActions ? {} : remoteOverridesOf(actions);
+  const overrides = {};
+  for (const { name } of actions) {
+    const kept = Object.hasOwn(stored, name) ? { ...stored[name] } : {};
+    if (!declaresActions) for (const field of REMOTE_OVERRIDE_FIELDS) delete kept[field];
+    const override = { ...kept, ...(Object.hasOwn(decided, name) ? decided[name] : {}) };
+    if (Object.keys(override).length) overrides[name] = override;
+  }
+  return overrides;
+}
+
 /**
  * A builder draft as a definition folder and an installation payload.
  *
@@ -304,7 +333,9 @@ export function draftToPackage(draft, { previous = null, existingInstance = null
   }
   const approval = compact({
     default: draft.approvalDefault,
-    actions: nonEmptyRecord(approvalActions)
+    actions: nonEmptyRecord(approvalActions),
+    // Set on the installation page (#2916); the builder does not edit it.
+    newOrChanged: existingInstance?.approval?.newOrChanged
   });
 
   const values = {};
@@ -325,7 +356,7 @@ export function draftToPackage(draft, { previous = null, existingInstance = null
     actions: {
       enabled: ['*'],
       disabled: draft.actions.filter(a => a.enabled === false).map(a => a.name),
-      overrides: declaresActions ? {} : remoteOverridesOf(draft.actions)
+      overrides: overridesOf(draft.actions, declaresActions, existingInstance)
     },
     approval: Object.keys(approval).length ? approval : undefined,
     timeoutMs: existingInstance?.timeoutMs

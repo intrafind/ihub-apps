@@ -1,10 +1,21 @@
 {
   "id": "com.intrafind/qwant-search",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Model guidance and example prompts for the search action; the integration instructions are now written for the model, because they are added to the system prompt while the engine is active in a chat.",
+        "de": "Modellhinweise und Beispiel-Prompts für die Suchaktion; die Hinweise der Integration richten sich jetzt an das Modell, weil sie dem Systemprompt hinzugefügt werden, solange die Suchmaschine in einem Chat aktiv ist."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-11-01",
@@ -59,11 +70,25 @@
         "de": "Das Web mit Qwant durchsuchen (ohne Schlüssel)."
       },
       "sideEffect": "read",
-      "dataFlow": "external"
+      "dataFlow": "external",
+      "guidance": {
+        "en": "Write the query as a few keywords, in the language of the pages you expect. Add the year for anything that changes over time.",
+        "de": "Formuliere die Anfrage als wenige Stichwörter in der Sprache der erwarteten Seiten. Ergänze die Jahreszahl bei allem, was sich mit der Zeit ändert."
+      },
+      "examples": [
+        {
+          "en": "What changed in the EU AI Act this year?",
+          "de": "Was hat sich dieses Jahr am EU AI Act geändert?"
+        },
+        {
+          "en": "Find the current opening hours of the city library.",
+          "de": "Finde die aktuellen Öffnungszeiten der Stadtbibliothek."
+        }
+      ]
     }
   ],
   "instructions": {
-    "en": "Web search is switched on per app under Apps → Edit → Integrations → Web search; the user turns it on or off in the chat. The app uses this engine when it names it, or on Auto when it is the first engine the user may use.",
-    "de": "Die Websuche wird pro App unter Apps → Bearbeiten → Integrationen → Websuche eingeschaltet; der Benutzer schaltet sie im Chat ein oder aus. Die App nutzt diese Suchmaschine, wenn sie sie nennt, oder bei Auto, wenn sie die erste Suchmaschine ist, die der Benutzer nutzen darf."
+    "en": "Search the web when the question needs current or public information the conversation does not hold. Search in several short queries rather than one long one, read the pages the results point to when a snippet is not enough, and cite every source you use.",
+    "de": "Suche im Web, wenn die Frage aktuelle oder öffentliche Informationen braucht, die das Gespräch nicht enthält. Suche mit mehreren kurzen Anfragen statt einer langen, lies die Seiten der Treffer, wenn ein Ausschnitt nicht reicht, und zitiere jede Quelle, die du verwendest."
   }
 }
