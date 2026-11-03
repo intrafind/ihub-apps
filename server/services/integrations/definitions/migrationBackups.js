@@ -31,8 +31,10 @@ import logger from '../../../utils/logger.js';
  * `representedVersion` is the definition version the copies were written
  * for. `kind` is `pre-migration` (taken before a run), `boundary` (the state
  * between two migrations of one run, kept so a later revert to that version
- * has something to restore), or `pre-restore` (taken before a restore
- * replaced the installation). The manifest is written last: a folder without
+ * has something to restore: for a marketplace definition with the definition
+ * folder of that version, fetched from the registry, and its manifest entry),
+ * or `pre-restore` (taken before a restore or revert replaced the
+ * installation). The manifest is written last: a folder without
  * one is an interrupted backup and is never offered.
  *
  * Paths are built from an instance id that passed the id grammar and a
@@ -99,7 +101,9 @@ export function compactTimestamp(date) {
  * @param {object} input.integrations - the `config/integrations.json` body to keep
  * @param {Array<{ path: string, data: object, bindingKeys: string[] }>} [input.apps]
  * @param {{ data: object, entryKey: string }|null} [input.installations] - the marketplace manifest and the entry of the definition
- * @param {{ folder: string, sourceDir: string, version: string }|null} [input.definition] - a marketplace definition folder to copy
+ * @param {{ folder: string, sourceDir?: string, files?: Record<string, string|object>, version: string }|null} [input.definition]
+ *   - a marketplace definition folder to keep: copied from `sourceDir`, or
+ *   written from a package's `files` (relative path → text or JSON)
  * @returns {Promise<{ id: string, dir: string, manifest: object }>}
  * @throws {Error} on an invalid id or version, or when the copy fails (the partial folder is removed)
  */
@@ -207,13 +211,36 @@ async function copyIntoBackup(dir, { integrations, apps, installations, definiti
       entryKey: installations.entryKey
     });
   }
-  if (definition?.sourceDir) {
+  if (definition?.sourceDir || definition?.files) {
     const relPath = `integration-definitions/${definition.folder}`;
     const target = await backupFilePath(dir, relPath);
-    await fs.cp(definition.sourceDir, target, { recursive: true, errorOnExist: true });
+    if (definition.sourceDir) {
+      await fs.cp(definition.sourceDir, target, { recursive: true, errorOnExist: true });
+    } else {
+      await writePackageFiles(target, definition.files);
+    }
     files.push({ path: relPath, type: 'definition', version: definition.version });
   }
   return files;
+}
+
+/**
+ * Write a definition package (relative path → text or JSON) into a folder,
+ * every path resolved inside it.
+ *
+ * @param {string} target - the folder (created)
+ * @param {Record<string, string|object>} packageFiles
+ */
+async function writePackageFiles(target, packageFiles) {
+  await fs.mkdir(target, { recursive: true });
+  // Sequential on purpose: the first file that cannot be written stops the backup.
+  for (const [relPath, content] of Object.entries(packageFiles || {})) {
+    const file = await resolveAndValidatePath(relPath, target);
+    if (!file || file === target) throw new Error(`Package path escapes its folder: ${relPath}`);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    await fs.writeFile(file, text, 'utf8');
+  }
 }
 
 /** The absolute path of a file inside a backup's `files/`, refused outside it. */
@@ -311,7 +338,9 @@ export function snapshotView(snapshot) {
     representedVersion: manifest.representedVersion,
     createdAt: manifest.createdAt,
     kind: manifest.kind || 'pre-migration',
-    hasDefinition: manifest.files.some(file => file.type === 'definition')
+    hasDefinition: manifest.files.some(file => file.type === 'definition'),
+    createdBy: manifest.createdBy || null,
+    trigger: manifest.trigger || null
   };
 }
 

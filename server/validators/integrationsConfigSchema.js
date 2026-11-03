@@ -136,7 +136,8 @@ export const MIGRATION_LOG_RESULTS = Object.freeze([
   'failed',
   'rolledBack',
   'restored',
-  'adopted'
+  'adopted',
+  'reverted'
 ]);
 
 /** Entries kept in `migrationLog` (the newest last). */

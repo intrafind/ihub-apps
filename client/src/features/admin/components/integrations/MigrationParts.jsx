@@ -9,9 +9,11 @@ import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import Badge from '../../../../shared/components/Badge';
 import {
   MIGRATION_ACTION,
+  backupsOf,
   changeParts,
   defaultBackupOf,
-  migrationLogNewestFirst
+  migrationLogNewestFirst,
+  revertability
 } from './migrationState';
 
 /**
@@ -36,6 +38,7 @@ const RESULT_TONES = {
   rolledBack: 'danger',
   restored: 'info',
   adopted: 'info',
+  reverted: 'info',
   skipped: 'neutral'
 };
 
@@ -119,6 +122,12 @@ export function migrationWarningText(warning, t, appName = id => id) {
             'The app “{{app}}” names the action “{{action}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.',
             { action: warning.action, app, key: warning.key }
           );
+    case 'MODULE_STEP_NOT_PLANNED':
+      return t(
+        'admin.integrations.migration.warnings.moduleNotPlanned',
+        'The migration runs the code module {{module}}; what it changes is known only when it runs and is not counted here.',
+        { module: warning.key }
+      );
     default:
       return warning.message || warning.code || '';
   }
@@ -212,6 +221,8 @@ export function logResultLabel(result, t) {
       return t('admin.integrations.migration.log.results.restored', 'Backup restored');
     case 'adopted':
       return t('admin.integrations.migration.log.results.adopted', 'Version adopted');
+    case 'reverted':
+      return t('admin.integrations.migration.log.results.reverted', 'Reverted');
     case 'skipped':
       return t('admin.integrations.migration.log.results.skipped', 'Skipped');
     default:
@@ -236,6 +247,8 @@ function triggerLabel(trigger, t) {
       return t('admin.integrations.migration.log.triggers.downgrade', 'downgrade');
     case 'adopt':
       return t('admin.integrations.migration.log.triggers.adopt', 'adopt');
+    case 'revert':
+      return t('admin.integrations.migration.log.triggers.revert', 'revert');
     default:
       return trigger || '';
   }
@@ -396,6 +409,8 @@ export function migrationActionLabel(action, t) {
       return t('admin.integrations.migration.actions.restore', 'Restore backup');
     case MIGRATION_ACTION.ADOPT:
       return t('admin.integrations.migration.actions.adopt', 'Adopt current version');
+    case MIGRATION_ACTION.REVERT:
+      return t('admin.integrations.migration.actions.revert', 'Revert to this version');
     default:
       return t('admin.integrations.migration.actions.uninstall', 'Uninstall');
   }
@@ -406,6 +421,7 @@ const ACTION_ICONS = {
   [MIGRATION_ACTION.RERUN]: 'arrow-path',
   [MIGRATION_ACTION.RESTORE]: 'clock',
   [MIGRATION_ACTION.ADOPT]: 'check',
+  [MIGRATION_ACTION.REVERT]: 'clock',
   [MIGRATION_ACTION.UNINSTALL]: 'trash'
 };
 
@@ -488,25 +504,135 @@ export function MigrationActionButtons({
   );
 }
 
+/** A backup as the picker lists it: version, kind and date. */
+function backupOptionText(backup, t, lang) {
+  return t('admin.integrations.migration.backups.option', 'v{{version}} · {{kind}} · {{date}}', {
+    version: backup.representedVersion || '?',
+    kind: backupKindLabel(backup.kind, t),
+    date: formatMigrationDate(backup.createdAt, lang) || '?'
+  });
+}
+
 /**
- * The confirmation of Restore backup and Adopt current version (Uninstall
- * uses the page's own remove dialog): what is replaced, and from where.
+ * The name of a backup's kind.
+ *
+ * @param {string|undefined} kind - `pre-migration`, `boundary`, `pre-restore`
+ * @param {Function} t
+ * @returns {string}
+ */
+export function backupKindLabel(kind, t) {
+  switch (kind) {
+    case 'boundary':
+      return t('admin.integrations.migration.backups.kinds.boundary', 'between two migrations');
+    case 'pre-restore':
+      return t('admin.integrations.migration.backups.kinds.preRestore', 'before a restore');
+    default:
+      return t('admin.integrations.migration.backups.kinds.preMigration', 'before a migration');
+  }
+}
+
+/**
+ * The backup picker of the Restore and Revert confirmation.
  *
  * @param {Object} props
- * @param {{ action: string, instance: Object }|null} props.pending
+ * @param {Object} props.instance
+ * @param {string|null} props.value - the backup picked
+ * @param {(id: string) => void} props.onChange
+ * @param {(backup: Object) => boolean} [props.filter] - which backups to offer (Revert: only those it can go back to)
+ */
+function BackupPicker({ instance, value, onChange, filter = () => true }) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n?.language || 'en';
+  const list = backupsOf(instance).filter(filter);
+  if (list.length < 2 || !onChange) return null;
+  return (
+    <div className="mt-3">
+      <label
+        htmlFor="migration-backup-picker"
+        className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-1"
+      >
+        {t('admin.integrations.migration.backups.pick', 'Backup')}
+      </label>
+      <select
+        id="migration-backup-picker"
+        data-testid="migration-backup-picker"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+      >
+        {list.map(backup => (
+          <option key={backup.id} value={backup.id}>
+            {backupOptionText(backup, t, lang)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * The confirmation of Restore backup, Revert and Adopt current version
+ * (Uninstall uses the page's own remove dialog): what is replaced, and from
+ * where. Restore and Revert offer a picker of the installation's backups
+ * when there is more than one.
+ *
+ * @param {Object} props
+ * @param {{ action: string, instance: Object, backup?: string|null }|null} props.pending
  * @param {() => void} props.onConfirm
  * @param {() => void} props.onCancel
+ * @param {(id: string) => void} [props.onSelectBackup] - the picker changed the backup
  */
-export function MigrationConfirmDialog({ pending, onConfirm, onCancel }) {
+export function MigrationConfirmDialog({ pending, onConfirm, onCancel, onSelectBackup }) {
   const { t, i18n } = useTranslation();
   const lang = i18n?.language || 'en';
   const instance = pending?.instance;
   const label = instance?.label || instance?.id || '';
+  const picked =
+    backupsOf(instance).find(backup => backup.id === pending?.backup) ||
+    (pending?.backup ? { id: pending.backup } : null);
   let title = '';
   let message = null;
   let confirmLabel = '';
-  if (pending?.action === MIGRATION_ACTION.RESTORE) {
-    const backup = defaultBackupOf(instance) || {};
+  if (pending?.action === MIGRATION_ACTION.REVERT) {
+    const backup = picked || {};
+    title = t(
+      'admin.integrations.migration.confirm.revert.title',
+      'Revert {{label}} to v{{version}}?',
+      { label, version: backup.representedVersion || '?' }
+    );
+    confirmLabel = t('admin.integrations.migration.actions.revert', 'Revert to this version');
+    message = (
+      <>
+        <p>
+          {t(
+            'admin.integrations.migration.confirm.revert.message',
+            'The installation’s values, its action policy, the bindings of its apps and its marketplace entry go back to the backup {{backup}} (v{{version}}, taken {{date}}). What changed since then is replaced; iHub backs up the current state first, so you can revert forward again.',
+            {
+              backup: backup.id,
+              version: backup.representedVersion || '?',
+              date: formatMigrationDate(backup.createdAt, lang) || '?'
+            }
+          )}
+        </p>
+        {backup.hasDefinition && (
+          <p className="mt-2">
+            {t(
+              'admin.integrations.migration.confirm.revert.definition',
+              'The definition goes back to v{{version}} too. Other installations of the same definition follow it: each gets its own backup of v{{version}} restored, or needs a review.',
+              { version: backup.representedVersion || '?' }
+            )}
+          </p>
+        )}
+        <BackupPicker
+          instance={instance}
+          value={pending?.backup}
+          onChange={onSelectBackup}
+          filter={candidate => revertability(instance, candidate).ok}
+        />
+      </>
+    );
+  } else if (pending?.action === MIGRATION_ACTION.RESTORE) {
+    const backup = picked || defaultBackupOf(instance) || {};
     title = t(
       'admin.integrations.migration.confirm.restore.title',
       'Restore a backup of {{label}}?',
@@ -537,6 +663,7 @@ export function MigrationConfirmDialog({ pending, onConfirm, onCancel }) {
             )}
           </p>
         )}
+        <BackupPicker instance={instance} value={pending?.backup} onChange={onSelectBackup} />
       </>
     );
   } else if (pending?.action === MIGRATION_ACTION.ADOPT) {
@@ -614,6 +741,12 @@ function successText(outcome, t) {
         label: outcome.label,
         to
       });
+    case 'reverted':
+      return t(
+        'admin.integrations.migration.outcome.reverted',
+        '{{label}} was reverted to the backup {{backup}}; it is at v{{to}} now.',
+        { label: outcome.label, backup: outcome.backup?.id || entry.backup || '', to }
+      );
     default:
       return logResultLabel(outcome.result, t);
   }
@@ -638,6 +771,12 @@ function failureText(outcome, t) {
       return t(
         'admin.integrations.migration.outcome.adoptFailed',
         'The current version could not be adopted for {{label}}.',
+        { label: outcome.label }
+      );
+    case MIGRATION_ACTION.REVERT:
+      return t(
+        'admin.integrations.migration.outcome.revertFailed',
+        '{{label}} could not be reverted; nothing was changed.',
         { label: outcome.label }
       );
     default:

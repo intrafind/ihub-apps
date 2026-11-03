@@ -269,6 +269,35 @@ brings your installations along by itself.
 See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes),
 [Integrations → Migrations](../../integrations.md#migrations) and [Marketplace](../../marketplace.md).
 
+## Integrations: Revert to an Earlier Version, Version Pins and Code Migrations
+
+An integration from the marketplace can now be held on a version range, and an installation can go
+back to any version it was at — also to one in the middle of an update that skipped versions.
+
+- **Revert:** the installation's page has a **Backups** card that lists every backup iHub took —
+  before each migration, at each version an update passed through, before each restore — with the
+  version, the reason and the date. **Revert to this version** puts the definition of that version,
+  the installation's settings and action selection, the bindings of its apps and its marketplace
+  entry back together, after asking. If anything fails on the way, nothing is changed. The current
+  state is backed up first, so you can go forward again the same way. **Restore backup** now lets
+  you pick which backup to restore.
+- **Every version an update passes is kept:** when an update skips versions (1.2.0 → 1.4.0), iHub
+  also downloads the definitions of the versions in between and keeps them with the backup of that
+  version, so 1.3.0 can be restored later even though it was never installed.
+- **Channel and pins per registry:** **Admin → Marketplace → Manage Registries → Edit** has a
+  **Versions** section. The channel is **Stable releases only** (the default) or **All releases,
+  including pre-releases**. A **version pin** keeps one item on a range such as `1.3.x`: install
+  and the **Update** badge then offer only versions inside it, and the item shows **Pinned to
+  1.3.x**. An update never goes back to an older version; revert the installation instead.
+- **Code migrations from trusted registries:** a definition can migrate its installations with a
+  small JavaScript module when renames and defaults are not enough. It runs only for the built-in
+  integrations and for integrations from a registry you trust for code, and only when the file
+  matches the hash the catalog listed; a module never sees the sign-in or credentials of the
+  installation and may change only its settings, action selection and app bindings.
+
+See [Integrations → Migrations](../../integrations.md#migrations) and
+[Marketplace → Versions, channel and pins](../../marketplace.md#versions-channel-and-pins).
+
 ## People Directories Are Installed Integrations
 
 LDAP people directories — the company directory and external ones such as x500.bund.de — are

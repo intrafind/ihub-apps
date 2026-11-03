@@ -2935,7 +2935,19 @@
           "autoRefresh": "Automatische Aktualisierung",
           "hours": "Stunden",
           "trustCode": "Darf Integrationen liefern, die Code auf diesem Server ausführen",
-          "trustCodeHelp": "Nur für einen Herausgeber, dem Sie vertrauen. Eine solche Integration führt ihr Connector-Modul im Serverprozess aus; jede Code-Datei muss im Katalog einen Hash tragen, der bei der Installation geprüft wird."
+          "trustCodeHelp": "Nur für einen Herausgeber, dem Sie vertrauen. Eine solche Integration führt ihr Connector-Modul im Serverprozess aus; jede Code-Datei muss im Katalog einen Hash tragen, der bei der Installation geprüft wird.",
+          "versionPolicy": "Versionen",
+          "channel": "Kanal",
+          "channelStable": "Nur stabile Versionen",
+          "channelAll": "Alle Versionen, auch Vorabversionen",
+          "channelHelp": "Stabil blendet Versionen wie 2.0.0-rc.1 bei der Installation und im Update-Hinweis aus.",
+          "pins": "Versionsfestlegungen",
+          "pinsHelp": "Hält einen Eintrag in einem Versionsbereich, zum Beispiel 1.3.x oder ~1.3.0. Installation und Update-Hinweis bieten nur Versionen innerhalb der Festlegung an.",
+          "pinItem": "Eintrag",
+          "pinRange": "Versionsbereich",
+          "removePin": "Festlegung entfernen",
+          "addPin": "Festlegung hinzufügen",
+          "pinInvalid": "Jede Festlegung braucht einen Eintrag als <Typ>:<Name> (zum Beispiel integration:org.ckan__open-data-portal) und einen Versionsbereich."
         }
       },
       "detail": {
@@ -3004,6 +3016,10 @@
         "actionsDynamicHint": "Der Server listet seine Aktionen, wenn iHub sich mit ihm verbindet; installieren und testen Sie die Integration, um sie zu sehen.",
         "noActions": "Diese Integration gibt keine Aktionen an.",
         "unavailable": "Die Definition konnte nicht aus der Registry gelesen werden, daher werden ihre Eckdaten nicht angezeigt."
+      },
+      "versionPolicy": {
+        "pinned": "Festgelegt auf {{pin}}",
+        "offered": "hier angeboten: v{{version}}"
       }
     },
     "apps": {
@@ -4052,7 +4068,8 @@
           "actionRemoved": "Die Aktion „{{action}}“ wird aus der App „{{app}}“ entfernt (Einbindung {{key}}); die App bietet sie nicht mehr an.",
           "typeBindingAction": "Die App „{{app}}“ nennt die Aktion „{{action}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
           "typeBindingScope": "Die App „{{app}}“ setzt den Bereich „{{scope}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
-          "openApp": "App öffnen"
+          "openApp": "App öffnen",
+          "moduleNotPlanned": "Die Migration führt das Code-Modul {{module}} aus; was es ändert, steht erst fest, wenn es läuft, und ist hier nicht mitgezählt."
         },
         "log": {
           "title": "Migrationsprotokoll",
@@ -4073,7 +4090,8 @@
             "rolledBack": "Zurückgerollt",
             "restored": "Sicherung wiederhergestellt",
             "adopted": "Version übernommen",
-            "skipped": "Übersprungen"
+            "skipped": "Übersprungen",
+            "reverted": "Zurückgesetzt"
           },
           "triggers": {
             "manual": "von Hand gestartet",
@@ -4082,7 +4100,8 @@
             "recovery": "Wiederherstellung beim Start",
             "restore": "Wiederherstellung",
             "downgrade": "Downgrade",
-            "adopt": "Übernahme"
+            "adopt": "Übernahme",
+            "revert": "Zurücksetzen"
           }
         },
         "actions": {
@@ -4091,7 +4110,8 @@
           "restore": "Sicherung wiederherstellen",
           "adopt": "Aktuelle Version übernehmen",
           "uninstall": "Deinstallieren",
-          "forInstallation": "{{action}}: {{label}}"
+          "forInstallation": "{{action}}: {{label}}",
+          "revert": "Auf diese Version zurücksetzen"
         },
         "confirm": {
           "restore": {
@@ -4103,6 +4123,11 @@
             "title": "v{{version}} für {{label}} übernehmen?",
             "message": "Sie bestätigen, dass die gespeicherten Werte bereits zu {{definition}} v{{version}} passen. iHub prüft sie wie das Ergebnis einer Migration und vermerkt die Version erst dann; kein Wert wird geändert. Passen Werte nicht, werden sie aufgelistet und nichts wird vermerkt.",
             "confirm": "Version übernehmen"
+          },
+          "revert": {
+            "title": "{{label}} auf v{{version}} zurücksetzen?",
+            "message": "Die Werte der Installation, ihre Aktionsrichtlinie, die Bindungen ihrer Apps und ihr Marketplace-Eintrag werden auf die Sicherung {{backup}} (v{{version}}, erstellt {{date}}) zurückgesetzt. Was sich seitdem geändert hat, wird ersetzt; iHub sichert zuerst den aktuellen Stand, sodass Sie wieder vorwärts zurücksetzen können.",
+            "definition": "Auch die Definition geht auf v{{version}} zurück. Andere Installationen derselben Definition folgen ihr: Für jede wird ihre eigene Sicherung von v{{version}} wiederhergestellt, oder sie muss geprüft werden."
           }
         },
         "outcome": {
@@ -4116,7 +4141,9 @@
           "migrateFailed": "Die Migration von {{label}} ist fehlgeschlagen.",
           "retry": "Es wurde nichts geschrieben. Versuchen Sie es gleich noch einmal.",
           "open": "{{label}} öffnen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "reverted": "{{label}} wurde auf die Sicherung {{backup}} zurückgesetzt und steht jetzt auf v{{to}}.",
+          "revertFailed": "{{label}} konnte nicht zurückgesetzt werden; es wurde nichts geändert."
         },
         "panel": {
           "title": "Definitionsmigration",
@@ -4137,7 +4164,23 @@
         },
         "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
         "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
-        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
+        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion.",
+        "backups": {
+          "title": "Sicherungen",
+          "help": "iHub erstellt vor jeder Migration und bei jeder Version, die ein mehrstufiges Update durchläuft, eine Sicherung. Beim Zurücksetzen werden die Definition dieser Version, die Werte und die Aktionsrichtlinie der Installation, die Bindungen ihrer Apps und ihr Marketplace-Eintrag gemeinsam wiederhergestellt.",
+          "withDefinition": "mit Definition",
+          "loaded": "geladene Version",
+          "taken": "Erstellt {{date}} von {{by}}",
+          "definitionMissing": "Solange v{{loaded}} geladen ist, kann nicht auf diese Sicherung zurückgesetzt werden: Sie enthält die Definition von v{{version}} nicht.",
+          "revertTo": "Auf v{{version}} zurücksetzen ({{date}})",
+          "pick": "Sicherung",
+          "option": "v{{version}} · {{kind}} · {{date}}",
+          "kinds": {
+            "preMigration": "vor einer Migration",
+            "boundary": "zwischen zwei Migrationen",
+            "preRestore": "vor einer Wiederherstellung"
+          }
+        }
       },
       "testChat": {
         "title": "Im Chat testen",

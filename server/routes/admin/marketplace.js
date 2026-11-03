@@ -31,6 +31,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { dirNameToDefinitionId } from '../../validators/integrationDefinitionSchema.js';
 import { previewDefinitionUpdate } from '../../services/integrations/definitions/migrationPreview.js';
+import { isUpdate, offeredVersion } from '../../services/marketplace/versionPolicy.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
 
@@ -53,6 +54,35 @@ const MIGRATION_CONFLICT_CODES = new Set([
   'MIGRATION_LOCK_LOST',
   'MIGRATION_CONFLICT'
 ]);
+
+/**
+ * Codes of a version the registry does not offer (409): not listed, outside
+ * the registry's channel or the item's pin, no version left to offer, or an
+ * update that is not newer than the installed version.
+ */
+const VERSION_POLICY_CODES = new Set([
+  'VERSION_NOT_LISTED',
+  'VERSION_NOT_OFFERED',
+  'NO_VERSION_OFFERED',
+  'VERSION_NOT_NEWER',
+  'VERSION_DESCRIPTOR_INVALID'
+]);
+
+/** A version the client may name on install or update: up to 64 characters of a version. */
+const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/;
+
+/**
+ * The optional `version` of an install or update body: undefined when absent,
+ * false when it is not a version string.
+ *
+ * @param {object|undefined} body
+ * @returns {string|undefined|false}
+ */
+function versionFromBody(body) {
+  const version = body?.version;
+  if (version === undefined || version === null || version === '') return undefined;
+  return typeof version === 'string' && VERSION_PATTERN.test(version) ? version : false;
+}
 
 /**
  * What updating an integration item would do to the installations of its
@@ -375,7 +405,12 @@ export default function registerAdminMarketplaceRoutes(app) {
         const item = await registryService.getItemDetail(registryId, type, name);
         if (type === 'integration') {
           try {
-            item.migrationPreview = await integrationUpdatePreview(name, item);
+            // Planned to the version the update installs: the offered one
+            // (channel and pin applied), which may be older than the current.
+            item.migrationPreview = await integrationUpdatePreview(name, {
+              ...item,
+              version: item.offeredVersion || item.version
+            });
           } catch (error) {
             logger.warn('Could not plan the migrations of an integration update', {
               component: COMPONENT,
@@ -445,8 +480,11 @@ export default function registerAdminMarketplaceRoutes(app) {
         const installedBy = req.user?.email || req.user?.username || 'admin';
         // Replacing an item that already exists here must be asked for explicitly
         const replaceLocal = req.body?.replaceLocal === true;
+        const version = versionFromBody(req.body);
+        if (version === false) return sendError(res, 400, 'Invalid version', 'INVALID_VERSION');
         const manifest = await contentInstaller.install(registryId, type, name, installedBy, {
-          replaceLocal
+          replaceLocal,
+          version
         });
         logAudit({
           req,
@@ -459,6 +497,9 @@ export default function registerAdminMarketplaceRoutes(app) {
       } catch (error) {
         logger.error('Error installing item', { component: COMPONENT, error: error.message });
         if (error.code === 'LOCAL_CONTENT_EXISTS') {
+          return sendError(res, 409, error.message, error.code);
+        }
+        if (VERSION_POLICY_CODES.has(error.code)) {
           return sendError(res, 409, error.message, error.code);
         }
         if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
@@ -494,7 +535,9 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { type, name } = req.params;
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const updatedBy = req.user?.email || req.user?.username || 'admin';
-        const manifest = await contentInstaller.update(type, name, updatedBy);
+        const version = versionFromBody(req.body);
+        if (version === false) return sendError(res, 400, 'Invalid version', 'INVALID_VERSION');
+        const manifest = await contentInstaller.update(type, name, updatedBy, { version });
         logAudit({
           req,
           action: 'update',
@@ -508,7 +551,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
           return sendError(res, 409, error.message, error.code);
         }
-        if (MIGRATION_CONFLICT_CODES.has(error.code)) {
+        if (MIGRATION_CONFLICT_CODES.has(error.code) || VERSION_POLICY_CODES.has(error.code)) {
           return sendError(res, 409, error.message, error.code);
         }
         if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
@@ -611,9 +654,11 @@ export default function registerAdminMarketplaceRoutes(app) {
   /**
    * GET /api/admin/marketplace/updates
    * Check all installed items for available updates by comparing their recorded
-   * version against the version advertised in the latest cached catalog.
+   * version against the version their registry offers in the latest cached
+   * catalog: the newest listed version that passes the registry's channel and
+   * the item's pin (`versionPolicy.js`).
    *
-   * Returns an array of items where the catalog version differs from the installed version.
+   * Returns an array of items whose offered version is newer than the installed one.
    */
   app.get(
     buildServerPath('/api/admin/marketplace/updates'),
@@ -624,6 +669,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         const cc = (await import('../../configCache.js')).default;
         const { data: installationsData } = cc.getInstallations();
         const installations = installationsData?.installations || {};
+        const registries = cc.getRegistries()?.data?.registries || [];
 
         const updates = [];
 
@@ -636,12 +682,14 @@ export default function registerAdminMarketplaceRoutes(app) {
           );
           if (!item) continue;
 
-          // Only flag as updateable when both versions are known and differ
-          if (item.version && manifest.version && item.version !== manifest.version) {
+          // Only flag as updateable when the offered version is newer than the installed one
+          const registry = registries.find(r => r.id === manifest.registryId) || null;
+          const offered = offeredVersion(item, registry);
+          if (isUpdate(offered, manifest.version)) {
             updates.push({
               key,
               ...manifest,
-              latestVersion: item.version,
+              latestVersion: offered,
               updateAvailable: true
             });
           }

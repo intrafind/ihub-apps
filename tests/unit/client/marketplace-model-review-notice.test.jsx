@@ -125,7 +125,14 @@ describe('marketplace detail panel', () => {
       within(screen.getByTestId('update-dialog')).getByRole('button', { name: 'Update' })
     );
     await waitFor(() =>
-      expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith('official', 'model', 'model-item')
+      expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith(
+        'official',
+        'model',
+        'model-item',
+        {
+          version: undefined
+        }
+      )
     );
     expect(mockApi.installMarketplaceItem).not.toHaveBeenCalled();
   });
