@@ -29,6 +29,7 @@ import {
 } from '../services/chat/chatContextTools.js';
 import { getToolsForApp } from '../toolLoader.js';
 import { extractToolSources } from '../services/sources/index.js';
+import { knowledgeSourceSeam } from '../services/loop/seams/knowledgeSourceSeam.js';
 import RequestBuilder from '../services/chat/RequestBuilder.js';
 import { renderUserMessage } from '../../shared/promptContext.js';
 
@@ -244,6 +245,14 @@ describe('earlier sources', () => {
     assert.equal(frame.items[0].provider, 'web');
     assert.equal(frame.items[0].private, false);
     assert.equal(frame.items[0].url, WEB_SOURCE.url);
+    // An answer that rests on it is badged as web search, as when it was found.
+    const badges = [];
+    knowledgeSourceSeam.postTool(
+      { addKnowledgeSource: source => badges.push(source) },
+      { toolId: 'chat_sources_read' },
+      { sources: frame }
+    );
+    assert.deepEqual(badges, ['websearch']);
   });
 
   it('answers an unknown id with a pointer to the list', async () => {

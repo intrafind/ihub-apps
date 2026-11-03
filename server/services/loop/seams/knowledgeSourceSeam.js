@@ -60,9 +60,48 @@ export function classifyToolKnowledgeSource(toolId, toolDef) {
   return classifyKnowledgeSource(toolId);
 }
 
+/** The tool that reads a source an earlier answer of the chat found (`tools/chatSources.js`). */
+const RECALL_TOOL_ID = 'chat_sources_read';
+
+/**
+ * The badge source of one stored source, by the provider it was found
+ * with: a page found on the web is web search however many turns ago it
+ * was found. `web` covers the providers' own search (grounding) too; an
+ * iAssistant document is an `ifinder` source.
+ * @param {string} provider
+ * @returns {'websearch'|'ifinder'|'sources'|'integration'}
+ */
+export function classifySourceProvider(provider) {
+  const id = String(provider || '');
+  if (id === 'web') return 'websearch';
+  if (id === 'ifinder') return 'ifinder';
+  if (id === 'project') return 'sources';
+  if (id.startsWith('mcp:')) return 'integration';
+  // Any other provider is the id of the tool that found it.
+  return classifyKnowledgeSource(id) || 'integration';
+}
+
+/**
+ * The badge sources of a recall: the providers the recalled sources were
+ * found with. Listing earlier sources reads no content, so only a read counts.
+ * @param {Object} outcome - The tool call's outcome (`sources` frame)
+ * @returns {string[]}
+ */
+function recalledKnowledgeSources(outcome) {
+  if (outcome.error) return [];
+  const items = Array.isArray(outcome.sources?.items) ? outcome.sources.items : [];
+  return [...new Set(items.map(item => classifySourceProvider(item.provider)))];
+}
+
 export const knowledgeSourceSeam = {
   name: 'knowledge-sources',
   postTool(ctx, info, outcome) {
+    if (info.toolId === RECALL_TOOL_ID) {
+      const recalled = recalledKnowledgeSources(outcome);
+      for (const source of recalled) ctx.addKnowledgeSource(source);
+      if (recalled.length) outcome.knowledgeSource = recalled[0];
+      return;
+    }
     const source = classifyToolKnowledgeSource(info.toolId, info.toolDef);
     if (!source) return;
     // A connected system that returned nothing but an error informed nothing.

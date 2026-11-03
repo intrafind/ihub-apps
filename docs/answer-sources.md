@@ -70,7 +70,8 @@ the answer first cites them.
 Each stored answer keeps its sources (`sources` on the message), but they do not go back to
 the model with the history. On a later turn the model looks them up with `chat_sources_list` and
 `chat_sources_read`. A source read that way is reported again with its stored provider and
-privacy, so the new answer can cite it (see
+privacy, so the new answer can cite it, and the answer badge counts it as the kind of source it
+was found as (see
 [What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model)).
 
 ### Integration scopes

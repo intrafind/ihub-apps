@@ -404,7 +404,8 @@ every turn.
 
 - **Sources:** "what did the second source say?" or "open that article again" works. The assistant
   reads the stored title, link, snippet and passages of a source an earlier answer found, and can
-  cite it again with a badge. For more of a web page, it reads the page again.
+  cite it again with a badge. For more of a web page, it reads the page again. The answer badge
+  shows where the source came from: an answer built on a web page found earlier says "web search".
 - **Uploaded files:** files from earlier turns can be read again in full, also those that were
   left out of the prompt to save space.
 - **Created files:** documents, spreadsheets, presentations, code and web pages the chat created
