@@ -326,3 +326,120 @@ describe('usageLimits input from the admin editors', () => {
     assert.equal(parseUsageLimitsInput({ allModels: { day: 'x' } }).ok, false);
   });
 });
+
+describe('review follow-ups', () => {
+  const dirs = [];
+  after(async () => {
+    for (const dir of dirs) await fs.rm(dir, { recursive: true, force: true });
+  });
+  async function ledger() {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'quota-ledger-'));
+    dirs.push(dir);
+    return createQuotaLedger({ filePath: path.join(dir, 'quota.json'), flushIntervalMs: 60000 });
+  }
+
+  it('keeps counting after the reset time moves earlier (smaller window key)', async () => {
+    const l = await ledger();
+    const at6 = currentWindows(
+      { timezone: 'UTC', dailyAt: '06:00' },
+      Date.parse('2026-11-03T10:00:00Z')
+    );
+    const at0 = currentWindows(
+      { timezone: 'UTC', dailyAt: '00:00' },
+      Date.parse('2026-11-03T10:05:00Z')
+    );
+    assert.ok(at0.day.key < at6.day.key);
+    l.record('u1', {
+      modelId: 'a',
+      tokens: 30,
+      windows: at6,
+      now: Date.parse('2026-11-03T10:00:00Z')
+    });
+    await l.flush();
+    l.record('u1', {
+      modelId: 'a',
+      tokens: 5,
+      windows: at0,
+      now: Date.parse('2026-11-03T10:05:00Z')
+    });
+    await l.flush();
+    assert.equal((await l.getUser('u1', at0)).models.a.day, 5);
+    l.record('u1', {
+      modelId: 'a',
+      tokens: 7,
+      windows: at0,
+      now: Date.parse('2026-11-03T10:06:00Z')
+    });
+    await l.flush();
+    assert.equal((await l.getUser('u1', at0)).models.a.day, 12);
+  });
+
+  it('drops a stale delta from before the reset that is flushed after new counts', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'quota-ledger-'));
+    dirs.push(dir);
+    const filePath = path.join(dir, 'quota.json');
+    const workerA = createQuotaLedger({ filePath, flushIntervalMs: 60000 });
+    const workerB = createQuotaLedger({ filePath, flushIntervalMs: 60000 });
+    const yesterday = currentWindows({ timezone: 'UTC' }, Date.parse('2026-11-02T23:59:00Z'));
+    const today = currentWindows({ timezone: 'UTC' }, Date.parse('2026-11-03T00:01:00Z'));
+    workerA.record('u1', {
+      modelId: 'a',
+      tokens: 99,
+      windows: yesterday,
+      now: Date.parse('2026-11-02T23:59:00Z')
+    });
+    workerB.record('u1', {
+      modelId: 'a',
+      tokens: 4,
+      windows: today,
+      now: Date.parse('2026-11-03T00:01:00Z')
+    });
+    await workerB.flush();
+    await workerA.flush();
+    assert.equal((await workerB.getUser('u1', today)).models.a.day, 4);
+  });
+});
+
+describe('file storage limit of 0', () => {
+  it('turns uploads off instead of lifting the cap', async () => {
+    const { withUserFileLimit } = await import('../services/quota/quotaService.js');
+    const configCache = (await import('../configCache.js')).default;
+    const original = configCache.getGroups;
+    configCache.getGroups = () => ({
+      data: { groups: { blocked: { usageLimits: { fileStorageBytes: 0 } } } }
+    });
+    try {
+      const policy = { enabled: true, maxUserBytes: 1000, quotas: { maxUserBytes: 1000 } };
+      const out = withUserFileLimit(policy, { id: 'u-blocked', groups: ['blocked'] });
+      assert.equal(out.enabled, false);
+      const free = withUserFileLimit(policy, { id: 'u-free', groups: [] });
+      assert.equal(free.enabled, true);
+    } finally {
+      configCache.getGroups = original;
+    }
+  });
+});
+
+describe('a failing limit check', () => {
+  it('refuses the call (fails closed)', async () => {
+    const { assertWithinQuota } = await import('../services/quota/quotaService.js');
+    const configCache = (await import('../configCache.js')).default;
+    const original = configCache.getGroups;
+    configCache.getGroups = () => {
+      throw new Error('groups.json unreadable');
+    };
+    try {
+      await assert.rejects(
+        assertWithinQuota({ id: 'u1', groups: ['users'] }, { id: 'm', usageLimits: { day: 5 } }),
+        err => {
+          assert.equal(err.code, LLM_ERROR_CODES.QUOTA_EXCEEDED);
+          assert.equal(err.providerCode, 'USAGE_LIMIT_CHECK_FAILED');
+          assert.equal(err.details.scope, 'check');
+          return true;
+        }
+      );
+    } finally {
+      configCache.getGroups = original;
+    }
+  });
+});

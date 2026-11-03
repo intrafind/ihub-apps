@@ -16,6 +16,15 @@
 import { isLLMError, LLM_ERROR_CODES } from '../loop/contracts/errors.js';
 import { isDnsFailure } from '../../utils/dnsGuard.js';
 
+/** A number in the user's locale; plain digits for a locale Intl rejects. */
+function formatNumber(value, language) {
+  try {
+    return Number(value).toLocaleString(language || 'en');
+  } catch {
+    return String(value);
+  }
+}
+
 async function translate(getLocalizedError, key, params, language) {
   if (typeof getLocalizedError !== 'function') return null;
   try {
@@ -88,7 +97,7 @@ export async function describeChatError(
       params = { timeout: timeoutSeconds };
     }
     message = (await t(key, params)) || message;
-  } else if (llm?.code === LLM_ERROR_CODES.QUOTA_EXCEEDED && details) {
+  } else if (llm?.code === LLM_ERROR_CODES.QUOTA_EXCEEDED && details && details.scope !== 'check') {
     // A used-up usage limit: which budget, and when it resets, in the
     // user's language and the reset schedule's time zone.
     const windowKey =
@@ -111,7 +120,7 @@ export async function describeChatError(
       (await t(details.scope === 'model' ? 'quotaExceededModel' : 'quotaExceededAllModels', {
         window: (await t(windowKey, {})) || details.window,
         model: details.modelName || details.modelId,
-        limit: Number(details.limit).toLocaleString(language || 'en'),
+        limit: formatNumber(details.limit, language),
         resetAt
       })) || message;
   } else if (!llm && err?.code) {

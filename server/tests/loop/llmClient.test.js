@@ -696,3 +696,59 @@ test('execute — a provider without usage is counted by estimate', async () => 
   assert.equal(recorded[0].usage.promptTokens, 20);
   assert.equal(recorded[0].usage.completionTokens, 10);
 });
+
+test('execute — a call that fails after the answer started is counted by estimate', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    transport: async () => {
+      const encoder = new TextEncoder();
+      const chunk = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'x'.repeat(40) } }] })}\n\n`;
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(chunk));
+        },
+        // Fails on the read after the first chunk (error() in start() would
+        // discard the queued chunk).
+        pull(controller) {
+          if (this.sent) {
+            controller.error(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+          }
+          this.sent = true;
+        }
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+  });
+  await assert.rejects(
+    client.complete({
+      modelId: 'oa',
+      messages: [{ role: 'user', content: 'y'.repeat(80) }],
+      options: { user: { id: 'u1' } },
+      telemetry: { autoRun: false }
+    })
+  );
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].usage.source, 'estimate');
+  assert.equal(recorded[0].usage.completionTokens, 10);
+});
+
+test('execute — a call that fails before any answer is not counted', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    maxRetries: 0,
+    transport: async () => {
+      throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+    }
+  });
+  await assert.rejects(
+    client.complete({
+      modelId: 'oa',
+      messages,
+      options: { user: { id: 'u1' } },
+      telemetry: { autoRun: false }
+    })
+  );
+  assert.equal(recorded.length, 0);
+});

@@ -282,6 +282,26 @@ export { applyProviderLink };
  */
 const isChatModel = model => (model.modelType || 'chat') === 'chat';
 
+/**
+ * Validate a model's per-user token budget (`usageLimits: { day, week, month }`)
+ * in place: windows left empty or set to -1 are unlimited and are dropped, and
+ * an empty budget is removed. Used by both create and update.
+ *
+ * @param {Object} model
+ * @returns {string|null} An error message, or null when valid
+ */
+function normalizeModelUsageLimits(model) {
+  if (model.usageLimits === undefined) return null;
+  const parsed = usageLimitBucketSchema.safeParse(model.usageLimits || {});
+  if (!parsed.success) return 'Invalid usageLimits';
+  const limits = Object.fromEntries(
+    Object.entries(parsed.data).filter(([, v]) => v !== undefined && v !== null && v >= 0)
+  );
+  if (Object.keys(limits).length) model.usageLimits = limits;
+  else delete model.usageLimits;
+  return null;
+}
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -610,16 +630,8 @@ export default function registerAdminModelsRoutes(app) {
       delete updatedModel.apiKeySet;
       delete updatedModel.apiKeyMasked;
 
-      // Per-user token budget of the model: windows left empty are unlimited.
-      if (updatedModel.usageLimits !== undefined) {
-        const parsed = usageLimitBucketSchema.safeParse(updatedModel.usageLimits || {});
-        if (!parsed.success) return sendBadRequest(res, 'Invalid usageLimits');
-        const limits = Object.fromEntries(
-          Object.entries(parsed.data).filter(([, v]) => v !== undefined && v !== null && v >= 0)
-        );
-        if (Object.keys(limits).length) updatedModel.usageLimits = limits;
-        else delete updatedModel.usageLimits;
-      }
+      const limitsError = normalizeModelUsageLimits(updatedModel);
+      if (limitsError) return sendBadRequest(res, limitsError);
 
       if (!isChatModel(updatedModel)) updatedModel.default = false;
       if (updatedModel.default === true) {
@@ -677,6 +689,9 @@ export default function registerAdminModelsRoutes(app) {
       if (!validateIdForPath(newModel.id, 'model', res)) {
         return;
       }
+      const limitsError = normalizeModelUsageLimits(newModel);
+      if (limitsError) return sendBadRequest(res, limitsError);
+
       const providerLinkError = applyProviderLink(newModel);
       if (providerLinkError) {
         return sendBadRequest(res, providerLinkError);

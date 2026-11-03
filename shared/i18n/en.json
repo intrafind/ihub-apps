@@ -4486,7 +4486,7 @@
         "platformBudget": "Budget across all models (every user)",
         "platformBudgetHint": "The most tokens one user may use across all models. Leave empty for no limit. Per-model budgets are set on each model; groups and users can only lower them.",
         "schedule": "Reset schedule",
-        "scheduleHint": "All token budgets reset at the same moments for everyone. Monthly budgets reset on the 1st.",
+        "scheduleHint": "All token budgets reset at the same moments for everyone. Monthly budgets reset on the 1st. Saving a new schedule starts new windows right away: usage already counted in the current day, week and month starts again from zero.",
         "dailyAt": "Daily at",
         "weeklyOn": "Weekly on",
         "weeklyAt": "Weekly at",

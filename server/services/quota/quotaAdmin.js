@@ -155,6 +155,8 @@ function summarize(row) {
     worst,
     buckets: row.buckets,
     hasPersonalLimits: Boolean(row.record?.usageLimits),
+    // Only users in users.json have an editor (and can hold personal limits).
+    stored: Boolean(row.record),
     fileLimit: Number.isFinite(row.limits.fileStorageBytes.limit)
       ? row.limits.fileStorageBytes.limit
       : null

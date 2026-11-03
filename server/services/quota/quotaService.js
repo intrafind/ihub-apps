@@ -122,22 +122,23 @@ export function getUserLimits(user, { models, users } = {}) {
 }
 
 /**
- * The per-user file storage limit in bytes (0 = unlimited, as in
- * `uploads.quotas`).
+ * The user's file storage limit in bytes: `null` when unlimited, `0` when an
+ * admin blocked uploads for them (a group or user `fileStorageBytes: 0`).
  *
  * @param {Object} user
- * @returns {number}
+ * @returns {number|null}
  */
 export function getUserFileStorageLimit(user) {
   try {
     const { limit } = getUserLimits(user, { models: [] }).fileStorageBytes;
-    return Number.isFinite(limit) ? limit : 0;
+    return Number.isFinite(limit) ? limit : null;
   } catch (error) {
     logger.warn('Could not resolve file storage limit', {
       component: COMPONENT,
       error: error.message
     });
-    return chatFilePolicy().quotas.maxUserBytes;
+    const fallback = chatFilePolicy().quotas.maxUserBytes;
+    return fallback > 0 ? fallback : null;
   }
 }
 
@@ -145,12 +146,20 @@ export function getUserFileStorageLimit(user) {
  * A chat-file policy with the user's own storage limit in place of the
  * platform default.
  *
+ * `uploads.quotas.maxUserBytes` reads 0 as "no limit", so a limit of 0 —
+ * uploads blocked for this user — cannot be passed on as a byte count (a cap
+ * of a byte or so would make the quota check evict the user's stored
+ * originals to make room). It turns uploads off instead, which every upload
+ * route already answers with "uploads disabled".
+ *
  * @param {Object} policy - `chatFilePolicy()`
  * @param {Object} user
  */
 export function withUserFileLimit(policy, user) {
   if (!policy || !user) return policy;
-  const maxUserBytes = getUserFileStorageLimit(user);
+  const limit = getUserFileStorageLimit(user);
+  if (limit === 0) return { ...policy, enabled: false, uploadsBlockedForUser: true };
+  const maxUserBytes = limit ?? 0;
   return {
     ...policy,
     maxUserBytes,
@@ -291,13 +300,23 @@ export async function assertWithinQuota(user, model) {
   try {
     exceeded = await findExceededBucket(user, model);
   } catch (error) {
-    // A broken limit lookup must not take every model call down with it.
-    logger.error('Usage limit check failed; allowing the call', {
+    // Fails closed, like every permission lookup: a limit that cannot be
+    // checked is not waived. (An unreadable ledger file is not an error here
+    // — it reads as no usage — so this is a config or code fault.)
+    logger.error('Usage limit check failed; refusing the call', {
       component: COMPONENT,
       modelId: model?.id,
       error
     });
-    return;
+    throw new LLMError(
+      'Usage limits could not be checked. Please try again or contact your administrator.',
+      {
+        code: LLM_ERROR_CODES.QUOTA_EXCEEDED,
+        providerCode: 'USAGE_LIMIT_CHECK_FAILED',
+        modelId: model?.id ?? null,
+        details: { scope: 'check', modelId: model?.id ?? null }
+      }
+    );
   }
   if (exceeded) throw quotaExceededError(exceeded);
 }

@@ -72,7 +72,7 @@ Every budget resets on a fixed calendar boundary that is the same for everyone. 
 - **Weekly** budgets reset on `weeklyOn` at `weeklyAt`.
 - **Monthly** budgets reset on the **1st of the month** at `monthlyAt`.
 
-Times are wall-clock times in `timezone`, an IANA name. When it is empty, the server's time zone is used. A reset at 00:00 stays at 00:00 across daylight-saving changes. Change the schedule under **Usage Reports → Limits & quotas → Reset schedule**, which also shows the next reset times. A change takes effect at the next boundary.
+Times are wall-clock times in `timezone`, an IANA name. When it is empty, the server's time zone is used. A reset at 00:00 stays at 00:00 across daylight-saving changes. Change the schedule under **Usage Reports → Limits & quotas → Reset schedule**, which also shows the next reset times. A new schedule applies at once: the current day, week and month start over, so usage already counted in them starts again from zero.
 
 ## Enforcement
 
@@ -81,10 +81,12 @@ Every model call goes through one place, the LLM client. That covers chat, agent
 - If a budget is used up, the call is refused with code `QUOTA_EXCEEDED`.
   - The chat shows a localized message naming the model, the budget and when it resets.
   - The Inference API answers `429` with `details` holding `{ scope, modelId, window, limit, used, resetAt }`.
-- What a call used is counted when the call ends. The call that crosses a limit still finishes, and the next one is refused, so a budget can be overshot by up to one answer.
+- What a call used is counted when the call ends, and also when it fails or is stopped after the answer started (by estimate when the provider had not yet reported usage).
+- Calls that are already running when a budget runs out still finish, and so do calls that passed the check together, such as parallel agent steps, workflow nodes or API requests. Cluster workers share their counts within a few seconds. A budget can therefore be exceeded by the calls in flight at that moment.
+- If the limit check itself fails (for example, an unreadable groups or users configuration), the call is refused rather than let through, with the message "Usage limits could not be checked".
 - A multi-step agent run stops at the next model call once the budget is used up.
 
-Calls without a user, such as system work, are neither checked nor counted. Guests are counted per guest cookie and get the limits of the anonymous groups.
+Calls without a user, such as system work, are neither checked nor counted. A file storage limit of `0` on a group or user turns uploads off for those users. Guests are counted per guest cookie and get the limits of the anonymous groups.
 
 ### File storage
 

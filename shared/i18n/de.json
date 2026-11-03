@@ -4785,7 +4785,7 @@
         "platformBudget": "Kontingent über alle Modelle (je Benutzer)",
         "platformBudgetHint": "Die meisten Tokens, die ein Benutzer über alle Modelle zusammen verbrauchen darf. Leer lassen für kein Limit. Kontingente je Modell werden am Modell festgelegt; Gruppen und Benutzer können sie nur senken.",
         "schedule": "Zurücksetzung",
-        "scheduleHint": "Alle Token-Kontingente werden für alle zum selben Zeitpunkt zurückgesetzt. Monatliche Kontingente am 1. des Monats.",
+        "scheduleHint": "Alle Token-Kontingente werden für alle zum selben Zeitpunkt zurückgesetzt. Monatliche Kontingente am 1. des Monats. Ein neuer Zeitplan gilt sofort: die bereits gezählte Nutzung des aktuellen Tages, der Woche und des Monats beginnt wieder bei null.",
         "dailyAt": "Täglich um",
         "weeklyOn": "Wöchentlich am",
         "weeklyAt": "Wöchentlich um",

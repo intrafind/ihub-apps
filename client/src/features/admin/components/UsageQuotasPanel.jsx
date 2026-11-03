@@ -14,6 +14,7 @@ import {
   resetUsageLimitUser,
   saveUsageLimitSettings
 } from '../../../api/usageLimitsAdminApi';
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 import { formatBytes } from '../utils/systemResourcesFormat';
 import {
   formatResetMoment,
@@ -121,7 +122,9 @@ function SettingsCard() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error?.message || t('admin.usage.limits.saveFailed', 'Settings could not be saved')
+        text: error?.response
+          ? getAdminApiErrorMessage(error)
+          : t('admin.usage.limits.saveFailed', 'Settings could not be saved')
       });
     } finally {
       setSaving(false);
@@ -177,7 +180,7 @@ function SettingsCard() {
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {t(
               'admin.usage.limits.scheduleHint',
-              'All token budgets reset at the same moments for everyone. Monthly budgets reset on the 1st.'
+              'All token budgets reset at the same moments for everyone. Monthly budgets reset on the 1st. Saving a new schedule starts new windows right away: usage already counted in the current day, week and month starts again from zero.'
             )}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -282,7 +285,11 @@ function UsersView({ models }) {
       setData(await fetchUsageLimitUsers({ ...query, pageSize: 25 }));
       setError(null);
     } catch (e) {
-      setError(e?.message || t('admin.usage.limits.loadFailed', 'Could not load usage'));
+      setError(
+        e?.response
+          ? getAdminApiErrorMessage(e)
+          : t('admin.usage.limits.loadFailed', 'Could not load usage')
+      );
     } finally {
       setLoading(false);
     }
@@ -306,7 +313,11 @@ function UsersView({ models }) {
       await resetUsageLimitUser(target.userKey);
       await load();
     } catch (e) {
-      setError(e?.message || t('admin.usage.limits.resetFailed', 'Reset failed'));
+      setError(
+        e?.response
+          ? getAdminApiErrorMessage(e)
+          : t('admin.usage.limits.resetFailed', 'Reset failed')
+      );
     }
   };
 
@@ -470,7 +481,7 @@ function UsersView({ models }) {
                         </p>
                       )}
                       <div className="mt-4 flex flex-wrap gap-3">
-                        {!user.guest && (
+                        {user.stored && (
                           <Link
                             to={`/admin/users/${encodeURIComponent(user.userKey)}`}
                             className={BUTTON}

@@ -44,15 +44,30 @@ function createDefault() {
   return { version: 1, users: {} };
 }
 
-/** Add counter `delta` (`{key, tokens}`) to `target[name]`; the later window wins. */
+/**
+ * Add counter `delta` (`{key, tokens, at}`) to `target[name]`.
+ *
+ * Same window: the tokens add up. Different windows: the one recorded later
+ * wins, not the one with the later key — after an admin moves the reset
+ * schedule earlier, the current window's key is smaller than the stored one,
+ * and it must still replace it. A worker's delta from before a reset, flushed
+ * after another worker already counted in the new window, is older and is
+ * dropped.
+ */
 function addWindow(target, name, delta) {
   const current = target[name];
-  if (!current || typeof current !== 'object' || !current.key || delta.key > current.key) {
-    target[name] = { key: delta.key, tokens: delta.tokens };
-  } else if (current.key === delta.key) {
-    current.tokens = (Number(current.tokens) || 0) + delta.tokens;
+  if (!current || typeof current !== 'object' || !current.key) {
+    target[name] = { key: delta.key, tokens: delta.tokens, at: delta.at };
+    return;
   }
-  // A delta for an older window than the stored one is dropped.
+  if (current.key === delta.key) {
+    current.tokens = (Number(current.tokens) || 0) + delta.tokens;
+    if (!current.at || (delta.at && delta.at > current.at)) current.at = delta.at;
+    return;
+  }
+  const newer =
+    current.at && delta.at ? delta.at > current.at : String(delta.key) > String(current.key);
+  if (newer) target[name] = { key: delta.key, tokens: delta.tokens, at: delta.at };
 }
 
 function ensureUser(users, userKey) {
@@ -158,8 +173,9 @@ export function createQuotaLedger({
    * @param {Object} usage.windows - `currentWindows()` of the reset schedule
    * @param {string} [usage.name] - Display name for the admin views
    * @param {string[]} [usage.groups] - Groups at the time, for the admin views
+   * @param {Date|number} [usage.now] - When it was used (tests)
    */
-  function record(userKey, { modelId, appId, tokens, windows, name, groups }) {
+  function record(userKey, { modelId, appId, tokens, windows, name, groups, now }) {
     const amount = Math.max(0, Math.round(Number(tokens) || 0));
     if (!safeKey(userKey) || !safeKey(modelId) || amount === 0) return;
     const user = ensureUser(pending.users, userKey);
@@ -167,10 +183,13 @@ export function createQuotaLedger({
     if (Array.isArray(groups)) user.groups = groups.slice(0, 50).map(String);
     user.lastSeen = new Date().toISOString();
     if (!user.models[modelId]) user.models[modelId] = {};
+    const at = new Date(now ?? Date.now()).toISOString();
     for (const window of WINDOWS) {
-      addWindow(user.models[modelId], window, { key: windows[window].key, tokens: amount });
+      addWindow(user.models[modelId], window, { key: windows[window].key, tokens: amount, at });
     }
-    if (safeKey(appId)) addWindow(user.apps, appId, { key: windows.month.key, tokens: amount });
+    if (safeKey(appId)) {
+      addWindow(user.apps, appId, { key: windows.month.key, tokens: amount, at });
+    }
     dirty = true;
     scheduleFlush();
   }
@@ -256,7 +275,8 @@ export function createQuotaLedger({
       if (!user?.models) return;
       for (const [id, counters] of Object.entries(user.models)) {
         if (modelId && id !== modelId) continue;
-        for (const w of targets) counters[w] = { key: windows[w].key, tokens: 0 };
+        const at = new Date().toISOString();
+        for (const w of targets) counters[w] = { key: windows[w].key, tokens: 0, at };
       }
     });
   }

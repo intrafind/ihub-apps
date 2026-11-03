@@ -1053,8 +1053,11 @@ export class LLMClient {
         }
         if (failure) {
           client._recordError({ runId, step, err: failure, span, startedAt });
-          // What the provider reported before the call failed is still used.
-          if (accumulator.usage) recordQuota(accumulator.usage);
+          // A call that failed or was stopped after the answer started still
+          // used tokens: the provider's count when it sent one, an estimate
+          // otherwise (most providers report usage only in the last chunk, so
+          // stopping an answer must not keep it off the budget).
+          if (accumulator.usage || accumulator.chunkCount > 0) recordQuota(accumulator.usage);
         } else {
           client._endSpan(span, { model, accumulator, startedAt });
           recordQuota(accumulator.usage);
