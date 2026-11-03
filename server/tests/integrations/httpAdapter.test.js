@@ -471,7 +471,9 @@ describe('http protocol: certificate whitelist', () => {
         });
       }
     );
-    await new Promise(resolve => httpsServer.listen(0, '127.0.0.1', resolve));
+    // The wildcard (dual stack where the host has IPv6): `localhost` may
+    // resolve to ::1 first (CI runners), and 127.0.0.1 must answer too.
+    await new Promise(resolve => httpsServer.listen(0, resolve));
     port = httpsServer.address().port;
     platform = { ssl: { ignoreInvalidCertificates: true, domainWhitelist: ['localhost'] } };
   });
@@ -499,6 +501,9 @@ describe('http protocol: certificate whitelist', () => {
   });
 
   it('rejects the same certificate on a host that is not whitelisted', async () => {
-    await assert.rejects(callOn('127.0.0.1'), /certificate|self.signed|fetch failed/i);
+    // Refused for the certificate, not for an unreachable server.
+    await assert.rejects(callOn('127.0.0.1'), error =>
+      /CERT|SELF_SIGNED/.test(error.cause?.code || error.code || '')
+    );
   });
 });
