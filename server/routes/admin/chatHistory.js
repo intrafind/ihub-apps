@@ -108,7 +108,9 @@ const uploadsSettingsSchema = z
         maxChatBytes: z.number().int(),
         maxChatFiles: z.number().int(),
         maxUserBytes: z.number().int(),
-        maxServerBytes: z.number().int()
+        maxServerBytes: z.number().int(),
+        maxApiFiles: z.number().int(),
+        maxApiBytes: z.number().int()
       })
       .partial()
       .strict()

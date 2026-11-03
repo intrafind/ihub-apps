@@ -534,25 +534,33 @@ export class ChatFileRepository {
       );
     }
 
-    // Tier 1: Per-Chat / Per-Task quota
-    if (quotas.maxChatFiles > 0 || quotas.maxChatBytes > 0) {
+    // Tier 1: Per-Chat / Per-Task quota. The files of an Inference API user
+    // (`/v1/files`, scope `user`) have limits of their own.
+    const isApiScope = scope.type === 'user';
+    const maxScopeFiles = isApiScope ? quotas.maxApiFiles : quotas.maxChatFiles;
+    const maxScopeBytes = isApiScope ? quotas.maxApiBytes : quotas.maxChatBytes;
+    if (maxScopeFiles > 0 || maxScopeBytes > 0) {
       const existing = (await this.list(scope)).filter(
         item => !replaces || chatFileKey(scope, item.id) !== replaces.key
       );
-      if (quotas.maxChatFiles > 0 && existing.length >= quotas.maxChatFiles) {
+      if (maxScopeFiles > 0 && existing.length >= maxScopeFiles) {
         throw new ChatFileQuotaError(
-          'QUOTA_CHAT_FILES',
-          `This ${scope.type} already has the maximum of ${quotas.maxChatFiles} uploaded files`,
-          { limit: quotas.maxChatFiles, used: existing.length },
+          isApiScope ? 'QUOTA_API_FILES' : 'QUOTA_CHAT_FILES',
+          isApiScope
+            ? `You already have the maximum of ${maxScopeFiles} files in the Inference API`
+            : `This ${scope.type} already has the maximum of ${maxScopeFiles} uploaded files`,
+          { limit: maxScopeFiles, used: existing.length },
           413
         );
       }
       const scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
-      if (quotas.maxChatBytes > 0 && scopeBytes + totalBytes > quotas.maxChatBytes) {
+      if (maxScopeBytes > 0 && scopeBytes + totalBytes > maxScopeBytes) {
         throw new ChatFileQuotaError(
-          'QUOTA_CHAT_BYTES',
-          `This ${scope.type} exceeds the storage quota of ${Math.floor(quotas.maxChatBytes / (1024 * 1024))} MB`,
-          { limit: quotas.maxChatBytes, used: scopeBytes, size: totalBytes },
+          isApiScope ? 'QUOTA_API_BYTES' : 'QUOTA_CHAT_BYTES',
+          isApiScope
+            ? `Your Inference API files exceed the storage quota of ${Math.floor(maxScopeBytes / (1024 * 1024))} MB`
+            : `This ${scope.type} exceeds the storage quota of ${Math.floor(maxScopeBytes / (1024 * 1024))} MB`,
+          { limit: maxScopeBytes, used: scopeBytes, size: totalBytes },
           413
         );
       }

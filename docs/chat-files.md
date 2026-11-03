@@ -29,9 +29,10 @@ Edited in **Admin → Chat history → Uploaded files**.
 | `quotas.maxChatBytes` / `maxChatFiles` | 100 MB / 25 | One chat or one task                                                                  |
 | `quotas.maxUserBytes`         | 1 GB           | One user (chats, tasks, API files)                                                       |
 | `quotas.maxServerBytes`       | 50 GB          | The whole server                                                                         |
+| `quotas.maxApiFiles` / `maxApiBytes` | 200 / 1 GB | One Inference API user's files (`/v1/files`, scope `user`); they do not use the per-chat limits |
 
 Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_BYTES`,
-`QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
+`QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
 
 ## HTTP API
 

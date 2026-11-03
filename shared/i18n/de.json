@@ -996,7 +996,11 @@
         "maxUserBytes": "Pro Benutzer",
         "maxUserBytesHelp": "Alles, was ein Benutzer in Chats und Aufgaben hat. 0 hebt die Grenze auf.",
         "maxServerBytes": "Gesamter Server",
-        "maxServerBytesHelp": "Alle hochgeladenen Dateien aller Benutzer zusammen. 0 hebt die Grenze auf."
+        "maxServerBytesHelp": "Alle hochgeladenen Dateien aller Benutzer zusammen. 0 hebt die Grenze auf.",
+        "maxApiFiles": "Inference-API: Dateien pro Benutzer",
+        "maxApiFilesHelp": "Die meisten Dateien, die ein Benutzer über die Inference-API (/v1/files) behalten darf. 0 hebt die Grenze auf.",
+        "maxApiBytes": "Inference-API: Größe pro Benutzer",
+        "maxApiBytesHelp": "Alle Dateien, die ein Benutzer über die Inference-API behält, zusammen. 0 hebt die Grenze auf."
       }
     },
     "voiceInput": {

@@ -1093,6 +1093,27 @@ function AdminChatHistoryPage() {
                 bytes={settings.uploads.quotas.maxServerBytes}
                 onChange={value => updateUploadQuota('maxServerBytes', value)}
               />
+              <NumberField
+                id="uploads-max-api-files"
+                label={t('admin.chatHistory.uploads.maxApiFiles', 'Inference API: files per user')}
+                help={t(
+                  'admin.chatHistory.uploads.maxApiFilesHelp',
+                  'The most files one user may keep through the Inference API (/v1/files). 0 removes the limit.'
+                )}
+                value={settings.uploads.quotas.maxApiFiles}
+                onChange={value => updateUploadQuota('maxApiFiles', value)}
+              />
+              <SizeField
+                id="uploads-max-api"
+                label={t('admin.chatHistory.uploads.maxApiBytes', 'Inference API: size per user')}
+                help={t(
+                  'admin.chatHistory.uploads.maxApiBytesHelp',
+                  'All files one user keeps through the Inference API together. 0 removes the limit.'
+                )}
+                unit={MB}
+                bytes={settings.uploads.quotas.maxApiBytes}
+                onChange={value => updateUploadQuota('maxApiBytes', value)}
+              />
             </div>
           </div>
         </div>
