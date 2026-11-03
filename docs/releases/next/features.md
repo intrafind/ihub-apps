@@ -391,3 +391,22 @@ chat, without the conversation it came from. Open the Artifacts panel, select th
   (off by default).
 
 See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).
+
+## Marketplace: Offline Registry for Installations Without Internet Access
+
+An iHub without internet access can now use the marketplace. The **offline marketplace** is the
+official catalog, the website and every file the catalog points at as one folder of static files,
+published as a Docker image (`ghcr.io/intrafind/ihub-marketplace`) and as a `.tar.gz` bundle. Host it
+inside your network, add its `catalog.json` under **Admin → Marketplace → Manage Registries**, and
+install apps, models, prompts, skills, workflows and integrations as usual.
+
+- **Nothing is dropped:** the 89 skills that the official catalog links to on GitHub are copied into
+  the bundle at their pinned commits, with their reference files and license texts.
+- **Easy to host:** the image needs no configuration or volume, runs as a non-root user and serves
+  on port 8080; the bundle works behind any web server, at any path.
+- **Skills with reference files from a registry's own host:** a skill whose catalog entry is a path
+  on the registry and lists companion files now installs them. Before, installing such a skill failed
+  with a server error, which affects private registries that list reference files too.
+- **Unchanged:** the hosted MCP integrations and the model providers still need to be reachable.
+
+See [Marketplace → Air-gapped installations](../../marketplace.md#air-gapped-installations).
