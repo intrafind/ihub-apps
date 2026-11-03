@@ -561,6 +561,25 @@ new built-in integration **LDAP browser**, separate from people search. Install 
 
 See [People Directory Search → LDAP browser](../../people-directory-search.md#ldap-browser-for-admins).
 
+## Integrations: Build Your Own with Add Manually
+
+**Admin → Integrations → Add manually** builds a custom integration in five steps: name, icon and
+description; sign-in (none, a service account from the credential store, or per-user OAuth for an
+MCP server); the source of its actions; the actions; a review. It replaces the Tools page.
+
+- **Sources:** an **OpenAPI** document (URL, file or paste; pick the operations, the side effect
+  comes from the method), **HTTP requests** (method, URL template with `{param}` placeholders,
+  query, headers, body template, a JSONPath response mapping; no code), a **script** (a JavaScript
+  module edited in the builder), an **MCP server** (URL or local command; its tools) or an **A2A
+  agent** (agent card; its skills).
+- **Per action:** description for the model, parameters, side effect, data flow and approval.
+- HTTP request calls go through the SSRF guard, the proxy and the certificate whitelist like every
+  other outbound call, and never follow redirects.
+- A custom integration is an ordinary installation in the new **Custom** group: bind it to apps,
+  grant it to groups, test it on its page, and open it again with **Edit in builder**.
+- **Export for a registry** downloads a package (catalog item plus files) that another iHub installs
+  from the Marketplace.
+
 ## Integrations: Dedicated Editors for People Directories, the LDAP Browser and Entra ID
 
 The **Settings** tab of these installations is a dedicated editor instead of the generic form.

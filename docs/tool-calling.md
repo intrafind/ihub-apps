@@ -1080,7 +1080,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
-- **Type**: Server-side execution — the `search` action of the built-in engine **Brave Search** (installation `brave`, **Admin → Integrations → Web search**), not a tool file in `contents/tools/`; the same holds for `staanSearch` (`staan`) and `qwantSearch` (`qwant`). None of them appears under **Admin → Tools**. The page reader `read_url` is a platform tool of the web search feature (`server/defaults/tools/read_url.json`)
+- **Type**: Server-side execution — the `search` action of the built-in engine **Brave Search** (installation `brave`, **Admin → Integrations → Web search**), not a tool file in `contents/tools/`; the same holds for `staanSearch` (`staan`) and `qwantSearch` (`qwant`). The page reader `read_url` is a platform tool of the web search feature (`server/defaults/tools/read_url.json`)
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)

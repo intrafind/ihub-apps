@@ -31,7 +31,7 @@ import AdminLoadError from '../components/AdminLoadError';
  *
  * Route: /admin/skills/:skillName
  *
- * Follows the same layout conventions as AdminToolEditPage.
+ * Follows the same layout conventions as AdminPromptEditPage.
  */
 function AdminSkillEditPage() {
   const { t } = useTranslation();
