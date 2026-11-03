@@ -56,7 +56,9 @@ jest.mock('../../../client/src/api/userIntegrationsApi', () => ({
   fetchUserIntegrations: (...args) => mockFetchUserIntegrations(...args),
   disconnectUserIntegration: jest.fn(),
   fetchUserIntegration: jest.fn(async () => null),
-  requestConnectUrl: (...args) => mockRequestConnectUrl(...args)
+  requestConnectUrl: (...args) => mockRequestConnectUrl(...args),
+  fetchRequestableIntegrations: jest.fn(async () => []),
+  requestIntegration: jest.fn()
 }));
 
 const IntegrationsPage =

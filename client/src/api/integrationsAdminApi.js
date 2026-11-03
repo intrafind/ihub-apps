@@ -262,6 +262,41 @@ export const fetchPeopleDirectoryEditorContext = async () =>
   (await makeAdminApiCall(`${BASE}/people-directories/editor-context`)).data;
 
 /**
+ * The queue of users' integration requests (`requests`), the definitions
+ * hidden from the users' catalog (`hidden`) and the number of open requests
+ * (`openCount`). Server: `server/routes/admin/integrationRequests.js`.
+ */
+export const fetchIntegrationRequests = async () =>
+  (await makeAdminApiCall(`${BASE}/requests`)).data;
+
+const requestPath = id => `${BASE}/requests/${encodeURIComponent(id)}`;
+
+/** Approve a request; the admin installs the definition next. */
+export const approveIntegrationRequest = async (id, { note } = {}) =>
+  (
+    await makeAdminApiCall(`${requestPath(id)}/_approve`, {
+      method: 'POST',
+      ...json(note ? { note } : {})
+    })
+  ).data.request;
+
+/** Decline a request; `hide` also hides its definition from every user. */
+export const declineIntegrationRequest = async (id, { note, hide = false } = {}) =>
+  (
+    await makeAdminApiCall(`${requestPath(id)}/_decline`, {
+      method: 'POST',
+      ...json({ hide, ...(note ? { note } : {}) })
+    })
+  ).data;
+
+/** Show a hidden definition in the users' catalog again. */
+export const showHiddenIntegration = async definition => {
+  await makeAdminApiCall(`${BASE}/requests/hidden/${encodeURIComponent(definition)}`, {
+    method: 'DELETE'
+  });
+};
+
+/**
  * Every tool an app, workflow or agent can name (the admin pickers): the
  * platform tools, tool files left in `contents/tools/` and the actions of the
  * enabled installations, each with `integration: { instanceId, label, action }`

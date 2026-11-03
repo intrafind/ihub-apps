@@ -147,12 +147,13 @@ A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a
 
 ## The Integrations page
 
-**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has three tabs (`?tab=` in the URL):
+**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has four tabs (`?tab=` in the URL):
 
 | Tab                       | Contents                                                                                                                                                                                                                                       |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Installed** (default)   | every installation as a tile, grouped                                                                                                                                                                                                          |
 | **Catalog** (`catalog`)   | every definition you can install, in the same groups                                                                                                                                                                                           |
+| **Requests** (`requests`) | what users asked for from the catalog, with the open count as badge; see [Requests from users](#requests-from-users)                                                                                                                            |
 | **Inbound** (`inbound`)   | what connects _to_ iHub, each with its status and a link to its page: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway                                                                                    |
 
 **Groups.** Installed and Catalog list their entries under the same headings, in this order; a group with nothing in it is left out, and each heading shows the count and a one-line description:
@@ -466,6 +467,24 @@ The browser used to keep this state per app in `sessionStorage` (`ai_hub_app_set
 - **Connect** and **Reconnect** use the one connect flow and come back to this page, which shows the result ("Jira connected successfully.") in a live region. **Disconnect** asks first, then reloads that one entry, so the row changes without a page reload.
 - **Sign-in for background tasks** shows the stored sign-in iFinder calls use in the OIDC token-exchange mode (authorize, revoke). **Access to iHub** (connected apps, personal API keys, the Outlook add-in) is unchanged.
 
+### Requests from users
+
+Users can ask for a catalog integration their groups cannot use yet (#2926).
+
+**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not hidden, and has no enabled installation the user's groups allow. Each row shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
+
+**Admin → Integrations → Requests** is the queue; the number of open requests is the tab's badge and is shown next to **Integrations** in the admin sidebar.
+
+| Action | Effect |
+| --- | --- |
+| **Approve** | marks the request _approved_ and opens the install wizard for the definition; an approved request keeps an **Install** button until it is installed |
+| **Decline** | closes the request with an optional note to the requester; the user may ask again |
+| **Decline and hide** | as Decline, and hides the definition from every user's list; the other open requests for it are declined too. **Hidden from users** lists the hidden definitions with **Show again** |
+
+A request **closes by itself** as _installed_ once an enabled installation of its definition exists that the requester's groups allow: after an install, an update or an enable, and whenever the queue or the user's list is read, so granting the groups access later (Admin → Groups → Integrations) closes it too. When the definition is already installed but not for the requester's groups, the queue says so and links the installation. The queue checks the groups the user had when they asked; the user's own list checks their current groups.
+
+Rules: one open (or approved) request per user and definition (`409 REQUEST_EXISTS`); only signed-in, interactive users can request (anonymous `401`, OAuth clients and agents `403`); a definition the user cannot request answers `404` like an unknown one. Requests are runtime state in the storage provider (namespaces `integration-requests`, one document per user and definition, owned by the user, and `integration-requests-hidden`), not configuration; they are deleted with the user's account. Audit: resource `integration`, action `request` for a request and `requestDecision` for an approval, a decline and a request closed by an install; showing a hidden definition again is an `update`.
+
 ### Headless runs
 
 Scheduled tasks (and workflows) run as their owner: a tool that needs a connection resolves the **owner's** own connection when it is called, never anybody else's. A run is not refused up front because its app offers a tool whose integration the owner has not connected — most runs never call most of the app's tools. A tool call that finds no usable connection returns a structured result instead of throwing:
@@ -723,6 +742,12 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/admin/integrations/builder/_export/:id` | the registry package of a custom integration (see [Custom integrations](#custom-integrations-add-manually)) |
 | `GET /api/admin/integrations/tools` | every tool an app, workflow or agent can name (platform tools, remaining tool files, actions of enabled installations with `integration: { instanceId, label, action }`), for the admin pickers |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
+| `GET /api/admin/integrations/requests` | the request queue: `requests` (each with `definitionName`, `definitionAvailable`, `installedInstances`, `requester`, `status` `open` \| `approved` \| `declined` \| `fulfilled`, `reason`, `note`, `decidedBy`, `fulfilledBy`), `hidden` (`definition`, `name`, `hiddenAt`, `hiddenBy`) and `openCount` |
+| `POST /api/admin/integrations/requests/:id/_approve` `{ note? }` | approve → `{ request }`; `404` for an unknown request or a definition no longer in the catalog, `409 REQUEST_CLOSED` for a closed one |
+| `POST /api/admin/integrations/requests/:id/_decline` `{ note?, hide? }` | decline, `hide: true` also hides the definition and declines its other open requests → `{ request, alsoDeclined }`; `note` at most 500 characters |
+| `DELETE /api/admin/integrations/requests/hidden/:definitionId` | show a hidden definition again (the id URL-encoded); `404` when it is not hidden |
+| `GET /api/integrations/requests` | the catalog entries the signed-in user can request, `{ items: [{ definition, name, description, icon, publisher, categories, capabilities, actionCount, effects, request }] }`; `request` is the user's own (`id`, `status`, `reason`, `createdAt`, `decidedAt`, `note`) or null |
+| `POST /api/integrations/requests` `{ definition, reason? }` | request one → `201 { request }`; `400` for an invalid id or a reason over 500 characters, `401` anonymous, `403` delegated callers, `404` not requestable, `409 REQUEST_EXISTS`, `415` without a JSON body |
 | `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
 | `GET /api/integrations/:id` | one of them, `{ integration }`; `404` for an installation the user may not use |
 | `POST /api/integrations/:id/connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
@@ -837,6 +862,7 @@ The actions answer `{ success, logEntry, instance }` (the installation as above;
 | `server/utils/outboundRecorder.js`, `server/utils/secretRedaction.js` | the requests a test sent, as `httpFetch` and `safeFetch` report them; redaction of headers, URLs, bodies and known secrets |
 | `server/services/integrations/integrationTools.js`                                                                                                                                                                                                                                                     | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                                                 |
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
+| `server/services/integrations/IntegrationRequestService.js`, `integrationRequestCatalog.js`, `server/routes/integrations/integrationRequests.js`, `server/routes/admin/integrationRequests.js` | requests from users: storage, what a user can request, the user and admin routes |
 | `server/services/integrations/auth/OAuthUserClient.js`, `strategies/fixedEndpoint.js`, `strategies/mcpDiscovery.js` | the one per-user OAuth client (PKCE, code exchange, refresh, revocation, RFC 9207 `iss`, scope step-up); fixed endpoints (Jira, the storage providers) and MCP discovery (RFC 9728/8414, CIMD, DCR, pre-registered client) as strategies |
 | `server/services/integrations/auth/IntegrationConnectionService.js`, `connectionProviders.js`, `tokenSecrets.js`, `oauthFlowStore.js`, `integrationAuthRequired.js` | the connection index, connect / callback / refresh / disconnect / resolve, what each installation's connection is, where the secrets live, the server-side sign-in flows, `INTEGRATION_AUTH_REQUIRED` |
 | `server/services/integrations/auth/connectionReindex.js` | the one-time re-index of the token tree into the connection index |

@@ -38,6 +38,7 @@ import {
   auditArgs,
   testAction
 } from '../../services/integrations/tester/ActionTester.js';
+import { closeRequestsFor } from './integrationRequests.js';
 
 /** An action name in a route: what MCP tools, OpenAPI operations and connectors use. */
 const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -608,6 +609,8 @@ export default function registerAdminIntegrationsRoutes(app) {
         definition: instance.definition,
         admin: adminName(req)
       });
+      // Users who asked for this definition and whose groups now allow it.
+      await closeRequestsFor(req, instance.definition);
       res.status(201).json({ success: true, instance });
     } catch (error) {
       sendIntegrationError(res, error, 'install integration');
@@ -682,6 +685,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Updated installed integration "${id}"`
       });
+      await closeRequestsFor(req, instance.definition);
       res.json({ success: true, instance });
     } catch (error) {
       sendIntegrationError(res, error, 'update installed integration');
@@ -1174,6 +1178,7 @@ export default function registerAdminIntegrationsRoutes(app) {
             resourceId: id,
             summary: `${enabled ? 'Enabled' : 'Disabled'} integration "${id}"`
           });
+          if (enabled) await closeRequestsFor(req, instance.definition);
           res.json({ success: true, instance });
         } catch (error) {
           sendIntegrationError(res, error, 'toggle integration');

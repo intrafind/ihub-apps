@@ -3980,6 +3980,45 @@
         "none": "No instructions.",
         "edit": "Edit instructions",
         "reset": "Use the integration’s own"
+      },
+      "requests": {
+        "tab": "Requests",
+        "sidebarBadge": "{{count}} open integration requests",
+        "loadFailed": "The requests could not be loaded.",
+        "openTitle": "Open requests ({{count}})",
+        "description": "Users asked for these catalog integrations. Approve opens the install wizard; a request closes by itself once the integration is installed and the requester’s groups may use it.",
+        "none": "No open requests.",
+        "requestedBy": "Requested by {{name}} on {{date}}",
+        "alreadyInstalled": "Already installed, but not for this user’s groups. Granting their groups access closes the request:",
+        "definitionGone": "This integration is no longer in the catalog.",
+        "approve": "Approve",
+        "approveNamed": "Approve the request of {{user}} for {{name}}",
+        "install": "Install",
+        "installNamed": "Install {{name}}",
+        "decline": "Decline",
+        "declineNamed": "Decline the request of {{user}} for {{name}}",
+        "declineHide": "Decline and hide",
+        "declineHideNamed": "Decline the request of {{user}} for {{name}} and hide it",
+        "declineTitle": "Decline the request for {{name}}?",
+        "declineMessage": "{{user}} sees the request as declined and may ask again.",
+        "declineHideTitle": "Decline and hide {{name}}?",
+        "declineHideMessage": "No user sees {{name}} in “Not available yet” any more, and the other open requests for it are declined too. You can show it again later.",
+        "noteLabel": "Note to the requester (optional)",
+        "noteHelp": "Shown to the user next to the declined request.",
+        "declined": "Request for {{name}} declined.",
+        "declinedHidden": "Request declined; {{name}} is hidden from users.",
+        "closedTitle": "Closed requests ({{count}})",
+        "hiddenTitle": "Hidden from users ({{count}})",
+        "hiddenDescription": "Users do not see these in “Not available yet” and cannot request them.",
+        "hiddenBy": "Hidden by {{name}} on {{date}}",
+        "show": "Show again",
+        "showNamed": "Show {{name}} again",
+        "status": {
+          "open": "Open",
+          "approved": "Approved, not installed yet",
+          "declined": "Declined",
+          "fulfilled": "Installed"
+        }
       }
     },
     "sidebar": {
@@ -6167,6 +6206,29 @@
         "public_url_mismatch": "The public URL of iHub changed; ask your administrator to check {{name}}.",
         "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
         "callback_failed": "The sign-in to {{name}} could not be completed. Try again."
+      }
+    },
+    "requests": {
+      "title": "Not available yet ({{count}})",
+      "description": "Integrations in the catalog that your administrator has not made available to you. Request one and an administrator decides.",
+      "search": "Search the catalog",
+      "noMatches": "Nothing in the catalog matches.",
+      "publisher": "by {{publisher}}",
+      "adminNote": "Administrator: {{note}}",
+      "request": "Request",
+      "requestNamed": "Request {{name}}",
+      "requestAgain": "Request again",
+      "requestAgainNamed": "Request {{name}} again",
+      "reasonLabel": "Why do you need it? (optional)",
+      "reasonCount": "{{count}} of {{max}} characters",
+      "send": "Send request",
+      "sent": "Request for {{name}} sent. An administrator decides.",
+      "alreadyRequested": "You have already requested {{name}}.",
+      "failed": "Could not request {{name}}: {{message}}",
+      "state": {
+        "requested": "Requested",
+        "approved": "Approved, being set up",
+        "declined": "Declined"
       }
     }
   },

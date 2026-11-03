@@ -41,8 +41,10 @@ import {
  * @param {function} params.t - i18n translation function
  * @param {function} params.showAdminPage - (key: string) => boolean
  * @param {object} params.featureFlags - FeatureFlags instance
+ * @param {object} [params.badges] - Counts shown next to items, by item key
+ *   (`integrations`: open integration requests)
  */
-export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
+export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {} }) {
   const ff = featureFlags ? featureFlags.isEnabled.bind(featureFlags) : () => true;
 
   return [
@@ -189,7 +191,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           label: t('admin.nav.integrations', 'Integrations'),
           href: '/admin/integrations',
           icon: LinkIcon,
-          visible: true
+          visible: true,
+          badge: badges.integrations || 0,
+          badgeLabel: t(
+            'admin.integrations.requests.sidebarBadge',
+            '{{count}} open integration requests',
+            { count: badges.integrations || 0 }
+          )
         },
         {
           key: 'mcp-gateway',

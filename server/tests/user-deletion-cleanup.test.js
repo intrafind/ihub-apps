@@ -314,6 +314,7 @@ describe('the cleanup', () => {
       'integrationPreferences',
       'userProjects',
       'userSkills',
+      'integrationRequests',
       'shortLinks'
     ]);
     expect(names.indexOf('scheduledTasks')).toBeLessThan(names.indexOf('chats'));
@@ -332,7 +333,13 @@ describe('the cleanup', () => {
     ]) {
       expect(kindOf(name)).toBe('access');
     }
-    for (const name of ['chats', 'userPrompts', 'userSkills', 'shortLinks']) {
+    for (const name of [
+      'chats',
+      'userPrompts',
+      'userSkills',
+      'integrationRequests',
+      'shortLinks'
+    ]) {
       expect(kindOf(name)).toBe('content');
     }
   });

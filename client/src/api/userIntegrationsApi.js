@@ -91,3 +91,39 @@ export async function disconnectUserIntegration(id) {
   const { data } = await apiClient.post(`${path(id)}/disconnect`, {}, QUIET);
   return data;
 }
+
+/**
+ * The catalog integrations the user can request ("Not available yet"),
+ * each with the user's own request or null.
+ * Server: `server/routes/integrations/integrationRequests.js`.
+ *
+ * ```
+ * { definition, name, description, icon, publisher, categories, capabilities,
+ *   actionCount, effects,
+ *   request: { id, status, reason, createdAt, decidedAt, note } | null }
+ * ```
+ * `request.status` is `open`, `approved`, `declined` or `fulfilled`.
+ *
+ * @returns {Promise<Object[]>}
+ */
+export async function fetchRequestableIntegrations() {
+  const { data } = await apiClient.get('/integrations/requests', QUIET);
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+/**
+ * Ask an admin to make a catalog integration available.
+ *
+ * @param {string} definition - The definition id
+ * @param {string} [reason] - Why (at most 500 characters)
+ * @returns {Promise<Object>} The request
+ */
+export async function requestIntegration(definition, reason) {
+  const trimmed = typeof reason === 'string' ? reason.trim() : '';
+  const { data } = await apiClient.post(
+    '/integrations/requests',
+    { definition, ...(trimmed ? { reason: trimmed } : {}) },
+    QUIET
+  );
+  return data?.request || null;
+}

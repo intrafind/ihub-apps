@@ -63,7 +63,10 @@ jest.mock('../../../client/src/api/userIntegrationsApi', () => ({
   fetchUserIntegrations: (...args) => mockFetchUserIntegrations(...args),
   fetchUserIntegration: (...args) => mockFetchUserIntegration(...args),
   disconnectUserIntegration: (...args) => mockDisconnect(...args),
-  requestConnectUrl: (...args) => mockRequestConnectUrl(...args)
+  requestConnectUrl: (...args) => mockRequestConnectUrl(...args),
+  // "Not available yet" has its own test (settings-integration-requests).
+  fetchRequestableIntegrations: () => Promise.resolve([]),
+  requestIntegration: jest.fn()
 }));
 
 // The real connect flow, leaving through a seam instead of `window.location.assign`.
