@@ -277,6 +277,20 @@ function overridesOf(actions, declaresActions, existingInstance) {
 }
 
 /**
+ * The installation's `approval` after a builder save. Nothing left to set
+ * removes the stored setting (`null`): `undefined` would keep it, because a
+ * save that does not name the approval keeps the stored one.
+ *
+ * @param {Object} approval - what the draft sets (default, actions, newOrChanged)
+ * @param {Object|null} existingInstance - the stored installation, if any
+ * @returns {Object|null|undefined}
+ */
+function approvalOf(approval, existingInstance) {
+  if (Object.keys(approval).length > 0) return approval;
+  return existingInstance?.approval ? null : undefined;
+}
+
+/**
  * A builder draft as a definition folder and an installation payload.
  *
  * @param {Object} draft - a validated draft (`validateBuilderDraft`)
@@ -366,13 +380,7 @@ export function draftToPackage(draft, { previous = null, existingInstance = null
       disabled: draft.actions.filter(a => a.enabled === false).map(a => a.name),
       overrides: overridesOf(draft.actions, declaresActions, existingInstance)
     },
-    // Nothing left to set removes the stored setting; `undefined` would keep it
-    // (a save that does not name the approval keeps the stored one).
-    approval: Object.keys(approval).length
-      ? approval
-      : existingInstance?.approval
-        ? null
-        : undefined,
+    approval: approvalOf(approval, existingInstance),
     timeoutMs: existingInstance?.timeoutMs
   });
   return { definitionId, definition, files, installation };
