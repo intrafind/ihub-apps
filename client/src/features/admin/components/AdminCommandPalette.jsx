@@ -13,7 +13,6 @@ const ADMIN_PAGES = [
   { label: 'Models', href: '/admin/models' },
   { label: 'Providers', href: '/admin/providers' },
   { label: 'Prompts', href: '/admin/prompts' },
-  { label: 'Tools', href: '/admin/tools' },
   { label: 'Skills', href: '/admin/skills' },
   { label: 'Projects', href: '/admin/projects' },
   { label: 'Agents', href: '/admin/agents' },
@@ -78,8 +77,7 @@ const TYPE_ROUTES = {
   group: id => `/admin/groups/${id}`,
   user: () => '/admin/users',
   project: id => `/admin/projects/${encodeURIComponent(id)}`,
-  provider: id => `/admin/providers/${id}`,
-  tool: () => '/admin/tools'
+  provider: id => `/admin/providers/${id}`
 };
 
 const CATEGORY_TO_TYPE = {
@@ -89,8 +87,7 @@ const CATEGORY_TO_TYPE = {
   groups: 'group',
   users: 'user',
   projects: 'project',
-  providers: 'provider',
-  tools: 'tool'
+  providers: 'provider'
 };
 
 function buildSubtitle(type, entry) {

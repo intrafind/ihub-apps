@@ -17,6 +17,7 @@ import { effectiveValues, localized } from '../../definitions/installedValues.js
 import { actionRequirementsMet } from '../enforcement.js';
 import { toolIdFor, actionEnabled, testResult } from '../common.js';
 import { getConnector, listConnectors } from './connectors/index.js';
+import { runToolScript } from '../../../tools/toolScriptRunner.js';
 
 /**
  * Connector modules of `script` definitions, one entry per module file:
@@ -201,8 +202,11 @@ export async function discoverActions({ definition, instance, language = 'en' })
     const requirementsMet = actionRequirementsMet(action, values);
     const enabled = actionEnabled(instance, action);
     const error = impl ? undefined : `not implemented by connector "${connector.id}"`;
+    // A `script` module may leave the schema to the definition (the
+    // integration builder writes it there); the module's own wins.
     const parameters =
-      typeof impl?.parameters === 'function' ? impl.parameters(ctx) : impl?.parameters;
+      (typeof impl?.parameters === 'function' ? impl.parameters(ctx) : impl?.parameters) ||
+      action.parameters;
     const ownDescription = perInstance(impl, 'description');
     const usable = perInstance(impl, 'available');
     return {
@@ -242,7 +246,7 @@ export async function run({ definition, instance, action, args = {}, context = {
     throw new Error(`Integration ${instance.id}: action ${action.name} is not implemented`);
   }
   const values = effectiveValues(definition, instance);
-  return impl.run(args, {
+  const ctx = {
     definition,
     instance,
     values,
@@ -250,7 +254,20 @@ export async function run({ definition, instance, action, args = {}, context = {
     chatId: context.chatId,
     scope: context.scope,
     params: context.params || {}
-  });
+  };
+  if (definition.protocol.type === 'script') {
+    // A custom script may call one of iHub's tool scripts (`server/tools/`):
+    // the connectors migration V211 generated from tool files do exactly
+    // that. `params` defaults to everything the tool call received, as the
+    // tool function got it before.
+    ctx.runToolScript = (script, { method, parameters, params } = {}) =>
+      runToolScript(script, {
+        method,
+        parameters: parameters || action.parameters,
+        params: params || { ...(context.params || {}), ...args }
+      });
+  }
+  return impl.run(args, ctx);
 }
 
 /** Test an installation: the connector's steps in the shared report shape. */

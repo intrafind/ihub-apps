@@ -2443,75 +2443,6 @@
         }
       }
     },
-    "tools": {
-      "title": "Tool-Verwaltung",
-      "subtitle": "Erstellen, bearbeiten und verwalten Sie KI-Tools / Funktionsaufrufe für Ihre iHub Apps",
-      "toggle": "Werkzeuge umschalten",
-      "enableDisable": "Werkzeuge",
-      "enableDisableSubtitle": "Werkzeuge für diesen Chat aktivieren oder deaktivieren",
-      "createNew": "Neues Tool erstellen",
-      "uploadConfig": "Konfiguration hochladen",
-      "uploading": "Hochladen...",
-      "searchPlaceholder": "Tools durchsuchen...",
-      "filterAll": "Alle Tools",
-      "filterEnabled": "Nur aktivierte",
-      "filterDisabled": "Nur deaktivierte",
-      "filterAllTypes": "Alle Typen",
-      "filterRegular": "Reguläre Tools",
-      "filterMultiFunction": "Multi-Funktion",
-      "filterSpecial": "Spezial-Tools",
-      "loadError": "Fehler beim Laden der Tools",
-      "noTools": "Keine Tools gefunden",
-      "noToolsDescription": "Beginnen Sie mit der Erstellung eines neuen Tools.",
-      "enabled": "Aktiviert",
-      "disabled": "Deaktiviert",
-      "enable": "Aktivieren",
-      "disable": "Deaktivieren",
-      "clone": "Klonen",
-      "edit": "Bearbeiten",
-      "delete": "Löschen",
-      "download": "Konfiguration herunterladen",
-      "deleteConfirm": "Sind Sie sicher, dass Sie dieses Tool löschen möchten?",
-      "deleteSuccess": "Tool erfolgreich gelöscht",
-      "typeRegular": "Regulär",
-      "typeMultiFunction": "Multi-Funktion",
-      "typeSpecial": "Spezial",
-      "table": {
-        "name": "Name",
-        "type": "Typ",
-        "description": "Beschreibung",
-        "script": "Skript",
-        "status": "Status",
-        "actions": "Aktionen"
-      },
-      "editTool": "Tool bearbeiten",
-      "createDescription": "Ein neues KI-Tool / Funktion erstellen",
-      "editDescription": "Tool-Konfiguration und Skript bearbeiten",
-      "configTab": "Konfiguration",
-      "scriptTab": "Skript-Editor",
-      "id": "Tool-ID",
-      "idHelp": "Eindeutige Kennung für das Tool",
-      "name": "Name",
-      "nameHelp": "Anzeigename für das Tool in verschiedenen Sprachen",
-      "description": "Beschreibung",
-      "descriptionHelp": "Beschreibung, die dem LLM für die Tool-Auswahl angezeigt wird",
-      "scriptFile": "Skriptdatei",
-      "scriptFileHelp": "JavaScript-Datei im Verzeichnis server/tools/",
-      "concurrency": "Parallelitätslimit",
-      "concurrencyHelp": "Maximale Anzahl gleichzeitiger Ausführungen",
-      "parameters": "Parameter (JSON-Schema)",
-      "parametersHelp": "JSON-Schema-Definition für Tool-Parameter",
-      "functions": "Funktionen (Multi-Funktions-Tool)",
-      "functionsHelp": "Definieren Sie mehrere Funktionen für dieses Tool (z.B. findUser, getAllUserDetails). Jede Funktion sollte eine Beschreibung und Parameter haben. Lassen Sie {} leer für reguläre Einzel-Funktions-Tools.",
-      "functionsExample": "Beispiel Multi-Funktions-Konfiguration anzeigen",
-      "isSpecialTool": "Spezial-Tool",
-      "isSpecialToolHelp": "Provider-spezifische Tools, die direkt vom Modellanbieter verarbeitet werden (z.B. Google Search Grounding, OpenAI Web Search)",
-      "provider": "Anbieter",
-      "providerHelp": "Anbieter-Kennung (z.B. \"google\" für Google Search, \"openai\" für OpenAI, \"openai-responses\" für antwortbasierte Tools)",
-      "scriptSaved": "Skript erfolgreich gespeichert",
-      "saveScript": "Skript speichern",
-      "scriptEditorInfo": "Bearbeiten Sie den JavaScript-Code für dieses Tool. Änderungen werden in server/tools/ gespeichert"
-    },
     "users": {
       "view": {
         "title": "Benutzer anzeigen",
@@ -3631,6 +3562,10 @@
         "catalog": {
           "title": "Aus dem Katalog",
           "description": "Integrationen aus dem Katalog oder einer Marketplace-Registry."
+        },
+        "custom": {
+          "description": "Integrationen, die hier mit „Manuell hinzufügen“ gebaut wurden, und die aus der früheren Tools-Seite migrierten Tools.",
+          "title": "Eigene"
         }
       },
       "editors": {
@@ -5505,14 +5440,9 @@
         "internal": "Intern",
         "external": "Extern"
       },
-      "toolSection": "Freigabe",
-      "toolMode": "Vor einem Aufruf fragen",
       "inheritPlatform": "Plattform-Standard",
-      "toolModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung und der App. Eine Funktion kann im JSON eine eigene \"approval\" setzen.",
       "sideEffect": "Was ein Aufruf bewirkt",
-      "sideEffectHelp": "\"Fragen, außer es wird nur gelesen\" fragt bei allem, was nicht als Lesen angegeben ist.",
       "dataFlowLabel": "Wohin die Daten gehen",
-      "dataFlowHelp": "Bestimmt, welcher Plattform-Standard gilt (intern oder extern).",
       "title": "Tool-Freigabe",
       "description": "Legen Sie fest, wann eine Person einen Tool-Aufruf freigeben muss, bevor er ausgeführt wird. Auch ein Lesezugriff auf ein externes System kann interne Informationen hinaustragen, deshalb können externe Tools strenger sein. Integrationen, Tools, ihre Aktionen und Apps können dies nur verschärfen, nie lockern. Es wird nichts gefragt, bis Sie hier oder an einer Integration oder einem Tool einen Modus setzen.",
       "loadError": "Die Einstellungen zur Tool-Freigabe konnten nicht geladen werden.",
@@ -5536,6 +5466,203 @@
       "newOrChangedHelp": "Eine Aktion, die seit der letzten Prüfung hinzugekommen ist oder deren Wirkung oder Eingabe sich geändert hat, fragt mindestens so, bis Sie sie als geprüft markieren. Gilt, sobald an dieser Integration eine Freigabe eingestellt ist.",
       "presetAlwaysHelp": "Vorausgewählt: immer fragen. Diese Integration sendet Daten nach außen und gibt nicht verlässlich an, welche ihrer Aktionen nur lesen. Sie können das jetzt oder später auf der Seite der Integration ändern.",
       "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern."
+    },
+    "integrationBuilder": {
+      "a2a": {
+        "cardUrl": "URL der Agent Card"
+      },
+      "action": {
+        "approval": "Freigabe",
+        "approvalInherit": "Wie die Integration",
+        "description": "Beschreibung für das Modell",
+        "enabled": "„{{name}}“ dem Modell anbieten",
+        "name": "Name der Aktion",
+        "nameHelp": "Unter diesem Namen ruft das Modell die Aktion auf.",
+        "operation": "Operation {{operationId}}",
+        "parameters": "Parameter (JSON-Schema)",
+        "parametersFromSource": "Kommt beim Aufruf aus der Quelle.",
+        "remoteDescription": "Der Server beschreibt sie so: {{text}} – eine Beschreibung hier ersetzt das.",
+        "remove": "Aktion {{name}} entfernen",
+        "schemaError": "Kein JSON-Objekt: {{error}}",
+        "toolId": "Tool-ID {{toolId}} (übernommen vom Tool, aus dem diese Integration migriert wurde)."
+      },
+      "actions": {
+        "add": "Aktion hinzufügen",
+        "approvalDefault": "Freigabe für alle Aktionen",
+        "approvalHelp": "Ob eine Person einen Aufruf freigibt, bevor er läuft. Eine Aktion kann nur strenger sein; eine App kann weiter verschärfen.",
+        "connectFirst": "Speichern Sie die Integration und verbinden Sie Ihr eigenes Konto, um ihre Tools aufzulisten.",
+        "listSkills": "Fähigkeiten des Agenten lesen",
+        "listTools": "Tools des Servers auflisten",
+        "listed": "{{count}} Aktion(en) aufgelistet.",
+        "pickOperations": "Wählen Sie im vorigen Schritt Operationen des OpenAPI-Dokuments.",
+        "remoteHelp": "Die Aktionen sind das, was die Quelle beim Aufruf auflistet; Einstellungen hier gelten für die jetzt gelisteten Namen und bleiben an ihnen."
+      },
+      "addManually": "Manuell hinzufügen",
+      "auth": {
+        "clientId": "Client-ID (optional)",
+        "credential": "Zugangsdaten",
+        "credentialHelp": "Geheimnisse liegen im Zugangsdaten-Speicher; die Integration verweist nur auf einen Eintrag.",
+        "header": "Name des Headers",
+        "kind": {
+          "basic": "Basic Auth (Geheimnis „Benutzer:Passwort“)",
+          "bearer": "Authorization: Bearer <Token>",
+          "credential": "Wie die Zugangsdaten es vorgeben (Bearer, Basic, API-Schlüssel, OAuth2)",
+          "header": "API-Schlüssel in einem Header",
+          "label": "Wie die Zugangsdaten gesendet werden"
+        },
+        "mode": {
+          "label": "Anmeldung",
+          "none": "Keine (öffentlicher Endpunkt)",
+          "oauthUser": "OAuth pro Benutzer (jeder meldet sich selbst an)",
+          "serviceAccount": "Dienstkonto (gemeinsame Zugangsdaten)"
+        },
+        "oauthHelp": "Ohne Client-ID registriert sich iHub selbst beim Server (dynamische Client-Registrierung oder ein Client-ID-Metadatendokument).",
+        "prefix": "Präfix des Werts (optional)",
+        "scopes": "Scopes (optional, durch Leerzeichen getrennt)",
+        "scriptHelp": "Eine Skript-Integration meldet sich selbst an: ihr Modul liest seine Einstellungen aus ctx.values."
+      },
+      "back": "Zurück",
+      "basics": {
+        "description": "Beschreibung",
+        "icon": "Icon-URL (optional)",
+        "iconHelp": "Eine https-URL; Registries und der Marketplace zeigen sie, wenn die Integration veröffentlicht wird.",
+        "instanceId": "ID",
+        "instanceIdHelp": "Tool-IDs lauten <id>__<aktion>; Apps binden die Integration über diese ID. Sie lässt sich später nicht ändern.",
+        "name": "Name"
+      },
+      "catalogHint": "Nicht im Katalog? Bauen Sie sie aus einem OpenAPI-Dokument, HTTP-Anfragen, einem Skript, einem MCP-Server oder einem A2A-Agenten.",
+      "create": "Integration anlegen",
+      "editInBuilder": "Im Builder bearbeiten",
+      "errors": {
+        "actionName": "Ein Aktionsname beginnt mit einem Buchstaben und enthält nur Buchstaben, Ziffern und _.",
+        "actionNameTaken": "Zwei Aktionen haben diesen Namen.",
+        "actionsRequired": "Fügen Sie mindestens eine Aktion hinzu.",
+        "baseUrl": "Die Basis-URL ist eine http(s)-URL.",
+        "bodyOnGet": "Eine GET- oder HEAD-Anfrage hat keinen Body.",
+        "cardUrlRequired": "Geben Sie die URL der Agent Card ein.",
+        "commandRequired": "Geben Sie den Befehl ein, der den Server startet.",
+        "credentialRequired": "Wählen Sie die Zugangsdaten, die gesendet werden.",
+        "documentRequired": "Lesen Sie ein OpenAPI-Dokument ein.",
+        "headerRequired": "Nennen Sie den Header, in dem der Schlüssel gesendet wird.",
+        "icon": "Das Icon ist eine https-URL.",
+        "instanceId": "Kleinbuchstaben, Ziffern und „-“ (höchstens 48), beginnend mit Buchstabe oder Ziffer.",
+        "moduleRequired": "Schreiben Sie das Connector-Modul.",
+        "nameRequired": "Geben Sie der Integration einen Namen.",
+        "relativeUrl": "Eine relative URL braucht die Basis-URL der Quelle.",
+        "requestUrl": "Geben Sie die URL der Anfrage ein.",
+        "urlRequired": "Geben Sie die Server-URL ein."
+      },
+      "export": "Für eine Registry exportieren",
+      "exported": "Exportiert. Legen Sie die Dateien unter integration-definitions/{{name}}/ ab und nehmen Sie den Katalogeintrag in die catalog.json Ihrer Registry auf.",
+      "headers": "Feste Header",
+      "http": {
+        "addParameters": "Als Parameter hinzufügen",
+        "baseUrl": "Basis-URL (optional)",
+        "baseUrlHelp": "Relative URLs der Aktionen werden angehängt. Aufrufe laufen durch den SSRF-Schutz: eine private Adresse muss bei den erlaubten Hosts der Integrationen freigegeben sein.",
+        "body": "Body-Vorlage",
+        "bodyHelp": "In einem JSON-Body wird ein Platzhalter zum JSON des Werts: schreiben Sie {note}, nicht \"{note}\".",
+        "contentType": "Format des Bodys",
+        "fieldName": "Feld",
+        "fieldPath": "Pfad",
+        "fields": "Felder der Antwort (optional)",
+        "headersHelp": "Werden mit jeder Anfrage gesendet; keine Geheimnisse hier, die gehören zur Anmeldung.",
+        "method": "Methode",
+        "query": "Query-Parameter",
+        "queryHelp": "Ein Parameter, dessen Platzhalter keinen Wert haben, entfällt.",
+        "request": "Anfrage",
+        "requestHeaders": "Header",
+        "result": "Antwort: Pfad zum Ergebnis",
+        "resultHelp": "Schlüssel mit Punkten, [] für jedes Element einer Liste. Leer: die ganze Antwort.",
+        "undeclared": "Die Anfrage nutzt Platzhalter, die kein Parameter deklariert: {{names}}. Installationswerte gleichen Namens füllen sie; sonst bleiben sie leer.",
+        "url": "URL-Vorlage",
+        "urlHelp": "{name} wird durch das gleichnamige Argument ersetzt (URL-kodiert), sonst durch den Installationswert."
+      },
+      "loadError": "Die Integration konnte nicht geöffnet werden",
+      "mcp": {
+        "args": "Argumente (eines pro Zeile)",
+        "command": "Befehl",
+        "env": "Umgebungsvariablen",
+        "stdioWarning": "iHub startet diesen Befehl auf seinem Server. Ein lokaler Prozess lässt sich nicht in eine Registry exportieren.",
+        "transport": "Transport",
+        "transports": {
+          "sse": "SSE (veraltet)",
+          "stdio": "Lokaler Prozess (stdio)",
+          "streamableHttp": "Streamable HTTP (empfohlen)",
+          "websocket": "WebSocket"
+        },
+        "url": "Server-URL"
+      },
+      "next": "Weiter",
+      "openapi": {
+        "baseUrl": "Basis-URL",
+        "baseUrlHelp": "Die Pfade der Operationen werden angehängt. Leer: der erste Server des Dokuments.",
+        "file": "Datei laden",
+        "noOperationId": "Operationen ohne operationId können keine Aktionen werden.",
+        "operations": "Operationen, die zu Aktionen werden",
+        "parsed": "Gelesen: {{title}} {{version}}",
+        "read": "Dokument lesen",
+        "readError": "Das Dokument konnte nicht gelesen werden: {{error}}",
+        "reread": "{{count}} Operation(en) gewählt. Lesen Sie das Dokument erneut, um die Auswahl zu ändern.",
+        "source": "OpenAPI-Dokument: URL oder eingefügtes JSON/YAML"
+      },
+      "review": {
+        "actions": "Aktionen ({{count}})",
+        "definition": "Definition",
+        "none": "Keine",
+        "oauthUser": "OAuth pro Benutzer",
+        "offered": "Angeboten",
+        "serviceAccount": "Dienstkonto"
+      },
+      "rows": {
+        "add": "Zeile hinzufügen",
+        "name": "Name",
+        "remove": "Zeile {{n}} entfernen",
+        "value": "Wert"
+      },
+      "save": "Speichern",
+      "saved": "Integration „{{id}}“ gespeichert.",
+      "script": {
+        "help": "Ein ES-Modul, keine Importe aus seinem Ordner. export default { actions: { <name>: { run: async (args, ctx) => … } } }. ctx.values enthält die Installationswerte, ctx.user den Aufrufer, ctx.runToolScript(script, { method }) führt eines der Tool-Skripte von iHub aus. Die Aktionen (Beschreibung, Parameter) deklarieren Sie im nächsten Schritt.",
+        "module": "Connector-Modul (actions/connector.js)",
+        "skeleton": "Für jede Aktion einen Rumpf einfügen",
+        "warning": "Das Modul läuft im iHub-Server mit dessen Rechten. Verwenden Sie nur Code, dem Sie vertrauen."
+      },
+      "source": {
+        "a2a": "A2A-Agent",
+        "a2aHelp": "Ein entfernter Agent; die Fähigkeiten seiner Agent Card werden zu Aktionen.",
+        "http": "HTTP-Anfrage",
+        "httpHelp": "REST-Endpunkte ohne Code einbinden: Methode, URL-Vorlage, Body, Zuordnung der Antwort.",
+        "label": "Woher die Aktionen kommen",
+        "mcp": "MCP-Server",
+        "mcpHelp": "Ein Model-Context-Protocol-Endpunkt oder ein lokaler Befehl; seine Tools werden zu Aktionen.",
+        "openapi": "OpenAPI",
+        "openapiHelp": "Operationen eines OpenAPI-Dokuments wählen (URL, Datei oder Einfügen).",
+        "script": "Skript",
+        "scriptHelp": "Aktionen aus einem JavaScript-Modul, das in iHub läuft."
+      },
+      "steps": {
+        "actions": "Aktionen",
+        "basics": "Grundlagen",
+        "review": "Prüfen",
+        "signIn": "Anmeldung",
+        "source": "Quelle"
+      },
+      "stepsLabel": "Schritte des Builders",
+      "subtitle": "Bauen Sie eine Integration aus einem OpenAPI-Dokument, HTTP-Anfragen, einem Skript, einem MCP-Server oder einem A2A-Agenten. Sie wird unter ihrer ID installiert und funktioniert wie jede andere Integration: an Apps binden, Gruppen freigeben, auf ihrer Seite testen.",
+      "switchSource": {
+        "confirm": "Wechseln",
+        "message": "Die Aktionen der bisherigen Quelle werden entfernt.",
+        "title": "Quelle wechseln?"
+      },
+      "titleEdit": "Im Builder bearbeiten",
+      "titleEditOf": "{{id}} im Builder bearbeiten",
+      "titleNew": "Manuell hinzufügen",
+      "unsaved": {
+        "leave": "Verlassen",
+        "message": "Die Integration ist nicht gespeichert. Trotzdem verlassen?",
+        "stay": "Bleiben",
+        "title": "Ungespeicherte Änderungen"
+      }
     }
   },
   "cloudStorage": {
