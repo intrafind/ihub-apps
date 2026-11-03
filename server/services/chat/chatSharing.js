@@ -16,7 +16,6 @@
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isChatHistoryConfigured } from './chatPersistence.js';
-import { deriveChatTitle, MAX_TITLE_LENGTH } from './ChatRepository.js';
 
 /** Feature flag gating chat sharing as a whole. */
 export const CHAT_SHARING_FEATURE = 'chatSharing';
@@ -305,6 +304,26 @@ export function resolveShareLimits({ expiresAt, maxViews }, settings, now = Date
   return { ok: true, expiresAt: resolvedExpiry, maxViews: resolvedViews };
 }
 
+/** Longest title a share carries; the same cap a chat title has. */
+const MAX_SHARE_TITLE_LENGTH = 200;
+
+/** Longest title taken from a message when the chat has none; the same cap the chat list uses. */
+const MAX_DERIVED_SHARE_TITLE_LENGTH = 80;
+
+/**
+ * Whitespace collapsed, trimmed and cut with an ellipsis at `maxLength`.
+ *
+ * @param {unknown} text - Raw text.
+ * @param {number} maxLength - Inclusive length cap.
+ * @returns {string}
+ */
+function shortTitle(text, maxLength) {
+  if (typeof text !== 'string') return '';
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= maxLength) return collapsed;
+  return `${collapsed.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 /**
  * The title a new share carries: a name people recognise in the browser tab,
  * the link preview, the "Shared with me" list and the owner's link list.
@@ -323,18 +342,17 @@ export function resolveShareLimits({ expiresAt, maxViews }, settings, now = Date
  * @returns {string} The title, '' when nothing usable exists.
  */
 export function buildShareTitle({ chat, messages = [], artifact = null } = {}) {
-  let chatTitle =
-    typeof chat?.title === 'string' ? deriveChatTitle(chat.title, MAX_TITLE_LENGTH) : '';
+  let chatTitle = shortTitle(chat?.title, MAX_SHARE_TITLE_LENGTH);
   if (!chatTitle) {
     const firstUser = messages.find(message => message?.role === 'user');
-    chatTitle = deriveChatTitle(firstUser?.content);
+    chatTitle = shortTitle(firstUser?.content, MAX_DERIVED_SHARE_TITLE_LENGTH);
   }
   if (!artifact) return chatTitle;
   const fileName = typeof artifact.name === 'string' ? artifact.name.trim() : '';
   if (!fileName) return chatTitle;
-  if (!chatTitle || chatTitle === fileName) return deriveChatTitle(fileName, MAX_TITLE_LENGTH);
+  if (!chatTitle || chatTitle === fileName) return shortTitle(fileName, MAX_SHARE_TITLE_LENGTH);
   // Keep the file name whole and shorten the chat part, so the extension and
   // the name survive a long conversation title.
-  const room = Math.max(MAX_TITLE_LENGTH - fileName.length - 3, 20);
-  return deriveChatTitle(`${deriveChatTitle(chatTitle, room)} – ${fileName}`, MAX_TITLE_LENGTH);
+  const room = Math.max(MAX_SHARE_TITLE_LENGTH - fileName.length - 3, 20);
+  return shortTitle(`${shortTitle(chatTitle, room)} – ${fileName}`, MAX_SHARE_TITLE_LENGTH);
 }
