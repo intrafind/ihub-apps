@@ -813,6 +813,10 @@ To add a new model:
 - Responses are stored by default (`store: true`) for stateful conversations
 - For organizations with Zero Data Retention requirements, the adapter can be configured to use encrypted reasoning items
 
+## Usage Limits
+
+A model can carry a per-user token budget, `usageLimits: { "day": 50000, "week": 200000, "month": 500000 }`. It is the most one user may use of the model in each window. Groups and users can only set lower limits. See [Usage Limits](usage-limits.md).
+
 ## Model Hints
 
 The Model Hints feature allows administrators to display important, internationalized messages when users select specific models. This is useful for guiding users to appropriate models, warning about deprecations, or enforcing acknowledgment for experimental models.

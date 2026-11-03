@@ -122,6 +122,7 @@ export function inferenceErrorStatus(err) {
     case LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED:
       return 400;
     case LLM_ERROR_CODES.RATE_LIMITED:
+    case LLM_ERROR_CODES.QUOTA_EXCEEDED:
       return 429;
     case LLM_ERROR_CODES.TIMEOUT:
       return 504;
@@ -148,7 +149,11 @@ export function fromLLMError(err) {
     String(err.code || 'ERROR'),
     err.message,
     {
-      ...(typeof err.details === 'string' && err.details ? { details: err.details } : {})
+      ...(typeof err.details === 'string' && err.details ? { details: err.details } : {}),
+      // A usage limit tells the caller which budget ran out and when it resets.
+      ...(err.code === LLM_ERROR_CODES.QUOTA_EXCEEDED && err.details
+        ? { details: err.details }
+        : {})
     }
   );
 }

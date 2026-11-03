@@ -20,6 +20,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
+import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -323,6 +324,10 @@ function AdminModelEditPage() {
       if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
       // Left out of the payload when empty (the loop below drops undefined).
       dataToSend.sampling = samplingPayload(data);
+      // Per-user token budget. An empty object tells the server to clear a
+      // previously saved budget; a new model simply leaves it out.
+      dataToSend.usageLimits =
+        normalizeLimitBucket(data.usageLimits) || (isNewModel ? undefined : {});
       // A language added without a voice yet means nothing to save.
       if (dataToSend.tts?.voices) {
         const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
@@ -493,6 +498,43 @@ function AdminModelEditPage() {
               jsonSchema={jsonSchema}
               title={isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
             />
+
+            {/* Usage limits (per user) */}
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.usageLimits.modelTitle', 'Usage limits (per user)')}
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {t(
+                    'admin.usageLimits.modelIntro',
+                    'The most a single user may use of this model in each window. Groups and users can only set lower limits. Resets follow the schedule under Usage → Limits & quotas.'
+                  )}
+                </p>
+              </div>
+              <div className="px-6 py-4">
+                <UsageLimitBucketFields
+                  idPrefix="model-usage-limits"
+                  value={formData.usageLimits}
+                  allowUnlimited={false}
+                  onChange={bucket =>
+                    setFormData(prev => {
+                      const next = { ...prev };
+                      const clean = normalizeLimitBucket(bucket);
+                      if (clean) next.usageLimits = clean;
+                      else delete next.usageLimits;
+                      return next;
+                    })
+                  }
+                />
+                <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                  {t(
+                    'admin.usageLimits.modelEmptyHint',
+                    'Empty means unlimited. 0 blocks the model for everyone.'
+                  )}
+                </p>
+              </div>
+            </div>
 
             {/* Usage Stats and Apps List - integrated as sections */}
             {!isNewModel && (

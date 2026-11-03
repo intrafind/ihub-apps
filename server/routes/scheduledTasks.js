@@ -51,6 +51,7 @@ import { sendErrorResponse, sendInternalError, sendNotFound } from '../utils/res
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import { withUserFileLimit } from '../services/quota/quotaService.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import {
   ingestRequestFile,
@@ -607,7 +608,7 @@ export default function registerScheduledTaskRoutes(app) {
       const store = taskFileStore(res);
       if (!store) return;
       const taskApp = findByIdCaseInsensitive(configCache.getApps()?.data || [], task.appId);
-      const policy = chatFilePolicy(taskApp);
+      const policy = withUserFileLimit(chatFilePolicy(taskApp), req.user);
       if (!policy.enabled) {
         return sendErrorResponse(res, 503, 'File uploads are disabled', {
           details: { code: 'UPLOADS_DISABLED' }

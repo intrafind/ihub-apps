@@ -1179,6 +1179,22 @@ export class ChatFileRepository {
     return keys.filter(key => !key.slice(prefix.length).includes(KEY_SEPARATOR));
   }
 
+  /**
+   * Bytes and number of files stored for one owner — what counts against
+   * the per-user storage quota (`maxUserBytes`).
+   *
+   * @param {string} ownerId
+   * @returns {Promise<{usedBytes: number, fileCount: number}>}
+   */
+  async getOwnerUsage(ownerId) {
+    if (!ownerId || !this.isAvailable()) return { usedBytes: 0, fileCount: 0 };
+    const docs = await this._listOwnerDocs(ownerId);
+    return {
+      usedBytes: docs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0),
+      fileCount: docs.length
+    };
+  }
+
   async _listOwnerDocs(ownerId) {
     const docs = [];
     try {

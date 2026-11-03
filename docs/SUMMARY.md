@@ -20,6 +20,7 @@
     - [Projects](projects.md)
       - [Sources (now Projects)](sources.md)
     - [Chat and Task Files](chat-files.md)
+    - [Usage Limits](usage-limits.md)
     - [Mimetype Configuration](mimetypes.md)
     - [Configuration Validation](configuration-validation.md)
     - [Configuration Migrations](configuration-migrations.md)

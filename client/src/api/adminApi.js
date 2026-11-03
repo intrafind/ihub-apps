@@ -1353,6 +1353,39 @@ export const fetchAdminUsageProviders = async (range = '30d') => {
   return response.data;
 };
 
+/**
+ * One user's token usage against their effective limits (model, group and
+ * personal), with where each limit comes from and their file storage.
+ *
+ * @param {string} userKey - The user id (as stored in usage tracking)
+ * @returns {Promise<Object>} `{ buckets, models, files, personalLimits, ... }`
+ */
+export const fetchAdminUsageLimitUser = async userKey => {
+  const response = await makeAdminApiCall(
+    `/admin/usage/limits/users/${encodeURIComponent(userKey)}`
+  );
+  return response.data;
+};
+
+/**
+ * Reset a user's token counts for the current window(s).
+ *
+ * @param {string} userKey - The user id
+ * @param {{modelId?: string, window?: 'day'|'week'|'month'}} [body] - Narrow the
+ *   reset to one model and/or window; empty resets everything
+ * @returns {Promise<Object>} The user's usage after the reset
+ */
+export const resetAdminUsageLimitUser = async (userKey, body = {}) => {
+  const response = await makeAdminApiCall(
+    `/admin/usage/limits/users/${encodeURIComponent(userKey)}/reset`,
+    {
+      method: 'POST',
+      body
+    }
+  );
+  return response.data;
+};
+
 export const setAppFeedbackEnabled = async (appId, enabled) => {
   const response = await makeAdminApiCall(`/admin/apps/${appId}/features/feedback`, {
     method: 'POST',
@@ -1379,6 +1412,8 @@ export const adminApi = {
   fetchAdminUsageApps,
   fetchAdminUsageModels,
   fetchAdminUsageProviders,
+  fetchAdminUsageLimitUser,
+  resetAdminUsageLimitUser,
   fetchAdminFeedbackEntries,
   setAppFeedbackEnabled,
   fetchAdminCacheStats,

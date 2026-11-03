@@ -608,3 +608,147 @@ test('snapshots: secrets are dropped at any depth and the acting user is reduced
     }
   );
 });
+
+test('execute — usage limits: checked before the call, counted after it', async () => {
+  const user = { id: 'u1', groups: ['users'] };
+  const asserted = [];
+  const recorded = [];
+  const quota = {
+    async assert(principal, model) {
+      asserted.push({ principal, model: model.id });
+    },
+    record(principal, call) {
+      recorded.push({ principal, ...call });
+    }
+  };
+  const { client } = makeClient({
+    quota,
+    transport: async () =>
+      sseResponse(
+        openaiText(['ok'], { usage: { prompt_tokens: 9, completion_tokens: 2, total_tokens: 11 } })
+      )
+  });
+  await client.complete({
+    modelId: 'oa',
+    messages,
+    options: { user },
+    telemetry: { appId: 'chat', autoRun: false }
+  });
+  assert.deepEqual(asserted, [{ principal: user, model: 'oa' }]);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].principal, user);
+  assert.equal(recorded[0].appId, 'chat');
+  assert.equal(recorded[0].usage.promptTokens, 9);
+  assert.equal(recorded[0].usage.completionTokens, 2);
+});
+
+test('execute — a used-up budget refuses the call before anything is sent', async () => {
+  const refusal = new Error('limit');
+  refusal.code = LLM_ERROR_CODES.QUOTA_EXCEEDED;
+  const { client, calls } = makeClient({
+    quota: {
+      async assert() {
+        throw refusal;
+      },
+      record() {
+        throw new Error('nothing to count');
+      }
+    },
+    transport: async () => sseResponse([])
+  });
+  await assert.rejects(
+    client.execute({ modelId: 'oa', messages, options: { user: { id: 'u1' } } }),
+    err => err === refusal
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('execute — calls without a user are neither checked nor counted', async () => {
+  let touched = false;
+  const { client } = makeClient({
+    quota: {
+      async assert() {
+        touched = true;
+      },
+      record() {
+        touched = true;
+      }
+    },
+    transport: async () => sseResponse(openaiText(['ok']))
+  });
+  await client.complete({ modelId: 'oa', messages, telemetry: { autoRun: false } });
+  assert.equal(touched, false);
+});
+
+test('execute — a provider without usage is counted by estimate', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    transport: async () => sseResponse(openaiText(['x'.repeat(40)]))
+  });
+  await client.complete({
+    modelId: 'oa',
+    messages: [{ role: 'user', content: 'y'.repeat(80) }],
+    options: { user: { id: 'u1' } },
+    telemetry: { autoRun: false }
+  });
+  assert.equal(recorded[0].usage.source, 'estimate');
+  assert.equal(recorded[0].usage.promptTokens, 20);
+  assert.equal(recorded[0].usage.completionTokens, 10);
+});
+
+test('execute — a call that fails after the answer started is counted by estimate', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    transport: async () => {
+      const encoder = new TextEncoder();
+      const chunk = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'x'.repeat(40) } }] })}\n\n`;
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(chunk));
+        },
+        // Fails on the read after the first chunk (error() in start() would
+        // discard the queued chunk).
+        pull(controller) {
+          if (this.sent) {
+            controller.error(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+          }
+          this.sent = true;
+        }
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+  });
+  await assert.rejects(
+    client.complete({
+      modelId: 'oa',
+      messages: [{ role: 'user', content: 'y'.repeat(80) }],
+      options: { user: { id: 'u1' } },
+      telemetry: { autoRun: false }
+    })
+  );
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].usage.source, 'estimate');
+  assert.equal(recorded[0].usage.completionTokens, 10);
+});
+
+test('execute — a call that fails before any answer is not counted', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    maxRetries: 0,
+    transport: async () => {
+      throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+    }
+  });
+  await assert.rejects(
+    client.complete({
+      modelId: 'oa',
+      messages,
+      options: { user: { id: 'u1' } },
+      telemetry: { autoRun: false }
+    })
+  );
+  assert.equal(recorded.length, 0);
+});

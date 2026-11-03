@@ -256,7 +256,9 @@ export function makeClient(opts = {}) {
     maxRetries: opts.maxRetries,
     connectTimeoutMs: opts.connectTimeoutMs,
     streamIdleTimeoutMs: opts.streamIdleTimeoutMs,
-    debugDumps: false
+    debugDumps: false,
+    // Usage limits are off unless a test passes its own `quota`.
+    quota: opts.quota ?? null
   });
   return { client, calls };
 }

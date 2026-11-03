@@ -279,6 +279,25 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
 
               {/* Menu items */}
               <div className="py-1">
+                {/* Usage and limits */}
+                <Link
+                  to="/settings/usage"
+                  role="menuitem"
+                  tabIndex={-1}
+                  className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    setShowAllGroups(false);
+                  }}
+                >
+                  <Icon
+                    name="chart-bar"
+                    size="sm"
+                    className="mr-3 text-gray-500 dark:text-gray-400"
+                  />
+                  {t('auth.menu.usage', 'Usage')}
+                </Link>
+
                 {/* Integrations */}
                 {featureFlags.isEnabled('integrations', true) &&
                   (platformConfig?.cloudStorage?.enabled || platformConfig?.jira?.enabled) && (

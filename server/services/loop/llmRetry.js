@@ -66,6 +66,8 @@ export function isAbortLike(err) {
 export function isTransientLlmError(err) {
   if (!err) return false;
   if (isAbortLike(err)) return false;
+  // A used-up usage limit stays used up until its window resets.
+  if (err.code === 'QUOTA_EXCEEDED') return false;
   if (err.status != null) return isTransientHttpStatus(err.status);
   // Not transient: the host could not be resolved, or it did not answer the
   // connect at all (SYNs blackholed). Retrying only repeats the same wait and,

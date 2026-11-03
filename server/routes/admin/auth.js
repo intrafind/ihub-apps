@@ -22,6 +22,7 @@ import { startUserCleanup } from '../../services/userDeletion.js';
 import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvider.js';
 import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
 import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
+import { parseUsageLimitsInput } from '../../validators/common.js';
 
 /** The local user database, as a path relative to `contents/`. */
 const USERS_FILE = 'config/users.json';
@@ -573,7 +574,9 @@ export default function registerAdminAuthRoutes(app) {
         return sendBadRequest(res, 'Invalid user ID');
       }
 
-      const { email, name, password, internalGroups, active } = req.body;
+      const { email, name, password, internalGroups, active, usageLimits } = req.body;
+      const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
+      if (limits && !limits.ok) return sendBadRequest(res, limits.error);
 
       const usersData = await configStore.readJson(USERS_FILE);
       if (!usersData) {
@@ -594,6 +597,10 @@ export default function registerAdminAuthRoutes(app) {
       if (internalGroups !== undefined)
         user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
       if (active !== undefined) user.active = active;
+      if (limits) {
+        if (limits.value) user.usageLimits = limits.value;
+        else delete user.usageLimits;
+      }
 
       // Update password if provided
       if (password) {

@@ -26,7 +26,9 @@ export const LLM_ERROR_CODES = Object.freeze({
   AUTH_FAILED: 'AUTH_FAILED',
   MODEL_NOT_FOUND: 'MODEL_NOT_FOUND',
   INVALID_REQUEST: 'INVALID_REQUEST',
-  ABORTED: 'ABORTED'
+  ABORTED: 'ABORTED',
+  // The caller's usage limit is used up (services/quota/quotaService.js).
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED'
 });
 
 export const LLM_ERROR_CODE_LIST = Object.freeze(Object.values(LLM_ERROR_CODES));

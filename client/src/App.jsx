@@ -184,6 +184,7 @@ const AdminCredentialsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminCredentialsPage')
 );
 const IntegrationsPage = lazyWithRetry(() => import('./features/settings/pages/IntegrationsPage'));
+const UsagePage = lazyWithRetry(() => import('./features/settings/pages/UsagePage'));
 const OcrPage = lazyWithRetry(() => import('./features/tools/pages/OcrPage'));
 const JobListPage = lazyWithRetry(() => import('./features/tools/pages/JobListPage'));
 import AppProviders from './features/apps/components/AppProviders';
@@ -883,6 +884,7 @@ function App() {
             path="settings/integrations"
             element={<LazyAdminRoute component={IntegrationsPage} />}
           />
+          <Route path="settings/usage" element={<LazyAdminRoute component={UsagePage} />} />
           {featureFlags.isEnabled('toolsService', true) && (
             <>
               <Route path="tools/ocr-ai" element={<LazyAdminRoute component={OcrPage} />} />

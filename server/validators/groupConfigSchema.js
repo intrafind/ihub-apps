@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { zSafeId } from './common.js';
+import { usageLimitsSchema, zSafeId } from './common.js';
 
 export const groupConfigSchema = z
   .object({
@@ -40,6 +40,8 @@ export const groupConfigSchema = z
       .prefault({}),
     mappings: z.array(z.string()).prefault([]),
     inherits: z.array(z.string()).optional(),
+    // Token and file storage limits of the members (services/quota).
+    usageLimits: usageLimitsSchema.optional(),
     enabled: z.boolean().prefault(true)
   })
   .passthrough();

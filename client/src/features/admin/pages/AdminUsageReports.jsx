@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import UsageTimeline from '../components/UsageTimeline';
+import UsageQuotasPanel from '../components/UsageQuotasPanel';
 import PromptCachePanel from '../components/PromptCachePanel';
 import { summarizePromptCache } from '../utils/promptCacheStats';
 
@@ -174,7 +175,14 @@ function AdminUsageReports() {
   const { t } = useTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  // `?tab=limits` opens a tab directly (links from the model, group and user editors).
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('tab') || 'overview';
+    } catch {
+      return 'overview';
+    }
+  });
   const [trackingMeta, setTrackingMeta] = useState(null);
 
   const load = async () => {
@@ -267,6 +275,11 @@ function AdminUsageReports() {
       id: 'overview',
       label: t('admin.usage.tabs.overview', 'Overview'),
       icon: <Icon name="chart" size="md" />
+    },
+    {
+      id: 'limits',
+      label: t('admin.usage.tabs.limits', 'Limits & quotas'),
+      icon: <Icon name="chart-bar" size="md" />
     },
     {
       id: 'users',
@@ -885,6 +898,7 @@ function AdminUsageReports() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'limits' && <UsageQuotasPanel />}
         {activeTab === 'users' && renderUsers()}
         {activeTab === 'apps' && renderApps()}
         {activeTab === 'magic' && renderMagic()}

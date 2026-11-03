@@ -1,0 +1,292 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * Admin views and settings of usage limits (services/quota):
+ *
+ *   GET  /api/admin/usage/limits/settings          — platform budget + reset schedule
+ *   PUT  /api/admin/usage/limits/settings
+ *   GET  /api/admin/usage/limits/users             — users with their buckets (paged)
+ *   GET  /api/admin/usage/limits/users/:userKey    — one user in detail
+ *   POST /api/admin/usage/limits/users/:userKey/reset
+ *   GET  /api/admin/usage/limits/models            — per model
+ *   GET  /api/admin/usage/limits/groups            — per group
+ *
+ * Model, group and user limits are edited with their own admin editors
+ * (`usageLimits` on each config).
+ */
+import { adminAuth } from '../../middleware/adminAuth.js';
+import { buildServerPath } from '../../utils/basePath.js';
+import configStore from '../../services/config/ConfigStore.js';
+import configCache from '../../configCache.js';
+import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import { usageLimitBucketSchema } from '../../validators/common.js';
+import {
+  currentWindows,
+  isValidTimeZone,
+  normalizeResets,
+  WEEKDAYS,
+  WINDOWS
+} from '../../services/quota/resetSchedule.js';
+import { getCurrentWindows } from '../../services/quota/quotaService.js';
+import { getQuotaLedger } from '../../services/quota/QuotaLedger.js';
+import {
+  getGroupOverview,
+  getModelOverview,
+  getQuotaUser,
+  listQuotaUsers
+} from '../../services/quota/quotaAdmin.js';
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A user key as it appears in the ledger or users.json. */
+function validUserKey(key) {
+  return (
+    typeof key === 'string' &&
+    key.length > 0 &&
+    key.length <= 256 &&
+    !/[\u0000-\u001f]/.test(key) &&
+    !['__proto__', 'constructor', 'prototype'].includes(key)
+  );
+}
+
+function settingsResponse(platform) {
+  const usageLimits = platform?.usageLimits || {};
+  const schedule = normalizeResets(usageLimits.resets);
+  const windows = currentWindows(usageLimits.resets);
+  return {
+    allModels: usageLimits.allModels || {},
+    resets: {
+      timezone: usageLimits.resets?.timezone ?? null,
+      dailyAt: schedule.dailyAt,
+      weeklyOn: schedule.weeklyOn,
+      weeklyAt: schedule.weeklyAt,
+      monthlyAt: schedule.monthlyAt
+    },
+    effectiveTimezone: schedule.timezone,
+    nextResets: {
+      day: windows.day.resetAt,
+      week: windows.week.resetAt,
+      month: windows.month.resetAt
+    }
+  };
+}
+
+export default function registerAdminUsageLimitRoutes(app) {
+  /**
+   * @swagger
+   * /admin/usage/limits/settings:
+   *   get:
+   *     summary: Platform usage limit settings
+   *     description: The budget across all models and the reset schedule, with the next reset times.
+   *     tags: [Admin - Usage]
+   *     responses:
+   *       200: { description: Settings }
+   *   put:
+   *     summary: Update the platform usage limit settings
+   *     tags: [Admin - Usage]
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               allModels: { type: object, description: "{ day, week, month } tokens, -1/null = unlimited" }
+   *               resets:
+   *                 type: object
+   *                 properties:
+   *                   timezone: { type: string, nullable: true }
+   *                   dailyAt: { type: string, example: "00:00" }
+   *                   weeklyOn: { type: string, example: monday }
+   *                   weeklyAt: { type: string, example: "00:00" }
+   *                   monthlyAt: { type: string, example: "00:00" }
+   *     responses:
+   *       200: { description: Saved settings }
+   *       400: { description: Invalid settings }
+   */
+  app.get(buildServerPath('/api/admin/usage/limits/settings'), adminAuth, (req, res) => {
+    try {
+      res.json(settingsResponse(configCache.getPlatform() || {}));
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage limit settings');
+    }
+  });
+
+  app.put(buildServerPath('/api/admin/usage/limits/settings'), adminAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const parsedBudget = usageLimitBucketSchema.safeParse(body.allModels || {});
+      if (!parsedBudget.success) return sendBadRequest(res, 'Invalid allModels budget');
+      const resets = body.resets || {};
+      if (resets.timezone !== null && resets.timezone !== undefined && resets.timezone !== '') {
+        if (!isValidTimeZone(resets.timezone)) return sendBadRequest(res, 'Unknown time zone');
+      }
+      for (const key of ['dailyAt', 'weeklyAt', 'monthlyAt']) {
+        if (resets[key] !== undefined && !TIME.test(resets[key])) {
+          return sendBadRequest(res, `${key} must be HH:MM`);
+        }
+      }
+      if (resets.weeklyOn !== undefined && !WEEKDAYS.includes(resets.weeklyOn)) {
+        return sendBadRequest(res, 'weeklyOn must be a weekday name');
+      }
+
+      const platform = await configStore.readJson('config/platform.json');
+      if (!platform) return sendInternalError(res, new Error('platform.json unreadable'), 'save');
+      const current = platform.usageLimits || {};
+      platform.usageLimits = {
+        ...current,
+        allModels: Object.fromEntries(
+          Object.entries(parsedBudget.data).filter(([, v]) => v !== undefined && v !== null)
+        ),
+        resets: {
+          ...(current.resets || {}),
+          timezone: resets.timezone ? resets.timezone : null,
+          ...(resets.dailyAt ? { dailyAt: resets.dailyAt } : {}),
+          ...(resets.weeklyOn ? { weeklyOn: resets.weeklyOn } : {}),
+          ...(resets.weeklyAt ? { weeklyAt: resets.weeklyAt } : {}),
+          ...(resets.monthlyAt ? { monthlyAt: resets.monthlyAt } : {})
+        }
+      };
+      await configStore.writeJson('config/platform.json', platform);
+      await configCache.refreshCacheEntry('config/platform.json');
+      res.json(settingsResponse(configCache.getPlatform() || platform));
+    } catch (error) {
+      return sendInternalError(res, error, 'save usage limit settings');
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/usage/limits/users:
+   *   get:
+   *     summary: Users with their usage against their limits
+   *     tags: [Admin - Usage]
+   *     parameters:
+   *       - { in: query, name: search, schema: { type: string } }
+   *       - { in: query, name: status, schema: { type: string, enum: [all, limited, warning, exceeded] } }
+   *       - { in: query, name: modelId, schema: { type: string } }
+   *       - { in: query, name: page, schema: { type: integer } }
+   *       - { in: query, name: pageSize, schema: { type: integer } }
+   *     responses:
+   *       200: { description: "{ items, total, page, pageSize }" }
+   */
+  app.get(buildServerPath('/api/admin/usage/limits/users'), adminAuth, async (req, res) => {
+    try {
+      const { search, status, modelId, page, pageSize } = req.query;
+      res.json(
+        await listQuotaUsers({
+          search: typeof search === 'string' ? search : '',
+          status: ['all', 'limited', 'warning', 'exceeded'].includes(status) ? status : 'all',
+          modelId: typeof modelId === 'string' && modelId ? modelId : null,
+          page: Number(page) || 1,
+          pageSize: Number(pageSize) || 25
+        })
+      );
+    } catch (error) {
+      return sendInternalError(res, error, 'list usage limits');
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/usage/limits/users/{userKey}:
+   *   get:
+   *     summary: One user's usage, limits and limit sources
+   *     tags: [Admin - Usage]
+   *     parameters:
+   *       - { in: path, name: userKey, required: true, schema: { type: string } }
+   *     responses:
+   *       200: { description: User usage }
+   *       404: { description: Unknown user }
+   */
+  app.get(
+    buildServerPath('/api/admin/usage/limits/users/:userKey'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { userKey } = req.params;
+        if (!validUserKey(userKey)) return sendBadRequest(res, 'Invalid user');
+        const user = await getQuotaUser(userKey);
+        if (!user) return sendNotFound(res, 'User');
+        res.json(user);
+      } catch (error) {
+        return sendInternalError(res, error, 'load user usage');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/usage/limits/users/{userKey}/reset:
+   *   post:
+   *     summary: Reset a user's token counts for the current window(s)
+   *     tags: [Admin - Usage]
+   *     parameters:
+   *       - { in: path, name: userKey, required: true, schema: { type: string } }
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               modelId: { type: string, description: "Only this model (all when omitted)" }
+   *               window: { type: string, enum: [day, week, month], description: "Only this window (all when omitted)" }
+   *     responses:
+   *       200: { description: The user's usage after the reset }
+   */
+  app.post(
+    buildServerPath('/api/admin/usage/limits/users/:userKey/reset'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { userKey } = req.params;
+        if (!validUserKey(userKey)) return sendBadRequest(res, 'Invalid user');
+        const { modelId, window } = req.body || {};
+        if (window !== undefined && window !== null && !WINDOWS.includes(window)) {
+          return sendBadRequest(res, 'window must be day, week or month');
+        }
+        if (modelId !== undefined && modelId !== null && typeof modelId !== 'string') {
+          return sendBadRequest(res, 'Invalid modelId');
+        }
+        await getQuotaLedger().reset(userKey, getCurrentWindows(), {
+          modelId: modelId || undefined,
+          window: window || undefined
+        });
+        res.json((await getQuotaUser(userKey)) || { userKey });
+      } catch (error) {
+        return sendInternalError(res, error, 'reset user usage');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/usage/limits/models:
+   *   get:
+   *     summary: Per model — global limits, tokens and users near or over their budget
+   *     tags: [Admin - Usage]
+   *     responses:
+   *       200: { description: Model rows }
+   * /admin/usage/limits/groups:
+   *   get:
+   *     summary: Per group — limits, members and their combined tokens
+   *     tags: [Admin - Usage]
+   *     responses:
+   *       200: { description: Group rows }
+   */
+  app.get(buildServerPath('/api/admin/usage/limits/models'), adminAuth, async (req, res) => {
+    try {
+      res.json({ items: await getModelOverview(), resets: getCurrentWindows() });
+    } catch (error) {
+      return sendInternalError(res, error, 'load model usage');
+    }
+  });
+
+  app.get(buildServerPath('/api/admin/usage/limits/groups'), adminAuth, async (req, res) => {
+    try {
+      res.json({ items: await getGroupOverview() });
+    } catch (error) {
+      return sendInternalError(res, error, 'load group usage');
+    }
+  });
+}

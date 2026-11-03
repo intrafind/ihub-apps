@@ -23,6 +23,7 @@ import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
+import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
 
 /**
  * Refusals of the chat request the user can do something about, by the code
@@ -552,6 +553,8 @@ function useAppChat({
           break;
 
         case RUN_EVENTS.RUN_ENDED: {
+          // The answer used tokens: the usage limits shown update.
+          if (!rootRun.parentRunId) void refreshMyUsage();
           // A re-attached turn is settled: hand back to the caller so it can
           // re-read the stored transcript. The replay and the live stream meet
           // at a fetch boundary, so what is on screen may be missing a delta
@@ -598,6 +601,8 @@ function useAppChat({
         }
 
         case RUN_EVENTS.STREAM_ERROR:
+          // A refused (or failed) call may have used tokens or hit a limit.
+          void refreshMyUsage();
           // Preserve any streamed content (the projection appends the error text)
           updateAssistantMessage(messageId, content, false, extras);
           settleReattachedRun(rootRun.runId);

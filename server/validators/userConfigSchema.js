@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
+import { usageLimitsSchema } from './common.js';
 
 export const userConfigSchema = z
   .object({
@@ -19,7 +20,9 @@ export const userConfigSchema = z
     passwordHash: z.string().nullish(),
     // For external auth users
     externalId: z.string().nullish(),
-    provider: z.string().nullish()
+    provider: z.string().nullish(),
+    // Personal token and file storage limits (services/quota).
+    usageLimits: usageLimitsSchema.optional()
   })
   .passthrough();
 

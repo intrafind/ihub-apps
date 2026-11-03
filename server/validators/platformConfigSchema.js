@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+import { usageLimitBucketSchema } from './common.js';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
@@ -184,6 +185,38 @@ const usageTrackingRetentionSchema = z
     dailyRetentionDays: z.number().prefault(365),
     monthlyRetentionDays: z.number().prefault(-1),
     feedbackRetentionDays: z.number().prefault(-1)
+  })
+  .passthrough();
+
+/**
+ * Usage limits (services/quota): the budget across all models every user gets
+ * at most, and the built-in reset schedule of all token budgets — daily at
+ * `dailyAt`, weekly on `weeklyOn` at `weeklyAt`, monthly on the 1st at
+ * `monthlyAt`, wall-clock times in `timezone` (the server's zone when unset).
+ */
+const usageLimitsPlatformSchema = z
+  .object({
+    allModels: usageLimitBucketSchema.prefault({}),
+    resets: z
+      .object({
+        timezone: z.string().nullable().prefault(null),
+        dailyAt: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM')
+          .prefault('00:00'),
+        weeklyOn: z
+          .enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])
+          .prefault('monday'),
+        weeklyAt: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM')
+          .prefault('00:00'),
+        monthlyAt: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM')
+          .prefault('00:00')
+      })
+      .prefault({})
   })
   .passthrough();
 
@@ -442,6 +475,7 @@ export const platformConfigSchema = z
       .passthrough()
       .prefault({}),
     usageTracking: usageTrackingRetentionSchema.prefault({}),
+    usageLimits: usageLimitsPlatformSchema.prefault({}),
     // Transport ceilings for provider calls, in milliseconds (see
     // services/loop/LLMClient.js). Both fall back to the env vars
     // LLM_CONNECT_TIMEOUT_MS / LLM_STREAM_IDLE_TIMEOUT_MS when unset, and a

@@ -9,6 +9,8 @@ import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigati
 import { modelSupportsWebSearch } from '../webSearch';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import { isTranscriptionModel } from '../../../utils/modelFiltering';
+import useMyUsage, { mostUrgentBucket } from '../../../shared/hooks/useMyUsage';
+import { formatTimeUntil, windowLabel } from '../../../shared/utils/usageFormat';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -24,6 +26,7 @@ function ModelSelector({
   dropdownDirection = 'up' // 'up' or 'down' - controls where the dropdown opens
 }) {
   const { t } = useTranslation();
+  const { bucketsForModel } = useMyUsage();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const menuRef = useRef(null);
@@ -166,6 +169,10 @@ function ModelSelector({
               </div>
               {filteredModels.map((model, index) => {
                 const name = getLocalizedContent(model.name, currentLanguage);
+                // The model's own token budget, when it has one.
+                const usageBucket = mostUrgentBucket(
+                  bucketsForModel(model.id).filter(b => b.scope === 'model')
+                );
                 const desc = getLocalizedContent(model.description, currentLanguage);
                 const isSelected = model.id === selectedModel;
                 // Web search apps mark each model: globe where web search
@@ -200,6 +207,27 @@ function ModelSelector({
                         >
                           {name}
                         </div>
+                        {usageBucket && (
+                          <div
+                            className={`mt-0.5 text-xs font-medium ${
+                              usageBucket.exceeded
+                                ? 'text-red-600 dark:text-red-400'
+                                : usageBucket.warning
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : 'text-gray-500 dark:text-gray-400'
+                            }`}
+                            data-testid="model-usage-badge"
+                          >
+                            {usageBucket.exceeded
+                              ? t('usage.picker.exceeded', 'Limit reached · resets in {{until}}', {
+                                  until: formatTimeUntil(usageBucket.resetAt, t)
+                                })
+                              : t('usage.picker.used', '{{percent}}% of {{window}} limit used', {
+                                  percent: Math.round(usageBucket.percent),
+                                  window: windowLabel(usageBucket.window, t).toLowerCase()
+                                })}
+                          </div>
+                        )}
                         {isTranscriptionModel(model) && (
                           /* Selecting one turns the chat into transcription:
                              audio and video in, the transcript as the answer. */
