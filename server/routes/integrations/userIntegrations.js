@@ -56,7 +56,7 @@ import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
 import { isAdminUser } from '../../services/loop/runIdentity.js';
-import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
+import { isAdminEligiblePrincipal, canUserAccessResource } from '../../utils/authorization.js';
 import { describeInstallation } from '../../services/integrations/auth/connectionProviders.js';
 import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import {
@@ -77,7 +77,6 @@ import {
   effectivePreferences,
   getIntegrationPreferencesRepository
 } from '../../services/integrations/IntegrationPreferencesRepository.js';
-import { canUserAccessResource } from '../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'UserIntegrations';
