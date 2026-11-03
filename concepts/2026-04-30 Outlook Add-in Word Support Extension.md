@@ -1,7 +1,7 @@
 # Outlook Add-in Word Support Extension
 
 **Date:** 2026-04-30
-**Status:** Concept
+**Status:** Superseded by [Office Hosts and Model-Driven Office Tools](office-hosts-and-tools/README.md) (2026-11-03). Written for the former `ihub-outlook-addin` repository; its paths do not exist in this repository.
 **Scope:** ihub-outlook-addin
 
 ## Problem Statement
