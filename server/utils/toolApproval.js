@@ -182,8 +182,9 @@ export function resolveSideEffect(toolDef, installation = null) {
 
 /**
  * Where a tool's data goes. The installation's admin override
- * (`actions.overrides[action].dataFlow`) wins; then declared values; remote
- * MCP servers and A2A agents are external; everything else is iHub's own
+ * (`actions.overrides[action].dataFlow`, set in the integration builder for
+ * an MCP tool or an A2A skill) wins; then declared values; remote MCP servers
+ * and A2A agents are external; everything else is iHub's own
  * (`internal`).
  *
  * @param {Object} toolDef

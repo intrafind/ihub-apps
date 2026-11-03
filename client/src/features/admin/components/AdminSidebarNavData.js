@@ -11,7 +11,6 @@ import {
   Cog6ToothIcon,
   WindowIcon,
   DocumentTextIcon,
-  WrenchIcon,
   FolderIcon,
   CodeBracketIcon,
   UsersIcon,
@@ -109,13 +108,6 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           href: '/admin/prompts',
           icon: DocumentTextIcon,
           visible: showAdminPage('prompts')
-        },
-        {
-          key: 'tools',
-          label: t('admin.nav.tools', 'Tools'),
-          href: '/admin/tools',
-          icon: WrenchIcon,
-          visible: showAdminPage('tools')
         },
         {
           key: 'skills',

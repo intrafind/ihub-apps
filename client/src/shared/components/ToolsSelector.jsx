@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
-import { fetchTools } from '../../api';
+import { fetchAdminToolCatalog } from '../../api/integrationsAdminApi';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
 function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] }) {
@@ -22,7 +22,7 @@ function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] 
     const loadTools = async () => {
       try {
         setIsLoading(true);
-        const tools = await fetchTools();
+        const tools = await fetchAdminToolCatalog();
         setAvailableTools(tools || []);
       } catch (error) {
         console.error('Failed to fetch tools:', error);

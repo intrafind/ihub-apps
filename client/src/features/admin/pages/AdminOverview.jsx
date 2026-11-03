@@ -17,7 +17,6 @@ import {
   ShieldCheckIcon,
   BoltIcon,
   FolderIcon,
-  WrenchIcon,
   KeyIcon,
   ArrowUpCircleIcon,
   ServerStackIcon,
@@ -411,15 +410,6 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
             href="/admin/projects"
           />
         )}
-        <InfoRow
-          icon={WrenchIcon}
-          label={t('admin.overview.tools', 'Tools')}
-          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
-            enabled: info.tools.enabled,
-            total: info.tools.total
-          })}
-          href="/admin/tools"
-        />
         {info.integrations && (
           <InfoRow
             icon={LinkIcon}

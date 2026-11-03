@@ -66,6 +66,81 @@ After an update the previous module version is dropped (actions, the test and th
 
 A shipped definition never uses `script` (it is `native`); the shipped IntraFind registry is the place to publish connectors such as Jira or Microsoft 365 that cannot be expressed as an OpenAPI document.
 
+### Custom integrations (Add manually)
+
+**Admin → Integrations → Add manually** (`/admin/integrations/builder/new`, also on the Catalog tab) opens the **integration builder**. It replaced the Tools page (**Admin → Tools** and `/api/admin/tools*` are gone, see [Tool files became custom integrations](#tool-files-became-custom-integrations)). A custom integration is an ordinary definition `custom/<id>` in `contents/integration-definitions/custom__<id>/` plus an installation `<id>`: it is listed in the **Custom** group, bound to apps, granted to groups, tested and approved like every other integration, and its page has **Edit in builder**.
+
+The builder has five steps:
+
+| Step | What you set |
+| --- | --- |
+| **Basics** | Name and description (per language), the ID (proposed from the name; tool ids are `<id>__<action>`; it cannot change later), an optional https icon URL |
+| **Sign-in** | **None**; a **service account**: a credential picked from the credential store (**Admin → Credentials**), sent as the credential's own type says (bearer, basic, API key header, OAuth2 client credentials, API key query), as a bearer token, as an API key in a named header (with an optional prefix) or as basic auth; **per-user OAuth** for an MCP server (each user connects their own account). A script integration signs in itself |
+| **Source** | Where the actions come from (below) |
+| **Actions** | Per action: name, description for the model, parameters (JSON schema), **side effect**, **data flow** and **approval**; plus an approval for every action. See [Tool Approval](tool-approval.md) |
+| **Review** | What will be saved, with the tool id of every action |
+
+| Source | Settings | Actions |
+| --- | --- | --- |
+| **OpenAPI** | The document from a URL (fetched by the server through the SSRF guard), a file or pasted JSON/YAML; base URL (default: the document's first server); static headers. The document is stored with the integration (`openapi.json`) | One per picked operation; the side effect is proposed from the method (GET/HEAD read, POST/PUT/PATCH write, DELETE destructive) |
+| **HTTP request** | Optional base URL and static headers | One request template each, see [HTTP request actions](#http-request-actions-http) |
+| **Script** | The connector module `actions/connector.js` (one bundled ES module, see [Code-based integrations](#code-based-integrations-script)); **Insert a stub for every action** writes a skeleton | Declared in the builder (description, parameters); the module implements `actions.<name>.run(args, ctx)` |
+| **MCP server** | Streamable HTTP, SSE or WebSocket URL with headers, or a local command (`stdio`) with arguments and environment | The server's `tools/list` (**List the server's tools**); per tool a description that replaces the server's, side effect, data flow (stored as installation overrides) and approval |
+| **A2A agent** | The agent card URL | The card's skills (**Read the agent's skills**) |
+
+Saving writes the definition with the next patch version (`1.0.0`, `1.0.1`, …) and saves the installation against it; when the installation is refused, the previous folder is put back. A save keeps what the installation page sets outside the builder: the action detail's overrides (guidance, example prompts, and for an action the definition declares also its description, side effect and data flow), the accepted action fingerprints and `approval.newOrChanged`. An action whose name, side effect or input schema the save changes counts as changed under [new or changed actions](tool-approval.md) until an admin marks it reviewed. A script module runs in the server process like any `script` definition; the builder writes it without the registry's trust check, because the admin wrote it.
+
+**Export.** **Export for a registry** on the builder (`POST /api/admin/integrations/builder/_export/:id`) downloads a package `{ format: "ihub-integration-package", formatVersion: 1, catalogItem, files }`. `files` is the definition folder (`integration.json` and its companions); `catalogItem` is the entry for the registry's `catalog.json` (type `integration`, name `custom__<id>`, version, `source.path` `integration-definitions/custom__<id>/integration.json`, `source.companions`, and a `source.integrity` hash for every code file). Publish the files under that path next to the catalog, add the item to `items[]`, and another iHub installs it from the [Marketplace](marketplace.md) (a script integration only from a registry trusted for code). Tool ids the integration kept from a tool file (`toolId`) belong to this server and are left out; an MCP server started as a local process cannot be exported (`409 NOT_PUBLISHABLE`).
+
+### HTTP request actions (`http`)
+
+The `http` protocol wraps REST endpoints without code. The protocol holds what every action shares; each action is one request template:
+
+```jsonc
+{
+  "protocol": { "type": "http", "baseUrl": "https://erp.example.com/api", "headers": { "Accept": "application/json" } },
+  "actions": [
+    {
+      "name": "get_order",
+      "description": { "en": "Get one order with its lines" },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "parameters": { "type": "object", "properties": { "orderId": { "type": "string" } }, "required": ["orderId"] },
+      "request": { "method": "GET", "url": "/orders/{orderId}", "query": { "expand": "{expand}" } },
+      "response": { "result": "$.data.lines", "fields": { "sku": "sku", "qty": "quantity.value" } }
+    },
+    {
+      "name": "add_note",
+      "sideEffect": "write",
+      "parameters": { "type": "object", "properties": { "orderId": { "type": "string" }, "note": { "type": "string" } } },
+      "request": { "method": "POST", "url": "/orders/{orderId}/notes", "body": "{\"text\": {note}}", "contentType": "application/json" }
+    }
+  ]
+}
+```
+
+- `{name}` is the model's argument of that name, else the install value of that name. Every substitution is escaped for where it lands: URL-encoded in the path and the query (a path value `.` or `..` is refused), JSON-encoded in a JSON body (write `{note}`, not `"{note}"`; a missing value is `null`), form-encoded in a form body; a header value with a line break is refused. A query parameter whose placeholders have no value is left out. The base URL takes install values only.
+- `response.result` is a path into the response (dotted keys, `[]` for every element of a list, `$.` optional); `response.fields` projects the result (each element of a list) onto named paths. Without a mapping the model sees the whole response. A response above `maxResponseBytes` (default 256 KB) is cut and flagged.
+- Calls go through the SSRF guard with the integrations' `security` (`blockPrivateIps`, `allowedHosts`) and `platform.ssrf.allowedHosts`: a direct call through `safeFetch` (resolved once, private addresses refused, the connection pinned to the checked address), a call the proxy settings route through the proxy through `httpFetch` after the same host check. Certificates follow `ssl.domainWhitelist`. Redirects are never followed (a 3xx is reported as an error). An HTTP error comes back as `{ error: true, status, message }` with the API's own message where it has one.
+- The test of an installation runs its first read action that needs no argument (or the declared `health` action).
+
+### Tool files became custom integrations
+
+Migration **V211** turned every tool file an admin had created in `contents/tools/` into a custom integration (shipped and platform tools, provider tools and agent tools stay where they are):
+
+| Tool file | Custom integration |
+| --- | --- |
+| Script tool (`script`, one function or several `functions`) | Protocol `script`; a generated `actions/connector.js` runs the tool's script in `server/tools/` exactly as before (`ctx.runToolScript(script, { method })`), one action per function |
+| OpenAPI tool (`type: "openapi"`) | Protocol `openapi`; an inline or file document is copied into the folder, a URL stays the document URL; `openapi.auth.credentialRef` becomes a service account that sends the credential as its type says (`serviceAccount.kind: "credential"`); `xDisplay.hideFields` → `hideFields`; the tool's `security.allowedHosts` join the integrations' allowed hosts |
+| `id`, function names | The installation id is the tool id in lower case with `-` (`pingTool` → `ping-tool`, `<id>-2` when taken); every action keeps its **tool id** (`toolId`: `myTool`, `myTool_search`), so apps, workflows, agent profiles, group tool grants, the MCP and A2A gateways and app approval overrides keep working |
+| `enabled`, `approval` / `requiresApproval`, `sideEffect`, `dataFlow` | The installation's `enabled`; `approval.default` (the tool's) and `approval.actions` (a function's own); the action's side effect and data flow (an undeclared data flow stays `internal`) |
+| App `tools` entries | `app.integrations.<id>`, narrowed to `actions` when the app named single functions |
+| Groups | Every group with an explicit `permissions.integrations` list (no `*`) gets the installation, because the tool was usable by everyone who could open an app that listed it |
+
+The tool file is deleted. `passthrough`, `concurrency` and `requestDelayMs` are not carried over (logged). A file whose id cannot be kept as a tool id, or whose functions collide as action names, is left in place with a warning. Only built-in and custom (`custom/<id>`) definitions may fix tool ids; a definition from a registry cannot.
+
+A tool file put into `contents/tools/` by hand still loads as a plain tool (developers, see [Tool Calling](tool-calling.md)); an OpenAPI tool file does not any more (logged once).
+
 ### Remote A2A agents
 
 A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a` protocol, installed from the shipped **A2A agent** definition (`com.intrafind/a2a-agent`): the Agent Card URL, a sign-in mode (none, a shared token or API key, or an OAuth client) and the call budget are its install values. The card's skills are the installation's actions, listed after **Test connection**; tool ids stay `a2a__<id>__<skill>`. Calling an agent, its conversations and the inbound side are described in [A2A Agents](a2a-agents.md). Migration V194 turned every agent of the former `config/a2aAgents.json` into an installation under the same id.
@@ -627,6 +702,10 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/admin/integrations/installed/:id/_adopt`                                                                   | adopt the loaded definition version for an installation that needs a review |
 | `GET /api/admin/integrations/installed/:id/example-apps`                                                              | the example apps it offers (`templates[]`: `key`, `source` `definition` or `generated`, `name`, `description`, `suggestedId`), `grantedToYou` (the calling admin's groups grant it), `enabled` |
 | `POST /api/admin/integrations/installed/:id/example-apps`                                                             | create one, body `{ "template"?: "<key>", "appId"?: "…", "enabled"?: true }` → `201 { app }`; `409` when the id is taken, `400` for an invalid id or an unknown template; audited as `create app` |
+| `POST /api/admin/integrations/builder`, `GET` / `PUT /api/admin/integrations/builder/:id` | create, read and save a custom integration as a builder draft (`400 INVALID_DRAFT` / `INVALID_DEFINITION` with `details[].path`, `409 DUPLICATE_ID`, `400 NOT_CUSTOM` for another definition's installation) |
+| `POST /api/admin/integrations/builder/_import` | list the actions of a source before saving: `{ kind: "openapi", source: { type: "url", url } \| { type: "inline", spec } }` → operations and the parsed document; `{ kind: "mcp" \| "a2a", source, auth? }` → the tools or skills |
+| `POST /api/admin/integrations/builder/_export/:id` | the registry package of a custom integration (see [Custom integrations](#custom-integrations-add-manually)) |
+| `GET /api/admin/integrations/tools` | every tool an app, workflow or agent can name (platform tools, remaining tool files, actions of enabled installations with `integration: { instanceId, label, action }`), for the admin pickers |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
 | `GET /api/admin/integrations/requests` | the request queue: `requests` (each with `definitionName`, `definitionAvailable`, `installedInstances`, `requester`, `status` `open` \| `approved` \| `declined` \| `fulfilled`, `reason`, `note`, `decidedBy`, `fulfilledBy`), `hidden` (`definition`, `name`, `hiddenAt`, `hiddenBy`) and `openCount` |
 | `POST /api/admin/integrations/requests/:id/_approve` `{ note? }` | approve → `{ request }`; `404` for an unknown request or a definition no longer in the catalog, `409 REQUEST_CLOSED` for a closed one |

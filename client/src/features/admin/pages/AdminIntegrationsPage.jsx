@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -480,6 +480,10 @@ function AdminIntegrationsPage() {
             <Icon name="refresh" size="sm" />
             {t('admin.integrationCatalog.reload', 'Reload catalog')}
           </button>
+          <Link to="/admin/integrations/builder/new" className={SECONDARY_BUTTON_CLASS}>
+            <Icon name="wrench" size="sm" />
+            {t('admin.integrationBuilder.addManually', 'Add manually')}
+          </Link>
           <button type="button" className={PRIMARY_BUTTON_CLASS} onClick={() => setTab('catalog')}>
             <Icon name="plus" size="sm" />
             {t('admin.integrationCatalog.install', 'Install')}
@@ -592,6 +596,20 @@ function AdminIntegrationsPage() {
       )}
       {!loading && tab === 'catalog' && (
         <div role="tabpanel" id="tabpanel-catalog" aria-labelledby="tab-catalog">
+          <div
+            className={`mb-6 flex flex-wrap items-center justify-between gap-3 ${CALLOUT_CLASS.info}`}
+          >
+            <p>
+              {t(
+                'admin.integrationBuilder.catalogHint',
+                'Not in the catalog? Build it from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent.'
+              )}
+            </p>
+            <Link to="/admin/integrations/builder/new" className={SECONDARY_BUTTON_CLASS}>
+              <Icon name="wrench" size="sm" />
+              {t('admin.integrationBuilder.addManually', 'Add manually')}
+            </Link>
+          </div>
           {searchBox}
           {catalogGroups.length === 0 ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">

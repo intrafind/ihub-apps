@@ -2151,75 +2151,6 @@
         }
       }
     },
-    "tools": {
-      "title": "Tool Management",
-      "subtitle": "Create, edit, and manage AI tools / function calling for your iHub Apps",
-      "toggle": "Toggle tools",
-      "enableDisable": "Tools",
-      "enableDisableSubtitle": "Enable or disable tools for this chat",
-      "createNew": "Create New Tool",
-      "uploadConfig": "Upload Config",
-      "uploading": "Uploading...",
-      "searchPlaceholder": "Search tools...",
-      "filterAll": "All Tools",
-      "filterEnabled": "Enabled Only",
-      "filterDisabled": "Disabled Only",
-      "filterAllTypes": "All Types",
-      "filterRegular": "Regular Tools",
-      "filterMultiFunction": "Multi-Function",
-      "filterSpecial": "Special Tools",
-      "loadError": "Error loading tools",
-      "noTools": "No tools found",
-      "noToolsDescription": "Get started by creating a new tool.",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "enable": "Enable",
-      "disable": "Disable",
-      "clone": "Clone",
-      "edit": "Edit",
-      "delete": "Delete",
-      "download": "Download Config",
-      "deleteConfirm": "Are you sure you want to delete this tool?",
-      "deleteSuccess": "Tool deleted successfully",
-      "typeRegular": "Regular",
-      "typeMultiFunction": "Multi-Function",
-      "typeSpecial": "Special",
-      "table": {
-        "name": "Name",
-        "type": "Type",
-        "description": "Description",
-        "script": "Script",
-        "status": "Status",
-        "actions": "Actions"
-      },
-      "editTool": "Edit Tool",
-      "createDescription": "Create a new AI tool / function",
-      "editDescription": "Edit tool configuration and script",
-      "configTab": "Configuration",
-      "scriptTab": "Script Editor",
-      "id": "Tool ID",
-      "idHelp": "Unique identifier for the tool",
-      "name": "Name",
-      "nameHelp": "Display name for the tool in different languages",
-      "description": "Description",
-      "descriptionHelp": "Description shown to the LLM for tool selection",
-      "scriptFile": "Script File",
-      "scriptFileHelp": "JavaScript file in server/tools/ directory",
-      "concurrency": "Concurrency Limit",
-      "concurrencyHelp": "Maximum number of concurrent executions",
-      "parameters": "Parameters (JSON Schema)",
-      "parametersHelp": "JSON Schema definition for tool parameters",
-      "functions": "Functions (Multi-Function Tool)",
-      "functionsHelp": "Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.",
-      "functionsExample": "Show example multi-function configuration",
-      "isSpecialTool": "Special Tool",
-      "isSpecialToolHelp": "Provider-specific tools that are handled directly by the model provider (e.g., Google Search Grounding, OpenAI Web Search)",
-      "provider": "Provider",
-      "providerHelp": "Provider identifier (e.g., \"google\" for Google Search, \"openai\" for OpenAI, \"openai-responses\" for response-based tools)",
-      "scriptSaved": "Script saved successfully",
-      "saveScript": "Save Script",
-      "scriptEditorInfo": "Edit the JavaScript code for this tool. Changes will be saved to server/tools/"
-    },
     "users": {
       "view": {
         "title": "View User",
@@ -3339,6 +3270,10 @@
         "catalog": {
           "title": "From the catalog",
           "description": "Integrations from the catalog or a marketplace registry."
+        },
+        "custom": {
+          "description": "Integrations built here with \"Add manually\", and the tools migrated from the former Tools page.",
+          "title": "Custom"
         }
       },
       "editors": {
@@ -5252,14 +5187,9 @@
         "internal": "Internal",
         "external": "External"
       },
-      "toolSection": "Approval",
-      "toolMode": "Ask before a call runs",
       "inheritPlatform": "Platform default",
-      "toolModeHelp": "The strictest of the platform default, this setting and the app wins. A function can set its own \"approval\" in the JSON.",
       "sideEffect": "What a call does",
-      "sideEffectHelp": "\"Ask unless it only reads\" asks for everything that is not declared as a read.",
       "dataFlowLabel": "Where its data goes",
-      "dataFlowHelp": "Picks which platform default applies (internal or external).",
       "title": "Tool approval",
       "description": "Decide when a person has to approve a tool call before it runs. A read on an external system can carry internal information out, so external tools can be stricter. Integrations, tools, their actions and apps can only make this stricter, never looser. Nothing is asked until you set a mode here or on an integration or tool.",
       "loadError": "The tool approval settings could not be loaded.",
@@ -5283,6 +5213,203 @@
       "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
       "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
       "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
+    },
+    "integrationBuilder": {
+      "a2a": {
+        "cardUrl": "Agent card URL"
+      },
+      "action": {
+        "approval": "Approval",
+        "approvalInherit": "As the integration",
+        "description": "Description for the model",
+        "enabled": "Offer \"{{name}}\" to the model",
+        "name": "Action name",
+        "nameHelp": "The model calls the action by this name.",
+        "operation": "Operation {{operationId}}",
+        "parameters": "Parameters (JSON schema)",
+        "parametersFromSource": "Taken from the source when the action is called.",
+        "remoteDescription": "The server describes it as: {{text}} — a description here replaces that.",
+        "remove": "Remove action {{name}}",
+        "schemaError": "Not a JSON object: {{error}}",
+        "toolId": "Tool id {{toolId}} (kept from the tool this integration was migrated from)."
+      },
+      "actions": {
+        "add": "Add action",
+        "approvalDefault": "Approval for every action",
+        "approvalHelp": "Whether a person approves a call before it runs. An action can only be stricter; an app can tighten it further.",
+        "connectFirst": "Save the integration and connect your own account to list its tools.",
+        "listSkills": "Read the agent’s skills",
+        "listTools": "List the server’s tools",
+        "listed": "{{count}} action(s) listed.",
+        "pickOperations": "Pick operations of the OpenAPI document on the previous step.",
+        "remoteHelp": "The actions are whatever the source lists when it is called; settings made here apply to the names listed now and stay with them."
+      },
+      "addManually": "Add manually",
+      "auth": {
+        "clientId": "Client ID (optional)",
+        "credential": "Credential",
+        "credentialHelp": "Secrets live in the credential store; the integration only references one.",
+        "header": "Header name",
+        "kind": {
+          "basic": "Basic auth (\"user:password\" secret)",
+          "bearer": "Authorization: Bearer <token>",
+          "credential": "As the credential says (bearer, basic, API key, OAuth2)",
+          "header": "API key in a header",
+          "label": "How the credential is sent"
+        },
+        "mode": {
+          "label": "Sign-in",
+          "none": "None (public endpoint)",
+          "oauthUser": "Per-user OAuth (each user signs in)",
+          "serviceAccount": "Service account (one shared credential)"
+        },
+        "oauthHelp": "Without a client ID iHub registers itself with the server (dynamic client registration or a client ID metadata document).",
+        "prefix": "Value prefix (optional)",
+        "scopes": "Scopes (optional, space-separated)",
+        "scriptHelp": "A script integration signs in itself: its module reads its settings from ctx.values."
+      },
+      "back": "Back",
+      "basics": {
+        "description": "Description",
+        "icon": "Icon URL (optional)",
+        "iconHelp": "An https URL; registries and the Marketplace show it when the integration is published.",
+        "instanceId": "ID",
+        "instanceIdHelp": "Tool ids are <id>__<action>; apps bind the integration by this id. It cannot change later.",
+        "name": "Name"
+      },
+      "catalogHint": "Not in the catalog? Build it from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent.",
+      "create": "Create integration",
+      "editInBuilder": "Edit in builder",
+      "errors": {
+        "actionName": "An action name starts with a letter and has only letters, digits and _.",
+        "actionNameTaken": "Two actions have this name.",
+        "actionsRequired": "Add at least one action.",
+        "baseUrl": "The base URL is an http(s) URL.",
+        "bodyOnGet": "A GET or HEAD request has no body.",
+        "cardUrlRequired": "Enter the agent card URL.",
+        "commandRequired": "Enter the command that starts the server.",
+        "credentialRequired": "Pick the credential to send.",
+        "documentRequired": "Read an OpenAPI document.",
+        "headerRequired": "Name the header the key is sent in.",
+        "icon": "The icon is an https URL.",
+        "instanceId": "Use lower-case letters, digits and \"-\" (at most 48), starting with a letter or digit.",
+        "moduleRequired": "Write the connector module.",
+        "nameRequired": "Give the integration a name.",
+        "relativeUrl": "A relative URL needs the base URL of the source.",
+        "requestUrl": "Enter the URL of the request.",
+        "urlRequired": "Enter the server URL."
+      },
+      "export": "Export for a registry",
+      "exported": "Exported. Publish the files under integration-definitions/{{name}}/ and add the catalog item to your registry’s catalog.json.",
+      "headers": "Static headers",
+      "http": {
+        "addParameters": "Add them as parameters",
+        "baseUrl": "Base URL (optional)",
+        "baseUrlHelp": "Relative action URLs are appended to it. Calls go through the SSRF guard: a private address must be allowed under the integrations’ allowed hosts.",
+        "body": "Body template",
+        "bodyHelp": "In a JSON body a placeholder becomes the JSON of the value: write {note}, not \"{note}\".",
+        "contentType": "Body format",
+        "fieldName": "Field",
+        "fieldPath": "Path",
+        "fields": "Response fields (optional)",
+        "headersHelp": "Sent with every request; no secrets here, they belong to the sign-in.",
+        "method": "Method",
+        "query": "Query parameters",
+        "queryHelp": "A parameter whose placeholders have no value is left out.",
+        "request": "Request",
+        "requestHeaders": "Headers",
+        "result": "Response: path to the result",
+        "resultHelp": "Dotted keys, [] for every element of a list. Empty: the whole response.",
+        "undeclared": "The request uses placeholders no parameter declares: {{names}}. Install values of that name fill them; otherwise they stay empty.",
+        "url": "URL template",
+        "urlHelp": "{name} is replaced by the argument of that name (URL-encoded), else by the install value."
+      },
+      "loadError": "Could not open the integration",
+      "mcp": {
+        "args": "Arguments (one per line)",
+        "command": "Command",
+        "env": "Environment variables",
+        "stdioWarning": "iHub starts this command on its server. A local process cannot be exported to a registry.",
+        "transport": "Transport",
+        "transports": {
+          "sse": "SSE (legacy)",
+          "stdio": "Local process (stdio)",
+          "streamableHttp": "Streamable HTTP (recommended)",
+          "websocket": "WebSocket"
+        },
+        "url": "Server URL"
+      },
+      "next": "Next",
+      "openapi": {
+        "baseUrl": "Base URL",
+        "baseUrlHelp": "The operation paths are appended to it. Empty: the first server of the document.",
+        "file": "Load a file",
+        "noOperationId": "Operations without an operationId cannot become actions.",
+        "operations": "Operations that become actions",
+        "parsed": "Read: {{title}} {{version}}",
+        "read": "Read document",
+        "readError": "The document could not be read: {{error}}",
+        "reread": "{{count}} operation(s) picked. Read the document again to change the selection.",
+        "source": "OpenAPI document: URL or pasted JSON/YAML"
+      },
+      "review": {
+        "actions": "Actions ({{count}})",
+        "definition": "Definition",
+        "none": "None",
+        "oauthUser": "Per-user OAuth",
+        "offered": "Offered",
+        "serviceAccount": "Service account"
+      },
+      "rows": {
+        "add": "Add row",
+        "name": "Name",
+        "remove": "Remove row {{n}}",
+        "value": "Value"
+      },
+      "save": "Save",
+      "saved": "Integration \"{{id}}\" saved.",
+      "script": {
+        "help": "One ES module, no imports from its folder. export default { actions: { <name>: { run: async (args, ctx) => … } } }. ctx.values holds the install values, ctx.user the caller, ctx.runToolScript(script, { method }) runs one of iHub’s tool scripts. Declare the actions (description, parameters) on the next step.",
+        "module": "Connector module (actions/connector.js)",
+        "skeleton": "Insert a stub for every action",
+        "warning": "The module runs inside the iHub server with its permissions. Only use code you trust."
+      },
+      "source": {
+        "a2a": "A2A agent",
+        "a2aHelp": "A remote agent; the skills of its agent card become actions.",
+        "http": "HTTP request",
+        "httpHelp": "Wrap REST endpoints without code: method, URL template, body, response mapping.",
+        "label": "Where the actions come from",
+        "mcp": "MCP server",
+        "mcpHelp": "A Model Context Protocol endpoint or a local command; its tools become actions.",
+        "openapi": "OpenAPI",
+        "openapiHelp": "Pick operations of an OpenAPI document (URL, file or paste).",
+        "script": "Script",
+        "scriptHelp": "Actions backed by a JavaScript module that runs in iHub."
+      },
+      "steps": {
+        "actions": "Actions",
+        "basics": "Basics",
+        "review": "Review",
+        "signIn": "Sign-in",
+        "source": "Source"
+      },
+      "stepsLabel": "Builder steps",
+      "subtitle": "Build an integration from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent. It is installed under its ID and works like every other integration: bind it to apps, grant it to groups, test it on its page.",
+      "switchSource": {
+        "confirm": "Switch",
+        "message": "The actions of the current source are removed.",
+        "title": "Switch the source?"
+      },
+      "titleEdit": "Edit in builder",
+      "titleEditOf": "Edit {{id}} in the builder",
+      "titleNew": "Add manually",
+      "unsaved": {
+        "leave": "Leave",
+        "message": "The integration is not saved. Leave anyway?",
+        "stay": "Stay",
+        "title": "Unsaved changes"
+      }
     }
   },
   "cloudStorage": {

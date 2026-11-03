@@ -217,10 +217,25 @@ async function resolveAuth(tool) {
   const ref = tool.openapi.auth?.credentialRef;
   // Public APIs have no credentialRef; skip auth resolution entirely.
   if (!ref) return { headers: {}, queryParam: null };
+  return resolveCredentialAuth(ref, ssrfOptsFor(tool));
+}
+
+/**
+ * The auth headers (and optional query parameter) a credential profile asks
+ * for, by the profile's type: bearer, basic, API key header or query, OAuth2
+ * client credentials (token fetched and cached through the SSRF guard), or an
+ * opaque secret sent as a bearer token. Shared with the `http` integration
+ * adapter, whose `credential` service-account kind sends a profile this way.
+ *
+ * @param {string} ref - credential profile id
+ * @param {{ allowHosts?: string[], blockPrivateIps?: boolean }} [ssrfOpts] - for the OAuth2 token request
+ * @returns {Promise<{ headers: Object<string,string>, queryParam: {name: string, value: string}|null }>}
+ */
+export async function resolveCredentialAuth(ref, ssrfOpts = {}) {
   const profile = credentialService.resolve(ref);
   const { headers, queryParam, needsOAuthToken } = credentialProfileAuth(profile);
   if (needsOAuthToken) {
-    headers.Authorization = `Bearer ${await getOAuthToken(ref, profile, ssrfOptsFor(tool))}`;
+    headers.Authorization = `Bearer ${await getOAuthToken(ref, profile, ssrfOpts)}`;
   }
   return { headers, queryParam };
 }

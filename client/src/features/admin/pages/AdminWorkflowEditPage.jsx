@@ -31,7 +31,7 @@ import AdminLoadError from '../components/AdminLoadError';
  * - /admin/workflows/new  : Create a new workflow
  * - /admin/workflows/:id  : Edit an existing workflow
  *
- * Follows the same patterns as AdminToolEditPage.jsx.
+ * Follows the same patterns as AdminPromptEditPage.jsx.
  */
 function AdminWorkflowEditPage() {
   const { t } = useTranslation();

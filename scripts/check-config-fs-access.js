@@ -215,11 +215,6 @@ const NON_CONFIG_SITES = [
     reason: 'Reads docs/releases/ — release notes shipped with the application, not contents/.'
   },
   {
-    path: 'server/routes/admin/tools.js',
-    arg: /\bscriptPath\b/,
-    reason: 'Tool implementation scripts under server/tools/ are application code, not config.'
-  },
-  {
     path: 'server/routes/admin/ui.js',
     arg: /\b(filepath|assetsDir)\b/,
     reason: 'Uploaded UI assets (images, fonts) under contents/uploads/ — binaries, not documents.'
