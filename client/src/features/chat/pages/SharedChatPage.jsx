@@ -19,6 +19,8 @@ import {
   fetchSharedChatFiles
 } from '../../../api';
 import ArtifactsPanel from '../components/ArtifactsPanel';
+import SharedArtifactView from '../components/SharedArtifactView';
+import { previewTypeOf } from '../utils/artifactFiles';
 import ChatFilesContext from '../contexts/ChatFilesContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -98,9 +100,11 @@ function CenteredState({ icon, title, description, children }) {
  * @param {Object} props - Component properties.
  * @param {Object} props.artifact - Descriptor `{ id, kind, mimeType, bytes, name? }`.
  * @param {(id: string) => Promise<Blob>} props.fetchBlob - Fetches the bytes.
+ * @param {(artifact: Object) => void} [props.onPreview] - Opens the rendered preview. A web
+ *   artifact (HTML/SVG) is stored as plain text, so its raw bytes in a tab would show source.
  * @returns {JSX.Element}
  */
-function ArtifactRow({ artifact, fetchBlob }) {
+function ArtifactRow({ artifact, fetchBlob, onPreview }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -122,11 +126,14 @@ function ArtifactRow({ artifact, fetchBlob }) {
     [artifact.id, fetchBlob]
   );
 
+  const rendered = ['html', 'svg'].includes(previewTypeOf(artifact));
   const handleView = () =>
-    withBlob('view', url => {
-      window.open(url, '_blank', 'noopener');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    });
+    rendered && onPreview
+      ? onPreview(artifact)
+      : withBlob('view', url => {
+          window.open(url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        });
 
   const handleDownload = () =>
     withBlob('download', url => {
@@ -202,6 +209,7 @@ export default function SharedChatPage() {
   const [data, setData] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
   const [showArtifacts, setShowArtifacts] = useState(false);
+  const [panelArtifactId, setPanelArtifactId] = useState(null);
   // The one request in flight for this link, keyed by what it asked with.
   // Every successful open counts as a view server-side, so the page must
   // open a link exactly once: not once per StrictMode double-run, and not
@@ -400,6 +408,10 @@ export default function SharedChatPage() {
     );
   }
 
+  if (share.target === 'artifact') {
+    return <SharedArtifactView share={share} formatDate={formatDate} />;
+  }
+
   const color = share.app?.color || DEFAULT_APP_COLOR;
   const icon = share.app?.icon || DEFAULT_APP_ICON;
 
@@ -509,7 +521,15 @@ export default function SharedChatPage() {
                 </li>
               )}
               {artifacts.map(artifact => (
-                <ArtifactRow key={artifact.id} artifact={artifact} fetchBlob={fetchArtifactBlob} />
+                <ArtifactRow
+                  key={artifact.id}
+                  artifact={artifact}
+                  fetchBlob={fetchArtifactBlob}
+                  onPreview={item => {
+                    setPanelArtifactId(item.id);
+                    setShowArtifacts(true);
+                  }}
+                />
               ))}
             </ul>
           </section>
@@ -518,8 +538,12 @@ export default function SharedChatPage() {
         {showArtifacts && (
           <ArtifactsPanel
             isOpen
-            onClose={() => setShowArtifacts(false)}
+            onClose={() => {
+              setShowArtifacts(false);
+              setPanelArtifactId(null);
+            }}
             source={artifactSource}
+            initialArtifactId={panelArtifactId}
             zipName={title || 'shared-chat'}
             messages={messages}
             uploadedSource={uploadedSource}

@@ -5,6 +5,7 @@
  * Chat share routes — read-only links onto durable chats (#2515).
  *
  *   POST   /api/chats/:chatId/shares               create a share of this chat
+ *   POST   /api/chats/:chatId/artifacts/:id/shares create a share of one artifact of it
  *   GET    /api/chats/:chatId/shares               this chat's shares, with view stats (owner)
  *   GET    /api/shares/with-me                     `users` shares addressed to the caller
  *   GET    /api/shares/:shareId                    the frozen transcript (auth per mode)
@@ -104,6 +105,19 @@ const createShareSchema = z
     // and, with access, which of them (default: all the transcript names).
     uploadedFilesAccess: z.enum(UPLOADED_FILES_ACCESS).optional(),
     sharedFileIds: z.array(z.string().min(1).max(100)).max(200).optional()
+  })
+  .strict();
+
+// A single-artifact share: the same audience and limits, no uploaded files
+// (there is no transcript to attach them to), and the embed flag.
+const createArtifactShareSchema = z
+  .object({
+    mode: z.enum(SHARE_MODES),
+    recipients: z.array(z.string().min(1).max(200)).max(MAX_SHARE_RECIPIENTS).optional(),
+    expiresAt: z.string().max(64).nullable().optional(),
+    maxViews: z.number().nullable().optional(),
+    showOwnerName: z.boolean().optional(),
+    embeddable: z.boolean().optional()
   })
   .strict();
 
@@ -247,6 +261,10 @@ function viewerView(share) {
     expiresAt: share.expiresAt || null,
     sharedBy: sharedBy || null,
     messageCount: share.messageCount || 0,
+    target: share.target || 'chat',
+    ...(share.target === 'artifact'
+      ? { artifact: share.artifact || null, embeddable: share.embeddable === true }
+      : {}),
     uploadedFilesAccess: share.uploadedFilesAccess || 'none',
     readOnly: true
   };
@@ -339,6 +357,156 @@ async function isShareOwnerOrAdmin(share, user) {
 }
 
 /**
+ * Create a share of a chat (`artifactId` null) or of one of its artifacts.
+ * Both routes validate, authorize and respond the same way; only the payload
+ * differs.
+ *
+ * @param {import('express').Request} req - Express request.
+ * @param {import('express').Response} res - Express response.
+ * @param {Object} [options]
+ * @param {string|null} [options.artifactId] - Artifact to share instead of the chat.
+ * @returns {Promise<void>}
+ */
+async function handleCreateShare(req, res, { artifactId = null } = {}) {
+  const isArtifactShare = artifactId !== null;
+  try {
+    const { chatId } = req.params;
+    if (!validateIdForPath(chatId, 'chat', res)) return;
+    if (isArtifactShare && !validateIdForPath(artifactId, 'artifact', res)) return;
+    const deps = requireSharing(res);
+    if (!deps) return;
+    const parsed = (isArtifactShare ? createArtifactShareSchema : createShareSchema).safeParse(
+      req.body || {}
+    );
+    if (!parsed.success) {
+      return sendBadRequest(
+        res,
+        `Invalid share request: ${parsed.error.issues
+          .map(issue => `${issue.path.join('.') || 'body'}: ${issue.message}`)
+          .join('; ')}`
+      );
+    }
+    const {
+      mode,
+      recipients = [],
+      expiresAt,
+      maxViews,
+      showOwnerName = false,
+      uploadedFilesAccess = 'none',
+      sharedFileIds,
+      embeddable = false
+    } = parsed.data;
+    if (isArtifactShare && deps.settings.allowArtifacts === false) {
+      return sendErrorResponse(res, 403, 'Sharing single artifacts is not allowed here', {
+        details: { code: 'ARTIFACT_SHARING_DISABLED' }
+      });
+    }
+    if (!allowedShareModes(deps.settings)[mode]) {
+      return sendErrorResponse(res, 403, `Sharing mode '${mode}' is not allowed here`, {
+        details: { code: 'SHARE_MODE_DISABLED' }
+      });
+    }
+    // Write intent: sharing hands the conversation to others, which is the
+    // owner's call and nobody else's — an admin reading a chat for
+    // support cannot publish it.
+    const auth = await authorizeChat(chatId, req.user, {
+      repository: deps.chats,
+      intent: 'write'
+    });
+    if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
+    // A temporary chat is the one its owner asked not to keep, and it is
+    // gone within a day: a link onto it would publish what was meant to
+    // stay private and then break. Keeping the chat first is the way.
+    if (auth.chat.temporary === true) {
+      return sendErrorResponse(res, 409, 'A temporary chat cannot be shared; keep it first', {
+        details: { code: 'CHAT_TEMPORARY' }
+      });
+    }
+
+    let messages = [];
+    let artifact = null;
+    if (isArtifactShare) {
+      const descriptors = await getArtifactRepository().list(deps.chats.artifactScope(chatId));
+      artifact = descriptors.find(item => item.id === artifactId) || null;
+      if (!artifact) return sendNotFound(res, 'Artifact');
+      if (embeddable) {
+        if (mode !== 'public') return sendBadRequest(res, 'Only public links can be embedded');
+        if (!deps.settings.embedEnabled) {
+          return sendErrorResponse(res, 403, 'Embedding shared artifacts is not allowed here', {
+            details: { code: 'EMBED_DISABLED' }
+          });
+        }
+        if (maxViews != null) {
+          return sendBadRequest(res, 'An embeddable link cannot have a view limit');
+        }
+      }
+    } else {
+      ({ messages } = await deps.chats.getMessages(chatId));
+      if (!messages.length) {
+        return sendBadRequest(res, 'This chat has no messages to share yet');
+      }
+    }
+
+    let recipientDetails = [];
+    if (mode === 'users') {
+      const ids = [...new Set(recipients.map(id => String(id).trim()).filter(Boolean))];
+      if (ids.length === 0) {
+        return sendBadRequest(res, 'Pick at least one user to share with');
+      }
+      const resolved = resolveRecipients(ids);
+      if (!resolved.ok) {
+        return sendBadRequest(res, 'Some recipients are not known users', {
+          unknown: resolved.unknown
+        });
+      }
+      recipientDetails = resolved.details;
+    }
+
+    const limits = resolveShareLimits({ expiresAt, maxViews }, deps.settings);
+    if (!limits.ok) return sendBadRequest(res, limits.error);
+
+    // A pseudonymized installation records no names against a chat, and
+    // a share must not become the place where one is written next to
+    // the pseudonym — not for viewers, and not for the admin list.
+    const pseudonymized = auth.chat.identityMode === 'pseudonymized';
+    const share = await deps.shares.createShare({
+      chatId,
+      ownerId: auth.chat.ownerId,
+      identityMode: auth.chat.identityMode,
+      appId: auth.chat.appId,
+      mode,
+      recipients: recipientDetails.map(entry => entry.id),
+      recipientDetails,
+      title: isArtifactShare ? artifact.name || auth.chat.title || '' : auth.chat.title || '',
+      ownerName: pseudonymized ? null : req.user?.name || req.user?.username || null,
+      showOwnerName: pseudonymized ? false : showOwnerName,
+      expiresAt: limits.expiresAt,
+      maxViews: limits.maxViews,
+      messages,
+      uploadedFilesAccess,
+      sharedFileIds,
+      ...(isArtifactShare ? { target: 'artifact', artifact, embeddable } : {})
+    });
+    if (!share) return sendSharingUnavailable(res);
+
+    logAudit({
+      req,
+      action: 'create',
+      resource: isArtifactShare ? 'artifactShare' : 'chatShare',
+      resourceId: share.id,
+      summary: `Shared ${isArtifactShare ? `artifact ${artifactId} of chat` : 'chat'} ${chatId} ${
+        mode === 'public'
+          ? 'publicly (no sign-in required)'
+          : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
+      }`
+    });
+    res.status(201).json({ share: ownerView(share) });
+  } catch (error) {
+    sendStorageError(res, error, isArtifactShare ? 'create artifact share' : 'create chat share');
+  }
+}
+
+/**
  * Register the sharing endpoints.
  *
  * @param {import('express').Application} app - Express application.
@@ -349,115 +517,14 @@ export default function registerChatShareRoutes(app) {
     buildServerPath('/api/chats/:chatId/shares'),
     requireFeature(CHAT_SHARING_FEATURE),
     authenticatedOnly,
-    async (req, res) => {
-      try {
-        const { chatId } = req.params;
-        if (!validateIdForPath(chatId, 'chat', res)) return;
-        const deps = requireSharing(res);
-        if (!deps) return;
-        const parsed = createShareSchema.safeParse(req.body || {});
-        if (!parsed.success) {
-          return sendBadRequest(
-            res,
-            `Invalid share request: ${parsed.error.issues
-              .map(issue => `${issue.path.join('.') || 'body'}: ${issue.message}`)
-              .join('; ')}`
-          );
-        }
-        const {
-          mode,
-          recipients = [],
-          expiresAt,
-          maxViews,
-          showOwnerName = false,
-          uploadedFilesAccess = 'none',
-          sharedFileIds
-        } = parsed.data;
-        if (!allowedShareModes(deps.settings)[mode]) {
-          return sendErrorResponse(res, 403, `Sharing mode '${mode}' is not allowed here`, {
-            details: { code: 'SHARE_MODE_DISABLED' }
-          });
-        }
-        // Write intent: sharing hands the conversation to others, which is the
-        // owner's call and nobody else's — an admin reading a chat for
-        // support cannot publish it.
-        const auth = await authorizeChat(chatId, req.user, {
-          repository: deps.chats,
-          intent: 'write'
-        });
-        if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
-        // A temporary chat is the one its owner asked not to keep, and it is
-        // gone within a day: a link onto it would publish what was meant to
-        // stay private and then break. Keeping the chat first is the way.
-        if (auth.chat.temporary === true) {
-          return sendErrorResponse(res, 409, 'A temporary chat cannot be shared; keep it first', {
-            details: { code: 'CHAT_TEMPORARY' }
-          });
-        }
+    (req, res) => handleCreateShare(req, res)
+  );
 
-        const { messages } = await deps.chats.getMessages(chatId);
-        if (!messages.length) {
-          return sendBadRequest(res, 'This chat has no messages to share yet');
-        }
-
-        let recipientDetails = [];
-        if (mode === 'users') {
-          const ids = [...new Set(recipients.map(id => String(id).trim()).filter(Boolean))];
-          if (ids.length === 0) {
-            return sendBadRequest(res, 'Pick at least one user to share with');
-          }
-          const resolved = resolveRecipients(ids);
-          if (!resolved.ok) {
-            return sendBadRequest(res, 'Some recipients are not known users', {
-              unknown: resolved.unknown
-            });
-          }
-          recipientDetails = resolved.details;
-        }
-
-        const limits = resolveShareLimits({ expiresAt, maxViews }, deps.settings);
-        if (!limits.ok) return sendBadRequest(res, limits.error);
-
-        // A pseudonymized installation records no names against a chat, and
-        // a share must not become the place where one is written next to
-        // the pseudonym — not for viewers, and not for the admin list.
-        const pseudonymized = auth.chat.identityMode === 'pseudonymized';
-        const share = await deps.shares.createShare({
-          chatId,
-          ownerId: auth.chat.ownerId,
-          identityMode: auth.chat.identityMode,
-          appId: auth.chat.appId,
-          mode,
-          recipients: recipientDetails.map(entry => entry.id),
-          recipientDetails,
-          title: auth.chat.title || '',
-          ownerName: pseudonymized ? null : req.user?.name || req.user?.username || null,
-          showOwnerName: pseudonymized ? false : showOwnerName,
-          expiresAt: limits.expiresAt,
-          maxViews: limits.maxViews,
-          messages,
-          uploadedFilesAccess,
-          sharedFileIds
-        });
-        if (!share) return sendSharingUnavailable(res);
-
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'chatShare',
-          resourceId: share.id,
-          summary:
-            mode === 'public'
-              ? `Shared chat ${chatId} publicly (no sign-in required)`
-              : `Shared chat ${chatId} with ${
-                  mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'
-                }`
-        });
-        res.status(201).json({ share: ownerView(share) });
-      } catch (error) {
-        sendStorageError(res, error, 'create chat share');
-      }
-    }
+  app.post(
+    buildServerPath('/api/chats/:chatId/artifacts/:artifactId/shares'),
+    requireFeature(CHAT_SHARING_FEATURE),
+    authenticatedOnly,
+    (req, res) => handleCreateShare(req, res, { artifactId: req.params.artifactId })
   );
 
   app.get(buildServerPath('/api/chats/:chatId/shares'), authenticatedOnly, async (req, res) => {
@@ -472,9 +539,12 @@ export default function registerChatShareRoutes(app) {
       });
       if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
       const now = Date.now();
-      const items = (await deps.shares.listSharesForChat(chatId)).map(share =>
-        ownerView(share, now)
-      );
+      const artifactId = typeof req.query.artifactId === 'string' ? req.query.artifactId : null;
+      const items = (await deps.shares.listSharesForChat(chatId))
+        .filter(
+          share => !artifactId || (share.target === 'artifact' && share.artifact?.id === artifactId)
+        )
+        .map(share => ownerView(share, now));
       res.json({ items });
     } catch (error) {
       sendStorageError(res, error, 'list chat shares');

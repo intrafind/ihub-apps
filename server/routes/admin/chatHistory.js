@@ -38,6 +38,7 @@ import {
   CHAT_SHARING_FEATURE,
   chatSharingSettings,
   isChatSharingConfigured,
+  sanitizeOrigins,
   shareState
 } from '../../services/chat/chatSharing.js';
 import { getChatShareRepository, isShareId } from '../../services/chat/ChatShareRepository.js';
@@ -89,7 +90,10 @@ const sharingSettingsSchema = z
     allowPublic: z.boolean(),
     defaultExpiryDays: z.number().int(),
     maxExpiryDays: z.number().int(),
-    maxViewsCap: z.number().int()
+    maxViewsCap: z.number().int(),
+    allowArtifacts: z.boolean(),
+    embedEnabled: z.boolean(),
+    embedAllowedOrigins: z.array(z.string().max(300)).max(50)
   })
   .partial()
   .strict();
@@ -284,8 +288,10 @@ export default function registerAdminChatHistoryRoutes(app) {
           'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
         );
       }
-      for (const [key, value] of Object.entries(sharing || {})) {
-        if (current.sharing[key] === value) continue;
+      for (const [key, rawValue] of Object.entries(sharing || {})) {
+        // Origins are stored as bare `http(s)` origins; anything else is dropped.
+        const value = key === 'embedAllowedOrigins' ? sanitizeOrigins(rawValue) : rawValue;
+        if (JSON.stringify(current.sharing[key]) === JSON.stringify(value)) continue;
         platformConfig.chats = {
           ...platformConfig.chats,
           sharing: { ...platformConfig.chats?.sharing, [key]: value }
@@ -354,6 +360,8 @@ export default function registerAdminChatHistoryRoutes(app) {
         ownerName: share.ownerName || null,
         appId: share.appId || null,
         title: share.title || '',
+        target: share.target || 'chat',
+        embeddable: share.embeddable === true,
         mode: share.mode,
         state: shareState(share, now),
         recipientCount: Array.isArray(share.recipients) ? share.recipients.length : 0,

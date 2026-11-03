@@ -829,6 +829,13 @@ function AdminChatHistoryPage() {
                           <span className="block truncate" title={share.chatId}>
                             {share.title || share.chatId}
                           </span>
+                          {share.target === 'artifact' && (
+                            <span className="block text-xs text-gray-500 dark:text-gray-400">
+                              {t('admin.chatHistory.shares.target.artifact', 'Single file')}
+                              {share.embeddable &&
+                                ` · ${t('admin.chatHistory.shares.embeddable', 'embeddable')}`}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 pr-4">
                           <span className="block truncate max-w-40" title={share.ownerId}>
@@ -1208,6 +1215,55 @@ function AdminChatHistoryPage() {
                 onChange={value => updateSetting('sharing', 'maxViewsCap', value)}
               />
             </div>
+            <CheckboxField
+              id="sharing-allow-artifacts"
+              label={t('admin.chatHistory.sharing.allowArtifacts', 'Links to single files')}
+              help={t(
+                'admin.chatHistory.sharing.allowArtifactsHelp',
+                'Owners can share one generated file (a page, image, document) as its own link, without the conversation. Deleting the chat deletes these links and the files.'
+              )}
+              checked={settings.sharing.allowArtifacts}
+              onChange={value => updateSetting('sharing', 'allowArtifacts', value)}
+            />
+            <CheckboxField
+              id="sharing-embed-enabled"
+              label={t(
+                'admin.chatHistory.sharing.embedEnabled',
+                'Allow embedding public file links'
+              )}
+              help={t(
+                'admin.chatHistory.sharing.embedEnabledHelp',
+                'Public file links can get an embed code (iframe). Only the websites listed below may show it.'
+              )}
+              checked={settings.sharing.embedEnabled}
+              onChange={value => updateSetting('sharing', 'embedEnabled', value)}
+            />
+            {settings.sharing.embedEnabled && (
+              <div>
+                <label
+                  htmlFor="sharing-embed-origins"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  {t('admin.chatHistory.sharing.embedOrigins', 'Websites that may embed')}
+                </label>
+                <textarea
+                  id="sharing-embed-origins"
+                  rows={3}
+                  value={(settings.sharing.embedAllowedOrigins || []).join('\n')}
+                  onChange={e =>
+                    updateSetting('sharing', 'embedAllowedOrigins', e.target.value.split('\n'))
+                  }
+                  placeholder="https://portal.example.com"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t(
+                    'admin.chatHistory.sharing.embedOriginsHelp',
+                    'One origin per line (scheme and host, e.g. https://portal.example.com). With none listed, only iHub itself can show the embed.'
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

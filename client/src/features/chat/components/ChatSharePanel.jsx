@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import {
+  createArtifactShare,
   createChatShare,
   fetchChatFiles,
   fetchChatShares,
@@ -14,7 +15,11 @@ import {
   revokeChatShare
 } from '../../../api';
 import { buildPath } from '../../../utils/runtimeBasePath';
-import ShareLinkResult, { CopyLinkButton, shareInputClass as inputClass } from './ShareLinkResult';
+import ShareLinkResult, {
+  CopyLinkButton,
+  embedSnippet,
+  shareInputClass as inputClass
+} from './ShareLinkResult';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,8 +40,10 @@ const MODE_ORDER = ['users', 'authenticated', 'public'];
  * @param {string} shareId - Share id.
  * @returns {string}
  */
-function shareUrl(shareId) {
-  return `${window.location.origin}${buildPath(`/share/${encodeURIComponent(shareId)}`)}`;
+function shareUrl(shareId, { embed = false } = {}) {
+  return `${window.location.origin}${buildPath(
+    `/share/${encodeURIComponent(shareId)}${embed ? '/embed' : ''}`
+  )}`;
 }
 
 function formatDate(value, language) {
@@ -123,6 +130,12 @@ function ShareRow({ share, onRevoke }) {
         </span>
         <span className="ml-auto flex items-center gap-2">
           {active && <CopyLinkButton text={shareUrl(share.id)} />}
+          {active && share.embeddable && (
+            <CopyLinkButton
+              text={embedSnippet(shareUrl(share.id, { embed: true }))}
+              label={t('chatSharing.embed.copy', 'Copy embed code')}
+            />
+          )}
           {active && (
             <button
               type="button"
@@ -208,9 +221,12 @@ function ShareRow({ share, onRevoke }) {
  *
  * @param {Object} props - Component properties.
  * @param {string} props.chatId - The stored chat.
+ * @param {{id: string, name?: string}|null} [props.artifact] - Share this one
+ *   artifact instead of the conversation: no uploaded-file options, and a
+ *   public link may be made embeddable.
  * @returns {JSX.Element}
  */
-export default function ChatSharePanel({ chatId }) {
+export default function ChatSharePanel({ chatId, artifact = null }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const sharing = platformConfig?.chats?.sharing || {};
@@ -222,6 +238,8 @@ export default function ChatSharePanel({ chatId }) {
   const defaultExpiryDays =
     Number(sharing.defaultExpiryDays) > 0 ? Number(sharing.defaultExpiryDays) : 0;
   const maxViewsCap = Number(sharing.maxViewsCap) > 0 ? Number(sharing.maxViewsCap) : 0;
+  const artifactId = artifact?.id || null;
+  const embedOffered = Boolean(artifactId) && sharing.embedEnabled === true;
 
   const expiryOptions = useMemo(() => {
     const options = [];
@@ -259,6 +277,7 @@ export default function ChatSharePanel({ chatId }) {
   const [filesAccess, setFilesAccess] = useState('none');
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [leftOutFiles, setLeftOutFiles] = useState(() => new Set());
+  const [embeddable, setEmbeddable] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -277,12 +296,18 @@ export default function ChatSharePanel({ chatId }) {
   const loadShares = useCallback(async () => {
     setShares(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await fetchChatShares(chatId);
-      setShares({ items: result?.items || [], loading: false, error: null });
+      const result = artifactId
+        ? await fetchChatShares(chatId, { artifactId })
+        : await fetchChatShares(chatId);
+      // The chat's own list is the chat links; an artifact's is that artifact's.
+      const items = (result?.items || []).filter(item =>
+        artifactId ? item.artifact?.id === artifactId : item.target !== 'artifact'
+      );
+      setShares({ items, loading: false, error: null });
     } catch (error) {
       setShares({ items: [], loading: false, error });
     }
-  }, [chatId]);
+  }, [chatId, artifactId]);
 
   useEffect(() => {
     loadShares();
@@ -335,6 +360,8 @@ export default function ChatSharePanel({ chatId }) {
     (expiry !== 'custom' || Boolean(expiresAt));
 
   useEffect(() => {
+    // An artifact link carries no transcript, so there are no uploads to offer.
+    if (artifactId) return undefined;
     let active = true;
     fetchChatFiles(chatId)
       .then(result => {
@@ -346,7 +373,7 @@ export default function ChatSharePanel({ chatId }) {
     return () => {
       active = false;
     };
-  }, [chatId]);
+  }, [chatId, artifactId]);
 
   const anyOriginal = uploadedFiles.some(file => file.hasOriginal);
   const toggleFile = id =>
@@ -364,19 +391,29 @@ export default function ChatSharePanel({ chatId }) {
     setCreateError(null);
     try {
       const parsedViews = maxViews === '' ? null : Number(maxViews);
-      const result = await createChatShare(chatId, {
+      const embed = embedOffered && mode === 'public' && embeddable;
+      const body = {
         mode,
         ...(mode === 'users' ? { recipients: recipients.map(r => r.id) } : {}),
         expiresAt,
-        maxViews: Number.isInteger(parsedViews) && parsedViews > 0 ? parsedViews : null,
-        ...(mode === 'public' ? { showOwnerName } : {}),
-        ...(uploadedFiles.length > 0 && filesAccess !== 'none'
-          ? {
-              uploadedFilesAccess: filesAccess,
-              sharedFileIds: uploadedFiles.filter(f => !leftOutFiles.has(f.id)).map(f => f.id)
-            }
-          : {})
-      });
+        // An embeddable link cannot have a view limit: every reload would use one up.
+        maxViews: !embed && Number.isInteger(parsedViews) && parsedViews > 0 ? parsedViews : null,
+        ...(mode === 'public' ? { showOwnerName } : {})
+      };
+      const result = artifactId
+        ? await createArtifactShare(chatId, artifactId, {
+            ...body,
+            ...(embed ? { embeddable: true } : {})
+          })
+        : await createChatShare(chatId, {
+            ...body,
+            ...(uploadedFiles.length > 0 && filesAccess !== 'none'
+              ? {
+                  uploadedFilesAccess: filesAccess,
+                  sharedFileIds: uploadedFiles.filter(f => !leftOutFiles.has(f.id)).map(f => f.id)
+                }
+              : {})
+          });
       setCreated(result.share);
       setAcknowledged(false);
       await loadShares();
@@ -434,17 +471,27 @@ export default function ChatSharePanel({ chatId }) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        {t(
-          'chatSharing.description',
-          'Recipients get a read-only copy of this conversation as it is right now. Later messages and edits are not part of it. Uploaded files are shared only if you choose so below.'
-        )}
+        {artifact
+          ? t('chatSharing.artifact.description', {
+              name: artifact.name || '',
+              defaultValue:
+                'Recipients get a read-only view of {{name}} only, not the conversation it came from.'
+            })
+          : t(
+              'chatSharing.description',
+              'Recipients get a read-only copy of this conversation as it is right now. Later messages and edits are not part of it. Uploaded files are shared only if you choose so below.'
+            )}
       </p>
       {allowedModes.length === 0 ? (
         <p className="text-sm text-gray-600 dark:text-gray-300">
           {t('chatSharing.noModes', 'Sharing chats is not available here.')}
         </p>
       ) : created ? (
-        <ShareLinkResult url={shareUrl(created.id)} onCreateAnother={() => setCreated(null)} />
+        <ShareLinkResult
+          url={shareUrl(created.id)}
+          embedUrl={created.embeddable ? shareUrl(created.id, { embed: true }) : null}
+          onCreateAnother={() => setCreated(null)}
+        />
       ) : (
         // App.css makes every form sticky on phones (meant for the chat
         // input). Alone in its wrapper this one has no room to move, so it
@@ -595,13 +642,20 @@ export default function ChatSharePanel({ chatId }) {
                   <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
                   <div>
                     <p className="text-sm font-semibold">
-                      {t('chatSharing.publicWarningTitle', 'This makes the conversation public')}
+                      {artifact
+                        ? t('chatSharing.artifact.publicWarningTitle', 'This makes the file public')
+                        : t('chatSharing.publicWarningTitle', 'This makes the conversation public')}
                     </p>
                     <p className="text-sm mt-1">
-                      {t(
-                        'chatSharing.publicWarning',
-                        'Anyone who has the link can read this conversation and download the files it generated — without signing in, until you revoke the link or it expires. The link can be forwarded to anyone. Do not share conversations that contain internal or personal data.'
-                      )}
+                      {artifact
+                        ? t(
+                            'chatSharing.artifact.publicWarning',
+                            'Anyone who has the link can open and download this file without signing in, until you revoke the link or it expires. The link can be forwarded to anyone. Do not share files that contain internal or personal data.'
+                          )
+                        : t(
+                            'chatSharing.publicWarning',
+                            'Anyone who has the link can read this conversation and download the files it generated — without signing in, until you revoke the link or it expires. The link can be forwarded to anyone. Do not share conversations that contain internal or personal data.'
+                          )}
                     </p>
                   </div>
                 </div>
@@ -613,12 +667,37 @@ export default function ChatSharePanel({ chatId }) {
                     className="mt-0.5"
                   />
                   <span>
-                    {t(
-                      'chatSharing.publicAcknowledge',
-                      'I understand that anyone with the link can read this conversation without signing in.'
-                    )}
+                    {artifact
+                      ? t(
+                          'chatSharing.artifact.publicAcknowledge',
+                          'I understand that anyone with the link can open this file without signing in.'
+                        )
+                      : t(
+                          'chatSharing.publicAcknowledge',
+                          'I understand that anyone with the link can read this conversation without signing in.'
+                        )}
                   </span>
                 </label>
+                {embedOffered && (
+                  <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={embeddable}
+                      onChange={e => setEmbeddable(e.target.checked)}
+                      data-testid="share-embeddable"
+                      className="mt-0.5"
+                    />
+                    <span>
+                      {t('chatSharing.embed.label', 'Allow embedding on other websites')}
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'chatSharing.embed.hint',
+                          'Gives you an embed code. Only websites your administrator allowed can show it, and the link cannot have an open limit.'
+                        )}
+                      </span>
+                    </span>
+                  </label>
+                )}
                 {!sharing.ownerNameHidden && (
                   <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input
@@ -633,7 +712,7 @@ export default function ChatSharePanel({ chatId }) {
               </div>
             )}
 
-            {uploadedFiles.length > 0 && (
+            {!artifactId && uploadedFiles.length > 0 && (
               <fieldset data-testid="share-files-access">
                 <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('chatSharing.files.label', 'Files you uploaded to this chat')}
@@ -789,7 +868,8 @@ export default function ChatSharePanel({ chatId }) {
                   min={1}
                   max={maxViewsCap || undefined}
                   step={1}
-                  value={maxViews}
+                  value={embeddable && mode === 'public' ? '' : maxViews}
+                  disabled={embedOffered && embeddable && mode === 'public'}
                   onChange={e => setMaxViews(e.target.value)}
                   placeholder={
                     maxViewsCap
@@ -839,7 +919,9 @@ export default function ChatSharePanel({ chatId }) {
           id="share-existing-heading"
           className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2"
         >
-          {t('chatSharing.existingTitle', 'Links for this chat')}
+          {artifact
+            ? t('chatSharing.artifact.existingTitle', 'Links for this file')
+            : t('chatSharing.existingTitle', 'Links for this chat')}
         </h3>
         {revokeError && (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-2">
@@ -856,7 +938,9 @@ export default function ChatSharePanel({ chatId }) {
           </p>
         ) : shares.items.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('chatSharing.existingEmpty', 'This chat has not been shared yet.')}
+            {artifact
+              ? t('chatSharing.artifact.existingEmpty', 'This file has not been shared yet.')
+              : t('chatSharing.existingEmpty', 'This chat has not been shared yet.')}
           </p>
         ) : (
           <ul className="space-y-2">

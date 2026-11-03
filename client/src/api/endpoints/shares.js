@@ -58,17 +58,47 @@ export const createChatShare = async (chatId, body) => {
 };
 
 /**
+ * Share one artifact of a stored chat as its own read-only link. Same body as
+ * {@link createChatShare} without the uploaded-file options, plus `embeddable`.
+ *
+ * @param {string} chatId - The stored chat the artifact belongs to.
+ * @param {string} artifactId - The artifact to share.
+ * @param {Object} body - `{ mode, recipients?, expiresAt?, maxViews?, showOwnerName?, embeddable? }`
+ * @returns {Promise<{ share: Object }>} the response body (owner's view)
+ */
+export const createArtifactShare = async (chatId, artifactId, body) => {
+  if (!chatId || !artifactId || !body?.mode) {
+    throw new Error('Missing required parameters');
+  }
+  return handleApiResponse(
+    () =>
+      apiClient.post(
+        `/chats/${encodeURIComponent(chatId)}/artifacts/${encodeURIComponent(artifactId)}/shares`,
+        body
+      ),
+    null,
+    null
+  );
+};
+
+/**
  * The shares of one chat, newest first — active and dead alike.
  *
  * @param {string} chatId - Chat id.
+ * @param {Object} [options]
+ * @param {string} [options.artifactId] - Only the shares of this artifact.
  * @returns {Promise<{ items: Object[] }>} the response body
  */
-export const fetchChatShares = async chatId => {
+export const fetchChatShares = async (chatId, { artifactId } = {}) => {
   if (!chatId) {
     throw new Error('Missing required parameters');
   }
   return handleApiResponse(
-    () => apiClient.get(`/chats/${encodeURIComponent(chatId)}/shares`),
+    () =>
+      apiClient.get(
+        `/chats/${encodeURIComponent(chatId)}/shares`,
+        artifactId ? { params: { artifactId } } : undefined
+      ),
     null,
     null
   );

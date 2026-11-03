@@ -67,6 +67,7 @@ import registerRunRoutes from './routes/runs.js';
 // the durable-chat surface at `/api/chats`.
 import registerStoredChatRoutes from './routes/chats.js';
 import registerChatShareRoutes from './routes/chatShares.js';
+import registerShareEmbedPageRoutes from './routes/shareEmbedPage.js';
 import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
@@ -863,6 +864,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerRunRoutes(app);
   registerStoredChatRoutes(app);
   registerChatShareRoutes(app);
+  registerShareEmbedPageRoutes(app);
   registerScheduledTaskRoutes(app);
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).

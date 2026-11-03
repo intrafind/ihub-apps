@@ -265,8 +265,14 @@ The HTML preview never touches the server's `text/plain` serving described
 under [Kinds](#kinds): the browser gets the text through the API client and
 renders it in a frame without access to the iHub origin.
 
+A selected file can be **shared** on its own: the preview has a Share button
+that opens a dialog for a read-only link to just that file, optionally
+embeddable on allowlisted websites. See
+[Chat Sharing → Sharing a single file](chat-sharing.md#sharing-a-single-file).
+
 Code: `client/src/features/chat/components/ArtifactsPanel.jsx`,
-`ArtifactPreview.jsx`, `client/src/features/chat/utils/artifactFiles.js`.
+`ArtifactPreview.jsx`, `ArtifactShareDialog.jsx`,
+`client/src/features/chat/utils/artifactFiles.js`.
 
 ## Lifetime
 

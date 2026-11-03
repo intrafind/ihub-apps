@@ -41,6 +41,7 @@ import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { fingerprint } from '../services/UserFingerprint.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
+import registerShareEmbedPageRoutes from '../routes/shareEmbedPage.js';
 import { downloadName } from '../services/artifacts/artifactZip.js';
 import registerChatRoutes from '../routes/chats.js';
 import { PassThrough } from 'node:stream';
@@ -76,6 +77,7 @@ function captureRoutes(register) {
 
 const shareRoutes = captureRoutes(registerChatShareRoutes);
 const chatRoutes = captureRoutes(registerChatRoutes);
+const embedRoutes = captureRoutes(registerShareEmbedPageRoutes);
 
 function handlersFor(routes, method, suffix) {
   const route = routes.find(entry => entry.method === method && entry.routePath.endsWith(suffix));
@@ -102,6 +104,10 @@ function makeResponse() {
     return res;
   };
   res.set = res.setHeader;
+  res.removeHeader = name => {
+    delete res.headers[String(name).toLowerCase()];
+    return res;
+  };
   return res;
 }
 
@@ -126,6 +132,12 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}
 }
 
 const createHandlers = handlersFor(shareRoutes, 'post', '/api/chats/:chatId/shares');
+const createArtifactShareHandlers = handlersFor(
+  shareRoutes,
+  'post',
+  '/api/chats/:chatId/artifacts/:artifactId/shares'
+);
+const embedHandlers = handlersFor(embedRoutes, 'get', '/share/:shareId/embed');
 const listHandlers = handlersFor(shareRoutes, 'get', '/api/chats/:chatId/shares');
 const withMeHandlers = handlersFor(shareRoutes, 'get', '/api/shares/with-me');
 const openHandlers = handlersFor(shareRoutes, 'get', '/api/shares/:shareId');
@@ -240,7 +252,10 @@ before(async () => {
         allowPublic: true,
         defaultExpiryDays: 0,
         maxExpiryDays: 0,
-        maxViewsCap: 0
+        maxViewsCap: 0,
+        allowArtifacts: true,
+        embedEnabled: true,
+        embedAllowedOrigins: ['https://portal.example.com', 'javascript:alert(1)']
       }
     },
     localAuth: { usersFile }
@@ -254,7 +269,16 @@ after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-beforeEach(() => setSharing({ allowPublic: true, maxExpiryDays: 0, maxViewsCap: 0 }));
+beforeEach(() =>
+  setSharing({
+    allowPublic: true,
+    maxExpiryDays: 0,
+    maxViewsCap: 0,
+    allowArtifacts: true,
+    embedEnabled: true,
+    embedAllowedOrigins: ['https://portal.example.com', 'javascript:alert(1)']
+  })
+);
 
 describe('the policy helpers', () => {
   it('reads a share state from its record', () => {
@@ -1154,5 +1178,235 @@ describe('the recipient picker', () => {
     for (const item of byEmail.body.items) {
       assert.deepEqual(Object.keys(item).sort(), ['email', 'id', 'name']);
     }
+  });
+});
+
+/**
+ * Store an HTML web artifact (kind `code`, served as text) against a chat.
+ *
+ * @param {string} chatId - Chat id.
+ * @param {string} html - Markup.
+ * @returns {Promise<Object>} The stored descriptor.
+ */
+async function seedHtmlArtifact(chatId, html = '<h1>hello</h1><script>1</script>') {
+  const repository = getChatRepository();
+  const stored = await repository.artifactStore().put(repository.artifactScope(chatId), {
+    kind: 'code',
+    mimeType: 'text/plain',
+    data: Buffer.from(html).toString('base64'),
+    name: 'page.html'
+  });
+  assert.ok(stored?.id, 'the artifact was stored');
+  await repository.appendMessage(chatId, {
+    role: 'assistant',
+    content: 'a page',
+    artifacts: [stored]
+  });
+  return stored;
+}
+
+function shareArtifact(user, chatId, artifactId, body) {
+  return drive(createArtifactShareHandlers, { params: { chatId, artifactId }, body, user });
+}
+
+describe('sharing a single artifact', () => {
+  it('lets the owner share one artifact and serves only that one', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    const other = await seedArtifact(chatId, 'other');
+
+    const created = await shareArtifact(ADA, chatId, page.id, { mode: 'public' });
+    assert.equal(created.statusCode, 201);
+    const { share } = created.body;
+    assert.equal(share.target, 'artifact');
+    assert.deepEqual(share.artifactIds, [page.id]);
+    assert.equal(share.title, 'page.html');
+    assert.equal(share.messageCount, 0);
+
+    const opened = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
+    assert.equal(opened.statusCode, 200);
+    assert.equal(opened.body.share.target, 'artifact');
+    assert.equal(opened.body.share.artifact.id, page.id);
+    assert.deepEqual(opened.body.messages, []);
+    assert.equal(opened.body.share.chatId, undefined, 'the chat id stays with the owner');
+
+    const bytes = await drive(artifactHandlers, {
+      params: { shareId: share.id, artifactId: page.id },
+      user: ANONYMOUS
+    });
+    assert.equal(bytes.statusCode, 200);
+    assert.equal(bytes.headers['content-type'].startsWith('text/plain'), true);
+
+    const foreign = await drive(artifactHandlers, {
+      params: { shareId: share.id, artifactId: other.id },
+      user: ANONYMOUS
+    });
+    assert.equal(foreign.statusCode, 404, 'another artifact of the same chat is not reachable');
+  });
+
+  it('keeps the audience rules of chat shares', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+
+    const authed = (await shareArtifact(ADA, chatId, page.id, { mode: 'authenticated' })).body
+      .share;
+    assert.equal(
+      (await drive(openHandlers, { params: { shareId: authed.id }, user: ANONYMOUS })).statusCode,
+      401
+    );
+    assert.equal(
+      (await drive(openHandlers, { params: { shareId: authed.id }, user: GRACE })).statusCode,
+      200
+    );
+
+    const users = (
+      await shareArtifact(ADA, chatId, page.id, { mode: 'users', recipients: [GRACE.id] })
+    ).body.share;
+    assert.equal(
+      (await drive(openHandlers, { params: { shareId: users.id }, user: GRACE })).statusCode,
+      200
+    );
+    assert.equal(
+      (await drive(openHandlers, { params: { shareId: users.id }, user: LINUS })).statusCode,
+      404
+    );
+
+    const revoked = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    await drive(revokeHandlers, { params: { shareId: revoked.id }, user: ADA });
+    assert.equal(
+      (await drive(openHandlers, { params: { shareId: revoked.id }, user: ANONYMOUS })).statusCode,
+      404
+    );
+  });
+
+  it('refuses a stranger, an admin, an unknown artifact and a switched-off feature', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    assert.equal((await shareArtifact(GRACE, chatId, page.id, { mode: 'public' })).statusCode, 404);
+    assert.equal((await shareArtifact(ROOT, chatId, page.id, { mode: 'public' })).statusCode, 404);
+    assert.equal(
+      (await shareArtifact(ADA, chatId, 'does-not-exist', { mode: 'public' })).statusCode,
+      404
+    );
+    setSharing({ allowArtifacts: false });
+    const off = await shareArtifact(ADA, chatId, page.id, { mode: 'public' });
+    assert.equal(off.statusCode, 403);
+    assert.equal(off.body.details?.code ?? off.body.code, 'ARTIFACT_SHARING_DISABLED');
+    // Sharing the chat itself is unaffected by the artifact switch.
+    assert.equal((await createShare(ADA, chatId, { mode: 'public' })).statusCode, 201);
+  });
+
+  it('lists the shares of one artifact', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    const other = await seedArtifact(chatId, 'second');
+    const mine = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    await shareArtifact(ADA, chatId, other.id, { mode: 'public' });
+    await createShare(ADA, chatId, { mode: 'public' });
+    const res = await drive(listHandlers, {
+      params: { chatId },
+      query: { artifactId: page.id },
+      user: ADA
+    });
+    assert.deepEqual(
+      res.body.items.map(item => item.id),
+      [mine.id]
+    );
+  });
+
+  it('allows embedding only for public links without a view limit, when enabled', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    const ok = await shareArtifact(ADA, chatId, page.id, { mode: 'public', embeddable: true });
+    assert.equal(ok.statusCode, 201);
+    assert.equal(ok.body.share.embeddable, true);
+
+    assert.equal(
+      (await shareArtifact(ADA, chatId, page.id, { mode: 'authenticated', embeddable: true }))
+        .statusCode,
+      400
+    );
+    assert.equal(
+      (
+        await shareArtifact(ADA, chatId, page.id, {
+          mode: 'public',
+          embeddable: true,
+          maxViews: 5
+        })
+      ).statusCode,
+      400
+    );
+    setSharing({ embedEnabled: false });
+    assert.equal(
+      (await shareArtifact(ADA, chatId, page.id, { mode: 'public', embeddable: true })).statusCode,
+      403
+    );
+  });
+
+  it('takes the artifact shares and the artifacts with the chat', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    const share = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    const repository = getChatRepository();
+    assert.ok(await getArtifactRepository().get(repository.artifactScope(chatId), page.id));
+
+    assert.equal(
+      (await drive(deleteChatHandlers, { params: { chatId }, user: ADA })).statusCode,
+      200
+    );
+    assert.equal(await getChatShareRepository().getShare(share.id), null);
+    assert.equal(
+      await getArtifactRepository().get(repository.artifactScope(chatId), page.id),
+      null
+    );
+  });
+});
+
+describe('the embed page', () => {
+  async function embeddableShare(overrides = {}) {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(chatId);
+    const body = { mode: 'public', embeddable: true, ...overrides };
+    const created = await shareArtifact(ADA, chatId, page.id, body);
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    return created.body.share;
+  }
+
+  it('renders the artifact in a sandboxed frame, framable only by allowlisted origins', async () => {
+    const share = await embeddableShare();
+    const res = await drive(embedHandlers, { params: { shareId: share.id } });
+    assert.equal(res.statusCode, 200);
+    const csp = res.headers['content-security-policy'];
+    assert.match(csp, /frame-ancestors 'self' https:\/\/portal\.example\.com(;|$)/);
+    assert.equal(csp.includes('javascript:'), false);
+    assert.equal(res.headers['x-frame-options'], undefined);
+    assert.match(res.body, /<iframe sandbox="allow-scripts"/);
+    assert.equal(res.body.includes('<h1>hello</h1>'), false, 'markup is escaped into srcdoc');
+    assert.match(res.body, /&lt;h1&gt;hello&lt;\/h1&gt;/);
+    assert.equal(res.headers['cache-control'], 'private, no-store');
+  });
+
+  it('answers 404 for everything that is not an active, public, embeddable artifact share', async () => {
+    const plain = await embeddableShare({ embeddable: false });
+    assert.equal((await drive(embedHandlers, { params: { shareId: plain.id } })).statusCode, 404);
+
+    const chatId = await seedChat(ADA);
+    const chatShare = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
+    assert.equal(
+      (await drive(embedHandlers, { params: { shareId: chatShare.id } })).statusCode,
+      404
+    );
+
+    const revoked = await embeddableShare();
+    await drive(revokeHandlers, { params: { shareId: revoked.id }, user: ADA });
+    assert.equal((await drive(embedHandlers, { params: { shareId: revoked.id } })).statusCode, 404);
+
+    const live = await embeddableShare();
+    setSharing({ embedEnabled: false });
+    const off = await drive(embedHandlers, { params: { shareId: live.id } });
+    assert.equal(off.statusCode, 404);
+    assert.equal(off.headers['content-security-policy'], undefined, 'no framing relaxed on 404');
+
+    assert.equal((await drive(embedHandlers, { params: { shareId: 'nope' } })).statusCode, 404);
   });
 });

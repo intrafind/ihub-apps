@@ -668,7 +668,13 @@
         "maxExpiryDays": "Longest expiry (days)",
         "maxExpiryDaysHelp": "Owners cannot pick a later expiry, and \"never\" is no longer offered. 0 removes the limit.",
         "maxViewsCap": "Most views per link",
-        "maxViewsCapHelp": "Owners cannot allow more opens than this, and \"unlimited\" is no longer offered. 0 removes the limit."
+        "maxViewsCapHelp": "Owners cannot allow more opens than this, and \"unlimited\" is no longer offered. 0 removes the limit.",
+        "allowArtifacts": "Links to single files",
+        "allowArtifactsHelp": "Owners can share one generated file (a page, image, document) as its own link, without the conversation. Deleting the chat deletes these links and the files.",
+        "embedEnabled": "Allow embedding public file links",
+        "embedEnabledHelp": "Public file links can get an embed code (iframe). Only the websites listed below may show it.",
+        "embedOrigins": "Websites that may embed",
+        "embedOriginsHelp": "One origin per line (scheme and host, e.g. https://portal.example.com). With none listed, only iHub itself can show the embed."
       },
       "shares": {
         "title": "Shared chats",
@@ -702,7 +708,11 @@
           "revoked": "Revoked",
           "expired": "Expired",
           "exhausted": "View limit reached"
-        }
+        },
+        "target": {
+          "artifact": "Single file"
+        },
+        "embeddable": "embeddable"
       },
       "uploads": {
         "title": "Uploaded files",
@@ -6997,7 +7007,9 @@
     "sharedNew": "New",
     "sharedNewHint": "You have not opened this yet",
     "scheduled": "Scheduled",
-    "inProject": "In project {{name}}"
+    "inProject": "In project {{name}}",
+    "sharedFile": "File",
+    "untitledFile": "Untitled file"
   },
   "transcription": {
     "record": "Record audio for the selected model",
@@ -7251,6 +7263,22 @@
       "originalUnavailable": "None of the files is stored in its original form.",
       "pick": "Files to share",
       "textOnly": "(text only)"
+    },
+    "artifact": {
+      "title": "Share file",
+      "description": "Recipients get a read-only view of {{name}} only, not the conversation it came from.",
+      "publicWarningTitle": "This makes the file public",
+      "publicWarning": "Anyone who has the link can open and download this file without signing in, until you revoke the link or it expires. The link can be forwarded to anyone. Do not share files that contain internal or personal data.",
+      "publicAcknowledge": "I understand that anyone with the link can open this file without signing in.",
+      "publicBanner": "This file is publicly accessible. Anyone with the link can open it.",
+      "existingTitle": "Links for this file",
+      "existingEmpty": "This file has not been shared yet."
+    },
+    "embed": {
+      "label": "Allow embedding on other websites",
+      "hint": "Gives you an embed code. Only websites your administrator allowed can show it, and the link cannot have an open limit.",
+      "codeLabel": "Embed code",
+      "copy": "Copy embed code"
     }
   },
   "sources": {
@@ -8544,7 +8572,8 @@
     "viewMode": "Preview mode",
     "previewTab": "Preview",
     "codeTab": "Code",
-    "csvRowsShown": "Showing {{shown}} of {{total}} rows."
+    "csvRowsShown": "Showing {{shown}} of {{total}} rows.",
+    "share": "Share"
   },
   "chatFiles": {
     "attached": "Attached {{name}} to your email.",

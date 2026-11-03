@@ -170,7 +170,10 @@ audit log (Admin → Audit Log, `resource: chatShare`).
       "allowPublic": true,
       "defaultExpiryDays": 0,
       "maxExpiryDays": 0,
-      "maxViewsCap": 0
+      "maxViewsCap": 0,
+      "allowArtifacts": true,
+      "embedEnabled": false,
+      "embedAllowedOrigins": []
     }
   }
 }
@@ -185,6 +188,9 @@ audit log (Admin → Audit Log, `resource: chatShare`).
 | `defaultExpiryDays`  | `0`     | Expiry a new link gets when the owner picks none; `0` means none; never above the cap      |
 | `maxExpiryDays`      | `0`     | Longest expiry an owner may pick; with a cap, _never_ is no longer offered; `0` = no cap  |
 | `maxViewsCap`        | `0`     | Most opens an owner may allow; with a cap, _unlimited_ is no longer offered; `0` = no cap |
+| `allowArtifacts`     | `true`  | Offer [links to a single file](#sharing-a-single-file); migration V212                    |
+| `embedEnabled`       | `false` | Let a public file link be embedded in an iframe                                           |
+| `embedAllowedOrigins`| `[]`    | Websites (`https://portal.example.com`) allowed to embed; other origins are dropped on save |
 
 The caps are enforced server-side on create, whatever the form sent. The
 client learns the effective settings from `GET /api/configs/platform`, which
@@ -217,12 +223,55 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
 - **Shared with me** on `/chats` lists the `users` shares addressed to the
   signed-in viewer, with a _New_ badge until they open one.
 
+## Sharing a single file
+
+A generated file (a web page, image, document, code file — see
+[Artifacts](artifacts.md)) can be shared **on its own**, without the
+conversation it came from. It is the same system: same audiences, expiry,
+open limit, revoke, admin list and `/share/<id>` URL; the share document just
+has `target: "artifact"` (a missing `target` means `chat`) and carries one
+artifact id and no transcript.
+
+- **Share** in the preview of the Artifacts panel opens the dialog. It is the
+  conversation form minus the uploaded-file options; below it, the links of
+  that file. Offered when chat sharing and `allowArtifacts` are on and the chat
+  is kept and has a message.
+- The link page shows the file with the same preview the chat uses — HTML runs
+  in a sandboxed frame with a locked-down CSP, SVG is sanitized — plus a
+  Download button. Only that one artifact can be fetched through the link; any
+  other artifact of the chat answers 404.
+- **Lifecycle:** artifact shares belong to their chat. Deleting the chat (or
+  the retention sweep) deletes its artifact shares **and** the files. Editing an
+  earlier message keeps a shared file, like a chat share does.
+- Shared with specific users, a file shows in **Shared with me** with a _File_
+  badge; the admin list marks it _Single file_.
+
+### Embedding
+
+With `embedEnabled`, an owner can tick **Allow embedding on other websites**
+for a **public** file link that has **no open limit** (every reload would use
+one up). The dialog then gives an `<iframe>` embed code pointing at
+`/share/<id>/embed`.
+
+- The embed page is rendered by the server, not the SPA. Its
+  `Content-Security-Policy: frame-ancestors` names `'self'` and the
+  `embedAllowedOrigins` only; any other site sees the frame blocked.
+- The file itself is shown in an inner `sandbox="allow-scripts"` frame with
+  the same CSP as the in-app preview (no network access), so it never runs on
+  the iHub origin. Images and PDFs are shown directly; other kinds show a
+  download link.
+- A link that is not embeddable, not public, revoked, expired, or while
+  `embedEnabled` is off answers 404 and never relaxes the framing policy.
+  Opening the embed page counts as a view.
+
 ## API
 
 | Method & path                                    | Who        | Purpose                                                   |
 | ------------------------------------------------ | ---------- | --------------------------------------------------------- |
 | `POST /api/chats/:chatId/shares`                 | owner      | Create: `{ mode, recipients?, expiresAt?, maxViews?, showOwnerName? }` |
-| `GET /api/chats/:chatId/shares`                  | owner      | This chat's shares with their state and view counts       |
+| `POST /api/chats/:chatId/artifacts/:artifactId/shares` | owner | Share one artifact: same body plus `embeddable?`, without the file options; `403 ARTIFACT_SHARING_DISABLED` / `EMBED_DISABLED` |
+| `GET /share/:shareId/embed`                      | public     | Embeddable page of a public, embeddable file link         |
+| `GET /api/chats/:chatId/shares`                  | owner      | This chat's shares with their state and view counts; `?artifactId=` narrows to one file |
 | `GET /api/shares/with-me`                        | signed in  | `users` shares addressed to the caller that still open    |
 | `GET /api/shares/:shareId`                       | per mode   | The snapshot and the display fields; counts as a view     |
 | `GET /api/shares/:shareId/artifacts`             | per mode   | Descriptors of the artifacts the snapshot references      |
@@ -266,6 +315,8 @@ client-minted and enumerable.
 | `server/services/chat/ChatShareRepository.js`       | The three documents, views, revoke, cascade                 |
 | `server/services/chat/chatShareAccess.js`           | Who may open a link                                         |
 | `server/routes/chatShares.js`                       | The routes above                                            |
+| `server/routes/shareEmbedPage.js`                   | The embeddable page of a public file link                   |
+| `server/utils/frameAncestors.js`                    | `frame-ancestors` policy shared with the Nextcloud embed    |
 | `server/routes/admin/chatHistory.js`                | Settings, stats, admin list and revoke                      |
 | `client/src/features/chat/components/ShareDialog.jsx` | The share dialog: conversation and app link |
 | `client/src/features/chat/components/ChatSharePanel.jsx` | Its "This conversation" form and link list |

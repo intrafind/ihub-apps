@@ -279,6 +279,11 @@ function SharedRow({ share, timeLabel }) {
           >
             {share.appName}
           </span>
+          {share.target === 'artifact' && (
+            <span className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+              {t('chatHistory.sharedFile', 'File')}
+            </span>
+          )}
           {!share.viewed && (
             <span
               className="flex-none text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
@@ -295,12 +300,16 @@ function SharedRow({ share, timeLabel }) {
                 defaultValue: 'Shared by {{name}}'
               })
             : t('chatHistory.sharedWithYou', 'Shared with you')}
-          {' · '}
-          {t('chatHistory.messageCount', {
-            count: share.messageCount || 0,
-            defaultValue_one: '{{count}} message',
-            defaultValue_other: '{{count}} messages'
-          })}
+          {share.target !== 'artifact' && (
+            <>
+              {' · '}
+              {t('chatHistory.messageCount', {
+                count: share.messageCount || 0,
+                defaultValue_one: '{{count}} message',
+                defaultValue_other: '{{count}} messages'
+              })}
+            </>
+          )}
         </span>
       </span>
       <span className="flex-none text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
@@ -426,7 +435,11 @@ export default function ChatHistoryPage() {
         const name = share.app?.name || app?.name;
         return {
           ...share,
-          displayTitle: share.title || t('chatHistory.untitled', 'Untitled chat'),
+          displayTitle:
+            share.title ||
+            (share.target === 'artifact'
+              ? t('chatHistory.untitledFile', 'Untitled file')
+              : t('chatHistory.untitled', 'Untitled chat')),
           appName:
             (name && getLocalizedContent(name, currentLanguage)) ||
             share.appId ||

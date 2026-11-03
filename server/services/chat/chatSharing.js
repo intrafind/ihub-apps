@@ -47,8 +47,14 @@ export const DEFAULT_SHARING_SETTINGS = Object.freeze({
   allowPublic: true,
   defaultExpiryDays: 0,
   maxExpiryDays: 0,
-  maxViewsCap: 0
+  maxViewsCap: 0,
+  allowArtifacts: true,
+  embedEnabled: false,
+  embedAllowedOrigins: []
 });
+
+/** What a share can carry: the whole chat, or one of its artifacts. */
+export const SHARE_TARGETS = Object.freeze(['chat', 'artifact']);
 
 /** One day in milliseconds, for turning the day-based caps into instants. */
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +77,26 @@ function readNumber(value, fallback) {
 
 function readBoolean(value, fallback) {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+/**
+ * Reduce a list of URLs to unique `http(s)` origins; anything else is dropped.
+ *
+ * @param {unknown} value - Candidate list.
+ * @returns {string[]}
+ */
+export function sanitizeOrigins(value) {
+  const origins = new Set();
+  for (const item of Array.isArray(value) ? value : []) {
+    if (typeof item !== 'string') continue;
+    try {
+      const url = new URL(item.trim());
+      if (url.protocol === 'http:' || url.protocol === 'https:') origins.add(url.origin);
+    } catch {
+      /* not a URL */
+    }
+  }
+  return [...origins];
 }
 
 /**
@@ -101,7 +127,10 @@ export function chatSharingSettings(platformConfig) {
       DEFAULT_SHARING_SETTINGS.defaultExpiryDays
     ),
     maxExpiryDays: readNumber(block.maxExpiryDays, DEFAULT_SHARING_SETTINGS.maxExpiryDays),
-    maxViewsCap: readNumber(block.maxViewsCap, DEFAULT_SHARING_SETTINGS.maxViewsCap)
+    maxViewsCap: readNumber(block.maxViewsCap, DEFAULT_SHARING_SETTINGS.maxViewsCap),
+    allowArtifacts: readBoolean(block.allowArtifacts, DEFAULT_SHARING_SETTINGS.allowArtifacts),
+    embedEnabled: readBoolean(block.embedEnabled, DEFAULT_SHARING_SETTINGS.embedEnabled),
+    embedAllowedOrigins: sanitizeOrigins(block.embedAllowedOrigins)
   };
 }
 
@@ -151,6 +180,8 @@ export function chatSharingClientConfig(featureConfig = {}, platformConfig = {})
     defaultExpiryDays: effectiveDefaultExpiryDays(settings),
     maxExpiryDays: settings.maxExpiryDays,
     maxViewsCap: settings.maxViewsCap,
+    allowArtifacts: settings.allowArtifacts,
+    embedEnabled: settings.embedEnabled,
     // In pseudonymized identity mode a share never carries its owner's name,
     // so the form has no "show my name" to offer.
     ownerNameHidden: platformConfig?.runLog?.identityMode === 'pseudonymized'
