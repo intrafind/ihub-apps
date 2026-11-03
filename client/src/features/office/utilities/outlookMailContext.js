@@ -176,22 +176,45 @@ function getItemAsFileAsync(item) {
   });
 }
 
+// The pop-out's copy of the pane's answer, for the turns that follow: the message
+// crosses the bridge as megabytes of base64, and a chat resends the email each turn.
+let lastRemoteEml = null;
+
+async function fetchMailEmlFromPane(remote, expectedItemId, keptAttachmentIds) {
+  const key = `${expectedItemId}|${[...keptAttachmentIds].sort().join(',')}`;
+  if (lastRemoteEml?.key === key) return lastRemoteEml.base64;
+  try {
+    const base64 = await remote.call('readMailEml', { expectedItemId, keptAttachmentIds });
+    if (typeof base64 !== 'string' || !base64) return null;
+    lastRemoteEml = { key, base64 };
+    return base64;
+  } catch {
+    // A pane that is gone or too slow: the caller synthesizes the message.
+    return null;
+  }
+}
+
 /**
  * The open email as the RFC 5322 message Outlook has (`item.getAsFileAsync`, Mailbox
  * 1.14+, read mode), base64 — the original a chat stores as the email's `.eml`.
  *
+ * A popped-out chat has no mailbox: it asks the pane (`readMailEml`), which reads
+ * the message with the same checks, and keeps the answer for the turns that follow.
+ *
  * Returns null — and the caller falls back to a synthesized message — when the API
  * is missing (older Outlook, compose mode), the item is not `expectedItemId` (the
- * user moved on while the chat was sent), the chat runs in a pop-out (no mailbox
- * there), or the message holds an attachment the user removed from the context: the
- * original carries all of them, and what the user took out must not be stored.
+ * user moved on while the chat was sent), the pane does not answer, or the message
+ * holds an attachment the user removed from the context: the original carries all
+ * of them, and what the user took out must not be stored.
  *
  * @param {string|null} expectedItemId - `itemId` of the snapshot the message is built from.
  * @param {Array<string>} [keptAttachmentIds] - Ids of the attachments the user kept.
  * @returns {Promise<string|null>}
  */
 export async function fetchCurrentMailEml(expectedItemId, keptAttachmentIds = []) {
-  if (!expectedItemId || getOfficeRemote()) return null;
+  if (!expectedItemId) return null;
+  const remote = getOfficeRemote();
+  if (remote) return fetchMailEmlFromPane(remote, expectedItemId, keptAttachmentIds);
   const item = getLiveItem();
   if (!item || item.itemId !== expectedItemId) return null;
   const kept = new Set(keptAttachmentIds);

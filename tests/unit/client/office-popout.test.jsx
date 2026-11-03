@@ -262,6 +262,75 @@ describe('the popped-out chat routes Outlook through the pane', () => {
     expect(remote.call).toHaveBeenCalledWith('attachFile', { base64: 'QUJD', filename: 'a.pdf' });
   });
 
+  describe('the real message of the open email (.eml)', () => {
+    test('is asked of the pane, with the item and the attachments the user kept', async () => {
+      const remote = { state: { mailbox: true }, call: jest.fn(async () => 'RU1MLUJBU0U2NA==') };
+      const { context } = load(remote);
+      await expect(context.fetchCurrentMailEml('ITEM-1', ['att-1', 'att-2'])).resolves.toBe(
+        'RU1MLUJBU0U2NA=='
+      );
+      expect(remote.call).toHaveBeenCalledWith('readMailEml', {
+        expectedItemId: 'ITEM-1',
+        keptAttachmentIds: ['att-1', 'att-2']
+      });
+    });
+
+    test('is kept for the turns that follow, and asked again for another item or other attachments', async () => {
+      const remote = { state: { mailbox: true }, call: jest.fn(async () => 'RU1M') };
+      const { context } = load(remote);
+      await context.fetchCurrentMailEml('ITEM-1', ['a', 'b']);
+      await context.fetchCurrentMailEml('ITEM-1', ['b', 'a']);
+      expect(remote.call).toHaveBeenCalledTimes(1);
+      await context.fetchCurrentMailEml('ITEM-1', ['a']);
+      await context.fetchCurrentMailEml('ITEM-2', ['a']);
+      expect(remote.call).toHaveBeenCalledTimes(3);
+    });
+
+    test('is null — the chat synthesizes one — when the pane has none, is gone, or no item is named', async () => {
+      const none = load({ state: {}, call: jest.fn(async () => null) });
+      await expect(none.context.fetchCurrentMailEml('ITEM-1')).resolves.toBeNull();
+      const gone = load({
+        state: {},
+        call: jest.fn(() => Promise.reject(new Error('The Outlook pane did not answer.')))
+      });
+      await expect(gone.context.fetchCurrentMailEml('ITEM-1')).resolves.toBeNull();
+      const unnamed = { state: {}, call: jest.fn() };
+      await expect(load(unnamed).context.fetchCurrentMailEml(null)).resolves.toBeNull();
+      expect(unnamed.call).not.toHaveBeenCalled();
+      // A failed answer is not remembered.
+      const flaky = {
+        state: {},
+        call: jest.fn().mockRejectedValueOnce(new Error('late')).mockResolvedValueOnce('RU1M')
+      };
+      const { context } = load(flaky);
+      await expect(context.fetchCurrentMailEml('ITEM-1')).resolves.toBeNull();
+      await expect(context.fetchCurrentMailEml('ITEM-1')).resolves.toBe('RU1M');
+    });
+
+    test('crosses the bridge whole although it is megabytes, and is a slow call in the dialog', async () => {
+      const eml = Buffer.from('Subject: x\r\n\r\n' + 'body '.repeat(200_000)).toString('base64');
+      const paneSide = jest.fn(() => eml);
+      const { dialog } = connect({ paneHandlers: { readMailEml: paneSide }, chunkSize: 8192 });
+      const remote = {
+        state: { mailbox: true },
+        call: (method, payload) => dialog.request(method, payload)
+      };
+      const { context } = load(remote);
+      const received = await context.fetchCurrentMailEml('ITEM-1', ['a']);
+      expect(received).toBe(eml);
+      expect(paneSide).toHaveBeenCalledWith({ expectedItemId: 'ITEM-1', keptAttachmentIds: ['a'] });
+      // The dialog gives the pane the time it needs for the other slow reads.
+      const source = require('fs').readFileSync(
+        require('path').join(
+          __dirname,
+          '../../../client/src/features/office/utilities/officePopoutChild.js'
+        ),
+        'utf8'
+      );
+      expect(source).toMatch(/SLOW_METHODS = new Set\([^)]*'readMailEml'/s);
+    });
+  });
+
   test('a pane that is gone fails the action with a message instead of a throw', async () => {
     const remote = {
       state: { mailbox: true, mode: 'read' },
@@ -314,6 +383,68 @@ describe('the popped-out chat routes Outlook through the pane', () => {
     expect(auth.getAccessToken()).toBe('new-access');
     expect(auth.getRefreshToken()).toBe('new-refresh');
     delete global.fetch;
+  });
+});
+
+describe('the pane serves the real message of the open email', () => {
+  afterEach(() => {
+    delete global.Office;
+    jest.resetModules();
+    jest.dontMock('../../../client/src/features/office/utilities/outlookMailContext');
+  });
+
+  test("readMailEml reads it from the pane's own mailbox with the caller's item and attachments", async () => {
+    const fetchCurrentMailEml = jest.fn(async () => 'RU1M');
+    jest.resetModules();
+    jest.doMock('../../../client/src/features/office/utilities/outlookMailContext', () => ({
+      fetchCurrentMailContext: jest.fn(),
+      fetchCurrentOutlookItemContext: jest.fn(),
+      fetchCurrentMailEml
+    }));
+    let dialogHandler;
+    const dialog = {
+      messageChild: jest.fn(),
+      addEventHandler: jest.fn((type, handler) => {
+        if (type === 'dialogMessageReceived') dialogHandler = handler;
+      }),
+      close: jest.fn()
+    };
+    global.Office = {
+      EventType: {
+        DialogMessageReceived: 'dialogMessageReceived',
+        DialogEventReceived: 'dialogEventReceived'
+      },
+      AsyncResultStatus: { Succeeded: 'succeeded' },
+      context: {
+        ui: {
+          displayDialogAsync: jest.fn((url, options, callback) =>
+            callback({ status: 'succeeded', value: dialog })
+          )
+        }
+      }
+    };
+    const {
+      openChatPopout
+    } = require('../../../client/src/features/office/utilities/officePopout');
+    await openChatPopout({
+      url: 'https://ihub.example/popout',
+      getInit: () => ({}),
+      onClosed: jest.fn()
+    });
+
+    // The dialog's side of the bridge asks; the pane answers through messageChild.
+    let child;
+    dialog.messageChild.mockImplementation(message => queueMicrotask(() => child.receive(message)));
+    child = createPopoutEndpoint({
+      send: message => dialogHandler({ message }),
+      handlers: {}
+    });
+    const pending = child.request('readMailEml', {
+      expectedItemId: 'ITEM-9',
+      keptAttachmentIds: ['k1']
+    });
+    await expect(pending).resolves.toBe('RU1M');
+    expect(fetchCurrentMailEml).toHaveBeenCalledWith('ITEM-9', ['k1']);
   });
 });
 

@@ -10,7 +10,11 @@ import {
   isOutlookAppointmentMode,
   isRequirementSetSupported
 } from './officeCapabilities';
-import { fetchCurrentMailContext, fetchCurrentOutlookItemContext } from './outlookMailContext';
+import {
+  fetchCurrentMailContext,
+  fetchCurrentMailEml,
+  fetchCurrentOutlookItemContext
+} from './outlookMailContext';
 import { detectOutlookMode, runOutlookMailAction } from './outlookMailActions';
 import {
   attachFileToOutlookItem,
@@ -29,7 +33,7 @@ import { getAccessToken, getRefreshToken, refreshTokenOrExpireSession } from '..
  * chat moves there — and the pane stays open behind it as the dialog's
  * gateway to Outlook (see `officeRemote.js` for the dialog's half):
  *
- *   dialog → pane   hello, readItemContext, readMailContext, runMailAction,
+ *   dialog → pane   hello, readItemContext, readMailContext, readMailEml, runMailAction,
  *                   attachFile, openUrl, refreshToken, dock
  *                   (events: chatState, pinnedEmails, signedOut)
  *   pane → dialog   itemchanged (with the item's new state)
@@ -200,6 +204,12 @@ export function openChatPopout({ url, getInit, onChatState, onPinnedEmails, onCl
       hello: () => ({ ...getInit(), state: readPaneOutlookState() }),
       readItemContext: () => fetchCurrentOutlookItemContext(),
       readMailContext: () => fetchCurrentMailContext(),
+      // The real RFC 5322 message: only the pane has the mailbox to read it from.
+      readMailEml: ({ expectedItemId, keptAttachmentIds } = {}) =>
+        fetchCurrentMailEml(
+          expectedItemId,
+          Array.isArray(keptAttachmentIds) ? keptAttachmentIds : []
+        ),
       runMailAction: ({ action, markdown, options } = {}) =>
         runOutlookMailAction(action, markdown, options || {}),
       attachFile: ({ base64, filename } = {}) => attachFileToOutlookItem({ base64, filename }),
