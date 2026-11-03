@@ -15,6 +15,8 @@ import { normalizeFiles } from '../../../shared/promptContext.js';
 import { getScopeProvider } from '../integrations/scopes/index.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
+import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
+import { chatContextInventory } from './chatContextTools.js';
 import {
   isVoiceTurn,
   resolveVoiceInstruction,
@@ -618,8 +620,33 @@ class RequestBuilder {
           ? { ...app, _activeSkills: activeSkills.map(({ name, full }) => ({ name, full })) }
           : app;
 
+      // What earlier turns of a stored chat found, were given and produced,
+      // for the chat context tools — only when this turn sends the history
+      // and the model can call tools. A model that cannot keeps every earlier
+      // file inline: it could not read back a file left out.
+      const sendsHistory = Array.isArray(messages) && messages.length > 1;
+      const chatContext =
+        sendsHistory && app.sendChatHistory !== false && modelSupportsTools(model)
+          ? await chatContextInventory({ chatId, user })
+          : null;
+      // The files of earlier turns stay inline within a share of the context
+      // window; an older one is a stub the model reads with `chat_files_read`,
+      // which the chat offers because it has files.
+      let promptMessages = messages;
+      if (chatContext?.files) {
+        const budgeted = applyHistoryFileBudget(messages, { contextWindow: model.contextWindow });
+        promptMessages = budgeted.messages;
+        if (budgeted.omitted > 0) {
+          logger.info('Files of earlier turns left out for the context budget', {
+            component: 'RequestBuilder',
+            chatId,
+            omitted: budgeted.omitted
+          });
+        }
+      }
+
       let llmMessages = await processMessageTemplates(
-        messages,
+        promptMessages,
         bypassAppPrompts ? null : app,
         style,
         outputFormat,
@@ -682,7 +709,8 @@ class RequestBuilder {
         modelProvider: model.provider,
         model,
         websearchEnabled,
-        activeSkills
+        activeSkills,
+        chatContext
       };
       const tools = applyIntegrationScopes(
         llmMessages,

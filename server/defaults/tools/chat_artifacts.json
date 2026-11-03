@@ -1,0 +1,78 @@
+{
+  "id": "chat_artifacts",
+  "name": {
+    "en": "Chat artifacts",
+    "de": "Chat-Artefakte"
+  },
+  "description": {
+    "en": "List and read the files earlier answers of this chat created: documents, spreadsheets, presentations, code, web artifacts and images. Added automatically when the chat has created files.",
+    "de": "Die Dateien auflisten und lesen, die frühere Antworten dieses Chats erstellt haben: Dokumente, Tabellen, Präsentationen, Code, Web-Artefakte und Bilder. Wird automatisch hinzugefügt, wenn der Chat Dateien erstellt hat."
+  },
+  "script": "chatArtifacts.js",
+  "enabled": true,
+  "readOnly": true,
+  "functions": {
+    "list": {
+      "name": {
+        "en": "List created files",
+        "de": "Erstellte Dateien auflisten"
+      },
+      "description": {
+        "en": "List the files created in this chat (documents, spreadsheets, presentations, code, web artifacts, images) with their id, name, kind, size and the turn that created them. Use this when the user refers to a file created earlier, then read it with chat_artifacts_read.",
+        "de": "Die in diesem Chat erstellten Dateien (Dokumente, Tabellen, Präsentationen, Code, Web-Artefakte, Bilder) mit ID, Name, Art, Größe und der Runde, die sie erstellt hat, auflisten. Verwenden, wenn sich der Nutzer auf eine früher erstellte Datei bezieht, und sie dann mit chat_artifacts_read lesen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["document", "code", "image", "archive"],
+            "description": {
+              "en": "Only files of this kind",
+              "de": "Nur Dateien dieser Art"
+            }
+          },
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Only files whose name contains this text",
+              "de": "Nur Dateien, deren Name diesen Text enthält"
+            }
+          }
+        }
+      }
+    },
+    "read": {
+      "name": {
+        "en": "Read created file",
+        "de": "Erstellte Datei lesen"
+      },
+      "description": {
+        "en": "Read the content of a file created in this chat, by its id or name from chat_artifacts_list: the text of code and text files, the extracted text of PDF, Word, PowerPoint and Excel files. Images and archives cannot be read as text. A long file comes in parts: when the result has nextOffset, call again with that offset for the rest. To change a file, create a new one with the changes.",
+        "de": "Den Inhalt einer in diesem Chat erstellten Datei lesen, anhand ihrer ID oder ihres Namens aus chat_artifacts_list: den Text von Code- und Textdateien, den extrahierten Text von PDF-, Word-, PowerPoint- und Excel-Dateien. Bilder und Archive können nicht als Text gelesen werden. Eine lange Datei kommt in Teilen: Enthält das Ergebnis nextOffset, mit diesem Offset erneut aufrufen. Um eine Datei zu ändern, eine neue mit den Änderungen erstellen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "artifact": {
+            "type": "string",
+            "description": {
+              "en": "The file's id or name from chat_artifacts_list",
+              "de": "Die ID oder der Name der Datei aus chat_artifacts_list"
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "description": {
+              "en": "Character to start at (default 0)",
+              "de": "Zeichen, ab dem gelesen wird (Standard 0)"
+            },
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "required": ["artifact"]
+      }
+    }
+  }
+}

@@ -35,6 +35,7 @@ import {
   computeContextUsage,
   conversationTokenFragments
 } from '../../../shared/utils/tokenEstimatorClient.js';
+import { modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import {
   useEstimatedTokenCount,
   useEstimatedTokensForFragments
@@ -294,8 +295,16 @@ function ChatInput({
   // Re-tokenized only when the message list actually changes, and per-fragment
   // counts are memoized, so a long conversation is not re-scanned per render.
   const historyFragments = useMemo(
-    () => conversationTokenFragments(messages, { includeHistory: sendChatHistory !== false }),
-    [messages, sendChatHistory]
+    () =>
+      conversationTokenFragments(messages, {
+        includeHistory: sendChatHistory !== false,
+        // The server leaves earlier files out only for a model that can read
+        // them back with a tool (`shared/historyFileBudget.js`).
+        contextWindow: modelSupportsTools(selectedModelData)
+          ? selectedModelData?.contextWindow
+          : undefined
+      }),
+    [messages, sendChatHistory, selectedModelData]
   );
   const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
 

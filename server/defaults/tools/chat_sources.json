@@ -1,0 +1,87 @@
+{
+  "id": "chat_sources",
+  "name": {
+    "en": "Earlier sources",
+    "de": "Frühere Quellen"
+  },
+  "description": {
+    "en": "List and read the sources earlier answers of this chat found: web results, pages read and documents. Added automatically when an earlier answer has sources.",
+    "de": "Die Quellen auflisten und lesen, die frühere Antworten dieses Chats gefunden haben: Webergebnisse, gelesene Seiten und Dokumente. Wird automatisch hinzugefügt, wenn eine frühere Antwort Quellen hat."
+  },
+  "script": "chatSources.js",
+  "enabled": true,
+  "readOnly": true,
+  "functions": {
+    "list": {
+      "name": {
+        "en": "List earlier sources",
+        "de": "Frühere Quellen auflisten"
+      },
+      "description": {
+        "en": "List the sources that earlier answers in this chat found (web results, pages read, documents), grouped by turn, with each source's id, title, link and whether the answer cited it. Use this when the user refers to something found earlier (\"the second source\", \"that article\") instead of searching again. Then read a source with chat_sources_read.",
+        "de": "Die Quellen auflisten, die frühere Antworten in diesem Chat gefunden haben (Webergebnisse, gelesene Seiten, Dokumente), nach Runde gruppiert, mit ID, Titel, Link und ob die Antwort sie zitiert hat. Verwenden, wenn sich der Nutzer auf früher Gefundenes bezieht („die zweite Quelle“, „dieser Artikel“), statt erneut zu suchen. Danach eine Quelle mit chat_sources_read lesen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "description": {
+              "en": "Only the sources of this turn (1 is the first question of the chat). Omit for every turn.",
+              "de": "Nur die Quellen dieser Runde (1 ist die erste Frage des Chats). Weglassen für alle Runden."
+            },
+            "minimum": 1
+          },
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Only sources whose title, link, site or snippet contain this text",
+              "de": "Nur Quellen, deren Titel, Link, Website oder Ausschnitt diesen Text enthalten"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "description": {
+              "en": "Most sources to return (default 30)",
+              "de": "Maximale Anzahl Quellen (Standard 30)"
+            },
+            "default": 30,
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "read": {
+      "name": {
+        "en": "Read earlier source",
+        "de": "Frühere Quelle lesen"
+      },
+      "description": {
+        "en": "Read what was kept of one source an earlier answer found, by its id from chat_sources_list: title, link, snippet and the passages taken from it. The full text of a web page is not kept; when you need more of a page, read its link again with the page reader if it is available. A source read here can be cited in your answer with its link.",
+        "de": "Lesen, was von einer Quelle einer früheren Antwort gespeichert ist, anhand ihrer ID aus chat_sources_list: Titel, Link, Ausschnitt und die daraus entnommenen Passagen. Der vollständige Text einer Webseite wird nicht gespeichert; wenn mehr von einer Seite benötigt wird, den Link erneut mit dem Seitenleser lesen, falls verfügbar. Eine hier gelesene Quelle kann in der Antwort mit ihrem Link zitiert werden."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": {
+              "en": "The source id from chat_sources_list",
+              "de": "Die Quellen-ID aus chat_sources_list"
+            }
+          },
+          "turn": {
+            "type": "integer",
+            "description": {
+              "en": "The turn the source belongs to; omit to take the latest turn that has it",
+              "de": "Die Runde der Quelle; weglassen für die letzte Runde, die sie enthält"
+            },
+            "minimum": 1
+          }
+        },
+        "required": ["id"]
+      }
+    }
+  }
+}

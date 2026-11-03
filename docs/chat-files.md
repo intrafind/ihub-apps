@@ -4,6 +4,11 @@ Files users attach to a chat or to a scheduled task are stored by the server, so
 reading them on every later turn, after a reload and on other devices. The design is in
 [`concepts/chat-files/README.md`](../concepts/chat-files/README.md).
 
+The files of earlier turns go back to the model in full only while they fit a quarter of the
+context window. An older file is named in the prompt but not repeated, and the model reads it
+with the `chat_files_read` tool when it needs it (see
+[What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model)).
+
 ## What is stored
 
 Every file has a metadata document, the extracted text, optional page images (scanned PDFs) and

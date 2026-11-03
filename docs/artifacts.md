@@ -326,6 +326,16 @@ An artifact goes when its scope goes, and when whatever named it goes:
 There is no age-based sweep of the namespace itself; artifacts are reclaimed
 through their scope.
 
+## Reading a chat's artifacts in a later turn
+
+The transcript keeps only an artifact's descriptor, so its content never goes back to the model
+with the history. In a later turn of the chat, the model lists the created files with
+`chat_artifacts_list` and reads one with `chat_artifacts_read`: the text of code and text files,
+or the extracted text of a PDF, Word, PowerPoint or Excel file. Both find the same files as
+`create_zip`: the stored artifacts and the files still held from the current turn
+(`chatArtifactCandidates` in `services/documents/files/fileTools.js`). See
+[What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model).
+
 ## Using it from a new producer
 
 ```js

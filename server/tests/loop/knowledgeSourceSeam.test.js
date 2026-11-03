@@ -102,3 +102,50 @@ test('a connected system counts only when the call returned data', async () => {
     source: undefined
   });
 });
+
+test('a recalled source counts as the kind of source it was found as', async () => {
+  const { classifySourceProvider } =
+    await import('../../services/loop/seams/knowledgeSourceSeam.js');
+  // Web pages, the providers' own search (grounding) included.
+  assert.equal(classifySourceProvider('web'), 'websearch');
+  // iFinder documents, iAssistant's included.
+  assert.equal(classifySourceProvider('ifinder'), 'ifinder');
+  assert.equal(classifySourceProvider('project'), 'sources');
+  // An MCP server is a connected system, even one that searches.
+  assert.equal(classifySourceProvider('mcp:brave-search'), 'integration');
+  // Otherwise the provider is the id of the tool that found it.
+  assert.equal(classifySourceProvider('braveSearch'), 'websearch');
+  assert.equal(classifySourceProvider('source_handbook'), 'sources');
+  assert.equal(classifySourceProvider('jira'), 'integration');
+});
+
+test('reading an earlier source badges the answer; listing them does not', async () => {
+  const { knowledgeSourceSeam } = await import('../../services/loop/seams/knowledgeSourceSeam.js');
+  const run = (toolId, outcome) => {
+    const added = [];
+    const ctx = { addKnowledgeSource: source => added.push(source) };
+    knowledgeSourceSeam.postTool(ctx, { toolId }, outcome);
+    return { added, outcome };
+  };
+  const recalled = {
+    sources: {
+      items: [
+        { id: 'url:a', provider: 'web' },
+        { id: 'url:b', provider: 'web' },
+        { id: 'ifinder:d1', provider: 'ifinder' }
+      ]
+    }
+  };
+  const read = run('chat_sources_read', { ...recalled });
+  assert.deepEqual(read.added, ['websearch', 'ifinder']);
+  assert.equal(read.outcome.knowledgeSource, 'websearch');
+
+  // The list reads no content.
+  assert.deepEqual(run('chat_sources_list', { ...recalled }).added, []);
+  // A read that found nothing, or failed, informs nothing.
+  assert.deepEqual(run('chat_sources_read', { sources: null }).added, []);
+  assert.deepEqual(run('chat_sources_read', { ...recalled, error: 'boom' }).added, []);
+  // The other chat context tools are not knowledge sources.
+  assert.deepEqual(run('chat_files_read', {}).added, []);
+  assert.deepEqual(run('chat_artifacts_read', {}).added, []);
+});
