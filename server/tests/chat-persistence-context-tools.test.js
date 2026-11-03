@@ -342,7 +342,11 @@ describe('created files', () => {
 
 describe('a turn of a stored chat', () => {
   /** Prepare a turn of `chatId` with the stored history as the route hands it over. */
-  async function prepare(chatId, report, { contextWindow = 32000, sendChatHistory } = {}) {
+  async function prepare(
+    chatId,
+    report,
+    { contextWindow = 32000, sendChatHistory, supportsTools = 'auto' } = {}
+  ) {
     configCache.setCacheEntry('config/apps.json', [
       {
         id: 'chat',
@@ -354,7 +358,15 @@ describe('a turn of a stored chat', () => {
       }
     ]);
     configCache.setCacheEntry('config/models.json', [
-      { id: 'm', name: 'M', provider: 'openai', enabled: true, default: true, contextWindow }
+      {
+        id: 'm',
+        name: 'M',
+        provider: 'openai',
+        enabled: true,
+        default: true,
+        contextWindow,
+        supportsTools
+      }
     ]);
     const builder = new RequestBuilder();
     builder.apiKeyVerifier = { verifyApiKey: async () => ({ success: true, apiKey: 'k' }) };
@@ -418,6 +430,15 @@ describe('a turn of a stored chat', () => {
     const data = await prepare(chatId, report, { contextWindow: 1000000 });
     const first = data.llmMessages.find(message => message.role === 'user');
     assert.ok(first.content.includes('Quarterly report.'));
+  });
+
+  it('keeps every earlier file and offers nothing to a model without tool calling', async () => {
+    const { chatId, report } = await seedChat();
+    const data = await prepare(chatId, report, { contextWindow: 32000, supportsTools: 'none' });
+    const first = data.llmMessages.find(message => message.role === 'user');
+    assert.ok(first.content.includes('Quarterly report.'));
+    assert.ok(!first.content.includes('omitted="true"'));
+    assert.ok(!data.tools.some(tool => isChatContextTool(tool.id)));
   });
 
   it('offers nothing to an app that sends no history', async () => {

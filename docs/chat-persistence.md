@@ -584,7 +584,10 @@ tokens). Each older file is replaced by an empty block that names it,
 and the model reads it with `chat_files_read` when the question needs it.
 Before this, every earlier file was re-sent in full on every turn, and a chat
 with a few large documents could fill the context window with no way to
-recover. E-mails, meetings and pages sent with a turn are not affected. The
+recover. E-mails, meetings and pages sent with a turn are not affected, and
+neither is a scanned file without text (only page images), which no tool could
+bring back. The budget and the tools apply only to a model with tool calling;
+on a model without it, every earlier file goes in full as before. The
 composer's context meter applies the same budget.
 
 Code: `services/chat/chatContextTools.js` (inventory and dispatch),

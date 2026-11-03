@@ -12,7 +12,8 @@
  * fit a share of the context window; an older file is replaced by a stub
  * (`omitted: true`) that names it, which `renderUserMessage` renders as an
  * empty `<content … omitted="true"/>` block. The model reads such a file
- * with the `chat_files_read` tool when it needs it.
+ * with the `chat_files_read` tool when it needs it, so the budget applies
+ * only to a model that can call tools, and only to files with text.
  *
  * Pure and cheap (characters / 4, no tokenizer), so the server and the
  * client's context meter apply the same budget to the same messages.
@@ -83,13 +84,15 @@ export function omittedFileStub(file) {
 
 /**
  * Whether a file can be replaced by a stub: it can be read again by its id,
- * it is a document (not an email, meeting or page) and it has something to omit.
+ * it is a document (not an email, meeting or page) and it has text — what
+ * `chat_files_read` returns. A scanned file with only page images stays
+ * inline: no tool could bring its pages back.
  */
 function stubbable(file) {
   if (!file || typeof file !== 'object' || file.omitted) return false;
   if (typeof (file.fileId || file.id) !== 'string') return false;
   if (HOST_ITEM_ORIGINS.has(file.origin)) return false;
-  return estimateFileTokens(file) > 0;
+  return typeof file.content === 'string' && file.content.length > 0;
 }
 
 /**

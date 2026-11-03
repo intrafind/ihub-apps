@@ -621,10 +621,12 @@ class RequestBuilder {
           : app;
 
       // What earlier turns of a stored chat found, were given and produced,
-      // for the chat context tools — only when this turn sends the history.
+      // for the chat context tools — only when this turn sends the history
+      // and the model can call tools. A model that cannot keeps every earlier
+      // file inline: it could not read back a file left out.
       const sendsHistory = Array.isArray(messages) && messages.length > 1;
       const chatContext =
-        sendsHistory && app.sendChatHistory !== false
+        sendsHistory && app.sendChatHistory !== false && modelSupportsTools(model)
           ? await chatContextInventory({ chatId, user })
           : null;
       // The files of earlier turns stay inline within a share of the context

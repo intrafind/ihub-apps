@@ -76,6 +76,20 @@ test('keeps files that cannot be read again and host items', () => {
   assert.equal(omitted, 0);
 });
 
+test('keeps a scanned file without text, which no tool could read back', () => {
+  const messages = [
+    {
+      role: 'user',
+      content: 'first',
+      fileData: [{ ...file('scan', 0), pageImages: ['a', 'b', 'c'] }]
+    },
+    { role: 'user', content: 'now' }
+  ];
+  const { messages: out, omitted } = applyHistoryFileBudget(messages, { budgetTokens: 10 });
+  assert.equal(omitted, 0);
+  assert.equal(out[0].fileData[0].pageImages.length, 3);
+});
+
 test('no context window, no budget', () => {
   const messages = [
     { role: 'user', content: 'a', fileData: [file('f', 100000)] },

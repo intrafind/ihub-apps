@@ -35,6 +35,7 @@ import {
   computeContextUsage,
   conversationTokenFragments
 } from '../../../shared/utils/tokenEstimatorClient.js';
+import { modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import {
   useEstimatedTokenCount,
   useEstimatedTokensForFragments
@@ -297,9 +298,13 @@ function ChatInput({
     () =>
       conversationTokenFragments(messages, {
         includeHistory: sendChatHistory !== false,
-        contextWindow: selectedModelData?.contextWindow
+        // The server leaves earlier files out only for a model that can read
+        // them back with a tool (`shared/historyFileBudget.js`).
+        contextWindow: modelSupportsTools(selectedModelData)
+          ? selectedModelData?.contextWindow
+          : undefined
       }),
-    [messages, sendChatHistory, selectedModelData?.contextWindow]
+    [messages, sendChatHistory, selectedModelData]
   );
   const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
 
