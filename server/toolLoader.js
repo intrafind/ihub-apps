@@ -16,6 +16,7 @@ import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
+import { runToolScript } from './services/tools/toolScriptRunner.js';
 import { isInteractiveTool, isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import {
@@ -140,6 +141,9 @@ function buildWorkflowToolParams(workflow, language = 'en') {
   };
 }
 
+/** OpenAPI tool files already reported as unsupported, so each is logged once. */
+const reportedOpenApiToolFiles = new Set();
+
 /**
  * Load tools defined locally in contents/tools/
  * @param {string} language - Optional language for localization
@@ -158,29 +162,24 @@ export async function loadConfiguredTools(language = null) {
   const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
   const localized = localizeTools(tools, effectiveLanguage);
 
-  // Derive LLM-facing parameters for OpenAPI tools from the referenced operation
-  // so the model sees the correct argument schema. A broken/unreachable spec
-  // disables the tool rather than crashing tool discovery.
-  const openApiTools = localized.filter(t => t.type === 'openapi' && !t.parameters);
-  if (openApiTools.length > 0) {
-    const { getOpenApiToolParameters } = await import('./services/tools/OpenApiToolRunner.js');
-    await Promise.all(
-      openApiTools.map(async t => {
-        try {
-          t.parameters = await getOpenApiToolParameters(t);
-        } catch (error) {
-          logger.error('Failed to derive OpenAPI tool parameters; disabling tool', {
-            component: 'ToolLoader',
-            toolId: t.id,
-            error: error?.message
-          });
-          t.enabled = false;
-        }
-      })
-    );
+  // OpenAPI tool files are gone: migration V211 turned every one into a
+  // custom integration, and nothing creates them any more. A file put back
+  // by hand has nothing to run it, so it is not offered.
+  const offered = [];
+  for (const tool of localized) {
+    if (tool?.type === 'openapi') {
+      if (!reportedOpenApiToolFiles.has(tool.id)) {
+        reportedOpenApiToolFiles.add(tool.id);
+        logger.warn(
+          'OpenAPI tool files are no longer supported; build the integration under Admin → Integrations → Add manually',
+          { component: 'ToolLoader', toolId: tool.id }
+        );
+      }
+      continue;
+    }
+    offered.push(tool);
   }
-
-  return localized;
+  return offered;
 }
 
 /** Agent ids whose id clash has been logged, so each is reported once. */
@@ -1304,14 +1303,6 @@ export async function runTool(toolId, params = {}, options = {}) {
     return await a2aClientManager.callTool(toolId, params, { signal: options.signal });
   }
 
-  // OpenAPI tools are dispatched through the OpenApiToolRunner.
-  if (tool.type === 'openapi') {
-    logger.info('Dispatching OpenAPI tool call', { component: 'ToolLoader', toolId });
-    const { runOpenApiTool } = await import('./services/tools/OpenApiToolRunner.js');
-    const { chatId, user, appConfig, ...args } = params;
-    return await runOpenApiTool(tool, args, { chatId, user, appConfig });
-  }
-
   // Check if this is a special tool (like Google Search) that doesn't have a script
   if (tool.isSpecialTool) {
     // Special tools are handled by the model provider directly, not executed here
@@ -1328,22 +1319,12 @@ export async function runTool(toolId, params = {}, options = {}) {
   }
 
   try {
-    const mod = await import(`./tools/${scriptName}`);
-    const fn = tool.method ? mod[tool.method] : mod.default;
-    if (typeof fn !== 'function') {
-      throw new Error(`Tool ${toolId} does not export function ${tool.method || 'default'}`);
-    }
-
-    // Apply default parameter values defined in the tool schema
-    if (tool.parameters && tool.parameters.properties) {
-      for (const [key, prop] of Object.entries(tool.parameters.properties)) {
-        if (params[key] === undefined && prop.default !== undefined) {
-          params[key] = prop.default;
-        }
-      }
-    }
-
-    return await fn(params);
+    // Default parameter values of the tool's schema fill what the call left out.
+    return await runToolScript(scriptName, {
+      method: tool.method,
+      parameters: tool.parameters,
+      params
+    });
   } catch (error) {
     logger.error('Failed to execute tool', {
       component: 'ToolLoader',

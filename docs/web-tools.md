@@ -143,7 +143,7 @@ tool calls to be circulated back through the conversation, which the adapter
 does not do yet. The reader is a platform tool of the web search feature
 (`server/defaults/tools/read_url.json`), not an engine's action: an admin
 switches it off with a tool file `contents/tools/read_url.json` that says
-`"enabled": false` (**Admin → Tools**).
+`"enabled": false` (a hand-written file; there is no admin page for tool files).
 
 ### Admin UI Configuration
 
@@ -526,7 +526,7 @@ The three search tools are the **Search the web** action (`search`) of their
 engine installations, not tool files: `braveSearch` (`brave`), `staanSearch`
 (`staan`) and `qwantSearch` (`qwant`) keep their ids, but there is no
 `contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`)
-any more, and they are not listed under **Admin → Tools**. They are switched
+any more. They are switched
 on and off, and restricted to groups, on their engine under **Admin →
 Integrations → Web search**. Their throttling is unchanged (Brave: one request
 at a time, 1100 ms apart). The page reader `read_url` is a platform tool of the

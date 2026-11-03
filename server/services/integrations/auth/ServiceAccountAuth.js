@@ -135,7 +135,10 @@ export function credentialProfileAuth(profile) {
 /**
  * The headers of an installation in service-account mode, for a definition's
  * `auth.serviceAccount` (`kind`: `bearer`, `basic`, `header`; `header` and
- * `valuePrefix` for the header kind).
+ * `valuePrefix` for the header kind). `credential` here is a secret typed into
+ * a form (a test before saving): an opaque secret, sent as a bearer token like
+ * a `secret` profile. A stored `credential` profile is sent by its own type
+ * instead (`credentialProfileAuth`).
  *
  * @param {Object} params
  * @param {string} params.secret - The credential's value
@@ -145,7 +148,7 @@ export function credentialProfileAuth(profile) {
  */
 export function serviceAccountHeaders({ secret, serviceAccount = {}, fillTemplate = t => t }) {
   const kind = serviceAccount.kind || 'header';
-  if (kind === 'bearer') return { Authorization: `Bearer ${secret}` };
+  if (kind === 'bearer' || kind === 'credential') return { Authorization: `Bearer ${secret}` };
   if (kind === 'basic') {
     return { Authorization: `Basic ${Buffer.from(String(secret)).toString('base64')}` };
   }

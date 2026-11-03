@@ -55,10 +55,13 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
   const protocol = definition.protocol;
   // "{baseUrl}{apiPath}" with a URL that ends in "/" and a path that starts
   // with one gives an interior "//", which many portals answer with 404.
-  const baseUrl = fillTemplate(protocol.baseUrl, values)
-    .replace(/(^[a-z][a-z0-9+.-]*:\/\/[^/]+)|\/{2,}/gi, (match, origin) => origin || '/')
-    .replace(/\/+$/, '');
-  if (!isHttpUrl(baseUrl)) {
+  // Without a base URL the runner takes the document's first server.
+  const baseUrl = protocol.baseUrl
+    ? fillTemplate(protocol.baseUrl, values)
+        .replace(/(^[a-z][a-z0-9+.-]*:\/\/[^/]+)|\/{2,}/gi, (match, origin) => origin || '/')
+        .replace(/\/+$/, '')
+    : undefined;
+  if (baseUrl !== undefined && !isHttpUrl(baseUrl)) {
     throw new Error(`Integration ${instance.id}: base URL "${baseUrl}" is not an http(s) URL`);
   }
 
@@ -72,17 +75,36 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
   if (mode === 'service-account') {
     const ref = instance.auth?.credentialRef;
     if (!ref) throw new Error(`Integration ${instance.id}: service account without credential`);
+    const account = definition.auth.serviceAccount || {};
+    if (account.kind === 'credential' && resolveSecret === storedSecret) {
+      // The profile's own type decides how it is sent (the runner applies it).
+      return { baseUrl, headers, credentialRef: ref };
+    }
     Object.assign(
       headers,
       serviceAccountHeaders({
         secret: resolveSecret(ref),
-        serviceAccount: definition.auth.serviceAccount || {},
+        serviceAccount: account,
         fillTemplate: template => fillTemplate(template, values)
       })
     );
   }
 
   return { baseUrl, headers };
+}
+
+/**
+ * Where the runner reads the OpenAPI document: the companion file the
+ * registry already parsed, or, for a definition whose `protocol.document` is
+ * an http(s) URL, that URL (fetched through the SSRF guard and cached by the
+ * runner). An OpenAPI tool file with a `url` source became such a definition
+ * in migration V211.
+ */
+function specSourceOf(definition, document) {
+  if (document) return { type: 'inline', spec: document };
+  const ref = definition.protocol.document;
+  if (isHttpUrl(ref)) return { type: 'url', url: ref };
+  return { type: 'inline', spec: document };
 }
 
 /**
@@ -95,10 +117,11 @@ function buildRunnerTool(definition, instance, document, action, settings, secur
     type: 'openapi',
     name: action.name,
     openapi: {
-      source: { type: 'inline', spec: document },
+      source: specSourceOf(definition, document),
       operationId: action.operationId,
       baseUrl: settings.baseUrl,
       headers: settings.headers,
+      ...(settings.credentialRef ? { auth: { credentialRef: settings.credentialRef } } : {}),
       xDisplay: { hideFields: action.hideFields || [] },
       maxResponseBytes: action.maxResponseBytes || protocol.maxResponseBytes || 262144,
       timeoutMs: action.timeoutMs || instance.timeoutMs || protocol.timeoutMs || 30000,
@@ -145,6 +168,7 @@ export async function discoverActions({
   definition,
   instance,
   document,
+  security,
   language = 'en',
   includeUnavailable = false
 }) {
@@ -163,7 +187,14 @@ export async function discoverActions({
     try {
       const probe = {
         id: `${toolIdFor(instance.id, action.name)}::schema`,
-        openapi: { source: { type: 'inline', spec: document }, operationId: action.operationId }
+        openapi: {
+          source: specSourceOf(definition, document),
+          operationId: action.operationId,
+          security: {
+            blockPrivateIps: security?.blockPrivateIps !== false,
+            allowedHosts: security?.allowedHosts || []
+          }
+        }
       };
       const derived = await getOpenApiToolParameters(probe);
       parameters = shapeParametersForModel(derived, action.defaults, values);
@@ -375,7 +406,7 @@ export async function test({
   try {
     values = effectiveValues(definition, instance);
     const settings = resolveRequestSettings(definition, instance, values, resolveSecret);
-    push('settings', 'Request settings', 'ok', settings.baseUrl, {
+    push('settings', 'Request settings', 'ok', settings.baseUrl || 'Base URL from the document', {
       details: { baseUrl: settings.baseUrl, headers: Object.keys(settings.headers) }
     });
   } catch (error) {
