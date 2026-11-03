@@ -61,6 +61,7 @@ import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import { withUserFileLimit } from '../services/quota/quotaService.js';
 import {
   isChatFileFailure,
   isMultipartRequest,
@@ -524,7 +525,8 @@ export default function registerChatRoutes(app) {
       const chatApp = requestedAppId
         ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
         : null;
-      const policy = chatFilePolicy(chatApp);
+      // The user's own file storage limit (group/user `usageLimits`).
+      const policy = withUserFileLimit(chatFilePolicy(chatApp), req.user);
       if (!policy.enabled) {
         return sendErrorResponse(res, 503, 'Chat file uploads are disabled', {
           details: { code: 'UPLOADS_DISABLED' }

@@ -14,6 +14,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
+import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
 
 function AdminGroupEditPage() {
   const { t } = useTranslation();
@@ -135,7 +136,8 @@ function AdminGroupEditPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: data
+        // `null` clears limits saved before; the server drops empty parts.
+        body: { ...data, usageLimits: normalizeUsageLimits(data.usageLimits) }
       });
 
       markSaved();
@@ -259,6 +261,20 @@ function AdminGroupEditPage() {
               groupId === 'new'
                 ? t('admin.groups.edit.createTitle', 'Create New Group')
                 : t('admin.groups.edit.editTitle', 'Edit Group')
+            }
+          />
+
+          <UsageLimitsEditor
+            level="group"
+            value={group?.usageLimits}
+            modelIds={group?.permissions?.models}
+            onChange={usageLimits =>
+              setGroup(prev => {
+                const next = { ...prev };
+                if (usageLimits) next.usageLimits = usageLimits;
+                else delete next.usageLimits;
+                return next;
+              })
             }
           />
 

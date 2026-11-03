@@ -88,6 +88,32 @@ export async function describeChatError(
       params = { timeout: timeoutSeconds };
     }
     message = (await t(key, params)) || message;
+  } else if (llm?.code === LLM_ERROR_CODES.QUOTA_EXCEEDED && details) {
+    // A used-up usage limit: which budget, and when it resets, in the
+    // user's language and the reset schedule's time zone.
+    const windowKey =
+      details.window === 'week'
+        ? 'quotaWindowWeek'
+        : details.window === 'month'
+          ? 'quotaWindowMonth'
+          : 'quotaWindowDay';
+    let resetAt = details.resetAt;
+    try {
+      resetAt = new Date(details.resetAt).toLocaleString(language || 'en', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        ...(details.timezone ? { timeZone: details.timezone } : {})
+      });
+    } catch {
+      /* keep the ISO time */
+    }
+    message =
+      (await t(details.scope === 'model' ? 'quotaExceededModel' : 'quotaExceededAllModels', {
+        window: (await t(windowKey, {})) || details.window,
+        model: details.modelName || details.modelId,
+        limit: Number(details.limit).toLocaleString(language || 'en'),
+        resetAt
+      })) || message;
   } else if (!llm && err?.code) {
     // Tool-loop and preparation errors carry a translation key as their code.
     message = (await t(err.code, {})) || message;

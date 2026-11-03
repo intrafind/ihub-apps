@@ -24,6 +24,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { servedMediaType } from '../../services/artifacts/artifactPolicy.js';
 import { chatFilePolicy } from '../../services/chatFiles/chatFilePolicy.js';
+import { withUserFileLimit } from '../../services/quota/quotaService.js';
 import { userFileScope } from '../../services/chatFiles/ChatFileRepository.js';
 import { ingestChatFile } from '../../services/chatFiles/ChatFileService.js';
 import { InferenceApiError, sendOpenAiError } from '../../services/inference/errors.js';
@@ -174,7 +175,7 @@ export default function registerFilesRoutes(app) {
     try {
       const { owner, scope } = await callerScope(req);
       const store = requireFileStore();
-      const policy = chatFilePolicy();
+      const policy = withUserFileLimit(chatFilePolicy(), req.user);
       if (!policy.enabled) {
         throw new InferenceApiError(403, 'uploads_disabled', 'File uploads are disabled');
       }

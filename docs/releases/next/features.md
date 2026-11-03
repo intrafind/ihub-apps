@@ -383,3 +383,25 @@ chat, without the conversation it came from. Open the Artifacts panel, select th
   (off by default).
 
 See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).
+
+## Usage Limits per Model, Group and User — Visible to Users and Admins
+
+Admins can give each model a per-user token budget per day, week and month — for example a small
+budget for a preview model — and lower it further for groups and individual users. Users see
+their budgets and when they reset; admins see everyone's usage against their limits.
+
+- **Levels:** the model's limit is the ceiling; a group's and a user's limits can only lower it.
+  A budget across all models can be set for everyone. Groups and users can also get a lower file
+  storage limit than the platform's per-user upload quota.
+- **Built-in resets:** daily at a set time, weekly on a set weekday and monthly on the 1st, in a
+  configurable time zone (**Usage Reports → Limits & quotas → Reset schedule**).
+- **Enforced everywhere:** chat, agents, workflows, scheduled tasks and the Inference API refuse
+  a call once the budget is used up, with a message saying when it resets (`429` with
+  `QUOTA_EXCEEDED` on the API).
+- **For users:** a new **Usage** page in the user menu, a notice above the chat input from 80 %
+  of a budget, and the usage of limited models in the model picker.
+- **For admins:** a **Limits & quotas** tab under Usage Reports with every user (search, filter
+  by near or at a limit, per-model, reset), a per-model and a per-group view; limit fields in
+  the model, group and user editors, and the user's current usage in the user editor.
+
+Nothing is limited until an admin sets a limit. See [Usage Limits](../../usage-limits.md).

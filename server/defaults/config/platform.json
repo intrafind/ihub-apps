@@ -315,6 +315,16 @@
     "monthlyRetentionDays": -1,
     "feedbackRetentionDays": -1
   },
+  "usageLimits": {
+    "allModels": {},
+    "resets": {
+      "timezone": null,
+      "dailyAt": "00:00",
+      "weeklyOn": "monday",
+      "weeklyAt": "00:00",
+      "monthlyAt": "00:00"
+    }
+  },
   "jwt": {
     "algorithm": "RS256"
   },

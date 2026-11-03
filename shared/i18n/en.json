@@ -535,7 +535,8 @@
       "adminPanel": "Admin Panel",
       "signOut": "Sign Out",
       "signIn": "Sign In",
-      "closeLogin": "Close login dialog"
+      "closeLogin": "Close login dialog",
+      "usage": "Usage"
     }
   },
   "widget": {
@@ -4465,6 +4466,88 @@
         "cached": "Cached",
         "uncached": "Uncached",
         "topProviders": "Providers"
+      },
+      "limits": {
+        "status": {
+          "exceeded": "Limit reached",
+          "warning": "Near limit",
+          "ok": "OK"
+        },
+        "perWindow": "{{limit}} / {{window}}",
+        "unlimited": "Unlimited",
+        "allModels": "All models",
+        "saved": "Settings saved",
+        "saveFailed": "Settings could not be saved",
+        "platformBudget": "Budget across all models (every user)",
+        "platformBudgetHint": "The most tokens one user may use across all models. Leave empty for no limit. Per-model budgets are set on each model; groups and users can only lower them.",
+        "schedule": "Reset schedule",
+        "scheduleHint": "All token budgets reset at the same moments for everyone. Monthly budgets reset on the 1st.",
+        "dailyAt": "Daily at",
+        "weeklyOn": "Weekly on",
+        "weeklyAt": "Weekly at",
+        "monthlyAt": "Monthly (1st) at",
+        "timezone": "Time zone",
+        "nextResets": "Next resets: daily {{day}}, weekly {{week}}, monthly {{month}}.",
+        "loadFailed": "Could not load usage",
+        "resetFailed": "Reset failed",
+        "search": "Search",
+        "searchPlaceholder": "Name, e-mail or group",
+        "filterStatus": "Show",
+        "filter": {
+          "all": "All users",
+          "limited": "Users with limits",
+          "warning": "Near or at a limit (≥ 80 %)",
+          "exceeded": "Limit reached",
+          "anyModel": "Any model"
+        },
+        "filterModel": "Model",
+        "refresh": "Refresh",
+        "user": "User",
+        "closestLimit": "Closest to its limit",
+        "thisMonth": "Tokens this month",
+        "files": "File storage",
+        "statusLabel": "Status",
+        "guests": "Guests",
+        "noLimits": "No limits",
+        "hide": "Hide",
+        "details": "Details",
+        "noLimitsUser": "No token limits apply to this user.",
+        "editLimits": "Edit personal limits",
+        "resetUsage": "Reset current usage",
+        "noUsers": "No users match.",
+        "pageOf": "Page {{page}} of {{pages}} · {{total}} users",
+        "resetTitle": "Reset usage?",
+        "resetMessage": "This sets {{name}}'s token counts for the current day, week and month to zero, for every model.",
+        "resetConfirm": "Reset",
+        "model": "Model",
+        "perUserLimit": "Limit per user",
+        "tokensWindow": "Tokens ({{window}})",
+        "activeUsers": "Users this month",
+        "nearOver": "Near / at limit",
+        "noModels": "No enabled models.",
+        "noGroupLimits": "None (model limits apply)",
+        "otherModels": "Other models",
+        "group": "Group",
+        "groupLimits": "Limits",
+        "members": "Members seen",
+        "inherits": "inherits {{groups}}",
+        "views": {
+          "users": "Users",
+          "models": "Models",
+          "groups": "Groups"
+        },
+        "weekday": {
+          "monday": "Monday",
+          "tuesday": "Tuesday",
+          "wednesday": "Wednesday",
+          "thursday": "Thursday",
+          "friday": "Friday",
+          "saturday": "Saturday",
+          "sunday": "Sunday"
+        }
+      },
+      "tabs": {
+        "limits": "Limits & quotas"
       }
     },
     "localization": {
@@ -5493,6 +5576,61 @@
         "stay": "Stay",
         "title": "Unsaved changes"
       }
+    },
+    "usageLimits": {
+      "title": "Usage limits",
+      "userTitle": "Personal usage limits",
+      "modelTitle": "Usage limits (per user)",
+      "modelIntro": "The most a single user may use of this model in each window. Groups and users can only set lower limits. Resets follow the schedule under Usage → Limits & quotas.",
+      "modelEmptyHint": "Empty means unlimited. 0 blocks the model for everyone.",
+      "groupIntro": "Limits for each member of this group. They can only lower the limit of the model.",
+      "userIntro": "Personal limits for this user. They can only lower the limits of the model and of the user's groups.",
+      "emptyHintGroup": "An empty field means no limit from this group. A member of several groups gets the most generous group limit; enter -1 to lift a limit that other groups of a member set. 0 blocks.",
+      "emptyHintUser": "An empty field means no personal limit. 0 blocks the model for this user.",
+      "allModelsTitle": "All models",
+      "allModelsHint": "Tokens a user may use across all models together.",
+      "fileStorageTitle": "File storage",
+      "fileStorageLabel": "Storage limit (MB)",
+      "fileStorageHint": "The most a user may keep in uploaded files. Empty means no limit at this level.",
+      "fileStorageUsage": "File storage ({{count}} files)",
+      "perModelTitle": "Per model",
+      "perModelHint": "Tokens a user may use of one model. The placeholder shows the model's own limit.",
+      "loadingModels": "Loading models…",
+      "loadingUsage": "Loading usage…",
+      "noModels": "No models available.",
+      "noModelsGroup": "This group has no model permissions. Add models under Permissions to limit them here.",
+      "modelColumn": "Model",
+      "unknownModel": "Model not found",
+      "otherModels": "All other models",
+      "otherModelsHint": "Each model without its own entry above",
+      "placeholderCeiling": "max {{limit}}",
+      "placeholderNoLimit": "no limit",
+      "noEffectModel": "Has no effect — the model allows at most {{limit}}",
+      "noEffectPlatform": "Has no effect — the platform allows at most {{limit}}",
+      "currentUsageTitle": "Current usage",
+      "currentUsageIntro": "Tokens used in the current windows against the limits that apply to this user.",
+      "noLimitsApply": "No token limits apply to this user.",
+      "limitedBy": "Limit from {{source}}",
+      "resetButton": "Reset usage",
+      "resetting": "Resetting…",
+      "resetConfirmTitle": "Reset usage?",
+      "resetConfirmMessage": "This sets this user's token counts for the current day, week and month back to zero. It cannot be undone.",
+      "resetConfirm": "Reset",
+      "newUserHint": "Personal usage limits can be set once the user has been created.",
+      "source": {
+        "group": "group: {{group}}",
+        "model": "model",
+        "platform": "platform",
+        "user": "personal limit"
+      },
+      "window": {
+        "day": "Daily tokens",
+        "week": "Weekly tokens",
+        "month": "Monthly tokens",
+        "dayShort": "Daily",
+        "weekShort": "Weekly",
+        "monthShort": "Monthly"
+      }
     }
   },
   "cloudStorage": {
@@ -5851,7 +5989,12 @@
     "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access.",
     "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again.",
     "outputValidationFailed": "The AI model's answer did not match the required output format.",
-    "apiKeyUnreadable": "The API key stored for model {modelId} cannot be decrypted. The server's encryption key is not the one it was saved with. An administrator has to enter the key again (Admin › Models) or provide it as an environment variable."
+    "apiKeyUnreadable": "The API key stored for model {modelId} cannot be decrypted. The server's encryption key is not the one it was saved with. An administrator has to enter the key again (Admin › Models) or provide it as an environment variable.",
+    "quotaExceededModel": "You have used your {window} token budget for {model} ({limit} tokens). It resets on {resetAt}. Choose another model to continue until then.",
+    "quotaExceededAllModels": "You have used your {window} token budget across all models ({limit} tokens). It resets on {resetAt}.",
+    "quotaWindowDay": "daily",
+    "quotaWindowWeek": "weekly",
+    "quotaWindowMonth": "monthly"
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
@@ -8634,5 +8777,63 @@
     "delete": "Delete file",
     "templateHint": "The assistant can use this file as a template.",
     "truncated": "Very long: the assistant reads the beginning."
+  },
+  "usage": {
+    "limitedBy": "Limit {{source}}",
+    "page": {
+      "title": "Usage",
+      "subtitle": "How much of your token budgets you have used, and when they reset.",
+      "refresh": "Refresh",
+      "loadFailed": "Your usage could not be loaded.",
+      "schedule": "Daily limits reset {{day}}, weekly limits {{week}}, monthly limits {{month}}.",
+      "allModels": "All models",
+      "allModelsHint": "Your budget across every model together.",
+      "modelExhausted": "Limit reached — choose another model until it resets.",
+      "noLimits": "No token limits apply to you.",
+      "otherModels": "Models without a limit",
+      "otherModelsHint": "Tokens used this month.",
+      "noLongerAvailable": "(no longer available to you)",
+      "files": "File storage",
+      "filesHint": "Files you uploaded to chats and tasks. The oldest originals may be removed when the storage is full.",
+      "filesUnavailable": "File storage is not available.",
+      "filesCount": "{{count}} files"
+    },
+    "tokens": "{{count}} tokens",
+    "usedUnlimited": "{{used}} used · unlimited",
+    "usedOf": "{{used}} of {{limit}}",
+    "reset": {
+      "now": "now",
+      "daysHours": "{{days}} d {{hours}} h",
+      "days": "{{days}} d",
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min",
+      "todayAt": "today at {{time}}",
+      "tomorrowAt": "tomorrow at {{time}}",
+      "dayAt": "{{day}} at {{time}}",
+      "full": "Resets {{moment}} (in {{until}})"
+    },
+    "window": {
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly"
+    },
+    "source": {
+      "model": "set for this model",
+      "platform": "set for everyone",
+      "user": "your personal limit",
+      "group": "set for group {{group}}"
+    },
+    "chat": {
+      "exceededModel": "{{window}} limit for {{model}} reached ({{used}} of {{limit}} tokens). {{reset}}. Choose another model to continue.",
+      "exceededAll": "{{window}} limit across all models reached ({{used}} of {{limit}} tokens). {{reset}}.",
+      "warningModel": "You've used {{percent}}% of your {{windowLower}} limit for {{model}}. {{reset}}.",
+      "warningAll": "You've used {{percent}}% of your {{windowLower}} limit across all models. {{reset}}.",
+      "viewUsage": "View usage"
+    },
+    "picker": {
+      "exceeded": "Limit reached · resets in {{until}}",
+      "used": "{{percent}}% of {{window}} limit used"
+    }
   }
 }

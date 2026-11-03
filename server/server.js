@@ -50,6 +50,7 @@ import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
+import registerUsageRoutes from './routes/usageRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
@@ -849,6 +850,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerRendererRoutes(app);
   registerAppSessionStartRoute(app);
   registerMagicPromptRoutes(app);
+  registerUsageRoutes(app);
   registerChatRoutes(app, {
     processMessageTemplates,
     getLocalizedError,
@@ -1305,6 +1307,8 @@ if (cluster.isPrimary && workerCount > 1) {
     try {
       const { flushUsage } = await import('./usageTracker.js');
       await flushUsage();
+      const { getQuotaLedger } = await import('./services/quota/QuotaLedger.js');
+      await getQuotaLedger().flush();
     } catch {
       // Failures are logged within the tracker
     }

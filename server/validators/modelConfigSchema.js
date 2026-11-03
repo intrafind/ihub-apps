@@ -9,6 +9,7 @@ import {
   MAX_OUTPUT_TOKENS_MAX
 } from '../../shared/validationPatterns.js';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../shared/modelCapabilities.js';
+import { usageLimitBucketSchema } from './common.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -289,6 +290,9 @@ const baseModelConfigSchema = z
     // request. Defaults to true (unset) so existing model configs are unchanged.
     supportsTemperature: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),
+    // Per-user token budget of this model per reset window — the ceiling
+    // groups and users can only lower (services/quota/limitResolver.js).
+    usageLimits: usageLimitBucketSchema.optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),
     // Text-to-speech settings (modelType: 'tts' only).

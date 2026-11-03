@@ -24,6 +24,7 @@ import IntegrationChips from '../../integrations/picker/IntegrationChips';
 import { isRowOn, setRowOn } from '../../integrations/picker/pickerState';
 import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
 import ModelHintBanner from './ModelHintBanner';
+import ModelUsageNotice from './ModelUsageNotice';
 import { VoiceInputComponent } from '../../voice/components';
 import VoiceModeButton from '../../voice/components/VoiceModeButton';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
@@ -730,6 +731,8 @@ function ChatInput({
           </div>
         </div>
       )}
+
+      <ModelUsageNotice modelId={selectedModel} />
 
       {/* Status line above the input: ephemeral "not saved" notice centered,
           token count right. Rendered as one row to keep vertical space tight. */}

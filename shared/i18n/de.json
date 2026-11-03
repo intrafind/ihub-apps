@@ -720,7 +720,12 @@
     "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "malformedModelResponse": "Das KI-Modell hat eine unvollständige Antwort zurückgegeben und es konnte keine Antwort generiert werden. Dies kann gelegentlich auftreten – bitte senden Sie Ihre Nachricht erneut.",
     "outputValidationFailed": "Die Antwort des KI-Modells entsprach nicht dem geforderten Ausgabeformat.",
-    "apiKeyUnreadable": "Der für das Modell {modelId} gespeicherte API-Schlüssel kann nicht entschlüsselt werden. Der Verschlüsselungsschlüssel des Servers ist nicht der, mit dem er gespeichert wurde. Ein Administrator muss den Schlüssel erneut eingeben (Admin › Modelle) oder als Umgebungsvariable bereitstellen."
+    "apiKeyUnreadable": "Der für das Modell {modelId} gespeicherte API-Schlüssel kann nicht entschlüsselt werden. Der Verschlüsselungsschlüssel des Servers ist nicht der, mit dem er gespeichert wurde. Ein Administrator muss den Schlüssel erneut eingeben (Admin › Modelle) oder als Umgebungsvariable bereitstellen.",
+    "quotaExceededModel": "Sie haben Ihr {window} Token-Kontingent für {model} ({limit} Tokens) aufgebraucht. Es wird am {resetAt} zurückgesetzt. Wählen Sie bis dahin ein anderes Modell.",
+    "quotaExceededAllModels": "Sie haben Ihr {window} Token-Kontingent über alle Modelle ({limit} Tokens) aufgebraucht. Es wird am {resetAt} zurückgesetzt.",
+    "quotaWindowDay": "tägliches",
+    "quotaWindowWeek": "wöchentliches",
+    "quotaWindowMonth": "monatliches"
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -4758,6 +4763,88 @@
         "cached": "Gecacht",
         "uncached": "Ungecacht",
         "topProviders": "Anbieter"
+      },
+      "limits": {
+        "status": {
+          "exceeded": "Limit erreicht",
+          "warning": "Fast erreicht",
+          "ok": "OK"
+        },
+        "perWindow": "{{limit}} / {{window}}",
+        "unlimited": "Unbegrenzt",
+        "allModels": "Alle Modelle",
+        "saved": "Einstellungen gespeichert",
+        "saveFailed": "Einstellungen konnten nicht gespeichert werden",
+        "platformBudget": "Kontingent über alle Modelle (je Benutzer)",
+        "platformBudgetHint": "Die meisten Tokens, die ein Benutzer über alle Modelle zusammen verbrauchen darf. Leer lassen für kein Limit. Kontingente je Modell werden am Modell festgelegt; Gruppen und Benutzer können sie nur senken.",
+        "schedule": "Zurücksetzung",
+        "scheduleHint": "Alle Token-Kontingente werden für alle zum selben Zeitpunkt zurückgesetzt. Monatliche Kontingente am 1. des Monats.",
+        "dailyAt": "Täglich um",
+        "weeklyOn": "Wöchentlich am",
+        "weeklyAt": "Wöchentlich um",
+        "monthlyAt": "Monatlich (am 1.) um",
+        "timezone": "Zeitzone",
+        "nextResets": "Nächste Zurücksetzung: täglich {{day}}, wöchentlich {{week}}, monatlich {{month}}.",
+        "loadFailed": "Nutzung konnte nicht geladen werden",
+        "resetFailed": "Zurücksetzen fehlgeschlagen",
+        "search": "Suche",
+        "searchPlaceholder": "Name, E-Mail oder Gruppe",
+        "filterStatus": "Anzeigen",
+        "filter": {
+          "all": "Alle Benutzer",
+          "limited": "Benutzer mit Limits",
+          "warning": "Nahe am oder am Limit (≥ 80 %)",
+          "exceeded": "Limit erreicht",
+          "anyModel": "Alle Modelle"
+        },
+        "filterModel": "Modell",
+        "refresh": "Aktualisieren",
+        "user": "Benutzer",
+        "closestLimit": "Am nächsten am Limit",
+        "thisMonth": "Tokens diesen Monat",
+        "files": "Dateispeicher",
+        "statusLabel": "Status",
+        "guests": "Gäste",
+        "noLimits": "Keine Limits",
+        "hide": "Ausblenden",
+        "details": "Details",
+        "noLimitsUser": "Für diesen Benutzer gelten keine Token-Limits.",
+        "editLimits": "Persönliche Limits bearbeiten",
+        "resetUsage": "Aktuelle Nutzung zurücksetzen",
+        "noUsers": "Keine passenden Benutzer.",
+        "pageOf": "Seite {{page}} von {{pages}} · {{total}} Benutzer",
+        "resetTitle": "Nutzung zurücksetzen?",
+        "resetMessage": "Setzt die Token-Zähler von {{name}} für den aktuellen Tag, die Woche und den Monat für alle Modelle auf null.",
+        "resetConfirm": "Zurücksetzen",
+        "model": "Modell",
+        "perUserLimit": "Limit je Benutzer",
+        "tokensWindow": "Tokens ({{window}})",
+        "activeUsers": "Benutzer diesen Monat",
+        "nearOver": "Fast / am Limit",
+        "noModels": "Keine aktivierten Modelle.",
+        "noGroupLimits": "Keine (Modell-Limits gelten)",
+        "otherModels": "Weitere Modelle",
+        "group": "Gruppe",
+        "groupLimits": "Limits",
+        "members": "Gesehene Mitglieder",
+        "inherits": "erbt von {{groups}}",
+        "views": {
+          "users": "Benutzer",
+          "models": "Modelle",
+          "groups": "Gruppen"
+        },
+        "weekday": {
+          "monday": "Montag",
+          "tuesday": "Dienstag",
+          "wednesday": "Mittwoch",
+          "thursday": "Donnerstag",
+          "friday": "Freitag",
+          "saturday": "Samstag",
+          "sunday": "Sonntag"
+        }
+      },
+      "tabs": {
+        "limits": "Limits & Kontingente"
       }
     },
     "localization": {
@@ -5786,6 +5873,61 @@
         "stay": "Bleiben",
         "title": "Ungespeicherte Änderungen"
       }
+    },
+    "usageLimits": {
+      "title": "Nutzungslimits",
+      "userTitle": "Persönliche Nutzungslimits",
+      "modelTitle": "Nutzungslimits (pro Benutzer)",
+      "modelIntro": "Wie viel ein einzelner Benutzer von diesem Modell je Zeitraum höchstens verbrauchen darf. Gruppen und Benutzer können nur niedrigere Limits festlegen. Die Zurücksetzung folgt dem Zeitplan unter Nutzung → Limits & Kontingente.",
+      "modelEmptyHint": "Leer bedeutet unbegrenzt. 0 sperrt das Modell für alle.",
+      "groupIntro": "Limits für jedes Mitglied dieser Gruppe. Sie können das Limit des Modells nur senken.",
+      "userIntro": "Persönliche Limits für diesen Benutzer. Sie können die Limits des Modells und der Gruppen des Benutzers nur senken.",
+      "emptyHintGroup": "Ein leeres Feld bedeutet: kein Limit durch diese Gruppe. Ein Mitglied mehrerer Gruppen erhält das großzügigste Gruppenlimit; geben Sie -1 ein, um ein Limit aufzuheben, das andere Gruppen eines Mitglieds setzen. 0 sperrt.",
+      "emptyHintUser": "Ein leeres Feld bedeutet: kein persönliches Limit. 0 sperrt das Modell für diesen Benutzer.",
+      "allModelsTitle": "Alle Modelle",
+      "allModelsHint": "Tokens, die ein Benutzer über alle Modelle zusammen verbrauchen darf.",
+      "fileStorageTitle": "Dateispeicher",
+      "fileStorageLabel": "Speicherlimit (MB)",
+      "fileStorageHint": "Wie viel ein Benutzer höchstens an hochgeladenen Dateien speichern darf. Leer bedeutet kein Limit auf dieser Ebene.",
+      "fileStorageUsage": "Dateispeicher ({{count}} Dateien)",
+      "perModelTitle": "Pro Modell",
+      "perModelHint": "Tokens, die ein Benutzer von einem Modell verbrauchen darf. Der Platzhalter zeigt das eigene Limit des Modells.",
+      "loadingModels": "Modelle werden geladen…",
+      "loadingUsage": "Nutzung wird geladen…",
+      "noModels": "Keine Modelle verfügbar.",
+      "noModelsGroup": "Diese Gruppe hat keine Modellberechtigungen. Fügen Sie unter Berechtigungen Modelle hinzu, um sie hier zu begrenzen.",
+      "modelColumn": "Modell",
+      "unknownModel": "Modell nicht gefunden",
+      "otherModels": "Alle anderen Modelle",
+      "otherModelsHint": "Jedes Modell ohne eigenen Eintrag oben",
+      "placeholderCeiling": "max. {{limit}}",
+      "placeholderNoLimit": "kein Limit",
+      "noEffectModel": "Ohne Wirkung – das Modell erlaubt höchstens {{limit}}",
+      "noEffectPlatform": "Ohne Wirkung – die Plattform erlaubt höchstens {{limit}}",
+      "currentUsageTitle": "Aktuelle Nutzung",
+      "currentUsageIntro": "Im aktuellen Zeitraum verbrauchte Tokens im Vergleich zu den Limits, die für diesen Benutzer gelten.",
+      "noLimitsApply": "Für diesen Benutzer gelten keine Token-Limits.",
+      "limitedBy": "Limit von {{source}}",
+      "resetButton": "Nutzung zurücksetzen",
+      "resetting": "Wird zurückgesetzt…",
+      "resetConfirmTitle": "Nutzung zurücksetzen?",
+      "resetConfirmMessage": "Damit werden die Token-Zähler dieses Benutzers für den aktuellen Tag, die aktuelle Woche und den aktuellen Monat auf null gesetzt. Dies kann nicht rückgängig gemacht werden.",
+      "resetConfirm": "Zurücksetzen",
+      "newUserHint": "Persönliche Nutzungslimits können festgelegt werden, sobald der Benutzer angelegt ist.",
+      "source": {
+        "group": "Gruppe: {{group}}",
+        "model": "Modell",
+        "platform": "Plattform",
+        "user": "persönliches Limit"
+      },
+      "window": {
+        "day": "Tokens pro Tag",
+        "week": "Tokens pro Woche",
+        "month": "Tokens pro Monat",
+        "dayShort": "Täglich",
+        "weekShort": "Wöchentlich",
+        "monthShort": "Monatlich"
+      }
     }
   },
   "cloudStorage": {
@@ -5887,7 +6029,8 @@
       "adminPanel": "Admin-Panel",
       "signOut": "Abmelden",
       "signIn": "Anmelden",
-      "closeLogin": "Anmeldedialog schließen"
+      "closeLogin": "Anmeldedialog schließen",
+      "usage": "Nutzung"
     }
   },
   "widget": {
@@ -8599,5 +8742,63 @@
     "delete": "Datei löschen",
     "templateHint": "Der Assistent kann diese Datei als Vorlage verwenden.",
     "truncated": "Sehr lang: Der Assistent liest den Anfang."
+  },
+  "usage": {
+    "limitedBy": "Limit {{source}}",
+    "page": {
+      "title": "Nutzung",
+      "subtitle": "Wie viel Ihrer Token-Kontingente Sie verbraucht haben und wann sie zurückgesetzt werden.",
+      "refresh": "Aktualisieren",
+      "loadFailed": "Ihre Nutzung konnte nicht geladen werden.",
+      "schedule": "Tägliche Limits werden {{day}} zurückgesetzt, wöchentliche {{week}}, monatliche {{month}}.",
+      "allModels": "Alle Modelle",
+      "allModelsHint": "Ihr Kontingent über alle Modelle zusammen.",
+      "modelExhausted": "Limit erreicht — wählen Sie bis zur Zurücksetzung ein anderes Modell.",
+      "noLimits": "Für Sie gelten keine Token-Limits.",
+      "otherModels": "Modelle ohne Limit",
+      "otherModelsHint": "Diesen Monat verbrauchte Tokens.",
+      "noLongerAvailable": "(für Sie nicht mehr verfügbar)",
+      "files": "Dateispeicher",
+      "filesHint": "Dateien, die Sie in Chats und Aufgaben hochgeladen haben. Ist der Speicher voll, können die ältesten Originale entfernt werden.",
+      "filesUnavailable": "Dateispeicher ist nicht verfügbar.",
+      "filesCount": "{{count}} Dateien"
+    },
+    "tokens": "{{count}} Tokens",
+    "usedUnlimited": "{{used}} verbraucht · unbegrenzt",
+    "usedOf": "{{used}} von {{limit}}",
+    "reset": {
+      "now": "jetzt",
+      "daysHours": "{{days}} T {{hours}} Std.",
+      "days": "{{days}} T",
+      "hoursMinutes": "{{hours}} Std. {{minutes}} Min.",
+      "hours": "{{hours}} Std.",
+      "minutes": "{{minutes}} Min.",
+      "todayAt": "heute um {{time}}",
+      "tomorrowAt": "morgen um {{time}}",
+      "dayAt": "{{day}} um {{time}}",
+      "full": "Wird {{moment}} zurückgesetzt (in {{until}})"
+    },
+    "window": {
+      "day": "Täglich",
+      "week": "Wöchentlich",
+      "month": "Monatlich"
+    },
+    "source": {
+      "model": "für dieses Modell festgelegt",
+      "platform": "für alle festgelegt",
+      "user": "Ihr persönliches Limit",
+      "group": "für Gruppe {{group}} festgelegt"
+    },
+    "chat": {
+      "exceededModel": "Limit ({{window}}) für {{model}} erreicht ({{used}} von {{limit}} Tokens). {{reset}}. Wählen Sie ein anderes Modell, um fortzufahren.",
+      "exceededAll": "Limit ({{window}}) über alle Modelle erreicht ({{used}} von {{limit}} Tokens). {{reset}}.",
+      "warningModel": "Sie haben {{percent}} % Ihres Limits ({{windowLower}}) für {{model}} verbraucht. {{reset}}.",
+      "warningAll": "Sie haben {{percent}} % Ihres Limits ({{windowLower}}) über alle Modelle verbraucht. {{reset}}.",
+      "viewUsage": "Nutzung anzeigen"
+    },
+    "picker": {
+      "exceeded": "Limit erreicht · wird in {{until}} zurückgesetzt",
+      "used": "{{percent}} % des Limits ({{window}}) verbraucht"
+    }
   }
 }

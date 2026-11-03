@@ -6056,7 +6056,8 @@
     "AUTH_FAILED",
     "MODEL_NOT_FOUND",
     "INVALID_REQUEST",
-    "ABORTED"
+    "ABORTED",
+    "QUOTA_EXCEEDED"
   ],
   "RUN_LOG_EVENTS": [
     "run/start",

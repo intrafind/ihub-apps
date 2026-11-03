@@ -36,6 +36,7 @@ import {
   resolveProviderApiKey
 } from '../../services/llmProviders.js';
 import { inspectModelApiKey } from '../../utils.js';
+import { usageLimitBucketSchema } from '../../validators/common.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -608,6 +609,17 @@ export default function registerAdminModelsRoutes(app) {
       // Remove client-side helper fields
       delete updatedModel.apiKeySet;
       delete updatedModel.apiKeyMasked;
+
+      // Per-user token budget of the model: windows left empty are unlimited.
+      if (updatedModel.usageLimits !== undefined) {
+        const parsed = usageLimitBucketSchema.safeParse(updatedModel.usageLimits || {});
+        if (!parsed.success) return sendBadRequest(res, 'Invalid usageLimits');
+        const limits = Object.fromEntries(
+          Object.entries(parsed.data).filter(([, v]) => v !== undefined && v !== null && v >= 0)
+        );
+        if (Object.keys(limits).length) updatedModel.usageLimits = limits;
+        else delete updatedModel.usageLimits;
+      }
 
       if (!isChatModel(updatedModel)) updatedModel.default = false;
       if (updatedModel.default === true) {

@@ -15,6 +15,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { parseUsageLimitsInput } from '../../validators/common.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -550,7 +551,17 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const { id, name, description, permissions, mappings = [], inherits = [] } = req.body;
+      const {
+        id,
+        name,
+        description,
+        permissions,
+        mappings = [],
+        inherits = [],
+        usageLimits
+      } = req.body;
+      const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
+      if (limits && !limits.ok) return sendBadRequest(res, limits.error);
 
       if (!id || !name) {
         return sendBadRequest(res, 'Group ID and name are required');
@@ -589,7 +600,8 @@ export default function registerAdminGroupRoutes(app) {
         description: description || '',
         permissions: normalizeGroupPermissions(permissions),
         mappings: Array.isArray(mappings) ? mappings : [],
-        inherits: Array.isArray(inherits) ? inherits : []
+        inherits: Array.isArray(inherits) ? inherits : [],
+        ...(limits?.value ? { usageLimits: limits.value } : {})
       };
 
       groupsData.groups[id] = newGroup;
@@ -689,7 +701,9 @@ export default function registerAdminGroupRoutes(app) {
         return;
       }
 
-      const { name, description, permissions, mappings, inherits } = req.body;
+      const { name, description, permissions, mappings, inherits, usageLimits } = req.body;
+      const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
+      if (limits && !limits.ok) return sendBadRequest(res, limits.error);
 
       const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
       if (!groupsData) {
@@ -710,6 +724,10 @@ export default function registerAdminGroupRoutes(app) {
       if (description !== undefined) group.description = description;
       if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
       if (inherits !== undefined) group.inherits = Array.isArray(inherits) ? inherits : [];
+      if (limits) {
+        if (limits.value) group.usageLimits = limits.value;
+        else delete group.usageLimits;
+      }
 
       // Update permissions
       if (permissions !== undefined && typeof permissions === 'object') {

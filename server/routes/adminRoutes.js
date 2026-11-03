@@ -32,6 +32,7 @@ import registerAdminSsrfRoutes from './admin/ssrf.js';
 import registerAdminProxyRoutes from './admin/proxy.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
+import registerAdminUsageLimitRoutes from './admin/usageLimits.js';
 import registerAdminUpdateRoutes from './admin/update.js';
 import registerAdminIFinderAssistantsRoutes from './admin/iFinderAssistants.js';
 import registerAdminOfficeIntegrationRoutes from './admin/officeIntegration.js';
@@ -89,6 +90,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminProxyRoutes(app);
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);
+  registerAdminUsageLimitRoutes(app);
   registerAdminUpdateRoutes(app);
   registerAdminIFinderAssistantsRoutes(app);
   registerAdminOfficeIntegrationRoutes(app);

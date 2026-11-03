@@ -493,6 +493,10 @@ export class LLMClient {
     this.runLog = opts.runLog || runLogSingleton;
     this.sleep = opts.sleep;
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
+    // Usage limits (services/quota): `{ assert(user, model), record(user, call) }`,
+    // or null to turn them off. Every model call passes through `execute`, so
+    // this is the one place they are enforced and counted.
+    this.quota = opts.quota !== undefined ? opts.quota : defaultQuota;
     // Kept as the constructed values only; the effective ceilings are
     // resolved per call so platform.json and per-model overrides apply to the
     // module-level singleton too (see resolveTimeoutMs).
@@ -632,6 +636,24 @@ export class LLMClient {
         modelId: params.modelId || null
       });
     }
+
+    // Usage limits: refuse a call over the caller's budget before anything is
+    // sent. `quota: false` on the params exempts a call (none do today).
+    const quotaUser = options.user || telemetry.user || null;
+    const quota = params.quota === false ? null : this.quota;
+    if (quota && quotaUser) await quota.assert(quotaUser, model);
+    const recordQuota = usage => {
+      if (!quota || !quotaUser) return;
+      try {
+        quota.record(quotaUser, {
+          model,
+          usage: usage || estimateCallUsage(messages, accumulator),
+          appId: telemetry.appId || options.appConfig?.id || null
+        });
+      } catch {
+        /* counting must never break a call */
+      }
+    };
 
     // Abort/timeout plumbing: one signal for key resolution, request
     // construction (model discovery may hit the network), the transport and
@@ -1031,8 +1053,11 @@ export class LLMClient {
         }
         if (failure) {
           client._recordError({ runId, step, err: failure, span, startedAt });
+          // What the provider reported before the call failed is still used.
+          if (accumulator.usage) recordQuota(accumulator.usage);
         } else {
           client._endSpan(span, { model, accumulator, startedAt });
+          recordQuota(accumulator.usage);
         }
       }
     };
@@ -1615,6 +1640,43 @@ export class LLMClient {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** The quota service, loaded on first use (it reads config this module must not import early). */
+let quotaModule = null;
+async function loadQuota() {
+  if (!quotaModule) quotaModule = await import('../quota/quotaService.js');
+  return quotaModule;
+}
+
+const defaultQuota = {
+  async assert(user, model) {
+    const { assertWithinQuota } = await loadQuota();
+    await assertWithinQuota(user, model);
+  },
+  record(user, call) {
+    loadQuota()
+      .then(({ recordModelUsage }) => recordModelUsage(user, call))
+      .catch(() => {});
+  }
+};
+
+/**
+ * Usage of a call whose provider reported none: an estimate from the text
+ * sent and received (about four characters a token).
+ */
+function estimateCallUsage(messages, accumulator) {
+  let chars = 0;
+  for (const message of messages || []) {
+    const content = message?.content;
+    if (typeof content === 'string') chars += content.length;
+    else if (Array.isArray(content)) {
+      for (const part of content) if (typeof part?.text === 'string') chars += part.text.length;
+    }
+  }
+  const promptTokens = Math.ceil(chars / 4);
+  const completionTokens = Math.ceil((accumulator?.content?.length || 0) / 4);
+  return { promptTokens, completionTokens, source: 'estimate' };
+}
 
 /**
  * The real transport: proxy/SSL-aware fetch, nothing else. Per-model

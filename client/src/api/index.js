@@ -18,6 +18,7 @@ export * from './endpoints/exports';
 export * from './endpoints/scheduledTasks';
 export * from './endpoints/projects';
 export * from './endpoints/integrationPicker';
+export * from './endpoints/usage';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

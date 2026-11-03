@@ -113,6 +113,8 @@ function toGenericToolCalls(toolCalls) {
 function errorEnvelope(err) {
   const body = { error: err.message, code: err.code };
   if (typeof err.details === 'string' && err.details) body.details = err.details;
+  // A usage limit says which budget ran out and when it resets.
+  if (err.code === LLM_ERROR_CODES.QUOTA_EXCEEDED && err.details) body.details = err.details;
   return body;
 }
 

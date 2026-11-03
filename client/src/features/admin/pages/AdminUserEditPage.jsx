@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -10,10 +10,206 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  fetchAdminUsageLimitUser,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  resetAdminUsageLimitUser
+} from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
+import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
+import QuotaBar from '../../../shared/components/QuotaBar';
+import { windowLabel, localizedName } from '../../../shared/utils/usageFormat';
+
+/**
+ * Bytes as "12.3 MB" for the file storage bar.
+ * @param {number} bytes
+ * @param {string} language
+ * @returns {string}
+ */
+const formatBytes = (bytes, language) => {
+  const n = Number(bytes) || 0;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = n;
+  let unit = 0;
+  while (Math.abs(value) >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toLocaleString(language, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
+};
+
+/**
+ * Where an effective limit comes from, as an admin reads it.
+ * @param {string|null} source - `model`, `platform`, `user` or `group:<id>`
+ * @param {Function} t
+ * @returns {string}
+ */
+const adminSourceLabel = (source, t) => {
+  if (!source) return '';
+  if (source === 'model') return t('admin.usageLimits.source.model', 'model');
+  if (source === 'platform') return t('admin.usageLimits.source.platform', 'platform');
+  if (source === 'user') return t('admin.usageLimits.source.user', 'personal limit');
+  if (source.startsWith('group:')) {
+    return t('admin.usageLimits.source.group', 'group: {{group}}', { group: source.slice(6) });
+  }
+  return source;
+};
+
+/**
+ * Read-only view of a user's token usage against their effective limits, with
+ * a button that resets the counts of the current windows.
+ *
+ * @param {Object} props
+ * @param {string} props.userId - The user id (the usage tracking key)
+ */
+function UserUsagePanel({ userId }) {
+  const { t, i18n } = useTranslation();
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setInfo(await fetchAdminUsageLimitUser(userId));
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleReset = async () => {
+    setConfirmReset(false);
+    try {
+      setResetting(true);
+      setError(null);
+      setInfo(await resetAdminUsageLimitUser(userId));
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const buckets = info?.buckets || [];
+  const files = info?.files;
+
+  const bucketLabel = bucket => {
+    const window = windowLabel(bucket.window, t);
+    const scope =
+      bucket.scope === 'model'
+        ? localizedName(bucket.modelName, i18n.language, bucket.modelId)
+        : t('admin.usageLimits.allModelsTitle', 'All models');
+    return `${scope} · ${window}`;
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            {t('admin.usageLimits.currentUsageTitle', 'Current usage')}
+          </h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {t(
+              'admin.usageLimits.currentUsageIntro',
+              'Tokens used in the current windows against the limits that apply to this user.'
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setConfirmReset(true)}
+          disabled={loading || resetting || !info}
+          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+        >
+          <Icon name="refresh" className="h-4 w-4 mr-2" />
+          {resetting
+            ? t('admin.usageLimits.resetting', 'Resetting…')
+            : t('admin.usageLimits.resetButton', 'Reset usage')}
+        </button>
+      </div>
+      <div className="px-6 py-4 space-y-4">
+        {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {loading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('admin.usageLimits.loadingUsage', 'Loading usage…')}
+          </p>
+        ) : (
+          info && (
+            <>
+              {buckets.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('admin.usageLimits.noLimitsApply', 'No token limits apply to this user.')}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                  {buckets.map(bucket => (
+                    <QuotaBar
+                      key={bucket.id || `${bucket.scope}:${bucket.modelId}:${bucket.window}`}
+                      label={bucketLabel(bucket)}
+                      used={bucket.used}
+                      limit={bucket.limit}
+                      resetAt={bucket.resetAt}
+                      hint={
+                        bucket.source
+                          ? t('admin.usageLimits.limitedBy', 'Limit from {{source}}', {
+                              source: adminSourceLabel(bucket.source, t)
+                            })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+              {files && (
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <QuotaBar
+                    label={t(
+                      'admin.usageLimits.fileStorageUsage',
+                      'File storage ({{count}} files)',
+                      {
+                        count: files.fileCount ?? 0
+                      }
+                    )}
+                    used={files.usedBytes || 0}
+                    limit={typeof files.limit === 'number' && files.limit >= 0 ? files.limit : null}
+                    format={value => formatBytes(value, i18n.language)}
+                  />
+                </div>
+              )}
+            </>
+          )
+        )}
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirmReset}
+        title={t('admin.usageLimits.resetConfirmTitle', 'Reset usage?')}
+        message={t(
+          'admin.usageLimits.resetConfirmMessage',
+          "This sets this user's token counts for the current day, week and month back to zero. It cannot be undone."
+        )}
+        confirmLabel={t('admin.usageLimits.resetConfirm', 'Reset')}
+        denyLabel={t('common.cancel', 'Cancel')}
+        danger
+        onConfirm={handleReset}
+        onDeny={() => setConfirmReset(false)}
+      />
+    </div>
+  );
+}
 
 function AdminUserEditPage() {
   const { t } = useTranslation();
@@ -132,6 +328,12 @@ function AdminUserEditPage() {
         active: data.enabled !== false,
         authMethods: data.authMethods || ['local']
       };
+
+      // Personal usage limits (only the update route accepts them); `null`
+      // clears limits saved before.
+      if (!isNewUser) {
+        apiData.usageLimits = normalizeUsageLimits(data.usageLimits);
+      }
 
       // Only include password if it's provided
       if (data.password) {
@@ -271,6 +473,32 @@ function AdminUserEditPage() {
                 : t('admin.users.edit.editTitle', 'Edit User')
             }
           />
+
+          {isNewUser ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.usageLimits.newUserHint',
+                'Personal usage limits can be set once the user has been created.'
+              )}
+            </p>
+          ) : (
+            <>
+              <UserUsagePanel userId={userId} />
+              <UsageLimitsEditor
+                level="user"
+                value={user?.usageLimits}
+                modelIds={['*']}
+                onChange={usageLimits =>
+                  setUser(prev => {
+                    const next = { ...prev };
+                    if (usageLimits) next.usageLimits = usageLimits;
+                    else delete next.usageLimits;
+                    return next;
+                  })
+                }
+              />
+            </>
+          )}
 
           {/* Save buttons */}
           <div className="flex justify-end space-x-4">
