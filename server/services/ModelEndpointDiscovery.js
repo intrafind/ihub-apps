@@ -81,6 +81,20 @@ export function stripTrailingSlashes(value) {
 const CALL_SUFFIXES = ['/chat/completions', '/completions', '/responses', '/messages'];
 
 /**
+ * Whether `hostname` is an Azure OpenAI / Azure AI Foundry endpoint. These
+ * serve the OpenAI API under `/openai`, address models by *deployment name*,
+ * and list the models a resource offers (the catalog), not its deployments.
+ */
+export function isAzureOpenAiHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  return (
+    host.endsWith('.openai.azure.com') ||
+    host.endsWith('.cognitiveservices.azure.com') ||
+    host.endsWith('.services.ai.azure.com')
+  );
+}
+
+/**
  * Turn whatever URL the admin pasted into the listing URL and the API base.
  *
  * Accepted forms, using an OpenAI-compatible server as the example:
@@ -93,9 +107,15 @@ const CALL_SUFFIXES = ['/chat/completions', '/completions', '/responses', '/mess
  * Query string and fragment are dropped: credentials belong in the API key
  * field, not in a URL that ends up in stored model configs.
  *
+ * Azure OpenAI hosts: whatever the path under `/openai` (`…/openai/responses`,
+ * `…/openai/deployments/x/chat/completions`), the listing is `/openai/v1/models`,
+ * the only listing the key can call without an `api-version`. A pasted
+ * `api-version` is returned as `azureApiVersion`, because it names the inference
+ * URL the admin wants models called on (see {@link buildInferenceUrl}).
+ *
  * @param {string} input - URL entered by the admin
  * @param {string} provider - One of {@link DISCOVERY_PROVIDERS}
- * @returns {{ modelsUrl: string, baseUrl: string }}
+ * @returns {{ modelsUrl: string, baseUrl: string, azure: boolean, azureApiVersion?: string }}
  * @throws {ModelDiscoveryError} for anything that is not an http(s) URL
  */
 export function resolveModelsEndpoint(input, provider) {
@@ -122,8 +142,11 @@ export function resolveModelsEndpoint(input, provider) {
   }
 
   let path = stripTrailingSlashes(parsed.pathname);
+  const azure = provider !== 'google' && isAzureOpenAiHost(parsed.hostname);
 
-  if (provider === 'google') {
+  if (azure) {
+    path = '/openai/v1/models';
+  } else if (provider === 'google') {
     // A model URL: …/models/gemini-x:streamGenerateContent → …/models
     path = path.replace(/\/models\/[^/]+$/, '/models');
   } else {
@@ -137,10 +160,14 @@ export function resolveModelsEndpoint(input, provider) {
   }
 
   const origin = parsed.origin;
-  return {
+  const result = {
     modelsUrl: `${origin}${path}`,
-    baseUrl: `${origin}${path.slice(0, -'/models'.length)}`
+    baseUrl: `${origin}${path.slice(0, -'/models'.length)}`,
+    azure
   };
+  const apiVersion = azure ? parsed.searchParams.get('api-version') : null;
+  if (apiVersion) result.azureApiVersion = apiVersion;
+  return result;
 }
 
 /**
@@ -172,9 +199,13 @@ export function buildDiscoveryHeaders(provider, apiKey) {
  * @param {string} baseUrl - API base returned by {@link resolveModelsEndpoint}
  * @param {string} modelId - Remote model id
  * @param {string} [type] - The model's type from the listing
+ * @param {Object} [options]
+ * @param {string} [options.azureApiVersion] - `api-version` the admin pasted for an
+ *   Azure endpoint. With the Responses API the model is then called on
+ *   `…/openai/responses?api-version=…` rather than the versionless `…/openai/v1/responses`.
  * @returns {string}
  */
-export function buildInferenceUrl(provider, baseUrl, modelId, type) {
+export function buildInferenceUrl(provider, baseUrl, modelId, type, options = {}) {
   // A speech-to-text model of an OpenAI-compatible endpoint is called on its
   // audio API, where iHub's transcription provider sends recordings.
   if (type === 'transcription' && TRANSCRIPTION_API_TYPES.includes(provider)) {
@@ -182,6 +213,10 @@ export function buildInferenceUrl(provider, baseUrl, modelId, type) {
   }
   switch (provider) {
     case 'openai-responses':
+      if (options.azureApiVersion) {
+        const root = baseUrl.replace(/\/v1$/, '');
+        return `${root}/responses?api-version=${encodeURIComponent(options.azureApiVersion)}`;
+      }
       return `${baseUrl}/responses`;
     case 'anthropic':
       return `${baseUrl}/messages`;
@@ -643,7 +678,7 @@ async function readJsonBody(response) {
  * @param {string} [params.apiKey] - Optional key; omitted from the call when empty
  * @param {Object} [deps]
  * @param {typeof httpFetch} [deps.fetch] - Injected for tests
- * @returns {Promise<{ provider: string, modelsUrl: string, baseUrl: string,
+ * @returns {Promise<{ provider: string, modelsUrl: string, baseUrl: string, azure: boolean,
  *   models: Array<ReturnType<typeof normalizeModelEntry> & { url: string,
  *     modelType?: 'transcription'|'tts', backend?: string, unsupported?: true }> }>}
  *   A speech model carries the `modelType` and the `backend` (model `provider`)
@@ -660,7 +695,7 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
     );
   }
   const key = typeof apiKey === 'string' ? apiKey.trim() : '';
-  const { modelsUrl, baseUrl } = resolveModelsEndpoint(url, provider);
+  const { modelsUrl, baseUrl, azure, azureApiVersion } = resolveModelsEndpoint(url, provider);
   // Google and Anthropic page their listings; ask for everything at once.
   const requestUrl =
     provider === 'google'
@@ -717,7 +752,10 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
 
   const models = parseModelsResponse(await readJsonBody(response)).map(entry => {
     if (entry.type !== 'transcription' && entry.type !== 'tts') {
-      return { ...entry, url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type) };
+      return {
+        ...entry,
+        url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type, { azureApiVersion })
+      };
     }
     // A speech model is imported for the backend that runs it, or not at all:
     // as a chat model it could never answer.
@@ -734,7 +772,7 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
     models: models.length
   });
 
-  return { provider, modelsUrl, baseUrl, models };
+  return { provider, modelsUrl, baseUrl, azure, models };
 }
 
 /**

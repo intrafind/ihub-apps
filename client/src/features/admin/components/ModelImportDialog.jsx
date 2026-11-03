@@ -98,6 +98,8 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
 
   const [selected, setSelected] = useState({});
   const [editedIds, setEditedIds] = useState({});
+  // Azure: the name of the deployment a model is called by, per listed model id.
+  const [deployments, setDeployments] = useState({});
   const [prefix, setPrefix] = useState('');
   const [enableModels, setEnableModels] = useState(true);
   const [search, setSearch] = useState('');
@@ -206,6 +208,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       setDiscovery(data);
       setSelected({});
       setEditedIds({});
+      setDeployments({});
       setSearch('');
       const isBuiltIn = existingProvider && !isCustomLlmProvider(existingProvider);
       setPrefix(isBuiltIn ? '' : `${targetProviderId}-`);
@@ -226,7 +229,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   };
 
   const models = useMemo(() => discovery?.models || [], [discovery]);
+  const isAzure = Boolean(discovery?.azure);
   const targetIdOf = model => editedIds[model.id] ?? suggestModelId(model.id, prefix);
+  // Azure lists the models a resource offers, but calls them by deployment name.
+  const deploymentOf = model => (deployments[model.id] ?? model.id).trim();
 
   const visibleModels = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -241,7 +247,8 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     selectedModels.map(m => ({ key: m.id, id: targetIdOf(m) })),
     existingModelIds
   );
-  const hasProblems = Object.keys(idProblems).length > 0;
+  const missingDeployment = isAzure && selectedModels.some(m => !deploymentOf(m));
+  const hasProblems = Object.keys(idProblems).length > 0 || missingDeployment;
   // A new provider is created on its own when no model is picked: its models
   // can be imported later. An existing provider needs at least one model.
   const creatingProvider = providerChoice === NEW_PROVIDER && !createdProviderId;
@@ -336,7 +343,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       try {
         await makeAdminApiCall('/admin/models', {
           method: 'POST',
-          body: buildImportedModelConfig(model, {
+          body: buildImportedModelConfig(isAzure ? { ...model, id: deploymentOf(model) } : model, {
             id,
             apiType: discovery.apiType,
             providerId: targetProviderId,
@@ -577,6 +584,15 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
         </button>
       </div>
 
+      {isAzure && (
+        <p className="rounded-md bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+          {t(
+            'admin.models.import.azureHint',
+            'Azure lists the models your resource offers, not your deployments. Enter the name of the deployment for each model you pick; it is sent as the model name.'
+          )}
+        </p>
+      )}
+
       {creatingProvider && (
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
@@ -648,6 +664,11 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
                 <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
                   {t('admin.models.import.context', 'Context')}
                 </th>
+                {isAzure && (
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
+                    {t('admin.models.import.deploymentName', 'Deployment name')}
+                  </th>
+                )}
                 <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
                   {t('admin.models.import.targetId', 'iHub model ID')}
                 </th>
@@ -729,6 +750,26 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
                     <td className="px-3 py-2 align-top text-gray-700 dark:text-gray-300 hidden sm:table-cell">
                       {formatTokens(model.contextWindow)}
                     </td>
+                    {isAzure && (
+                      <td className="px-3 py-2 align-top">
+                        <input
+                          type="text"
+                          value={deployments[model.id] ?? model.id}
+                          onChange={e =>
+                            setDeployments(prev => ({ ...prev, [model.id]: e.target.value }))
+                          }
+                          disabled={!checked}
+                          aria-label={t(
+                            'admin.models.import.deploymentNameFor',
+                            'Deployment name for {{name}}',
+                            { name: model.name }
+                          )}
+                          className={`${FIELD} mt-0 disabled:opacity-60 ${
+                            checked && !deploymentOf(model) ? 'border-red-400' : ''
+                          }`}
+                        />
+                      </td>
+                    )}
                     <td className="px-3 py-2 align-top">
                       <input
                         type="text"

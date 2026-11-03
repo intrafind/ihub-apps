@@ -119,3 +119,12 @@ search was badged "Based on web search". They now show **Based on connected syst
   on iFinder documents".
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
+
+## Importing Models from Azure OpenAI
+
+**Import from URL** now accepts the URL copied from Azure, such as
+`https://<resource>.openai.azure.com/openai/responses?api-version=…`, and reads the model list
+from `/openai/v1/models`. Azure lists the models a resource offers, not its deployments, and calls
+a model by its deployment name; the import dialog therefore has a **Deployment name** field for
+each selected model. If the pasted URL carries an `api-version` and the API type is OpenAI
+Responses, the imported models keep that `…/openai/responses?api-version=…` URL.

@@ -449,6 +449,7 @@ export default function registerAdminModelsRoutes(app) {
         apiType: result.provider,
         modelsUrl: result.modelsUrl,
         baseUrl: result.baseUrl,
+        azure: result.azure,
         models: result.models.map(model => ({
           ...model,
           existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null

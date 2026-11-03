@@ -650,3 +650,51 @@ test('OpenRouter: output modalities tell image and audio generators from chat mo
   assert.equal(byId['black-forest-labs/flux-pro'].type, 'image');
   assert.equal(byId['vendor/speaker'].type, 'audio');
 });
+
+test('Azure OpenAI: any pasted URL under /openai lists /openai/v1/models', () => {
+  const pasted = [
+    'https://res.openai.azure.com/openai/responses?api-version=2025-04-01-preview',
+    'https://res.openai.azure.com/openai/v1',
+    'https://res.openai.azure.com/openai/deployments/dev/chat/completions?api-version=2024-10-21',
+    'https://res.openai.azure.com'
+  ];
+  for (const input of pasted) {
+    const r = resolveModelsEndpoint(input, 'openai-responses');
+    assert.equal(r.modelsUrl, 'https://res.openai.azure.com/openai/v1/models', input);
+    assert.equal(r.baseUrl, 'https://res.openai.azure.com/openai/v1', input);
+    assert.equal(r.azure, true, input);
+  }
+  assert.equal(
+    resolveModelsEndpoint(pasted[0], 'openai-responses').azureApiVersion,
+    '2025-04-01-preview'
+  );
+  assert.equal(resolveModelsEndpoint(pasted[1], 'openai').azureApiVersion, undefined);
+  // Other hosts are untouched.
+  const other = resolveModelsEndpoint('https://host/openai/v1', 'openai');
+  assert.equal(other.azure, false);
+  assert.equal(other.modelsUrl, 'https://host/openai/v1/models');
+});
+
+test('Azure OpenAI: a pasted api-version keeps the Responses URL the admin gave', async () => {
+  const { fetch, calls } = fakeFetch(fakeResponse(200, { data: [{ id: 'gpt-4.1' }] }));
+  const keep = await discoverModels(
+    {
+      url: 'https://res.openai.azure.com/openai/responses?api-version=2025-04-01-preview',
+      provider: 'openai-responses',
+      apiKey: 'k'
+    },
+    { fetch }
+  );
+  assert.equal(calls[0].url, 'https://res.openai.azure.com/openai/v1/models');
+  assert.equal(keep.azure, true);
+  assert.equal(
+    keep.models[0].url,
+    'https://res.openai.azure.com/openai/responses?api-version=2025-04-01-preview'
+  );
+
+  const v1 = await discoverModels(
+    { url: 'https://res.openai.azure.com/openai/v1', provider: 'openai-responses', apiKey: 'k' },
+    { fetch }
+  );
+  assert.equal(v1.models[0].url, 'https://res.openai.azure.com/openai/v1/responses');
+});
