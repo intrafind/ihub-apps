@@ -31,15 +31,43 @@ export const PROVIDER_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 export const A2A_RESPONSE_LIMITS = Object.freeze({
   /** Agent Card body. */
   cardBytes: 1024 * 1024,
-  /** A JSON-RPC response body (`message/send`, `tasks/get`, OAuth token). */
+  /** An OAuth token response. */
   jsonBytes: 4 * 1024 * 1024,
+  /**
+   * A JSON-RPC response body (`message/send`, `tasks/get`). Larger than a token
+   * response: an agent returns files inline as base64 `FilePart`s.
+   */
+  rpcBytes: 16 * 1024 * 1024,
   /** One SSE line, and the `data:` lines of one SSE event together. */
-  sseEventBytes: 4 * 1024 * 1024,
+  sseEventBytes: 16 * 1024 * 1024,
   /** Everything one `message/stream` response may deliver. */
-  streamBytes: 16 * 1024 * 1024,
+  streamBytes: 32 * 1024 * 1024,
   /** The artifact text collected from one stream, in characters. */
-  artifactChars: 4 * 1024 * 1024
+  artifactChars: 4 * 1024 * 1024,
+  /** Most files (`FilePart`s) one answer may carry; the rest are dropped. */
+  files: 10,
+  /** Largest file taken from an answer, in bytes (inline or fetched). */
+  fileBytes: 10 * 1024 * 1024
 });
+
+/**
+ * The media types iHub tells a remote agent it accepts as output: text and
+ * JSON, and the files and pictures it can keep in a chat.
+ */
+export const A2A_ACCEPTED_OUTPUT_MODES = Object.freeze([
+  'text/plain',
+  'application/json',
+  'text/*',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/zip',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif'
+]);
 
 /** Longest skill slug within a tool id. */
 export const MAX_SKILL_SLUG_LENGTH = 40;
@@ -165,8 +193,9 @@ function assignSkillSlugs(skillIds, budget) {
 /**
  * The tool definitions for an agent's skills, within its `allowedSkills`.
  *
- * Every tool takes the same input: a `message` for the agent and optional
- * structured `data` (sent as a data part). Ids are `a2a__<agentId>__<slug>`,
+ * Every tool takes the same input: a `message` for the agent, optional
+ * structured `data` (sent as a data part) and optional `fileIds` of the chat's
+ * files (sent as file parts). Ids are `a2a__<agentId>__<slug>`,
  * at most 64 characters, match `PROVIDER_TOOL_NAME_PATTERN`, and are unique
  * within the agent (see `assignSkillSlugs` for how clashing slugs are told
  * apart). An agent id that cannot form a valid tool name yields no tools.
@@ -214,6 +243,12 @@ export function buildSkillTools(agentConfig, card) {
             type: 'object',
             description: 'Optional structured input (sent as a data part)',
             additionalProperties: true
+          },
+          fileIds: {
+            type: 'array',
+            description:
+              "Optional ids of files of this chat (uploads, or files an earlier tool returned) to send to the agent along with the message (as file parts). Use the 'fileId' of the file.",
+            items: { type: 'string' }
           }
         },
         required: ['message']
@@ -268,6 +303,51 @@ export function statusMessageText(task) {
 }
 
 /**
+ * The files of a list of A2A parts: every `FilePart` that carries its content
+ * (`file.bytes`, base64) or a link to it (`file.uri`). Nothing is decoded or
+ * fetched here.
+ *
+ * @param {Array<Object>} parts
+ * @returns {Array<{name?: string, mimeType?: string, bytes?: string, uri?: string}>}
+ */
+export function partsFiles(parts) {
+  const files = [];
+  for (const part of Array.isArray(parts) ? parts : []) {
+    if (part?.kind !== 'file' || !part.file || typeof part.file !== 'object') continue;
+    const { name, mimeType, bytes, uri } = part.file;
+    const hasBytes = typeof bytes === 'string' && bytes.length > 0;
+    const hasUri = typeof uri === 'string' && uri.length > 0;
+    if (!hasBytes && !hasUri) continue;
+    files.push({
+      ...(typeof name === 'string' && name ? { name } : {}),
+      ...(typeof mimeType === 'string' && mimeType ? { mimeType } : {}),
+      ...(hasBytes ? { bytes } : { uri })
+    });
+  }
+  return files;
+}
+
+/**
+ * The files of a task's status message, if any.
+ * @param {Object} task - A2A `Task` (or anything with `status.message`)
+ * @returns {Array<Object>} See {@link partsFiles}
+ */
+export function statusMessageFiles(task) {
+  return partsFiles(task?.status?.message?.parts);
+}
+
+/**
+ * The files of a task's artifacts.
+ * @param {Array<Object>} artifacts - A2A `Artifact[]`
+ * @returns {Array<Object>} See {@link partsFiles}
+ */
+export function artifactsFiles(artifacts) {
+  return (Array.isArray(artifacts) ? artifacts : []).flatMap(artifact =>
+    partsFiles(artifact?.parts)
+  );
+}
+
+/**
  * The text of a task's artifacts, joined as paragraphs.
  * @param {Array<Object>} artifacts - A2A `Artifact[]`
  * @returns {string}
@@ -296,7 +376,7 @@ export class StreamCollector {
     this.message = null;
     this.status = null;
     this.final = false;
-    /** @type {Map<string, {artifactId: string, name?: string, text: string, done: boolean}>} */
+    /** @type {Map<string, {artifactId: string, name?: string, text: string, done: boolean, files: Array<Object>}>} */
     this.artifacts = new Map();
     this.maxArtifactChars = maxArtifactChars;
     this._artifactChars = 0;
@@ -372,6 +452,7 @@ export class StreamCollector {
           const chunk = partsText(artifact.parts);
           this._count(chunk.length);
           existing.text += chunk;
+          existing.files.push(...partsFiles(artifact.parts));
           if (artifact.name && !existing.name) existing.name = artifact.name;
         } else {
           this._replace(artifact);
@@ -393,7 +474,8 @@ export class StreamCollector {
       artifactId: artifact.artifactId,
       ...(artifact.name ? { name: artifact.name } : {}),
       text,
-      done: false
+      done: false,
+      files: partsFiles(artifact.parts)
     });
   }
 
@@ -416,6 +498,19 @@ export class StreamCollector {
   /** The context id learned from the stream, if any. */
   get contextId() {
     return this.task?.contextId || this._contextId || this.message?.contextId || null;
+  }
+
+  /**
+   * The files the stream delivered, in arrival order: those of the artifacts,
+   * then of the final status message or direct reply.
+   * @returns {Array<Object>} See {@link partsFiles}
+   */
+  files() {
+    return [
+      ...Array.from(this.artifacts.values()).flatMap(artifact => artifact.files),
+      ...(this.status?.message ? partsFiles(this.status.message.parts) : []),
+      ...(this.message ? partsFiles(this.message.parts) : [])
+    ];
   }
 
   /** The collected artifacts as text, in arrival order. */

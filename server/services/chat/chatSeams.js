@@ -21,8 +21,7 @@ import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
-import { generatedFilesOf } from '../../../shared/generatedFiles.js';
-import { heldGeneratedFileData } from '../documents/generatedFiles.js';
+import { liftToolOutputs } from './toolOutputFiles.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
@@ -285,7 +284,9 @@ export function chatToolSeam({
   mcpAppViews = null,
   mcpAuthPrompts = null,
   scheduledTaskProposals = null,
-  generatedFiles = null
+  generatedFiles = null,
+  generatedImages = null,
+  fileStore = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -403,17 +404,35 @@ export function chatToolSeam({
       if (scheduledTaskProposal && Array.isArray(scheduledTaskProposals)) {
         scheduledTaskProposals.push(scheduledTaskProposal);
       }
-      // Only the built-in tools of system skills hand the user a file (a
-      // download card); the same field on any other tool's result is ignored.
-      // The result names the file without its bytes, so the model never sees
-      // them: they were held for this turn, and go to the client here and to
-      // the stored answer (as an artifact) through `generatedFiles`.
-      const files = info.toolDef?.isSystemSkillTool
-        ? generatedFilesOf(outcome.rawResult?.files)
-            .map(file => ({ ...file, data: heldGeneratedFileData(file.id, { chatId }) }))
-            .filter(file => file.data)
-        : [];
+      // Only the built-in tools of system skills (and the skills of remote A2A
+      // agents) hand the user a file (a download card); the same field on any
+      // other tool's result is ignored. The result names the file without its
+      // bytes, so the model never sees them: they were held for this turn, and
+      // go to the client here and to the stored answer (as an artifact)
+      // through `generatedFiles`. An MCP tool's binary blocks (`resource`
+      // blob, `image`) are stored here and replaced by `{ fileId, name,
+      // mimeType, bytes }` descriptors before the model reads the result.
+      const lifted = await liftToolOutputs({
+        toolDef: info.toolDef,
+        rawResult: outcome.rawResult,
+        chatId,
+        ownerId: ctx?.refs?.userId || null,
+        store: fileStore
+      });
+      if (lifted.replaced) {
+        outcome.rawResult = lifted.rawResult;
+        outcome.message.content = JSON.stringify(lifted.rawResult);
+      }
+      const files = lifted.files;
       if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
+      for (const image of lifted.images) {
+        if (Array.isArray(generatedImages)) generatedImages.push(image);
+        emit(ctx, SSE_V2_EVENTS.STEP_DELTA, {
+          step: ctx.iteration,
+          kind: 'image',
+          image: { mimeType: image.mimeType, data: image.data }
+        });
+      }
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),

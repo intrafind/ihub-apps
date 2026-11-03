@@ -67,3 +67,19 @@ The model sees `id="…"` and `can_use_as_template="true"` on the file's `<conte
 - `create_xlsx({ sourceFileId })`: keeps the workbook and replaces or adds the sheets given.
 
 An app that pins a `documentTemplate` keeps it unless it sets `allowUserTemplateUploads: true`.
+
+## Inference API, MCP and A2A
+
+- **Inference API:** `/api/inference/v1/files` (`POST`, `GET`, `GET /:id`, `GET /:id/content`,
+  `DELETE /:id`) stores files per user; `file_id` works in `/v1/responses` (`input_file`) and
+  `/v1/chat/completions` (`file` parts). Inline files, `.xlsx` and scanned PDFs included, go through
+  the same extraction as uploads. A file in a `/v1/responses` conversation turn is stored in the
+  chat, so the web UI and API turns on the same chat see each other's files.
+- **MCP client:** binary `resource` and `image` blocks a tool returns are stored in the chat and
+  appear in the Files drawer; the model sees `{ fileId, name, mimeType, bytes }` instead of base64.
+- **MCP server:** `app__*` and `workflow__*` tools take optional `files` (`name`, `mimeType`,
+  `data` base64 or `text`) and return generated files and pictures as MCP `resource` and `image`
+  blocks.
+- **A2A:** the server accepts inbound `FilePart`s (`bytes` or an https `uri`), advertises file types
+  on the Agent Card and returns generated files as `FilePart` artifacts. The A2A tools take
+  `fileIds` to forward chat files and store the files a remote agent returns.

@@ -556,3 +556,5 @@ Scheduled tasks can carry reference documents and templates of their own.
   files in the chat (once per chat), and Outlook attachments keep their original so they can be used
   as templates. The Inference API gets `/v1/files` and `file_id` references (`.xlsx` and scanned PDFs
   included), and files in MCP and A2A calls are stored in the chat and shown in the drawer.
+- **MCP and A2A:** `app__*` and `workflow__*` tools accept `files` and return generated files as
+  MCP `resource` and `image` blocks; A2A accepts and returns `FilePart`s and its tools take `fileIds`.

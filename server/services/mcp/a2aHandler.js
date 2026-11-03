@@ -14,6 +14,15 @@ import { getLocalizedString } from '../../utils/localize.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { getA2aTaskStore, taskStatus } from './a2aTaskStore.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
+import { ACCEPTED_TYPES } from '../projects/extractText.js';
+import { GENERATED_FILE_MEDIA_TYPES } from '../../../shared/generatedFiles.js';
+import { ARTIFACT_KINDS } from '../artifacts/artifactPolicy.js';
+import {
+  InboundFileError,
+  filesFromA2aParts,
+  inboundChatId,
+  ingestInboundFiles
+} from './inboundFiles.js';
 
 /**
  * Agent-to-Agent (A2A) protocol handler.
@@ -72,6 +81,44 @@ const A2A_TASK_WALL_CLOCK_MS = 10 * 60 * 1000;
 
 /** Largest message text accepted (characters). */
 const MAX_MESSAGE_CHARS = 200_000;
+
+/** The text a message that only carries files is answered with. */
+const FILES_ONLY_TEXT = 'Please process the attached file(s).';
+
+/** Most bytes of files one task returns as artifacts. */
+const MAX_OUTPUT_FILE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Media types the agent reads: text, JSON and every document type the server
+ * extracts (PDF, Office, OpenDocument, Markdown, CSV, …) — a `FilePart` of one
+ * of these is ingested like an upload.
+ */
+export const A2A_INPUT_MODES = Object.freeze([
+  ...new Set([
+    'text/plain',
+    'application/json',
+    // `text/*` is accepted: the common text types are named for clients that
+    // match modes literally
+    'text/markdown',
+    'text/csv',
+    'text/html',
+    'application/xml',
+    ...ACCEPTED_TYPES.mimeTypes.filter(type => !type.endsWith('/*'))
+  ])
+]);
+
+/** Media types the agent returns: text, JSON, generated files and pictures. */
+export const A2A_OUTPUT_MODES = Object.freeze([
+  ...new Set([
+    'text/plain',
+    'application/json',
+    ...GENERATED_FILE_MEDIA_TYPES,
+    ...(ARTIFACT_KINDS.get('image') || [])
+  ])
+]);
+
+/** Workflows take files in; their answer is text or JSON. */
+const WORKFLOW_OUTPUT_MODES = Object.freeze(['text/plain', 'application/json']);
 
 const JSONRPC_PARSE_ERROR = -32700;
 const JSONRPC_INVALID_REQUEST = -32600;
@@ -162,8 +209,8 @@ function appSkillsFor(user, platform, language) {
         app.id,
       tags: ['app'],
       ...(examples.length ? { examples } : {}),
-      inputModes: ['text/plain'],
-      outputModes: ['text/plain'],
+      inputModes: [...A2A_INPUT_MODES],
+      outputModes: [...A2A_OUTPUT_MODES],
       _kind: 'app',
       _id: app.id
     });
@@ -192,8 +239,8 @@ function workflowSkillsFor(user, platform, language) {
         getLocalizedString(wf.description, language) ||
         wf.id,
       tags: ['workflow'],
-      inputModes: ['text/plain'],
-      outputModes: ['text/plain'],
+      inputModes: [...A2A_INPUT_MODES],
+      outputModes: [...WORKFLOW_OUTPUT_MODES],
       _kind: 'workflow',
       _id: wf.id
     });
@@ -277,8 +324,8 @@ export function buildAgentCard({ baseUrl, platform, user = null, skillId = null,
     version: getAppVersion(),
     provider: { organization: name, url: baseUrl },
     capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: false },
-    defaultInputModes: ['text/plain'],
-    defaultOutputModes: ['text/plain'],
+    defaultInputModes: [...A2A_INPUT_MODES],
+    defaultOutputModes: [...A2A_OUTPUT_MODES],
     securitySchemes: {
       oauth2: {
         type: 'oauth2',
@@ -335,6 +382,91 @@ function messageData(message) {
   return out;
 }
 
+/** A file part as the task stores it: its name and type, not its content. */
+function redactFilePart(part) {
+  if (part?.kind !== 'file') return part;
+  const { name, mimeType } = part.file && typeof part.file === 'object' ? part.file : {};
+  return {
+    kind: 'file',
+    file: {
+      ...(typeof name === 'string' ? { name } : {}),
+      ...(typeof mimeType === 'string' ? { mimeType } : {})
+    }
+  };
+}
+
+/** The JSON-RPC error of a file that cannot be taken. */
+function inboundFileError(error) {
+  if (!(error instanceof InboundFileError)) return error;
+  if (error.code === 'UNSUPPORTED_TYPE') {
+    return new A2aError(A2A_ERRORS.CONTENT_TYPE_NOT_SUPPORTED, error.message);
+  }
+  if (error.code === 'STORAGE_UNAVAILABLE') {
+    return new A2aError(A2A_ERRORS.INTERNAL, error.message);
+  }
+  return invalidParams(error.message);
+}
+
+/** Whether a media type is one of the client's `acceptedOutputModes` (none listed: every one). */
+function accepts(modes, mimeType) {
+  if (!Array.isArray(modes) || modes.length === 0) return true;
+  return modes.some(
+    mode =>
+      typeof mode === 'string' &&
+      (mode === '*/*' ||
+        mode.toLowerCase() === mimeType ||
+        (mode.endsWith('/*') && mimeType.startsWith(mode.slice(0, -1).toLowerCase())))
+  );
+}
+
+/**
+ * The artifacts for the files and pictures an app produced: one artifact per
+ * file with a `FilePart` (`{ kind: 'file', file: { name, mimeType, bytes } }`,
+ * bytes base64). Types the client did not accept and files past the size
+ * budget are left out and named in `omitted`.
+ *
+ * @param {{generatedFiles?: Array<Object>, images?: Array<Object>}|null} outputs
+ * @param {string[]|undefined} acceptedOutputModes
+ * @returns {{artifacts: Array<Object>, omitted: string[]}}
+ */
+export function fileArtifactsOf(outputs, acceptedOutputModes) {
+  const artifacts = [];
+  const omitted = [];
+  let total = 0;
+  const entries = [
+    ...(outputs?.generatedFiles || []).map(file => ({
+      name: file.name,
+      mimeType: file.mimeType,
+      data: file.data
+    })),
+    ...(outputs?.images || []).map((image, index) => ({
+      name: image.name || `image-${index + 1}.${String(image.mimeType).split('/')[1] || 'png'}`,
+      mimeType: image.mimeType,
+      data: image.data
+    }))
+  ];
+  for (const entry of entries) {
+    if (!entry.data || !entry.mimeType) continue;
+    const name = String(entry.name || 'file');
+    const bytes = Buffer.byteLength(entry.data, 'base64');
+    if (!accepts(acceptedOutputModes, String(entry.mimeType).toLowerCase())) {
+      omitted.push(name);
+      continue;
+    }
+    if (total + bytes > MAX_OUTPUT_FILE_BYTES) {
+      omitted.push(name);
+      continue;
+    }
+    total += bytes;
+    artifacts.push({
+      artifactId: randomUUID(),
+      name,
+      parts: [{ kind: 'file', file: { name, mimeType: entry.mimeType, bytes: entry.data } }]
+    });
+  }
+  return { artifacts, omitted };
+}
+
 /**
  * Validate the incoming A2A Message and normalise it for storage.
  * @throws {A2aError}
@@ -351,17 +483,13 @@ function normalizeIncomingMessage(params) {
   }
   for (const part of message.parts) {
     if (!part || typeof part !== 'object') throw invalidParams('Invalid message part');
-    if (part.kind === 'file') {
-      throw new A2aError(
-        A2A_ERRORS.CONTENT_TYPE_NOT_SUPPORTED,
-        'File parts are not supported; send text (and data) parts'
-      );
-    }
-    if (part.kind !== 'text' && part.kind !== 'data') {
+    if (part.kind !== 'text' && part.kind !== 'data' && part.kind !== 'file') {
       throw invalidParams(`Unsupported part kind: ${String(part.kind)}`);
     }
   }
-  const text = messageText(message);
+  const fileParts = message.parts.filter(part => part.kind === 'file');
+  // A message that only carries files is a request to work with them.
+  const text = messageText(message) || (fileParts.length > 0 ? FILES_ONLY_TEXT : '');
   if (!text) throw invalidParams('message has no text');
   if (text.length > MAX_MESSAGE_CHARS) throw invalidParams('message text too long');
   for (const key of ['contextId', 'taskId', 'messageId']) {
@@ -376,11 +504,13 @@ function normalizeIncomingMessage(params) {
   return {
     text,
     data: messageData(message),
+    fileParts,
     stored: {
       kind: 'message',
       role: 'user',
       messageId: message.messageId || randomUUID(),
-      parts: message.parts,
+      // The task keeps which files came, never what is in them.
+      parts: message.parts.map(redactFilePart),
       ...(message.contextId ? { contextId: message.contextId } : {}),
       ...(message.taskId ? { taskId: message.taskId } : {}),
       ...(message.metadata && typeof message.metadata === 'object'
@@ -476,7 +606,19 @@ function isAbort(error) {
  * Run the skill for a task and drive the task through its states, emitting
  * A2A streaming events on the way when `emit` is given.
  */
-async function runTask({ task, skill, text, data, userMessage, user, platform, store, emit }) {
+async function runTask({
+  task,
+  skill,
+  text,
+  data,
+  inbound = null,
+  acceptedOutputModes,
+  userMessage,
+  user,
+  platform,
+  store,
+  emit
+}) {
   const controller = new AbortController();
   store.registerRun(task.id, controller);
   const language = platform?.defaultLanguage || 'en';
@@ -503,15 +645,19 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
     let answer;
     // A workflow's JSON answer, as a `data` part next to its text
     let answerData = null;
+    // Files and pictures the skill produced, returned as `FilePart` artifacts
+    let outputs = null;
     if (skill._kind === 'app') {
       const history = contextMessages(await store.getContext(contextId, user.id));
-      const { text: result } = await invokeApp({
+      const { text: result, result: run } = await invokeApp({
         appId: skill._id,
-        messages: [...history, { role: 'user', content: text }],
+        // The user's message carries the files the caller sent as `fileData`
+        messages: [...history, inbound?.message || { role: 'user', content: text }],
         variables: data,
         user,
         language,
         runId: `a2a-${task.id}`,
+        ...(inbound?.chatId ? { chatId: inbound.chatId } : {}),
         timeoutMs: A2A_MODEL_TIMEOUT_MS,
         maxWallClockMs: A2A_TASK_WALL_CLOCK_MS,
         abortSignal: controller.signal,
@@ -530,12 +676,18 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
           : undefined
       });
       answer = result;
+      outputs = { generatedFiles: run?.generatedFiles || [], images: run?.images || [] };
     } else {
       const output = await runTool(
         `workflow_${skill._id}`,
         withTrustedToolContext(
           { input: text, ...data },
-          { user, chatId: `a2a-${task.id}`, language }
+          {
+            user,
+            chatId: inbound?.chatId || `a2a-${task.id}`,
+            language,
+            ...(inbound?.fileData?.length ? { _fileData: inbound.fileData } : {})
+          }
         )
       );
       // The answer and nothing else: text as text, JSON as a `data` part
@@ -547,6 +699,15 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
       answerData = parts.json;
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
+
+    const { artifacts: fileArtifacts, omitted } = fileArtifactsOf(outputs, acceptedOutputModes);
+    if (omitted.length > 0) {
+      logger.info('A2A task files left out of the artifacts', {
+        component: 'A2A',
+        taskId: task.id,
+        omitted: omitted.length
+      });
+    }
 
     const artifact = {
       artifactId,
@@ -578,8 +739,19 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
         lastChunk: true
       });
     }
+    for (const fileArtifact of fileArtifacts) {
+      send({
+        kind: 'artifact-update',
+        taskId: task.id,
+        contextId,
+        artifact: fileArtifact,
+        append: false,
+        lastChunk: true
+      });
+    }
     statusMessage = agentMessage(answer, { contextId, taskId: task.id });
     await store.setArtifact(task.id, artifact);
+    for (const fileArtifact of fileArtifacts) await store.setArtifact(task.id, fileArtifact);
     const updated = await store.setStatus(task.id, 'completed', statusMessage);
     finalState = updated?.status?.state || 'completed';
     if (finalState === 'completed') {
@@ -629,7 +801,7 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
  * finished Task is returned (or the submitted one when non-blocking).
  */
 async function handleMessage(params, { user, platform, fixedSkillId, store, emit }) {
-  const { text, data, stored } = normalizeIncomingMessage(params);
+  const { text, data, stored, fileParts } = normalizeIncomingMessage(params);
   const configuration =
     params.configuration && typeof params.configuration === 'object' ? params.configuration : {};
   if (configuration.pushNotificationConfig) {
@@ -645,6 +817,27 @@ async function handleMessage(params, { user, platform, fixedSkillId, store, emit
   }
   const context = stored.contextId ? await store.getContext(stored.contextId, user.id) : null;
   const skill = resolveSkill({ params, message: stored, context, fixedSkillId, user, platform });
+
+  // The message's files are taken before a task exists: a file that cannot be
+  // read answers the request with an error instead of starting a task that
+  // fails.
+  let inbound = null;
+  if (fileParts.length > 0) {
+    try {
+      const files = await filesFromA2aParts(fileParts);
+      const chatId = inboundChatId(`a2a-${randomUUID()}`);
+      const ingested = await ingestInboundFiles({
+        files,
+        chatId,
+        user,
+        origin: 'a2a',
+        message: { role: 'user', content: text }
+      });
+      inbound = { chatId, message: ingested.message, fileData: ingested.fileData };
+    } catch (error) {
+      throw inboundFileError(error);
+    }
+  }
 
   const task = await store.createTask({
     ownerId: user.id,
@@ -673,6 +866,8 @@ async function handleMessage(params, { user, platform, fixedSkillId, store, emit
       skill,
       text,
       data,
+      inbound,
+      acceptedOutputModes: configuration.acceptedOutputModes,
       userMessage,
       user,
       platform,
