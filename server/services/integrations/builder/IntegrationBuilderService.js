@@ -8,6 +8,8 @@ import { resolveAndValidatePath } from '../../../utils/pathSecurity.js';
 import integrationRegistry from '../definitions/IntegrationRegistry.js';
 import installedIntegrationService, { IntegrationError } from '../InstalledIntegrationService.js';
 import { getProtocolAdapter } from '../protocols/index.js';
+import { currentActionsOf } from '../actionReview.js';
+import { actionReviewState } from '../../../utils/actionFingerprint.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { sideEffectOfMethod } from '../protocols/http/HttpAdapter.js';
 import {
@@ -258,6 +260,9 @@ export class IntegrationBuilderService {
     if (!parsed.success) throw invalidDraft(parsed.errors);
     const { instance: existing, entry } = await this._customOf(instanceId);
     const previous = await this._rawDefinition(entry);
+    // What each action fingerprinted as before this save, to tell afterwards
+    // which ones the save changed or added (`_acceptEditedActions`).
+    const before = await this._trackedFingerprints(existing, parsed.data.source, language);
     const pkg = draftToPackage(
       { ...parsed.data, definitionId: existing.definition },
       { previous, existingInstance: existing }
@@ -279,7 +284,89 @@ export class IntegrationBuilderService {
     await this.registry.dropPrevious(pkg.definitionId, kept);
     this.registry._announce();
     await this._definitionsChanged(pkg.definitionId);
+    if (['openapi', 'http', 'script'].includes(parsed.data.source)) {
+      instance = await this._acceptEditedActions(instanceId, language, instance, before);
+    }
     return { instance, definition: pkg.definition };
+  }
+
+  /**
+   * The current fingerprints of the actions of an installation the builder
+   * accepts edits for, or null when there is nothing to accept: the source is
+   * not one whose definition the builder writes (openapi, http, script), the
+   * installation does not track actions for review (approval is set and a
+   * baseline exists), or its actions cannot be listed.
+   *
+   * @returns {Promise<Object<string,string>|null>}
+   */
+  async _trackedFingerprints(instance, source, language) {
+    if (!['openapi', 'http', 'script'].includes(source)) return null;
+    if (!instance?.approval || !instance.actions?.fingerprints) return null;
+    try {
+      const resolved = await this.installations.resolve(instance.id, language);
+      const { fingerprints } = await currentActionsOf(resolved, language);
+      return Object.keys(fingerprints).length > 0 ? fingerprints : null;
+    } catch (error) {
+      logger.warn('Builder: could not read the action fingerprints before the save', {
+        component: COMPONENT,
+        instanceId: instance.id,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  /**
+   * The actions an admin just edited in the builder are reviewed by that edit.
+   *
+   * For an openapi, http or script integration the definition is the builder's
+   * own: an action this save changed (its name, side effect or input schema,
+   * so its fingerprint differs from before the save) or added shows as new or
+   * changed against the accepted fingerprints (#2916), and would then wait for
+   * approval until someone clicked "Mark reviewed" on what the same admin had
+   * just written. Their current fingerprints are accepted here. An action that
+   * was already new or changed before the save, and that the save did not
+   * change, stays pending: only the admin's own edit is a review. Nothing
+   * happens for an installation that does not track review
+   * (`_trackedFingerprints`), and an MCP tool or A2A skill is never accepted
+   * this way: its fingerprint is what the remote server declares, which the
+   * builder does not edit.
+   *
+   * A failure here does not fail the save, which is stored: the actions then
+   * stay new or changed, as before.
+   *
+   * @param {string} instanceId
+   * @param {string} language
+   * @param {Object} stored - the installation as the save stored it
+   * @param {Object<string,string>|null} before - `_trackedFingerprints` of the
+   *   installation before the save
+   * @returns {Promise<Object>} the stored installation
+   */
+  async _acceptEditedActions(instanceId, language, stored, before) {
+    if (!before) return stored;
+    try {
+      const current = this.installations.get(instanceId) || stored;
+      const resolved = await this.installations.resolve(instanceId, language);
+      const { fingerprints } = await currentActionsOf(resolved, language);
+      const edited = Object.entries(fingerprints)
+        .filter(([name, fingerprint]) => before[name] !== fingerprint)
+        .filter(([name, fingerprint]) => actionReviewState(current, name, fingerprint))
+        .map(([name]) => name);
+      if (edited.length === 0) return stored;
+      const { instance } = await this.installations.markActionsReviewed(
+        instanceId,
+        fingerprints,
+        edited
+      );
+      return instance;
+    } catch (error) {
+      logger.warn('Builder: could not mark the edited actions as reviewed', {
+        component: COMPONENT,
+        instanceId,
+        error: error.message
+      });
+      return stored;
+    }
   }
 
   /** Validate the definition before it is written, with the builder's paths in the message. */

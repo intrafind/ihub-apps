@@ -30,6 +30,13 @@ export const MCP_TRANSPORTS = Object.freeze(['streamableHttp', 'sse', 'websocket
 export const SIDE_EFFECTS = Object.freeze(['read', 'write', 'destructive', 'unknown']);
 export const DATA_FLOWS = Object.freeze(['internal', 'external']);
 
+/**
+ * Longest description for the model, per language: the same limit the action
+ * detail has (server `MAX_ACTION_TEXT_LENGTH`). An MCP tool's or A2A skill's
+ * description is stored as an override, which the server refuses above it.
+ */
+export const MAX_ACTION_DESCRIPTION_LENGTH = 4000;
+
 /** Sources whose actions the definition declares (the others list them live). */
 export const DECLARED_ACTION_SOURCES = Object.freeze(['openapi', 'http', 'script']);
 
