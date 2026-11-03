@@ -12,7 +12,7 @@ This guide provides step-by-step instructions for generating RSA public-private 
 
 ## Overview
 
-iFinder integration requires JWT tokens signed with RS256 (RSA with SHA-256) for secure authentication. This process involves:
+iFinder integration requires signed JWT tokens for secure authentication; this guide uses RS256 (RSA with SHA-256), the default. The installation also offers RS384, RS512 and ES256/384/512 (**Signing algorithm**). This process involves:
 
 1. **Generating a private key** for signing JWT tokens in iHub Apps
 2. **Extracting the public key** for verification in iFinder

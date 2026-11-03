@@ -80,7 +80,7 @@ every integration, MCP servers included (see [Security](#security)).
 | `streamableHttp` | **Recommended.** Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via `Mcp-Session-Id` + `Last-Event-ID`, so a reconnect resumes the stream rather than replaying in-flight requests. |
 | `sse`            | Legacy SSE transport for older MCP servers. Disable if you call non-idempotent tools — reconnect _replays_ requests, which can cause duplicate side effects.                                                        |
 | `stdio`          | Local MCP server invoked as a child process. iHub does not invoke a shell — args go straight to `execve`.                                                                                                           |
-| `websocket`      | Less common. Supported for parity.                                                                                                                                                                                  |
+| `websocket`      | Less common. Supported for parity. `wss://` endpoints honor `ssl.domainWhitelist` like every other outbound connection.                                                                                            |
 
 `streamableHttp` and `sse` accept optional non-secret `headers` sent with
 every request — a scope or account id some vendors expect next to the key.
@@ -1182,7 +1182,9 @@ callers with the matching scope.
   variables, model selection), the turn runs on the shared
   [agent loop](agent-loop.md) with every model call through `LLMClient`
   (API-key resolution, throttling, retries), and the assistant text is
-  returned as a single content block. Tools configured on the app
+  returned as a text content block, followed by a `resource` block for each
+  generated file and an `image` block for each generated picture (see
+  [Files](#files-through-mcp)). Tools configured on the app
   execute server-side and structured output applies; interactive tools
   (`ask_user`) are refused with a `NO_USER_AVAILABLE` result because no
   user can answer over `tools/call`.
@@ -1208,6 +1210,21 @@ callers with the matching scope.
   `read_skill_resource` tools stay out of the gateway: they wrap
   filesystem access, and these resources replace them for external
   callers.
+
+### Files through MCP
+
+Files travel both ways; the full behaviour is described in [Chat and Scheduled-Task Files](chat-files.md#inference-api-mcp-and-a2a).
+
+- **Inbound.** `app__*` and `workflow__*` tools take an optional `files` array (`name`, `mimeType`, and
+  `data` as base64 or `text`). The files are taken into the invocation's chat like uploads.
+- **Outbound.** `app__*` tools return the files and pictures the app generated as MCP `resource`
+  (with a base64 `blob`) and `image` blocks. `workflow__*` tools return the workflow's answer
+  only: a workflow run has no output path for generated files, so none are returned.
+- **Outbound connections (iHub as MCP client).** Binary `resource` and `image` blocks that a
+  connected MCP server returns are stored in the chat and appear in the Files drawer. The model sees a
+  descriptor (`fileId`, name, type, size) instead of the base64 data, and a later tool call can use the
+  file by its id. Large tool results are lifted the same way before they are spilled to the
+  tool-result store.
 
 ### Who sees which tool
 

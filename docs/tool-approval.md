@@ -54,9 +54,9 @@ can only tighten them, never loosen them (a looser app value is ignored and logg
 | # | Layer                    | Where                                                                                         | Set by |
 | - | ------------------------ | --------------------------------------------------------------------------------------------- | ------ |
 | 1 | Platform default         | `platform.json` → `toolApproval.defaults.internal` / `.external`, else `.default`. **Admin → Security → Tool approval** | Admin |
-| 2 | Tool file                | `contents/tools/<id>.json` → `approval` (per function, else the tool's). `requiresApproval: true` counts as `always`. a hand-written tool file; the admin-created ones became custom integrations (V211), whose approval is set per action in the [integration builder](integrations.md#custom-integrations-add-manually) | Admin |
+| 2 | Tool file                | `contents/tools/<id>.json` → `approval` (per function, else the tool's). `requiresApproval: true` counts as `always`. Only for a hand-written tool file; the admin-created ones became custom integrations (V211), whose approval is set in the [integration builder](integrations.md#custom-integrations-add-manually) or on the action's detail page | Admin |
 | 2 | Installation default     | `integrations.json` → `installed[].approval.default`. **Admin → Integrations → an installation → Overview** | Admin |
-| 3 | Installation action      | `installed[].approval.actions[<action name>]`, keyed by the action's own name (an MCP tool's name, never the prefixed tool id) | Admin |
+| 3 | Installation action      | `installed[].approval.actions[<action name>]`, keyed by the action's own name (an MCP tool's name, never the prefixed tool id). Set in the action's detail panel on the installation page | Admin |
 | 3 | New or changed action    | `installed[].approval.newOrChanged` (default `always`) while the action is new or changed since the last review (see below) | Admin |
 | 4 | App override             | App → `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default`. **Admin → Apps → Edit → Tools** | App author |
 
@@ -123,6 +123,11 @@ action already set to `always` stays there, and `newOrChanged: "never"` turns th
   or a changed declared side effect. A change of the installation's own settings that changes an
   action's input (such as the maximum number of rows a CKAN search may ask for) counts too.
 - **Renamed actions.** An action a definition migration renames is new under its new name.
+- **Saving in the builder.** For an OpenAPI, HTTP or script custom integration that already tracks
+  actions, saving in the [integration builder](integrations.md#custom-integrations-add-manually)
+  accepts the actions the save changed or added as reviewed: the admin just wrote them. An action
+  that was already pending and that the save does not touch stays pending, and an MCP tool or A2A
+  skill that changed on the remote server is never accepted by a save.
 - iHub logs a warning once per action and fingerprint when it first sees one that is new or
   changed. Discovery never writes `integrations.json`; only setting approval for the first time
   and **Mark reviewed** do.

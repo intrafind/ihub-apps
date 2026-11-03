@@ -180,7 +180,7 @@ The installation lives in `contents/config/integrations.json`; the client secret
 
 The Office 365 integration requires the `integrations` feature flag to be enabled in your platform configuration.
 
-In **Admin → Platform Settings** (or in `platform.json`):
+In **Admin → Platform → Features** (or in `platform.json`):
 
 ```json
 {

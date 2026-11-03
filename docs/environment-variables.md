@@ -91,7 +91,10 @@ The iFinder and iAssistant settings are not in `platform.json`: they are the
 (Admin → Integrations), which the `IHUB_*` mapping does not cover.
 Use `IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` for them; they win over the
 installation's base URL and private key (see
-[iFinder Integration](iFinder-Integration.md#configuration)).
+[iFinder Integration](iFinder-Integration.md#configuration)). Two more variables are
+fallbacks for an empty installation field: `IFINDER_SEARCH_PROFILE` (default search
+profile of the `ifinder` installation, else `searchprofile-standard`) and
+`IASSISTANT_PROFILE_ID` (default conversation profile of the `iassistant` installation).
 
 `IHUB_PLATFORM__I_FINDER__*` and `IHUB_PLATFORM__I_ASSISTANT__*` variables from
 before the move (for example `IHUB_PLATFORM__I_FINDER__BASE_URL`,

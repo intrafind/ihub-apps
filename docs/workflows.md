@@ -508,6 +508,16 @@ A workflow runs on a schedule with a `schedule` trigger:
 
 Schedule triggers run on the same scheduler as [Scheduled Tasks](scheduled-tasks.md): one worker in the cluster fires each slot once, the next run follows the trigger's `timezone` across DST, and adding, editing or removing a trigger applies **without a restart**. The workflow runs as the non-privileged `system` principal. A slot missed while the server was down is skipped, not caught up. Webhook triggers are unaffected.
 
+## Who a run acts as after an answer
+
+A workflow paused on a `human` node (or a question or a [tool approval](tool-approval.md)) continues
+as the principal it started with — the user who started it — never as the person who answered: an
+approver group can hold many people, and none of them becomes the run's identity (their groups and
+connected accounts are not used). Who answered is recorded on the interaction's answer
+(`answer.approver`) and in the execution's answer log. A run started before this was recorded fails
+with `EXECUTION_PRINCIPAL_UNKNOWN` when it is resumed and has to be started again. Details:
+[Tool Approval → Who a workflow acts as after an answer](tool-approval.md#who-a-workflow-acts-as-after-an-answer).
+
 ## Execution records and retention
 
 Every run of a workflow leaves two records behind, and until this release

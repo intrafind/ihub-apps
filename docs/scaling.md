@@ -297,6 +297,10 @@ than landing on one; what remains worker-local:
   [rate limiting](rate-limiting.md#several-worker-processes).
 - **Voice connection caps are per worker** — see
   [below](#realtime-voice-websocket-and-workers).
+- **The uploaded-files quota is shared.** The server-wide byte total of
+  [chat and task files](chat-files.md#platform-settings-platformuploads) is a counter document in
+  the `chat-files` namespace of the shared storage, adjusted with a compare-and-set, so every worker
+  and instance enforces `maxServerBytes` against the same number.
 - **Workflow engine state** is file-persisted with an in-process cache. A
   worker that is not running an execution re-reads its checkpoint on every
   read, so it can lag the running worker by at most one checkpoint.

@@ -358,6 +358,7 @@ When web search or other external sources are used, an **Answer Source Badge** a
 |-------|-------|-------------|
 | AI knowledge | Gray | Response generated purely from the model's knowledge |
 | Web Search | Green | Response includes information from web search results |
+| Connected systems | Sky | Response is based on an MCP server, a remote agent or an installed integration (a people directory, Jira, …) |
 | iFinder | Emerald | Response uses documents found by an iFinder search tool |
 | Sources | Purple | Response uses configured knowledge base sources |
 | iAssistant | Indigo | Response includes information from iFinder iAssistant |

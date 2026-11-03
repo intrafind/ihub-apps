@@ -144,7 +144,7 @@ Validates core platform settings including authentication and authorization.
 Validates user group definitions with inheritance support.
 
 **Key Components:**
-- **Permissions**: Resource access control arrays
+- **Permissions**: Resource access control arrays (`apps`, `prompts`, `models`, `workflows`, `skills`, `integrations`; the last lists the installed integrations the members may use, see [Integrations](integrations.md#who-may-use-an-integration))
 - **Inheritance**: Group hierarchy with circular dependency detection
 - **External Mappings**: Integration with external auth providers
 
@@ -214,7 +214,7 @@ Validates agentic workflow definitions that power the DAG-based workflow orchest
 Validates marketplace catalog documents fetched from a registry's `catalog.json` endpoint. A catalog describes the installable content items available from a registry.
 
 **Key Components:**
-- **Items**: Array of installable content (type: app, model, prompt, skill, workflow)
+- **Items**: Array of installable content (type: app, model, prompt, skill, workflow, integration)
 - **Source**: How to fetch each item's content file — three types supported:
   - `relative`: Path relative to the catalog's base URL
   - `github`: GitHub repository file via the Contents API
@@ -227,7 +227,8 @@ Validates marketplace catalog documents fetched from a registry's `catalog.json`
   [Marketplace → Versions, channel and pins](marketplace.md#versions-channel-and-pins))
 
 **On install:** each item's content is validated against the schema of its type (app, model,
-prompt or workflow) before anything is written, and its `id` must equal the item's `name`. An item
+prompt or workflow; an `integration` item against `integrationDefinitionSchema.js`) before
+anything is written, and its `id` must equal the item's `name`. An item
 whose `name` matches one already on the instance that the marketplace did not install is shown as
 **Local copy**, and replacing it needs confirmation (`replaceLocal: true` on the install request).
 
@@ -326,6 +327,15 @@ Validates the MIME type configuration used to classify and display uploadable fi
 ### 12. Cloud Storage Configuration
 
 Retired (V200): `cloudStorageSchema.js` is gone. The Office 365, Google Drive and Nextcloud providers are installations of built-in integration definitions (`server/defaults/integration-definitions/com.intrafind__office365/`, `com.intrafind__google-drive/`, `com.intrafind__nextcloud/`), validated like every installation by `integrationsConfigSchema.js` and the definition's install fields (`checkInstallValues`). A `cloudStorage` key in `platform.json` is rejected.
+
+### 13. Integration Configuration
+
+Four schemas in `server/validators/` cover the unified integrations (see [Integrations](integrations.md)):
+
+- `integrationDefinitionSchema.js`: an integration **definition** (`integration.json`): actions, install fields, compatibility, release notes and migration steps. Also validates `integration` items of a marketplace catalog.
+- `integrationsConfigSchema.js`: `contents/config/integrations.json`, the **installations**: `definitionVersion`, per-action policy (`actions.overrides`), tool approval (`approval`) and the migration state and log. An installation carries no groups; access lives in `groups.json` under `permissions.integrations`.
+- `integrationBuilderSchema.js`: the draft the **integration builder** saves (sources `openapi`, `mcp`, `a2a`, `http`, `script`).
+- `integrationConnectionSchema.js`: a **connection** record, who is connected to which installation. It never holds a token, only a `secretRef`.
 
 ## Error Handling
 

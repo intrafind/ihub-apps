@@ -330,7 +330,7 @@ File content (text documents, PDFs, etc.) is always converted to plain text and 
 
 ### Processing Pipeline
 
-All file processing happens **client-side** before content is sent to the server.
+With `storageMode: client_text_only` all file processing happens **client-side** before content is sent to the server. In the default mode (`original_and_text`) the server stores the file with the chat, extracts the text itself and keeps reading it on later turns; see [Chat and Scheduled-Task Files](chat-files.md).
 
 1. **Selection** — User clicks the paperclip (files), camera (images), or microphone icon (audio).
 2. **Validation** — MIME type and file size are checked against the app's upload configuration. File extension is used as a fallback when the browser reports an incorrect MIME type.
@@ -368,7 +368,7 @@ All file processing happens **client-side** before content is sent to the server
 
 | Type | Default | Configurable range | What else limits it |
 |------|---------|--------------------|---------------------|
-| Files | 20 MB | 1–100 MB | Documents are read in the browser; the text is sent, not the file |
+| Files | 20 MB | 1–100 MB | In `client_text_only` mode documents are read in the browser and the text is sent, not the file; otherwise the server's `platform.uploads` limits also apply (see [Chat files](chat-files.md#platform-settings-platformuploads)) |
 | Images | 10 MB | 1–100 MB | The image is sent in the request: 50 MB (see below) |
 | Audio | 20 MB | 1–2000 MB | The audio is sent in the request (50 MB, see below) unless it is transcribed in the browser; a data URL of more than about 400 MB cannot be built |
 | Video | 50 MB | 1–51200 MB (50 GB) | MP4/MOV with extracted audio: nothing but the limit. Other containers, and videos sent as they are: about 2 GB |
@@ -490,8 +490,8 @@ All file processing happens **client-side** before content is sent to the server
 
 ## Security Considerations
 
-- All file processing happens client-side; only extracted text or base64-encoded data is transmitted to the server.
-- No files are stored on the server; content exists only for the duration of the conversation session.
+- In `client_text_only` mode all file processing happens client-side and only extracted text or base64-encoded data is transmitted to the server; nothing is stored beyond the conversation.
+- In the default `original_and_text` mode (and `server_text_only`) the server stores the extracted text, and in the first mode the original, with the chat, under the retention and quotas described in [Chat and Scheduled-Task Files](chat-files.md).
 - File content is included in conversation logs if server-side logging is enabled.
 - MIME type and file size are validated before processing begins.
 - File extension is used as a secondary validation when the browser reports an incorrect MIME type.

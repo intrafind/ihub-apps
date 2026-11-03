@@ -43,7 +43,7 @@ needed.
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `id` | — | Installation id: letters, digits, `_` and `-` (no `.`, no `__`), at most 48 characters. Tools are named `a2a__<id>__<skill>`; apps bind and groups grant the agent by it, so it must not be the id of another installation or the base id of a tool (see [Ids shared with tools or installed integrations](#ids-shared-with-tools-or-installed-integrations)). |
-| `label`, `description` | — | Optional. Shown on the Installed page, in the app editor and in the chat's tool menu. |
+| `label`, `description` | — | Optional. Shown in the integration list, in the app editor and in the chat's tool menu. |
 | `enabled` | `true` | A disabled agent contributes no tools. |
 | `values.cardUrl` | — | Required. Full URL of the Agent Card. HTTPS; plain HTTP only for `localhost` / `127.0.0.1`. |
 | `auth` | `{ "mode": "none" }` | The sign-in mode and the credential reference; see [Authentication](#authentication). |
@@ -155,11 +155,11 @@ editor's former **Remote A2A agents** picker is gone.
 ### Ids shared with tools or installed integrations
 
 An agent's id is an installation id, so it cannot collide with another installation — an MCP
-server, an iFinder installation or another agent: the Installed page refuses the id (ids are
+server, an iFinder installation or another agent: Admin → Integrations refuses the id (ids are
 compared ignoring case). People directories check installed integrations the same way, so a
 directory never takes an agent's id either.
 
-Local tools are referenced by bare ids too (`jira` for `jira_searchTickets`), and nothing stops a
+Local tools are referenced by bare ids too (`knowledge` for `knowledge_search`), and nothing stops a
 tool from being added with the id of an existing agent. Should an agent share the id or base id of
 a local tool, the bare id keeps meaning the tool in group grants: the agent is marked with
 `_a2a.idConflict`, the server log names the clash, and the agent is granted only by
@@ -283,15 +283,28 @@ never checked (a redirect to an IP address is not even resolved). So an Agent Ca
 token request answered with a `3xx` fails with `A2A_REDIRECT_REFUSED`; configure the final URL
 instead (for example the card URL the redirect points to).
 
-Only the model's `message` and `data` leave iHub. The user object, chat id, app configuration and
-attachments of the chat are never sent to an agent.
+Only the model's `message` and `data` — and the chat files it names — leave iHub. The user object, chat id
+and app configuration are never sent to an agent, and the chat's attachments are sent only when the
+model names them (see [Files](#files)).
+
+## Files
+
+The tools of an agent take an optional `fileIds` array next to `message` and `data`. The model
+names files of the **current chat** (uploads, mail attachments, files it generated); iHub sends the
+stored original, or the extracted text as a plain text file when no original was kept, as `FilePart`s
+of the message. Ids from other chats are refused, and a call may name at most 10 files.
+
+`FilePart`s in the agent's answer (inline bytes or a `uri`, up to 10 files of 10 MB each per answer)
+are stored in the chat as files with the origin `a2a`. They show up in the Files drawer, the tool
+answers the model with a short descriptor (`fileId`, name, type, size) instead of the bytes, and a
+later call can pass the file on. An agent that returns no file behaves as before. See
+[Chat & Task Files](chat-files.md).
 
 ## Limitations
 
 - **No per-user sign-in** — the definition offers no **Per-user OAuth** mode; see
   [Authentication](#authentication). Follows with #2545.
-- **No file parts.** Attachments are not handed to agents, and file parts in an agent's answer are
-  ignored.
 - **No push notifications** and no `tasks/resubscribe`: long tasks are polled within `timeoutMs`.
-- **Text results only.** Output modes other than text and JSON are not requested.
+- **Output modes are limited.** iHub accepts text, JSON, PDF, Word, PowerPoint and Excel documents, ZIP
+  archives and PNG/JPEG/WebP/GIF pictures; other media types are not requested.
 - **Only JSON-RPC.** Agents offering only gRPC or HTTP+JSON transports cannot be connected.

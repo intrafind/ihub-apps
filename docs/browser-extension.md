@@ -98,7 +98,7 @@ Before starting the rollout, confirm:
 
 ## Step 1 — Enable the `integrations` feature flag
 
-In **Admin → Platform Settings**, or directly in `contents/config/platform.json`:
+In **Admin → Platform → Features**, or directly in `contents/config/platform.json`:
 
 ```json
 {

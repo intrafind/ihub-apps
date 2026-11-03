@@ -15,6 +15,28 @@ optionally the original. Scopes:
 | `task` | a scheduled task definition              | none (kept while it exists) | the task, or the file         |
 | `user` | a user of the Inference API (`/v1/files`) | `originalRetentionDays`     | `DELETE /v1/files/:id`        |
 
+## In the UI
+
+- **Composer.** A file is uploaded in the background as soon as it is attached (not when the message is
+  sent) and the message then names it by id. In `client_text_only` mode only the text the browser
+  extracted is uploaded.
+- **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
+  (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
+  **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,
+  size, pages and storage state (original saved, original removed, text only), a preview of the text
+  the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
+  file chip under a message opens the file in the drawer. In the Outlook task pane, while a mail is
+  being written, **Attach to email** attaches the file to it.
+- **Task editor.** A scheduled task's form has an **Attached files** section to upload and remove
+  files. Files from a connected system with `refreshOnRun` are set through the API; if a refresh
+  fails, the run uses the last stored version and says so (see
+  [Scheduled Tasks](scheduled-tasks.md#attached-files)).
+- **E-mail attachments.** The same attachment is stored once per chat: a second copy with the same
+  name and content (byte hash, or text hash when no original is kept) is recognised and not stored
+  again.
+- **Large tool results.** A binary file a tool returns is moved out of the model's context into the
+  chat's files before it is logged, so a large result never reaches the transcript as base64.
+
 ## Platform settings (`platform.uploads`)
 
 Edited in **Admin → Chat history → Uploaded files**.
@@ -44,7 +66,7 @@ Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_B
 - `POST /api/chats/:chatId/files`, `POST /api/scheduled-tasks/:taskId/files`: a multipart `file`, or
   JSON with `text`, `pageImages`, base64 `data`, or `source`.
 - `GET /api/chats/:chatId/files`, `GET .../files/:fileId` (`?format=text` for the text,
-  `?download=1` for the original; `410 ORIGINAL_DISCARDED` when only the text is kept), and
+  `?download=1` to download the original — without it the original is served inline; `410 ORIGINAL_DISCARDED` when only the text is kept), and
   `DELETE .../files/:fileId`. The same under `/api/scheduled-tasks/:taskId/files`.
 - A chat message names stored files with `fileIds`; `fileData` still works and is stored from the
   message.

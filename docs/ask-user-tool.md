@@ -270,6 +270,10 @@ next chat message (`approvalResponse` next to `clarificationResponse`). Unlike
 a clarification, an approved call is run by the server with the arguments on
 the card before the assistant continues.
 
+In a workflow or agent run, a question or approval that a person answers does not change who
+the run acts as: it continues as the principal it started with, never as the person who answered
+(see [Tool Approval → Who a workflow acts as after an answer](tool-approval.md#who-a-workflow-acts-as-after-an-answer)).
+
 ## Response Format
 
 When the user responds, the LLM receives:

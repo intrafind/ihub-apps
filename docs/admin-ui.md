@@ -17,9 +17,9 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | Section | What's inside |
 |---------|--------------|
 | **Overview** | Dashboard, What's New |
-| **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
+| **AI Workspace** | Apps, Models, Providers, Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
-| **Integrations** | Integrations (tabs **Installed**, **Catalog** and **Inbound**: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
+| **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
 | **Customization** | UI Customization, Localization, Pages, Short Links |
 | **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
 | **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |
@@ -92,7 +92,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 - **Conversations** — total chat sessions recorded
 - **Version** — current iHub Apps version; shows an update badge if a newer version is available
 
-**Platform status panel:** Shows enabled/total counts for providers, models, projects, and tools, plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
+**Platform status panel:** Shows enabled/total counts for providers, models and projects, the installed integrations (with a notice when newer definitions are available), plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
 
 **Low-disk banner:** When that disk is 80 % full or more, a banner at the top of every admin page (not only the dashboard) says so and links to [System Resources](#system-resources). See [Low-disk warnings](#low-disk-warnings).
 
@@ -250,11 +250,12 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 **Permissions:** Each group can be configured with:
 - Which apps, prompts, and models are accessible
+- Which integrations the members may use (**Integrations** section; `permissions.integrations`; see [Who may use an integration](integrations.md#who-may-use-an-integration))
 - Whether admin access is granted (`adminAccess: true`)
 - Feature permissions such as `scheduledTasks`, `projects` (create user projects) and `projectSharing` (add members to a project)
 - External group mappings (for OIDC/LDAP — maps an external group name to this internal group)
 
-**Group access from the content side:** Every app, prompt, skill, tool and workflow edit page has a **Group access** card showing the same permission lists per group, as a search-and-add list rather than a long list of every group: groups that already have access appear as chips, and a search box finds the rest by name — the same pattern used to add apps, models or prompts to a group elsewhere in the admin area. Picking a group in the search results adds the item to that group's list in `groups.json`; removing its chip takes it off. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown as a locked chip, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
+**Group access from the content side:** Every app, prompt, skill and workflow edit page has a **Group access** card showing the same permission lists per group, as a search-and-add list rather than a long list of every group: groups that already have access appear as chips, and a search box finds the rest by name — the same pattern used to add apps, models or prompts to a group elsewhere in the admin area. Picking a group in the search results adds the item to that group's list in `groups.json`; removing its chip takes it off. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown as a locked chip, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
 
 **Content admins:** Members of a group with `contentAdmin: true` (the shipped `content-admins` group) can use the **Group access** card too, but only for the groups they belong to and for the groups that inherit from those. A content admin who is in `sales` can grant or withdraw content for `sales` and for every group with `sales` in its `inherits` chain, and sees no other groups. The `authenticated` and `anonymous` groups every user carries implicitly do not count as membership, so a content admin cannot publish to all users unless an administrator has explicitly made them a member of such a group. Everything else about a group — name, inheritance, models, external mappings, admin flags — stays with full administrators.
 
@@ -278,7 +279,7 @@ See [Projects](projects.md).
 
 ## Marketplace
 
-**AI Workspace → Marketplace** installs apps, models, prompts, skills and workflows from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is on by default — switch it off under **Platform → Features**.
+**AI Workspace → Marketplace** installs apps, models, prompts, skills, workflows and integrations from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is on by default — switch it off under **Platform → Features**.
 
 ![Admin marketplace](assets/screenshots/admin-marketplace.png)
 
@@ -476,7 +477,7 @@ The checkbox lists write the **exclusion** form for a partial selection, so a va
 
 ## Change History
 
-Every entity edit page (apps, models, prompts, sources, tools, providers, groups, users) has a **History** button in the page header.
+Every entity edit page (apps, models, prompts, sources, providers, groups, users) has a **History** button in the page header.
 
 Opening the history drawer shows:
 - A list of every saved change, with timestamp and the admin who made it
