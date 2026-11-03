@@ -44,7 +44,9 @@ configuration moves into installations on the first start (see Breaking Changes)
   definition from its registry and opens the setup form in one step. 29 hosted MCP servers —
   among them GitHub, Linear, Stripe, Zapier, Supabase and Microsoft Learn — now come from the iHub
   Official Marketplace this way, so they get updates without an iHub release; Context7,
-  Atlassian, draw.io, Excalidraw and a few more still ship with iHub.
+  Atlassian, draw.io, Excalidraw and a few more still ship with iHub. MCP servers you already
+  connected to one of the 29 keep their id, tools and key, and are linked to the marketplace
+  definition so they receive its updates.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
   and the files with formats and download links (file contents are not read), and query DataStore
   tables, on GovData, the German state and city portals, data.gov and internal CKAN catalogs.

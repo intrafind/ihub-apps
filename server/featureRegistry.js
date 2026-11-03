@@ -38,8 +38,8 @@ export const featureRegistry = [
     id: 'marketplace',
     name: { en: 'Marketplace', de: 'Marktplatz' },
     description: {
-      en: 'Registry-based content discovery and one-click installation of apps, models, prompts, skills, and workflows',
-      de: 'Registry-basierte Inhaltserkennung und Ein-Klick-Installation von Apps, Modellen, Prompts, Skills und Workflows'
+      en: 'Registry-based content discovery and one-click installation of apps, models, prompts, skills, workflows, and integrations',
+      de: 'Registry-basierte Inhaltserkennung und Ein-Klick-Installation von Apps, Modellen, Prompts, Skills, Workflows und Integrationen'
     },
     category: 'content',
     default: true

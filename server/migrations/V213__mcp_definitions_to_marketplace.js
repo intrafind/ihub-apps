@@ -22,8 +22,26 @@
  * configured, the copy is written without a record: a local definition the
  * admin maintains.
  *
+ * Re-linking: a server converted by V193 on an upgrade from 5.6.x became an
+ * installation of the generic `com.intrafind/mcp-server` definition, because
+ * V193 matches against the definitions shipped at the time it runs and these
+ * no longer ship. So does a server an admin added by hand. Such an
+ * installation is moved to the matching `mcp/<name>` definition when that
+ * yields exactly the connection it has: the same endpoint (V193's URL
+ * comparison: trimmed, trailing `/` ignored, case-insensitive) and
+ * transport, the same headers (a definition's fixed header, such as Close's
+ * `Close-Scope`, must already be among them), a sign-in mode the definition
+ * offers with the same scheme (bearer, or the same header name and prefix),
+ * the default tool prefix, MCP App views on, and no reconnect or other
+ * setting the definition has no field for. The id, label, credential
+ * reference, enabled state, action policy and app bindings stay as they are,
+ * so the tool ids do not change; the timeout moves from the values onto the
+ * installation, as V193 does for a matched server. An installation that does
+ * not qualify stays generic and the log says why.
+ *
  * A definition folder that already exists (installed from a registry or by
- * hand) is left as it is, and so is an existing record. Definitions no
+ * hand) is left as it is, and so is an existing record; a generic
+ * installation is re-linked to it only when it holds the snapshot's version. Definitions no
  * installation uses are not written; the catalog offers them from the
  * marketplace. Idempotent: a second run finds the folders and changes
  * nothing.
@@ -45,6 +63,17 @@ const REGISTRIES_FILE = 'config/registries.json';
 const DEFINITIONS_DIR = 'integration-definitions';
 const REGISTRY_ID = 'ihub-official';
 const INSTALLED_BY = 'migration V213';
+const GENERIC_DEFINITION = 'com.intrafind/mcp-server';
+/** The cap of an installation's own timeout (snapshot of V193's MAX_INSTANCE_TIMEOUT_MS). */
+const MAX_INSTANCE_TIMEOUT_MS = 120000;
+/** The generic definition's reconnect defaults (snapshot as of V213). */
+const RECONNECT_DEFAULTS = {
+  reconnectEnabled: true,
+  reconnectMaxRetries: 5,
+  reconnectInitialDelayMs: 1000,
+  reconnectMaxDelayMs: 30000,
+  reconnectGrowthFactor: 1.5
+};
 
 /** Folder name → the marketplace's 1.0.0 definition (snapshot of 2026-11-03). */
 export const MOVED_DEFINITIONS = Object.freeze({
@@ -2356,9 +2385,177 @@ function writeText(ctx) {
   };
 }
 
+// Snapshot of V193's normalizeUrl. Do NOT replace with an import.
+function normalizeUrl(url) {
+  return typeof url === 'string' ? url.trim().replace(/\/+$/, '').toLowerCase() : '';
+}
+
+function isEmpty(value) {
+  return value === undefined || value === null || value === '';
+}
+
+// Snapshot of parseHeaderLines (protocols/mcp/serverConfig.js) as of V213.
+function parseHeaderLines(lines) {
+  const out = {};
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const idx = String(line).indexOf(':');
+    if (idx <= 0) continue;
+    const name = String(line).slice(0, idx).trim();
+    if (name)
+      out[name.toLowerCase()] = String(line)
+        .slice(idx + 1)
+        .trim();
+  }
+  return out;
+}
+
+function sameRecord(a, b) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+}
+
+/**
+ * The moved definition a generic installation can be re-linked to, as
+ * `{ folder, instance }` with the re-linked installation, or `{ reason }`
+ * when its endpoint is a moved one but the connection would change, or null
+ * when its endpoint is none of them.
+ *
+ * @param {object} inst - a `com.intrafind/mcp-server` installation
+ * @returns {{ folder: string, instance: object } | { reason: string } | null}
+ */
+export function relinkFor(inst) {
+  const values = inst.values && typeof inst.values === 'object' ? inst.values : {};
+  const transport = values.transport || 'streamableHttp';
+  const url = normalizeUrl(values.url);
+  if (!url) return null;
+  const entry = Object.entries(MOVED_DEFINITIONS).find(
+    ([, def]) => normalizeUrl(def.protocol.transport.url) === url
+  );
+  if (!entry) return null;
+  const [folder, def] = entry;
+  const fixed = def.protocol.transport;
+  if (transport !== fixed.type) return { reason: `transport "${transport}" is not ${fixed.type}` };
+
+  const mode = inst.auth?.mode || 'none';
+  if (!def.auth.modes.includes(mode)) {
+    return { reason: `sign-in mode "${mode}" is not offered by ${def.id}` };
+  }
+  if (mode === 'service-account') {
+    const account = def.auth.serviceAccount;
+    const kind = values.authKind || 'bearer';
+    if (kind !== account.kind) {
+      return { reason: `the credential is sent as "${kind}", ${def.id} sends "${account.kind}"` };
+    }
+    if (kind === 'header') {
+      const name = String(values.headerName || '').toLowerCase();
+      const prefix = values.valuePrefix || '';
+      if (name !== account.header.toLowerCase() || prefix !== (account.valuePrefix || '')) {
+        return { reason: `the credential header differs from ${def.id}'s ${account.header}` };
+      }
+    }
+  }
+
+  const prefix = typeof values.toolPrefix === 'string' ? values.toolPrefix.trim() : '';
+  if (prefix && prefix !== `${inst.id}__`) {
+    return { reason: `custom toolPrefix "${prefix}" (${def.id} has no toolPrefix field)` };
+  }
+  if (values.appsEnabled === false) return { reason: 'MCP App views are switched off' };
+  for (const [key, standard] of Object.entries(RECONNECT_DEFAULTS)) {
+    if (!isEmpty(values[key]) && values[key] !== standard) {
+      return { reason: `${key} is set (${def.id} has no reconnect fields)` };
+    }
+  }
+  const carried = new Set([
+    'transport',
+    'url',
+    'headers',
+    'authKind',
+    'headerName',
+    'valuePrefix',
+    'toolPrefix',
+    'timeoutMs',
+    'appsEnabled',
+    ...Object.keys(RECONNECT_DEFAULTS)
+  ]);
+  const other = Object.keys(values).filter(key => !carried.has(key) && !isEmpty(values[key]));
+  if (other.length) return { reason: `${other.join(', ')} set (${def.id} has no such field)` };
+
+  // The definition's fixed headers, overridden by the admin's, must be
+  // exactly the headers the installation sends now.
+  const own = parseHeaderLines(values.headers);
+  const fixedHeaders = Object.fromEntries(
+    Object.entries(fixed.headers || {}).map(([name, value]) => [name.toLowerCase(), value])
+  );
+  if (!sameRecord({ ...fixedHeaders, ...own }, own)) {
+    const missing = Object.keys(fixedHeaders).filter(name => !(name in own));
+    return { reason: `${def.id} would add the header(s) ${missing.join(', ')}` };
+  }
+
+  const timeout = Number(values.timeoutMs);
+  const hasTimeout = !isEmpty(values.timeoutMs) && Number.isFinite(timeout) && timeout !== 30000;
+  if (hasTimeout && timeout > MAX_INSTANCE_TIMEOUT_MS) {
+    return {
+      reason: `timeoutMs ${timeout} is above the ${MAX_INSTANCE_TIMEOUT_MS} an installation may set`
+    };
+  }
+
+  const instance = {
+    ...inst,
+    definition: def.id,
+    definitionVersion: def.version,
+    values:
+      Array.isArray(values.headers) && values.headers.length ? { headers: values.headers } : {}
+  };
+  if (hasTimeout) instance.timeoutMs = timeout;
+  return { folder, instance };
+}
+
+/**
+ * Re-link the generic installations that qualify (see {@link relinkFor}) in
+ * place; logs each one, and each that matched an endpoint but stays generic.
+ * @returns {Promise<boolean>} whether any installation changed
+ */
+async function relinkGeneric(ctx, installed) {
+  let changed = false;
+  for (let i = 0; i < installed.length; i++) {
+    const inst = installed[i];
+    if (inst?.definition !== GENERIC_DEFINITION) continue;
+    const result = relinkFor(inst);
+    if (!result) continue;
+    if (result.reason) {
+      ctx.log(`${inst.id}: stays an installation of ${GENERIC_DEFINITION}: ${result.reason}`);
+      continue;
+    }
+    const def = MOVED_DEFINITIONS[result.folder];
+    const rel = `${DEFINITIONS_DIR}/${result.folder}/integration.json`;
+    if (await ctx.fileExists(rel)) {
+      let existing = null;
+      try {
+        existing = await ctx.readJson(rel);
+      } catch {
+        existing = null;
+      }
+      if (existing?.version !== def.version) {
+        ctx.log(
+          `${inst.id}: stays an installation of ${GENERIC_DEFINITION}: ${rel} holds version ${existing?.version ?? 'unknown'}, not ${def.version}`
+        );
+        continue;
+      }
+    }
+    installed[i] = result.instance;
+    changed = true;
+    ctx.log(`${inst.id}: re-linked from ${GENERIC_DEFINITION} to ${def.id}`);
+  }
+  return changed;
+}
+
 export async function up(ctx) {
   const config = (await ctx.readJson(INTEGRATIONS_FILE)) || {};
   const installed = Array.isArray(config.installed) ? config.installed : [];
+  if (await relinkGeneric(ctx, installed)) {
+    await ctx.writeJson(INTEGRATIONS_FILE, { ...config, installed });
+  }
   const used = new Map();
   for (const inst of installed) {
     const folder = FOLDER_BY_ID.get(inst?.definition);

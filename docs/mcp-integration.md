@@ -767,7 +767,18 @@ Upgrading moves existing installations along: migration V213 writes the
 definition of every moved server an installation uses to
 `contents/integration-definitions/mcp__<id>/` and records it as installed from
 `ihub-official`, so the installation, its tool ids and its credential stay as
-they were, and later versions arrive as marketplace updates. A server not in the catalog, or one
+they were, and later versions arrive as marketplace updates. It also re-links
+installations of the generic **MCP server** definition whose endpoint is one of the
+moved servers — what V193 makes of a server from the 5.6.x catalog, or a server
+added by hand — to the matching `mcp/<id>` definition, but only when the
+connection stays exactly the same: endpoint and transport, headers (a fixed
+header such as Close's `Close-Scope` must already be set), a sign-in mode and
+credential scheme the definition offers, the default tool prefix, MCP App views
+on and no reconnect setting. Id, label, credential, action policy and app
+bindings are kept; an installation that does not qualify stays generic and the
+migration log says why.
+
+A server not in the catalog, or one
 that only supports an interactive OAuth login for each user, is installed
 from the generic **MCP server** definition (`com.intrafind/mcp-server`), with
 the sign-in mode **Per-user OAuth** where needed (see
