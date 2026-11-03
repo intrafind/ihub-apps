@@ -676,9 +676,8 @@ export default function ChatSharePanel({ chatId }) {
                           )
                     ]
                   ].map(([value, label, hint]) => (
-                    <label
+                    <div
                       key={value}
-                      htmlFor={`share-files-access-${value}`}
                       className={`flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 ${
                         value === 'original' && !anyOriginal ? 'opacity-60' : ''
                       }`}
@@ -691,15 +690,21 @@ export default function ChatSharePanel({ chatId }) {
                         checked={filesAccess === value}
                         disabled={value === 'original' && !anyOriginal}
                         onChange={() => setFilesAccess(value)}
+                        aria-describedby={`share-files-access-${value}-hint`}
                         className="mt-0.5"
                       />
-                      <span>
-                        <span className="font-medium">{label}</span>
-                        <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      <div>
+                        <label htmlFor={`share-files-access-${value}`} className="font-medium">
+                          {label}
+                        </label>
+                        <span
+                          id={`share-files-access-${value}-hint`}
+                          className="block text-xs text-gray-500 dark:text-gray-400"
+                        >
                           {hint}
                         </span>
-                      </span>
-                    </label>
+                      </div>
+                    </div>
                   ))}
                 </div>
                 {filesAccess !== 'none' && (

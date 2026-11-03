@@ -244,6 +244,11 @@ test('fingerprint: an A2A skill tool and its admin action listing agree', () => 
           type: 'object',
           description: 'Optional structured input',
           additionalProperties: true
+        },
+        fileIds: {
+          type: 'array',
+          description: 'Optional ids of files of this chat to send to the agent',
+          items: { type: 'string' }
         }
       },
       required: ['message']

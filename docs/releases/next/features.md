@@ -805,6 +805,8 @@ Scheduled tasks can carry reference documents and templates of their own.
   included), and files in MCP and A2A calls are stored in the chat and shown in the drawer.
 - **MCP and A2A:** `app__*` and `workflow__*` tools accept `files` and return generated files as
   MCP `resource` and `image` blocks; A2A accepts and returns `FilePart`s and its tools take `fileIds`.
+  A2A skill tools gained the `fileIds` input, so an A2A skill whose approval is set to "ask when new
+  or changed" asks once more before it runs after the upgrade.
 
 ## Excel Workbooks and Interactive Web Artifacts from Chat, with Richer Previews
 
