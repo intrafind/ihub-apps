@@ -109,6 +109,72 @@ function failureOf(error, kind) {
   );
 }
 
+let ifinderProviderOverride = null;
+
+/**
+ * Replace the iFinder source provider, or restore it (`null`). A seam for tests,
+ * which have no iFinder to download from.
+ *
+ * @param {{content: Function}|null} provider
+ */
+export function setIfinderProviderForTests(provider) {
+  ifinderProviderOverride = provider;
+}
+
+async function ifinderProvider() {
+  if (ifinderProviderOverride) return ifinderProviderOverride;
+  return (await import('../sources/providers/ifinder.js')).default;
+}
+
+/** The file name a `Content-Disposition` header carries, when it has one. */
+function dispositionFileName(header) {
+  if (typeof header !== 'string') return null;
+  const star = /filename\*\s*=\s*(?:[\w-]+'[^']*')?([^;]+)/i.exec(header);
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  const raw = (star ? star[1] : plain?.[1])?.trim();
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Fetch one iFinder document. iFinder serves the original through its document
+ * link; a document without one is read as text.
+ *
+ * @returns {Promise<{bytes: Buffer, contentType: string, name: string, lastModified: null, ref: Object}>}
+ */
+async function fetchIfinderDocument({ ref, user, maxBytes }) {
+  const provider = await ifinderProvider();
+  const request = {
+    id: ref.documentId,
+    ...(ref.searchProfile ? { scope: ref.searchProfile } : {})
+  };
+  let content;
+  let text = false;
+  try {
+    content = await provider.content({ ref: request, user, format: 'original' });
+  } catch {
+    content = await provider.content({ ref: request, user, format: 'text' });
+    text = true;
+  }
+  const bytes = await readContent(content, maxBytes);
+  const isText = text || String(content.contentType || '').startsWith('text/');
+  const name =
+    content.fileName ||
+    dispositionFileName(content.contentDisposition) ||
+    `${ref.documentId}${isText ? '.txt' : ''}`;
+  return {
+    bytes,
+    contentType: String(content.contentType || (text ? 'text/plain' : 'application/octet-stream')),
+    name,
+    lastModified: null,
+    ref
+  };
+}
+
 /**
  * Fetch one file from a connected system.
  *
@@ -166,34 +232,7 @@ export async function fetchSourceFile({ source, user, maxBytes = 0, signal } = {
 
   try {
     if (kind === 'ifinder-document') {
-      // iFinder serves the original through its document link; a document without
-      // one is read as text.
-      const { default: provider } = await import('../sources/providers/ifinder.js');
-      const request = {
-        id: ref.documentId,
-        ...(ref.searchProfile ? { scope: ref.searchProfile } : {})
-      };
-      let content;
-      let text = false;
-      try {
-        content = await provider.content({ ref: request, user, format: 'original' });
-      } catch {
-        content = await provider.content({ ref: request, user, format: 'text' });
-        text = true;
-      }
-      const bytes = await readContent(content, maxBytes);
-      const name =
-        content.fileName ||
-        `${ref.documentId}${text || String(content.contentType || '').startsWith('text/') ? '.txt' : ''}`;
-      return {
-        bytes,
-        contentType: String(
-          content.contentType || (text ? 'text/plain' : 'application/octet-stream')
-        ),
-        name,
-        lastModified: null,
-        ref
-      };
+      return await fetchIfinderDocument({ ref, user, maxBytes });
     }
     const fetched = await definition.fetch({ ref }, { user, signal });
     const bytes = Buffer.isBuffer(fetched.bytes) ? fetched.bytes : Buffer.from(fetched.bytes || []);
