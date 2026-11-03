@@ -314,6 +314,12 @@ export class ChatShareRepository {
    * @param {string|null} [options.expiresAt] - ISO instant, or null.
    * @param {number|null} [options.maxViews] - Positive integer, or null.
    * @param {Object[]} options.messages - The stored transcript to freeze.
+   * @param {'chat'|'artifact'} [options.target] - What the link carries: the
+   *   frozen chat (default) or one of its artifacts, with no transcript.
+   * @param {{id: string, kind?: string, mimeType?: string, bytes?: number, name?: string}|null}
+   *   [options.artifact] - The artifact an `artifact` share carries.
+   * @param {boolean} [options.embeddable] - Whether the link may be embedded
+   *   in an iframe (artifact shares only).
    * @param {string} [options.now] - ISO clock, for tests.
    * @returns {Promise<Object|null>} The share, or null when it cannot be stored.
    */
@@ -333,21 +339,31 @@ export class ChatShareRepository {
     messages = [],
     uploadedFilesAccess = 'none',
     sharedFileIds = null,
+    target = 'chat',
+    artifact = null,
+    embeddable = false,
     now = new Date().toISOString()
   } = {}) {
     if (!this.isAvailable() || !isValidId(chatId) || !ownerId) return null;
+    const isArtifactShare = target === 'artifact';
+    if (isArtifactShare && typeof artifact?.id !== 'string') {
+      throw new StorageError('An artifact share needs an artifact', { code: 'INVALID_ARGUMENT' });
+    }
     if (!SHARE_MODES.includes(mode)) {
       throw new StorageError(`Unknown share mode: ${String(mode).slice(0, 32)}`, {
         code: 'INVALID_ARGUMENT'
       });
     }
-    const snapshot = (Array.isArray(messages) ? messages : []).map(snapshotMessage);
+    const snapshot = isArtifactShare
+      ? []
+      : (Array.isArray(messages) ? messages : []).map(snapshotMessage);
     // Uploaded files are opt-in (PM-07): none by default, and with access the
     // owner may still leave single files out. Only the shared ones are pinned
     // against deletion by a message edit.
-    const filesAccess = UPLOADED_FILES_ACCESS.includes(uploadedFilesAccess)
-      ? uploadedFilesAccess
-      : 'none';
+    const filesAccess =
+      !isArtifactShare && UPLOADED_FILES_ACCESS.includes(uploadedFilesAccess)
+        ? uploadedFilesAccess
+        : 'none';
     const sharedFiles =
       filesAccess === 'none'
         ? []
@@ -408,7 +424,20 @@ export class ChatShareRepository {
       recipientViews: {},
       revokedAt: null,
       messageCount: snapshot.length,
-      artifactIds: artifactIdsOf(snapshot),
+      target: isArtifactShare ? 'artifact' : 'chat',
+      artifactIds: isArtifactShare ? [artifact.id] : artifactIdsOf(snapshot),
+      ...(isArtifactShare
+        ? {
+            artifact: {
+              id: artifact.id,
+              kind: artifact.kind || null,
+              mimeType: artifact.mimeType || null,
+              bytes: Number.isFinite(artifact.bytes) ? artifact.bytes : null,
+              name: artifact.name || null
+            },
+            embeddable: embeddable === true && mode === 'public'
+          }
+        : {}),
       uploadedFilesAccess: filesAccess,
       ...(sharedFiles.length > 0 ? { fileIds: sharedFiles } : {})
     };

@@ -853,3 +853,21 @@ from browsers, report generators and iHub itself.
 - Detection is conservative: bulleted lists, tables of contents, code, justified text, two columns of
   prose and anything with fewer than three rows or two columns stay ordinary lines.
 - PDFs with tags still use their structure tree.
+
+## Share a Single File as a Link, Optionally Embedded
+
+A generated file — a web page, image, document or code file — can now be shared on its own, like a
+chat, without the conversation it came from. Open the Artifacts panel, select the file and choose
+**Share**.
+
+- **Same audiences and limits as chat links:** specific users, anyone signed in, or anyone with the
+  link, each with an expiry, an open limit and **Revoke**. Only that one file opens through the link;
+  HTML pages run in the same sandboxed preview as in the chat.
+- **Embedding:** a public link without an open limit can be embedded in an iframe. The dialog gives
+  the embed code; only the websites an admin lists can show it.
+- **Deleting the chat deletes its file links and the files.**
+- **Admin settings** (Admin → Observability → Chat History → Chat sharing): _Links to single files_
+  (on by default) and _Allow embedding public file links_ with the list of websites that may embed
+  (off by default).
+
+See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).

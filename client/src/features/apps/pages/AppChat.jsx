@@ -31,6 +31,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import ShareDialog from '../../chat/components/ShareDialog';
+import ArtifactShareDialog from '../../chat/components/ArtifactShareDialog';
 import ArtifactsPanel from '../../chat/components/ArtifactsPanel';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
@@ -329,12 +330,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // durable chat.
   const [showShare, setShowShare] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(false);
+  const [sharingArtifact, setSharingArtifact] = useState(null);
   const auth = useOptionalAuth();
   // A short link belongs to the signed-in user who creates it.
   const signedOut = auth ? auth.isAuthenticated !== true : false;
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true) && !signedOut;
   const { platformConfig } = usePlatformConfig();
   const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
+  const artifactSharingEnabled =
+    chatSharingEnabled && platformConfig?.chats?.sharing?.allowArtifacts !== false;
   // "Save as prompt" on a sent message: offered to a signed-in user when the
   // installation lets users keep prompts of their own (#2519).
   const userPromptsEnabled =
@@ -3527,10 +3531,23 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             initialTab={filesDrawerFileId ? 'uploaded' : null}
             initialFileId={filesDrawerFileId}
             mailAttach={mailAttachSource}
+            onShare={
+              artifactSharingEnabled && chatShareReady && chatId
+                ? artifact => setSharingArtifact(artifact)
+                : null
+            }
             zipName={
               conversationTitle || getLocalizedContent(app?.name, currentLanguage) || 'artifacts'
             }
             messages={messages}
+          />
+        )}
+        {sharingArtifact && (
+          <ArtifactShareDialog
+            isOpen
+            onClose={() => setSharingArtifact(null)}
+            chatId={chatId}
+            artifact={{ id: sharingArtifact.id, name: sharingArtifact.name }}
           />
         )}
         {showShare && (

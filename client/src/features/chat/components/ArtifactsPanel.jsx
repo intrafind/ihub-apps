@@ -125,9 +125,12 @@ const PRIMARY = `${BUTTON} bg-indigo-600 text-white hover:bg-indigo-700`;
  * @param {'uploaded'|'generated'} [props.initialTab] - Tab to open first (default: Uploaded
  *   when there are no generated files).
  * @param {string|null} [props.initialFileId] - Uploaded file to show first (a clicked chip).
+ * @param {string|null} [props.initialArtifactId] - Generated file to preview first.
  * @param {{ available: boolean, attach: Function }|null} [props.mailAttach] - "Attach to email"
  *   (Outlook task pane, composing).
  * @param {() => void} [props.onUploadedChanged] - A file was deleted.
+ * @param {(artifact: Object) => void} [props.onShare] - Adds a Share button to the preview of a
+ *   generated file (a link to that file alone). Absent where sharing is not on offer.
  */
 export default function ArtifactsPanel({
   isOpen,
@@ -139,8 +142,10 @@ export default function ArtifactsPanel({
   uploadedAccess = null,
   initialTab = null,
   initialFileId = null,
+  initialArtifactId = null,
   mailAttach = null,
-  onUploadedChanged = null
+  onUploadedChanged = null,
+  onShare = null
 }) {
   const { t, i18n } = useTranslation();
   const headingId = useId();
@@ -151,7 +156,7 @@ export default function ArtifactsPanel({
   const [items, setItems] = useState([]);
   const [status, setStatus] = useState('loading');
   const [selected, setSelected] = useState(() => new Set());
-  const [previewId, setPreviewId] = useState(null);
+  const [previewId, setPreviewId] = useState(initialArtifactId);
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [tab, setTab] = useState(initialTab);
@@ -641,6 +646,18 @@ export default function ArtifactsPanel({
                       >
                         <Icon name="envelope" size="sm" />
                         {t('chatFiles.attachToEmail', 'Attach to email')}
+                      </button>
+                    )}
+                    {onShare && (
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        disabled={busy !== null}
+                        onClick={() => onShare(preview)}
+                        data-testid="artifact-share"
+                      >
+                        <Icon name="share" size="sm" />
+                        {t('chatArtifacts.share', 'Share')}
                       </button>
                     )}
                     <button

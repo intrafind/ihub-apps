@@ -65,6 +65,11 @@ jest.mock('../../../client/src/utils/debugLog', () => ({
   __esModule: true,
   debugLog: () => {}
 }));
+// The preview has its own suites; here it only has to show it got the artifact.
+jest.mock('../../../client/src/features/chat/components/ArtifactPreview', () => ({
+  __esModule: true,
+  default: ({ artifact }) => <div data-testid="artifact-preview">{artifact.id}</div>
+}));
 jest.mock('../../../client/src/shared/components/LoadingSpinner', () => ({
   __esModule: true,
   default: () => <span>spinner</span>
@@ -178,4 +183,32 @@ test('a dead link shows the one "no longer available" page', async () => {
   await waitFor(() =>
     expect(screen.getByText('This link is no longer available')).toBeInTheDocument()
   );
+});
+
+test('a single-artifact link shows the file, not a transcript', async () => {
+  auth.isLoading = false;
+  mockApi.fetchSharedChat.mockResolvedValueOnce({
+    share: {
+      id: 'shr_art',
+      mode: 'public',
+      target: 'artifact',
+      title: 'page.html',
+      createdAt: '2026-09-24T10:00:00.000Z',
+      expiresAt: null,
+      sharedBy: null,
+      messageCount: 0,
+      artifact: { id: 'art1', name: 'page.html', kind: 'code', mimeType: 'text/plain', bytes: 12 },
+      readOnly: true
+    },
+    messages: [],
+    version: 1
+  });
+  mount();
+  await waitFor(() => expect(screen.getByTestId('artifact-preview')).toHaveTextContent('art1'));
+  expect(screen.getByRole('heading', { name: 'page.html' })).toBeInTheDocument();
+  expect(screen.getByTestId('shared-artifact-download')).toBeInTheDocument();
+  expect(screen.queryByTestId('messages')).not.toBeInTheDocument();
+  expect(screen.getByRole('note')).toHaveTextContent('This file is publicly accessible');
+  // No second request for a file list: the share already names its one file.
+  expect(mockApi.fetchSharedChatArtifacts).not.toHaveBeenCalled();
 });

@@ -18,31 +18,10 @@ import { buildServerPath } from '../utils/basePath.js';
 import { getRootDir } from '../pathUtils.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-
-function sanitizeFrameAncestors(allowedHostOrigins) {
-  const sources = ["'self'"];
-  if (Array.isArray(allowedHostOrigins)) {
-    for (const item of allowedHostOrigins) {
-      if (typeof item !== 'string') continue;
-      try {
-        const u = new URL(item);
-        if (u.protocol !== 'http:' && u.protocol !== 'https:') continue;
-        sources.push(u.origin);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  return sources.join(' ');
-}
+import { applyFrameAncestorsCsp } from '../utils/frameAncestors.js';
 
 function applyCsp(res, allowedHostOrigins) {
-  const frameAncestors = sanitizeFrameAncestors(allowedHostOrigins);
-  // Drop any prior X-Frame-Options the global middleware may have set —
-  // it can't express a multi-origin allowlist and overrides
-  // frame-ancestors in some user agents.
-  res.removeHeader('X-Frame-Options');
-  res.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`);
+  applyFrameAncestorsCsp(res, allowedHostOrigins);
 }
 
 export default function registerNextcloudEmbedPageRoutes(app) {

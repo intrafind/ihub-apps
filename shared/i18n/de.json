@@ -935,7 +935,13 @@
         "maxExpiryDays": "Längster Ablauf (Tage)",
         "maxExpiryDaysHelp": "Besitzer können keinen späteren Ablauf wählen, und „Nie“ wird nicht mehr angeboten. 0 hebt die Grenze auf.",
         "maxViewsCap": "Maximale Aufrufe pro Link",
-        "maxViewsCapHelp": "Besitzer können nicht mehr Aufrufe erlauben, und „Unbegrenzt“ wird nicht mehr angeboten. 0 hebt die Grenze auf."
+        "maxViewsCapHelp": "Besitzer können nicht mehr Aufrufe erlauben, und „Unbegrenzt“ wird nicht mehr angeboten. 0 hebt die Grenze auf.",
+        "allowArtifacts": "Links zu einzelnen Dateien",
+        "allowArtifactsHelp": "Besitzer können eine erzeugte Datei (Seite, Bild, Dokument) als eigenen Link teilen, ohne die Unterhaltung. Wird der Chat gelöscht, werden diese Links und die Dateien mit gelöscht.",
+        "embedEnabled": "Einbetten öffentlicher Datei-Links erlauben",
+        "embedEnabledHelp": "Öffentliche Datei-Links erhalten einen Einbettungscode (iframe). Nur die unten aufgeführten Websites dürfen ihn anzeigen.",
+        "embedOrigins": "Websites, die einbetten dürfen",
+        "embedOriginsHelp": "Ein Origin pro Zeile (Schema und Host, z. B. https://portal.example.com). Ohne Eintrag kann nur iHub selbst die Einbettung anzeigen."
       },
       "shares": {
         "title": "Geteilte Chats",
@@ -969,7 +975,11 @@
           "revoked": "Widerrufen",
           "expired": "Abgelaufen",
           "exhausted": "Aufruflimit erreicht"
-        }
+        },
+        "target": {
+          "artifact": "Einzelne Datei"
+        },
+        "embeddable": "einbettbar"
       },
       "uploads": {
         "title": "Hochgeladene Dateien",
@@ -6960,7 +6970,9 @@
     "sharedNew": "Neu",
     "sharedNewHint": "Sie haben dies noch nicht geöffnet",
     "scheduled": "Geplant",
-    "inProject": "Im Projekt {{name}}"
+    "inProject": "Im Projekt {{name}}",
+    "sharedFile": "Datei",
+    "untitledFile": "Datei ohne Titel"
   },
   "transcription": {
     "record": "Audio für das ausgewählte Modell aufnehmen",
@@ -7214,6 +7226,22 @@
       "originalUnavailable": "Keine der Dateien ist im Original gespeichert.",
       "pick": "Zu teilende Dateien",
       "textOnly": "(nur Text)"
+    },
+    "artifact": {
+      "title": "Datei teilen",
+      "description": "Empfänger sehen nur {{name}} schreibgeschützt, nicht die Unterhaltung, aus der die Datei stammt.",
+      "publicWarningTitle": "Dadurch wird die Datei öffentlich",
+      "publicWarning": "Jeder, der den Link hat, kann diese Datei ohne Anmeldung öffnen und herunterladen, bis Sie den Link widerrufen oder er abläuft. Der Link kann an beliebige Personen weitergegeben werden. Teilen Sie keine Dateien mit internen oder personenbezogenen Daten.",
+      "publicAcknowledge": "Mir ist bewusst, dass jeder mit dem Link diese Datei ohne Anmeldung öffnen kann.",
+      "publicBanner": "Diese Datei ist öffentlich zugänglich. Jeder mit dem Link kann sie öffnen.",
+      "existingTitle": "Links zu dieser Datei",
+      "existingEmpty": "Diese Datei wurde noch nicht geteilt."
+    },
+    "embed": {
+      "label": "Einbetten auf anderen Websites erlauben",
+      "hint": "Sie erhalten einen Einbettungscode. Nur von Ihrer Administration zugelassene Websites können ihn anzeigen, und der Link darf kein Aufruflimit haben.",
+      "codeLabel": "Einbettungscode",
+      "copy": "Einbettungscode kopieren"
     }
   },
   "sources": {
@@ -8505,7 +8533,8 @@
     "viewMode": "Vorschaumodus",
     "previewTab": "Vorschau",
     "codeTab": "Code",
-    "csvRowsShown": "{{shown}} von {{total}} Zeilen werden angezeigt."
+    "csvRowsShown": "{{shown}} von {{total}} Zeilen werden angezeigt.",
+    "share": "Teilen"
   },
   "chatFiles": {
     "attached": "{{name}} wurde an Ihre E-Mail angehängt.",

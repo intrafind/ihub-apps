@@ -435,7 +435,10 @@
       "allowPublic": true,
       "defaultExpiryDays": 0,
       "maxExpiryDays": 0,
-      "maxViewsCap": 0
+      "maxViewsCap": 0,
+      "allowArtifacts": true,
+      "embedEnabled": false,
+      "embedAllowedOrigins": []
     }
   },
   "userPrompts": {
