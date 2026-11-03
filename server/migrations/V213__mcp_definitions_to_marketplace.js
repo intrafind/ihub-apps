@@ -84,490 +84,767 @@ const RECONNECT_DEFAULTS = {
  * (`keyHelp`) and the tags. {@link movedDefinition} builds the full
  * definition from it, exactly as the marketplace publishes it.
  */
-const SERVERS = {
-  apify: {
-    name: { en: 'Apify', de: 'Apify' },
-    description: {
-      en: 'Run Apify Actors for web scraping, crawling and data extraction.\n\nAppend ?tools=actors,docs,apify/rag-web-browser (for example) to choose the tools and Actors.',
-      de: 'Apify-Actors für Web-Scraping, Crawling und Datenextraktion ausführen.\n\nMit ?tools=actors,docs,apify/rag-web-browser (Beispiel) an der URL die Tools und Actors auswählen.'
+// One JSON document rather than an object literal: the 29 entries share their
+// shape, which a token-based duplication check would count as copied code.
+const SERVERS = JSON.parse(String.raw`{
+  "apify": {
+    "name": {
+      "en": "Apify",
+      "de": "Apify"
     },
-    publisher: 'Apify',
-    category: 'automation',
-    docsUrl: 'https://docs.apify.com/integrations/mcp',
-    url: 'https://mcp.apify.com',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Copy your API token from the Apify Console under Settings → API & Integrations.',
-      de: 'API-Token in der Apify Console unter Settings → API & Integrations kopieren.'
+    "description": {
+      "en": "Run Apify Actors for web scraping, crawling and data extraction.\n\nAppend ?tools=actors,docs,apify/rag-web-browser (for example) to choose the tools and Actors.",
+      "de": "Apify-Actors für Web-Scraping, Crawling und Datenextraktion ausführen.\n\nMit ?tools=actors,docs,apify/rag-web-browser (Beispiel) an der URL die Tools und Actors auswählen."
     },
-    tags: ['scraping', 'crawler', 'web data']
+    "publisher": "Apify",
+    "category": "automation",
+    "docsUrl": "https://docs.apify.com/integrations/mcp",
+    "url": "https://mcp.apify.com",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Copy your API token from the Apify Console under Settings → API & Integrations.",
+      "de": "API-Token in der Apify Console unter Settings → API & Integrations kopieren."
+    },
+    "tags": [
+      "scraping",
+      "crawler",
+      "web data"
+    ]
   },
-  'astro-docs': {
-    name: { en: 'Astro Docs', de: 'Astro Docs' },
-    description: {
-      en: 'Search the official documentation of the Astro web framework.',
-      de: 'Die offizielle Dokumentation des Web-Frameworks Astro durchsuchen.'
+  "astro-docs": {
+    "name": {
+      "en": "Astro Docs",
+      "de": "Astro Docs"
     },
-    publisher: 'Astro',
-    category: 'documentation',
-    docsUrl: 'https://docs.astro.build/en/guides/build-with-ai/',
-    url: 'https://mcp.docs.astro.build/mcp',
-    tags: ['web', 'framework', 'docs']
+    "description": {
+      "en": "Search the official documentation of the Astro web framework.",
+      "de": "Die offizielle Dokumentation des Web-Frameworks Astro durchsuchen."
+    },
+    "publisher": "Astro",
+    "category": "documentation",
+    "docsUrl": "https://docs.astro.build/en/guides/build-with-ai/",
+    "url": "https://mcp.docs.astro.build/mcp",
+    "tags": [
+      "web",
+      "framework",
+      "docs"
+    ]
   },
-  braintrust: {
-    name: { en: 'Braintrust', de: 'Braintrust' },
-    description: {
-      en: 'Search Braintrust experiments, datasets and logs for evaluating AI applications.\n\nThe EU region uses https://api-eu.braintrust.dev/mcp.',
-      de: 'Braintrust-Experimente, Datasets und Logs zur Evaluierung von KI-Anwendungen durchsuchen.\n\nDie EU-Region nutzt https://api-eu.braintrust.dev/mcp.'
+  "braintrust": {
+    "name": {
+      "en": "Braintrust",
+      "de": "Braintrust"
     },
-    publisher: 'Braintrust',
-    category: 'development',
-    docsUrl: 'https://www.braintrust.dev/docs/reference/mcp',
-    url: 'https://api.braintrust.dev/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API key in Braintrust under Settings → API keys; the server acts with its owner’s permissions.',
-      de: 'API-Schlüssel in Braintrust unter Settings → API keys erstellen; der Server handelt mit den Rechten des Besitzers.'
+    "description": {
+      "en": "Search Braintrust experiments, datasets and logs for evaluating AI applications.\n\nThe EU region uses https://api-eu.braintrust.dev/mcp.",
+      "de": "Braintrust-Experimente, Datasets und Logs zur Evaluierung von KI-Anwendungen durchsuchen.\n\nDie EU-Region nutzt https://api-eu.braintrust.dev/mcp."
     },
-    tags: ['evals', 'llm', 'observability']
+    "publisher": "Braintrust",
+    "category": "development",
+    "docsUrl": "https://www.braintrust.dev/docs/reference/mcp",
+    "url": "https://api.braintrust.dev/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API key in Braintrust under Settings → API keys; the server acts with its owner’s permissions.",
+      "de": "API-Schlüssel in Braintrust unter Settings → API keys erstellen; der Server handelt mit den Rechten des Besitzers."
+    },
+    "tags": [
+      "evals",
+      "llm",
+      "observability"
+    ]
   },
-  'browser-use': {
-    name: { en: 'Browser Use', de: 'Browser Use' },
-    description: {
-      en: 'Let a cloud browser agent navigate websites, fill in forms and extract information.',
-      de: 'Einen Cloud-Browser-Agenten Websites bedienen, Formulare ausfüllen und Informationen auslesen lassen.'
+  "browser-use": {
+    "name": {
+      "en": "Browser Use",
+      "de": "Browser Use"
     },
-    publisher: 'Browser Use',
-    category: 'automation',
-    docsUrl: 'https://docs.browser-use.com/cloud/guides/mcp-server',
-    url: 'https://api.browser-use.com/v3/mcp',
-    account: { kind: 'header', header: 'X-Browser-Use-API-Key' },
-    keyHelp: {
-      en: 'Create an API key at cloud.browser-use.com under Settings → API keys. Usage is billed by Browser Use.',
-      de: 'API-Schlüssel auf cloud.browser-use.com unter Settings → API keys erstellen. Die Nutzung wird von Browser Use abgerechnet.'
+    "description": {
+      "en": "Let a cloud browser agent navigate websites, fill in forms and extract information.",
+      "de": "Einen Cloud-Browser-Agenten Websites bedienen, Formulare ausfüllen und Informationen auslesen lassen."
     },
-    tags: ['browser', 'web automation', 'agent']
+    "publisher": "Browser Use",
+    "category": "automation",
+    "docsUrl": "https://docs.browser-use.com/cloud/guides/mcp-server",
+    "url": "https://api.browser-use.com/v3/mcp",
+    "account": {
+      "kind": "header",
+      "header": "X-Browser-Use-API-Key"
+    },
+    "keyHelp": {
+      "en": "Create an API key at cloud.browser-use.com under Settings → API keys. Usage is billed by Browser Use.",
+      "de": "API-Schlüssel auf cloud.browser-use.com unter Settings → API keys erstellen. Die Nutzung wird von Browser Use abgerechnet."
+    },
+    "tags": [
+      "browser",
+      "web automation",
+      "agent"
+    ]
   },
-  buildkite: {
-    name: { en: 'Buildkite', de: 'Buildkite' },
-    description: {
-      en: 'Inspect Buildkite pipelines, builds, jobs and logs.\n\nTokens only work on the /direct endpoint. Add the header “X-Buildkite-Readonly: true” to hide tools that change data.',
-      de: 'Buildkite-Pipelines, Builds, Jobs und Logs einsehen.\n\nTokens funktionieren nur am Endpunkt /direct. Mit dem Header „X-Buildkite-Readonly: true“ werden Tools ausgeblendet, die Daten ändern.'
+  "buildkite": {
+    "name": {
+      "en": "Buildkite",
+      "de": "Buildkite"
     },
-    publisher: 'Buildkite',
-    category: 'development',
-    docsUrl: 'https://buildkite.com/docs/apis/mcp-server/remote/configuring-ai-tools',
-    url: 'https://mcp.buildkite.com/direct',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API access token under Personal Settings → API Access Tokens; its REST scopes decide which tools work.',
-      de: 'API Access Token unter Personal Settings → API Access Tokens erstellen; seine REST-Scopes bestimmen, welche Tools funktionieren.'
+    "description": {
+      "en": "Inspect Buildkite pipelines, builds, jobs and logs.\n\nTokens only work on the /direct endpoint. Add the header “X-Buildkite-Readonly: true” to hide tools that change data.",
+      "de": "Buildkite-Pipelines, Builds, Jobs und Logs einsehen.\n\nTokens funktionieren nur am Endpunkt /direct. Mit dem Header „X-Buildkite-Readonly: true“ werden Tools ausgeblendet, die Daten ändern."
     },
-    tags: ['ci', 'cd', 'pipelines', 'builds']
+    "publisher": "Buildkite",
+    "category": "development",
+    "docsUrl": "https://buildkite.com/docs/apis/mcp-server/remote/configuring-ai-tools",
+    "url": "https://mcp.buildkite.com/direct",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API access token under Personal Settings → API Access Tokens; its REST scopes decide which tools work.",
+      "de": "API Access Token unter Personal Settings → API Access Tokens erstellen; seine REST-Scopes bestimmen, welche Tools funktionieren."
+    },
+    "tags": [
+      "ci",
+      "cd",
+      "pipelines",
+      "builds"
+    ]
   },
-  close: {
-    name: { en: 'Close', de: 'Close' },
-    description: {
-      en: 'Search and update leads, contacts, opportunities and activities in the Close CRM.\n\nThe Close-Scope header starts read-only (mcp.read). Change it to mcp.write_safe or mcp.write_destructive to allow changes.',
-      de: 'Leads, Kontakte, Opportunities und Aktivitäten im Close-CRM suchen und bearbeiten.\n\nDer Header Close-Scope ist zunächst nur lesend (mcp.read). Für Änderungen auf mcp.write_safe oder mcp.write_destructive setzen.'
+  "close": {
+    "name": {
+      "en": "Close",
+      "de": "Close"
     },
-    publisher: 'Close',
-    category: 'customer',
-    docsUrl: 'https://developer.close.com/mcp',
-    url: 'https://mcp.close.com/mcp',
-    headers: { 'Close-Scope': 'mcp.read' },
-    account: { kind: 'header', header: 'Close-API-Key' },
-    keyHelp: {
-      en: 'Create an API key in Close under Settings → Developer → API Keys. Each key belongs to one user.',
-      de: 'API-Schlüssel in Close unter Settings → Developer → API Keys erstellen. Jeder Schlüssel gehört zu einem Benutzer.'
+    "description": {
+      "en": "Search and update leads, contacts, opportunities and activities in the Close CRM.\n\nThe Close-Scope header starts read-only (mcp.read). Change it to mcp.write_safe or mcp.write_destructive to allow changes.",
+      "de": "Leads, Kontakte, Opportunities und Aktivitäten im Close-CRM suchen und bearbeiten.\n\nDer Header Close-Scope ist zunächst nur lesend (mcp.read). Für Änderungen auf mcp.write_safe oder mcp.write_destructive setzen."
     },
-    tags: ['crm', 'sales', 'leads']
+    "publisher": "Close",
+    "category": "customer",
+    "docsUrl": "https://developer.close.com/mcp",
+    "url": "https://mcp.close.com/mcp",
+    "headers": {
+      "Close-Scope": "mcp.read"
+    },
+    "account": {
+      "kind": "header",
+      "header": "Close-API-Key"
+    },
+    "keyHelp": {
+      "en": "Create an API key in Close under Settings → Developer → API Keys. Each key belongs to one user.",
+      "de": "API-Schlüssel in Close unter Settings → Developer → API Keys erstellen. Jeder Schlüssel gehört zu einem Benutzer."
+    },
+    "tags": [
+      "crm",
+      "sales",
+      "leads"
+    ]
   },
-  cloudflare: {
-    name: { en: 'Cloudflare', de: 'Cloudflare' },
-    description: {
-      en: 'Manage a Cloudflare account through the Cloudflare API: Workers, DNS, R2, KV and more.',
-      de: 'Ein Cloudflare-Konto über die Cloudflare-API verwalten: Workers, DNS, R2, KV und mehr.'
+  "cloudflare": {
+    "name": {
+      "en": "Cloudflare",
+      "de": "Cloudflare"
     },
-    publisher: 'Cloudflare',
-    category: 'development',
-    docsUrl:
-      'https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/',
-    url: 'https://mcp.cloudflare.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API token at dash.cloudflare.com/profile/api-tokens with only the permissions needed. Tokens with IP filtering are not supported.',
-      de: 'API-Token unter dash.cloudflare.com/profile/api-tokens mit nur den nötigen Berechtigungen erstellen. Tokens mit IP-Filter werden nicht unterstützt.'
+    "description": {
+      "en": "Manage a Cloudflare account through the Cloudflare API: Workers, DNS, R2, KV and more.",
+      "de": "Ein Cloudflare-Konto über die Cloudflare-API verwalten: Workers, DNS, R2, KV und mehr."
     },
-    tags: ['workers', 'dns', 'r2', 'cdn']
+    "publisher": "Cloudflare",
+    "category": "development",
+    "docsUrl": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+    "url": "https://mcp.cloudflare.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API token at dash.cloudflare.com/profile/api-tokens with only the permissions needed. Tokens with IP filtering are not supported.",
+      "de": "API-Token unter dash.cloudflare.com/profile/api-tokens mit nur den nötigen Berechtigungen erstellen. Tokens mit IP-Filter werden nicht unterstützt."
+    },
+    "tags": [
+      "workers",
+      "dns",
+      "r2",
+      "cdn"
+    ]
   },
-  cloudinary: {
-    name: { en: 'Cloudinary', de: 'Cloudinary' },
-    description: {
-      en: 'Search, upload, tag and transform images and videos in Cloudinary.',
-      de: 'Bilder und Videos in Cloudinary suchen, hochladen, verschlagworten und transformieren.'
+  "cloudinary": {
+    "name": {
+      "en": "Cloudinary",
+      "de": "Cloudinary"
     },
-    publisher: 'Cloudinary',
-    category: 'content',
-    docsUrl: 'https://cloudinary.com/documentation/cloudinary_llm_mcp',
-    url: 'https://asset-management.mcp.cloudinary.com/mcp',
-    account: { kind: 'header', header: 'cloudinary-url' },
-    keyHelp: {
-      en: 'Store the environment URL cloudinary://<api_key>:<api_secret>@<cloud_name> from Console → Settings → API Keys.',
-      de: 'Die Umgebungs-URL cloudinary://<api_key>:<api_secret>@<cloud_name> aus Console → Settings → API Keys speichern.'
+    "description": {
+      "en": "Search, upload, tag and transform images and videos in Cloudinary.",
+      "de": "Bilder und Videos in Cloudinary suchen, hochladen, verschlagworten und transformieren."
     },
-    tags: ['images', 'video', 'assets', 'dam']
+    "publisher": "Cloudinary",
+    "category": "content",
+    "docsUrl": "https://cloudinary.com/documentation/cloudinary_llm_mcp",
+    "url": "https://asset-management.mcp.cloudinary.com/mcp",
+    "account": {
+      "kind": "header",
+      "header": "cloudinary-url"
+    },
+    "keyHelp": {
+      "en": "Store the environment URL cloudinary://<api_key>:<api_secret>@<cloud_name> from Console → Settings → API Keys.",
+      "de": "Die Umgebungs-URL cloudinary://<api_key>:<api_secret>@<cloud_name> aus Console → Settings → API Keys speichern."
+    },
+    "tags": [
+      "images",
+      "video",
+      "assets",
+      "dam"
+    ]
   },
-  fireflies: {
-    name: { en: 'Fireflies.ai', de: 'Fireflies.ai' },
-    description: {
-      en: 'Search meeting transcripts, summaries and action items recorded by Fireflies.',
-      de: 'Von Fireflies aufgezeichnete Meeting-Transkripte, Zusammenfassungen und Aufgaben durchsuchen.'
+  "fireflies": {
+    "name": {
+      "en": "Fireflies.ai",
+      "de": "Fireflies.ai"
     },
-    publisher: 'Fireflies.ai',
-    category: 'customer',
-    docsUrl: 'https://docs.fireflies.ai/getting-started/mcp-configuration',
-    url: 'https://api.fireflies.ai/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API key in Fireflies under Settings → Developer Settings. It acts with that user’s permissions.',
-      de: 'API-Schlüssel in Fireflies unter Settings → Developer Settings erstellen. Er handelt mit den Rechten dieses Benutzers.'
+    "description": {
+      "en": "Search meeting transcripts, summaries and action items recorded by Fireflies.",
+      "de": "Von Fireflies aufgezeichnete Meeting-Transkripte, Zusammenfassungen und Aufgaben durchsuchen."
     },
-    tags: ['meetings', 'transcripts', 'notes']
+    "publisher": "Fireflies.ai",
+    "category": "customer",
+    "docsUrl": "https://docs.fireflies.ai/getting-started/mcp-configuration",
+    "url": "https://api.fireflies.ai/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API key in Fireflies under Settings → Developer Settings. It acts with that user’s permissions.",
+      "de": "API-Schlüssel in Fireflies unter Settings → Developer Settings erstellen. Er handelt mit den Rechten dieses Benutzers."
+    },
+    "tags": [
+      "meetings",
+      "transcripts",
+      "notes"
+    ]
   },
-  github: {
-    name: { en: 'GitHub', de: 'GitHub' },
-    description: {
-      en: 'Work with repositories, issues, pull requests, code search and Actions.\n\nUse https://api.githubcopilot.com/mcp/readonly for read-only tools. GitHub Enterprise Cloud with data residency uses https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server is not supported.',
-      de: 'Mit Repositories, Issues, Pull Requests, Codesuche und Actions arbeiten.\n\nMit https://api.githubcopilot.com/mcp/readonly nur lesende Tools nutzen. GitHub Enterprise Cloud mit Datenresidenz nutzt https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server wird nicht unterstützt.'
+  "github": {
+    "name": {
+      "en": "GitHub",
+      "de": "GitHub"
     },
-    publisher: 'GitHub',
-    category: 'development',
-    docsUrl:
-      'https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/set-up-the-github-mcp-server',
-    url: 'https://api.githubcopilot.com/mcp/',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a personal access token under GitHub Settings → Developer settings → Personal access tokens, with the scopes the tools need (for example repo, read:org).',
-      de: 'Persönliches Zugriffstoken unter GitHub Settings → Developer settings → Personal access tokens erstellen, mit den Scopes, die die Tools brauchen (z. B. repo, read:org).'
+    "description": {
+      "en": "Work with repositories, issues, pull requests, code search and Actions.\n\nUse https://api.githubcopilot.com/mcp/readonly for read-only tools. GitHub Enterprise Cloud with data residency uses https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server is not supported.",
+      "de": "Mit Repositories, Issues, Pull Requests, Codesuche und Actions arbeiten.\n\nMit https://api.githubcopilot.com/mcp/readonly nur lesende Tools nutzen. GitHub Enterprise Cloud mit Datenresidenz nutzt https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server wird nicht unterstützt."
     },
-    tags: ['git', 'code', 'issues', 'pull requests']
+    "publisher": "GitHub",
+    "category": "development",
+    "docsUrl": "https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/set-up-the-github-mcp-server",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a personal access token under GitHub Settings → Developer settings → Personal access tokens, with the scopes the tools need (for example repo, read:org).",
+      "de": "Persönliches Zugriffstoken unter GitHub Settings → Developer settings → Personal access tokens erstellen, mit den Scopes, die die Tools brauchen (z. B. repo, read:org)."
+    },
+    "tags": [
+      "git",
+      "code",
+      "issues",
+      "pull requests"
+    ]
   },
-  'google-maps': {
-    name: { en: 'Google Maps', de: 'Google Maps' },
-    description: {
-      en: 'Ground answers in Google Maps data: places, addresses and routes (Maps Grounding Lite).',
-      de: 'Antworten mit Google-Maps-Daten untermauern: Orte, Adressen und Routen (Maps Grounding Lite).'
+  "google-maps": {
+    "name": {
+      "en": "Google Maps",
+      "de": "Google Maps"
     },
-    publisher: 'Google',
-    category: 'data',
-    docsUrl: 'https://developers.google.com/maps/ai/grounding-lite',
-    url: 'https://mapstools.googleapis.com/mcp',
-    account: { kind: 'header', header: 'X-Goog-Api-Key' },
-    keyHelp: {
-      en: 'Enable the “Maps Grounding Lite API” in a Google Cloud project and create an API key under APIs & Services → Credentials. Requests are billed per call.',
-      de: 'Die „Maps Grounding Lite API“ in einem Google-Cloud-Projekt aktivieren und unter APIs & Services → Credentials einen API-Schlüssel erstellen. Anfragen werden pro Aufruf abgerechnet.'
+    "description": {
+      "en": "Ground answers in Google Maps data: places, addresses and routes (Maps Grounding Lite).",
+      "de": "Antworten mit Google-Maps-Daten untermauern: Orte, Adressen und Routen (Maps Grounding Lite)."
     },
-    tags: ['maps', 'places', 'geocoding', 'routes', 'location']
+    "publisher": "Google",
+    "category": "data",
+    "docsUrl": "https://developers.google.com/maps/ai/grounding-lite",
+    "url": "https://mapstools.googleapis.com/mcp",
+    "account": {
+      "kind": "header",
+      "header": "X-Goog-Api-Key"
+    },
+    "keyHelp": {
+      "en": "Enable the “Maps Grounding Lite API” in a Google Cloud project and create an API key under APIs & Services → Credentials. Requests are billed per call.",
+      "de": "Die „Maps Grounding Lite API“ in einem Google-Cloud-Projekt aktivieren und unter APIs & Services → Credentials einen API-Schlüssel erstellen. Anfragen werden pro Aufruf abgerechnet."
+    },
+    "tags": [
+      "maps",
+      "places",
+      "geocoding",
+      "routes",
+      "location"
+    ]
   },
-  honeycomb: {
-    name: { en: 'Honeycomb', de: 'Honeycomb' },
-    description: {
-      en: 'Query observability data, traces, boards, triggers and SLOs in Honeycomb.\n\nEU teams use https://mcp.eu1.honeycomb.io/mcp.',
-      de: 'Observability-Daten, Traces, Boards, Trigger und SLOs in Honeycomb abfragen.\n\nEU-Teams nutzen https://mcp.eu1.honeycomb.io/mcp.'
+  "honeycomb": {
+    "name": {
+      "en": "Honeycomb",
+      "de": "Honeycomb"
     },
-    publisher: 'Honeycomb',
-    category: 'development',
-    docsUrl: 'https://docs.honeycomb.io/integrations/mcp/configuration-guide',
-    url: 'https://mcp.honeycomb.io/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'A team owner creates a Management API key (Team Settings → API Keys) with the Model Context Protocol and Environments permissions. Store it as <KEY_ID>:<KEY_SECRET>.',
-      de: 'Ein Team-Owner erstellt einen Management-API-Schlüssel (Team Settings → API Keys) mit den Berechtigungen Model Context Protocol und Environments. Als <KEY_ID>:<KEY_SECRET> speichern.'
+    "description": {
+      "en": "Query observability data, traces, boards, triggers and SLOs in Honeycomb.\n\nEU teams use https://mcp.eu1.honeycomb.io/mcp.",
+      "de": "Observability-Daten, Traces, Boards, Trigger und SLOs in Honeycomb abfragen.\n\nEU-Teams nutzen https://mcp.eu1.honeycomb.io/mcp."
     },
-    tags: ['observability', 'tracing', 'slo']
+    "publisher": "Honeycomb",
+    "category": "development",
+    "docsUrl": "https://docs.honeycomb.io/integrations/mcp/configuration-guide",
+    "url": "https://mcp.honeycomb.io/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "A team owner creates a Management API key (Team Settings → API Keys) with the Model Context Protocol and Environments permissions. Store it as <KEY_ID>:<KEY_SECRET>.",
+      "de": "Ein Team-Owner erstellt einen Management-API-Schlüssel (Team Settings → API Keys) mit den Berechtigungen Model Context Protocol und Environments. Als <KEY_ID>:<KEY_SECRET> speichern."
+    },
+    "tags": [
+      "observability",
+      "tracing",
+      "slo"
+    ]
   },
-  'hugging-face': {
-    name: { en: 'Hugging Face', de: 'Hugging Face' },
-    description: {
-      en: 'Search models, datasets, Spaces and papers on the Hugging Face Hub.\n\nWorks without a token with a reduced tool set. For all tools, create an access token at huggingface.co/settings/tokens, switch the authentication to Bearer token, and pick tools and Spaces at huggingface.co/settings/mcp.',
-      de: 'Modelle, Datasets, Spaces und Paper auf dem Hugging Face Hub durchsuchen.\n\nFunktioniert ohne Token mit weniger Tools. Für alle Tools ein Access Token unter huggingface.co/settings/tokens erstellen, die Authentifizierung auf Bearer-Token umstellen und Tools sowie Spaces unter huggingface.co/settings/mcp auswählen.'
+  "hugging-face": {
+    "name": {
+      "en": "Hugging Face",
+      "de": "Hugging Face"
     },
-    publisher: 'Hugging Face',
-    category: 'data',
-    docsUrl: 'https://huggingface.co/docs/hub/hf-mcp-server',
-    url: 'https://huggingface.co/mcp',
-    tags: ['models', 'datasets', 'ml', 'papers']
+    "description": {
+      "en": "Search models, datasets, Spaces and papers on the Hugging Face Hub.\n\nWorks without a token with a reduced tool set. For all tools, create an access token at huggingface.co/settings/tokens, switch the authentication to Bearer token, and pick tools and Spaces at huggingface.co/settings/mcp.",
+      "de": "Modelle, Datasets, Spaces und Paper auf dem Hugging Face Hub durchsuchen.\n\nFunktioniert ohne Token mit weniger Tools. Für alle Tools ein Access Token unter huggingface.co/settings/tokens erstellen, die Authentifizierung auf Bearer-Token umstellen und Tools sowie Spaces unter huggingface.co/settings/mcp auswählen."
+    },
+    "publisher": "Hugging Face",
+    "category": "data",
+    "docsUrl": "https://huggingface.co/docs/hub/hf-mcp-server",
+    "url": "https://huggingface.co/mcp",
+    "tags": [
+      "models",
+      "datasets",
+      "ml",
+      "papers"
+    ]
   },
-  intercom: {
-    name: { en: 'Intercom', de: 'Intercom' },
-    description: {
-      en: 'Search conversations, contacts, companies and help-center articles, and add internal notes.\n\nEU-hosted workspaces use https://mcp.eu.intercom.com/mcp. Australian workspaces are not supported.',
-      de: 'Konversationen, Kontakte, Firmen und Help-Center-Artikel durchsuchen und interne Notizen hinzufügen.\n\nIn der EU gehostete Workspaces nutzen https://mcp.eu.intercom.com/mcp. Australische Workspaces werden nicht unterstützt.'
+  "intercom": {
+    "name": {
+      "en": "Intercom",
+      "de": "Intercom"
     },
-    publisher: 'Intercom',
-    category: 'customer',
-    docsUrl: 'https://developers.intercom.com/docs/guides/mcp',
-    url: 'https://mcp.intercom.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Use the access token of an Intercom app: Developer Hub → your app → Configure → Authentication.',
-      de: 'Access Token einer Intercom-App verwenden: Developer Hub → App → Configure → Authentication.'
+    "description": {
+      "en": "Search conversations, contacts, companies and help-center articles, and add internal notes.\n\nEU-hosted workspaces use https://mcp.eu.intercom.com/mcp. Australian workspaces are not supported.",
+      "de": "Konversationen, Kontakte, Firmen und Help-Center-Artikel durchsuchen und interne Notizen hinzufügen.\n\nIn der EU gehostete Workspaces nutzen https://mcp.eu.intercom.com/mcp. Australische Workspaces werden nicht unterstützt."
     },
-    tags: ['support', 'helpdesk', 'crm']
+    "publisher": "Intercom",
+    "category": "customer",
+    "docsUrl": "https://developers.intercom.com/docs/guides/mcp",
+    "url": "https://mcp.intercom.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Use the access token of an Intercom app: Developer Hub → your app → Configure → Authentication.",
+      "de": "Access Token einer Intercom-App verwenden: Developer Hub → App → Configure → Authentication."
+    },
+    "tags": [
+      "support",
+      "helpdesk",
+      "crm"
+    ]
   },
-  linear: {
-    name: { en: 'Linear', de: 'Linear' },
-    description: {
-      en: 'Find, create and update Linear issues, projects and comments.',
-      de: 'Linear-Issues, Projekte und Kommentare finden, erstellen und bearbeiten.'
+  "linear": {
+    "name": {
+      "en": "Linear",
+      "de": "Linear"
     },
-    publisher: 'Linear',
-    category: 'productivity',
-    docsUrl: 'https://linear.app/docs/mcp',
-    url: 'https://mcp.linear.app/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a personal API key in Linear under Settings → Account → Security & Access. A key with read permission only gives read-only access.',
-      de: 'Persönlichen API-Schlüssel in Linear unter Settings → Account → Security & Access erstellen. Ein Schlüssel nur mit Leserecht erlaubt nur lesenden Zugriff.'
+    "description": {
+      "en": "Find, create and update Linear issues, projects and comments.",
+      "de": "Linear-Issues, Projekte und Kommentare finden, erstellen und bearbeiten."
     },
-    tags: ['issues', 'project management', 'tickets']
+    "publisher": "Linear",
+    "category": "productivity",
+    "docsUrl": "https://linear.app/docs/mcp",
+    "url": "https://mcp.linear.app/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a personal API key in Linear under Settings → Account → Security & Access. A key with read permission only gives read-only access.",
+      "de": "Persönlichen API-Schlüssel in Linear unter Settings → Account → Security & Access erstellen. Ein Schlüssel nur mit Leserecht erlaubt nur lesenden Zugriff."
+    },
+    "tags": [
+      "issues",
+      "project management",
+      "tickets"
+    ]
   },
-  'microsoft-learn': {
-    name: { en: 'Microsoft Learn', de: 'Microsoft Learn' },
-    description: {
-      en: 'Search and read official Microsoft documentation and code samples for Azure, Microsoft 365, .NET and more.',
-      de: 'Offizielle Microsoft-Dokumentation und Codebeispiele zu Azure, Microsoft 365, .NET und mehr durchsuchen und lesen.'
+  "microsoft-learn": {
+    "name": {
+      "en": "Microsoft Learn",
+      "de": "Microsoft Learn"
     },
-    publisher: 'Microsoft',
-    category: 'documentation',
-    docsUrl: 'https://learn.microsoft.com/en-us/training/support/mcp',
-    url: 'https://learn.microsoft.com/api/mcp',
-    tags: ['azure', 'microsoft 365', '.net', 'docs']
+    "description": {
+      "en": "Search and read official Microsoft documentation and code samples for Azure, Microsoft 365, .NET and more.",
+      "de": "Offizielle Microsoft-Dokumentation und Codebeispiele zu Azure, Microsoft 365, .NET und mehr durchsuchen und lesen."
+    },
+    "publisher": "Microsoft",
+    "category": "documentation",
+    "docsUrl": "https://learn.microsoft.com/en-us/training/support/mcp",
+    "url": "https://learn.microsoft.com/api/mcp",
+    "tags": [
+      "azure",
+      "microsoft 365",
+      ".net",
+      "docs"
+    ]
   },
-  modjo: {
-    name: { en: 'Modjo', de: 'Modjo' },
-    description: {
-      en: 'Analyse recorded sales calls, deals and accounts.',
-      de: 'Aufgezeichnete Verkaufsgespräche, Deals und Accounts analysieren.'
+  "modjo": {
+    "name": {
+      "en": "Modjo",
+      "de": "Modjo"
     },
-    publisher: 'Modjo',
-    category: 'customer',
-    docsUrl: 'https://help.modjo.ai/en/articles/15459539-set-up-and-use-the-modjo-mcp',
-    url: 'https://api.mcp.modjo.ai/v1/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'An administrator creates the key in Modjo under Settings → Integrations → Modjo API key. It covers the whole workspace.',
-      de: 'Ein Administrator erstellt den Schlüssel in Modjo unter Settings → Integrations → Modjo API key. Er gilt für den gesamten Workspace.'
+    "description": {
+      "en": "Analyse recorded sales calls, deals and accounts.",
+      "de": "Aufgezeichnete Verkaufsgespräche, Deals und Accounts analysieren."
     },
-    tags: ['sales', 'calls', 'conversation intelligence']
+    "publisher": "Modjo",
+    "category": "customer",
+    "docsUrl": "https://help.modjo.ai/en/articles/15459539-set-up-and-use-the-modjo-mcp",
+    "url": "https://api.mcp.modjo.ai/v1/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "An administrator creates the key in Modjo under Settings → Integrations → Modjo API key. It covers the whole workspace.",
+      "de": "Ein Administrator erstellt den Schlüssel in Modjo unter Settings → Integrations → Modjo API key. Er gilt für den gesamten Workspace."
+    },
+    "tags": [
+      "sales",
+      "calls",
+      "conversation intelligence"
+    ]
   },
-  monday: {
-    name: { en: 'monday.com', de: 'monday.com' },
-    description: {
-      en: 'Read and update monday.com boards, items, updates and workspaces.',
-      de: 'monday.com-Boards, Items, Updates und Workspaces lesen und bearbeiten.'
+  "monday": {
+    "name": {
+      "en": "monday.com",
+      "de": "monday.com"
     },
-    publisher: 'monday.com',
-    category: 'productivity',
-    docsUrl: 'https://developer.monday.com/api-reference/docs/mcp-api-token',
-    url: 'https://mcp.monday.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a personal API token via your profile picture → Developers → My access tokens. It acts with that user’s permissions.',
-      de: 'Persönliches API-Token über das Profilbild → Developers → My access tokens erstellen. Es handelt mit den Rechten dieses Benutzers.'
+    "description": {
+      "en": "Read and update monday.com boards, items, updates and workspaces.",
+      "de": "monday.com-Boards, Items, Updates und Workspaces lesen und bearbeiten."
     },
-    tags: ['project management', 'boards', 'tasks']
+    "publisher": "monday.com",
+    "category": "productivity",
+    "docsUrl": "https://developer.monday.com/api-reference/docs/mcp-api-token",
+    "url": "https://mcp.monday.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a personal API token via your profile picture → Developers → My access tokens. It acts with that user’s permissions.",
+      "de": "Persönliches API-Token über das Profilbild → Developers → My access tokens erstellen. Es handelt mit den Rechten dieses Benutzers."
+    },
+    "tags": [
+      "project management",
+      "boards",
+      "tasks"
+    ]
   },
-  neon: {
-    name: { en: 'Neon', de: 'Neon' },
-    description: {
-      en: 'Manage serverless Postgres projects and branches on Neon and run SQL queries.\n\nAppend ?readonly=true for read-only tools, or ?projectId=<id> to limit the server to one project.',
-      de: 'Serverlose Postgres-Projekte und -Branches auf Neon verwalten und SQL-Abfragen ausführen.\n\nMit ?readonly=true nur lesende Tools nutzen oder mit ?projectId=<id> auf ein Projekt beschränken.'
+  "neon": {
+    "name": {
+      "en": "Neon",
+      "de": "Neon"
     },
-    publisher: 'Neon',
-    category: 'development',
-    docsUrl: 'https://neon.com/docs/ai/neon-mcp-server',
-    url: 'https://mcp.neon.tech/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API key in the Neon Console under Settings → API keys.',
-      de: 'API-Schlüssel in der Neon Console unter Settings → API keys erstellen.'
+    "description": {
+      "en": "Manage serverless Postgres projects and branches on Neon and run SQL queries.\n\nAppend ?readonly=true for read-only tools, or ?projectId=<id> to limit the server to one project.",
+      "de": "Serverlose Postgres-Projekte und -Branches auf Neon verwalten und SQL-Abfragen ausführen.\n\nMit ?readonly=true nur lesende Tools nutzen oder mit ?projectId=<id> auf ein Projekt beschränken."
     },
-    tags: ['postgres', 'database', 'sql']
+    "publisher": "Neon",
+    "category": "development",
+    "docsUrl": "https://neon.com/docs/ai/neon-mcp-server",
+    "url": "https://mcp.neon.tech/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API key in the Neon Console under Settings → API keys.",
+      "de": "API-Schlüssel in der Neon Console unter Settings → API keys erstellen."
+    },
+    "tags": [
+      "postgres",
+      "database",
+      "sql"
+    ]
   },
-  pagerduty: {
-    name: { en: 'PagerDuty', de: 'PagerDuty' },
-    description: {
-      en: 'Look up incidents, services, schedules and on-call rotations in PagerDuty.\n\nEU accounts use https://mcp.eu.pagerduty.com/mcp.',
-      de: 'Incidents, Services, Dienstpläne und Rufbereitschaften in PagerDuty abrufen.\n\nEU-Konten nutzen https://mcp.eu.pagerduty.com/mcp.'
+  "pagerduty": {
+    "name": {
+      "en": "PagerDuty",
+      "de": "PagerDuty"
     },
-    publisher: 'PagerDuty',
-    category: 'development',
-    docsUrl: 'https://support.pagerduty.com/main/docs/pagerduty-mcp-server-integration-guide',
-    url: 'https://mcp.pagerduty.com/mcp',
-    account: { kind: 'header', header: 'Authorization', valuePrefix: 'Token token=' },
-    keyHelp: {
-      en: 'Use a PagerDuty user API token (My Profile → User Settings) or an account API key (Integrations → API Access Keys).',
-      de: 'PagerDuty-User-API-Token (My Profile → User Settings) oder Account-API-Schlüssel (Integrations → API Access Keys) verwenden.'
+    "description": {
+      "en": "Look up incidents, services, schedules and on-call rotations in PagerDuty.\n\nEU accounts use https://mcp.eu.pagerduty.com/mcp.",
+      "de": "Incidents, Services, Dienstpläne und Rufbereitschaften in PagerDuty abrufen.\n\nEU-Konten nutzen https://mcp.eu.pagerduty.com/mcp."
     },
-    tags: ['incidents', 'on-call', 'operations']
+    "publisher": "PagerDuty",
+    "category": "development",
+    "docsUrl": "https://support.pagerduty.com/main/docs/pagerduty-mcp-server-integration-guide",
+    "url": "https://mcp.pagerduty.com/mcp",
+    "account": {
+      "kind": "header",
+      "header": "Authorization",
+      "valuePrefix": "Token token="
+    },
+    "keyHelp": {
+      "en": "Use a PagerDuty user API token (My Profile → User Settings) or an account API key (Integrations → API Access Keys).",
+      "de": "PagerDuty-User-API-Token (My Profile → User Settings) oder Account-API-Schlüssel (Integrations → API Access Keys) verwenden."
+    },
+    "tags": [
+      "incidents",
+      "on-call",
+      "operations"
+    ]
   },
-  posthog: {
-    name: { en: 'PostHog', de: 'PostHog' },
-    description: {
-      en: 'Query product analytics, insights, feature flags, experiments and error tracking.\n\nEU Cloud projects use https://mcp-eu.posthog.com/mcp. Add ?features=flags,dashboards (for example) to the URL to limit the tools to those areas.',
-      de: 'Produktanalysen, Insights, Feature Flags, Experimente und Fehler-Tracking abfragen.\n\nProjekte in der EU Cloud nutzen https://mcp-eu.posthog.com/mcp. Mit ?features=flags,dashboards (Beispiel) an der URL werden die Tools auf diese Bereiche beschränkt.'
+  "posthog": {
+    "name": {
+      "en": "PostHog",
+      "de": "PostHog"
     },
-    publisher: 'PostHog',
-    category: 'analytics',
-    docsUrl: 'https://posthog.com/docs/model-context-protocol',
-    url: 'https://mcp.posthog.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a personal API key with the “MCP Server” preset under Settings → Personal API keys (keys start with phx_).',
-      de: 'Persönlichen API-Schlüssel mit der Vorlage „MCP Server“ unter Settings → Personal API keys erstellen (beginnt mit phx_).'
+    "description": {
+      "en": "Query product analytics, insights, feature flags, experiments and error tracking.\n\nEU Cloud projects use https://mcp-eu.posthog.com/mcp. Add ?features=flags,dashboards (for example) to the URL to limit the tools to those areas.",
+      "de": "Produktanalysen, Insights, Feature Flags, Experimente und Fehler-Tracking abfragen.\n\nProjekte in der EU Cloud nutzen https://mcp-eu.posthog.com/mcp. Mit ?features=flags,dashboards (Beispiel) an der URL werden die Tools auf diese Bereiche beschränkt."
     },
-    tags: ['product analytics', 'feature flags', 'errors']
+    "publisher": "PostHog",
+    "category": "analytics",
+    "docsUrl": "https://posthog.com/docs/model-context-protocol",
+    "url": "https://mcp.posthog.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a personal API key with the “MCP Server” preset under Settings → Personal API keys (keys start with phx_).",
+      "de": "Persönlichen API-Schlüssel mit der Vorlage „MCP Server“ unter Settings → Personal API keys erstellen (beginnt mit phx_)."
+    },
+    "tags": [
+      "product analytics",
+      "feature flags",
+      "errors"
+    ]
   },
-  postman: {
-    name: { en: 'Postman', de: 'Postman' },
-    description: {
-      en: 'Manage Postman workspaces, collections, environments and API specifications.\n\n/minimal offers the essential tools; use /mcp for the full tool set or /code for code generation. The EU region uses https://mcp.eu.postman.com.',
-      de: 'Postman-Workspaces, Collections, Umgebungen und API-Spezifikationen verwalten.\n\n/minimal bietet die wichtigsten Tools; /mcp für alle Tools oder /code für Codegenerierung verwenden. Die EU-Region nutzt https://mcp.eu.postman.com.'
+  "postman": {
+    "name": {
+      "en": "Postman",
+      "de": "Postman"
     },
-    publisher: 'Postman',
-    category: 'development',
-    docsUrl: 'https://learning.postman.com/docs/developer/postman-api/postman-mcp-server/',
-    url: 'https://mcp.postman.com/minimal',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a Postman API key under Settings → API keys (postman.postman.co/settings/me/api-keys).',
-      de: 'Postman-API-Schlüssel unter Settings → API keys erstellen (postman.postman.co/settings/me/api-keys).'
+    "description": {
+      "en": "Manage Postman workspaces, collections, environments and API specifications.\n\n/minimal offers the essential tools; use /mcp for the full tool set or /code for code generation. The EU region uses https://mcp.eu.postman.com.",
+      "de": "Postman-Workspaces, Collections, Umgebungen und API-Spezifikationen verwalten.\n\n/minimal bietet die wichtigsten Tools; /mcp für alle Tools oder /code für Codegenerierung verwenden. Die EU-Region nutzt https://mcp.eu.postman.com."
     },
-    tags: ['api', 'testing', 'collections']
+    "publisher": "Postman",
+    "category": "development",
+    "docsUrl": "https://learning.postman.com/docs/developer/postman-api/postman-mcp-server/",
+    "url": "https://mcp.postman.com/minimal",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a Postman API key under Settings → API keys (postman.postman.co/settings/me/api-keys).",
+      "de": "Postman-API-Schlüssel unter Settings → API keys erstellen (postman.postman.co/settings/me/api-keys)."
+    },
+    "tags": [
+      "api",
+      "testing",
+      "collections"
+    ]
   },
-  primamcp: {
-    name: { en: 'PRIMAMCP', de: 'PRIMAMCP' },
-    description: {
-      en: 'Look up German and EU legal information for legal research.',
-      de: 'Rechtsinformationen zu deutschem und EU-Recht für die juristische Recherche abrufen.'
+  "primamcp": {
+    "name": {
+      "en": "PRIMAMCP",
+      "de": "PRIMAMCP"
     },
-    publisher: 'PLANIT PRIMA',
-    category: 'data',
-    docsUrl: 'https://mcp.planitprima.com/docs',
-    url: 'https://mcp.planitprima.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API key (starts with sk-legal-) at mcp.planitprima.com/keys; it is shown only once. The free tier allows 150 requests per month.',
-      de: 'API-Schlüssel (beginnt mit sk-legal-) unter mcp.planitprima.com/keys erstellen; er wird nur einmal angezeigt. Der kostenlose Tarif erlaubt 150 Anfragen pro Monat.'
+    "description": {
+      "en": "Look up German and EU legal information for legal research.",
+      "de": "Rechtsinformationen zu deutschem und EU-Recht für die juristische Recherche abrufen."
     },
-    tags: ['legal', 'law', 'germany', 'eu', 'lawbster']
+    "publisher": "PLANIT PRIMA",
+    "category": "data",
+    "docsUrl": "https://mcp.planitprima.com/docs",
+    "url": "https://mcp.planitprima.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API key (starts with sk-legal-) at mcp.planitprima.com/keys; it is shown only once. The free tier allows 150 requests per month.",
+      "de": "API-Schlüssel (beginnt mit sk-legal-) unter mcp.planitprima.com/keys erstellen; er wird nur einmal angezeigt. Der kostenlose Tarif erlaubt 150 Anfragen pro Monat."
+    },
+    "tags": [
+      "legal",
+      "law",
+      "germany",
+      "eu",
+      "lawbster"
+    ]
   },
-  statista: {
-    name: { en: 'Statista', de: 'Statista' },
-    description: {
-      en: 'Search Statista statistics and retrieve chart data for market and consumer research.',
-      de: 'Statista-Statistiken durchsuchen und Diagrammdaten für Markt- und Verbraucherforschung abrufen.'
+  "statista": {
+    "name": {
+      "en": "Statista",
+      "de": "Statista"
     },
-    publisher: 'Statista',
-    category: 'data',
-    docsUrl: 'https://docs.platform.statista.ai/mcp-server/introduction',
-    url: 'https://api.statista.ai/v1/mcp',
-    account: { kind: 'header', header: 'x-api-key' },
-    keyHelp: {
-      en: 'Statista issues the API key after you request access at platform.statista.ai; it requires a Statista contract.',
-      de: 'Statista stellt den API-Schlüssel nach einer Zugangsanfrage auf platform.statista.ai aus; ein Statista-Vertrag ist erforderlich.'
+    "description": {
+      "en": "Search Statista statistics and retrieve chart data for market and consumer research.",
+      "de": "Statista-Statistiken durchsuchen und Diagrammdaten für Markt- und Verbraucherforschung abrufen."
     },
-    tags: ['statistics', 'market research']
+    "publisher": "Statista",
+    "category": "data",
+    "docsUrl": "https://docs.platform.statista.ai/mcp-server/introduction",
+    "url": "https://api.statista.ai/v1/mcp",
+    "account": {
+      "kind": "header",
+      "header": "x-api-key"
+    },
+    "keyHelp": {
+      "en": "Statista issues the API key after you request access at platform.statista.ai; it requires a Statista contract.",
+      "de": "Statista stellt den API-Schlüssel nach einer Zugangsanfrage auf platform.statista.ai aus; ein Statista-Vertrag ist erforderlich."
+    },
+    "tags": [
+      "statistics",
+      "market research"
+    ]
   },
-  stripe: {
-    name: { en: 'Stripe', de: 'Stripe' },
-    description: {
-      en: 'Work with Stripe customers, payments, invoices, subscriptions and products, and search the Stripe docs.\n\nTest in a sandbox first. Stripe asks for human confirmation of some write actions, such as refunds.',
-      de: 'Mit Stripe-Kunden, Zahlungen, Rechnungen, Abos und Produkten arbeiten und die Stripe-Dokumentation durchsuchen.\n\nZuerst in einer Sandbox testen. Für manche schreibenden Aktionen, etwa Erstattungen, verlangt Stripe eine Bestätigung durch einen Menschen.'
+  "stripe": {
+    "name": {
+      "en": "Stripe",
+      "de": "Stripe"
     },
-    publisher: 'Stripe',
-    category: 'finance',
-    docsUrl: 'https://docs.stripe.com/mcp',
-    url: 'https://mcp.stripe.com',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an agent API key (Dashboard → API keys, shown with an “Agent” badge) with only the permissions needed. From 31 October 2026 Stripe MCP rejects secret keys and restricted keys without the Agent tag.',
-      de: 'Agent-API-Schlüssel erstellen (Dashboard → API keys, mit „Agent“-Kennzeichnung) und nur die nötigen Berechtigungen vergeben. Ab 31. Oktober 2026 lehnt Stripe MCP Secret Keys und Restricted Keys ohne Agent-Kennzeichnung ab.'
+    "description": {
+      "en": "Work with Stripe customers, payments, invoices, subscriptions and products, and search the Stripe docs.\n\nTest in a sandbox first. Stripe asks for human confirmation of some write actions, such as refunds.",
+      "de": "Mit Stripe-Kunden, Zahlungen, Rechnungen, Abos und Produkten arbeiten und die Stripe-Dokumentation durchsuchen.\n\nZuerst in einer Sandbox testen. Für manche schreibenden Aktionen, etwa Erstattungen, verlangt Stripe eine Bestätigung durch einen Menschen."
     },
-    tags: ['payments', 'billing', 'subscriptions', 'invoices']
+    "publisher": "Stripe",
+    "category": "finance",
+    "docsUrl": "https://docs.stripe.com/mcp",
+    "url": "https://mcp.stripe.com",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an agent API key (Dashboard → API keys, shown with an “Agent” badge) with only the permissions needed. From 31 October 2026 Stripe MCP rejects secret keys and restricted keys without the Agent tag.",
+      "de": "Agent-API-Schlüssel erstellen (Dashboard → API keys, mit „Agent“-Kennzeichnung) und nur die nötigen Berechtigungen vergeben. Ab 31. Oktober 2026 lehnt Stripe MCP Secret Keys und Restricted Keys ohne Agent-Kennzeichnung ab."
+    },
+    "tags": [
+      "payments",
+      "billing",
+      "subscriptions",
+      "invoices"
+    ]
   },
-  supabase: {
-    name: { en: 'Supabase', de: 'Supabase' },
-    description: {
-      en: 'Query and manage Supabase projects: database, tables, migrations, edge functions and logs.\n\nRecommended: append ?project_ref=<project-ref>&read_only=true to limit the server to one project and read-only queries.',
-      de: 'Supabase-Projekte abfragen und verwalten: Datenbank, Tabellen, Migrationen, Edge Functions und Logs.\n\nEmpfohlen: ?project_ref=<projekt-ref>&read_only=true an die URL anhängen, um den Server auf ein Projekt und lesende Abfragen zu beschränken.'
+  "supabase": {
+    "name": {
+      "en": "Supabase",
+      "de": "Supabase"
     },
-    publisher: 'Supabase',
-    category: 'development',
-    docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp',
-    url: 'https://mcp.supabase.com/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create a personal access token in the Supabase dashboard under Account → Access Tokens (project API keys do not work).',
-      de: 'Persönliches Zugriffstoken im Supabase-Dashboard unter Account → Access Tokens erstellen (Projekt-API-Schlüssel funktionieren nicht).'
+    "description": {
+      "en": "Query and manage Supabase projects: database, tables, migrations, edge functions and logs.\n\nRecommended: append ?project_ref=<project-ref>&read_only=true to limit the server to one project and read-only queries.",
+      "de": "Supabase-Projekte abfragen und verwalten: Datenbank, Tabellen, Migrationen, Edge Functions und Logs.\n\nEmpfohlen: ?project_ref=<projekt-ref>&read_only=true an die URL anhängen, um den Server auf ein Projekt und lesende Abfragen zu beschränken."
     },
-    tags: ['postgres', 'database', 'sql']
+    "publisher": "Supabase",
+    "category": "development",
+    "docsUrl": "https://supabase.com/docs/guides/getting-started/mcp",
+    "url": "https://mcp.supabase.com/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create a personal access token in the Supabase dashboard under Account → Access Tokens (project API keys do not work).",
+      "de": "Persönliches Zugriffstoken im Supabase-Dashboard unter Account → Access Tokens erstellen (Projekt-API-Schlüssel funktionieren nicht)."
+    },
+    "tags": [
+      "postgres",
+      "database",
+      "sql"
+    ]
   },
-  superglue: {
-    name: { en: 'superglue', de: 'superglue' },
-    description: {
-      en: 'Discover and run prebuilt integration tools that connect APIs and systems.',
-      de: 'Vorgefertigte Integrationstools finden und ausführen, die APIs und Systeme verbinden.'
+  "superglue": {
+    "name": {
+      "en": "superglue",
+      "de": "superglue"
     },
-    publisher: 'superglue',
-    category: 'automation',
-    docsUrl: 'https://superglue.ai/docs/mcp/using-the-mcp/',
-    url: 'https://api.superglue.cloud/mcp',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'Create an API key at app.superglue.cloud via the organization menu → API Keys.',
-      de: 'API-Schlüssel auf app.superglue.cloud über das Organisationsmenü → API Keys erstellen.'
+    "description": {
+      "en": "Discover and run prebuilt integration tools that connect APIs and systems.",
+      "de": "Vorgefertigte Integrationstools finden und ausführen, die APIs und Systeme verbinden."
     },
-    tags: ['integrations', 'api', 'workflows']
+    "publisher": "superglue",
+    "category": "automation",
+    "docsUrl": "https://superglue.ai/docs/mcp/using-the-mcp/",
+    "url": "https://api.superglue.cloud/mcp",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "Create an API key at app.superglue.cloud via the organization menu → API Keys.",
+      "de": "API-Schlüssel auf app.superglue.cloud über das Organisationsmenü → API Keys erstellen."
+    },
+    "tags": [
+      "integrations",
+      "api",
+      "workflows"
+    ]
   },
-  wix: {
-    name: { en: 'Wix', de: 'Wix' },
-    description: {
-      en: 'Manage Wix sites and the business data behind them.\n\nReplace YOUR_WIX_ACCOUNT_ID in the additional headers with your Wix account ID. The key is sent without a “Bearer” prefix.',
-      de: 'Wix-Websites und die zugehörigen Geschäftsdaten verwalten.\n\nYOUR_WIX_ACCOUNT_ID in den zusätzlichen Headern durch die eigene Wix-Konto-ID ersetzen. Der Schlüssel wird ohne „Bearer“-Präfix gesendet.'
+  "wix": {
+    "name": {
+      "en": "Wix",
+      "de": "Wix"
     },
-    publisher: 'Wix',
-    category: 'content',
-    docsUrl: 'https://dev.wix.com/docs/overview/ai-the-wix-platform/the-wix-mcp',
-    url: 'https://mcp.wix.com/mcp',
-    headers: { 'wix-account-id': 'YOUR_WIX_ACCOUNT_ID' },
-    account: { kind: 'header', header: 'Authorization' },
-    keyHelp: {
-      en: 'Create an API key in the Wix API Keys Manager with the permissions the tools need.',
-      de: 'API-Schlüssel im Wix API Keys Manager mit den nötigen Berechtigungen erstellen.'
+    "description": {
+      "en": "Manage Wix sites and the business data behind them.\n\nReplace YOUR_WIX_ACCOUNT_ID in the additional headers with your Wix account ID. The key is sent without a “Bearer” prefix.",
+      "de": "Wix-Websites und die zugehörigen Geschäftsdaten verwalten.\n\nYOUR_WIX_ACCOUNT_ID in den zusätzlichen Headern durch die eigene Wix-Konto-ID ersetzen. Der Schlüssel wird ohne „Bearer“-Präfix gesendet."
     },
-    tags: ['website', 'cms', 'e-commerce']
+    "publisher": "Wix",
+    "category": "content",
+    "docsUrl": "https://dev.wix.com/docs/overview/ai-the-wix-platform/the-wix-mcp",
+    "url": "https://mcp.wix.com/mcp",
+    "headers": {
+      "wix-account-id": "YOUR_WIX_ACCOUNT_ID"
+    },
+    "account": {
+      "kind": "header",
+      "header": "Authorization"
+    },
+    "keyHelp": {
+      "en": "Create an API key in the Wix API Keys Manager with the permissions the tools need.",
+      "de": "API-Schlüssel im Wix API Keys Manager mit den nötigen Berechtigungen erstellen."
+    },
+    "tags": [
+      "website",
+      "cms",
+      "e-commerce"
+    ]
   },
-  zapier: {
-    name: { en: 'Zapier', de: 'Zapier' },
-    description: {
-      en: 'Run actions in thousands of apps through the actions configured on a Zapier MCP server.',
-      de: 'Aktionen in Tausenden Apps über die auf einem Zapier-MCP-Server konfigurierten Aktionen ausführen.'
+  "zapier": {
+    "name": {
+      "en": "Zapier",
+      "de": "Zapier"
     },
-    publisher: 'Zapier',
-    category: 'automation',
-    docsUrl: 'https://docs.zapier.com/mcp/get-started/connect/openai-api',
-    url: 'https://mcp.zapier.com/api/v1/connect',
-    account: { kind: 'bearer' },
-    keyHelp: {
-      en: 'At mcp.zapier.com create a server, add the actions it may run, then generate a token on its Connect tab.',
-      de: 'Auf mcp.zapier.com einen Server anlegen, die erlaubten Aktionen hinzufügen und im Tab „Connect“ ein Token erzeugen.'
+    "description": {
+      "en": "Run actions in thousands of apps through the actions configured on a Zapier MCP server.",
+      "de": "Aktionen in Tausenden Apps über die auf einem Zapier-MCP-Server konfigurierten Aktionen ausführen."
     },
-    tags: ['workflows', 'integrations', 'no-code']
+    "publisher": "Zapier",
+    "category": "automation",
+    "docsUrl": "https://docs.zapier.com/mcp/get-started/connect/openai-api",
+    "url": "https://mcp.zapier.com/api/v1/connect",
+    "account": {
+      "kind": "bearer"
+    },
+    "keyHelp": {
+      "en": "At mcp.zapier.com create a server, add the actions it may run, then generate a token on its Connect tab.",
+      "de": "Auf mcp.zapier.com einen Server anlegen, die erlaubten Aktionen hinzufügen und im Tab „Connect“ ein Token erzeugen."
+    },
+    "tags": [
+      "workflows",
+      "integrations",
+      "no-code"
+    ]
   }
-};
+}`);
 
 /** The release entry every moved definition starts with. */
 const FIRST_RELEASE = {
