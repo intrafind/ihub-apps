@@ -1,6 +1,6 @@
 # Document Templates (Corporate Design)
 
-A **document template** is your company's corporate design for the files iHub creates: PDFs, Word documents and PowerPoint presentations. Every document a model creates with the [`pdf`, `docx` and `pptx` system skills](pdf-generation.md), and every PDF export of a chat or Markdown, uses it — so all documents look the same, whoever asked for them.
+A **document template** is your company's corporate design for the files iHub creates: PDFs, Word documents, PowerPoint presentations and Excel workbooks. Every document a model creates with the [`pdf`, `docx`, `pptx` and `xlsx` system skills](pdf-generation.md) (the `web-artifacts` skill takes the brand colours and font as CSS variables), and every PDF export of a chat or Markdown, uses it — so all documents look the same, whoever asked for them.
 
 Admins manage templates under **Admin → Customization → Document templates**.
 
@@ -62,6 +62,14 @@ Presentations are always built by **filling a template**: your PowerPoint templa
 - **Footer and slide numbers:** set them in the template (**Slide footer**, **Slide numbers**). They appear on every slide but the title slide, where the layout has a footer or slide number placeholder.
 - **Speaker notes** use the template's notes master; a template without one gets a plain one.
 - Without a PowerPoint template, choose the **slide format** (16:9 or 4:3).
+
+## Excel
+
+Workbooks from the `xlsx` skill take the brand colours and font of the template for header rows, totals and accents; the logo, letterhead and Word/PowerPoint files do not apply. Without a template the model can pass a brand colour, accent colour and font.
+
+## Using a file the user uploaded
+
+A user can also attach a Word, PowerPoint, PDF or Excel file to a chat and ask the model to build on it — as styles for a new document, to fill placeholders, or to fill in a PDF form. This is separate from the company's templates; an app that **pins** a document template keeps it unless the app sets `allowUserTemplateUploads`. See [Chat files → Using a file in the document skills](chat-files.md#using-a-file-in-the-document-skills).
 
 ## Fonts in Word and PowerPoint files
 
