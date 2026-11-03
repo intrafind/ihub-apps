@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { SwitchIndicator } from '../../../shared/components/Switch';
-import { saveIntegrationPreferences } from '../../../api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -16,6 +15,7 @@ import IntegrationPicker, {
   IntegrationPickerSearch
 } from '../../integrations/picker/IntegrationPicker';
 import { isRowOn, scopeMapOf } from '../../integrations/picker/pickerState';
+import { saveIntegrationDefault } from '../../integrations/picker/useIntegrationDefaults';
 
 /**
  * The "+" menu of the chat input. Its main part is the integrations picker
@@ -235,7 +235,7 @@ function ChatInputActionsMenu({
   const saveDefault =
     app?.id && typeof onEnabledToolsChange === 'function'
       ? () =>
-          saveIntegrationPreferences(app.id, {
+          saveIntegrationDefault(app.id, {
             enabledTools,
             ...(hasWebsearch ? { websearchEnabled: Boolean(websearchEnabled) } : {}),
             integrationScopes: scopeMapOf(scopeIntegrations)
@@ -283,6 +283,7 @@ function ChatInputActionsMenu({
               value={query}
               onChange={setQuery}
               onArrowDown={focusFirstItem}
+              onClose={done}
             />
           )}
           <div

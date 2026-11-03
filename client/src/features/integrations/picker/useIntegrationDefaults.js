@@ -4,6 +4,10 @@
 import { useEffect, useState } from 'react';
 import { fetchIntegrationPreferences, saveIntegrationPreferences } from '../../../api';
 import { loadAppSettings, saveAppSettings } from '../../../utils/appSettings';
+import { useViewerKey } from '../../../shared/contexts/authContextValue';
+
+/** Told on `window` when the user saved a new default for an app. */
+const DEFAULT_SAVED_EVENT = 'ihub:integration-default-saved';
 
 /** The keys of the integration state the browser used to keep per app. */
 const BROWSER_KEYS = ['enabledTools', 'websearchEnabled', 'integrationScopes'];
@@ -71,6 +75,23 @@ export async function loadIntegrationDefaults(appId, kept = browserIntegrationSe
 }
 
 /**
+ * Save the user's default for an app ("Use as default for new chats") and
+ * hand it to every mounted `useIntegrationDefaults` of the app, so the next
+ * chat starts from it without a reload.
+ *
+ * @param {string} appId
+ * @param {Object} preferences
+ * @returns {Promise<Object|null>} Same shape as {@link loadIntegrationDefaults}
+ */
+export async function saveIntegrationDefault(appId, preferences) {
+  const saved = await saveIntegrationPreferences(appId, preferences);
+  if (saved && typeof saved === 'object' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(DEFAULT_SAVED_EVENT, { detail: { appId, value: saved } }));
+  }
+  return saved;
+}
+
+/**
  * The default a new chat of an app starts with, from the server (#2923).
  *
  * `preferences` is null while loading and when the server cannot answer (a
@@ -84,11 +105,15 @@ export async function loadIntegrationDefaults(appId, kept = browserIntegrationSe
  * @returns {{loading: boolean, preferences: (Object|null), stored: boolean}}
  */
 export default function useIntegrationDefaults(appId, { enabled = true } = {}) {
-  const [answer, setAnswer] = useState({ appId: null, value: null });
+  const viewer = useViewerKey();
+  const [answer, setAnswer] = useState({ key: null, value: null });
   const active = Boolean(appId) && enabled;
+  // The answer belongs to one viewer and app: after a sign-in or a switch of
+  // account, the previous viewer's default is not used.
+  const key = active && viewer !== null ? `${viewer}|${appId}` : null;
 
   useEffect(() => {
-    if (!active) return undefined;
+    if (!key) return undefined;
     let cancelled = false;
     // Read now, in the same commit, before the settings hook's save effect
     // rewrites what the browser kept for the app.
@@ -98,18 +123,28 @@ export default function useIntegrationDefaults(appId, { enabled = true } = {}) {
     Promise.resolve()
       .then(() => loadIntegrationDefaults(appId, kept))
       .then(value => {
-        if (!cancelled) setAnswer({ appId, value });
+        if (!cancelled) setAnswer({ key, value });
       })
       .catch(() => {
-        if (!cancelled) setAnswer({ appId, value: null });
+        if (!cancelled) setAnswer({ key, value: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [appId, active]);
+  }, [appId, key]);
+
+  // A default saved from the picker is the answer from now on.
+  useEffect(() => {
+    if (!key) return undefined;
+    const onSaved = event => {
+      if (event.detail?.appId === appId) setAnswer({ key, value: event.detail.value });
+    };
+    window.addEventListener(DEFAULT_SAVED_EVENT, onSaved);
+    return () => window.removeEventListener(DEFAULT_SAVED_EVENT, onSaved);
+  }, [appId, key]);
 
   if (!active) return { loading: false, preferences: null, stored: false };
-  const settled = answer.appId === appId;
+  const settled = key !== null && answer.key === key;
   return {
     loading: !settled,
     preferences: settled ? answer.value?.preferences || null : null,
