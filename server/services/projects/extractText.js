@@ -85,7 +85,8 @@ const PACKAGES = new Map([
     {
       extension: '.pptx',
       label: 'PowerPoint',
-      extract: bytes => extractPptxDocument(bytes, { speakerNotes: 'include' })
+      extract: (bytes, { speakerNotes = 'include' } = {}) =>
+        extractPptxDocument(bytes, { speakerNotes })
     }
   ],
   [XLSX_MIME, { extension: '.xlsx', label: 'Excel', extract: extractXlsx }],
@@ -106,7 +107,8 @@ const PACKAGES = new Map([
     {
       extension: '.odp',
       label: 'OpenDocument presentation',
-      extract: bytes => extractOdfDocument(bytes, { speakerNotes: 'include' })
+      extract: (bytes, { speakerNotes = 'include' } = {}) =>
+        extractOdfDocument(bytes, { speakerNotes })
     }
   ]
 ]);
@@ -894,14 +896,15 @@ export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
  * workbook's character budget).
  *
  * @param {{bytes: Buffer, contentType?: string, name?: string}} file
- * @param {{maxChars?: number, maxPages?: number, sheetRows?: number}} [options]
- *   The limits; `maxPages` and `sheetRows` default to the extractors' own.
+ * @param {{maxChars?: number, maxPages?: number, sheetRows?: number, speakerNotes?: 'include'|'ignore'}} [options]
+ *   The limits; `maxPages` and `sheetRows` default to the extractors' own. `speakerNotes`
+ *   (presentations) defaults to `include`.
  * @returns {Promise<{text: string, contentType: string, pages?: number, truncated: boolean}>}
  * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `NO_TEXT`
  */
 export async function extractText(
   { bytes, contentType, name },
-  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows } = {}
+  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes } = {}
 ) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
     throw new ExtractionError('NO_TEXT', `${name || 'The file'} is empty`);
@@ -916,7 +919,7 @@ export async function extractText(
       raw = await extractPdfDocument(bytes, { maxPages, maxChars: maxChars + 1, report });
       pages = countPages(raw);
     } else if (PACKAGES.has(type)) {
-      raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows });
+      raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows, speakerNotes });
     } else if (type === HTML_MIME) {
       raw = htmlText(decodeText(bytes, name));
     } else if (type === EML_MIME) {

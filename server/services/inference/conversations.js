@@ -25,6 +25,7 @@ import { authorizeChat } from '../chat/chatAccess.js';
 import { getChatRepository, isPersistableChatId } from '../chat/ChatRepository.js';
 import { isChatHistoryConfigured } from '../chat/chatPersistence.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
+import { hydrateHistoryForPrompt } from '../chatFiles/ChatFileService.js';
 import { InferenceApiError } from './errors.js';
 
 /** `origin.createdVia` of a chat made through the Responses / Conversations API. */
@@ -258,7 +259,12 @@ export function itemFromMessage(message) {
       ...attachments.map(attachment =>
         attachment.type?.startsWith('image/')
           ? { type: 'input_image', ...(attachment.name ? { filename: attachment.name } : {}) }
-          : { type: 'input_file', ...(attachment.name ? { filename: attachment.name } : {}) }
+          : {
+              type: 'input_file',
+              // A file stored with the conversation can be referenced by this id.
+              ...(attachment.id ? { file_id: attachment.id } : {}),
+              ...(attachment.name ? { filename: attachment.name } : {})
+            }
       )
     ],
     ...(message.variables && Object.keys(message.variables).length > 0
@@ -269,10 +275,30 @@ export function itemFromMessage(message) {
 }
 
 /**
+ * What a stored message is replayed as: the text of a user turn as it was rendered
+ * (template and variables included), an answer as stored. Null for a message that is
+ * not replayed — a failed answer (an error must not steer the next one), other roles.
+ *
+ * @param {Object} message - Stored message.
+ * @returns {{role: 'user'|'assistant', content: string}|null}
+ */
+function replayed(message) {
+  if (message?.role !== 'user' && message?.role !== 'assistant') return null;
+  if (message.role === 'assistant' && message.error) return null;
+  const content =
+    message.role === 'user' && typeof message.renderedContent === 'string'
+      ? message.renderedContent
+      : message.content;
+  return { role: message.role, content: typeof content === 'string' ? content : '' };
+}
+
+/**
  * The stored history as the model sees it: user turns as they were rendered
- * (template, variables and document text included), answers as stored.
- * Failed and empty turns are left out — an error must not steer the next
- * answer, and providers reject blank messages.
+ * (template, variables and — for a turn stored before files had their own store —
+ * document text included), answers as stored. Failed and empty turns are left
+ * out — an error must not steer the next answer, and providers reject blank messages.
+ *
+ * Files of a turn are not part of this text; see {@link hydratedHistoryForModel}.
  *
  * @param {Array<Object>} messages - Stored messages.
  * @returns {Array<{role: string, content: string}>}
@@ -280,14 +306,46 @@ export function itemFromMessage(message) {
 export function historyForModel(messages) {
   const out = [];
   for (const message of messages || []) {
-    if (message?.role !== 'user' && message?.role !== 'assistant') continue;
-    if (message.role === 'assistant' && message.error) continue;
-    const content =
-      message.role === 'user' && typeof message.renderedContent === 'string'
-        ? message.renderedContent
-        : message.content;
-    if (typeof content !== 'string' || !content.trim()) continue;
-    out.push({ role: message.role, content });
+    const entry = replayed(message);
+    if (entry && entry.content.trim()) out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * {@link historyForModel}, with the files of the user turns put back from the file
+ * repository: a turn that has attachments with an id (a file uploaded in the Web UI,
+ * or one an earlier API turn stored) gets them as `fileData`, so the Web UI and the
+ * API see each other's files in the same chat. A turn with a file and no text is
+ * replayed too.
+ *
+ * @param {string} chatId
+ * @param {Array<Object>} messages - Stored messages.
+ * @param {{store?: Object}} [options] - `store`: the chat's file repository.
+ * @returns {Promise<Array<{role: string, content: string, fileData?: Array}>>}
+ */
+export async function hydratedHistoryForModel(chatId, messages, { store = null } = {}) {
+  const out = [];
+  for (const message of messages || []) {
+    const entry = replayed(message);
+    if (!entry) continue;
+    const attached =
+      entry.role === 'user' &&
+      Array.isArray(message.attachments) &&
+      message.attachments.some(
+        attachment => typeof (attachment?.id || attachment?.fileId) === 'string'
+      );
+    let fileData = null;
+    if (attached) {
+      const [hydrated] = await hydrateHistoryForPrompt(
+        chatId,
+        [{ role: 'user', content: '', attachments: message.attachments }],
+        { store }
+      );
+      if (hydrated?.fileData?.length) fileData = hydrated.fileData;
+    }
+    if (!entry.content.trim() && !fileData) continue;
+    out.push(fileData ? { ...entry, fileData } : entry);
   }
   return out;
 }

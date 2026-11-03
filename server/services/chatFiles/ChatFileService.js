@@ -108,6 +108,7 @@ async function renderScannedPdfPages(bytes) {
  * @param {Object|null} [params.source] - Connector provenance (`{ kind, ref, refreshOnRun }`).
  * @param {string|null} [params.id] - Replace the stored file with this id (a connector refresh).
  * @param {Object|null} [params.appConfig]
+ * @param {{speakerNotes?: 'include'|'ignore'}|null} [params.extractOptions] - Extra `extractText` options.
  * @param {import('./ChatFileRepository.js').ChatFileRepository} [params.repository]
  * @param {Object} [params.scanner]
  * @returns {Promise<Object>} Stored file descriptor.
@@ -129,6 +130,7 @@ export async function ingestChatFile({
   id = null,
   appConfig = null,
   policy: explicitPolicy = null,
+  extractOptions = null,
   repository = null,
   store = null,
   scanner = null
@@ -204,7 +206,7 @@ export async function ingestChatFile({
     try {
       const extracted = await extractText(
         { bytes: buf, contentType: accepted, name: name || 'upload' },
-        { maxChars: MAX_TEXT_CHARS }
+        { maxChars: MAX_TEXT_CHARS, ...(extractOptions || {}) }
       );
       extractedText = extracted.text || '';
       resolvedMime = extracted.contentType || accepted;
