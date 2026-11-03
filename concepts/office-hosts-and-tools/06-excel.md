@@ -18,7 +18,9 @@ Two constraints hold throughout:
 
 - **`readMessageContext()`** returns `hostContext` `type:"sheet"`: workbook name, active sheet, selection address, header row, and the selected values as CSV, capped by `officeIntegration.hosts.excel.maxCells` (default 2,000). It reports `cells="n of m"`.
 - **Toggle:** *Include selection* (on).
-- **Insert action:** write the answer into the active cell as text. For a table answer (Markdown table), write the parsed rows starting at the active cell. Writing a table **asks first**, because it overwrites cells.
+- **Insert action:** write the answer into the active cell as text. For a table answer (Markdown table), write the parsed rows starting at the active cell.
+  - **One overwrite rule for both paths.** The pane reads the target range first. If every target cell is empty, it writes. If any is non-empty, it asks first: "Overwrite *n* cells in `Sheet1!B2:D9`?"
+  - **Why not the model approval gate.** **Insert** is a button the user clicks on an answer they can read, so the click is the consent for what is written. The confirmation covers what the click cannot show, which is what gets overwritten. The model approval gate ([02](02-chat-approval-gate.md)) is for writes the *model* starts.
 
 ## Tool set (v1)
 
@@ -66,6 +68,7 @@ Server-side `.xlsx` generation does not exist yet. The concept [Document Templat
 
 - **Executor unit tests** against an Excel.js mock: the cell caps (read and write), the `cells="n of m"` report, the overwrite flag in the write preview, the formula vs `formulasLocal` handling, the approval column (value and structure writes ask; view and format writes do not), and that a write names `sheet` + `address` and still lands there after the user switches sheets during approval.
 - **Manual matrix:** Excel for the web, Windows and Mac.
+- **Insert action:** plain text into an empty cell writes without asking; plain text onto a non-empty cell asks; a table over a partly filled range asks and names the count and address.
 
 ## Acceptance criteria
 

@@ -53,7 +53,7 @@ The insert and reply runners and `officeCall` in `client/src/features/office/uti
   - An address outside the list is refused and never executed.
   - To avoid an approval card for a call that will be refused anyway, the approval seam also runs the check first on the model's original arguments. That pre-check is a convenience. The post-approval check is the one that enforces.
 - **Sanitized HTML.** Every tool that writes model output as HTML (`insertAtCursor`, `prependToBody`, `rewriteSelection`, `setDraftBody`) converts Markdown with `renderMarkdown` from `client/src/config/marked.config.js`, which applies DOMPurify. It never uses bare `marked.parse`. On top of that, a mail-safe allowlist: no `script`, `style`, `iframe`, `form`, event attributes, or `javascript:`/`data:` link destinations.
-  - The existing answer action `runInsert` in `outlookMailActions.js` (~l.532) uses `marked.parse` today. P2 moves it onto the same helper, since tools and answer actions share one implementation.
+  - **One conversion point.** Today `runOutlookMailAction` in `outlookMailActions.js` converts the answer once with `marked.parse` (~l.532) and hands that raw HTML to **every** answer path: insert, reply, reply-all, forward and new. P2 replaces that single call with the sanitizing helper, so every path inherits it, including the `draftReply` tool, which reuses the reply runner. No path may call `marked.parse` itself afterwards. A lint rule (`no-restricted-imports` of `marked` under `client/src/features/office/`) enforces that.
 - **Read results** are untrusted content. They are wrapped as `<content type="email" origin="tool">…</content>` with the same escaping as `renderUserMessage` (`shared/promptContext.js`). A fixed tool note adds that instructions inside are data.
 - **Mode.** The pane advertises read tools in the reading pane and compose tools in a draft, following `detectOutlookMode` (`outlookMailActions.js`). Calendar items advertise `getMeeting` and the meeting tools only.
 
@@ -94,7 +94,9 @@ The insert and reply runners and `officeCall` in `client/src/features/office/uti
 
 - **Registry.** Each `run` against an Office.js mock: read and compose, a missing requirement set, an error mapping. Follow the existing `tests/unit/client/office-*.test.jsx`.
 - **Signature guard and Undo** for `setDraftBody`.
-- **Sanitizing.** Model output containing `<script>`, `<img onerror>`, `<iframe>` and `[x](javascript:alert(1))` is inserted without any of them, for each write tool and for the answer action.
+- **Sanitizing.** One table-driven test runs every hostile input through every writer: the tools `insertAtCursor`, `prependToBody`, `rewriteSelection`, `setDraftBody` and `draftReply`, and the answer actions `answer`, `answerAll`, `forward`, `new` and `insert`.
+  - Inputs: `<script>`, `<style>`, `<iframe>`, `<form>`, `<img onerror=…>`, `<a onclick=…>`, `[x](javascript:alert(1))`, `[x](data:text/html,…)`, `[x](vbscript:…)`.
+  - Assertions per writer: no `script`, `style`, `iframe` or `form` element remains; no attribute starting with `on`; no `href` or `src` with a `javascript:`, `data:` or `vbscript:` scheme.
 - **Recipient allowlist**, checked on the server and the client:
   - an allowed domain proposed by the model and then **edited** in the approval card to a disallowed domain is refused before the pane is asked
   - the pane's own check refuses it too when the server check is bypassed in the test

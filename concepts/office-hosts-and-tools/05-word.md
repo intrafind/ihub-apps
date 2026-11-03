@@ -31,12 +31,12 @@ Edits are **tracked changes by default**, so every change can be reviewed in Wor
 | `getParagraphs` | `body.paragraphs`, by range `{from, count}`, capped per call | 1.3 | never |
 | `searchDocument` | `body.search(text, options)` → ranges with context | 1.3 | never |
 | `listComments` | `body.getComments()` | 1.4 | never |
-| `insertText` | `insertHtml` at the cursor or after a paragraph | 1.3 | never |
+| `insertText` | `insertHtml` at the cursor or after a paragraph | 1.3 | never when tracked; **always** when untracked |
 | `replaceSelection` | `selection.insertHtml(…, 'Replace')` | 1.3 | never (tracked) / **always** (untracked) |
 | `findAndReplace` | `search` + `insertText(…, 'Replace')` on each hit, max *n* | 1.3 | **always** |
-| `applyStyle` | `paragraph.styleBuiltIn` / `style` | 1.3 | never |
-| `replyToComment` / `resolveComment` | `comment.reply()` / `comment.resolved = true` | 1.4 | never |
-| `insertTable` | `insertTable(rows, cols, …, values)` | 1.3 | never |
+| `applyStyle` | `paragraph.styleBuiltIn` / `style` | 1.3 | never when tracked; **always** when untracked |
+| `replyToComment` / `resolveComment` | `comment.reply()` / `comment.resolved = true` | 1.4 | **always** (changes shared collaboration state that co-authors see; not covered by Track Changes) |
+| `insertTable` | `insertTable(rows, cols, …, values)` | 1.3 | never when tracked; **always** when untracked |
 | `listTrackedChanges` | `body.getTrackedChanges()` | 1.6 | never |
 
 ### Tracked changes
@@ -45,7 +45,8 @@ Edits are **tracked changes by default**, so every change can be reviewed in Wor
 - **Restoring, including on failure.** The previous mode is restored in a `finally` block, so a rejected write or a rejected `context.sync()` never leaves `trackAll` switched on for the user's own later edits. If the restore itself fails, the pane shows a notice telling the user that Track Changes was left on.
 - **Setting.** The default comes from `officeIntegration.hosts.word.trackChanges` (`on` | `off` | `user`), and the user can override it in the pane's Settings dialog.
 - **Fallback.** On clients without WordApi 1.4 the writes are plain, and the activity row says so.
-- **Approval for untracked writes.** Writes that are *not* tracked, because the setting is off or the API is missing, need approval for `replaceSelection`.
+- **Approval for untracked writes.** When writes are *not* tracked, because the setting is `off` or WordApi 1.4 is missing, **every** Word write needs approval: `insertText`, `replaceSelection`, `applyStyle`, `insertTable` and `findAndReplace`. The approval seam reads the tracking state the pane advertised with the turn; the pane re-checks it before the write.
+- **Why tracked writes are exempt.** A tracked change is itself a review step: it stays visible in Word until the user accepts or rejects it. Comment replies and resolutions are not tracked, so they always ask.
 
 ### Limits
 
@@ -71,6 +72,7 @@ Related: `create_docx` (`server/systemSkills/docx`, `server/services/documents/d
 - **Executor unit tests** against a Word.js mock:
   - tracked-mode on and restored after a successful write
   - tracked-mode restored after a **rejected** write and after a rejected `context.sync()`
+  - untracked mode: every write tool raises an approval; tracked mode: only `findAndReplace` and the comment tools do
   - paging caps
   - the `findAndReplace` cap and preview
   - hostile model output (`<script>`, `<img onerror>`, `<iframe>`, `[x](javascript:…)`) is inserted without any of it

@@ -64,18 +64,21 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
 `clientToolSeam.preTool(ctx, info)` handles a call when `toolDef.executor === 'client'`. Ordering inside the seam matters: the `interaction/raised` frame must reach the client before the wait starts, or a fast client could answer an interaction it has not been told about.
 
 1. Refuse the call (return an error result) when the turn is headless or the tool was not advertised.
-2. Raise the interaction:
+2. Raise the interaction with the **stored** prompt, in which content-marked arguments are already redacted:
    ```js
-   interactionService.raise({
+   const interaction = await interactionService.raise({
      runId, kind: 'client_tool', origin: 'tool',
-     prompt: { tool: name, args },
-     source: { chatId, toolCallId, host, target },
+     prompt: { tool: name, args: redactClientToolArgs(toolDef, args), target },
+     source: { chatId, toolCallId, host },
      policy: { timeoutMs: 60_000 }
    })
    ```
-3. Emit `interaction/raised` and `tool/started` with `execution: 'client'`.
+   `raise()` persists the prompt and appends the `interaction/raised` ledger entry, so it must never see raw content.
+3. Emit the live `interaction/raised` SSE frame and `tool/started` with `execution: 'client'`. The live frame carries the stored prompt plus `liveArgs`, the full arguments the pane needs to execute. `liveArgs` exists only in that frame and in the waiting seam's memory. It is not written to the ledger, the interaction store or the replay buffer. A pane that reconnects after the frame was sent cannot recover `liveArgs`, so the call ends with `ClientTimeout` and the model may call the tool again.
 4. `await` the first of three: `waitForAnswer(id, { timeoutMs })`, `ctx.signal`, or the timeout.
 5. Validate the answer: it must be `{ ok: true, result }` or `{ ok: false, error: { name, code, message } }`, and the result size is capped.
+
+   **Error envelope.** Every error, from the pane or the seam, uses the same envelope with all three keys present: `name` (string), `code` (string, number or `null`) and `message` (string). Our own errors use `code: null`. Office.js errors pass their `code` through.
 6. Return `{ handled: true, execution: 'client', message: { role: 'tool', tool_call_id, name, content } }`.
 
 The loop then writes `tool/result`, runs `postTool` and continues.
@@ -83,9 +86,9 @@ The loop then writes `tool/result`, runs `postTool` and continues.
 ### Executing in the pane
 
 - `useAppChat` (`client/src/features/chat/hooks/useAppChat.js`) already folds `interaction/raised` through `reduceRunEvent` (`shared/run/runReducer.js`). The Office chat adds a handler. It runs only for `kind === 'client_tool'` and only when the current host is the embedded host.
-- The handler calls `host.executeClientTool(name, args)` from `EmbeddedHostContext`, then answers through `answerInteraction(runId, id, { decision: 'respond', data: { ok, result | error } }, { channel: 'office' })`.
+- The handler calls `host.executeClientTool(name, liveArgs)` from `EmbeddedHostContext`, then answers through `answerInteraction(runId, id, { decision: 'respond', data: { ok, result } }, { channel: 'office' })`, or with `{ ok: false, error }` on failure.
 - **Pop-out window.** The handler calls `getOfficeRemote().call('runClientTool', { name, args })`. Register a generic `runClientTool` handler next to the existing ones in `client/src/features/office/utilities/officePopout.js`. `client/src/features/office/utilities/officePopoutBridge.js` already chunks large payloads.
-- **Target check.** Before every call, and again right before any write, the executor checks that the target is still the one the turn advertised. On a mismatch it answers `{ ok:false, error:{ name:'TargetChanged' } }` and changes nothing.
+- **Target check.** Before every call, and again right before any write, the executor checks that the target is still the one the turn advertised. On a mismatch it answers `{ ok:false, error:{ name:'TargetChanged', code:null, message:'The open item or document changed.' } }` and changes nothing.
 
   | Host | Advertised `target` | Check before a write |
   |---|---|---|
@@ -94,14 +97,14 @@ The loop then writes `tool/result`, runs `postTool` and continues.
   | Excel (additionally) | the sheet and address named in the call's arguments | Writes name `sheet` + `address` explicitly and never use "the active selection" implicitly. The executor resolves the range by name, so switching sheets during an approval cannot redirect the write. |
   | PowerPoint (additionally) | the `slideId` named in the call's arguments | Writes name `slideId`; the executor verifies the shape belongs to that slide ([07](07-powerpoint.md)). |
 
-- **No Office API.** A browser tab without Office answers `{ ok:false, error:{ name:'HostUnavailable' } }`.
+- **No Office API.** A browser tab without Office answers `{ ok:false, error:{ name:'HostUnavailable', code:null, message:'Office is not available.' } }`.
 
 ### Protocol changes
 
 | File | Change |
 |---|---|
 | `shared/runEvents.js` | Add `'client_tool'` to `INTERACTION_KINDS` |
-| `server/services/loop/contracts/interaction.js` | Schema for the `client_tool` prompt `{tool, args, target}` and answer `{ok}` with either `result` or `error` |
+| `server/services/loop/contracts/interaction.js` | Schema for the `client_tool` prompt `{tool, args, target}` (args already redacted) and answer `{ok}` with either `result` or the error envelope |
 | `server/services/loop/contracts/sseV2.js` | Add `'client'` to the `tool/started.execution` enum |
 | `server/services/loop/contracts/runLogEvents.js` | Same enum |
 | `shared/run/runReducer.js`, `shared/run/toolActivity.js` | Show `execution:'client'` rows in the activity list. Today rows that are not `'server'` are hidden. |
@@ -114,22 +117,25 @@ Every failure becomes a **tool error result** that the model sees. None of them 
 
 | Situation | Result |
 |---|---|
-| Pane closed, or unpinned and the selection changed | Timeout after 60 s → `{error:'ClientTimeout'}`; the interaction is cancelled |
-| Item, document, sheet or slide changed since the turn started | `{error:'TargetChanged'}`; nothing is written |
+| Pane closed, or unpinned and the selection changed | Timeout after 60 s → `error:{ name:'ClientTimeout', code:null, message }`; the interaction is cancelled |
+| Item, document, sheet or slide changed since the turn started | `error:{ name:'TargetChanged', code:null, message }`; nothing is written |
 | User pressed Stop | The wait rejects with `ctx.signal`; the interaction is cancelled; the run ends `aborted` |
-| Office.js rejected the call | `{error:{name, code, message}}`. The same record goes to the pane's `ihubOfficeErrors()` log. |
+| Office.js rejected the call | `error:{ name, code, message }` from Office.js. The same record goes to the pane's `ihubOfficeErrors()` log. |
 | Run's wall clock (`DURABLE_TURN_WALL_CLOCK_MS`) exceeded | Existing deadline handling |
 | Answer posted to another worker | Resolved by `_applyRemote`. No special handling. |
 
 ### Redaction (what is stored)
 
-The model gets the full result. Nothing that came from the user's mailbox or document is persisted, and that includes arguments.
+The model gets the full result. **What is guaranteed:** tool results are never stored, and arguments marked `x-ihub-content` are never stored at any size. **What is not:** unmarked, structural arguments are stored in full, even when the model took their value from the item.
 
-Arguments are written by the model, but a body or a cell value is often copied straight from the email or document. Size says nothing about that. A tool's schema therefore marks every argument that can carry user content with `"x-ihub-content": true`, for example `body`, `html`, `text`, `values`, `formulas`, `notes`, `filename`. Those arguments are redacted **whatever their size**. All other arguments are kept, such as `address`, `sheet`, `slideId`, `mode` and recipient addresses, which the audit trail needs.
+Arguments are written by the model, but a body or a cell value is often copied straight from the email or document. Size says nothing about that. A tool's schema therefore marks every argument that can carry user content with `"x-ihub-content": true`, for example `body`, `html`, `text`, `subject`, `values`, `formulas`, `notes`, `expectedText`, `filename`. Those arguments are redacted **whatever their size**.
+
+Unmarked arguments are structural and kept for the audit trail: `address`, `sheet`, `slideId`, `shapeId`, `mode` and recipient addresses. A recipient address the model copied from the email is therefore stored, which is deliberate, since the audit must show who was added. A tool author who adds a free-text argument must mark it; a test lists every string argument of every client tool and fails on one that is neither marked nor on the structural allowlist.
 
 | Store | Today | With client tools |
 |---|---|---|
-| Ledger `tool/call` args | full | content-marked args → `{chars, sha256}` at any size; other args in full |
+| Ledger `tool/call` args | full | content-marked args → `{chars, sha256}` at any size; structural args in full |
+| Stored `client_tool` and `approval` interactions, ledger `interaction/raised` | full prompt | the redacted prompt only; full args live only in the SSE frame |
 | Ledger `tool/result` preview, spill store | 1 KB preview / spill | `{redacted:true, host, chars}`; never spilled |
 | `logInteraction('tool_usage')` (`chatSeams.js`) | `toolOutput: rawResult` | `{redacted:true, host, chars}` |
 | Ledger `interaction/answered` | full answer | `{ok, chars, sha256}` |
@@ -153,6 +159,9 @@ The same marker drives the approval preview ([02](02-chat-approval-gate.md)). Th
 - **Redaction:**
   - no tool output in the ledger, spill store, interaction log or stored chat
   - a **short** `setDraftBody` body copied from the email (under 100 characters) is still stored only as `{chars, sha256}`
+  - neither the stored interaction nor the `interaction/raised` ledger entry contains the body; the live SSE frame does
+  - every string argument of every client tool is either `x-ihub-content` or on the structural allowlist
+  - every error answer carries `name`, `code` and `message`
 - **Client:**
   - the interaction handler executes and answers
   - the pop-out routes through `runClientTool`
