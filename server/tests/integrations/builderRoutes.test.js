@@ -401,6 +401,36 @@ describe('create, load, save', () => {
     expect(Object.keys(after.fingerprints).sort()).toEqual(['get_order', 'list_orders']);
   });
 
+  it('leaves an action that was already pending alone when the save does not change it', async () => {
+    // get_order was accepted with a fingerprint that is no longer its own (it
+    // is "changed" before the save); the admin edits a different action.
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    const staleFingerprint = `sha256:${'b'.repeat(64)}`;
+    stored.actions.fingerprints = { ...stored.actions.fingerprints, get_order: staleFingerprint };
+    expect((await reviewStates('orders')).get_order).toBe('changed');
+
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    const draft = loaded.body;
+    draft.actions.push({
+      name: 'count_orders',
+      sideEffect: 'read',
+      dataFlow: 'internal',
+      parameters: { type: 'object', properties: {} },
+      request: { method: 'GET', url: '/orders/count' }
+    });
+    await admin(request(app).put('/api/admin/integrations/builder/orders')).send(draft).expect(200);
+
+    // The new action is the admin's own edit; the pending one is not touched.
+    const states = await reviewStates('orders');
+    expect(states.count_orders).toBeNull();
+    expect(states.get_order).toBe('changed');
+    expect(
+      state.integrations.installed.find(i => i.id === 'orders').actions.fingerprints.get_order
+    ).toBe(staleFingerprint);
+  });
+
   it('does not take a baseline on a save: an installation without one is left alone', async () => {
     const stored = state.integrations.installed.find(i => i.id === 'orders');
     delete stored.actions.fingerprints;
