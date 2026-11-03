@@ -277,6 +277,33 @@ describe('token refresh owned by iHub', () => {
     expect(await readUserTokens('alice', 'okta')).toBeNull();
   });
 
+  it('asks for more scopes when the retry after a refresh is refused with insufficient_scope', async () => {
+    await seedTokens({ scope: 'openid tickets:read' });
+    const entry = await fakeUpstream();
+    entry.conn.client.callTool = jest.fn(async () => {
+      const tokens = await entry.provider.tokens();
+      if (tokens.access_token === 'old') throw new UnauthorizedError('401');
+      // The refreshed token is valid but lacks a scope: 403 with a challenge.
+      entry.provider.scopeChallenge = 'Bearer error="insufficient_scope", scope="tickets:write"';
+      throw new UnauthorizedError('403');
+    });
+    mcpClientManager.refreshAuthorization = jest.fn(async () => ({
+      access_token: 'new',
+      token_type: 'bearer',
+      refresh_token: 'r2',
+      scope: 'openid tickets:read'
+    }));
+    const result = await call();
+    expect(result).toMatchObject({
+      error: 'INTEGRATION_AUTH_REQUIRED',
+      reason: 'insufficient_scope'
+    });
+    // The re-authorization asks for the challenged scope on top of the granted ones.
+    expect(decodeURIComponent(JSON.stringify(result))).toContain('tickets:write');
+    // The refreshed token is good for everything it was granted: it stays.
+    expect(await readUserTokens('alice', 'okta')).toMatchObject({ access_token: 'new' });
+  });
+
   it('never refreshes with a refresh token issued to another client', async () => {
     await writeUserTokens(
       'alice',

@@ -537,6 +537,10 @@ class McpClientManager {
       return await operation(conn);
     } catch (error) {
       if (!isAuthRequiredError(error)) throw error;
+      // The fresh token is valid but lacks a scope: ask for the scopes and
+      // keep the token, as on the first call.
+      const stepUp = this._stepUpError(serverConfig, conn, fresh);
+      if (stepUp) throw stepUp;
       // Even a fresh token is refused: it is useless for this server.
       await this._dropUserTokens(serverConfig, userId, fresh.access_token);
       await evict();
