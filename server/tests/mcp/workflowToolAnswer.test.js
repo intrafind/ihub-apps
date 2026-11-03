@@ -139,6 +139,15 @@ describe('workflowToolResult', () => {
     });
   });
 
+  it('returns the answer only: a workflow run has no generated files to return', () => {
+    const result = workflowToolResult({
+      ...finished('Done'),
+      generatedFiles: [{ id: 'f1', name: 'x.docx', mimeType: 'application/zip', data: 'AAAA' }],
+      images: [{ mimeType: 'image/png', data: 'AAAA' }]
+    });
+    expect(result.content).toEqual([{ type: 'text', text: 'Done' }]);
+  });
+
   it('writes numbers and booleans as text, not as JSON', () => {
     expect(workflowToolResult(finished({ output: 3 }))).toEqual({
       content: [{ type: 'text', text: '3' }]

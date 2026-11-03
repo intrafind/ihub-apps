@@ -59,3 +59,21 @@ test("the app's own tools come first, and bindings without tools stay off the li
   });
   expect(result.current.enabledTools).toEqual(['ask_user', 'braveSearch', 'ifinder']);
 });
+
+test('the settings this browser kept survive the mount, and its integration state stays until imported', async () => {
+  // The app is there before the models: the save must not run before the
+  // kept settings are read, and must not drop keys it does not own.
+  sessionStorage.setItem(
+    'ai_hub_app_settings_research',
+    JSON.stringify({ selectedStyle: 'brief', enabledTools: ['jira'] })
+  );
+  const app = { id: 'research', tools: ['braveSearch'] };
+  const { result } = renderHook(() => useAppSettings(app.id, app));
+  await waitFor(() => expect(result.current.modelsLoading).toBe(false));
+  await waitFor(() => expect(result.current.selectedStyle).toBe('brief'));
+  // The preferences request fails here (the API mock has none), so nothing
+  // was imported and the browser keeps its integration state for next time.
+  const kept = JSON.parse(sessionStorage.getItem('ai_hub_app_settings_research'));
+  expect(kept.selectedStyle).toBe('brief');
+  expect(kept.enabledTools).toEqual(['jira']);
+});

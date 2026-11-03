@@ -2,25 +2,41 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { randomUUID } from 'node:crypto';
-import credentialService from '../CredentialService.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { A2A_DEFAULT_API_KEY_HEADER } from '../../validators/a2aAgentConfigSchema.js';
 import {
+  A2A_ACCEPTED_OUTPUT_MODES,
   A2A_CLIENT_ERRORS,
   A2A_RESPONSE_LIMITS,
   RUNNING_TASK_STATES,
   StreamCollector,
   a2aError,
+  artifactsFiles,
   artifactsText,
   buildSkillTools,
   cardApiKeyHeader,
   parseSseStream,
+  partsFiles,
   partsText,
   resolveRpcEndpoint,
+  statusMessageFiles,
   statusMessageText,
   validateAgentCard
 } from './a2aTools.js';
+import { isAllowedAgentUrl } from '../../validators/a2aAgentConfigSchema.js';
+import {
+  decodeBase64Capped,
+  normalizeMediaType,
+  plainFileName,
+  storeToolOutputFile
+} from '../chat/toolOutputFiles.js';
 import logger from '../../utils/logger.js';
+import {
+  ClientCredentialsTokenCache,
+  clientCredentialsBody,
+  resolveSecretRefs,
+  staticAuthHeaders
+} from '../integrations/auth/ServiceAccountAuth.js';
 
 /** How long a fetched Agent Card is reused before it is fetched again. */
 export const CARD_TTL_MS = 10 * 60 * 1000;
@@ -47,8 +63,8 @@ export const TOKEN_TIMEOUT_MS = 10 * 1000;
 /** JSON-RPC error code of A2A's `TaskNotFoundError`. */
 export const TASK_NOT_FOUND_RPC_CODE = -32001;
 
-/** Output modes iHub can turn into a tool result. */
-const ACCEPTED_OUTPUT_MODES = ['text/plain', 'application/json'];
+/** Output modes iHub can turn into a tool result: text, JSON, files and pictures. */
+const ACCEPTED_OUTPUT_MODES = A2A_ACCEPTED_OUTPUT_MODES;
 
 /**
  * One A2aAgentConnection talks to a single remote A2A agent over JSON-RPC 2.0:
@@ -85,8 +101,8 @@ export class A2aAgentConnection {
     this.lastError = null;
     this.consecutiveFailures = 0;
     this._cardPromise = null;
-    this._oauthToken = null;
-    this._oauthTokenExpiry = 0;
+    /** Client-credentials tokens of `auth.type: "oauth"` (ServiceAccountAuth). */
+    this._oauthTokens = new ClientCredentialsTokenCache();
   }
 
   /** Drop the cached card and tools so the next use fetches them again. */
@@ -97,8 +113,7 @@ export class A2aAgentConnection {
     this.endpoint = null;
     this.toolsCache = null;
     this.skillsByToolId = new Map();
-    this._oauthToken = null;
-    this._oauthTokenExpiry = 0;
+    this._oauthTokens.clear();
   }
 
   get _fetchOptions() {
@@ -117,24 +132,19 @@ export class A2aAgentConnection {
   _resolveAuth() {
     const auth = this.config.auth;
     if (!auth || auth.type === 'none') return { type: 'none' };
-    const out = { ...auth };
-    const refFields = { valueRef: 'value', tokenRef: 'token', clientSecretRef: 'clientSecret' };
-    for (const [refField, plainField] of Object.entries(refFields)) {
-      if (typeof out[refField] === 'string' && out[refField]) {
-        try {
-          out[plainField] = credentialService.resolveSecret(out[refField]);
-        } catch (err) {
+    return resolveSecretRefs(
+      auth,
+      { valueRef: 'value', tokenRef: 'token', clientSecretRef: 'clientSecret' },
+      {
+        onError: (refField, err) =>
           logger.error('Failed to resolve A2A agent auth secret from credential store', {
             component: 'A2aAgentConnection',
             agentId: this.config.id,
             field: refField,
             error: err.message
-          });
-          throw err;
-        }
+          })
       }
-    }
-    return out;
+    );
   }
 
   /**
@@ -152,11 +162,11 @@ export class A2aAgentConnection {
    */
   async _authHeaders({ signal } = {}) {
     const auth = this._resolveAuth();
-    if (auth.type === 'apiKey') return { [this._apiKeyHeaderName(auth)]: auth.value };
-    if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
-    if (auth.type === 'oauth')
+    if (auth.type === 'oauth') {
       return { Authorization: `Bearer ${await this._oauthAccessToken(auth, { signal })}` };
-    return {};
+    }
+    if (auth.type !== 'apiKey' && auth.type !== 'bearer') return {};
+    return staticAuthHeaders(auth, { apiKeyHeader: this._apiKeyHeaderName(auth) });
   }
 
   /**
@@ -170,15 +180,21 @@ export class A2aAgentConnection {
    * @throws {Error} `A2A_AUTH_FAILED`, `A2A_REDIRECT_REFUSED`, `A2A_RESPONSE_TOO_LARGE`
    */
   async _oauthAccessToken(auth, { signal } = {}) {
-    const now = Date.now();
-    if (this._oauthToken && this._oauthTokenExpiry > now + 5000) return this._oauthToken;
+    return this._oauthTokens.getToken('client-credentials', () =>
+      this._requestOAuthToken(auth, { signal })
+    );
+  }
 
-    const body = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: auth.clientId,
-      client_secret: auth.clientSecret
+  /**
+   * One client-credentials token request, bounded and without redirects.
+   * @returns {Promise<{access_token: string, expires_in?: number}>}
+   */
+  async _requestOAuthToken(auth, { signal } = {}) {
+    const body = clientCredentialsBody({
+      clientId: auth.clientId,
+      clientSecret: auth.clientSecret,
+      scope: auth.scope
     });
-    if (auth.scope) body.set('scope', auth.scope);
     const timeout = AbortSignal.timeout(TOKEN_TIMEOUT_MS);
     let data;
     try {
@@ -223,9 +239,7 @@ export class A2aAgentConnection {
     if (!data?.access_token) {
       throw a2aError(A2A_CLIENT_ERRORS.AUTH_FAILED, 'OAuth token response missing access_token');
     }
-    this._oauthToken = data.access_token;
-    this._oauthTokenExpiry = now + (data.expires_in ? data.expires_in * 1000 : 3600 * 1000);
-    return this._oauthToken;
+    return data;
   }
 
   /**
@@ -437,7 +451,7 @@ export class A2aAgentConnection {
       { signal }
     );
     const body = parseJsonOrNull(
-      await readTextLimited(resp, A2A_RESPONSE_LIMITS.jsonBytes, `The ${method} response`)
+      await readTextLimited(resp, A2A_RESPONSE_LIMITS.rpcBytes, `The ${method} response`)
     );
     if (body?.error) throw rpcErrorOf(body.error, method);
     if (!resp.ok) {
@@ -477,7 +491,7 @@ export class A2aAgentConnection {
     const contentType = String(resp.headers?.get?.('content-type') || '');
     if (!resp.ok || !contentType.startsWith('text/event-stream')) {
       const body = parseJsonOrNull(
-        await readTextLimited(resp, A2A_RESPONSE_LIMITS.jsonBytes, 'The message/stream response')
+        await readTextLimited(resp, A2A_RESPONSE_LIMITS.rpcBytes, 'The message/stream response')
       );
       if (body?.error) throw rpcErrorOf(body.error, 'message/stream');
       if (body && typeof body === 'object' && 'result' in body) {
@@ -518,16 +532,20 @@ export class A2aAgentConnection {
    * @param {string} params.skillId - The card's skill id (sent as `metadata.skillId`)
    * @param {string} params.text - The message text
    * @param {Object} [params.data] - Structured input, sent as a data part
+   * @param {Array<{name: string, mimeType?: string, bytes: Buffer}>} [params.files] - Files to send
+   *   along, as file parts (`bytes` base64 on the wire)
    * @param {string} [params.contextId] - Conversation to continue
    * @param {string} [params.taskId] - Task waiting for input (`input-required`) to continue
    * @param {(progress: {state?: string, message?: string}) => void} [params.onProgress]
    * @param {AbortSignal} [params.signal] - Aborts the call (user stop)
-   * @returns {Promise<{text: string, contextId: string|null, taskId: string|null, state: string}>}
+   * @returns {Promise<{text: string, contextId: string|null, taskId: string|null, state: string,
+   *   files?: Array<Object>}>} `files` are the file parts the agent returned (see `receiveFiles`)
    */
   async sendMessage({
     skillId,
     text,
     data,
+    files,
     contextId,
     taskId: continueTaskId,
     onProgress,
@@ -548,22 +566,7 @@ export class A2aAgentConnection {
     else signal?.addEventListener?.('abort', onCallerAbort, { once: true });
     const callSignal = controller.signal;
 
-    const parts = [{ kind: 'text', text }];
-    if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
-      parts.push({ kind: 'data', data });
-    }
-    const params = {
-      message: {
-        kind: 'message',
-        role: 'user',
-        messageId: randomUUID(),
-        parts,
-        ...(contextId ? { contextId } : {}),
-        ...(continueTaskId ? { taskId: continueTaskId } : {}),
-        metadata: { skillId }
-      },
-      configuration: { blocking: true, acceptedOutputModes: ACCEPTED_OUTPUT_MODES }
-    };
+    const params = buildSendParams({ skillId, text, data, files, contextId, continueTaskId });
 
     let taskId = null;
     const track = id => {
@@ -580,26 +583,34 @@ export class A2aAgentConnection {
       return await this._settle(result, { signal: callSignal, onProgress, track });
     } catch (err) {
       if (callSignal.aborted || err?.name === 'AbortError') {
-        const reason = timedOut ? 'timeout' : 'stop';
-        if (taskId) this._cancelTask(taskId, reason);
-        if (!timedOut) {
-          throw a2aError(
-            A2A_CLIENT_ERRORS.CANCELLED,
-            `The call to agent ${this.config.id} was stopped`,
-            { taskId }
-          );
-        }
-        throw a2aError(
-          A2A_CLIENT_ERRORS.TIMEOUT,
-          `Agent ${this.config.id} did not finish within ${timeoutMs} ms`,
-          { taskId }
-        );
+        throw this._abortedError({ taskId, timedOut, timeoutMs });
       }
       throw err;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener?.('abort', onCallerAbort);
     }
+  }
+
+  /**
+   * The error for a call that was aborted, by the timeout or by the caller;
+   * cancels a running task (best effort) on the way.
+   * @private
+   */
+  _abortedError({ taskId, timedOut, timeoutMs }) {
+    if (taskId) this._cancelTask(taskId, timedOut ? 'timeout' : 'stop');
+    if (!timedOut) {
+      return a2aError(
+        A2A_CLIENT_ERRORS.CANCELLED,
+        `The call to agent ${this.config.id} was stopped`,
+        { taskId }
+      );
+    }
+    return a2aError(
+      A2A_CLIENT_ERRORS.TIMEOUT,
+      `Agent ${this.config.id} did not finish within ${timeoutMs} ms`,
+      { taskId }
+    );
   }
 
   /**
@@ -640,23 +651,31 @@ export class A2aAgentConnection {
       );
     }
     track(result.id);
-    let task = result;
     const pollIntervalMs = this.config.pollIntervalMs ?? 1500;
-    while (isRunning(task)) {
-      report(onProgress, task.status?.state, statusMessageText(task));
-      await sleep(pollIntervalMs, signal);
-      task = await this.rpc('tasks/get', { id: result.id }, { signal });
-      if (task?.kind !== 'task') {
-        throw a2aError(A2A_CLIENT_ERRORS.RPC_ERROR, 'tasks/get did not return a task');
-      }
-      if (task.id !== result.id) {
-        throw a2aError(
-          A2A_CLIENT_ERRORS.RPC_ERROR,
-          `tasks/get for task ${result.id} returned another task (${task.id})`
-        );
-      }
-    }
+    const task = await this._pollUntilSettled(result, { signal, onProgress, pollIntervalMs });
     return this._taskResult(task);
+  }
+
+  /**
+   * `tasks/get` every `pollIntervalMs` until the task stops running. Each poll
+   * depends on the previous one, so the steps run strictly in sequence.
+   * @private
+   */
+  async _pollUntilSettled(task, { signal, onProgress, pollIntervalMs }) {
+    if (!isRunning(task)) return task;
+    report(onProgress, task.status?.state, statusMessageText(task));
+    await sleep(pollIntervalMs, signal);
+    const next = await this.rpc('tasks/get', { id: task.id }, { signal });
+    if (next?.kind !== 'task') {
+      throw a2aError(A2A_CLIENT_ERRORS.RPC_ERROR, 'tasks/get did not return a task');
+    }
+    if (next.id !== task.id) {
+      throw a2aError(
+        A2A_CLIENT_ERRORS.RPC_ERROR,
+        `tasks/get for task ${task.id} returned another task (${next.id})`
+      );
+    }
+    return this._pollUntilSettled(next, { signal, onProgress, pollIntervalMs });
   }
 
   /** The answer held by a settled task. */
@@ -665,6 +684,7 @@ export class A2aAgentConnection {
       state: task.status?.state,
       statusText: statusMessageText(task),
       answerText: artifactsText(task.artifacts),
+      files: [...artifactsFiles(task.artifacts), ...statusMessageFiles(task)],
       taskId: task.id,
       contextId: task.contextId || null
     });
@@ -681,15 +701,20 @@ export class A2aAgentConnection {
    * @param {string|undefined} outcome.state
    * @param {string} outcome.statusText - Text of the status message
    * @param {string} outcome.answerText - Text of the artifacts
+   * @param {Array<Object>} [outcome.files] - File parts of the artifacts and the status message
    * @param {string|null} outcome.taskId
    * @param {string|null} outcome.contextId
-   * @returns {{text: string, contextId: string|null, taskId: string|null, state: string}}
+   * @returns {{text: string, contextId: string|null, taskId: string|null, state: string, files?: Array<Object>}}
    */
-  _outcome({ state, statusText, answerText, taskId, contextId }) {
+  _outcome({ state, statusText, answerText, files = [], taskId, contextId }) {
+    const withFiles = dedupeFiles(files);
+    const filesOf = withFiles.length > 0 ? { files: withFiles } : {};
     if (state === 'completed') {
-      return { text: answerText || statusText, contextId, taskId, state };
+      return { text: answerText || statusText, contextId, taskId, state, ...filesOf };
     }
-    if (state === 'input-required') return { text: statusText, contextId, taskId, state };
+    if (state === 'input-required') {
+      return { text: statusText, contextId, taskId, state, ...filesOf };
+    }
     if (state === 'failed' || state === 'rejected' || state === 'canceled') {
       throw a2aError(
         A2A_CLIENT_ERRORS.TASK_FAILED,
@@ -748,6 +773,7 @@ export class A2aAgentConnection {
         answerText:
           collector.artifactsText() ||
           (collector.message ? partsText(collector.message.parts, { separator: '\n' }) : ''),
+        files: collector.files(),
         taskId: collector.taskId,
         contextId: collector.contextId
       });
@@ -761,6 +787,166 @@ export class A2aAgentConnection {
       A2A_CLIENT_ERRORS.RPC_ERROR,
       `Agent ${this.config.id} closed the stream without an answer`
     );
+  }
+
+  /**
+   * Take the files an agent returned into the chat: decode `file.bytes`, or
+   * fetch `file.uri` (HTTPS; the agent's own origin with its credential, any
+   * other host without it, always through the SSRF-guarded fetch and never
+   * redirected), then store each (`toolOutputFiles.storeToolOutputFile`, origin
+   * `a2a`) so it shows in the chat's Files drawer.
+   *
+   * Never throws: a file that is too large, cannot be fetched or is of a type
+   * that cannot be kept comes back with an `error` in its descriptor.
+   *
+   * @param {Array<Object>} refs - `file` objects of the agent's file parts (`bytes` or `uri`)
+   * @param {Object} params
+   * @param {string} params.chatId - The chat the call was made in
+   * @param {string|null} [params.ownerId]
+   * @param {AbortSignal} [params.signal]
+   * @param {Object|null} [params.store] - A `ChatFileRepository` (tests)
+   * @returns {Promise<{files: Array<Object>, images: Array<Object>}>} What the model sees:
+   *   `{ fileId, name, mimeType, bytes, id? }` — `id` names the held download card
+   */
+  async receiveFiles(refs, { chatId, ownerId = null, signal, store = null } = {}) {
+    const list = Array.isArray(refs) ? refs : [];
+    const received = await Promise.all(
+      list.map((ref, index) => this._receiveFile(ref, index, { chatId, ownerId, signal, store }))
+    );
+    const files = [];
+    const images = [];
+    for (const { isImage, descriptor } of received) (isImage ? images : files).push(descriptor);
+    return { files, images };
+  }
+
+  /**
+   * Take one returned file into the chat (see `receiveFiles`).
+   * @private
+   * @returns {Promise<{isImage: boolean, descriptor: Object}>}
+   */
+  async _receiveFile(ref, index, { chatId, ownerId, signal, store }) {
+    const name = plainFileName(ref.name, `file-${index + 1}`);
+    if (index >= A2A_RESPONSE_LIMITS.files) {
+      return {
+        isImage: false,
+        descriptor: {
+          name,
+          error: `More than ${A2A_RESPONSE_LIMITS.files} files in one answer; this one was not stored.`
+        }
+      };
+    }
+    const { bytes, mimeType, failure } = await this._readFileRef(ref, { signal });
+    if (!bytes) {
+      const reason =
+        failure === 'too-large'
+          ? `The file is larger than ${A2A_RESPONSE_LIMITS.fileBytes / 1024 / 1024} MB and was not stored.`
+          : `The file could not be read (${String(failure || 'empty').slice(0, 120)}).`;
+      return {
+        isImage: false,
+        descriptor: { name, ...(mimeType ? { mimeType } : {}), error: reason }
+      };
+    }
+    const stored = await storeToolOutputFile({
+      chatId,
+      ownerId,
+      bytes,
+      name,
+      mimeType: normalizeMediaType(mimeType, name) || mimeType,
+      uri: ref.uri,
+      index,
+      origin: 'a2a',
+      meta: { agentId: this.config.id },
+      store
+    });
+    const held = stored.images[0] || stored.files[0];
+    const descriptor = { ...stored.descriptor };
+    delete descriptor.type;
+    if (held) descriptor.id = held.id;
+    return { isImage: stored.images.length > 0, descriptor };
+  }
+
+  /**
+   * The bytes of a file part: decoded `bytes`, else fetched `uri`.
+   * @private
+   * @returns {Promise<{bytes: Buffer|null, mimeType: string|undefined, failure: string|null}>}
+   */
+  async _readFileRef(ref, { signal }) {
+    if (typeof ref.bytes === 'string') {
+      const decoded = decodeBase64Capped(ref.bytes, A2A_RESPONSE_LIMITS.fileBytes);
+      return decoded.ok
+        ? { bytes: decoded.buffer, mimeType: ref.mimeType, failure: null }
+        : { bytes: null, mimeType: ref.mimeType, failure: decoded.reason };
+    }
+    try {
+      const fetched = await this._fetchFileUri(ref.uri, { signal });
+      return {
+        bytes: fetched.bytes,
+        mimeType: ref.mimeType || fetched.mimeType,
+        failure: null
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return { bytes: null, mimeType: ref.mimeType, failure: error?.message || 'fetch failed' };
+    }
+  }
+
+  /**
+   * Fetch the content behind a file part's `uri`, bounded in size.
+   * @private
+   */
+  async _fetchFileUri(uri, { signal } = {}) {
+    let url;
+    try {
+      url = new URL(uri);
+    } catch {
+      throw new Error('invalid uri');
+    }
+    if (!isAllowedAgentUrl(url.toString()) || url.username || url.password) {
+      throw new Error('uri must be https (http for localhost only) without credentials');
+    }
+    const sameOrigin = this.endpoint && new URL(this.endpoint).origin === url.origin;
+    const resp = sameOrigin
+      ? await this._request(url.toString(), { method: 'GET' }, { signal })
+      : await safeFetch(
+          url,
+          { method: 'GET', redirect: 'manual', ...(signal ? { signal } : {}) },
+          this._fetchOptions
+        );
+    refuseRedirect(resp, `File host ${url.host}`);
+    if (!resp.ok) {
+      await discardBody(resp);
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const max = A2A_RESPONSE_LIMITS.fileBytes;
+    const declared = Number(resp.headers?.get?.('content-length'));
+    if (Number.isFinite(declared) && declared > max) {
+      await discardBody(resp);
+      throw new Error('too-large');
+    }
+    const chunks = [];
+    let size = 0;
+    if (resp.body && typeof resp.body.getReader === 'function') {
+      const reader = resp.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > max) {
+          await reader.cancel().catch(() => {});
+          throw new Error('too-large');
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } else {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      if (buf.length > max) throw new Error('too-large');
+      chunks.push(buf);
+    }
+    const bytes = Buffer.concat(chunks);
+    return {
+      bytes,
+      mimeType: resp.headers?.get?.('content-type')?.split(';')[0].trim() || undefined
+    };
   }
 
   /** Snapshot for the admin page. */
@@ -783,12 +969,29 @@ export class A2aAgentConnection {
 
 /** The answer held by a `Message` reply (how the cookbook agents answer). */
 function messageResult(message) {
+  const files = dedupeFiles(partsFiles(message.parts));
   return {
     text: partsText(message.parts, { separator: '\n' }),
     contextId: message.contextId || null,
     taskId: message.taskId || null,
-    state: 'completed'
+    state: 'completed',
+    ...(files.length > 0 ? { files } : {})
   };
+}
+
+/** The same file listed twice (an artifact and the status message) once. */
+function dedupeFiles(files) {
+  const seen = new Set();
+  const out = [];
+  for (const file of Array.isArray(files) ? files : []) {
+    const key = `${file.name || ''}|${file.mimeType || ''}|${file.uri || ''}|${
+      file.bytes ? `${file.bytes.length}:${file.bytes.slice(0, 64)}:${file.bytes.slice(-64)}` : ''
+    }`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
 }
 
 /**
@@ -814,11 +1017,46 @@ function refuseRedirect(resp, who) {
   if (resp?.type !== 'opaqueredirect' && !(status >= 300 && status < 400)) return;
   void discardBody(resp);
   const location = resp.headers?.get?.('location');
+  const target = location ? ` to ${location}` : '';
   throw a2aError(
     A2A_CLIENT_ERRORS.REDIRECT_REFUSED,
-    `${who} answered with a redirect (HTTP ${status}${location ? ` to ${location}` : ''}); ` +
+    `${who} answered with a redirect (HTTP ${status}${target}); ` +
       'A2A requests do not follow redirects, so configure the final URL instead'
   );
+}
+
+/**
+ * The `message/send` / `message/stream` params: text, optional data part and
+ * file parts (`bytes` base64 on the wire).
+ */
+function buildSendParams({ skillId, text, data, files, contextId, continueTaskId }) {
+  const parts = [{ kind: 'text', text }];
+  if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
+    parts.push({ kind: 'data', data });
+  }
+  for (const file of Array.isArray(files) ? files : []) {
+    if (!file?.bytes?.length) continue;
+    parts.push({
+      kind: 'file',
+      file: {
+        name: file.name,
+        ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+        bytes: Buffer.from(file.bytes).toString('base64')
+      }
+    });
+  }
+  return {
+    message: {
+      kind: 'message',
+      role: 'user',
+      messageId: randomUUID(),
+      parts,
+      ...(contextId ? { contextId } : {}),
+      ...(continueTaskId ? { taskId: continueTaskId } : {}),
+      metadata: { skillId }
+    },
+    configuration: { blocking: true, acceptedOutputModes: ACCEPTED_OUTPUT_MODES }
+  };
 }
 
 /** Release a response body that will not be read; never throws. */

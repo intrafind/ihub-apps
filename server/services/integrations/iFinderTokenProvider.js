@@ -30,7 +30,7 @@ import configCache from '../../configCache.js';
 import { getIFinderConfig } from './ifinderConfig.js';
 import tokenStorageService from '../TokenStorageService.js';
 import credentialService from '../CredentialService.js';
-import { tokenStorageIdFor } from '../mcp/mcpUserTokens.js';
+import { tokenStorageIdFor } from './auth/tokenSecrets.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { withFileLock } from '../../utils/fileLock.js';

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
+  answerMcpAppToolApproval,
   buildMcpAppSandboxUrl,
   callMcpAppTool,
   fetchMcpAppResource,
@@ -27,6 +28,9 @@ import {
   hostStyles
 } from './hostContext';
 import { setMcpAppModelContext } from './modelContextStore';
+import ApprovalCard from '../components/ApprovalCard';
+import { buildToolApproval } from '../runToMessage';
+import { toolApprovalAnswer } from '../toolApprovalAnswer';
 import { embeddedViewResource, selectViewHtml } from './embeddedViewHtml';
 
 /** Inline views grow with their content up to this height (px). */
@@ -65,7 +69,7 @@ function errorMessage(error) {
  * sign-in). It answers 409, not 401, so the iHub session is left alone.
  */
 function isMcpAuthRequired(error) {
-  return error?.response?.data?.code === 'MCP_AUTH_REQUIRED';
+  return error?.response?.data?.code === 'INTEGRATION_AUTH_REQUIRED';
 }
 
 /**
@@ -115,9 +119,11 @@ function isSameOriginUrl(url) {
  * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
  * @param {string} props.appId - iHub app of the chat
  * @param {string} props.chatId
- * @param {{sendMessage: (text: string) => void, isProcessing: boolean}|null} [props.host] -
+ * @param {{sendMessage: (text: string) => void, isProcessing: boolean, toolApprovals?: boolean}|null} [props.host] -
  *   What the surrounding chat lets the view do beyond its iframe: `sendMessage`
- *   posts a user message (`ui/message`), `isProcessing` says a turn is running.
+ *   posts a user message (`ui/message`), `isProcessing` says a turn is running,
+ *   `toolApprovals` that the chat shows the approval card for a view's call to
+ *   a tool that needs approval (#2945; without it such a call is refused).
  *   Surfaces without a composer (shared chats, Office, compare mode) pass
  *   nothing and the view is told the feature is unavailable.
  */
@@ -137,6 +143,45 @@ function McpAppView({ view, appId, chatId, host = null }) {
   viewRef.current = view;
   const hostRef = useRef(host);
   hostRef.current = host;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+
+  // A view's call that waits for the user's approval (#2945): the card shown
+  // below the view, and how to hand the decision's result back to the view.
+  // One approval waits at a time: a second gated call while the card is
+  // shown is refused (its interaction lapses on the server), so neither call
+  // is left without an answer.
+  const [pendingApproval, setPendingApproval] = useState(null);
+  const approvalWaitRef = useRef(null);
+  const waitForApproval = useCallback((interaction, toolRef) => {
+    if (approvalWaitRef.current) {
+      return Promise.reject(
+        new Error('Another call of this view is waiting for approval. Try again after it.')
+      );
+    }
+    return new Promise(resolve => {
+      approvalWaitRef.current = { resolve, toolRef };
+      setPendingApproval(buildToolApproval(interaction));
+    });
+  }, []);
+  const decideApproval = useCallback(async answer => {
+    const decided = toolApprovalAnswer(answer);
+    const waiting = approvalWaitRef.current;
+    if (!decided || !waiting) return;
+    approvalWaitRef.current = null;
+    setPendingApproval(prev => (prev ? { ...prev, decision: decided.outcome } : prev));
+    let result;
+    try {
+      result = await answerMcpAppToolApproval({
+        ...waiting.toolRef,
+        interactionId: decided.approvalResponse.interactionId,
+        decision: decided.approvalResponse.decision
+      });
+    } catch (error) {
+      result = { content: [{ type: 'text', text: errorMessage(error) }], isError: true };
+    }
+    waiting.resolve(result);
+  }, []);
   const displayModeRef = useRef(displayMode);
   displayModeRef.current = displayMode;
   const localeRef = useRef(i18n.language);
@@ -306,7 +351,19 @@ function McpAppView({ view, appId, chatId, host = null }) {
             throw new RpcError(RPC_ERRORS.INVALID_PARAMS, 'Missing tool name');
           }
           try {
-            return await callMcpAppTool({ ...toolRef, name: params.name, args: params.arguments });
+            const result = await callMcpAppTool({
+              ...toolRef,
+              name: params.name,
+              args: params.arguments,
+              chatId: chatIdRef.current,
+              toolApprovalCapable: hostRef.current?.toolApprovals === true
+            });
+            // A tool that needs approval (#2945): the chat shows the card
+            // below the view; the view's call waits for the decision.
+            if (result?.awaitingApproval && result.interaction) {
+              return await waitForApproval(result.interaction, toolRef);
+            }
+            return result;
           } catch (error) {
             throw new RpcError(RPC_ERRORS.HOST, errorMessage(error));
           }
@@ -607,6 +664,11 @@ function McpAppView({ view, appId, chatId, host = null }) {
           style={fullscreen ? { flex: '1 1 auto', height: 'auto' } : { height }}
         />
       </div>
+      {/* A call of the view that waits for the user's approval: shown by
+          the chat, not by the view (#2945). */}
+      {pendingApproval && (
+        <ApprovalCard approval={pendingApproval} onDecide={decideApproval} allowChatGrant={false} />
+      )}
     </div>
   );
 }

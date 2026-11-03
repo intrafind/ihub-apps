@@ -44,6 +44,7 @@ import { getChatShareRepository, isShareId } from '../../services/chat/ChatShare
 import { sweepChats } from '../../services/chat/chatRetention.js';
 import { collectChatStats } from '../../services/chat/chatAdminStats.js';
 import { getRunSummaryRepository } from '../../services/runtime/RunSummaryRepository.js';
+import { STORAGE_MODES, chatFileSettings } from '../../services/chatFiles/chatFilePolicy.js';
 
 const COMPONENT = 'AdminChatHistory';
 
@@ -93,11 +94,36 @@ const sharingSettingsSchema = z
   .partial()
   .strict();
 
+// Uploaded files of chats and scheduled tasks (`platform.uploads`). Sizes are
+// bytes; zero or less is "no cap" (the three that name a size or count).
+const uploadsSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    storageMode: z.enum(STORAGE_MODES),
+    originalRetentionDays: z.number().int(),
+    evictOldestOriginalsOnQuota: z.boolean(),
+    quotas: z
+      .object({
+        maxFileBytes: z.number().int(),
+        maxChatBytes: z.number().int(),
+        maxChatFiles: z.number().int(),
+        maxUserBytes: z.number().int(),
+        maxServerBytes: z.number().int(),
+        maxApiFiles: z.number().int(),
+        maxApiBytes: z.number().int()
+      })
+      .partial()
+      .strict()
+  })
+  .partial()
+  .strict();
+
 const settingsBodySchema = z
   .object({
     chats: chatsSettingsSchema.optional(),
     runLog: runLogSettingsSchema.optional(),
-    sharing: sharingSettingsSchema.optional()
+    sharing: sharingSettingsSchema.optional(),
+    uploads: uploadsSettingsSchema.optional()
   })
   .strict();
 
@@ -115,7 +141,7 @@ let retentionRunning = false;
  * The effective settings, defaults filled in, in the shape the page edits.
  *
  * @param {Object} platform - Platform configuration.
- * @returns {{chats: Object, runLog: Object}}
+ * @returns {{chats: Object, sharing: Object, uploads: Object, runLog: Object}}
  */
 function resolveSettings(platform) {
   const chats = platform?.chats || {};
@@ -126,6 +152,11 @@ function resolveSettings(platform) {
       ...chatRetentionSettings(platform)
     },
     sharing: chatSharingSettings(platform),
+    uploads: (() => {
+      const { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas } =
+        chatFileSettings(platform);
+      return { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas };
+    })(),
     runLog: {
       enabled: ledger.enabled !== false,
       identityMode: ledger.identityMode || 'default',
@@ -222,7 +253,7 @@ export default function registerAdminChatHistoryRoutes(app) {
       );
     }
     try {
-      const { chats, runLog: ledger, sharing } = parsed.data;
+      const { chats, runLog: ledger, sharing, uploads } = parsed.data;
       const platformConfig = await configStore.readJson('config/platform.json');
       if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
@@ -260,6 +291,24 @@ export default function registerAdminChatHistoryRoutes(app) {
           sharing: { ...platformConfig.chats?.sharing, [key]: value }
         };
         changed.push(`chats.sharing.${key}`);
+      }
+
+      // `platform.uploads`: top-level values and the `quotas` block, written
+      // one by one so only what changed shows up in the audit entry.
+      for (const [key, value] of Object.entries(uploads || {})) {
+        if (key === 'quotas') {
+          for (const [quota, limit] of Object.entries(value || {})) {
+            if (current.uploads.quotas[quota] === limit) continue;
+            platformConfig.uploads = {
+              ...platformConfig.uploads,
+              quotas: { ...platformConfig.uploads?.quotas, [quota]: limit }
+            };
+            changed.push(`uploads.quotas.${quota}`);
+          }
+        } else if (current.uploads[key] !== value) {
+          platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
+          changed.push(`uploads.${key}`);
+        }
       }
 
       if (changed.length > 0) {

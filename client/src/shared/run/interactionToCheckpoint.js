@@ -50,6 +50,24 @@ export function isClarificationInteraction(interaction) {
 }
 
 /**
+ * True when an interaction is a chat tool approval (#2945): a model's tool
+ * call waiting for the user's Approve / Reject — not a workflow checkpoint
+ * and not a scheduled run's approval (those are `origin: 'policy'`).
+ *
+ * @param {Object|null} interaction
+ * @returns {boolean}
+ */
+export function isToolApprovalInteraction(interaction) {
+  return !!(
+    interaction &&
+    interaction.kind === 'approval' &&
+    interaction.origin === 'tool' &&
+    interaction.source?.chatId &&
+    !isCheckpointInteraction(interaction)
+  );
+}
+
+/**
  * True when a checkpoint is a question to answer (free text, number, date,
  * options…) rather than an approval / review decision — both the legacy
  * `input` type and the `question` type a node's `ask_user` produces.

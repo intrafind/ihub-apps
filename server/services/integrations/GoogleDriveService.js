@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import 'dotenv/config';
-import crypto from 'node:crypto';
 import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
-import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
+import { isUnavailableError } from './oauthRefreshError.js';
+import { createFixedEndpointStrategy } from './auth/strategies/fixedEndpoint.js';
 
 /**
  * Google Drive export MIME type mappings for Google Workspace documents
@@ -32,6 +32,13 @@ const GOOGLE_EXPORT_MIME_TYPES = {
   }
 };
 
+/** What a Google Drive sign-in asks for: read-only Drive plus the profile. */
+const GOOGLE_DRIVE_SCOPES = Object.freeze([
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
+]);
+
 /**
  * Google Drive Service for Google Workspace file access integration
  * Provides OAuth 2.0 authentication with PKCE, secure token storage, and Google Drive API access
@@ -47,6 +54,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
     // Google OAuth2 endpoints
     this.authBaseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
     this.tokenUrl = 'https://oauth2.googleapis.com/token';
+    this.revocationUrl = 'https://oauth2.googleapis.com/revoke';
     this.driveApiUrl = 'https://www.googleapis.com/drive/v3';
     this.userInfoUrl = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
@@ -67,152 +75,26 @@ class GoogleDriveService extends OAuthIntegrationBase {
   }
 
   /**
-   * Generate OAuth 2.0 authorization URL with PKCE
-   * @param {string} providerId - The provider ID
-   * @param {string} state - CSRF protection state
-   * @param {string} codeVerifier - PKCE code verifier
-   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
-   * @returns {string} Authorization URL
+   * The provider's authorization server for the shared OAuth client:
+   * Google's OAuth 2.0 endpoints, read-only Drive plus the profile scopes,
+   * offline access with a consent prompt (so a refresh token is issued) and
+   * Google's RFC 7009 revocation endpoint (used on disconnect).
+   * @param {string} providerId - The installation id
+   * @returns {import('./auth/OAuthUserClient.js').OAuthStrategy}
    */
-  generateAuthUrl(providerId, state, codeVerifier, req = null) {
+  oauthStrategy(providerId) {
     const provider = this._getProviderConfig(providerId);
-    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-
-    // Google Drive API scopes
-    const scopes = [
-      'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ].join(' ');
-
-    const params = new URLSearchParams({
-      client_id: provider.clientId,
-      response_type: 'code',
-      redirect_uri: redirectUri,
-      scope: scopes,
-      state: state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      access_type: 'offline',
-      prompt: 'consent'
+    return createFixedEndpointStrategy({
+      id: `fixed:googledrive:${providerId}`,
+      issuer: 'https://accounts.google.com',
+      authorizationEndpoint: this.authBaseUrl,
+      tokenEndpoint: this.tokenUrl,
+      revocationEndpoint: this.revocationUrl,
+      clientId: provider.clientId,
+      clientSecret: provider.clientSecret,
+      scopes: GOOGLE_DRIVE_SCOPES,
+      extraAuthorizationParams: { access_type: 'offline', prompt: 'consent' }
     });
-
-    return `${this.authBaseUrl}?${params.toString()}`;
-  }
-
-  /**
-   * Exchange authorization code for tokens
-   * @param {string} providerId - The provider ID
-   * @param {string} authCode - Authorization code from OAuth callback
-   * @param {string} codeVerifier - PKCE code verifier
-   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
-   * @returns {Promise<Object>} Tokens object
-   */
-  async exchangeCodeForTokens(providerId, authCode, codeVerifier, req = null) {
-    try {
-      const provider = this._getProviderConfig(providerId);
-      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-
-      const tokenData = new URLSearchParams({
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret,
-        code: authCode,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-        code_verifier: codeVerifier
-      });
-
-      const response = await httpFetch(this.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error exchanging authorization code', {
-          component: 'Google Drive',
-          error: errorData
-        });
-        throw new Error('Failed to exchange authorization code for tokens');
-      }
-
-      const tokens = await response.json();
-
-      if (!tokens.refresh_token) {
-        logger.warn('No refresh token received from Google OAuth', {
-          component: 'Google Drive'
-        });
-      }
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        providerId: providerId
-      };
-    } catch (error) {
-      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('Error exchanging authorization code', {
-        component: 'Google Drive',
-        error
-      });
-      throw new Error('Failed to exchange authorization code for tokens');
-    }
-  }
-
-  /**
-   * Refresh access token using refresh token
-   * @param {string} providerId - The provider ID
-   * @param {string} refreshToken - Refresh token
-   * @returns {Promise<Object>} New tokens
-   */
-  async refreshAccessToken(providerId, refreshToken) {
-    try {
-      logger.info('Attempting to refresh Google Drive access token', {
-        component: 'Google Drive'
-      });
-
-      const provider = this._getProviderConfig(providerId);
-
-      const tokenData = new URLSearchParams({
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token'
-      });
-
-      const response = await httpFetch(this.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error refreshing Google Drive access token', {
-          component: 'Google Drive',
-          error: errorData
-        });
-
-        throw refreshFailureFromResponse(response, errorData);
-      }
-
-      const tokens = await response.json();
-      logger.info('Google Drive token refresh successful', { component: 'Google Drive' });
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || refreshToken,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        providerId: providerId
-      };
-    } catch (error) {
-      throw this._toRefreshError(error);
-    }
   }
 
   /**

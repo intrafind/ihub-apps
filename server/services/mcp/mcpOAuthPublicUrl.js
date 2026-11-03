@@ -15,7 +15,7 @@
  * `X-Forwarded-Proto` / `X-Forwarded-Host` only when `trust proxy` trusts the
  * connecting peer — plus iHub's base path. A base derived from a request is
  * never trusted to replace an existing client registration (see
- * `mcpOAuthService.resolveClientRegistration`).
+ * `resolveClientRegistration` in `integrations/auth/strategies/mcpDiscovery.js`).
  *
  * Every server gets its own redirect URI (`…/api/mcp/oauth/callback/<id>`)
  * and its own CIMD (`…/api/mcp/oauth/client-metadata/<id>`): a code delivered
@@ -26,13 +26,12 @@
  * @module services/mcp/mcpOAuthPublicUrl
  */
 import configCache from '../../configCache.js';
-import { buildServerPath, getBasePath } from '../../utils/basePath.js';
+import { getBasePath } from '../../utils/basePath.js';
 import { getLocalizedString } from '../../utils/localize.js';
 
 /** Route paths, relative to the public base (which already carries the base path). */
 export const MCP_OAUTH_CALLBACK_PATH = '/api/mcp/oauth/callback';
 export const MCP_OAUTH_CLIENT_METADATA_PATH = '/api/mcp/oauth/client-metadata';
-export const MCP_OAUTH_AUTHORIZE_PATH = '/api/mcp/oauth/authorize';
 
 /**
  * Stand-in base for a provider built without one. It only ever ends up in an
@@ -170,15 +169,4 @@ export function buildMcpClientMetadata({ publicBase, serverId, clientName, withC
     response_types: ['code'],
     token_endpoint_auth_method: 'none'
   };
-}
-
-/**
- * The path a user opens to connect a server (relative to the origin; carries
- * the base path). The caller appends `returnUrl`.
- *
- * @param {string} serverId
- * @returns {string}
- */
-export function mcpConnectPath(serverId) {
-  return `${buildServerPath(MCP_OAUTH_AUTHORIZE_PATH)}?serverId=${encodeURIComponent(serverId)}`;
 }

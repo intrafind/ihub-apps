@@ -8,7 +8,7 @@
  *
  * Run: node --test server/tests/jira-redirect-uri.test.js
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
@@ -22,10 +22,17 @@ import {
 import { redirectUriStep } from '../services/integrations/protocols/native/connectors/jira/index.js';
 import jiraRouter from '../routes/integrations/jira.js';
 import { runWithContext } from '../utils/requestContext.js';
+import credentialService from '../services/CredentialService.js';
+import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
+import { getIntegrationConnectionService } from '../services/integrations/auth/IntegrationConnectionService.js';
+import os from 'node:os';
+import path from 'node:path';
+import { mkdtempSync } from 'node:fs';
 
-// In-memory key material for the signed OAuth state; nothing touches disk.
+// In-memory key material; the tokens land in a temp directory.
 tokenStorageService.encryptionKey = 'd'.repeat(64);
 tokenStorageService.jwtSecret = 'jira-redirect-uri-test-secret';
+tokenStorageService.storageBasePath = mkdtempSync(path.join(os.tmpdir(), 'jira-redirect-'));
 
 const CONFIGURED = 'https://registered.example/api/integrations/jira/callback';
 
@@ -36,6 +43,7 @@ function fakeRequest({ headers = {}, protocol = 'http', ...rest } = {}) {
     headers: lower,
     protocol,
     get: name => lower[name.toLowerCase()],
+    hostname: String(lower['x-forwarded-host'] || lower.host || '').split(':')[0],
     query: {},
     params: {},
     ...rest
@@ -68,8 +76,9 @@ function run(handler, req) {
       json(body) {
         resolve({ status: this.statusCode, body });
       },
-      redirect(location) {
-        resolve({ status: 302, location });
+      setHeader() {},
+      redirect(statusOrLocation, location) {
+        resolve({ status: 302, location: location ?? statusOrLocation });
       }
     };
     Promise.resolve(handler(req, res)).catch(error => resolve({ error }));
@@ -126,35 +135,51 @@ describe('resolveJiraRedirectUri', () => {
 
 describe('Jira OAuth routes', () => {
   const headers = { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'ihub.example' };
-  const originalExchange = JiraService.exchangeCodeForTokens;
-  const originalStore = JiraService.storeUserTokens;
+  const originalStrategy = JiraService.oauthStrategy;
+  let tokenEndpoint;
 
   beforeEach(() => {
-    JiraService.exchangeCodeForTokens = originalExchange;
-    JiraService.storeUserTokens = originalStore;
+    // The real strategy (Atlassian's endpoints, the configured client), with
+    // the token endpoint answered locally.
+    tokenEndpoint = fakeTokenEndpoint([{}]);
+    JiraService.oauthStrategy = function oauthStrategyForTest() {
+      const strategy = originalStrategy.call(this);
+      return {
+        ...strategy,
+        async resolve(ctx) {
+          return { ...(await strategy.resolve(ctx)), fetchFn: tokenEndpoint };
+        }
+      };
+    };
+    credentialService.tryResolveSecret = () => 'jira-client-secret';
+    credentialService.resolveSecret = () => 'jira-client-secret';
+  });
+  after(() => {
+    JiraService.oauthStrategy = originalStrategy;
   });
 
+  /** The sign-in as `POST /api/integrations/jira/connect` starts it (the one connect flow). */
   async function startFlow() {
-    const authHandler = lastHandler(jiraRouter, '/auth');
-    let started;
-    await new Promise(resolve =>
+    let authorize;
+    await new Promise((resolve, reject) =>
       runWithContext({ basePathPrefix: '/ihub' }, async () => {
-        started = await run(authHandler, fakeRequest({ headers, user: { id: 'u1' } }));
-        resolve();
+        try {
+          const user = { id: 'u1' };
+          ({ authorizationUrl: authorize } = await getIntegrationConnectionService().beginConnect({
+            installationId: 'jira',
+            user,
+            req: fakeRequest({ headers, user })
+          }));
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
       })
     );
-    assert.equal(started.status, 302, started.error?.message);
-    const authorize = new URL(started.location);
     return { authorize, state: authorize.searchParams.get('state') };
   }
 
   async function completeFlow(state) {
-    let exchangeArgs;
-    JiraService.exchangeCodeForTokens = async (...args) => {
-      exchangeArgs = args;
-      return { accessToken: 'a', refreshToken: 'r' };
-    };
-    JiraService.storeUserTokens = async () => true;
     const callbackHandler = lastHandler(jiraRouter, '/callback');
     let done;
     await new Promise(resolve =>
@@ -166,8 +191,8 @@ describe('Jira OAuth routes', () => {
         resolve();
       })
     );
-    assert.equal(done.location, '/settings/integrations?jira_connected=true');
-    return exchangeArgs;
+    assert.equal(done.location, '/ihub/settings/integrations?integration_connected=jira');
+    return tokenEndpoint.calls[0].params;
   }
 
   it('derives the redirect URI for the authorize step and sends the same one on the exchange', async () => {
@@ -177,18 +202,22 @@ describe('Jira OAuth routes', () => {
     assert.equal(authorize.origin, 'https://auth.atlassian.com');
     assert.equal(authorize.searchParams.get('redirect_uri'), DERIVED_BASE);
     assert.equal(authorize.searchParams.get('client_id'), 'client-1');
+    assert.equal(authorize.searchParams.get('code_challenge_method'), 'S256');
+    assert.equal(authorize.searchParams.get('audience'), 'api.atlassian.com');
 
-    const exchangeArgs = await completeFlow(state);
-    assert.equal(exchangeArgs[0], 'c');
-    assert.equal(exchangeArgs[2], DERIVED_BASE);
+    const exchange = await completeFlow(state);
+    assert.equal(exchange.get('code'), 'c');
+    assert.equal(exchange.get('redirect_uri'), DERIVED_BASE);
+    assert.equal(exchange.get('client_id'), 'client-1');
+    assert.ok(exchange.get('code_verifier'), 'the PKCE verifier kept server-side is sent');
   });
 
   it('sends the configured redirect URI on both steps when one is set', async () => {
     installJira({ clientId: 'client-1', clientSecretRef: 'jira-secret', redirectUri: CONFIGURED });
     const { authorize, state } = await startFlow();
     assert.equal(authorize.searchParams.get('redirect_uri'), CONFIGURED);
-    const exchangeArgs = await completeFlow(state);
-    assert.equal(exchangeArgs[2], CONFIGURED);
+    const exchange = await completeFlow(state);
+    assert.equal(exchange.get('redirect_uri'), CONFIGURED);
   });
 });
 

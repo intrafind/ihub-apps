@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -17,6 +17,8 @@ import IntegrationGroupSection from '../components/integrations/IntegrationGroup
 import InstallationTile from '../components/integrations/InstallationTile';
 import CatalogTile from '../components/integrations/CatalogTile';
 import InboundIntegrations from '../components/integrations/InboundIntegrations';
+import IntegrationRequestsPanel from '../components/integrations/IntegrationRequestsPanel';
+import { announceIntegrationRequestCount } from '../hooks/useIntegrationRequestCount';
 import {
   MigrationConfirmDialog,
   MigrationOutcome
@@ -32,11 +34,15 @@ import {
   SECONDARY_BUTTON_CLASS
 } from '../components/formStyles';
 import {
+  approveIntegrationRequest,
+  declineIntegrationRequest,
   deleteInstalledIntegration,
   fetchInstalledIntegrations,
   fetchIntegrationCatalog,
+  fetchIntegrationRequests,
   reloadIntegrationCatalog,
   setInstalledIntegrationEnabled,
+  showHiddenIntegration,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
 import {
@@ -46,7 +52,7 @@ import {
   getAdminApiErrorMessage
 } from '../../../api/adminApi';
 
-const TABS = new Set(['installed', 'catalog', 'inbound']);
+const TABS = new Set(['installed', 'catalog', 'requests', 'inbound']);
 
 /** Marketplace item names are definition folder names: `/` became `__`. */
 export function definitionIdFromParam(value) {
@@ -112,6 +118,10 @@ export function matchesIntegrationQuery(entry, query) {
  *   Install opens the install dialog; so does the deep link
  *   `?install=<folder name>` with `v.<key>=` and `label` prefills (the
  *   marketplace, the LDAP sign-in providers).
+ * - **Requests**: what users asked for from the catalog (#2926). Approve
+ *   opens the install dialog for the definition; Decline and Decline and
+ *   hide ask for a note. The count of open requests is the tab's badge and
+ *   the sidebar's.
  * - **Inbound**: Outlook add-in, browser extension, Microsoft 365 Copilot,
  *   Nextcloud embed and the MCP gateway, each with its status.
  */
@@ -144,6 +154,20 @@ function AdminIntegrationsPage() {
   const [testResult, setTestResult] = useState(null);
   // The outcome of the last migration action (log entry or error), until dismissed.
   const [migrationOutcome, setMigrationOutcome] = useState(null);
+  // The users' requests: { requests, hidden, openCount }; null while unknown.
+  const [requestQueue, setRequestQueue] = useState(null);
+  const [requestsFailed, setRequestsFailed] = useState(false);
+
+  const loadRequests = useCallback(async () => {
+    try {
+      const queue = await fetchIntegrationRequests();
+      setRequestQueue(queue);
+      setRequestsFailed(false);
+      announceIntegrationRequestCount(queue?.openCount || 0);
+    } catch {
+      setRequestsFailed(true);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -175,6 +199,11 @@ function AdminIntegrationsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The queue is read on its own: the page works without it.
+  useEffect(() => {
+    void loadRequests();
+  }, [loadRequests]);
 
   // The inbound channels' switches live in platform.json; without it every
   // card shows "Available".
@@ -260,6 +289,57 @@ function AdminIntegrationsPage() {
     );
     setTab('installed');
     void load();
+    // Installing closes the requests it serves.
+    void loadRequests();
+  };
+
+  const approveRequest = async request => {
+    setBusy(request.id);
+    try {
+      if (request.status === 'open') await approveIntegrationRequest(request.id);
+      await loadRequests();
+      setDialog({ definitionId: request.definition });
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const declineRequest = async (request, { note, hide }) => {
+    setBusy(request.id);
+    try {
+      await declineIntegrationRequest(request.id, { note, hide });
+      flash(
+        'success',
+        hide
+          ? t(
+              'admin.integrations.requests.declinedHidden',
+              'Request declined; {{name}} is hidden from users.',
+              { name: request.definitionName }
+            )
+          : t('admin.integrations.requests.declined', 'Request for {{name}} declined.', {
+              name: request.definitionName
+            })
+      );
+      await loadRequests();
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const showHidden = async definition => {
+    setBusy(definition);
+    try {
+      await showHiddenIntegration(definition);
+      await loadRequests();
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const toggle = async item => {
@@ -335,6 +415,11 @@ function AdminIntegrationsPage() {
       label: t('admin.integrationCatalog.tabs.catalog', 'Catalog'),
       count: catalog.length
     },
+    {
+      id: 'requests',
+      label: t('admin.integrations.requests.tab', 'Requests'),
+      ...(requestQueue ? { count: requestQueue.openCount || 0 } : {})
+    },
     { id: 'inbound', label: t('admin.integrations.tabs.inbound', 'Inbound') }
   ];
 
@@ -395,6 +480,10 @@ function AdminIntegrationsPage() {
             <Icon name="refresh" size="sm" />
             {t('admin.integrationCatalog.reload', 'Reload catalog')}
           </button>
+          <Link to="/admin/integrations/builder/new" className={SECONDARY_BUTTON_CLASS}>
+            <Icon name="wrench" size="sm" />
+            {t('admin.integrationBuilder.addManually', 'Add manually')}
+          </Link>
           <button type="button" className={PRIMARY_BUTTON_CLASS} onClick={() => setTab('catalog')}>
             <Icon name="plus" size="sm" />
             {t('admin.integrationCatalog.install', 'Install')}
@@ -507,6 +596,20 @@ function AdminIntegrationsPage() {
       )}
       {!loading && tab === 'catalog' && (
         <div role="tabpanel" id="tabpanel-catalog" aria-labelledby="tab-catalog">
+          <div
+            className={`mb-6 flex flex-wrap items-center justify-between gap-3 ${CALLOUT_CLASS.info}`}
+          >
+            <p>
+              {t(
+                'admin.integrationBuilder.catalogHint',
+                'Not in the catalog? Build it from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent.'
+              )}
+            </p>
+            <Link to="/admin/integrations/builder/new" className={SECONDARY_BUTTON_CLASS}>
+              <Icon name="wrench" size="sm" />
+              {t('admin.integrationBuilder.addManually', 'Add manually')}
+            </Link>
+          </div>
           {searchBox}
           {catalogGroups.length === 0 ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -529,6 +632,36 @@ function AdminIntegrationsPage() {
                 </IntegrationGroupSection>
               ))}
             </div>
+          )}
+        </div>
+      )}
+      {!loading && tab === 'requests' && (
+        <div role="tabpanel" id="tabpanel-requests" aria-labelledby="tab-requests">
+          {requestsFailed && (
+            <AdminLoadError
+              message={t(
+                'admin.integrations.requests.loadFailed',
+                'The requests could not be loaded.'
+              )}
+              framed={false}
+              className="mb-4"
+            />
+          )}
+          {requestQueue ? (
+            <IntegrationRequestsPanel
+              requests={requestQueue.requests || []}
+              hidden={requestQueue.hidden || []}
+              busyId={busy}
+              onApprove={approveRequest}
+              onDecline={declineRequest}
+              onShow={showHidden}
+            />
+          ) : (
+            !requestsFailed && (
+              <div className="flex justify-center py-16">
+                <LoadingSpinner size="lg" />
+              </div>
+            )
           )}
         </div>
       )}
@@ -559,6 +692,7 @@ function AdminIntegrationsPage() {
         pending={migration.pending}
         onConfirm={migration.confirm}
         onCancel={migration.cancel}
+        onSelectBackup={migration.selectBackup}
       />
 
       <ConfirmDialog

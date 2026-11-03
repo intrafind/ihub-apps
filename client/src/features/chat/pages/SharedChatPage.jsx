@@ -13,9 +13,13 @@ import {
   downloadSharedArtifactsZip,
   fetchSharedArtifact,
   fetchSharedChat,
-  fetchSharedChatArtifacts
+  fetchSharedChatArtifacts,
+  fetchSharedChatFileBlob,
+  fetchSharedChatFileText,
+  fetchSharedChatFiles
 } from '../../../api';
 import ArtifactsPanel from '../components/ArtifactsPanel';
+import ChatFilesContext from '../contexts/ChatFilesContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -274,6 +278,36 @@ export default function SharedChatPage() {
     [shareId]
   );
 
+  // The uploaded files the owner chose to share (none by default).
+  const uploadedAccess = share?.uploadedFilesAccess || 'none';
+  const uploadedSource = useMemo(
+    () =>
+      uploadedAccess === 'none'
+        ? null
+        : {
+            list: () => fetchSharedChatFiles(shareId),
+            fetchText: fileId => fetchSharedChatFileText(shareId, fileId),
+            fetchBlob: fileId => fetchSharedChatFileBlob(shareId, fileId)
+          },
+    [shareId, uploadedAccess]
+  );
+  const [filesDrawerFileId, setFilesDrawerFileId] = useState(null);
+  const hasSharedFiles =
+    Boolean(uploadedSource) &&
+    messages.some(message => message.sharedAttachments?.some(attachment => attachment?.shared));
+  const filesContext = useMemo(
+    () =>
+      uploadedSource
+        ? {
+            openFile: fileId => {
+              setFilesDrawerFileId(fileId);
+              setShowArtifacts(true);
+            }
+          }
+        : null,
+    [uploadedSource]
+  );
+
   const appName = share?.app
     ? getLocalizedContent(share.app.name, i18n.language)
     : share?.appId || '';
@@ -430,21 +464,23 @@ export default function SharedChatPage() {
       </header>
 
       <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-2 sm:px-6 py-4">
-        <ArtifactFetchContext.Provider value={fetchArtifact}>
-          <div className="flex-1 flex flex-col min-h-0">
-            <ChatMessageList
-              messages={messages}
-              editable={false}
-              readOnly
-              appId={share.appId || undefined}
-              chatId={share.id}
-              app={null}
-              models={[]}
-            />
-          </div>
-        </ArtifactFetchContext.Provider>
+        <ChatFilesContext.Provider value={filesContext}>
+          <ArtifactFetchContext.Provider value={fetchArtifact}>
+            <div className="flex-1 flex flex-col min-h-0">
+              <ChatMessageList
+                messages={messages}
+                editable={false}
+                readOnly
+                appId={share.appId || undefined}
+                chatId={share.id}
+                app={null}
+                models={[]}
+              />
+            </div>
+          </ArtifactFetchContext.Provider>
+        </ChatFilesContext.Provider>
 
-        {artifacts.length > 0 && (
+        {(artifacts.length > 0 || hasSharedFiles) && (
           <section className="mt-4 mb-8" aria-labelledby="shared-artifacts-heading">
             <div className="flex items-center justify-between gap-2 mb-2.5 px-1">
               <h2
@@ -464,6 +500,14 @@ export default function SharedChatPage() {
               </button>
             </div>
             <ul className="flex flex-col gap-2">
+              {hasSharedFiles && artifacts.length === 0 && (
+                <li className="text-sm text-gray-600 dark:text-gray-300">
+                  {t(
+                    'chatSharing.viewer.sharedFiles',
+                    'The owner shared the files uploaded to this chat.'
+                  )}
+                </li>
+              )}
               {artifacts.map(artifact => (
                 <ArtifactRow key={artifact.id} artifact={artifact} fetchBlob={fetchArtifactBlob} />
               ))}
@@ -478,6 +522,10 @@ export default function SharedChatPage() {
             source={artifactSource}
             zipName={title || 'shared-chat'}
             messages={messages}
+            uploadedSource={uploadedSource}
+            uploadedAccess={uploadedAccess}
+            initialTab={filesDrawerFileId ? 'uploaded' : null}
+            initialFileId={filesDrawerFileId}
           />
         )}
 

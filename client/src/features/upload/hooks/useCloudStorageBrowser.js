@@ -4,6 +4,30 @@
 import { useState, useCallback, useMemo } from 'react';
 import { apiClient } from '../../../api/client';
 import { processCloudFile } from '../utils/cloudFileProcessing';
+import { fetchUserIntegration } from '../../../api/userIntegrationsApi';
+
+/** A browse request refused for a missing connection (409 INTEGRATION_AUTH_REQUIRED) or a 401. */
+function isAuthRequired(err) {
+  return (
+    err?.response?.status === 401 || err?.response?.data?.error === 'INTEGRATION_AUTH_REQUIRED'
+  );
+}
+
+/**
+ * Why the connection is needed, from a refused request: the reason and, for
+ * `insufficient_scope`, the scopes the reconnect has to ask for.
+ *
+ * @param {Error} err - The refused request (axios error)
+ * @returns {{reason: string, scopes: string[]}}
+ */
+function authPromptOf(err) {
+  const data = err?.response?.data;
+  const reason = typeof data?.reason === 'string' ? data.reason : 'not_connected';
+  const scopes = Array.isArray(data?.scopes)
+    ? data.scopes.filter(scope => typeof scope === 'string' && scope)
+    : [];
+  return { reason, scopes };
+}
 
 /**
  * Shared state-management factory for the three cloud-storage file
@@ -41,6 +65,10 @@ export function useCloudStorageBrowser(adapter, options = {}) {
   const baseQuery = useMemo(() => (providerId ? { providerId } : {}), [providerId]);
 
   const [authStatus, setAuthStatus] = useState('checking');
+  // Why the user has to connect: `not_connected`, `expired`, `insufficient_scope`.
+  const [authReason, setAuthReason] = useState('not_connected');
+  // `insufficient_scope`: the permissions the reconnect asks for.
+  const [authScopes, setAuthScopes] = useState([]);
   const [sources, setSources] = useState([]);
   const [currentSource, setCurrentSource] = useState(null);
   const [drives, setDrives] = useState([]);
@@ -63,9 +91,15 @@ export function useCloudStorageBrowser(adapter, options = {}) {
   const checkAuthStatus = useCallback(async () => {
     try {
       setAuthStatus('checking');
-      const response = await apiClient.get(`${basePath}/status`, { params: baseQuery });
-      setAuthStatus(response.data.connected ? 'connected' : 'not_connected');
-      return response.data.connected;
+      // The one integrations API (`GET /api/integrations/:id`): the provider
+      // installation as the user sees it, with its connection status.
+      const integration = providerId ? await fetchUserIntegration(providerId) : null;
+      const status = integration?.connection?.status;
+      const connected = status === 'connected';
+      setAuthReason(status === 'needs_reconnect' ? integration.connection.reason : 'not_connected');
+      setAuthScopes([]);
+      setAuthStatus(connected ? 'connected' : 'not_connected');
+      return connected;
     } catch (err) {
       console.error(`${basePath} auth status check failed:`, err);
       if (err.response?.status === 401) {
@@ -76,9 +110,16 @@ export function useCloudStorageBrowser(adapter, options = {}) {
       }
       return false;
     }
-  }, [basePath, baseQuery]);
+  }, [basePath, providerId]);
 
-  const handleAuthError = useCallback(message => {
+  /**
+   * A browse request was refused because the user has no usable connection
+   * (`409 INTEGRATION_AUTH_REQUIRED`, with the reason and any missing
+   * scopes): show the Connect card.
+   */
+  const handleAuthError = useCallback((message, { reason = 'not_connected', scopes = [] } = {}) => {
+    setAuthReason(reason);
+    setAuthScopes(scopes);
     setAuthStatus('not_connected');
     setError(message);
   }, []);
@@ -92,8 +133,8 @@ export function useCloudStorageBrowser(adapter, options = {}) {
       return response.data.sources || [];
     } catch (err) {
       console.error(`Failed to load sources for ${basePath}:`, err);
-      if (err.response?.status === 401) {
-        handleAuthError('Authentication required.');
+      if (isAuthRequired(err)) {
+        handleAuthError('Authentication required.', authPromptOf(err));
       } else {
         setError(err.message || 'Failed to load sources');
       }
@@ -117,8 +158,8 @@ export function useCloudStorageBrowser(adapter, options = {}) {
         return result;
       } catch (err) {
         console.error(`Failed to load drives for source ${sourceId}:`, err);
-        if (err.response?.status === 401) {
-          handleAuthError('Authentication required.');
+        if (isAuthRequired(err)) {
+          handleAuthError('Authentication required.', authPromptOf(err));
         } else {
           setError(err.message || 'Failed to load drives');
         }
@@ -156,8 +197,8 @@ export function useCloudStorageBrowser(adapter, options = {}) {
         return response.data.items || [];
       } catch (err) {
         console.error('Failed to load items:', err);
-        if (err.response?.status === 401) {
-          handleAuthError('Authentication required.');
+        if (isAuthRequired(err)) {
+          handleAuthError('Authentication required.', authPromptOf(err));
         } else {
           setError(err.message || 'Failed to load items');
         }
@@ -355,6 +396,8 @@ export function useCloudStorageBrowser(adapter, options = {}) {
 
   return {
     authStatus,
+    authReason,
+    authScopes,
     sources,
     currentSource,
     drives,

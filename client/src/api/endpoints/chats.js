@@ -3,6 +3,7 @@
 
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+import { createFileApi } from '../utils/fileApi';
 
 /**
  * Durable chats (`/api/chats/*`) — list, open, rename and erase the chats the
@@ -215,3 +216,27 @@ export const keepChat = async chatId => {
     null
   );
 };
+
+/**
+ * The files uploaded to a chat (`/api/chats/:chatId/files`): the composer's
+ * pre-upload, the Files drawer's list, preview, original download and delete.
+ * See `api/utils/fileApi.js` for the calls.
+ */
+const chatFiles = createFileApi('/chats');
+
+/** Upload one file (or its extracted text) to a chat before the message is sent. */
+export const uploadChatFile = (chatId, payload, options) =>
+  chatFiles.upload(chatId, payload, options);
+
+/** @returns {Promise<{ items: Object[] }>} descriptors of the chat's uploaded files */
+export const fetchChatFiles = chatId => chatFiles.list(chatId);
+
+/** The extracted text of an uploaded file. */
+export const fetchChatFileText = (chatId, fileId) => chatFiles.text(chatId, fileId);
+
+/** The original binary of an uploaded file (rejects with 410 once it was discarded). */
+export const fetchChatFileBlob = (chatId, fileId) => chatFiles.blob(chatId, fileId);
+
+/** Delete an uploaded file; `onlyOriginal` drops just its binary and keeps the text. */
+export const deleteChatFile = (chatId, fileId, options) =>
+  chatFiles.remove(chatId, fileId, options);

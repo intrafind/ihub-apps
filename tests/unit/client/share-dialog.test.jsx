@@ -31,6 +31,7 @@ const mockApi = {
   createShortLink: jest.fn(),
   getShortLink: jest.fn(),
   fetchChatShares: jest.fn(),
+  fetchChatFiles: jest.fn(async () => ({ items: [] })),
   createChatShare: jest.fn(),
   lookupUsers: jest.fn(),
   revokeChatShare: jest.fn()
@@ -40,6 +41,7 @@ jest.mock('../../../client/src/api', () => ({
   createShortLink: (...args) => mockApi.createShortLink(...args),
   getShortLink: (...args) => mockApi.getShortLink(...args),
   fetchChatShares: (...args) => mockApi.fetchChatShares(...args),
+  fetchChatFiles: (...args) => mockApi.fetchChatFiles(...args),
   createChatShare: (...args) => mockApi.createChatShare(...args),
   lookupUsers: (...args) => mockApi.lookupUsers(...args),
   revokeChatShare: (...args) => mockApi.revokeChatShare(...args)
@@ -72,6 +74,7 @@ function renderDialog(props = {}) {
 beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockApi.fetchChatShares.mockResolvedValue({ items: [] });
+  mockApi.fetchChatFiles.mockResolvedValue({ items: [] });
 });
 
 describe('ShareDialog', () => {

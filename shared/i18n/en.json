@@ -20,7 +20,16 @@
     "hideList": "Hide file list",
     "regionLabel": "Attached files",
     "saveAudio": "Save audio",
-    "saveAudioNamed": "Save audio as {{name}}"
+    "saveAudioNamed": "Save audio as {{name}}",
+    "errors": {
+      "chatQuota": "This chat has no room for more saved files; the file is sent with the message only",
+      "storageQuota": "Your file storage is full; the file is sent with the message only",
+      "fileTooLarge": "Too large to save; the file is sent with the message only",
+      "notSaved": "Could not be saved to the chat; the file is sent with the message only"
+    },
+    "stored": "Saved to this chat",
+    "templateReady": "can be used as a template",
+    "uploading": "Uploading {{name}}"
   },
   "app": {
     "title": "iHub Apps",
@@ -462,6 +471,39 @@
       "disable": "Turn off incognito — keep this chat in your history",
       "activeNotice": "Temporary chat — not saved to your history and deleted {{hours}} hours after its last activity.",
       "keepFailed": "This chat could not be saved to your history: {{error}}"
+    },
+    "toolApproval": {
+      "titleWithIntegration": "{{integration}} · {{tool}}",
+      "intro": "The assistant wants to run this tool with the arguments below. Nothing is sent until you choose.",
+      "introDecided": "The assistant asked to run this tool.",
+      "arguments": "Arguments",
+      "justification": "Written by the assistant (not a verified reason)",
+      "approve": "Approve",
+      "approveForChat": "Approve & allow for this chat",
+      "reject": "Reject",
+      "expired": "This approval expired. The call was not run.",
+      "closed": "This approval is closed.",
+      "approvedMessage": "Approved: {{tool}}",
+      "approvedForChatMessage": "Approved for this chat: {{tool}}",
+      "rejectedMessage": "Rejected: {{tool}}",
+      "submitFailed": "The decision could not be sent.",
+      "notPending": "This approval is no longer open (it was answered, or a newer message replaced it).",
+      "alreadyAnswered": "This approval was already answered.",
+      "decided": {
+        "approved": "You approved this call.",
+        "approvedForChat": "You approved this call and allowed this tool for the rest of the chat.",
+        "rejected": "You rejected this call. It was not run."
+      },
+      "sideEffect": {
+        "read": "Reads",
+        "write": "Writes",
+        "destructive": "Deletes or overwrites",
+        "unknown": "Effect unknown"
+      },
+      "dataFlow": {
+        "internal": "Internal",
+        "external": "External"
+      }
     }
   },
   "auth": {
@@ -612,7 +654,7 @@
       "title": "Chat History",
       "sharing": {
         "title": "Chat sharing",
-        "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; uploaded files are never part of it.",
+        "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; the owner decides whether the files uploaded to it are shared too (by default they are not).",
         "enabled": "Allow sharing chats",
         "enabledHelp": "Turning it off stops new links and closes existing ones until it is turned on again.",
         "allowUsers": "Links for specific users",
@@ -661,6 +703,37 @@
           "expired": "Expired",
           "exhausted": "View limit reached"
         }
+      },
+      "uploads": {
+        "title": "Uploaded files",
+        "description": "Files users attach to chats and to scheduled tasks. The text the assistant reads is kept with the chat so follow-up questions, reloads and other devices keep working.",
+        "enabled": "Store uploaded files on the server",
+        "enabledHelp": "Turning it off stops uploads to the file store; attachments are then only sent with the message.",
+        "storageMode": "What the server keeps",
+        "mode": {
+          "originalAndText": "The file and its text (originals can be downloaded, shared and used as templates)",
+          "serverTextOnly": "Only the text (the server extracts it and discards the file)",
+          "clientTextOnly": "Only the text, extracted in the browser (files never leave the device)"
+        },
+        "storageModeHelp": "An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
+        "originalRetentionDays": "Keep original files (days)",
+        "originalRetentionDaysHelp": "After this many days only the text of a chat file stays, until the chat itself is deleted. Files attached to scheduled tasks are kept as long as the task exists. 0 keeps originals as long as the chat.",
+        "evict": "Make room by removing the oldest originals",
+        "evictHelp": "When a user or the server reaches its limit, the oldest chat originals are removed first (their text stays) before an upload is refused.",
+        "maxFileBytes": "Largest file",
+        "maxFileBytesHelp": "A larger upload is refused. 0 removes the limit.",
+        "maxChatBytes": "Per chat or task",
+        "maxChatBytesHelp": "All files of one chat or one scheduled task together. 0 removes the limit.",
+        "maxChatFiles": "Files per chat or task",
+        "maxChatFilesHelp": "The most files one chat or task may hold. 0 removes the limit.",
+        "maxUserBytes": "Per user",
+        "maxUserBytesHelp": "Everything one user has in chats and tasks. 0 removes the limit.",
+        "maxServerBytes": "Whole server",
+        "maxServerBytesHelp": "All uploaded files of all users together. 0 removes the limit.",
+        "maxApiFiles": "Inference API: files per user",
+        "maxApiFilesHelp": "The most files one user may keep through the Inference API (/v1/files). 0 removes the limit.",
+        "maxApiBytes": "Inference API: size per user",
+        "maxApiBytesHelp": "All files one user keeps through the Inference API together. 0 removes the limit."
       }
     },
     "voiceInput": {
@@ -2067,7 +2140,8 @@
         "ssrf": "SSRF Allowlist",
         "proxy": "Outbound Proxy",
         "encryption": "Value Encryption",
-        "rateLimits": "Rate Limits"
+        "rateLimits": "Rate Limits",
+        "toolApproval": "Tool approval"
       },
       "rateLimits": {
         "title": "Rate limits",
@@ -2116,75 +2190,6 @@
           }
         }
       }
-    },
-    "tools": {
-      "title": "Tool Management",
-      "subtitle": "Create, edit, and manage AI tools / function calling for your iHub Apps",
-      "toggle": "Toggle tools",
-      "enableDisable": "Tools",
-      "enableDisableSubtitle": "Enable or disable tools for this chat",
-      "createNew": "Create New Tool",
-      "uploadConfig": "Upload Config",
-      "uploading": "Uploading...",
-      "searchPlaceholder": "Search tools...",
-      "filterAll": "All Tools",
-      "filterEnabled": "Enabled Only",
-      "filterDisabled": "Disabled Only",
-      "filterAllTypes": "All Types",
-      "filterRegular": "Regular Tools",
-      "filterMultiFunction": "Multi-Function",
-      "filterSpecial": "Special Tools",
-      "loadError": "Error loading tools",
-      "noTools": "No tools found",
-      "noToolsDescription": "Get started by creating a new tool.",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "enable": "Enable",
-      "disable": "Disable",
-      "clone": "Clone",
-      "edit": "Edit",
-      "delete": "Delete",
-      "download": "Download Config",
-      "deleteConfirm": "Are you sure you want to delete this tool?",
-      "deleteSuccess": "Tool deleted successfully",
-      "typeRegular": "Regular",
-      "typeMultiFunction": "Multi-Function",
-      "typeSpecial": "Special",
-      "table": {
-        "name": "Name",
-        "type": "Type",
-        "description": "Description",
-        "script": "Script",
-        "status": "Status",
-        "actions": "Actions"
-      },
-      "editTool": "Edit Tool",
-      "createDescription": "Create a new AI tool / function",
-      "editDescription": "Edit tool configuration and script",
-      "configTab": "Configuration",
-      "scriptTab": "Script Editor",
-      "id": "Tool ID",
-      "idHelp": "Unique identifier for the tool",
-      "name": "Name",
-      "nameHelp": "Display name for the tool in different languages",
-      "description": "Description",
-      "descriptionHelp": "Description shown to the LLM for tool selection",
-      "scriptFile": "Script File",
-      "scriptFileHelp": "JavaScript file in server/tools/ directory",
-      "concurrency": "Concurrency Limit",
-      "concurrencyHelp": "Maximum number of concurrent executions",
-      "parameters": "Parameters (JSON Schema)",
-      "parametersHelp": "JSON Schema definition for tool parameters",
-      "functions": "Functions (Multi-Function Tool)",
-      "functionsHelp": "Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.",
-      "functionsExample": "Show example multi-function configuration",
-      "isSpecialTool": "Special Tool",
-      "isSpecialToolHelp": "Provider-specific tools that are handled directly by the model provider (e.g., Google Search Grounding, OpenAI Web Search)",
-      "provider": "Provider",
-      "providerHelp": "Provider identifier (e.g., \"google\" for Google Search, \"openai\" for OpenAI, \"openai-responses\" for response-based tools)",
-      "scriptSaved": "Script saved successfully",
-      "saveScript": "Save Script",
-      "scriptEditorInfo": "Edit the JavaScript code for this tool. Changes will be saved to server/tools/"
     },
     "users": {
       "view": {
@@ -2609,7 +2614,19 @@
           "autoRefresh": "Auto Refresh",
           "hours": "hours",
           "trustCode": "May deliver integrations that run code on this server",
-          "trustCodeHelp": "Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install."
+          "trustCodeHelp": "Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install.",
+          "versionPolicy": "Versions",
+          "channel": "Channel",
+          "channelStable": "Stable releases only",
+          "channelAll": "All releases, including pre-releases",
+          "channelHelp": "Stable hides versions such as 2.0.0-rc.1 from install and the update badge.",
+          "pins": "Version pins",
+          "pinsHelp": "Keep an item on a version range, for example 1.3.x or ~1.3.0. Install and the update badge offer only versions inside the pin.",
+          "pinItem": "Item",
+          "pinRange": "Version range",
+          "removePin": "Remove pin",
+          "addPin": "Add pin",
+          "pinInvalid": "Each pin needs an item as <type>:<name> (for example integration:org.ckan__open-data-portal) and a version range."
         }
       },
       "detail": {
@@ -2678,6 +2695,10 @@
         "actionsDynamicHint": "The server lists its actions when iHub connects to it; install and test the integration to see them.",
         "noActions": "This integration declares no actions.",
         "unavailable": "The definition could not be read from the registry, so its facts are not shown."
+      },
+      "versionPolicy": {
+        "pinned": "Pinned to {{pin}}",
+        "offered": "offered here: v{{version}}"
       }
     },
     "apps": {
@@ -2721,6 +2742,7 @@
           "scopeAny": "users pick",
           "scopePicker": "Scope picker",
           "picker": {
+            "inline": "In the chat input",
             "menu": "In the menu",
             "hidden": "Hidden"
           },
@@ -2906,7 +2928,10 @@
         "add": "Add",
         "removeLanguage": "Remove language {{lang}}",
         "noLanguages": "No languages configured. Add a language to get started.",
-        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers."
+        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers.",
+        "toolApproval": "Approval before tool calls",
+        "toolApprovalInherit": "As the admin settings (default)",
+        "toolApprovalHelp": "Makes the approval stricter for this app. It can never relax the platform, tool or integration settings: a looser value is ignored."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3286,6 +3311,10 @@
         "catalog": {
           "title": "From the catalog",
           "description": "Integrations from the catalog or a marketplace registry."
+        },
+        "custom": {
+          "description": "Integrations built here with \"Add manually\", and the tools migrated from the former Tools page.",
+          "title": "Custom"
         }
       },
       "editors": {
@@ -3723,7 +3752,8 @@
           "actionRemoved": "The action “{{action}}” is removed from the app “{{app}}” (binding {{key}}); the app no longer offers it.",
           "typeBindingAction": "The app “{{app}}” names the action “{{action}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
           "typeBindingScope": "The app “{{app}}” sets the scope “{{scope}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
-          "openApp": "Open the app"
+          "openApp": "Open the app",
+          "moduleNotPlanned": "The migration runs the code module {{module}}; what it changes is known only when it runs and is not counted here."
         },
         "log": {
           "title": "Migration log",
@@ -3744,7 +3774,8 @@
             "rolledBack": "Rolled back",
             "restored": "Backup restored",
             "adopted": "Version adopted",
-            "skipped": "Skipped"
+            "skipped": "Skipped",
+            "reverted": "Reverted"
           },
           "triggers": {
             "manual": "run by hand",
@@ -3753,7 +3784,8 @@
             "recovery": "recovery at start",
             "restore": "restore",
             "downgrade": "downgrade",
-            "adopt": "adopt"
+            "adopt": "adopt",
+            "revert": "revert"
           }
         },
         "actions": {
@@ -3762,7 +3794,8 @@
           "restore": "Restore backup",
           "adopt": "Adopt current version",
           "uninstall": "Uninstall",
-          "forInstallation": "{{action}}: {{label}}"
+          "forInstallation": "{{action}}: {{label}}",
+          "revert": "Revert to this version"
         },
         "confirm": {
           "restore": {
@@ -3774,6 +3807,11 @@
             "title": "Adopt v{{version}} for {{label}}?",
             "message": "You confirm that the stored values already fit {{definition}} v{{version}}. iHub checks them like the result of a migration and only then records the version; no value is changed. Values that do not fit are listed and nothing is recorded.",
             "confirm": "Adopt version"
+          },
+          "revert": {
+            "title": "Revert {{label}} to v{{version}}?",
+            "message": "The installation’s values, its action policy, the bindings of its apps and its marketplace entry go back to the backup {{backup}} (v{{version}}, taken {{date}}). What changed since then is replaced; iHub backs up the current state first, so you can revert forward again.",
+            "definition": "The definition goes back to v{{version}} too. Other installations of the same definition follow it: each gets its own backup of v{{version}} restored, or needs a review."
           }
         },
         "outcome": {
@@ -3787,7 +3825,9 @@
           "migrateFailed": "The migration of {{label}} failed.",
           "retry": "Nothing was written. Try again in a moment.",
           "open": "Open {{label}}",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "reverted": "{{label}} was reverted to the backup {{backup}}; it is at v{{to}} now.",
+          "revertFailed": "{{label}} could not be reverted; nothing was changed."
         },
         "panel": {
           "title": "Definition migration",
@@ -3808,7 +3848,23 @@
         },
         "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
         "settingsReadOnlyLegend": "Settings (read-only)",
-        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
+        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version.",
+        "backups": {
+          "title": "Backups",
+          "help": "iHub keeps a backup before every migration and at every version a multi-step update passes. Reverting puts back the definition of that version, the installation’s values and action policy, the bindings of its apps and its marketplace entry together.",
+          "withDefinition": "with definition",
+          "loaded": "loaded version",
+          "taken": "Taken {{date}} by {{by}}",
+          "definitionMissing": "Cannot be reverted to while v{{loaded}} is loaded: this backup does not hold the definition of v{{version}}.",
+          "revertTo": "Revert to v{{version}} ({{date}})",
+          "pick": "Backup",
+          "option": "v{{version}} · {{kind}} · {{date}}",
+          "kinds": {
+            "preMigration": "before a migration",
+            "boundary": "between two migrations",
+            "preRestore": "before a restore"
+          }
+        }
       },
       "testChat": {
         "title": "Test in chat",
@@ -3838,6 +3894,171 @@
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
         "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+      },
+      "actionReview": {
+        "new": "New",
+        "changed": "Changed",
+        "newHint": "Added since the last review. It asks for approval until you mark it reviewed.",
+        "changedHint": "Its side effect or input changed since the last review. It asks for approval until you mark it reviewed.",
+        "pending": "{{count}} actions are new or changed since the last review.",
+        "markAll": "Mark all reviewed",
+        "markOne": "Mark reviewed",
+        "markOneLabel": "Mark {{action}} reviewed",
+        "marked": "Marked as reviewed: {{actions}}"
+      },
+      "actionDetail": {
+        "source": {
+          "platform": "platform default",
+          "admin": "admin override",
+          "definition": "integration definition",
+          "annotation": "vendor annotation (not trusted)",
+          "protocol": "remote system (always external)",
+          "tool": "tool",
+          "installation": "integration setting",
+          "action": "this action’s setting",
+          "newOrChanged": "new or changed since the last review",
+          "app": "app",
+          "default": "default"
+        },
+        "edited": "Edited",
+        "reset": "Reset to default",
+        "test": {
+          "noParameters": "This action takes no input.",
+          "title": "Test",
+          "connectionShared": "Shared credential of the installation ({{ref}})",
+          "connectionSharedNoRef": "Shared credential of the installation",
+          "connectionPersonal": "My own connection ({{user}})",
+          "connectionMe": "As me ({{user}})",
+          "errorRequired": "Required",
+          "errorNumber": "Enter a number",
+          "errorInteger": "Enter a whole number",
+          "errorJson": "Enter valid JSON",
+          "choose": "Choose…",
+          "notSet": "(not set)",
+          "requiredSr": "(required)",
+          "statusOk": "Succeeded",
+          "statusError": "Failed",
+          "statusTimeout": "Timed out",
+          "result": "Result",
+          "httpStatus": "HTTP {{status}}",
+          "duration": "{{ms}} ms",
+          "sourceCount": "Answer Sources: {{count}}",
+          "request": "Request as sent",
+          "noHttp": "No HTTP request was recorded (the action ran in iHub, or its system is reached another way).",
+          "response": "Raw response",
+          "truncated": "(shortened)",
+          "sources": "Answer Sources",
+          "noSources": "The result produced no Answer Sources.",
+          "notRunnable": "This action cannot run with the current settings: {{reason}}",
+          "help": "Runs the action directly, without the model. Every run is written to the audit log.",
+          "runAs": "Run as",
+          "confirm": "I understand that this test can change data in {{integration}} (side effect: {{effect}}).",
+          "running": "Running…",
+          "run": "Run test"
+        },
+        "parameters": "Parameters",
+        "paramName": "Name",
+        "paramType": "Type",
+        "paramDescription": "Description",
+        "paramRequired": "required",
+        "schemaAsSent": "Schema as sent to the model",
+        "saved": "Saved.",
+        "title": "Action",
+        "tryInChat": "Try in chat",
+        "what": "What it does",
+        "modelDescription": "Description for the model",
+        "modelDescriptionHelp": "The tool description the model reads to decide when to call this action. Saved for the current language.",
+        "effect": "Side effect, data flow, approval",
+        "sideEffect": "Side effect",
+        "from": "from {{source}}",
+        "dataFlowLabel": "Data flow",
+        "approval": "Approval",
+        "methodHint": "The OpenAPI method {{method}} suggests “{{effect}}”. Confirm it with an override below.",
+        "overrideSideEffect": "Side effect override",
+        "asDeclared": "As declared ({{value}})",
+        "overrideDataFlow": "Data flow override",
+        "asDeclaredPlain": "As declared",
+        "actionApproval": "Approval for this action",
+        "effectHelp": "An override is your decision and is trusted: it can make a gate stricter or, for a confirmed read, looser. The strictest of the platform default, the integration, this action and the app wins.",
+        "howToUse": "How to use",
+        "guidance": "Model guidance",
+        "noGuidance": "No guidance.",
+        "guidanceHelp": "Added to the system prompt while this integration is active in a chat. Saved for the current language.",
+        "examples": "Example prompts",
+        "noExamples": "No example prompts.",
+        "examplesHelp": "One prompt per line, shown to users as ideas for what to ask. Saved for the current language.",
+        "integrationInstructions": "Integration instructions",
+        "instructionsHint": "Edited on the Overview of the installation; added to the system prompt with the guidance of each action.",
+        "usedBy": "Used by",
+        "unused": "No app, workflow or scheduled task binds this action.",
+        "bindingApp": "App",
+        "bindingWorkflow": "Workflow",
+        "bindingTask": "Scheduled task",
+        "usage": "Usage in the last {{days}} days",
+        "usageCalls": "Calls",
+        "usageApproved": "Approved",
+        "usageRejected": "Rejected",
+        "usageExpired": "Approvals expired",
+        "usageErrors": "Errors",
+        "usageTests": "Admin tests",
+        "usageUnavailable": "The usage could not be read.",
+        "usageHelp": "Counted by this server since this version: calls from chats, workflows and scheduled runs, answers to approval requests, and admin tests (not counted as calls).",
+        "openLabel": "Details of {{action}}: what it does, how to use it, test it",
+        "open": "Details",
+        "dataFlow": {
+          "internal": "Stays in iHub",
+          "external": "Leaves iHub"
+        }
+      },
+      "instructions": {
+        "sourceAdmin": "Your text",
+        "sourceDefinition": "From the integration definition",
+        "sourceServer": "Sent by the server",
+        "title": "Instructions for the model",
+        "help": "Added to the system prompt while this integration is active in a chat, together with the guidance of each action it offers.",
+        "languageHint": "Saved for the current language; an empty text uses the integration’s own again.",
+        "none": "No instructions.",
+        "edit": "Edit instructions",
+        "reset": "Use the integration’s own"
+      },
+      "requests": {
+        "tab": "Requests",
+        "sidebarBadge": "{{count}} open integration requests",
+        "loadFailed": "The requests could not be loaded.",
+        "openTitle": "Open requests ({{count}})",
+        "description": "Users asked for these catalog integrations. Approve opens the install wizard; a request closes by itself once the integration is installed and the requester’s groups may use it.",
+        "none": "No open requests.",
+        "requestedBy": "Requested by {{name}} on {{date}}",
+        "alreadyInstalled": "Already installed, but not for this user’s groups. Granting their groups access closes the request:",
+        "definitionGone": "This integration is no longer in the catalog.",
+        "approve": "Approve",
+        "approveNamed": "Approve the request of {{user}} for {{name}}",
+        "install": "Install",
+        "installNamed": "Install {{name}}",
+        "decline": "Decline",
+        "declineNamed": "Decline the request of {{user}} for {{name}}",
+        "declineHide": "Decline and hide",
+        "declineHideNamed": "Decline the request of {{user}} for {{name}} and hide it",
+        "declineTitle": "Decline the request for {{name}}?",
+        "declineMessage": "{{user}} sees the request as declined and may ask again.",
+        "declineHideTitle": "Decline and hide {{name}}?",
+        "declineHideMessage": "No user sees {{name}} in “Not available yet” any more, and the other open requests for it are declined too. You can show it again later.",
+        "noteLabel": "Note to the requester (optional)",
+        "noteHelp": "Shown to the user next to the declined request.",
+        "declined": "Request for {{name}} declined.",
+        "declinedHidden": "Request declined; {{name}} is hidden from users.",
+        "closedTitle": "Closed requests ({{count}})",
+        "hiddenTitle": "Hidden from users ({{count}})",
+        "hiddenDescription": "Users do not see these in “Not available yet” and cannot request them.",
+        "hiddenBy": "Hidden by {{name}} on {{date}}",
+        "show": "Show again",
+        "showNamed": "Show {{name}} again",
+        "status": {
+          "open": "Open",
+          "approved": "Approved, not installed yet",
+          "declined": "Declined",
+          "fulfilled": "Installed"
+        }
       }
     },
     "sidebar": {
@@ -4995,7 +5216,242 @@
         "fixes": "Fixes"
       }
     },
-    "translateField": "Translate"
+    "translateField": "Translate",
+    "toolApproval": {
+      "mode": {
+        "never": "Never ask",
+        "writes": "Ask unless it only reads",
+        "always": "Always ask"
+      },
+      "notDeclared": "Not declared",
+      "dataFlow": {
+        "internal": "Internal",
+        "external": "External"
+      },
+      "inheritPlatform": "Platform default",
+      "sideEffect": "What a call does",
+      "dataFlowLabel": "Where its data goes",
+      "title": "Tool approval",
+      "description": "Decide when a person has to approve a tool call before it runs. A read on an external system can carry internal information out, so external tools can be stricter. Integrations, tools, their actions and apps can only make this stricter, never looser. Nothing is asked until you set a mode here or on an integration or tool.",
+      "loadError": "The tool approval settings could not be loaded.",
+      "saved": "Tool approval settings saved.",
+      "saveError": "The tool approval settings could not be saved.",
+      "platformDefault": "All tools",
+      "platformDefaultHelp": "Applies where no data flow rule is set.",
+      "platformInternal": "Internal tools",
+      "platformInternalHelp": "Tools that stay inside your systems (iHub's own tools, internal integrations).",
+      "platformExternal": "External tools",
+      "platformExternalHelp": "Remote MCP servers, A2A agents and integrations whose data leaves your systems.",
+      "sameAsAll": "Same as all tools",
+      "actionMode": "Approval for {{action}}",
+      "inheritInstallation": "Approval: as the integration",
+      "installationMode": "Ask before an action runs",
+      "installationModeHelp": "The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.",
+      "saveApproval": "Save approval",
+      "installationSaved": "Approval settings saved.",
+      "newOrChangedMode": "New or changed actions",
+      "newOrChangedDefault": "Always ask (default)",
+      "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
+      "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
+      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
+    },
+    "integrationBuilder": {
+      "a2a": {
+        "cardUrl": "Agent card URL"
+      },
+      "action": {
+        "approval": "Approval",
+        "approvalInherit": "As the integration",
+        "description": "Description for the model",
+        "enabled": "Offer \"{{name}}\" to the model",
+        "name": "Action name",
+        "nameHelp": "The model calls the action by this name.",
+        "operation": "Operation {{operationId}}",
+        "parameters": "Parameters (JSON schema)",
+        "parametersFromSource": "Taken from the source when the action is called.",
+        "remoteDescription": "The server describes it as: {{text}} — a description here replaces that.",
+        "remove": "Remove action {{name}}",
+        "schemaError": "Not a JSON object: {{error}}",
+        "toolId": "Tool id {{toolId}} (kept from the tool this integration was migrated from)."
+      },
+      "actions": {
+        "add": "Add action",
+        "approvalDefault": "Approval for every action",
+        "approvalHelp": "Whether a person approves a call before it runs. An action can only be stricter; an app can tighten it further.",
+        "connectFirst": "Save the integration and connect your own account to list its tools.",
+        "listSkills": "Read the agent’s skills",
+        "listTools": "List the server’s tools",
+        "listed": "{{count}} action(s) listed.",
+        "pickOperations": "Pick operations of the OpenAPI document on the previous step.",
+        "remoteHelp": "The actions are whatever the source lists when it is called; settings made here apply to the names listed now and stay with them."
+      },
+      "addManually": "Add manually",
+      "auth": {
+        "clientId": "Client ID (optional)",
+        "credential": "Credential",
+        "credentialHelp": "Secrets live in the credential store; the integration only references one.",
+        "header": "Header name",
+        "kind": {
+          "basic": "Basic auth (\"user:password\" secret)",
+          "bearer": "Authorization: Bearer <token>",
+          "credential": "As the credential says (bearer, basic, API key, OAuth2)",
+          "header": "API key in a header",
+          "label": "How the credential is sent"
+        },
+        "mode": {
+          "label": "Sign-in",
+          "none": "None (public endpoint)",
+          "oauthUser": "Per-user OAuth (each user signs in)",
+          "serviceAccount": "Service account (one shared credential)"
+        },
+        "oauthHelp": "Without a client ID iHub registers itself with the server (dynamic client registration or a client ID metadata document).",
+        "prefix": "Value prefix (optional)",
+        "scopes": "Scopes (optional, space-separated)",
+        "scriptHelp": "A script integration signs in itself: its module reads its settings from ctx.values."
+      },
+      "back": "Back",
+      "basics": {
+        "description": "Description",
+        "icon": "Icon URL (optional)",
+        "iconHelp": "An https URL; registries and the Marketplace show it when the integration is published.",
+        "instanceId": "ID",
+        "instanceIdHelp": "Tool ids are <id>__<action>; apps bind the integration by this id. It cannot change later.",
+        "name": "Name"
+      },
+      "catalogHint": "Not in the catalog? Build it from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent.",
+      "create": "Create integration",
+      "editInBuilder": "Edit in builder",
+      "errors": {
+        "actionName": "An action name starts with a letter and has only letters, digits and _.",
+        "actionNameTaken": "Two actions have this name.",
+        "actionsRequired": "Add at least one action.",
+        "baseUrl": "The base URL is an http(s) URL.",
+        "bodyOnGet": "A GET or HEAD request has no body.",
+        "cardUrlRequired": "Enter the agent card URL.",
+        "commandRequired": "Enter the command that starts the server.",
+        "credentialRequired": "Pick the credential to send.",
+        "documentRequired": "Read an OpenAPI document.",
+        "headerRequired": "Name the header the key is sent in.",
+        "icon": "The icon is an https URL.",
+        "instanceId": "Use lower-case letters, digits and \"-\" (at most 48), starting with a letter or digit.",
+        "moduleRequired": "Write the connector module.",
+        "nameRequired": "Give the integration a name.",
+        "relativeUrl": "A relative URL needs the base URL of the source.",
+        "requestUrl": "Enter the URL of the request.",
+        "urlRequired": "Enter the server URL."
+      },
+      "export": "Export for a registry",
+      "exported": "Exported. Publish the files under integration-definitions/{{name}}/ and add the catalog item to your registry’s catalog.json.",
+      "headers": "Static headers",
+      "http": {
+        "addParameters": "Add them as parameters",
+        "baseUrl": "Base URL (optional)",
+        "baseUrlHelp": "Relative action URLs are appended to it. Calls go through the SSRF guard: a private address must be allowed under the integrations’ allowed hosts.",
+        "body": "Body template",
+        "bodyHelp": "In a JSON body a placeholder becomes the JSON of the value: write {note}, not \"{note}\".",
+        "contentType": "Body format",
+        "fieldName": "Field",
+        "fieldPath": "Path",
+        "fields": "Response fields (optional)",
+        "headersHelp": "Sent with every request; no secrets here, they belong to the sign-in.",
+        "method": "Method",
+        "query": "Query parameters",
+        "queryHelp": "A parameter whose placeholders have no value is left out.",
+        "request": "Request",
+        "requestHeaders": "Headers",
+        "result": "Response: path to the result",
+        "resultHelp": "Dotted keys, [] for every element of a list. Empty: the whole response.",
+        "undeclared": "The request uses placeholders no parameter declares: {{names}}. Install values of that name fill them; otherwise they stay empty.",
+        "url": "URL template",
+        "urlHelp": "{name} is replaced by the argument of that name (URL-encoded), else by the install value."
+      },
+      "loadError": "Could not open the integration",
+      "mcp": {
+        "args": "Arguments (one per line)",
+        "command": "Command",
+        "env": "Environment variables",
+        "stdioWarning": "iHub starts this command on its server. A local process cannot be exported to a registry.",
+        "transport": "Transport",
+        "transports": {
+          "sse": "SSE (legacy)",
+          "stdio": "Local process (stdio)",
+          "streamableHttp": "Streamable HTTP (recommended)",
+          "websocket": "WebSocket"
+        },
+        "url": "Server URL"
+      },
+      "next": "Next",
+      "openapi": {
+        "baseUrl": "Base URL",
+        "baseUrlHelp": "The operation paths are appended to it. Empty: the first server of the document.",
+        "file": "Load a file",
+        "noOperationId": "Operations without an operationId cannot become actions.",
+        "operations": "Operations that become actions",
+        "parsed": "Read: {{title}} {{version}}",
+        "read": "Read document",
+        "readError": "The document could not be read: {{error}}",
+        "reread": "{{count}} operation(s) picked. Read the document again to change the selection.",
+        "source": "OpenAPI document: URL or pasted JSON/YAML"
+      },
+      "review": {
+        "actions": "Actions ({{count}})",
+        "definition": "Definition",
+        "none": "None",
+        "oauthUser": "Per-user OAuth",
+        "offered": "Offered",
+        "serviceAccount": "Service account"
+      },
+      "rows": {
+        "add": "Add row",
+        "name": "Name",
+        "remove": "Remove row {{n}}",
+        "value": "Value"
+      },
+      "save": "Save",
+      "saved": "Integration \"{{id}}\" saved.",
+      "script": {
+        "help": "One ES module, no imports from its folder. export default { actions: { <name>: { run: async (args, ctx) => … } } }. ctx.values holds the install values, ctx.user the caller, ctx.runToolScript(script, { method }) runs one of iHub’s tool scripts. Declare the actions (description, parameters) on the next step.",
+        "module": "Connector module (actions/connector.js)",
+        "skeleton": "Insert a stub for every action",
+        "warning": "The module runs inside the iHub server with its permissions. Only use code you trust."
+      },
+      "source": {
+        "a2a": "A2A agent",
+        "a2aHelp": "A remote agent; the skills of its agent card become actions.",
+        "http": "HTTP request",
+        "httpHelp": "Wrap REST endpoints without code: method, URL template, body, response mapping.",
+        "label": "Where the actions come from",
+        "mcp": "MCP server",
+        "mcpHelp": "A Model Context Protocol endpoint or a local command; its tools become actions.",
+        "openapi": "OpenAPI",
+        "openapiHelp": "Pick operations of an OpenAPI document (URL, file or paste).",
+        "script": "Script",
+        "scriptHelp": "Actions backed by a JavaScript module that runs in iHub."
+      },
+      "steps": {
+        "actions": "Actions",
+        "basics": "Basics",
+        "review": "Review",
+        "signIn": "Sign-in",
+        "source": "Source"
+      },
+      "stepsLabel": "Builder steps",
+      "subtitle": "Build an integration from an OpenAPI document, HTTP requests, a script, an MCP server or an A2A agent. It is installed under its ID and works like every other integration: bind it to apps, grant it to groups, test it on its page.",
+      "switchSource": {
+        "confirm": "Switch",
+        "message": "The actions of the current source are removed.",
+        "title": "Switch the source?"
+      },
+      "titleEdit": "Edit in builder",
+      "titleEditOf": "Edit {{id}} in the builder",
+      "titleNew": "Add manually",
+      "unsaved": {
+        "leave": "Leave",
+        "message": "The integration is not saved. Leave anyway?",
+        "stay": "Stay",
+        "title": "Unsaved changes"
+      }
+    }
   },
   "cloudStorage": {
     "selectFiles": "Select Files from Cloud Storage",
@@ -5020,19 +5476,8 @@
     "name": "Name",
     "size": "Size",
     "modified": "Modified",
-    "notConnected": "Office 365 Not Connected",
-    "connect": "Connect to Office 365",
-    "connectPrompt": "Connect your Microsoft account to browse files from OneDrive, SharePoint, and Teams",
-    "googleDrive": {
-      "notConnected": "Google Drive Not Connected",
-      "connect": "Connect to Google Drive",
-      "connectPrompt": "Connect your Google account to browse files from Google Drive, Shared Drives, and files shared with you"
-    },
-    "nextcloud": {
-      "notConnected": "Nextcloud Not Connected",
-      "connectPrompt": "Connect your Nextcloud account to browse and attach files from your Nextcloud instance.",
-      "connect": "Connect to Nextcloud"
-    }
+    "googleDrive": {},
+    "nextcloud": {}
   },
   "components": {
     "uploader": {
@@ -5318,7 +5763,8 @@
       "expired": "This file is no longer available",
       "failed": "Download failed. Please try again.",
       "notKept": "This file was not kept with the chat",
-      "slides": "{{count}} slides"
+      "slides": "{{count}} slides",
+      "sheets": "{{count}} sheets"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -5544,58 +5990,10 @@
     },
     "page": {
       "title": "Integrations",
-      "subtitle": "Connect your external accounts to enhance your AI applications",
+      "subtitle": "The systems iHub can work with for you, and the tools that use iHub as you.",
       "loading": "Loading integrations...",
       "authRequiredTitle": "Authentication Required",
       "authRequiredBody": "Please log in to manage your integrations.",
-      "card": {
-        "connected": "Connected",
-        "notConnected": "Not Connected",
-        "availableFeatures": "Available Features:",
-        "connectAccount": "Connect {{name}} Account",
-        "disconnect": "Disconnect",
-        "tokenExpiring": "Token expires soon - consider reconnecting"
-      },
-      "jira": {
-        "description": "Atlassian JIRA integration for ticket management and project insights",
-        "features": {
-          "search": "Search and retrieve JIRA tickets",
-          "create": "Create new tickets and issues",
-          "update": "Update existing tickets",
-          "info": "Get project and user information"
-        },
-        "connected": "JIRA account connected successfully! You can now use JIRA features in your apps.",
-        "connectionFailed": "Connection failed: {{message}}",
-        "disconnected": "JIRA account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect JIRA: {{message}}",
-        "testSuccess": "JIRA connection test successful! Found {{count}} accessible tickets.",
-        "testFailed": "JIRA connection test failed: {{message}}"
-      },
-      "cloud": {
-        "description": {
-          "office365": "Microsoft Office 365 integration for cloud file access",
-          "googleDrive": "Google Drive integration for cloud file access"
-        },
-        "features": {
-          "browseOffice365": "Browse OneDrive and SharePoint files",
-          "browseGoogleDrive": "Browse Google Drive files",
-          "upload": "Upload cloud files to chats",
-          "oauth": "Secure OAuth 2.0 with PKCE"
-        },
-        "connected": "{{name}} account connected successfully! You can now select files from {{name}}.",
-        "connectionFailed": "{{name}} connection failed: {{message}}",
-        "disconnected": "{{name}} account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
-          "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
-          "invalid_state": "{{name}} sign-in could not be verified. Please try connecting again.",
-          "session_expired": "{{name}} sign-in took too long and expired. Please try connecting again.",
-          "oauth_failed": "{{name}} sign-in failed at the provider. Please try again or contact your administrator if the problem persists.",
-          "missing_code": "{{name}} sign-in did not complete. Please try connecting again.",
-          "callback_failed": "{{name}} could not be connected. Please try again or contact your administrator if the problem persists."
-        }
-      },
       "office": {
         "available": "Available",
         "deployHint": "Deploy this manifest in Microsoft 365 Admin Center to make the add-in available to your organization.",
@@ -5647,15 +6045,7 @@
         "rotateFailed": "Failed to rotate API key: {{message}}",
         "revokeFailed": "Failed to revoke API key: {{message}}"
       },
-      "empty": {
-        "title": "No Integrations Configured",
-        "body": "Contact your administrator to enable external integrations."
-      },
       "sections": {
-        "accounts": {
-          "title": "Your accounts",
-          "description": "Sign in to services so iHub can work with them on your behalf."
-        },
         "access": {
           "title": "Access to iHub",
           "description": "Tools and applications that use iHub Apps as you."
@@ -5691,36 +6081,195 @@
           "mcpResourcesRead": "Read iHub sources and skills available to you"
         }
       },
-      "mcp": {
-        "title": "MCP servers",
-        "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
-        "serverDescription": "MCP server",
-        "connect": "Connect {{name}}",
-        "connected": "{{name}} connected successfully.",
-        "connectionFailed": "Connecting {{name}} failed: {{message}}",
-        "disconnected": "{{name}} disconnected",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "oauth_failed": "the sign-in was cancelled or refused",
-          "missing_code": "the sign-in returned no authorization code",
-          "invalid_state": "the sign-in link is invalid",
-          "state_expired": "the sign-in took too long, please start again",
-          "user_mismatch": "the sign-in was started by a different user",
-          "server_not_found": "the server is not available to you",
-          "exchange_failed": "the server did not accept the sign-in",
-          "discovery_failed": "the server's sign-in could not be found",
-          "registration_failed": "iHub could not register with the server",
-          "issuer_mismatch": "the sign-in answer came from another authorization server than expected",
-          "public_url_mismatch": "iHub was reached under another address than the one registered with the server; ask your administrator to set the MCP gateway public URL"
-        }
-      },
       "iFinder": {
-        "title": "iFinder",
         "description": "iHub uses your {{provider}} sign-in to search iFinder for you, also in scheduled tasks and workflows while you are signed out.",
         "authorizedSince": "Authorized via {{provider}} on {{date}}",
         "authorize": "Sign in via {{provider}}",
         "revoked": "iFinder authorization revoked",
-        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}"
+        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}",
+        "sectionTitle": "Sign-in for background tasks",
+        "notAuthorized": "Not authorized",
+        "revoke": "Revoke"
+      },
+      "dismissMessage": "Dismiss message",
+      "showDetails": "Show details",
+      "disconnect": "Disconnect",
+      "disconnectNamed": "Disconnect {{name}}",
+      "connectNamed": "Connect {{name}}",
+      "reconnectNamed": "Reconnect {{name}}",
+      "disconnectTitle": "Disconnect {{name}}",
+      "disconnectConfirm": "iHub will no longer act as you in {{name}}. Chats that need it will ask you to connect again.",
+      "disconnected": "{{name}} disconnected.",
+      "disconnectFailed": "Could not disconnect {{name}}: {{message}}",
+      "moreActions": "+{{count}} more",
+      "available": {
+        "title": "Available to you ({{count}})",
+        "description": "Everything your groups allow, and who iHub acts as in each. Connect once; chats use it afterwards.",
+        "empty": "No integration is available to you yet.",
+        "loadFailed": "Your integrations could not be loaded. Reload the page to try again."
+      },
+      "filters": {
+        "search": "Search integrations",
+        "searchPlaceholder": "Search…",
+        "category": "Category",
+        "allCategories": "All categories",
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "needsAttention": "Needs attention",
+        "noMatches": "No integration matches the filters.",
+        "count": "Showing {{shown}} of {{total}}"
+      },
+      "status": {
+        "connected": "Connected",
+        "connectedAs": "Connected as {{account}}",
+        "expires": "expires {{when}}",
+        "notConnected": "Not connected",
+        "needsReconnect": "Reconnect needed · {{reason}}",
+        "reconnectReasons": {
+          "expired": "your sign-in expired or was revoked",
+          "insufficientScope": "a new permission is needed"
+        },
+        "sso": "Signed in via SSO",
+        "serviceAccount": "Runs as service account",
+        "serviceAccountFor": "Runs as service account ({{groups}})",
+        "sharedKey": "Shared key",
+        "none": "No sign-in needed",
+        "unavailable": "Unavailable · {{reason}}",
+        "unavailableReasons": {
+          "unreachable": "the system cannot be reached; an administrator must check it",
+          "credentialRejected": "the shared key was refused or has expired; an administrator must renew it",
+          "credentialMissing": "the shared key is missing; an administrator must set it",
+          "notConfigured": "the sign-in is not set up; an administrator must finish it"
+        },
+        "unknown": "Status unknown"
+      },
+      "capabilities": {
+        "tools": "Actions in chat",
+        "files": "Files",
+        "search": "Search",
+        "views": "Interactive views",
+        "triggers": "Events",
+        "agent": "Agent"
+      },
+      "categories": {
+        "a2a": "A2A",
+        "admin": "Administration",
+        "agents": "Agents",
+        "analytics": "Analytics",
+        "assistant": "Assistant",
+        "automation": "Automation",
+        "content": "Content",
+        "customer": "Customer",
+        "data": "Data",
+        "design": "Design",
+        "development": "Development",
+        "directory": "Directory",
+        "documentation": "Documentation",
+        "documents": "Documents",
+        "files": "Files",
+        "finance": "Finance",
+        "internal": "Internal",
+        "mcp": "MCP",
+        "open-data": "Open data",
+        "people": "People",
+        "productivity": "Productivity",
+        "public-sector": "Public sector",
+        "research": "Research",
+        "search": "Search",
+        "storage": "Storage",
+        "ticketing": "Ticketing",
+        "web": "Web"
+      },
+      "detail": {
+        "identity": "How it runs for you",
+        "account": "Signed in as",
+        "connectedAt": "Connected since",
+        "access": "Access",
+        "expiresOn": "Ends {{when}} ({{date}}); then connect again",
+        "renews": "Renewed automatically until you disconnect",
+        "untilDisconnect": "Until you disconnect or it is revoked",
+        "lastUsed": "Last used",
+        "neverUsed": "Not used yet",
+        "signInHost": "You sign in at",
+        "sharedWith": "Shared with your group",
+        "actions": "What it can do",
+        "noActions": "It offers no actions in chat.",
+        "permissions": "What you allowed",
+        "permissionLine": "{{effect}}: {{actions}}",
+        "actAsYou": "iHub acts as you in {{name}}.",
+        "scopes": "Technical permissions ({{count}})",
+        "apps": "Apps that use it",
+        "noApps": "None of the apps you can open uses it yet."
+      }
+    },
+    "connect": {
+      "title": "Connect {{name}}",
+      "titleReconnect": "Reconnect {{name}}",
+      "titleScope": "{{name}} needs another permission",
+      "why": "To answer your request, iHub needs to act as you in {{name}}.",
+      "whyAction": "To run “{{action}}” for your request, iHub needs to act as you in {{name}}.",
+      "whyFiles": "To show your files, iHub needs to act as you in {{name}}.",
+      "whyExpired": "Your connection to {{name}} has expired or was revoked. Sign in again to continue; your settings stay as they are.",
+      "whyScope": "This request needs a permission you have not granted to iHub yet. Reconnecting keeps your connection and adds it.",
+      "signInAt": "You will sign in at {{host}}.",
+      "newPermission": "New permission:",
+      "permissions": "Permissions",
+      "effects": {
+        "read": "Read",
+        "write": "Write",
+        "destructive": "Delete",
+        "unknown": "Other"
+      },
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "notNow": "Not now",
+      "notNowNote": "{{name}} is not connected.",
+      "show": "Show details",
+      "connected": "{{name}} is connected.",
+      "connectedAs": "{{name}} is connected as {{account}}.",
+      "connectedMessage": "{{name}} connected successfully.",
+      "failed": "Connecting {{name}} did not succeed. Try again.",
+      "failedMessage": "Connecting {{name}} failed: {{message}}",
+      "startFailed": "The sign-in to {{name}} could not be started.",
+      "retryMessage": "I connected {{name}}. Please try again.",
+      "errors": {
+        "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
+        "oauth_failed": "The sign-in to {{name}} did not succeed.",
+        "missing_code": "The sign-in to {{name}} did not return an authorization. Try again.",
+        "invalid_state": "The sign-in to {{name}} could not be matched to your session. Try again.",
+        "state_expired": "The sign-in to {{name}} took too long. Try again.",
+        "user_mismatch": "The sign-in to {{name}} was started by another iHub user. Try again.",
+        "integration_not_found": "{{name}} is not available to you.",
+        "exchange_failed": "{{name}} did not accept the sign-in. Try again or ask your administrator.",
+        "discovery_failed": "The sign-in server of {{name}} could not be reached.",
+        "registration_failed": "iHub could not register with the sign-in server of {{name}}.",
+        "issuer_mismatch": "The sign-in answer did not come from the expected server for {{name}}.",
+        "public_url_mismatch": "The public URL of iHub changed; ask your administrator to check {{name}}.",
+        "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
+        "callback_failed": "The sign-in to {{name}} could not be completed. Try again."
+      }
+    },
+    "requests": {
+      "title": "Not available yet ({{count}})",
+      "description": "Integrations in the catalog that your administrator has not made available to you. Request one and an administrator decides.",
+      "search": "Search the catalog",
+      "noMatches": "Nothing in the catalog matches.",
+      "publisher": "by {{publisher}}",
+      "adminNote": "Administrator: {{note}}",
+      "request": "Request",
+      "requestNamed": "Request {{name}}",
+      "requestAgain": "Request again",
+      "requestAgainNamed": "Request {{name}} again",
+      "reasonLabel": "Why do you need it? (optional)",
+      "reasonCount": "{{count}} of {{max}} characters",
+      "send": "Send request",
+      "sent": "Request for {{name}} sent. An administrator decides.",
+      "alreadyRequested": "You have already requested {{name}}.",
+      "failed": "Could not request {{name}}: {{message}}",
+      "state": {
+        "requested": "Requested",
+        "approved": "Approved, being set up",
+        "declined": "Declined"
       }
     }
   },
@@ -6588,7 +7137,7 @@
   },
   "chatSharing": {
     "title": "Share chat",
-    "description": "Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.",
+    "description": "Recipients get a read-only copy of this conversation as it is right now. Later messages and edits are not part of it. Uploaded files are shared only if you choose so below.",
     "noModes": "Sharing chats is not available here.",
     "modeLabel": "Who can open the link",
     "modes": {
@@ -6682,15 +7231,22 @@
       "expires": "This link expires on {{date}}.",
       "attachmentsLabel": "Attachments",
       "attachmentNotIncluded": "Attachment not included: {{name}}",
-      "attachmentUnnamed": "file"
+      "attachmentUnnamed": "file",
+      "sharedFiles": "The owner shared the files uploaded to this chat."
+    },
+    "files": {
+      "label": "Files you uploaded to this chat",
+      "hint": "Recipients always see the names of the files you attached. Whether they can open them is up to you.",
+      "none": "Do not share the files",
+      "noneHint": "Only the file names appear in the transcript.",
+      "text": "Share the text of the files",
+      "textHint": "Viewers can read the text extracted from the files, not download them.",
+      "original": "Share the original files",
+      "originalHint": "Viewers can also download the files as you uploaded them.",
+      "originalUnavailable": "None of the files is stored in its original form.",
+      "pick": "Files to share",
+      "textOnly": "(text only)"
     }
-  },
-  "mcpConnect": {
-    "title": "Connect {{name}}",
-    "explanation": "{{name}} needs you to sign in with your own account before its tools can be used.",
-    "connect": "Connect",
-    "connected": "{{name}} is connected. Send your request again to use it.",
-    "failed": "Connecting {{name}} did not succeed. Try again."
   },
   "sources": {
     "title": "Sources",
@@ -7346,6 +7902,32 @@
       "platformMax": "Default: {{count}} (set by your administrator; a higher value has no effect)",
       "platformDays": "Default: {{count}} (set by your administrator; a higher value has no effect)",
       "help": "Older runs and their chats are deleted automatically. Leave a field empty to use the default. Runs in progress are never deleted."
+    },
+    "files": {
+      "someFailed": "The task was saved, but some files could not be attached:",
+      "errors": {
+        "fileTooLarge": "The file is too large.",
+        "taskQuota": "This task has reached its limit for attached files. Remove one first.",
+        "storageFull": "The file storage is full.",
+        "unsupported": "This file type is not supported.",
+        "noText": "The file contains no readable text.",
+        "rejected": "The file was rejected by the security scan.",
+        "disabled": "File uploads are switched off.",
+        "textOnly": "This installation stores only text: files are read in the browser first.",
+        "failed": "The file could not be attached."
+      },
+      "deleteFailed": "The file could not be removed.",
+      "original": "Original saved",
+      "textOnly": "Text only",
+      "template": "usable as a template",
+      "title": "Attached files",
+      "help": "Reference documents or templates every run can read, for example a style guide, a report template or a price list. They stay until you remove them or delete the task.",
+      "add": "Attach files",
+      "textOnlyMode": "This installation keeps only extracted text, so files cannot be attached to tasks here.",
+      "loadFailed": "The attached files could not be loaded.",
+      "uploading": "Uploading {{name}}…",
+      "remove": "Remove {{name}}",
+      "stagedHint": "The files are attached when you save the task."
     }
   },
   "memoryEditor": {
@@ -7887,6 +8469,39 @@
       "unavailable": "The list could not be loaded, so only the default is offered."
     }
   },
+  "integrationPicker": {
+    "search": "Search integrations",
+    "searchPlaceholder": "Search integrations…",
+    "attach": "Attach",
+    "upload": "Upload file",
+    "imageGeneration": "Image generation",
+    "effect": {
+      "read": "read",
+      "write": "write",
+      "destructive": "delete"
+    },
+    "status": {
+      "ready": "Ready",
+      "notConnected": "Not connected",
+      "reconnect": "Reconnect needed",
+      "unavailable": "Unavailable"
+    },
+    "connect": "Connect →",
+    "reconnect": "Reconnect →",
+    "connectFailed": "The sign-in could not be started.",
+    "noMatch": "No integrations match.",
+    "none": "This app uses no integrations.",
+    "saveDefault": "Use as default for new chats",
+    "defaultSaved": "Saved",
+    "defaultFailed": "Not saved",
+    "manage": "Manage integrations…"
+  },
+  "mentions": {
+    "empty": "Nothing to mention here",
+    "noResults": "No results",
+    "integrationOn": "Integration · on in this chat",
+    "integrationOff": "Integration · switch on for this chat"
+  },
   "chatArtifacts": {
     "title": "Artifacts",
     "open": "Artifacts",
@@ -7918,6 +8533,41 @@
     "previewFailed": "The preview could not be loaded.",
     "previewTruncated": "Showing the first {{size}}. Download the file to see all of it.",
     "noPreview": "There is no preview for this file type. Download it to open it.",
-    "codeOf": "Content of {{name}}"
+    "codeOf": "Content of {{name}}",
+    "viewMode": "Preview mode",
+    "previewTab": "Preview",
+    "codeTab": "Code",
+    "csvRowsShown": "Showing {{shown}} of {{total}} rows."
+  },
+  "chatFiles": {
+    "attached": "Attached {{name}} to your email.",
+    "attachTooLarge": "The file is too large to attach to an email.",
+    "attachFailed": "The file could not be attached to your email.",
+    "title": "Files",
+    "tabsLabel": "Kinds of files in this chat",
+    "tabUploaded": "Uploaded",
+    "tabGenerated": "Generated",
+    "attachToEmail": "Attach to email",
+    "openInDrawer": "Open {{name}} in the Files panel",
+    "emptyBody": "(no text)",
+    "textPreviewNote": "Showing the text the assistant reads from this file.",
+    "originalDiscarded": "The original file is no longer stored; only its text is kept. You can download the text instead.",
+    "deleteFailed": "The file could not be deleted. Please try again.",
+    "loading": "Loading the uploaded files…",
+    "loadFailed": "The uploaded files could not be loaded.",
+    "notShared": "The owner did not share the files attached to this chat.",
+    "empty": "No files uploaded to this chat yet. Documents, emails and pages you attach appear here.",
+    "listLabel": "Files uploaded to this chat",
+    "pages": "{{count}} pages",
+    "stateOriginal": "Original saved",
+    "stateExpired": "Original removed",
+    "stateTextOnly": "Text only",
+    "question": "Question {{number}}",
+    "downloadOriginal": "Download original",
+    "downloadText": "Download text",
+    "deleteConfirm": "Delete {{name}}?",
+    "delete": "Delete file",
+    "templateHint": "The assistant can use this file as a template.",
+    "truncated": "Very long: the assistant reads the beginning."
   }
 }

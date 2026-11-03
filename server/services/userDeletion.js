@@ -35,7 +35,7 @@
  */
 import { revokeConnectionsForUser } from './oauth/ConnectionService.js';
 import { deletePersonalClientsByOwner } from '../utils/oauthClientManager.js';
-import { tokenStorageIdFor } from './mcp/mcpUserTokens.js';
+import { tokenStorageIdFor } from './integrations/auth/tokenSecrets.js';
 import tokenStorageService from './TokenStorageService.js';
 import { oauthClientsFile } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
@@ -99,6 +99,16 @@ export const USER_CLEANUP_STEPS = [
         tokenStorageIdFor(userId)
       ])
     })
+  },
+  {
+    // The connection index records who connected what; the tokens went above.
+    name: 'integrationConnections',
+    kind: 'access',
+    run: async userId => {
+      const { getIntegrationConnectionService } =
+        await import('./integrations/auth/IntegrationConnectionService.js');
+      return { removed: await getIntegrationConnectionService().forgetUser(userId) };
+    }
   },
   {
     // The pool holds the user's tokens in memory; only this worker's is reached.
@@ -169,6 +179,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // What the user's new chats start with, per app (#2923).
+    name: 'integrationPreferences',
+    kind: 'content',
+    run: async userId => {
+      const { getIntegrationPreferencesRepository } =
+        await import('./integrations/IntegrationPreferencesRepository.js');
+      return { removed: await getIntegrationPreferencesRepository().deleteAllOfUser(userId) };
+    }
+  },
+  {
     // Owned projects go with the user (their uploaded knowledge is theirs);
     // a membership in someone else's project is simply dropped.
     name: 'userProjects',
@@ -184,6 +204,16 @@ export const USER_CLEANUP_STEPS = [
     run: async userId => {
       const { getUserSkillRepository } = await import('./skills/UserSkillRepository.js');
       return { removed: await deleteOwned(getUserSkillRepository(), userId) };
+    }
+  },
+  {
+    // Requests for catalog integrations name the user and their groups.
+    name: 'integrationRequests',
+    kind: 'content',
+    run: async userId => {
+      const { getIntegrationRequestService } =
+        await import('./integrations/IntegrationRequestService.js');
+      return { removed: await getIntegrationRequestService().forgetUser(userId) };
     }
   },
   {

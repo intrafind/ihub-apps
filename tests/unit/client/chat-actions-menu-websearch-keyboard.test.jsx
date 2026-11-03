@@ -50,11 +50,7 @@ jest.mock('../../../client/src/features/voice/components', () => ({
 }));
 
 jest.mock('../../../client/src/api', () => ({
-  fetchToolsBasic: jest.fn(() => Promise.resolve([]))
-}));
-
-jest.mock('../../../client/src/utils/toolUsageTracker', () => ({
-  trackToolUsage: jest.fn()
+  saveIntegrationPreferences: jest.fn(() => Promise.resolve({}))
 }));
 
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
@@ -132,14 +128,15 @@ describe('ChatInputActionsMenu web search toggle', () => {
     expect(onWebsearchEnabledChange).toHaveBeenCalledWith(true);
   });
 
-  it('takes part in the menu roving tabindex', () => {
+  it('can take the roving focus of the menu', () => {
     openMenu();
 
-    // Sole navigable item in this configuration, so it owns tabindex 0.
-    expect(screen.getByRole('menuitemcheckbox', { name: /Web Search/ })).toHaveAttribute(
-      'tabindex',
-      '0'
-    );
+    // Focusable by script; `useKeyboardNavigation` hands it tabindex 0 when it
+    // is the active item (jsdom reports no layout, so the hook stays idle).
+    const row = screen.getByRole('menuitemcheckbox', { name: /Web Search/ });
+    expect(row).toHaveAttribute('tabindex', '-1');
+    row.focus();
+    expect(row).toHaveFocus();
   });
 
   it('keeps the visual switch out of the accessibility tree and the tab order', () => {

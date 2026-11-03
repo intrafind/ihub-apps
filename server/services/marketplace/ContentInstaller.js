@@ -33,7 +33,6 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import registryService from './RegistryService.js';
@@ -53,8 +52,12 @@ import { getContentsPath } from '../../utils/contentsPath.js';
 import integrationRegistry from '../integrations/definitions/IntegrationRegistry.js';
 import {
   CODE_FILE_PATTERN,
-  checkScriptCodeFiles
+  checkMigrationModuleFiles,
+  checkScriptCodeFiles,
+  matchesIntegrity
 } from '../integrations/definitions/scriptModule.js';
+import { listedVersions, offeredVersion, passesPolicy, versionPolicyFor } from './versionPolicy.js';
+import semver from 'semver';
 import {
   validateIntegrationDefinition,
   definitionSchemaRevision,
@@ -164,9 +167,25 @@ const CONTENT_CONFIG = {
       if (!raw) return { success: false, errors: ['integration.json is missing'] };
       assertKnownDefinitionSchema(typeof raw === 'string' ? JSON.parse(raw) : raw);
       const parsed = validateIntegrationDefinition(typeof raw === 'string' ? JSON.parse(raw) : raw);
-      return parsed.success
-        ? { success: true }
-        : { success: false, errors: parsed.errors.map(e => `${e.path.join('.')}: ${e.message}`) };
+      if (!parsed.success) {
+        return {
+          success: false,
+          errors: parsed.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        };
+      }
+      // A fixed tool id (`toolId`) addresses a tool on this server: only the
+      // definitions iHub ships and the custom integrations built here may
+      // keep one. A registry's definition gets `<installation>__<action>`.
+      const fixed = (parsed.data.actions || []).filter(a => a.toolId).map(a => a.name);
+      if (fixed.length && !parsed.data.builtIn) {
+        return {
+          success: false,
+          errors: [
+            `actions: a definition from a registry cannot fix tool ids (${fixed.join(', ')})`
+          ]
+        };
+      }
+      return { success: true };
     }
   }
 };
@@ -249,11 +268,14 @@ async function saveInstallations(data) {
  * @param {string} registryId - Registry that hosts the item
  * @param {string} type - Content type ('app'|'model'|'prompt'|'skill'|'workflow')
  * @param {string} name - Item name / identifier
+ * @param {{ version?: string }} [options] - `version`: a version the item
+ *   lists other than its current one; its descriptor (`versions[].ref`) is
+ *   fetched and the content comes from there (`RegistryService.fetchItemVersion`)
  * @returns {Promise<{ item: object, content: object }>}
- *   The matching catalog item descriptor and its fetched content
+ *   The matching catalog item descriptor (of the version fetched) and its content
  * @throws {Error} When the catalog is not cached, item is not found, or the fetch fails
  */
-export async function fetchItemContent(registryId, type, name) {
+export async function fetchItemContent(registryId, type, name, { version } = {}) {
   const registry = await registryService.getRegistryWithAuth(registryId);
   const cached = await registryService.getCachedCatalogAsync(registryId);
 
@@ -263,8 +285,12 @@ export async function fetchItemContent(registryId, type, name) {
     );
   }
 
-  const item = (cached.catalog?.items || []).find(i => i.type === type && i.name === name);
-  if (!item) throw new Error(`Item '${type}:${name}' not found in registry '${registryId}'`);
+  const current = (cached.catalog?.items || []).find(i => i.type === type && i.name === name);
+  if (!current) throw new Error(`Item '${type}:${name}' not found in registry '${registryId}'`);
+  const item =
+    version && version !== current.version
+      ? await registryService.fetchItemVersion(registry, current, version)
+      : current;
 
   const itemUrl = registryService.resolveItemUrl(item, registry);
   if (!itemUrl) throw new Error(`Cannot resolve URL for item '${type}:${name}'`);
@@ -319,20 +345,13 @@ export async function fetchItemContent(registryId, type, name) {
   return { item, content: responseData };
 }
 
-/** Whether `text` has the hash `expected` (`sha256-<base64>` or a hex digest). */
-export function matchesIntegrity(text, expected) {
-  if (typeof expected !== 'string' || !expected) return false;
-  const digest = crypto.createHash('sha256').update(text, 'utf8');
-  const value = expected.startsWith('sha256-') ? expected.slice('sha256-'.length) : expected;
-  if (/^[0-9a-f]{64}$/i.test(value)) return digest.digest('hex') === value.toLowerCase();
-  return digest.digest('base64') === value;
-}
-
 /**
  * Code travels only from a registry the admin trusts for it, and only with a
  * hash per code file in the catalog, which the fetched file must match. Every
  * hash the catalog lists is checked, whatever the file. A `script` definition
- * brings exactly one code file, its bundled module (`checkScriptCodeFiles`).
+ * brings exactly one connector file, its bundled module (`checkScriptCodeFiles`),
+ * and any definition the migration modules its `module` steps name
+ * (`checkMigrationModuleFiles`), each one bundled file as well.
  *
  * @param {object} item - Catalog item
  * @param {{ files: Record<string, string|object> }} content
@@ -362,6 +381,9 @@ export function verifyIntegrationCode(item, content, registry) {
       throw error;
     }
     if (isScript) checkScriptCodeFiles(definition, content.files);
+  }
+  if (definition && typeof definition === 'object') {
+    checkMigrationModuleFiles(definition, content.files);
   }
   for (const [file, expected] of Object.entries(integrity)) {
     const text = content.files[file];
@@ -693,6 +715,105 @@ export function assertCompatible(type, name, subject) {
 }
 
 /**
+ * The hashes of the code files an integration package brings, from the
+ * catalog item it was fetched with: what the installation manifest records as
+ * `codeIntegrity`, so a migration module run later (a re-run, a manual
+ * migration) is checked against the hash the catalog listed at install time.
+ *
+ * @param {object} item - catalog item (of the version installed)
+ * @param {{ files: Record<string, string|object> }} content
+ * @returns {Record<string, string>|null} path → hash, null without code files
+ */
+export function codeIntegrityOf(item, content) {
+  const integrity = item?.source?.integrity || {};
+  const entries = Object.keys(content?.files || {})
+    .filter(file => CODE_FILE_PATTERN.test(file) && typeof integrity[file] === 'string')
+    .sort((a, b) => a.localeCompare(b))
+    .map(file => [file, integrity[file]]);
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
+/**
+ * The version an install or update takes (versioning phase 3): the one the
+ * admin named, which must be listed and pass the registry's channel and the
+ * item's pin, or else the version the registry offers
+ * (`versionPolicy.offeredVersion`). An item that lists no version at all is
+ * installed as it is (undefined).
+ *
+ * @param {object|null} registry - registry config
+ * @param {object} item - the cached catalog item
+ * @param {string} [requested]
+ * @returns {string|undefined}
+ * @throws {Error} `VERSION_NOT_LISTED`, `VERSION_NOT_OFFERED` or `NO_VERSION_OFFERED`
+ */
+export function resolveRequestedVersion(registry, item, requested) {
+  const listed = listedVersions(item);
+  const policy = versionPolicyFor(registry, item.type, item.name);
+  const label = `${item.type} '${item.name}'`;
+  if (requested) {
+    if (!listed.includes(requested)) {
+      const error = new Error(`${label}: version ${requested} is not listed by the registry`);
+      error.code = 'VERSION_NOT_LISTED';
+      throw error;
+    }
+    if (!passesPolicy(requested, policy)) {
+      const error = new Error(
+        `${label}: version ${requested} is outside what the registry offers (channel ${policy.channel}${policy.pin ? `, pin ${policy.pin}` : ''})`
+      );
+      error.code = 'VERSION_NOT_OFFERED';
+      throw error;
+    }
+    return requested;
+  }
+  if (listed.length === 0) return undefined;
+  const offered = offeredVersion(item, registry);
+  if (!offered) {
+    const error = new Error(
+      `${label}: no listed version passes the registry's channel ${policy.channel}${policy.pin ? ` and the pin ${policy.pin}` : ''}`
+    );
+    error.code = 'NO_VERSION_OFFERED';
+    throw error;
+  }
+  return offered;
+}
+
+/**
+ * The package of one version of an installed integration definition, fetched
+ * from the registry it was installed from (versioning phase 3: the runner keeps
+ * the definition folder of every migration boundary it passes, so an admin
+ * can revert to that version later). Checked like an install
+ * (`verifyIntegrationCode`). Null when the definition was not installed from
+ * a registry or the registry does not list the version.
+ *
+ * @param {string} definitionId
+ * @param {string} version
+ * @returns {Promise<{ files: Record<string, string|object>, manifestEntry: object }|null>}
+ */
+export async function fetchIntegrationVersionPackage(definitionId, version) {
+  const key = `integration:${definitionIdToDirName(definitionId)}`;
+  const installations = await configStore.readJson(INSTALLATIONS_FILE);
+  const manifest = installations?.installations?.[key];
+  if (!manifest?.registryId) return null;
+  const catalogItem = await cachedCatalogItem(manifest.registryId, 'integration', manifest.itemId);
+  if (!catalogItem || !listedVersions(catalogItem).includes(version)) return null;
+  const { item, content } = await fetchItemContent(
+    manifest.registryId,
+    'integration',
+    manifest.itemId,
+    { version }
+  );
+  if (content.files['integration.json']?.version !== version) return null;
+  return {
+    files: content.files,
+    manifestEntry: {
+      ...manifest,
+      version,
+      codeIntegrity: codeIntegrityOf(item, content)
+    }
+  };
+}
+
+/**
  * The catalog item of an installed or installable item, from the cached
  * catalog; null when the catalog is not cached or the item is gone.
  */
@@ -723,13 +844,23 @@ class ContentInstaller {
    * @param {string} type - Content type ('app'|'model'|'prompt'|'skill'|'workflow')
    * @param {string} name - Item name / identifier
    * @param {string} [installedBy='admin'] - Username of the installing admin for audit trail
-   * @param {{ replaceLocal?: boolean }} [options] - `replaceLocal: true` confirms
-   *   replacing an item that already exists on this instance
+   * @param {{ replaceLocal?: boolean, version?: string }} [options] - `replaceLocal: true` confirms
+   *   replacing an item that already exists on this instance; `version` names a
+   *   listed version (default: the version the registry offers, its channel and
+   *   the item's pin applied)
    * @returns {Promise<object>} The installation manifest entry
    * @throws {Error} On validation failure, duplicate installation, fetch error,
-   *   or — with `code: 'LOCAL_CONTENT_EXISTS'` — an unconfirmed local item
+   *   or — with `code: 'LOCAL_CONTENT_EXISTS'` — an unconfirmed local item;
+   *   `VERSION_NOT_LISTED`, `VERSION_NOT_OFFERED`, `NO_VERSION_OFFERED` for a
+   *   version the registry does not offer
    */
-  async install(registryId, type, name, installedBy = 'admin', { replaceLocal = false } = {}) {
+  async install(
+    registryId,
+    type,
+    name,
+    installedBy = 'admin',
+    { replaceLocal = false, version: requestedVersion } = {}
+  ) {
     logger.info('Installing content item from registry', {
       component: COMPONENT,
       type,
@@ -776,9 +907,21 @@ class ContentInstaller {
     // An item this server version cannot run is refused before anything is
     // fetched (the UI greys it out; this holds for a direct API call too).
     const catalogItem = await cachedCatalogItem(registryId, type, name);
-    if (catalogItem) assertCompatible(type, name, catalogItem);
+    const version = catalogItem
+      ? resolveRequestedVersion(
+          await registryService.getRegistryWithAuth(registryId),
+          catalogItem,
+          requestedVersion
+        )
+      : undefined;
+    // The catalog describes its current version; another version is checked
+    // against its own descriptor once it is fetched.
+    if (catalogItem && (!version || version === catalogItem.version)) {
+      assertCompatible(type, name, catalogItem);
+    }
 
-    const { item, content } = await fetchItemContent(registryId, type, name);
+    const { item, content } = await fetchItemContent(registryId, type, name, { version });
+    if (item !== catalogItem) assertCompatible(type, name, item);
 
     // Validate the fetched content against the schema for this type
     assertValidContent(type, name, content, config);
@@ -809,6 +952,10 @@ class ContentInstaller {
       updateAvailable: null,
       sourceUrl: item.source?.url || null
     };
+    if (type === 'integration') {
+      const codeIntegrity = codeIntegrityOf(item, content);
+      if (codeIntegrity) manifest.codeIntegrity = codeIntegrity;
+    }
 
     installations.installations[key] = manifest;
     await saveInstallations(installations);
@@ -890,10 +1037,16 @@ class ContentInstaller {
    * @param {string} type - Content type
    * @param {string} name - Item name / identifier
    * @param {string} [updatedBy='admin'] - Username of the updating admin
+   * @param {{ version?: string }} [options] - `version` names a listed version
+   *   (default: the version the registry offers, its channel and the item's pin
+   *   applied); it must not be older than the installed one (going back is a
+   *   Revert of the installation, not an update)
    * @returns {Promise<object>} The updated installation manifest entry
-   * @throws {Error} When the item is not tracked in the installations manifest
+   * @throws {Error} When the item is not tracked in the installations manifest;
+   *   `VERSION_NOT_LISTED`, `VERSION_NOT_OFFERED`, `NO_VERSION_OFFERED`,
+   *   `VERSION_NOT_NEWER` for a version the update does not take
    */
-  async update(type, name, updatedBy = 'admin') {
+  async update(type, name, updatedBy = 'admin', { version: requestedVersion } = {}) {
     logger.info('Updating content item', { component: COMPONENT, type, name });
 
     const installations = await readInstallations();
@@ -912,14 +1065,37 @@ class ContentInstaller {
     }
 
     const catalogItem = await cachedCatalogItem(existing.registryId, type, name);
-    if (catalogItem) assertCompatible(type, name, catalogItem);
+    const registry = catalogItem
+      ? await registryService.getRegistryWithAuth(existing.registryId)
+      : null;
+    const version = catalogItem
+      ? resolveRequestedVersion(registry, catalogItem, requestedVersion)
+      : undefined;
+    if (
+      version &&
+      semver.valid(version) &&
+      semver.valid(existing.version) &&
+      semver.lt(version, existing.version)
+    ) {
+      const error = new Error(
+        `${type} '${name}' is installed at ${existing.version}; ${version} is older. An update only moves forward: revert the installation to a backup of ${version} instead`
+      );
+      error.code = 'VERSION_NOT_NEWER';
+      throw error;
+    }
+    if (catalogItem && (!version || version === catalogItem.version)) {
+      assertCompatible(type, name, catalogItem);
+    }
 
-    const { item, content } = await fetchItemContent(existing.registryId, type, name);
+    const { item, content } = await fetchItemContent(existing.registryId, type, name, {
+      version
+    });
+    if (item !== catalogItem) assertCompatible(type, name, item);
 
     assertValidContent(type, name, content, config);
     if (type === 'integration') {
       assertCompatible(type, name, content.files['integration.json']);
-      return this._updateIntegration(name, key, existing, item, content, updatedBy);
+      return this._updateIntegration(name, key, existing, item, content, updatedBy, registry);
     }
 
     await this._writeContent(type, name, content, config);
@@ -957,24 +1133,42 @@ class ContentInstaller {
    * @param {object} item - the catalog item
    * @param {{ files: Record<string, string|object> }} content - the fetched package
    * @param {string} updatedBy
+   * @param {object|null} [registry] - the registry config (`trustCode` decides
+   *   whether migration modules of the package may run)
    * @returns {Promise<object>} the updated manifest entry with `integrationMigrations`,
    *   one result per installation (`migrated`, `stamped`, `failed` or `skipped`)
    */
-  async _updateIntegration(name, key, existing, item, content, updatedBy) {
+  async _updateIntegration(name, key, existing, item, content, updatedBy, registry = null) {
     const manifestPatch = {
       updatedAt: new Date().toISOString(),
       updatedBy,
       version: item.version || existing.version,
-      updateAvailable: null
+      updateAvailable: null,
+      codeIntegrity: codeIntegrityOf(item, content)
     };
+    const definitionId = dirNameToDefinitionId(name);
     const { default: definitionMigrationRunner } =
       await import('../integrations/definitions/DefinitionMigrationRunner.js');
+    // The intermediate versions an update passes are fetched (once each) for
+    // the backups the runner keeps at every migration boundary.
+    const fetched = new Map();
+    const fetchDefinitionVersion = version => {
+      if (!fetched.has(version)) {
+        fetched.set(version, fetchIntegrationVersionPackage(definitionId, version));
+      }
+      return fetched.get(version);
+    };
     const outcome = await definitionMigrationRunner.applyDefinitionUpdate({
-      definitionId: dirNameToDefinitionId(name),
+      definitionId,
       files: content.files,
       manifestKey: key,
       manifestPatch,
-      by: updatedBy
+      by: updatedBy,
+      moduleTrust: {
+        trustCode: registry?.trustCode === true,
+        integrity: item.source?.integrity || {}
+      },
+      fetchDefinitionVersion
     });
     Object.assign(existing, manifestPatch);
     const cc = await getConfigCache();

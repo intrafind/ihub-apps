@@ -17,7 +17,11 @@ You create `.xlsx` spreadsheets with the `create_xlsx` tool. The server builds a
 - **`.csv` (`create_file` in `files` skill)**: raw flat text data exports for scripts or imports when no formulas, styling or multiple sheets are wanted.
 - **`.pdf` (`create_pdf`)** / **`.docx` (`create_docx`)** / **`.pptx` (`create_pptx`)**: reports, prose documents, slide decks.
 
-If the user uploaded an `.xlsx` or `.csv` file, its extracted contents are already in the conversation as `<content type="document">`. Read them directly; to deliver a new or updated workbook, pass the full `sheets` JSON array to `create_xlsx`.
+If the user uploaded an `.xlsx` or `.csv` file, its extracted contents are already in the conversation as `<content type="document">`. Read them directly to answer questions or to build a **new** workbook from the data.
+
+Do not present a rebuilt workbook as a faithful update of the upload. The extracted text holds the values the file showed when it was saved, not its formulas, charts, styles or macros, and it stops at 2,000 rows per sheet and 300,000 characters per workbook (the text says `[… N more rows omitted]` where it was cut). A workbook rebuilt from it therefore replaces formulas with static values and drops any omitted rows. Before you rebuild an uploaded workbook, tell the user this and offer the rebuild only if they agree; say in your answer that the result is a new file, not an edit of the original.
+
+When the uploaded `.xlsx`'s `<content>` tag says `can_use_as_template="true"`, pass its `id` as `sourceFileId` to **keep the user's workbook and change only what was asked**: its sheets, formatting and defined names stay; each sheet in `sheets` replaces the sheet with the same name, or is added as a new one. Send only the new or changed sheets, with the complete content of each.
 
 ## The company template
 
@@ -59,6 +63,10 @@ Pass `sheets` as a JSON array of 1–20 worksheet objects:
    - Put model assumptions or drivers on an `Assumptions` tab (mark input rows with `{ "cells": [...], "assumption": true }` so hardcoded inputs render in financial-model blue) and reference them across tabs: `=Assumptions!B2` or `='Key Drivers'!B2` (quote tab names that contain spaces).
 5. **Prevent formula errors (`#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`)**:
    - Wrap ratios that could divide by zero in `=IF(B2=0, 0, (C2-B2)/B2)` or `=IFERROR((C2-B2)/B2, 0)`.
+6. **Stay inside the workbook**:
+   - Formulas that fetch data from outside or run commands (`WEBSERVICE`, `FILTERXML`, `HYPERLINK`, `RTD`, `CALL`, `REGISTER`, DDE links) are never written as live formulas; they appear as plain text. Put such values in the cell as text instead.
+   - Dynamic-array functions (`FILTER`, `SORT`, `SORTBY`, `UNIQUE`, `SEQUENCE`) do not spill into neighbouring cells in these workbooks. Do not rely on them; list the rows explicitly, or use `INDEX`/`SMALL`/`SUMIFS` style formulas.
+7. **Years, IDs and postal codes stay plain**: a whole number in a `general` column is shown without thousands separators (`2026`, not `2,026`). Set `"format": "integer"` only for quantities that should read `1,250,000`.
 
 ## Example
 

@@ -21,8 +21,18 @@ import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
+import { liftMcpResultEarly, settleToolOutputs } from './toolOutputFiles.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
+import crypto from 'node:crypto';
+import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+import { redactApprovalArgs, resolveToolApproval } from '../../utils/toolApproval.js';
+import {
+  approvalDisplayData,
+  justificationOf,
+  oneShotGrant,
+  sameArgs
+} from '../loop/seams/approvalSeam.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
@@ -231,34 +241,74 @@ function embeddedMcpAppViewFor(info) {
   });
 }
 
-/** Longest string kept from an auth-required marker (ids, names, paths). */
+/** Longest string kept from an auth-required result (ids, names, scopes). */
 const AUTH_REQUIRED_FIELD_CHARS = 512;
 
+/** Most scopes kept from an auth-required result. */
+const AUTH_REQUIRED_MAX_SCOPES = 20;
+
+const AUTH_REQUIRED_REASONS = new Set(['not_connected', 'expired', 'insufficient_scope']);
+
 /**
- * The "connect first" marker of a per-user OAuth MCP tool result
- * (`{ error: 'MCP_AUTH_REQUIRED', authRequired: { serverId, serverName,
- * connectUrl } }`, see services/mcp/mcpOAuthService.js), or null.
+ * The installation a tool belongs to: an installed integration's
+ * (`_integration.instanceId`, which every MCP, native and OpenAPI action
+ * carries) or, for an MCP tool listed without it, its server's.
+ *
+ * @param {Object|null|undefined} toolDef
+ * @returns {string|null}
+ */
+function installationOfTool(toolDef) {
+  const id = toolDef?._integration?.instanceId || toolDef?._mcp?.serverId;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/**
+ * The Connect card of a tool result that says "connect first"
+ * (`{ error: 'INTEGRATION_AUTH_REQUIRED', integration, reason, connectUrl,
+ * scopes? }`, see services/integrations/auth/integrationAuthRequired.js), or
+ * null.
+ *
+ * Only a result about the tool's **own** installation counts, so an unrelated
+ * tool's result cannot spoof a card for an integration it has no relation to.
+ * Results of calls that failed inside the adapter or on the transport are
+ * not this shape and never produce a card (and so are never retried after a
+ * connect).
  *
  * @param {*} rawResult - The tool's result as the loop saw it
- * @returns {{serverId: string, serverName: string, connectUrl: string}|null}
+ * @param {Object} toolDef - The tool's definition
+ * @returns {{integration: string, name: string, reason: string, action?: string, scopes?: string[]}|null}
+ *
+ * @example
+ * authRequiredOf(
+ *   { error: 'INTEGRATION_AUTH_REQUIRED', integration: 'jira', reason: 'not_connected' },
+ *   { _integration: { instanceId: 'jira', instanceLabel: 'Jira', actionTitle: 'Search issues' } }
+ * ); // → { integration: 'jira', name: 'Jira', reason: 'not_connected', action: 'Search issues' }
  */
-export function authRequiredOf(rawResult) {
-  const marker = rawResult && typeof rawResult === 'object' ? rawResult.authRequired : null;
-  if (!marker || typeof marker !== 'object') return null;
-  const { serverId, serverName, connectUrl } = marker;
-  if (typeof serverId !== 'string' || !serverId) return null;
-  if (
-    typeof connectUrl !== 'string' ||
-    !connectUrl.startsWith('/') ||
-    connectUrl.startsWith('//') ||
-    connectUrl.startsWith('/\\')
-  ) {
-    return null;
-  }
+export function authRequiredOf(rawResult, toolDef) {
+  if (!rawResult || typeof rawResult !== 'object') return null;
+  if (rawResult.error !== 'INTEGRATION_AUTH_REQUIRED') return null;
+  const own = installationOfTool(toolDef);
+  if (!own || rawResult.integration !== own) return null;
+  const reason = AUTH_REQUIRED_REASONS.has(rawResult.reason) ? rawResult.reason : 'not_connected';
+  const name = String(toolDef?._integration?.instanceLabel || own).slice(
+    0,
+    AUTH_REQUIRED_FIELD_CHARS
+  );
+  const action = toolDef?._integration?.actionTitle;
+  const scopes = Array.isArray(rawResult.scopes)
+    ? rawResult.scopes
+        .filter(scope => typeof scope === 'string' && scope)
+        .slice(0, AUTH_REQUIRED_MAX_SCOPES)
+        .map(scope => scope.slice(0, AUTH_REQUIRED_FIELD_CHARS))
+    : [];
   return {
-    serverId: serverId.slice(0, AUTH_REQUIRED_FIELD_CHARS),
-    serverName: String(serverName || serverId).slice(0, AUTH_REQUIRED_FIELD_CHARS),
-    connectUrl: connectUrl.slice(0, AUTH_REQUIRED_FIELD_CHARS)
+    integration: own.slice(0, AUTH_REQUIRED_FIELD_CHARS),
+    name,
+    reason,
+    ...(typeof action === 'string' && action
+      ? { action: action.slice(0, AUTH_REQUIRED_FIELD_CHARS) }
+      : {}),
+    ...(scopes.length > 0 ? { scopes } : {})
   };
 }
 
@@ -273,19 +323,21 @@ export function authRequiredOf(rawResult) {
  * declares no view but returns an embedded view page gets its view on
  * `tool/completed` only (`mcpApp.embedded`).
  *
- * A per-user OAuth MCP tool whose caller has not connected the server returns
- * an auth-required marker; it rides on `tool/completed` as `authRequired` so
- * the chat renders a Connect card, and is collected on `mcpAuthPrompts`
- * (one per server) for the stored answer.
+ * A tool whose caller has no usable connection to its integration returns
+ * `INTEGRATION_AUTH_REQUIRED` before it runs; the Connect card for it rides on
+ * `tool/completed` as `authRequired` and is collected on `authPrompts` (one
+ * per integration) for the stored answer.
  */
 export function chatToolSeam({
   chatId,
   buildLogData,
   logInteraction,
   mcpAppViews = null,
-  mcpAuthPrompts = null,
+  authPrompts = null,
   scheduledTaskProposals = null,
-  generatedFiles = null
+  generatedFiles = null,
+  generatedImages = null,
+  fileStore = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -293,15 +345,21 @@ export function chatToolSeam({
   };
   const recordAuthPrompt = prompt => {
     if (
-      Array.isArray(mcpAuthPrompts) &&
-      !mcpAuthPrompts.some(p => p.serverId === prompt.serverId)
+      Array.isArray(authPrompts) &&
+      !authPrompts.some(p => p.integration === prompt.integration)
     ) {
-      mcpAuthPrompts.push(prompt);
+      authPrompts.push(prompt);
     }
     return prompt;
   };
   return {
     name: 'chat-tools',
+    liftResult(ctx, info, holder) {
+      return liftMcpResultEarly(
+        { toolDef: info.toolDef, chatId, ownerId: ctx?.refs?.userId || null, store: fileStore },
+        holder
+      );
+    },
     preTool(ctx, info) {
       logger.info('Chat tool call', {
         component: COMPONENT,
@@ -339,20 +397,10 @@ export function chatToolSeam({
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
       const mcp = mcpAppOf(info);
-      // The auth-required marker is only ever produced by an MCP tool call
-      // (McpClientManager._callUserTool); gate on the tool's own declared
-      // server so an unrelated tool's result object cannot spoof a Connect
-      // card for a server it has no relation to.
-      const mcpServerId = info.toolDef?._mcp?.serverId;
-      const gatedAuthRequiredOf = raw => {
-        if (!mcpServerId) return null;
-        const marker = authRequiredOf(raw);
-        return marker?.serverId === mcpServerId ? marker : null;
-      };
-      // A call that never reached its per-user OAuth server ("connect first")
-      // has no view to show: the Connect card stands in for it.
+      // A call that never reached its integration ("connect first") has no
+      // view to show: the Connect card stands in for it.
       let mcpApp =
-        mcp && !(!outcome.error && gatedAuthRequiredOf(outcome.rawResult))
+        mcp && !(!outcome.error && authRequiredOf(outcome.rawResult, info.toolDef))
           ? recordView(mcpAppViewFor(info, mcp))
           : null;
       if (!mcp && !outcome.error) {
@@ -393,7 +441,7 @@ export function chatToolSeam({
         );
         return;
       }
-      const authRequired = gatedAuthRequiredOf(outcome.rawResult);
+      const authRequired = authRequiredOf(outcome.rawResult, info.toolDef);
       if (authRequired) recordAuthPrompt(authRequired);
       // Only the scheduling tools may draw a confirmation card; any other
       // tool's result carrying the same field is ignored.
@@ -403,17 +451,30 @@ export function chatToolSeam({
       if (scheduledTaskProposal && Array.isArray(scheduledTaskProposals)) {
         scheduledTaskProposals.push(scheduledTaskProposal);
       }
-      // Only the built-in tools of system skills hand the user a file (a
-      // download card); the same field on any other tool's result is ignored.
-      // The result names the file without its bytes, so the model never sees
-      // them: they were held for this turn, and go to the client here and to
-      // the stored answer (as an artifact) through `generatedFiles`.
-      const files = info.toolDef?.isSystemSkillTool
-        ? generatedFilesOf(outcome.rawResult?.files)
-            .map(file => ({ ...file, data: heldGeneratedFileData(file.id, { chatId }) }))
-            .filter(file => file.data)
-        : [];
+      // Only the built-in tools of system skills (and the skills of remote A2A
+      // agents) hand the user a file (a download card); the same field on any
+      // other tool's result is ignored. The result names the file without its
+      // bytes, so the model never sees them: they were held for this turn, and
+      // go to the client here and to the stored answer (as an artifact)
+      // through `generatedFiles`. An MCP tool's binary blocks (`resource`
+      // blob, `image`) are stored here and replaced by `{ fileId, name,
+      // mimeType, bytes }` descriptors before the model reads the result.
+      const lifted = await settleToolOutputs(outcome, {
+        toolDef: info.toolDef,
+        chatId,
+        ownerId: ctx?.refs?.userId || null,
+        store: fileStore
+      });
+      const files = lifted.files;
       if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
+      for (const image of lifted.images) {
+        if (Array.isArray(generatedImages)) generatedImages.push(image);
+        emit(ctx, SSE_V2_EVENTS.STEP_DELTA, {
+          step: ctx.iteration,
+          kind: 'image',
+          image: { mimeType: image.mimeType, data: image.data }
+        });
+      }
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -600,6 +661,157 @@ export function chatQuestionOptions({
       });
       return { ...interaction, maxClarifications };
     }
+  };
+}
+
+/** Whether two argument objects are the same JSON value (see `approvalSeam.sameArgs`). */
+export { sameArgs };
+
+/**
+ * Options for the shared `approvalSeam` in a chat turn (#2945): the
+ * resolved policy of each tool (stamped by `getToolsForApp`, else resolved
+ * for this app), the chat's grants ("allow for this chat") and the one call a
+ * person just approved, the `approval` interaction with its frames, and the
+ * refusal where nobody can approve.
+ *
+ * @param {Object} options
+ * @param {string} options.chatId
+ * @param {Object} [options.app]
+ * @param {Object} [options.platform]
+ * @param {boolean} options.headless - nobody can answer an approval card here
+ * @param {string[]} [options.grants] - tool ids the user allowed for this chat
+ * @param {{callId: string, args: Object}|null} [options.approvedCall] - the call being resumed
+ * @param {Function} options.buildLogData
+ * @param {Function} options.logInteraction
+ * @returns {Object} options for `approvalSeam`
+ */
+export function chatApprovalOptions({
+  chatId,
+  app = null,
+  platform = null,
+  headless,
+  grants = [],
+  approvedCall = null,
+  buildLogData,
+  logInteraction,
+  interactionService = defaultInteractionService,
+  runLog = defaultRunLog
+}) {
+  const granted = new Set((Array.isArray(grants) ? grants : []).map(String));
+  const approvedOnce = oneShotGrant(approvedCall);
+  return {
+    headless,
+    resolvePolicy: toolDef => resolveToolApproval(toolDef, app, platform),
+    isGranted(info) {
+      const toolId = String(info.toolId || info.toolDef?.id);
+      if (granted.has(toolId)) return true;
+      // The call a person approved runs once, with exactly those arguments.
+      return approvedOnce(info);
+    },
+    async raise(info, ctx, policy) {
+      const runId = ctx.runId || chatId;
+      const runMeta = runLog?.getRunMeta?.(runId) || null;
+      const principalId = runMeta?.principalId || null;
+      const identityMode = runMeta?.identityMode || null;
+      const displayData = approvalDisplayData(info, policy, {
+        justification: justificationOf(ctx, info.call)
+      });
+      let interaction;
+      try {
+        interaction = await interactionService.raise({
+          id: `approve-${chatId}-${crypto.randomUUID()}`,
+          runId,
+          step: Number.isInteger(ctx.iteration) ? ctx.iteration : 0,
+          kind: 'approval',
+          origin: 'tool',
+          prompt: {
+            title: `Run ${displayData.toolName}?`,
+            message:
+              `The assistant wants to run "${displayData.toolName}". ` +
+              'Nothing is sent until you choose.',
+            inputType: 'confirm',
+            displayData
+          },
+          policy: { timeoutMs: CLARIFICATION_TTL_MS, onTimeout: 'deny', fallback: 'deny' },
+          source: {
+            ...(info.call?.id ? { toolCallId: String(info.call.id) } : {}),
+            toolId: displayData.toolId,
+            chatId,
+            ...(app?.id ? { appId: app.id } : {}),
+            ...(principalId ? { principalId: String(principalId) } : {}),
+            ...(identityMode ? { identityMode } : {}),
+            ...(runMeta?.anonymous ? { anonymous: true } : {})
+          }
+        });
+      } catch (raiseErr) {
+        // An approval nobody can find again could never be answered: fail the
+        // call (the model sees the error) instead of pausing on a draft.
+        logger.error('Tool approval could not be persisted as an interaction', {
+          component: COMPONENT,
+          chatId,
+          toolId: info.toolId,
+          error: raiseErr.message
+        });
+        throw Object.assign(new Error(`Approval could not be raised: ${raiseErr.message}`), {
+          code: 'INTERACTION_RAISE_FAILED',
+          cause: raiseErr
+        });
+      }
+      logger.info('Tool approval requested', {
+        component: COMPONENT,
+        chatId,
+        toolId: displayData.toolId,
+        sideEffect: displayData.sideEffect,
+        dataFlow: displayData.dataFlow,
+        approvalSource: displayData.approvalSource
+      });
+      // `interaction/raised` is sent by the turn once the paused turn is kept
+      // with the chat (ChatService), so the card never appears before an
+      // answer to it could be accepted.
+      return interaction;
+    },
+    async onDenied(info, ctx, payload) {
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: payload,
+        error: { code: payload.code, message: payload.message }
+      });
+      await logInteraction(
+        'tool_error',
+        buildLogData(true, {
+          toolId: info.toolId,
+          // A refused call never ran: its arguments are logged redacted.
+          toolInput: redactApprovalArgs(info.args),
+          error: payload
+        })
+      );
+    }
+  };
+}
+
+/**
+ * The tool result the model gets for a gated call that did not run: the
+ * person rejected it, or the approval expired.
+ *
+ * @param {'rejected'|'expired'} outcome
+ * @param {string} toolName
+ * @returns {Object}
+ */
+export function approvalRefusalPayload(outcome, toolName) {
+  if (outcome === 'expired') {
+    return {
+      error: true,
+      code: APPROVAL_ERROR_CODES.APPROVAL_EXPIRED,
+      message: `The approval for "${toolName}" expired before anyone answered. It was not run. Continue without it, or ask the user whether to try again.`
+    };
+  }
+  return {
+    error: true,
+    code: APPROVAL_ERROR_CODES.USER_REJECTED,
+    message: `The user rejected "${toolName}". It was not run. Do not call it again with the same arguments; continue without it or ask the user how to proceed.`
   };
 }
 

@@ -25,6 +25,14 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 const EXECUTION_ID = 'wf-exec-11111111-2222-3333-4444-555555555555';
 
+/** The principal the executions in these tests were started by (`_workflow.actor`). */
+const OWNER_ACTOR = { kind: 'user', userId: 'owner-1', groups: ['users'] };
+/** Rebuilds a recorded principal without the groups config (see executionActor.js). */
+const resolveActor = snapshot => ({
+  ok: true,
+  user: { id: snapshot.userId, groups: snapshot.groups || [] }
+});
+
 function fakeCheckpoint(overrides = {}) {
   return {
     id: 'ckpt-1',
@@ -64,6 +72,7 @@ function fakeEngine({ state, agent = false } = {}) {
     data: {
       pendingCheckpoint: fakeCheckpoint(),
       _workflowDefinition: workflow,
+      _workflow: { actor: OWNER_ACTOR },
       nodeResults: { plan: { ok: true } },
       ...(agent ? { _agent: { profileId: 'p1', triggeredBy: { userId: 'u1' } } } : {})
     }
@@ -113,7 +122,7 @@ function fakeEngine({ state, agent = false } = {}) {
       };
     }
   };
-  return { engine, registry, executor, calls, workflow, paused };
+  return { resolveActor, engine, registry, executor, calls, workflow, paused };
 }
 
 async function setup() {
@@ -146,8 +155,14 @@ test('isCheckpointInteraction: source.checkpointId + executionId, from a human n
 
 test('answer → executor.resume → route on branch → state update → engine.resume → run/resumed', async () => {
   const { runLog, svc } = await setup();
-  const { engine, registry, executor, calls } = fakeEngine();
-  const unregister = registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const { resolveActor, engine, registry, executor, calls } = fakeEngine();
+  const unregister = registerCheckpointResume(svc, {
+    resolveActor,
+    engine,
+    registry,
+    executor,
+    runLog
+  });
   const types = [];
   runLog.subscribe(EXECUTION_ID, e => types.push(e.type));
 
@@ -194,9 +209,13 @@ test('answer → executor.resume → route on branch → state update → engine
   assert.deepEqual(patch.data.nodeResults.plan, { ok: true });
   assert.equal(patch.data.nodeResults.approval.response, 'approve');
 
-  // engine resumed as the answering user with the stored definition; no agent timeout
+  // engine resumed as the execution's own principal, never the answerer (#2945);
+  // who answered is documented in the answer log
   assert.equal(calls.resume.length, 1);
-  assert.equal(calls.resume[0].options.user.id, 'alice');
+  assert.equal(calls.resume[0].options.user.id, 'owner-1');
+  assert.equal(patch.data._answerLog.length, 1);
+  assert.equal(patch.data._answerLog[0].approver.id, 'alice');
+  assert.equal(patch.data._answerLog[0].checkpointId, 'ckpt-1');
   assert.equal(calls.resume[0].options.workflow.id, 'wf-1');
   assert.equal(calls.resume[0].options.timeout, undefined);
 
@@ -215,7 +234,7 @@ test('answer → executor.resume → route on branch → state update → engine
 
 test('agent runs resume with the 30-minute node timeout', async () => {
   const { runLog, svc } = await setup();
-  const { engine, registry, executor, calls } = fakeEngine({ agent: true });
+  const { resolveActor, engine, registry, executor, calls } = fakeEngine({ agent: true });
   const it = checkpointToInteraction(fakeCheckpoint(), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
@@ -226,7 +245,7 @@ test('agent runs resume with the 30-minute node timeout', async () => {
       status: 'answered',
       answer: { value: 'approve', by: 'alice', at: new Date().toISOString(), channel: 'queue' }
     },
-    { engine, registry, executor, runLog, user: { id: 'alice' } }
+    { resolveActor, engine, registry, executor, runLog, user: { id: 'alice' } }
   );
   assert.equal(calls.resume[0].options.timeout, AGENT_NODE_TIMEOUT_MS);
   await svc.stop();
@@ -235,8 +254,8 @@ test('agent runs resume with the 30-minute node timeout', async () => {
 
 test('a rejected resume rejects the answer and leaves the interaction pending', async () => {
   const { runLog, svc } = await setup();
-  const { engine, registry, executor, calls } = fakeEngine();
-  registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const { resolveActor, engine, registry, executor, calls } = fakeEngine();
+  registerCheckpointResume(svc, { resolveActor, engine, registry, executor, runLog });
   const template = checkpointToInteraction(fakeCheckpoint({ options: undefined }), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
@@ -307,8 +326,8 @@ test('execution state guards: not paused / checkpoint mismatch / unknown executi
 
 test('non-checkpoint interactions are ignored by the registered handler', async () => {
   const { runLog, svc } = await setup();
-  const { engine, registry, executor, calls } = fakeEngine();
-  registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const { resolveActor, engine, registry, executor, calls } = fakeEngine();
+  registerCheckpointResume(svc, { resolveActor, engine, registry, executor, runLog });
   const q = await svc.raise({
     runId: EXECUTION_ID,
     kind: 'question',
@@ -359,12 +378,18 @@ test('an execution id that is not a safe run id is rejected before the engine is
 test('an expired checkpoint interaction cancels its execution (policy onTimeout: fail)', async () => {
   const { runLog, svc } = await setup();
   const cancelled = [];
-  const { engine, registry, executor } = fakeEngine();
+  const { resolveActor, engine, registry, executor } = fakeEngine();
   engine.cancel = async (id, reason) => {
     cancelled.push({ id, reason });
     return { executionId: id, status: 'cancelled' };
   };
-  const unregister = registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const unregister = registerCheckpointResume(svc, {
+    resolveActor,
+    engine,
+    registry,
+    executor,
+    runLog
+  });
   const template = checkpointToInteraction(fakeCheckpoint({ timeout: 1000 }), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
@@ -448,10 +473,11 @@ test('an answered question checkpoint resumes the paused node with the answer on
       pendingCheckpoint: pending,
       _pausedLoops: { research: { checkpointId: 'ckpt-q1', toolCallId: 'call_1', messages: [] } },
       _workflowDefinition: workflow,
+      _workflow: { actor: OWNER_ACTOR },
       _agent: { profileId: 'p1' }
     }
   };
-  const { engine, registry, calls } = fakeEngine({ state });
+  const { resolveActor, engine, registry, calls } = fakeEngine({ state });
   const interaction = {
     id: 'ckpt-q1',
     runId: EXECUTION_ID,
@@ -480,6 +506,7 @@ test('an answered question checkpoint resumes the paused node with the answer on
   };
   const newState = await resumeWorkflowFromAnswer(interaction, {
     user: { id: 'alice' },
+    resolveActor,
     engine,
     registry,
     executor
@@ -541,7 +568,7 @@ test('an answer that arrives before the pause is written waits for it instead of
 
 test('a failing engine.resume restores the paused state and its checkpoint; the answer can be retried', async () => {
   const { runLog, svc } = await setup();
-  const { engine, registry, executor, calls } = fakeEngine();
+  const { resolveActor, engine, registry, executor, calls } = fakeEngine();
   let failNext = true;
   const realResume = engine.resume.bind(engine);
   engine.resume = async (...args) => {
@@ -553,7 +580,7 @@ test('a failing engine.resume restores the paused state and its checkpoint; the 
     }
     return realResume(...args);
   };
-  registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  registerCheckpointResume(svc, { resolveActor, engine, registry, executor, runLog });
   const template = checkpointToInteraction(fakeCheckpoint({ options: undefined }), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
@@ -611,9 +638,13 @@ test('a failing engine.resume after a question answer restores the checkpoint to
     status: 'paused',
     completedNodes: [],
     currentNodes: ['research'],
-    data: { pendingCheckpoint: pending, _workflowDefinition: workflow }
+    data: {
+      pendingCheckpoint: pending,
+      _workflowDefinition: workflow,
+      _workflow: { actor: OWNER_ACTOR }
+    }
   };
-  const { engine, registry, calls } = fakeEngine({ state });
+  const { resolveActor, engine, registry, calls } = fakeEngine({ state });
   let code = 'WORKFLOW_NOT_AVAILABLE';
   engine.resume = async () => {
     const err = new Error('resume failed');
@@ -636,7 +667,7 @@ test('a failing engine.resume after a question answer restores the checkpoint to
     answer: { value: 'Q3', by: 'alice', at: new Date().toISOString(), channel: 'run_page' }
   };
   await assert.rejects(
-    resumeWorkflowFromAnswer(interaction, { engine, registry, runLog }),
+    resumeWorkflowFromAnswer(interaction, { resolveActor, engine, registry, runLog }),
     e => e.code === 'WORKFLOW_NOT_AVAILABLE'
   );
   const restore = calls.update.at(-1).patch;
@@ -652,7 +683,7 @@ test('a failing engine.resume after a question answer restores the checkpoint to
   code = 'INVALID_STATE_FOR_RESUME';
   const updatesBefore = calls.update.length;
   await assert.rejects(
-    resumeWorkflowFromAnswer(interaction, { engine, registry, runLog }),
+    resumeWorkflowFromAnswer(interaction, { resolveActor, engine, registry, runLog }),
     e => e.code === 'INVALID_STATE_FOR_RESUME' && e.status === 409
   );
   assert.equal(calls.update.length, updatesBefore + 1, 'only the answer was written');

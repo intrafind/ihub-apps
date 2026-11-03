@@ -231,6 +231,87 @@ describe('PUT /api/admin/chat-history/settings', () => {
   });
 });
 
+describe('uploaded files settings (platform.uploads)', () => {
+  test('reads the effective upload settings with defaults filled in', async () => {
+    const response = await request(createTestApp()).get('/api/admin/chat-history');
+
+    expect(response.status).toBe(200);
+    expect(response.body.settings.uploads).toEqual({
+      enabled: true,
+      storageMode: 'original_and_text',
+      originalRetentionDays: 14,
+      evictOldestOriginalsOnQuota: true,
+      quotas: {
+        maxFileBytes: 25 * 1024 * 1024,
+        maxChatBytes: 100 * 1024 * 1024,
+        maxChatFiles: 25,
+        maxUserBytes: 1024 * 1024 * 1024,
+        maxServerBytes: 50 * 1024 * 1024 * 1024,
+        maxApiFiles: 200,
+        maxApiBytes: 1024 * 1024 * 1024
+      }
+    });
+  });
+
+  test('writes the Inference API limits of the user scope', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ uploads: { quotas: { maxApiFiles: 50, maxApiBytes: 0 } } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual([
+      'uploads.quotas.maxApiFiles',
+      'uploads.quotas.maxApiBytes'
+    ]);
+    expect(state.stored.uploads.quotas).toEqual({ maxApiFiles: 50, maxApiBytes: 0 });
+    expect(response.body.settings.uploads.quotas.maxApiFiles).toBe(50);
+    expect(response.body.settings.uploads.quotas.maxApiBytes).toBe(0);
+  });
+
+  test('writes the mode, retention and quotas, changed values only', async () => {
+    state.stored.uploads = { quotas: { maxChatFiles: 10 } };
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({
+        uploads: {
+          storageMode: 'client_text_only',
+          originalRetentionDays: 7,
+          quotas: { maxChatFiles: 10, maxUserBytes: 500 * 1024 * 1024, maxServerBytes: 0 }
+        }
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual([
+      'uploads.storageMode',
+      'uploads.originalRetentionDays',
+      'uploads.quotas.maxUserBytes',
+      'uploads.quotas.maxServerBytes'
+    ]);
+    expect(state.stored.uploads).toEqual({
+      storageMode: 'client_text_only',
+      originalRetentionDays: 7,
+      quotas: { maxChatFiles: 10, maxUserBytes: 500 * 1024 * 1024, maxServerBytes: 0 }
+    });
+    expect(response.body.settings.uploads.storageMode).toBe('client_text_only');
+    expect(response.body.restartRequired).toBe(false);
+  });
+
+  test.each([
+    ['an unknown storage mode', { uploads: { storageMode: 'everything' } }],
+    ['an unknown upload field', { uploads: { retentionYears: 1 } }],
+    ['an unknown quota', { uploads: { quotas: { maxPetabytes: 1 } } }],
+    ['a fractional quota', { uploads: { quotas: { maxChatFiles: 1.5 } } }]
+  ])('rejects %s without writing', async (_label, body) => {
+    const before = JSON.stringify(state.stored);
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send(body);
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(state.stored)).toBe(before);
+  });
+});
+
 describe('POST /api/admin/chat-history/retention/run', () => {
   test('sweeps chats and the ledger with the configured settings', async () => {
     const response = await request(createTestApp())

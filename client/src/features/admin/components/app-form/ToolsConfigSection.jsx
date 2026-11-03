@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import ToolsSelector from '../../../../shared/components/ToolsSelector';
+import { ApprovalModeSelect } from '../ToolApprovalFields';
 
 /** Whether the model decides to use the app's tools or must call one first. */
 function ToolChoiceSelect({ toolChoice, onChange }) {
@@ -40,12 +41,46 @@ function ToolChoiceSelect({ toolChoice, onChange }) {
   );
 }
 
+/**
+ * The app's tool approval override (#2945): it can only make the admin's
+ * settings stricter, so the choices are "no override", "ask unless it only
+ * reads" and "always ask". Per-tool overrides (`toolApproval.tools`) are kept
+ * as they are and edited in the JSON.
+ */
+function ToolApprovalOverride({ toolApproval, onChange }) {
+  const { t } = useTranslation();
+  const setDefault = mode => {
+    const next = { ...(toolApproval || {}) };
+    if (mode) next.default = mode;
+    else delete next.default;
+    if (next.tools && Object.keys(next.tools).length === 0) delete next.tools;
+    onChange(Object.keys(next).length ? next : undefined);
+  };
+  return (
+    <div className="mt-6">
+      <ApprovalModeSelect
+        label={t('admin.apps.edit.toolApproval', 'Approval before tool calls')}
+        value={toolApproval?.default}
+        inheritLabel={t('admin.apps.edit.toolApprovalInherit', 'As the admin settings (default)')}
+        modes={['writes', 'always']}
+        onChange={setDefault}
+        help={t(
+          'admin.apps.edit.toolApprovalHelp',
+          'Makes the approval stricter for this app. It can never relax the platform, tool or integration settings: a looser value is ignored.'
+        )}
+      />
+    </div>
+  );
+}
+
 function ToolsConfigSection({
   selectedTools,
   onToolsChange,
   mcpToolIds = [],
   toolChoice,
-  onToolChoiceChange
+  onToolChoiceChange,
+  toolApproval,
+  onToolApprovalChange
 }) {
   const { t } = useTranslation();
 
@@ -74,6 +109,9 @@ function ToolsConfigSection({
             ]}
           />
           <ToolChoiceSelect toolChoice={toolChoice} onChange={onToolChoiceChange} />
+          {onToolApprovalChange && (
+            <ToolApprovalOverride toolApproval={toolApproval} onChange={onToolApprovalChange} />
+          )}
         </div>
       </div>
     </div>

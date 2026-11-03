@@ -110,17 +110,7 @@ export class A2aClientContextStore {
         // The document holds the ids it is for, so a digest collision (or a
         // stale copy of another conversation) can never be handed out.
         const data = doc?.data;
-        entry =
-          data &&
-          data.userId === ref.userId &&
-          data.chatId === ref.chatId &&
-          data.agentId === ref.agentId
-            ? {
-                contextId: data.contextId || null,
-                ...(data.taskId ? { taskId: data.taskId } : {}),
-                updatedAt: data.updatedAt || 0
-              }
-            : null;
+        entry = this._entryOf(data, ref);
       } catch (error) {
         logger.warn('A2A conversation read failed; using in-memory copy', {
           component: COMPONENT,
@@ -136,6 +126,18 @@ export class A2aClientContextStore {
     if (this.now() - (entry.updatedAt || 0) > CLIENT_CONTEXT_RETENTION_MS) return null;
     this._cache(key, entry);
     return { contextId: entry.contextId, ...(entry.taskId ? { taskId: entry.taskId } : {}) };
+  }
+
+  /** The remembered entry a stored document holds for `ref`, or null when it is for another conversation. */
+  _entryOf(data, ref) {
+    if (data?.userId !== ref.userId || data.chatId !== ref.chatId || data.agentId !== ref.agentId) {
+      return null;
+    }
+    return {
+      contextId: data.contextId || null,
+      ...(data.taskId ? { taskId: data.taskId } : {}),
+      updatedAt: data.updatedAt || 0
+    };
   }
 
   /**
@@ -213,12 +215,14 @@ export class A2aClientContextStore {
         limit: SWEEP_PAGE_SIZE,
         cursor: this._sweepCursor || undefined
       });
-      for (const doc of page.items || []) {
+      const expired = (page.items || []).filter(doc => {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
-        if (now - updatedAt > CLIENT_CONTEXT_RETENTION_MS) {
-          if (await documents.delete(A2A_CLIENT_CONTEXTS_NAMESPACE, doc.key)) removed += 1;
-        }
-      }
+        return now - updatedAt > CLIENT_CONTEXT_RETENTION_MS;
+      });
+      const deleted = await Promise.all(
+        expired.map(doc => documents.delete(A2A_CLIENT_CONTEXTS_NAMESPACE, doc.key))
+      );
+      removed += deleted.filter(Boolean).length;
       this._sweepCursor = page.nextCursor || null;
     } catch (error) {
       this._sweepCursor = null;

@@ -525,6 +525,21 @@ function sanitizeBox(source, ctx, depth) {
   return node;
 }
 
+/** Label above a signature field that has none of its own, by document language. */
+const SIGNATURE_LABELS = {
+  en: 'Signature',
+  de: 'Unterschrift',
+  fr: 'Signature',
+  es: 'Firma',
+  it: 'Firma',
+  nl: 'Handtekening'
+};
+
+function signatureLabel(language) {
+  const key = typeof language === 'string' ? language.slice(0, 2).toLowerCase() : 'en';
+  return SIGNATURE_LABELS[key] || SIGNATURE_LABELS.en;
+}
+
 function renderFormField(field, ctx) {
   if (!field || typeof field !== 'object') return null;
   countNode(ctx);
@@ -615,7 +630,12 @@ function renderFormField(field, ctx) {
           ? [labelNode]
           : [
               {
-                text: 'Signature',
+                text: required
+                  ? [
+                      { text: signatureLabel(ctx.language), bold: true, fontSize: 8.5 },
+                      { text: ' *', bold: true, fontSize: 8.5, color: '#dc2626' }
+                    ]
+                  : signatureLabel(ctx.language),
                 bold: true,
                 fontSize: 8.5,
                 color: ctx.theme.muted || '#475569',
@@ -682,20 +702,30 @@ function sanitizeForm(source, ctx) {
       if (rendered) stack.push(rendered);
     }
   } else {
-    for (let i = 0; i < rawFields.length; i += cols) {
-      const slice = rawFields.slice(i, i + cols);
-      if (slice.length === 1 && slice[0]?.span === cols) {
-        const rendered = renderFormField(slice[0], ctx);
+    // Fields fill rows of `cols` columns; a field that spans every column gets
+    // a row of its own, closing the row before it.
+    let pending = [];
+    const flushRow = () => {
+      if (pending.length === 0) return;
+      const rowCols = [];
+      for (let c = 0; c < cols; c += 1) {
+        const rendered = pending[c] ? renderFormField(pending[c], ctx) : { text: '' };
+        rowCols.push({ ...(rendered || { text: '' }), width: '*' });
+      }
+      stack.push({ columns: rowCols, columnGap: 12 });
+      pending = [];
+    };
+    for (const f of rawFields) {
+      if (Number(f?.span) >= cols) {
+        flushRow();
+        const rendered = renderFormField(f, ctx);
         if (rendered) stack.push(rendered);
       } else {
-        const rowCols = [];
-        for (let c = 0; c < cols; c += 1) {
-          const rendered = slice[c] ? renderFormField(slice[c], ctx) : { text: '' };
-          rowCols.push({ ...(rendered || { text: '' }), width: '*' });
-        }
-        stack.push({ columns: rowCols, columnGap: 12 });
+        pending.push(f);
+        if (pending.length === cols) flushRow();
       }
     }
+    flushRow();
   }
   const out = { stack, margin: [0, 4, 0, 10] };
   const margin = sanitizeMargin(source.margin);

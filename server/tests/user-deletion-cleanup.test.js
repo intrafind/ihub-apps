@@ -60,7 +60,7 @@ const { revokeConnectionsForUser } = await import('../services/oauth/ConnectionS
 const { deletePersonalClientsByOwner, loadOAuthClients } =
   await import('../utils/oauthClientManager.js');
 const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
-const { tokenStorageIdFor } = await import('../services/mcp/mcpUserTokens.js');
+const { tokenStorageIdFor } = await import('../services/integrations/auth/tokenSecrets.js');
 const { deleteChatsOfOwner } = await import('../services/chat/chatDeletion.js');
 const { USER_CLEANUP_STEPS, cleanUpDeletedUser, startUserCleanup, waitForUserCleanups } =
   await import('../services/userDeletion.js');
@@ -306,12 +306,15 @@ describe('the cleanup', () => {
       'personalApiKeys',
       'oauthConnections',
       'integrationTokens',
+      'integrationConnections',
       'mcpConnections',
       'scheduledTasks',
       'chats',
       'userPrompts',
+      'integrationPreferences',
       'userProjects',
       'userSkills',
+      'integrationRequests',
       'shortLinks'
     ]);
     expect(names.indexOf('scheduledTasks')).toBeLessThan(names.indexOf('chats'));
@@ -324,12 +327,19 @@ describe('the cleanup', () => {
       'personalApiKeys',
       'oauthConnections',
       'integrationTokens',
+      'integrationConnections',
       'mcpConnections',
       'scheduledTasks'
     ]) {
       expect(kindOf(name)).toBe('access');
     }
-    for (const name of ['chats', 'userPrompts', 'userSkills', 'shortLinks']) {
+    for (const name of [
+      'chats',
+      'userPrompts',
+      'userSkills',
+      'integrationRequests',
+      'shortLinks'
+    ]) {
       expect(kindOf(name)).toBe('content');
     }
   });

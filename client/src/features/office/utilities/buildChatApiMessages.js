@@ -5,6 +5,12 @@ import { processDocumentFile, resizeImageCanvas } from '../../upload/utils/fileP
 import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { sanitizeContentType, hasBase64Content } from './attachmentFormat';
 import { parseEmlAttachment, parseIcsAttachment } from './emailAttachmentParsers';
+import {
+  buildEmailFileEntry,
+  buildMeetingFileEntry,
+  buildPageFileEntry,
+  originalWithinCap
+} from './hostItemFiles';
 
 export { sanitizeContentType, hasBase64Content };
 
@@ -143,10 +149,15 @@ function base64ToFile(base64, name, contentType) {
 // - `url` (OneDrive/SharePoint share links) has no file bytes to read, so
 //   the link itself is sent as a reference instead of being dropped.
 // - anything else goes through the shared binary-document pipeline.
-async function buildFileEntryForAttachment(a, extractionOptions) {
+// With `storage` that keeps originals the raw bytes ride along as `base64`, so the
+// chat's file store keeps the attachment itself (`canUseAsTemplate` for a .docx,
+// .pptx, .xlsx, .pdf) and not only the text extracted here.
+async function buildFileEntryForAttachment(a, extractionOptions, storage) {
   const format = String(a?.content?.format || '').toLowerCase();
   const cleanType =
     sanitizeContentType(a.contentType) || a.contentType || 'application/octet-stream';
+  const original = originalWithinCap(a?.content?.content, storage);
+  const withOriginal = original ? { base64: original } : {};
 
   if (format === 'eml') {
     const text = parseEmlAttachment(a.content.content);
@@ -160,7 +171,8 @@ async function buildFileEntryForAttachment(a, extractionOptions) {
       fileName: a.name,
       fileType: 'message/rfc822',
       displayType: 'Email',
-      content: text
+      content: text,
+      ...withOriginal
     };
   }
 
@@ -176,7 +188,8 @@ async function buildFileEntryForAttachment(a, extractionOptions) {
       fileName: a.name,
       fileType: 'text/calendar',
       displayType: 'Calendar invite',
-      content: text
+      content: text,
+      ...withOriginal
     };
   }
 
@@ -211,7 +224,8 @@ async function buildFileEntryForAttachment(a, extractionOptions) {
       fileType: cleanType,
       displayType: cleanType,
       content: content || undefined,
-      pageImages: pageImages?.length ? pageImages : undefined
+      pageImages: pageImages?.length ? pageImages : undefined,
+      ...withOriginal
     };
   } catch (err) {
     console.warn(
@@ -225,7 +239,11 @@ async function buildFileEntryForAttachment(a, extractionOptions) {
 // Processes non-image attachments into file data for the outgoing request.
 // Returns an array of { fileName, fileType, displayType, content?, pageImages? }.
 // `fileUploadConfig` is the selected app's `upload.fileUpload` block (Word review marks).
-export async function buildFileDataFromMailAttachments(attachments, fileUploadConfig) {
+// `storage` (`HostItemStorage`, see hostItemFiles.js) is set when the chat stores its
+// files on the server; with `mode: 'original_and_text'` every attachment within the
+// per-file cap keeps its raw `base64`. Without it, or in the text-only modes, entries
+// carry text only, as they always did.
+export async function buildFileDataFromMailAttachments(attachments, fileUploadConfig, storage) {
   if (!attachments?.length) return null;
   const candidates = attachments
     .filter(a => !a?.isInline)
@@ -236,7 +254,9 @@ export async function buildFileDataFromMailAttachments(attachments, fileUploadCo
 
   const extractionOptions = extractionOptionsOf(fileUploadConfig);
   const results = await Promise.all(
-    candidates.map(attachment => buildFileEntryForAttachment(attachment, extractionOptions))
+    candidates.map(attachment =>
+      buildFileEntryForAttachment(attachment, extractionOptions, storage)
+    )
   );
   const valid = results.filter(Boolean);
   return valid.length ? valid : null;
@@ -321,23 +341,25 @@ function emailFields(email) {
 }
 
 /**
- * The current Outlook email — or, in the browser extension, the active tab.
- * Email headers ride along even when the user excluded the body via the
- * context strip: the strip still shows the subject, and a reply has to know
- * who it is answering. A page without text is dropped entirely; its title and
- * URL are not context on their own.
+ * The current Outlook item — an email, a meeting or, in the browser extension, the
+ * active tab — as its kind and the display-ready fields `hostContext` carries.
+ * Email headers ride along even when the user excluded the body via the context
+ * strip: the strip still shows the subject, and a reply has to know who it is
+ * answering. A page without text is dropped entirely; its title and URL are not
+ * context on their own.
  */
-function currentItemContext(item) {
-  if (!item || item.available === false) return {};
+function currentItemPart(item) {
+  if (!item || item.available === false) return null;
   if (item.itemKind === 'page') {
     const body = text(item.bodyText);
-    if (!body) return {};
-    return { currentPage: compact({ title: text(item.title), url: text(item.url), body }) };
+    if (!body) return null;
+    const fields = compact({ title: text(item.title), url: text(item.url), body });
+    return fields ? { kind: 'page', fields, raw: item, itemId: null } : null;
   }
   if (item.itemKind === 'appointment') {
     const start = formatIsoForPrompt(item.start);
     const end = formatIsoForPrompt(item.end);
-    const meeting = compact({
+    const fields = compact({
       subject: text(item.subject),
       yourRole: item.isOrganizer ? 'Organizer' : item.organizer?.email ? 'Attendee' : '',
       when: start && end ? `${start} – ${end}` : start,
@@ -347,21 +369,23 @@ function currentItemContext(item) {
       optionalAttendees: formatIdentityList(item.optionalAttendees),
       description: text(item.bodyText)
     });
-    return meeting ? { currentMeeting: meeting } : {};
+    return fields ? { kind: 'meeting', fields, raw: item, itemId: item.itemId ?? null } : null;
   }
-  const email = compact({
+  const fields = compact({
     ...emailFields(item),
     mailboxUser: formatIdentity(item.mailboxUser),
     body: text(item.bodyText)
   });
-  return email ? { currentEmail: email } : {};
+  return fields ? { kind: 'email', fields, raw: item, itemId: item.itemId ?? null } : null;
 }
+
+const CURRENT_ITEM_KEY = { page: 'currentPage', meeting: 'currentMeeting', email: 'currentEmail' };
 
 /**
  * Emails the user pinned or bulk-selected, de-duplicated against each other
  * and against the current item.
  */
-function addedEmailsContext(pinned, currentItemId) {
+function addedEmailParts(pinned, currentItemId) {
   const list = Array.isArray(pinned) ? pinned : [];
   const seen = new Set();
   const out = [];
@@ -371,9 +395,13 @@ function addedEmailsContext(pinned, currentItemId) {
     if (id && seen.has(id)) continue;
     if (id) seen.add(id);
     if (!text(p?.subject) && !text(p?.bodyText)) continue;
-    out.push(compact({ ...emailFields(p), body: text(p?.bodyText) }));
+    out.push({
+      fields: compact({ ...emailFields(p), body: text(p?.bodyText) }),
+      raw: p,
+      itemId: id ?? null
+    });
   }
-  return out.length ? { addedEmails: out } : {};
+  return out;
 }
 
 /**
@@ -396,11 +424,63 @@ function addedEmailsContext(pinned, currentItemId) {
  * @returns {Object|null}
  */
 export function buildHostContext({ item, currentItemId, pinned }) {
+  const added = addedEmailParts(pinned, currentItemId ?? item?.itemId ?? null);
+  const current = currentItemPart(item);
   const context = {
-    ...addedEmailsContext(pinned, currentItemId ?? item?.itemId ?? null),
-    ...currentItemContext(item)
+    ...(added.length ? { addedEmails: added.map(p => p.fields) } : {}),
+    ...(current ? { [CURRENT_ITEM_KEY[current.kind]]: current.fields } : {})
   };
   return Object.keys(context).length ? context : null;
+}
+
+/**
+ * The host item for the outgoing message: as `hostContext`, or — when the chat
+ * stores its files on the server (`storage`, see hostItemFiles.js) — as chat files.
+ * Both carry the same fields, so the server renders the same
+ * `<content type="email|meeting|page" origin="open|added">` blocks either way; as
+ * files they are also stored with the chat (Files drawer, later turns, replay,
+ * other devices) and found again by `meta.itemId` / `meta.url`.
+ *
+ * @param {Object} args - Those of {@link buildHostContext}, plus
+ * @param {import('./hostItemFiles').HostItemStorage|null} [args.storage] - null: no
+ *   storing chat, send `hostContext` as before.
+ * @param {string|null} [args.emlBase64] - The open email as Outlook's RFC 5322 message
+ *   (`fetchCurrentMailEml`); without it a minimal one is synthesized where the mode
+ *   keeps originals.
+ * @returns {{ hostContext: Object|null, fileData: Object[]|null }}
+ */
+export function buildHostItems({ item, currentItemId, pinned, storage = null, emlBase64 = null }) {
+  if (!storage) {
+    return { hostContext: buildHostContext({ item, currentItemId, pinned }), fileData: null };
+  }
+  const added = addedEmailParts(pinned, currentItemId ?? item?.itemId ?? null);
+  const current = currentItemPart(item);
+  const entries = [
+    ...added.map(p =>
+      buildEmailFileEntry({
+        fields: p.fields,
+        raw: p.raw,
+        itemId: p.itemId,
+        isCurrent: false,
+        storage
+      })
+    ),
+    current?.kind === 'email'
+      ? buildEmailFileEntry({
+          fields: current.fields,
+          raw: current.raw,
+          itemId: current.itemId,
+          isCurrent: true,
+          emlBase64,
+          storage
+        })
+      : null,
+    current?.kind === 'meeting'
+      ? buildMeetingFileEntry({ fields: current.fields, itemId: current.itemId })
+      : null,
+    current?.kind === 'page' ? buildPageFileEntry({ fields: current.fields }) : null
+  ].filter(Boolean);
+  return { hostContext: null, fileData: entries.length ? entries : null };
 }
 
 export function buildPromptTemplate(selectedStarterPrompt, selectedApp) {

@@ -94,6 +94,40 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
 
+## Integrations: Every Action Has a Detail With Guidance and a Test Runner
+
+Every action on the page of an installation (**Admin → Integrations → an installation**) now has
+**Details**, a panel that answers what the action does, how the model should use it, and whether
+it works, without a chat:
+
+- **What it does:** the description and the parameter schema exactly as the model receives them.
+  Vendor descriptions are often written for developers; replace the description for the model
+  per language, or reset it to the vendor's.
+- **Side effect, data flow, approval:** each value with where it came from (integration
+  definition, vendor annotation, admin override, platform default). Override the side effect or
+  data flow, set the action's approval mode, or mark a new or changed action as reviewed.
+  For an OpenAPI operation without a declared side effect, the HTTP method's suggestion is shown.
+- **How to use:** **model guidance** and **example prompts** per action, editable per language.
+  The guidance of every action a chat offers, with the integration's own **instructions**, is now
+  added to the system prompt while the integration is active (it used to be appended to the tool
+  description). The instructions are editable on the Overview, for MCP servers too, whose own
+  `instructions` are shown when the server sends them. The panel also lists the apps, workflows
+  and scheduled tasks that use the action.
+- **Test:** a form built from the parameter schema runs the action directly, without a model, as
+  you or with the installation's shared credential. It shows status, duration, the request as
+  sent (credentials, secret parameters and every resolved secret redacted), the raw response and
+  the Answer Sources it produced. An action that is not a confirmed read only runs after you tick
+  the confirmation; the server refuses it otherwise. Every test is written to the audit log
+  (`action.test`, with the arguments redacted).
+- **Usage:** calls, approvals, rejections, expired approvals, errors and admin tests in the last
+  7 days, counted per action from this version on.
+- **Try in chat** opens the installation's chat test from the panel.
+
+The built-in iFinder, Jira, Entra ID, iHub (asking the user, scheduled tasks) and web search
+integrations ship guidance and example prompts for their actions (definition version 1.1.0; no
+migration, no action shows as changed). The web search engines' instructions are now written for
+the model.
+
 ## Integrations Can Bring Their Own Code
 
 A definition in a registry may ship a connector module (`"protocol": { "type": "script",
@@ -235,6 +269,35 @@ brings your installations along by itself.
 See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes),
 [Integrations → Migrations](../../integrations.md#migrations) and [Marketplace](../../marketplace.md).
 
+## Integrations: Revert to an Earlier Version, Version Pins and Code Migrations
+
+An integration from the marketplace can now be held on a version range, and an installation can go
+back to any version it was at — also to one in the middle of an update that skipped versions.
+
+- **Revert:** the installation's page has a **Backups** card that lists every backup iHub took —
+  before each migration, at each version an update passed through, before each restore — with the
+  version, the reason and the date. **Revert to this version** puts the definition of that version,
+  the installation's settings and action selection, the bindings of its apps and its marketplace
+  entry back together, after asking. If anything fails on the way, nothing is changed. The current
+  state is backed up first, so you can go forward again the same way. **Restore backup** now lets
+  you pick which backup to restore.
+- **Every version an update passes is kept:** when an update skips versions (1.2.0 → 1.4.0), iHub
+  also downloads the definitions of the versions in between and keeps them with the backup of that
+  version, so 1.3.0 can be restored later even though it was never installed.
+- **Channel and pins per registry:** **Admin → Marketplace → Manage Registries → Edit** has a
+  **Versions** section. The channel is **Stable releases only** (the default) or **All releases,
+  including pre-releases**. A **version pin** keeps one item on a range such as `1.3.x`: install
+  and the **Update** badge then offer only versions inside it, and the item shows **Pinned to
+  1.3.x**. An update never goes back to an older version; revert the installation instead.
+- **Code migrations from trusted registries:** a definition can migrate its installations with a
+  small JavaScript module when renames and defaults are not enough. It runs only for the built-in
+  integrations and for integrations from a registry you trust for code, and only when the file
+  matches the hash the catalog listed; a module never sees the sign-in or credentials of the
+  installation and may change only its settings, action selection and app bindings.
+
+See [Integrations → Migrations](../../integrations.md#migrations) and
+[Marketplace → Versions, channel and pins](../../marketplace.md#versions-channel-and-pins).
+
 ## People Directories Are Installed Integrations
 
 LDAP people directories — the company directory and external ones such as x500.bund.de — are
@@ -356,6 +419,43 @@ Integrations**, and no longer three pages of their own with a shared provider ed
 See [Integrations → Built-in integrations](../../integrations.md#built-in-integrations) and
 [Apps → Files from storage providers](../../apps.md#files-from-storage-providers).
 
+## One Connection Service for Jira, Storage Providers and MCP Sign-ins
+
+Jira, Office 365, Google Drive, Nextcloud and MCP servers with per-user sign-in now connect,
+refresh and disconnect through one connection service and one OAuth client, so every integration
+gets the same security checks. Nothing changes for users who are connected: their connections are
+kept through the upgrade, nobody has to sign in again, and the callback URLs registered in the
+vendors' OAuth apps keep working.
+
+- **Connection index:** every connection has a record (status `active`, `expired`, `revoked`,
+  `failed` or `needs-reconnect`, the issuer, the granted scopes, expiry, last refresh and use).
+  The tokens stay where they always were; on the first start after the upgrade the existing token
+  files are indexed once, without moving or re-encrypting any of them. The **Connections** dialog
+  of an installation reads the index and shows each user's status.
+- **One callback:** `/api/integrations/oauth/callback` handles every sign-in. The callback URLs
+  admins registered (`/api/integrations/jira/callback`,
+  `/api/integrations/<provider>/<installation id>/callback`, `/api/mcp/oauth/callback/<server id>`)
+  are aliases of it and stay valid; nothing has to be re-registered.
+- **Same protection everywhere:** every sign-in uses PKCE — Nextcloud included — and a single-use
+  state kept on the server and bound to the user and the installation; the return URL must be on
+  the same origin. A refresh token goes back only to the authorization server and client that
+  issued it. Changing an installation's server URL, tenant or OAuth client ends its users'
+  connections, so a token is never sent to another endpoint.
+- **Disconnect revokes upstream** where the provider supports it (Google Drive, MCP servers that
+  advertise a revocation endpoint). Connect and disconnect are in the audit log as
+  `connection.create` and `connection.revoke`.
+- **Scheduled tasks use the owner's connection:** a tool in a scheduled run uses the owner's own
+  connection; when there is none, the run fails with `INTEGRATION_AUTH_REQUIRED`, naming the
+  integration and the reason (`not_connected`, `expired`, `insufficient_scope`), with a
+  **Reconnect** link.
+- **No endless retries:** a refresh token the provider refuses ends the connection (the user is
+  asked to reconnect), and after repeated temporary failures iHub backs off instead of asking the
+  provider again on every call.
+- **More scopes when a server asks:** an MCP server that refuses a call for a missing scope gets a
+  Connect card that asks the user to re-authorize once with the additional scopes.
+
+See [Integrations → Connections](../../integrations.md#connections).
+
 ## Groups Decide Which Integrations Their Members May Use
 
 Admins grant installed integrations per group, like apps: **Admin → Groups → a group →
@@ -381,6 +481,47 @@ the list is `permissions.integrations`.
 
 See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
 
+## Tool Calls Can Need a Person's Approval
+
+Admins decide which of the model's tool calls a person has to approve before anything is sent —
+for example, before an external MCP server receives what was found in your own documents, or
+before a comment lands on a Jira issue. Nothing changes on upgrade: approval is off until you set
+a mode.
+
+- **Three modes:** never, ask unless the call only reads, always. Every tool carries what it does
+  (reads, writes, deletes or overwrites, unknown) and where its data goes (internal, external).
+- **Where to set it:** a platform default for internal and external tools (**Admin → Security →
+  Tool approval**), a default and a mode per action on each integration (**Admin → Integrations
+  → an installation → Overview**), `approval` on a tool (**Admin → Tools → Edit**), and an app
+  override (**Admin → Apps → Edit → Tools**). The strictest setting wins; an app can make it
+  stricter, never looser.
+- **Approval card in the chat:** the tool and integration, what it does, the exact arguments, and
+  any text the assistant wrote, labelled as such. **Approve**, **Approve & allow for this chat**
+  or **Reject**. On approve, iHub runs exactly the call that was shown; the assistant does not
+  issue it again. A rejected or expired approval is reported to the assistant, which carries on.
+- **MCP App views ask too:** when an interactive view calls a tool that needs approval, the chat
+  shows the card below the view, and the view gets the result once you approve.
+- **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
+  under "ask unless it only reads" until an admin confirms the tool as a read.
+- **New and changed actions ask until reviewed:** iHub fingerprints every action of an
+  integration (name, what it does, its input). When a vendor adds an action or changes one, it
+  is badged **New** or **Changed** on the integration page and asks every time (configurable) until
+  you choose **Mark reviewed** or **Mark all reviewed**. This applies to integrations you have set
+  approval for.
+- **Sensible start for new integrations:** installing an integration preselects "ask unless it
+  only reads", and "always ask" for MCP servers, A2A agents and other external integrations that
+  do not declare what their actions do. You can change it before saving; existing integrations
+  are left as they are.
+- **Where nobody can approve** (OpenAI-compatible API, apps as tools, the MCP and A2A gateways,
+  workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
+  step that names approver groups parks the approval for them instead. Scheduled tasks keep
+  asking their owner, now for every tool the settings gate.
+- **Custom tools with `requiresApproval: true`** used to ask only in scheduled runs. They now ask
+  in the chat too, and are refused where nobody can approve (the API, other clients without the
+  approval card).
+
+See [Tool Approval](../../tool-approval.md).
+
 ## Integrations: One Admin Page, Grouped Tiles and a Page per Installation
 
 **Admin → Integrations** is one page with the tabs **Installed**, **Catalog** and **Inbound**.
@@ -404,6 +545,32 @@ shows what matters at a glance.
   from their definition.
 - **Inbound** lists what connects to iHub: Outlook add-in, browser extension, Microsoft 365
   Copilot, Nextcloud embed and the MCP gateway, each with its status.
+
+## Chat: One Row per Integration in the "+" Menu, Chips Under the Composer, Defaults on the Server
+
+The "+" menu of the chat is now the integrations picker: one row per integration the app offers,
+never one per action, with what it does ("read · write"). Chips under the composer show what the
+next answer can reach, and the default for new chats follows the user to any browser.
+
+- **Search, Attach, Use in this chat:** search the list; upload and the storage integrations that
+  hand over files are under **Attach**; web search, every integration and image generation are
+  rows under **Use in this chat**. An integration with a scope (iFinder search profile, iAssistant)
+  shows it on its row, with a submenu to change it.
+- **Connect →:** a personal integration the user has not connected yet shows **Connect →**
+  instead of a switch. The consent opens in a new tab and comes back to the same chat, and the row
+  is switched on there.
+- **Chips under the composer:** the logo, name and status of every integration switched on in the
+  chat, with its scope; web search turns off with one click. An app can show the scope as a
+  dropdown right in the chat input (`scopePicker: "inline"`, also in the app editor).
+- **`@` in the composer** finds the app's integrations beside its workflows and switches one on.
+- **Per chat, with a default on the server:** a switch changes the open chat only — it no longer
+  carries over to the next chat in the same browser tab. **Use as default for new chats** saves
+  the open chat's set (integrations, web search, scopes) for the app on the server, so it applies
+  in every browser. What the browser remembered is taken over once, on the first visit after the
+  upgrade. Scheduled tasks and workflows keep the set they were created with.
+- **Manage integrations…** opens Settings → Integrations.
+
+See [Integrations → In the chat](../../integrations.md#in-the-chat-the-integrations-picker).
 
 ## People Search Uses Every People Directory, Entra ID Included
 
@@ -436,6 +603,27 @@ run uses them, even after the chat moved to another profile.
 - Tasks saved before keep running as they did: without a stored profile, they search the
   default.
 
+## Users Request Catalog Integrations, Admins Approve From a Queue
+
+Users can now ask for an integration their administrator has not made available to them, and
+administrators see what people ask for.
+
+- **Not available yet:** **Settings → Integrations** lists the catalog integrations the user's
+  groups cannot use yet, read-only, with **Request**. A request takes an optional reason (up to
+  500 characters); afterwards the row shows _Requested_, _Approved, being set up_ or _Declined_
+  with the administrator's note. One open request per user and integration.
+- **Requests tab:** **Admin → Integrations → Requests** lists who asked for what, when and why,
+  with the number of open requests on the tab and next to **Integrations** in the admin sidebar.
+  **Approve** opens the install wizard for the integration; **Decline** and **Decline and hide**
+  take an optional note to the requester. A hidden integration disappears from every user's list
+  (and its other open requests are declined) until an administrator shows it again.
+- **Closes by itself:** a request closes once the integration is installed and the requester's
+  groups may use it, also when the group access is granted later.
+- **Audited:** requests and decisions are written to the audit log (resource `integration`,
+  actions `request` and `requestDecision`).
+
+See [Integrations → Requests from users](../../integrations.md#requests-from-users).
+
 ## LDAP Browser Is an Integration of Its Own
 
 The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the
@@ -457,6 +645,25 @@ new built-in integration **LDAP browser**, separate from people search. Install 
 
 See [People Directory Search → LDAP browser](../../people-directory-search.md#ldap-browser-for-admins).
 
+## Integrations: Build Your Own with Add Manually
+
+**Admin → Integrations → Add manually** builds a custom integration in five steps: name, icon and
+description; sign-in (none, a service account from the credential store, or per-user OAuth for an
+MCP server); the source of its actions; the actions; a review. It replaces the Tools page.
+
+- **Sources:** an **OpenAPI** document (URL, file or paste; pick the operations, the side effect
+  comes from the method), **HTTP requests** (method, URL template with `{param}` placeholders,
+  query, headers, body template, a JSONPath response mapping; no code), a **script** (a JavaScript
+  module edited in the builder), an **MCP server** (URL or local command; its tools) or an **A2A
+  agent** (agent card; its skills).
+- **Per action:** description for the model, parameters, side effect, data flow and approval.
+- HTTP request calls go through the SSRF guard, the proxy and the certificate whitelist like every
+  other outbound call, and never follow redirects.
+- A custom integration is an ordinary installation in the new **Custom** group: bind it to apps,
+  grant it to groups, test it on its page, and open it again with **Edit in builder**.
+- **Export for a registry** downloads a package (catalog item plus files) that another iHub installs
+  from the Marketplace.
+
 ## Integrations: Dedicated Editors for People Directories, the LDAP Browser and Entra ID
 
 The **Settings** tab of these installations is a dedicated editor instead of the generic form.
@@ -476,6 +683,26 @@ The **Settings** tab of these installations is a dedicated editor instead of the
   directory type.
 
 See [Integrations → Editors](../../integrations.md#editors).
+
+## One Connect Card for Every Integration
+
+When a request needs an integration the user has not connected yet — Jira, a storage provider or
+an MCP server with per-user sign-in — the chat now shows one Connect card that looks and works the
+same for all of them, and the request goes on by itself once the user is connected.
+
+- The card says why iHub needs to act as the user for this request, which permissions that covers
+  in plain words (the integration's actions, grouped as read and write) and where the sign-in
+  happens, with **Connect** and **Not now**.
+- After the vendor's consent the user lands back in the same chat, and the request that needed
+  the connection is retried once. A call that failed for any other reason is never retried by
+  itself, because a change may already have been made.
+- A connection that expired or lacks a permission shows **Reconnect** and says why and what
+  changes; the connection is kept and gains the new permission.
+- The file pickers of Office 365, Google Drive and Nextcloud show the same card when the user is
+  not connected.
+- `GET /api/integrations` lists, for the signed-in user, every integration their groups allow with
+  its actions and how it runs for them: connected as their account, signed in via SSO, service
+  account, shared key, not connected, or reconnect needed.
 
 ## Sources Panel: Where Each Document Was Found
 
@@ -510,6 +737,26 @@ app that uses the installation.
   visible to groups that may use all apps; untick it to create the app disabled.
 - Integration definitions from the marketplace can ship example apps too (`exampleApps`).
 
+## Settings → Integrations Shows Everything You May Use, and Who iHub Acts As
+
+**Settings → Integrations** now lists every integration your groups allow, not only the ones you
+sign in to yourself, and says truthfully who iHub acts as in each: _Connected as you_, _Signed in
+via SSO_, _Runs as service account (your group)_, _Shared key_, _Not connected_, _Reconnect
+needed_ or _Unavailable_ with what an administrator has to do.
+
+- **One list, one look:** iFinder, people directories, shared-key MCP servers and web search
+  appear next to Jira, cloud storage and per-user MCP servers, with a short summary of what each
+  can do (read · write).
+- **Connect, Reconnect, Disconnect** use the same sign-in as the Connect card in the chat;
+  disconnecting asks first and updates the row in place.
+- **Details:** open a row to see its actions with read / write badges, the apps that use it,
+  when it was last used, when your access ends, and what you allowed, in plain words.
+- **Find things:** search, filter by category, or show only what **needs attention** (a
+  reconnect, an unavailable integration, access that is about to end).
+- **Unavailable means the same as for admins:** an integration the admin list shows as
+  unreachable — for example because its shared key expired — shows as unavailable here too.
+- _Access to iHub_ (connected apps, personal API keys, the Outlook add-in) is unchanged.
+
 ## Chat: Tool Calls Name the Action and the System They Asked
 
 The list of tool calls above an answer now reads the way users think about it: each call shows
@@ -524,6 +771,75 @@ the action ("Search people") and the integration, MCP server or remote agent it 
 - Tools without a title (custom tools) keep showing their name as before.
 - A search in a connected system — a Jira ticket search, an MCP server's search — is listed as a
   call to that system, with its query among the arguments, no longer as a web search with a globe.
+
+## Chat and Scheduled-Task Files: Durable, Reusable and Connected
+
+Files attached to a chat now stay with it. The assistant keeps reading them on follow-up questions,
+after a page reload and on another device, and **Regenerate** and **Edit** no longer lose them.
+Scheduled tasks can carry reference documents and templates of their own.
+
+- **Files drawer:** the chat's side panel has **Uploaded** and **Generated** tabs. Uploaded files
+  show a type badge, size, pages and whether the original is still stored; they open as a preview
+  (PDF, picture, CSV, notebook, text, e-mail, meeting or web page). **Download original**,
+  **Download text** and **Delete file** are there, and in the Outlook task pane while writing a mail
+  **Attach to email**. Clicking an attachment chip in the conversation opens the file.
+- **What the server keeps** (**Admin → Chat history → Uploaded files**, per app `uploads.storageMode`):
+  the file and its text, only the text (the file is dropped after extraction), or only text
+  extracted in the browser. Originals older than the retention period (14 days by default) are
+  removed, their text stays with the chat. Limits per file, chat or task, user and server; when a
+  user or the server is full the oldest chat originals go first.
+- **Templates and forms:** an uploaded Word, PowerPoint, Excel or PDF file can be used by the
+  document skills. `create_docx` and `create_pptx` take the file's styles, master and layouts
+  (`templateFileId`, `templateMode`), `create_pdf` fills its form fields in place or prints on it as
+  letterhead, `create_xlsx` adds and replaces sheets in the uploaded workbook (`sourceFileId`).
+  An app with a fixed corporate document template keeps it unless it sets `allowUserTemplateUploads`.
+- **Scheduled tasks:** attach files in the task editor. Every run reads them, they are kept until
+  the file or task is deleted, and a copied task copies them. Files from Nextcloud, OneDrive and
+  SharePoint, Google Drive or iFinder can be fetched by the server and refreshed at the start of
+  every run (`refreshOnRun`); if a refresh fails the run uses the last version and says so.
+- **Sharing:** a shared chat includes the names of attached files but not the files. The owner can
+  share their text or the originals, file by file; viewers see only what was ticked.
+- **Outlook and integrations:** e-mails, meetings and web pages sent to the assistant are stored as
+  files in the chat (once per chat), and Outlook attachments keep their original so they can be used
+  as templates. The Inference API gets `/v1/files` and `file_id` references (`.xlsx` and scanned PDFs
+  included), and files in MCP and A2A calls are stored in the chat and shown in the drawer.
+- **MCP and A2A:** `app__*` and `workflow__*` tools accept `files`; `app__*` tools return generated
+  files as MCP `resource` and `image` blocks (workflow runs have no generated files to return); A2A accepts and returns `FilePart`s and its tools take `fileIds`.
+  A2A skill tools gained the `fileIds` input, so an A2A skill whose approval is set to "ask when new
+  or changed" asks once more before it runs after the upgrade.
+- **Limits and multi-instance:** the Inference API's `/v1/files` has its own limits per user
+  (**Admin → Chat history → Uploaded files**, `maxApiFiles` 200 and `maxApiBytes` 1 GB by default,
+  0 removes them) instead of the per-chat ones. The server-wide size limit is counted in a shared
+  counter, so several server instances enforce it together. A mail attachment sent with every turn
+  is stored once per chat.
+- **Inference API conversations:** items added to a conversation can carry `input_file` parts
+  (`file_data` or `file_id`); the files are stored in the conversation.
+- **Outlook pop-out:** a chat popped out of the task pane stores the real `.eml` of the open mail,
+  not a rebuilt one.
+
+## Excel Workbooks and Interactive Web Artifacts from Chat, with Richer Previews
+
+Two new system skills let a chat produce more than documents. Admins enable them per app like the
+existing document skills, by adding `xlsx` and `web-artifacts` to the app's `skills`.
+
+- **Excel workbooks (`xlsx` skill):** the model creates multi-sheet `.xlsx` files with the
+  corporate design, a frozen header row, filters, fitted column widths, number, percent and date
+  formats, and live formulas that Excel calculates on open. A formula that reaches outside the
+  workbook (for example `WEBSERVICE` or `HYPERLINK`) is written as plain text, never as a live
+  formula.
+- **Web artifacts (`web-artifacts` skill):** the model creates a self-contained interactive
+  `.html` page (dashboard, calculator, simulator) or a standalone `.svg`, with the corporate
+  colours and font available as `--brand-primary`, `--brand-accent` and `--brand-font`.
+- **Previews in the Artifacts panel:** PDFs, HTML pages, SVG graphics, CSV/TSV tables and Jupyter
+  notebooks open in the panel, with a **Preview | Code** switch where both make sense. An HTML
+  artifact runs sandboxed and cannot contact other sites.
+- **PDF and Word:** `create_pdf` can lay out fillable and pre-filled forms (text, checkbox, radio,
+  choice and signature fields); both tools take `showTitle`, `accentColor` and `date` (today by
+  default). PowerPoint slides can show KPI metric cards.
+- **Uploaded PDF forms:** the fields of a form (name, type, value, options) are now part of the
+  text the model reads.
+
+See [Apps → Skill Settings](../../apps.md#skill-settings).
 
 ## Tables in Uploaded PDFs Are Recognised Without Tags
 

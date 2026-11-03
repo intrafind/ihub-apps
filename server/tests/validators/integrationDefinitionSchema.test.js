@@ -202,11 +202,58 @@ describe('integrationDefinitionSchema', () => {
     void health;
     const result = validateIntegrationDefinition({
       ...rest,
-      protocol: { type: 'http', request: { url: 'https://api.example.com/{id}' } },
+      protocol: { type: 'storage', endpoint: 'https://files.example.com' },
       actions: []
     });
     expect(result.success).toBe(true);
-    expect(result.data.protocol.request.url).toBe('https://api.example.com/{id}');
+    expect(result.data.protocol.endpoint).toBe('https://files.example.com');
+  });
+
+  it('validates the http protocol and its request templates', () => {
+    const { scopes, sources, health, ...rest } = base;
+    void scopes;
+    void sources;
+    void health;
+    const valid = validateIntegrationDefinition({
+      ...rest,
+      protocol: { type: 'http', baseUrl: 'https://api.example.com' },
+      actions: [
+        {
+          name: 'get',
+          parameters: { type: 'object', properties: { id: { type: 'string' } } },
+          request: { method: 'GET', url: '/items/{id}' },
+          response: { result: '$.data', fields: { id: 'id' } }
+        }
+      ]
+    });
+    expect(valid.success).toBe(true);
+    expect(valid.data.actions[0].request).toEqual({
+      method: 'GET',
+      url: '/items/{id}',
+      contentType: 'application/json'
+    });
+    const noRequest = validateIntegrationDefinition({
+      ...rest,
+      protocol: { type: 'http', baseUrl: 'https://api.example.com' },
+      actions: [{ name: 'get' }]
+    });
+    expect(noRequest.success).toBe(false);
+  });
+
+  it('lets only built-in and custom definitions fix tool ids', () => {
+    const { scopes, sources, health, ...rest } = base;
+    void scopes;
+    void sources;
+    void health;
+    const action = { name: 'lookup', toolId: 'legacyLookup', request: { url: '/l' } };
+    const definition = id => ({
+      ...rest,
+      id,
+      protocol: { type: 'http', baseUrl: 'https://api.example.com' },
+      actions: [action]
+    });
+    expect(validateIntegrationDefinition(definition('custom/legacy')).success).toBe(true);
+    expect(validateIntegrationDefinition(definition('org.example/legacy')).success).toBe(false);
   });
 });
 

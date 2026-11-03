@@ -6,6 +6,12 @@ import { assertSpecSize, optionalString, toolFailure } from '../documentToolHelp
 import { holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToDocxSpec, templateBundleFor } from '../templates/applyTemplate.js';
+import {
+  DOCX_FILE_MIME,
+  loadUploadedFileOriginal,
+  userTemplateUploadsAllowed
+} from '../templateFiles.js';
+import { WORD_TEMPLATE_MODES } from './wordTemplate.js';
 
 /**
  * The tool the `docx` system skill brings (see `server/systemSkills/docx`):
@@ -26,7 +32,8 @@ export function docxSpecFromToolArgs(args) {
     title: optionalString(args.title, 300),
     subtitle: optionalString(args.subtitle, 300),
     author: optionalString(args.author, 200),
-    date: optionalString(args.date, 100),
+    // The cover page and the {date} placeholders share one date, today by default.
+    date: optionalString(args.date, 100) || new Date().toISOString().slice(0, 10),
     showTitle: args.showTitle !== false,
     language: optionalString(args.language, 20),
     markdown: typeof args.markdown === 'string' ? args.markdown : '',
@@ -55,9 +62,16 @@ export function docxSpecFromToolArgs(args) {
  * @param {string} [options.template] - Requested template id.
  * @returns {Promise<{ buffer: Buffer, warnings: string[], templateId: string|null }>}
  */
-export async function createDocx(spec, { app, template } = {}) {
+export async function createDocx(spec, { app, template, templateFile = null } = {}) {
   const bundle = await templateBundleFor({ format: 'docx', app, requested: template });
   const applied = applyTemplateToDocxSpec(spec, bundle);
+  if (templateFile?.buffer) {
+    // The user's own document: its styles, headers/footers and page setup win
+    // over the admin template; the content mode decides about its old body.
+    applied.assets = { wordTemplate: templateFile.buffer };
+    applied.spec = { ...applied.spec, templateMode: templateFile.mode || 'auto' };
+    applied.templateId = null;
+  }
   const started = Date.now();
   const { buffer, warnings } = await renderInWorker('docx', {
     spec: applied.spec,
@@ -85,10 +99,43 @@ export async function runCreateDocx(params) {
       throw new DocumentGenerationError('Provide the document content in "markdown".', 'invalid');
     }
     const spec = docxSpecFromToolArgs(params);
-    const { buffer, warnings, templateId } = await createDocx(spec, {
+    const extraWarnings = [];
+    let templateFile = null;
+    if (params.templateFileId) {
+      if (params.templateMode && !WORD_TEMPLATE_MODES.includes(params.templateMode)) {
+        throw new DocumentGenerationError(
+          `"templateMode" must be one of: ${WORD_TEMPLATE_MODES.join(', ')}.`,
+          'invalid'
+        );
+      }
+      if (userTemplateUploadsAllowed(params.appConfig)) {
+        const uploaded = await loadUploadedFileOriginal({
+          fileId: params.templateFileId,
+          mimeTypes: [DOCX_FILE_MIME],
+          user: params.user,
+          chatId: params.chatId
+        });
+        templateFile = {
+          buffer: uploaded.buffer,
+          mode: params.templateMode || 'auto',
+          name: uploaded.name
+        };
+      } else {
+        extraWarnings.push(
+          'This app uses a fixed corporate document template, so the uploaded file was not used as a template.'
+        );
+      }
+    }
+    const {
+      buffer,
+      warnings: renderWarnings,
+      templateId
+    } = await createDocx(spec, {
       app: params.appConfig,
-      template: params.template
+      template: params.template,
+      templateFile
     });
+    const warnings = [...extraWarnings, ...renderWarnings];
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
@@ -103,8 +150,9 @@ export async function runCreateDocx(params) {
       // chat's download card. The result itself never carries them.
       files: [file],
       ...(templateId ? { template: templateId } : {}),
+      ...(templateFile ? { templateFile: templateFile.name } : {}),
       ...(warnings.length ? { warnings } : {}),
-      message: `Created the Word document "${file.name}"${templateId ? ` in the "${templateId}" document template` : ''}. The user sees a download card for it in the chat — do not add a link.`
+      message: `Created the Word document "${file.name}"${templateId ? ` in the "${templateId}" document template` : ''}${templateFile ? ` using the styles of the uploaded "${templateFile.name}"` : ''}. The user sees a download card for it in the chat — do not add a link.`
     };
   } catch (error) {
     return toolFailure(error, 'The Word document could not be created.');

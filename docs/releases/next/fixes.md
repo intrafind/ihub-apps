@@ -120,6 +120,18 @@ search was badged "Based on web search". They now show **Based on connected syst
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
 
+## Workflows Continue as Their Own User After a Person Answers
+
+A workflow or agent run that paused for a `human` step, a question or a tool approval now continues
+as the user (or agent) it started with. Before, the steps after the answer ran as the person who
+answered, with their groups and their connected accounts — although anyone in an approver group
+could be the one answering. Who answered is now documented on the answer and in the run's history:
+their id, display name, the approver groups that let them answer, and the time.
+
+**Workflows and agent runs that are paused when you upgrade must be started again.** They do not
+record who they run as, so they cannot be continued after an answer: they stop with
+`EXECUTION_PRINCIPAL_UNKNOWN` ("started before this version; start it again").
+
 ## Wide Tables in Generated PDFs Stay on the Page
 
 Tables with many columns, or with a long word such as a URL, ran off the right edge of generated

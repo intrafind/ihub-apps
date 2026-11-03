@@ -9,7 +9,6 @@ import Office365Service from '../../services/integrations/Office365Service.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import rateLimit from 'express-rate-limit';
 import {
   sendInternalError,
   sendAuthRequired,
@@ -17,8 +16,12 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
-import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
-import { requireCloudStorageGrant } from './cloudStorageAccess.js';
+import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
+import {
+  requireCloudStorageGrant,
+  requestedProviderId,
+  respondIfAuthRequired
+} from './cloudStorageAccess.js';
 import { isValidGraphId } from '../../services/integrations/graphIds.js';
 
 const router = express.Router();
@@ -32,41 +35,13 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('office365'));
 
-// Rate limiter for Office 365 OAuth initiation to prevent abuse/DoS
-const office365AuthLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // limit each IP to 10 auth initiation requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
-createOAuthIntegrationRouter(router, {
+// The OAuth callback registered in the vendor app: an alias of the one integration
+// callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
+// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+registerIntegrationCallbackAlias(router, {
   providerKey: 'office365',
-  displayName: 'Office 365',
   requiresProviderId: true,
-  usesPkce: true,
-  authLimiter: office365AuthLimiter,
-  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
-    Office365Service.generateAuthUrl(providerId, state, codeVerifier, req),
-  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
-    Office365Service.exchangeCodeForTokens(providerId, code, codeVerifier, req),
-  storeUserTokens: (userId, tokens) => Office365Service.storeUserTokens(userId, tokens),
-  isUserAuthenticated: (userId, providerId) =>
-    Office365Service.isUserAuthenticated(userId, providerId),
-  getUserInfo: (userId, providerId) => Office365Service.getUserInfo(userId, providerId),
-  getTokenExpirationInfo: (userId, providerId) =>
-    Office365Service.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId) => Office365Service.deleteUserTokens(userId, providerId),
-  formatUserInfo: userInfo => ({
-    displayName: userInfo.displayName,
-    mail: userInfo.mail,
-    userPrincipalName: userInfo.userPrincipalName,
-    jobTitle: userInfo.jobTitle
-  }),
-  // invalid_client = expired/wrong client secret
-  mapCallbackError: error =>
-    error.code === 'invalid_client' ? 'invalid_client' : 'callback_failed'
+  stack: 'cloud-storage'
 });
 
 /**
@@ -166,9 +141,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'list Office 365 drives');
   }
@@ -216,9 +189,7 @@ router.get('/items', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'list Office 365 items');
   }
@@ -269,9 +240,7 @@ router.get('/download', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'download Office 365 file');
   }

@@ -38,7 +38,7 @@ export const CREATE_DOCX_TOOL = {
       showTitle: {
         type: 'boolean',
         description:
-          'Print the title block at the top of page 1 when there is no cover page or TOC (default true). Set to false for letters where the recipient block and subject line open the document.'
+          'Print the title block at the top of page 1 when there is no cover page (default true; with a table of contents it appears above the contents). Set to false for letters where the recipient block and subject line open the document.'
       },
       language: {
         type: 'string',
@@ -73,6 +73,17 @@ export const CREATE_DOCX_TOOL = {
       accentColor: {
         type: 'string',
         description: 'Hex colour for secondary accents, e.g. "#0284c7".'
+      },
+      templateFileId: {
+        type: 'string',
+        description:
+          'Optional id of a .docx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). Its styles, headers/footers and page setup are used for the new document.'
+      },
+      templateMode: {
+        type: 'string',
+        enum: ['styles_only', 'fill_placeholders', 'append'],
+        description:
+          'How to use templateFileId. "styles_only" (default when the file has no {{content}} marker) keeps styles, headers/footers and page setup and drops the old body text; "fill_placeholders" fills {{title}}, {{date}}, … and inserts the content at {{content}}; "append" adds the content after the old body.'
       },
       font: {
         type: 'string',

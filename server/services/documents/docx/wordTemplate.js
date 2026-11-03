@@ -58,6 +58,8 @@ const SETTINGS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/rela
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 
+export const WORD_TEMPLATE_MODES = Object.freeze(['styles_only', 'fill_placeholders', 'append']);
+
 export const TEXT_PLACEHOLDERS = Object.freeze(['title', 'subtitle', 'author', 'date', 'company']);
 const PLACEHOLDER = /\{\{\s*([a-z]+)\s*\}\}/gi;
 const CONTENT_MARKER = /^\{\{\s*content\s*\}\}$/i;
@@ -506,6 +508,11 @@ async function enableFieldUpdate(ctx) {
  * @param {Object} [options.properties] - Core properties (`title`, `author`, …).
  * @param {string} [options.accent] - The template theme's accent colour (hex,
  *   no `#`), for styles copied into it.
+ * @param {'styles_only'|'fill_placeholders'|'append'} [options.mode] - What to
+ *   do with a template body that has text but no `{{content}}` marker:
+ *   `styles_only` clears it (styles, headers/footers and section setup stay),
+ *   `fill_placeholders` and `append` (the default) put the content after it.
+ *   A `{{content}}` marker always wins.
  * @returns {Promise<Buffer>}
  */
 export async function mergeIntoWordTemplate(generated, template, options = {}) {
@@ -599,9 +606,10 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
       }
     } else marker.parentNode.removeChild(marker);
   } else {
-    if (!hasContent(tplBody)) {
-      // An empty body: drop its empty paragraphs, but not the ones that end
-      // a section (their page setup and headers would be lost).
+    if (options.mode === 'styles_only' || !hasContent(tplBody)) {
+      // An empty body, or `styles_only` (an uploaded document used only for
+      // its look): drop the old body, but not the paragraphs that end a
+      // section (their page setup and headers would be lost).
       for (const child of childElements(tplBody)) {
         if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
         tplBody.removeChild(child);

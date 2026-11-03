@@ -19,7 +19,10 @@ import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
-import { currentScopeOf, scopeActionLabel, scopeDisplayName } from '../utils/integrationScopes';
+import useIntegrationPicker from '../../integrations/picker/useIntegrationPicker';
+import IntegrationChips from '../../integrations/picker/IntegrationChips';
+import { isRowOn, setRowOn } from '../../integrations/picker/pickerState';
+import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import VoiceModeButton from '../../voice/components/VoiceModeButton';
@@ -45,6 +48,8 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
  * every render for surfaces that don't pass a conversation.
  */
 const NO_MESSAGES = [];
+// Stable, so memos that depend on the selection keep their identity.
+const NO_TOOLS = [];
 
 /** Format elapsed seconds as m:ss for the recording timer. */
 const formatElapsed = seconds => {
@@ -101,7 +106,8 @@ function ChatInput({
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
   magicPromptLoading = false,
-  enabledTools = [],
+  // `null`: the app offers no tool selection; left out: nothing selected yet.
+  enabledTools: enabledToolsProp,
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
@@ -215,10 +221,37 @@ function ChatInput({
   const ephemeralToggleAvailable =
     typeof onEphemeralChange === 'function' && app?.settings?.ephemeral?.enabled !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
+  // Callers pass `null` on purpose (no tool selection), so it is told apart
+  // from a prop that was left out (an empty selection).
+  const offersToolSelection = enabledToolsProp !== null;
+  const enabledTools = enabledToolsProp === undefined ? NO_TOOLS : enabledToolsProp;
+  // The integrations picker (#2923): one row per integration of the app,
+  // from the server; the "+" menu, the chips and `@` all show these rows.
+  const picker = useIntegrationPicker({
+    app: offersToolSelection && appToolRefs(app).length > 0 ? app : null,
+    language: currentLanguage,
+    enabledTools,
+    onEnabledToolsChange
+  });
+  const mentionIntegrations = useMemo(
+    () =>
+      typeof onEnabledToolsChange === 'function'
+        ? picker.rows
+            .filter(row => row.connection?.status !== 'unavailable')
+            .map(row => ({
+              id: row.id,
+              name: row.name,
+              description: row.description,
+              on: isRowOn(row, enabledTools)
+            }))
+        : [],
+    [picker.rows, enabledTools, onEnabledToolsChange]
+  );
   const workflowMentionsEnabled =
-    featureFlags.isEnabled('workflows', true) &&
-    Array.isArray(app?.workflows) &&
-    app.workflows.length > 0;
+    (featureFlags.isEnabled('workflows', true) &&
+      Array.isArray(app?.workflows) &&
+      app.workflows.length > 0) ||
+    mentionIntegrations.length > 0;
 
   // Derive the @mention query from the current input value
   const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';
@@ -415,14 +448,10 @@ function ChatInput({
   );
 
   // Calculate if single-action optimization is active in ChatInputActionsMenu
-  // This logic mirrors the calculation in ChatInputActionsMenu.jsx. Interactive
-  // clarification tools (`ask_user`) are a system channel, never shown as a
-  // selectable tool there, so they must not count as a tool action here either
-  // — otherwise an app whose only tool is `ask_user` would suppress the
-  // single-action optimization for its one real quick action. Only the
-  // well-known `ask_user` id is knowable without the fetched tool metadata; any
-  // `requiresUserInput` tool is filtered out for real inside the menu.
-  const hasTools = Array.isArray(app?.tools) && app.tools.some(id => id !== 'ask_user');
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx: the menu
+  // has a picker when the server lists rows for the app (the ask-the-user
+  // channel is never one), or web search, scopes, storage or image generation.
+  const hasTools = offersToolSelection && (picker.rows.length > 0 || picker.loading);
   // Local upload (paper-clip + dropzone) is independent from cloud storage
   // upload, which is rendered as separate entries in the actions menu.
   const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
@@ -443,9 +472,17 @@ function ChatInput({
           integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
         )
       : [];
-  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (visibleScopes.length > 0 ? 1 : 0);
-  const isSingleActionOptimization =
-    totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
+  const websearchAvailable =
+    app?.websearch?.enabled === true &&
+    typeof onWebsearchEnabledChange === 'function' &&
+    modelSupportsWebSearch(app, model) !== false;
+  const hasPicker =
+    hasTools ||
+    websearchAvailable ||
+    visibleScopes.length > 0 ||
+    hasCloudProviders ||
+    model?.supportsImageGeneration === true;
+  const isSingleActionOptimization = !hasPicker && quickActionCount === 1;
 
   // Handler to trigger file upload dialog via ref
   const handleAttachFile = useCallback(() => {
@@ -737,6 +774,15 @@ function ChatInput({
               setShowWorkflowSearch(false);
               setTimeout(() => focusInputAtEnd(), 0);
             }}
+            integrations={mentionIntegrations}
+            onSelectIntegration={rowId => {
+              // An integration is switched on for this chat; the `@partial`
+              // goes, the question stays.
+              onChange({ target: { value: value.replace(/@[\w.-]*$/, '') } });
+              onEnabledToolsChange?.(setRowOn(picker.rows, enabledTools, rowId, true));
+              setShowWorkflowSearch(false);
+              setTimeout(() => focusInputAtEnd(), 0);
+            }}
           />
         )}
 
@@ -816,6 +862,7 @@ function ChatInput({
               app={app}
               enabledTools={enabledTools}
               onEnabledToolsChange={onEnabledToolsChange}
+              picker={picker}
               uploadConfig={uploadConfig}
               onToggleUploader={handleAttachFile}
               onCloudProviderSelect={handleCloudProviderSelect}
@@ -848,54 +895,25 @@ function ChatInput({
             )}
             {projectContext && <ChatProjectChips projectContext={projectContext} />}
 
-            {/* Web search is on: say so in the bar, and turn it off in one
-                click. The switch itself lives in the "+" menu. */}
-            {app?.websearch?.enabled === true &&
-              websearchEnabled &&
-              onWebsearchEnabledChange &&
-              modelSupportsWebSearch(app, model) !== false && (
-                <button
-                  type="button"
-                  onClick={() => onWebsearchEnabledChange(false)}
-                  disabled={isInputDisabled || isProcessing}
-                  aria-pressed="true"
-                  aria-label={t('websearch.chipLabel', 'Web search is on — turn it off')}
-                  title={t('websearch.chipTitle', 'Web search is on. Click to turn it off.')}
-                  className="group flex shrink-0 items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-900/60"
-                >
-                  <Icon name="globe-alt" size="sm" />
-                  <span className="hidden sm:inline">{t('websearch.chip', 'Web search')}</span>
-                  <Icon
-                    name="x"
-                    size="xs"
-                    className="opacity-60 group-hover:opacity-100"
-                    aria-hidden="true"
-                  />
-                </button>
-              )}
-
-            {/* Where the next question goes: the scopes are picked in the "+"
-                menu, the chip keeps them visible before sending. */}
-            {visibleScopes.map(integration => {
-              const action = scopeActionLabel(integration, t);
-              const current = scopeDisplayName(currentScopeOf(integration), currentLanguage);
-              const name = scopeDisplayName(integration, currentLanguage);
-              return (
-                <span
-                  key={integration.id}
-                  className="flex min-w-0 shrink items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                  title={`${name}: ${action} ${current}`}
-                >
-                  <Icon
-                    name={integration.fixed ? 'lock-closed' : 'search'}
-                    size="xs"
-                    aria-hidden="true"
-                  />
-                  <span className="sr-only">{`${name}: ${action}`}</span>
-                  <span className="max-w-[10rem] truncate">{current}</span>
-                </span>
-              );
-            })}
+            {/* What the next turn can reach: web search and the integrations
+                switched on in this chat, with their scope. The switches live
+                in the "+" menu. */}
+            <IntegrationChips
+              rows={picker.rows}
+              enabledTools={enabledTools}
+              websearch={
+                websearchAvailable
+                  ? {
+                      available: true,
+                      enabled: Boolean(websearchEnabled),
+                      onChange: onWebsearchEnabledChange
+                    }
+                  : null
+              }
+              scopeIntegrations={visibleScopes}
+              onScopeChange={onIntegrationScopeChange}
+              disabled={isInputDisabled || isProcessing}
+            />
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
             {/* When single action, ChatInputActionsMenu shows it directly without a menu */}

@@ -27,6 +27,7 @@ import logger from '../../utils/logger.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { recordUpload } from '../../telemetry/metrics.js';
 import { OAuthRefreshError } from '../integrations/oauthRefreshError.js';
+import { isIntegrationAuthRequired } from '../integrations/auth/integrationAuthRequired.js';
 import { KnowledgeError } from '../knowledge/types.js';
 import { PROJECT_FILES_NAMESPACE, getProjectRepository, usageOf } from './ProjectRepository.js';
 import { ProjectError } from './projectErrors.js';
@@ -79,7 +80,7 @@ function errorOf(error) {
   ) {
     return { code: error.code, message: error.message };
   }
-  if (error instanceof OAuthRefreshError) {
+  if (error instanceof OAuthRefreshError || isIntegrationAuthRequired(error)) {
     return { code: 'SOURCE_FORBIDDEN', message: error.message };
   }
   const message = String(error?.message || 'ingest failed');

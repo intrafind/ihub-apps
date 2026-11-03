@@ -247,10 +247,20 @@ describe('message/send', () => {
       metadata: { skillId: 'Ask Agent' }
     });
     expect(typeof body.params.message.messageId).toBe('string');
+    // Text and JSON first, then the files and pictures iHub can keep in a chat.
     expect(body.params.configuration).toEqual({
       blocking: true,
-      acceptedOutputModes: ['text/plain', 'application/json']
+      acceptedOutputModes: expect.arrayContaining([
+        'text/plain',
+        'application/json',
+        'application/pdf',
+        'image/png'
+      ])
     });
+    expect(body.params.configuration.acceptedOutputModes.slice(0, 2)).toEqual([
+      'text/plain',
+      'application/json'
+    ]);
   });
 
   it('returns the artifacts of a completed task, data parts as JSON', async () => {
@@ -641,7 +651,7 @@ describe('size limits', () => {
     });
 
     agentWith({
-      rpc: (method, req) => rpcOk(req, agentMessage('y'.repeat(4 * 1024 * 1024 + 10)))
+      rpc: (method, req) => rpcOk(req, agentMessage('y'.repeat(16 * 1024 * 1024 + 10)))
     });
     await expect(
       connection().sendMessage({ skillId: 'Ask Agent', text: 'q' })

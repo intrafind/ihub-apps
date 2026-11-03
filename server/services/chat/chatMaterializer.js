@@ -28,26 +28,45 @@ import { insertSupportMarkers } from '../../../shared/sources/index.js';
 const MAX_STORED_AUTH_PROMPTS = 10;
 
 /**
- * The auth-required markers of a turn as stored with the answer: well-formed
- * entries only, one per server, bounded.
+ * The Connect cards of a turn as stored with the answer
+ * (`integrationAuthRequired`): well-formed entries only, one per integration,
+ * bounded. See `chatSeams.authRequiredOf` for the shape.
  *
  * @param {unknown} prompts
- * @returns {Array<{serverId: string, serverName: string, connectUrl: string}>}
+ * @returns {Array<{integration: string, name: string, reason: string, action?: string, scopes?: string[]}>}
  */
 export function boundStoredAuthPrompts(prompts) {
   if (!Array.isArray(prompts)) return [];
   const out = [];
   for (const p of prompts) {
-    if (!p || typeof p.serverId !== 'string' || typeof p.connectUrl !== 'string') continue;
-    if (out.some(existing => existing.serverId === p.serverId)) continue;
-    out.push({
-      serverId: p.serverId,
-      serverName: typeof p.serverName === 'string' ? p.serverName : p.serverId,
-      connectUrl: p.connectUrl
-    });
+    const entry = storedAuthPromptOf(p);
+    if (!entry || out.some(existing => existing.integration === entry.integration)) continue;
+    out.push(entry);
     if (out.length >= MAX_STORED_AUTH_PROMPTS) break;
   }
   return out;
+}
+
+/**
+ * One stored Connect card, well-formed, or null when it names no
+ * integration. Scopes are kept as non-empty strings, and left out when none
+ * remain.
+ *
+ * @param {unknown} p
+ * @returns {{integration: string, name: string, reason: string, action?: string, scopes?: string[]}|null}
+ */
+function storedAuthPromptOf(p) {
+  if (!p || typeof p.integration !== 'string' || !p.integration) return null;
+  const scopes = Array.isArray(p.scopes)
+    ? p.scopes.filter(scope => typeof scope === 'string' && scope)
+    : [];
+  return {
+    integration: p.integration,
+    name: typeof p.name === 'string' && p.name ? p.name : p.integration,
+    reason: typeof p.reason === 'string' ? p.reason : 'not_connected',
+    ...(typeof p.action === 'string' && p.action ? { action: p.action } : {}),
+    ...(scopes.length > 0 ? { scopes } : {})
+  };
 }
 import logger from '../../utils/logger.js';
 import { chatProjectConflict, deriveChatTitle } from './ChatRepository.js';
@@ -616,10 +635,10 @@ export async function settleAssistantTurn({
     // MCP App views the turn rendered (tool input + result per view), bounded
     // so a chat document cannot grow without limit.
     const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
-    // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-    const mcpAuthRequired = pausedWithoutAnswer
+    // Connect cards for integrations the user has to connect first (see chatSeams.authRequiredOf).
+    const integrationAuthRequired = pausedWithoutAnswer
       ? []
-      : boundStoredAuthPrompts(summary?.mcpAuthRequired);
+      : boundStoredAuthPrompts(summary?.integrationAuthRequired);
     // Confirmation cards for scheduled tasks the scheduling tools proposed.
     const scheduledTaskProposals = pausedWithoutAnswer
       ? []
@@ -659,7 +678,7 @@ export async function settleAssistantTurn({
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
-            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
+            ...(integrationAuthRequired.length > 0 ? { integrationAuthRequired } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
             ...(sources ? { sources } : {})

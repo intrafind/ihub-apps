@@ -279,9 +279,14 @@ groups carry are still read fresh.
 - The owner lost a scope the task is bound to (an iFinder search profile, an
   iAssistant) → the run **fails** with `INTEGRATION_SCOPE_NOT_ALLOWED`, naming
   the scope. See [Where a task searches](#where-a-task-searches).
-- An integration that needs signing in again (an expired Jira token, for
-  example) fails the run with `INTEGRATION_RECONNECT_REQUIRED` and a
-  **Reconnect** link, rather than reporting a success whose answer apologises.
+- A run uses the **owner's** own integration connections, never anybody
+  else's. It is not refused up front because the app offers a tool whose
+  integration the owner has not connected; a tool that needs the connection
+  checks it when it is called. When the owner has no usable connection (Jira,
+  a per-user MCP server, …), the run fails with `INTEGRATION_AUTH_REQUIRED`;
+  the reason names the `integration` and why (`reason`: `not_connected`,
+  `expired` or `insufficient_scope`) and carries a **Reconnect** link, rather
+  than reporting a success whose answer apologises.
 
 Runs are unattended, so the model is told so: it does not ask questions or wait
 for confirmation, and the `ask_user` clarification does not pause a run. Usage

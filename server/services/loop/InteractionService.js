@@ -1012,6 +1012,7 @@ export class InteractionService extends EventEmitter {
       reason: answer.reason,
       skipped: answer.skipped,
       by,
+      approver: this._approverOf(interaction, user, by),
       at: new Date(this._now()).toISOString(),
       channel
     });
@@ -1355,6 +1356,44 @@ export class InteractionService extends EventEmitter {
   }
 
   /** Actor id in the run's identity mode (`anonymous` for anonymous users). */
+  /**
+   * Who answers and on what authority, documented on the answer (#2945): the
+   * actor id (in the run's identity mode), the display name in the `full`
+   * mode only, and `via` — an approver group (with the groups that
+   * matched), admin rights, or owning the run. Only ever documentation: a
+   * resumed run never acts as this person.
+   *
+   * @param {Object} interaction
+   * @param {Object|null} user
+   * @param {string} by - the actor id already resolved for the answer
+   * @returns {{id: string, name?: string, via: string, groups: string[]}}
+   * @private
+   */
+  _approverOf(interaction, user, by) {
+    const mode =
+      interaction.source?.identityMode ||
+      this.runLog.getRunMeta?.(interaction.runId)?.identityMode ||
+      this.runLog.identityMode?.() ||
+      'default';
+    const approverGroups = Array.isArray(interaction.policy?.approverGroups)
+      ? interaction.policy.approverGroups
+      : [];
+    const userGroups = Array.isArray(user?.groups) ? user.groups : [];
+    const matched = approverGroups.filter(g => userGroups.includes(g));
+    let via = 'owner';
+    if (matched.length) via = 'approverGroups';
+    else if (
+      isAdminUser(user) &&
+      (approverGroups.length || interaction.source?.principalId !== by)
+    ) {
+      via = 'admin';
+    }
+    // A display name is personal data: only the `full` mode records it
+    // (`default` keeps the stable id only, see runIdentity.js).
+    const name = mode === 'full' && typeof user?.name === 'string' ? user.name : null;
+    return { id: by, ...(name ? { name } : {}), via, groups: matched };
+  }
+
   async _actorId(interaction, user) {
     const mode =
       interaction.source?.identityMode ||

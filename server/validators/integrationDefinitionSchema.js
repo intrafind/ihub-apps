@@ -27,6 +27,19 @@ export const localizedStringSchema = z.union([
 /** Reverse-DNS id with an optional single `/` segment, e.g. `org.ckan/open-data-portal`. */
 export const INTEGRATION_ID_PATTERN = /^[a-z0-9][a-z0-9.-]*(\/[a-z0-9][a-z0-9.-]*)?$/;
 
+/** The namespace of custom integrations: built in iHub (the builder, migration V211). */
+export const CUSTOM_DEFINITION_PREFIX = 'custom/';
+
+/**
+ * Whether a definition id names a custom integration (`custom/<id>`): one an
+ * admin built in iHub, or that migration V211 made from a tool file.
+ * @param {unknown} id
+ * @returns {boolean}
+ */
+export function isCustomDefinitionId(id) {
+  return typeof id === 'string' && id.startsWith(CUSTOM_DEFINITION_PREFIX) && id.length > 7;
+}
+
 export const integrationIdSchema = z
   .string()
   .min(1)
@@ -210,11 +223,24 @@ function renameOf(nameSchema) {
 }
 
 /**
- * The declarative migration steps (versioning concept §1), each an object
- * with exactly one of these keys. They reach an installation's `values`, its
- * action policy (`actions.enabled`, `actions.disabled`, `actions.overrides`)
- * and the app bindings of the installation (`actions`, `defaultScope`,
- * `pinnedScope`); nothing else, and never `auth` or a credential.
+ * The path of a migration module inside the definition folder:
+ * `migrations/<name>.js` (or `.mjs`), one level below `migrations/`, no
+ * dot segments. Like a `script` connector it is one bundled file that
+ * imports nothing from the folder (`definitions/migrationModules.js`).
+ */
+export const MIGRATION_MODULE_PATTERN =
+  /^migrations\/[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.m?js$/;
+
+/**
+ * The migration steps (versioning concept §1), each an object with exactly
+ * one of these keys. The seven declarative steps reach an installation's
+ * `values`, its action policy (`actions.enabled`, `actions.disabled`,
+ * `actions.overrides`) and the app bindings of the installation (`actions`,
+ * `defaultScope`, `pinnedScope`); nothing else, and never `auth` or a
+ * credential. A `module` step (versioning phase 3) names a JavaScript module
+ * of the definition folder whose `up()` rewrites the same parts in code; it
+ * runs only for a built-in definition or one from a registry trusted for code
+ * whose catalog hashed the file (`definitions/migrationModules.js`).
  */
 export const MIGRATION_STEP_SCHEMAS = Object.freeze({
   /** Move an install value to another key; a destination that holds a value is a collision. */
@@ -242,33 +268,29 @@ export const MIGRATION_STEP_SCHEMAS = Object.freeze({
   /** Drop an action from the policy and from the app bindings (apps that named it get a warning). */
   removeAction: z.object({ name: identifierSchema }).strict(),
   /** Rewrite the default and pinned scope of the app bindings. */
-  renameScope: renameOf(migrationScopeSchema)
+  renameScope: renameOf(migrationScopeSchema),
+  /** Run the `up()` of a migration module of the definition folder (`migrations/<name>.js`). */
+  module: z
+    .string()
+    .max(256)
+    .regex(
+      MIGRATION_MODULE_PATTERN,
+      'a migration module is a file migrations/<name>.js (or .mjs) of the definition folder'
+    )
 });
 
 /** The step types, in the order the concept lists them. */
 export const MIGRATION_STEP_TYPES = Object.freeze(Object.keys(MIGRATION_STEP_SCHEMAS));
 
 /**
- * The message for a `module` step: code migrations need a registry trusted
- * for code and an integrity hash (versioning phase 3), so this server refuses
- * them instead of dropping them silently.
- */
-export const MODULE_STEP_MESSAGE =
-  'a "module" step (code migration) is not supported by this server: migrations are declarative only (renameValue, setValue, removeValue, mapValue, renameAction, removeAction, renameScope)';
-
-/**
- * One declarative step: an object with exactly one key out of
- * {@link MIGRATION_STEP_TYPES}. A `module` step is refused with
- * {@link MODULE_STEP_MESSAGE}, an unknown key with the list of known ones.
+ * One step: an object with exactly one key out of
+ * {@link MIGRATION_STEP_TYPES}; an unknown key is refused with the list of
+ * known ones.
  */
 export const migrationStepSchema = z
   .record(z.string(), z.unknown())
   .superRefine((step, ctx) => {
     const keys = Object.keys(step);
-    if (keys.includes('module')) {
-      ctx.addIssue({ code: 'custom', path: ['module'], message: MODULE_STEP_MESSAGE });
-      return;
-    }
     const unknown = keys.filter(key => !MIGRATION_STEP_TYPES.includes(key));
     if (unknown.length > 0) {
       ctx.addIssue({
@@ -297,6 +319,24 @@ export const migrationStepSchema = z
     const [type] = Object.keys(step);
     return { [type]: MIGRATION_STEP_SCHEMAS[type].parse(step[type]) };
   });
+
+/**
+ * The migration module files a list of migrations names
+ * (`{ module: 'migrations/1.4.0.js' }` steps), each once, in order.
+ *
+ * @param {Array<{ steps?: Array<object> }>|undefined} migrations
+ * @returns {string[]}
+ */
+export function migrationModuleFiles(migrations) {
+  const files = [];
+  for (const migration of Array.isArray(migrations) ? migrations : []) {
+    for (const step of Array.isArray(migration?.steps) ? migration.steps : []) {
+      const file = step && typeof step === 'object' ? step.module : undefined;
+      if (typeof file === 'string' && !files.includes(file)) files.push(file);
+    }
+  }
+  return files;
+}
 
 /**
  * A definition migration: `id` is the version it brings an installation up
@@ -541,11 +581,19 @@ const HTTP_HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~{}-]+$/; // `{}` allows a {fi
 /**
  * How a shared secret (one for the whole installation) is sent. `field` names
  * the sensitive install field that holds it; `header` may be a template.
+ *
+ * `credential` (the `openapi` and `http` protocols only) sends the credential
+ * profile the installation references the way the profile's own type says:
+ * a bearer token, basic user and password, an API key header, an OAuth2
+ * client-credentials token, or an API key query parameter. The other kinds
+ * never put a secret into a query parameter, where it would land in access
+ * logs on both ends; `credential` does so only for an `apiKeyQuery` profile an
+ * admin created for an API that wants it.
  */
+export const SERVICE_ACCOUNT_KINDS = ['header', 'bearer', 'basic', 'credential'];
+
 const serviceAccountAuthSchema = z.object({
-  // A secret in a query parameter is not supported: it would land in access
-  // logs on both ends.
-  kind: z.enum(['header', 'bearer', 'basic']).prefault('header'),
+  kind: z.enum(SERVICE_ACCOUNT_KINDS).prefault('header'),
   header: z.string().regex(HTTP_HEADER_NAME).optional(),
   valuePrefix: z.string().max(64).optional(),
   field: identifierSchema.optional(),
@@ -595,8 +643,12 @@ const openapiProtocolSchema = z.object({
   type: z.literal('openapi'),
   /** Companion file in the definition folder, or an https URL. */
   document: httpOrCompanionSchema,
-  /** Base URL template; `{key}` placeholders are install fields. */
-  baseUrl: z.string().min(1).max(2048),
+  /**
+   * Base URL template; `{key}` placeholders are install fields. Absent: the
+   * document's first `servers[]` entry (an OpenAPI tool file without a base
+   * URL became such a definition in migration V211).
+   */
+  baseUrl: z.string().min(1).max(2048).optional(),
   /** Static non-secret headers sent on every request (values may be templates). */
   headers: z.record(z.string().regex(HTTP_HEADER_NAME), z.string().max(1024)).optional(),
   responseEnvelope: responseEnvelopeSchema.optional(),
@@ -609,6 +661,70 @@ const openapiProtocolSchema = z.object({
     .max(5 * 1024 * 1024)
     .prefault(262144),
   timeoutMs: z.number().int().min(1000).max(120000).prefault(30000)
+});
+
+/**
+ * The `http` protocol: every action is one request template (see
+ * {@link httpRequestSchema}); the protocol holds what all of them share. The
+ * base URL and the header values may name install fields as `{key}`.
+ */
+const httpProtocolSchema = z.object({
+  type: z.literal('http'),
+  /** Base URL template the actions' relative URLs are appended to; `{key}` placeholders are install fields. */
+  baseUrl: z.string().min(1).max(2048).optional(),
+  /** Static non-secret headers sent on every request (values may be install-field templates). */
+  headers: z.record(z.string().regex(HTTP_HEADER_NAME), z.string().max(1024)).optional(),
+  maxResponseBytes: z
+    .number()
+    .int()
+    .min(1024)
+    .max(5 * 1024 * 1024)
+    .prefault(262144),
+  timeoutMs: z.number().int().min(1000).max(120000).prefault(30000)
+});
+
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
+
+/** Content types an `http` action's body template is written in. */
+export const HTTP_BODY_TYPES = [
+  'application/json',
+  'application/x-www-form-urlencoded',
+  'text/plain'
+];
+
+/**
+ * One `http` action's request template. `{param}` placeholders name the
+ * action's parameters (the model's arguments) and, failing that, install
+ * fields. Every substitution is escaped for where it lands: URL-encoded in the
+ * URL and the query, JSON-encoded in a JSON body, form-encoded in a form body;
+ * a header value with a line break is refused.
+ */
+export const httpRequestSchema = z
+  .object({
+    method: z.enum(HTTP_METHODS).prefault('GET'),
+    /** Path relative to `protocol.baseUrl` (`/orders/{orderId}`), or an absolute http(s) URL template. */
+    url: z.string().min(1).max(2048),
+    /** Query parameters; one whose value resolves to nothing is left out. */
+    query: z.record(z.string().min(1).max(128), z.string().max(1024)).optional(),
+    headers: z.record(z.string().regex(HTTP_HEADER_NAME), z.string().max(1024)).optional(),
+    body: z
+      .string()
+      .max(64 * 1024)
+      .optional(),
+    contentType: z.enum(HTTP_BODY_TYPES).prefault('application/json')
+  })
+  .refine(request => !request.body || !['GET', 'HEAD'].includes(request.method), {
+    message: 'a GET or HEAD request has no body'
+  });
+
+/**
+ * How an `http` action's response becomes what the model sees: `result` is
+ * the path to the part that matters (`$.data.items`), `fields` projects it
+ * (each element, when it is a list) onto named paths.
+ */
+export const httpResponseMappingSchema = z.object({
+  result: jsonPathSchema.optional(),
+  fields: z.record(z.string().min(1).max(128), jsonPathSchema).optional()
 });
 
 /** Adapters the architecture names; `openapi`, `native` and `mcp` have one. */
@@ -703,7 +819,7 @@ const scriptProtocolSchema = z.object({
   module: z.string().min(1).max(256).regex(SCRIPT_MODULE_PATTERN, 'invalid module path')
 });
 
-const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp', 'a2a', 'script']);
+const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp', 'a2a', 'script', 'http']);
 
 const reservedProtocolSchema = z
   .object({
@@ -717,6 +833,7 @@ export const integrationProtocolSchema = z.union([
   mcpProtocolSchema,
   a2aProtocolSchema,
   scriptProtocolSchema,
+  httpProtocolSchema,
   reservedProtocolSchema
 ]);
 
@@ -728,9 +845,11 @@ export const integrationActionSchema = z.object({
   /** Model-facing name; the tool id becomes `<instanceId>__<name>`. */
   name: identifierSchema,
   /**
-   * Built-ins only: the tool id the action keeps from before it was an
-   * integration (`iFinder_search`), so apps, group grants and the MCP and A2A
-   * gateways keep addressing it.
+   * The tool id the action keeps from before it was an integration
+   * (`iFinder_search`), so apps, group grants and the MCP and A2A gateways
+   * keep addressing it. Built-ins, and custom integrations (`custom/<id>`,
+   * which migration V211 made from admin-created tool files); a definition
+   * from a registry may not fix one (`ContentInstaller`).
    */
   toolId: z
     .string()
@@ -741,6 +860,19 @@ export const integrationActionSchema = z.object({
   title: localizedStringSchema.optional(),
   /** Model-facing description; falls back to the operation summary. */
   description: localizedStringSchema.optional(),
+  /**
+   * The JSON schema of the action's arguments, for protocols whose actions
+   * the definition describes itself: required for `http`; for `script` the
+   * module's own `parameters` win and this is the fallback.
+   */
+  parameters: z
+    .object({ type: z.literal('object') })
+    .passthrough()
+    .optional(),
+  /** `http` only: the request the action sends. */
+  request: httpRequestSchema.optional(),
+  /** `http` only: what of the response the model sees. */
+  response: httpResponseMappingSchema.optional(),
   sideEffect: z.enum(SIDE_EFFECTS).prefault('unknown'),
   dataFlow: z.enum(DATA_FLOWS).prefault('external'),
   enabledByDefault: z.boolean().prefault(true),
@@ -975,8 +1107,9 @@ function checkInstallFieldKeys(def, addIssue) {
 }
 
 /**
- * Action names are unique, an openapi action names its operation, and only
- * a built-in definition fixes tool ids.
+ * Action names are unique, an openapi action names its operation, only a
+ * built-in or a custom (`custom/<id>`) definition fixes tool ids, and
+ * `request` / `response` are an http action's (see {@link checkHttpAction}).
  * @param {object} def - the parsed definition
  * @param {AddIssue} addIssue
  * @returns {Set<string>} every declared action name
@@ -991,11 +1124,40 @@ function checkActions(def, addIssue) {
     if (def.protocol.type === 'openapi' && !action.operationId) {
       addIssue(['actions', i, 'operationId'], 'an openapi action needs an operationId');
     }
-    if (action.toolId && !def.builtIn) {
-      addIssue(['actions', i, 'toolId'], 'only a built-in definition may fix its tool ids');
+    if (action.toolId && !def.builtIn && !isCustomDefinitionId(def.id)) {
+      addIssue(
+        ['actions', i, 'toolId'],
+        'only a built-in or a custom (custom/<id>) definition may fix its tool ids'
+      );
     }
+    checkHttpAction(def, action, i, addIssue);
   });
   return actionNames;
+}
+
+/**
+ * An http action has a request, and a relative request URL needs
+ * `protocol.baseUrl`; no other protocol's action has a request or response.
+ * @param {object} def - the parsed definition
+ * @param {object} action - one of `def.actions`
+ * @param {number} i - the action's index
+ * @param {AddIssue} addIssue
+ */
+function checkHttpAction(def, action, i, addIssue) {
+  if (def.protocol.type !== 'http') {
+    if (action.request || action.response) {
+      addIssue(
+        ['actions', i, action.request ? 'request' : 'response'],
+        'request and response belong to http actions'
+      );
+    }
+    return;
+  }
+  if (!action.request) {
+    addIssue(['actions', i, 'request'], 'an http action needs a request');
+  } else if (!/^https?:\/\//i.test(action.request.url) && !def.protocol.baseUrl) {
+    addIssue(['actions', i, 'request', 'url'], 'a relative URL needs protocol.baseUrl');
+  }
 }
 
 /**

@@ -170,6 +170,37 @@ function NumberField({ id, label, help, value, onChange, min, max }) {
   );
 }
 
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+/** A size setting held in bytes and edited in MB (or GB); 0 or less means no cap. */
+function SizeField({ id, label, help, bytes, unit = MB, unitLabel = 'MB', onChange }) {
+  const shown = bytes > 0 ? Math.round((bytes / unit) * 100) / 100 : 0;
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+      >
+        {label} ({unitLabel})
+      </label>
+      <input
+        id={id}
+        type="number"
+        step="1"
+        min={0}
+        value={shown}
+        onChange={e => {
+          const parsed = Number.parseFloat(e.target.value);
+          onChange(Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * unit) : 0);
+        }}
+        className={inputClass}
+      />
+      {help && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{help}</p>}
+    </div>
+  );
+}
+
 function CheckboxField({ id, label, help, checked, onChange }) {
   return (
     <div>
@@ -250,13 +281,26 @@ function AdminChatHistoryPage() {
     setDirty(true);
   };
 
+  const updateUploadQuota = (key, value) => {
+    setSettings(prev => ({
+      ...prev,
+      uploads: { ...prev.uploads, quotas: { ...prev.uploads.quotas, [key]: value } }
+    }));
+    setDirty(true);
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       setMessage(null);
       const response = await makeAdminApiCall('/admin/chat-history/settings', {
         method: 'PUT',
-        body: { chats: settings.chats, runLog: settings.runLog, sharing: settings.sharing }
+        body: {
+          chats: settings.chats,
+          runLog: settings.runLog,
+          sharing: settings.sharing,
+          uploads: settings.uploads
+        }
       });
       setMessage({
         type: 'success',
@@ -905,6 +949,175 @@ function AdminChatHistoryPage() {
           </div>
         </div>
 
+        {/* Uploaded files of chats and scheduled tasks */}
+        <div className={cardClass} data-testid="uploads-settings">
+          <h2 className={headingClass}>
+            <Icon name="paper-clip" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.chatHistory.uploads.title', 'Uploaded files')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.chatHistory.uploads.description',
+              'Files users attach to chats and to scheduled tasks. The text the assistant reads is kept with the chat so follow-up questions, reloads and other devices keep working.'
+            )}
+          </p>
+          <div className="space-y-4">
+            <CheckboxField
+              id="uploads-enabled"
+              label={t('admin.chatHistory.uploads.enabled', 'Store uploaded files on the server')}
+              help={t(
+                'admin.chatHistory.uploads.enabledHelp',
+                'Turning it off stops uploads to the file store; attachments are then only sent with the message.'
+              )}
+              checked={settings.uploads.enabled}
+              onChange={value => updateSetting('uploads', 'enabled', value)}
+            />
+            <div>
+              <label
+                htmlFor="uploads-storage-mode"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.chatHistory.uploads.storageMode', 'What the server keeps')}
+              </label>
+              <select
+                id="uploads-storage-mode"
+                value={settings.uploads.storageMode}
+                onChange={e => updateSetting('uploads', 'storageMode', e.target.value)}
+                className={inputClass}
+              >
+                <option value="original_and_text">
+                  {t(
+                    'admin.chatHistory.uploads.mode.originalAndText',
+                    'The file and its text (originals can be downloaded, shared and used as templates)'
+                  )}
+                </option>
+                <option value="server_text_only">
+                  {t(
+                    'admin.chatHistory.uploads.mode.serverTextOnly',
+                    'Only the text (the server extracts it and discards the file)'
+                  )}
+                </option>
+                <option value="client_text_only">
+                  {t(
+                    'admin.chatHistory.uploads.mode.clientTextOnly',
+                    'Only the text, extracted in the browser (files never leave the device)'
+                  )}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.chatHistory.uploads.storageModeHelp',
+                  'An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.'
+                )}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <NumberField
+                id="uploads-original-retention"
+                label={t(
+                  'admin.chatHistory.uploads.originalRetentionDays',
+                  'Keep original files (days)'
+                )}
+                help={t(
+                  'admin.chatHistory.uploads.originalRetentionDaysHelp',
+                  'After this many days only the text of a chat file stays, until the chat itself is deleted. Files attached to scheduled tasks are kept as long as the task exists. 0 keeps originals as long as the chat.'
+                )}
+                value={settings.uploads.originalRetentionDays}
+                onChange={value => updateSetting('uploads', 'originalRetentionDays', value)}
+              />
+              <CheckboxField
+                id="uploads-evict"
+                label={t(
+                  'admin.chatHistory.uploads.evict',
+                  'Make room by removing the oldest originals'
+                )}
+                help={t(
+                  'admin.chatHistory.uploads.evictHelp',
+                  'When a user or the server reaches its limit, the oldest chat originals are removed first (their text stays) before an upload is refused.'
+                )}
+                checked={settings.uploads.evictOldestOriginalsOnQuota}
+                onChange={value => updateSetting('uploads', 'evictOldestOriginalsOnQuota', value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <SizeField
+                id="uploads-max-file"
+                label={t('admin.chatHistory.uploads.maxFileBytes', 'Largest file')}
+                help={t(
+                  'admin.chatHistory.uploads.maxFileBytesHelp',
+                  'A larger upload is refused. 0 removes the limit.'
+                )}
+                bytes={settings.uploads.quotas.maxFileBytes}
+                onChange={value => updateUploadQuota('maxFileBytes', value)}
+              />
+              <SizeField
+                id="uploads-max-chat"
+                label={t('admin.chatHistory.uploads.maxChatBytes', 'Per chat or task')}
+                help={t(
+                  'admin.chatHistory.uploads.maxChatBytesHelp',
+                  'All files of one chat or one scheduled task together. 0 removes the limit.'
+                )}
+                bytes={settings.uploads.quotas.maxChatBytes}
+                onChange={value => updateUploadQuota('maxChatBytes', value)}
+              />
+              <NumberField
+                id="uploads-max-chat-files"
+                label={t('admin.chatHistory.uploads.maxChatFiles', 'Files per chat or task')}
+                help={t(
+                  'admin.chatHistory.uploads.maxChatFilesHelp',
+                  'The most files one chat or task may hold. 0 removes the limit.'
+                )}
+                value={settings.uploads.quotas.maxChatFiles}
+                onChange={value => updateUploadQuota('maxChatFiles', value)}
+              />
+              <SizeField
+                id="uploads-max-user"
+                label={t('admin.chatHistory.uploads.maxUserBytes', 'Per user')}
+                help={t(
+                  'admin.chatHistory.uploads.maxUserBytesHelp',
+                  'Everything one user has in chats and tasks. 0 removes the limit.'
+                )}
+                unit={MB}
+                bytes={settings.uploads.quotas.maxUserBytes}
+                onChange={value => updateUploadQuota('maxUserBytes', value)}
+              />
+              <SizeField
+                id="uploads-max-server"
+                label={t('admin.chatHistory.uploads.maxServerBytes', 'Whole server')}
+                help={t(
+                  'admin.chatHistory.uploads.maxServerBytesHelp',
+                  'All uploaded files of all users together. 0 removes the limit.'
+                )}
+                unit={GB}
+                unitLabel="GB"
+                bytes={settings.uploads.quotas.maxServerBytes}
+                onChange={value => updateUploadQuota('maxServerBytes', value)}
+              />
+              <NumberField
+                id="uploads-max-api-files"
+                label={t('admin.chatHistory.uploads.maxApiFiles', 'Inference API: files per user')}
+                help={t(
+                  'admin.chatHistory.uploads.maxApiFilesHelp',
+                  'The most files one user may keep through the Inference API (/v1/files). 0 removes the limit.'
+                )}
+                value={settings.uploads.quotas.maxApiFiles}
+                onChange={value => updateUploadQuota('maxApiFiles', value)}
+              />
+              <SizeField
+                id="uploads-max-api"
+                label={t('admin.chatHistory.uploads.maxApiBytes', 'Inference API: size per user')}
+                help={t(
+                  'admin.chatHistory.uploads.maxApiBytesHelp',
+                  'All files one user keeps through the Inference API together. 0 removes the limit.'
+                )}
+                unit={MB}
+                bytes={settings.uploads.quotas.maxApiBytes}
+                onChange={value => updateUploadQuota('maxApiBytes', value)}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Chat sharing settings */}
         <div className={cardClass}>
           <h2 className={headingClass}>
@@ -914,7 +1127,7 @@ function AdminChatHistoryPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {t(
               'admin.chatHistory.sharing.description',
-              'Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; uploaded files are never part of it.'
+              'Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; the owner decides whether the files uploaded to it are shared too (by default they are not).'
             )}
           </p>
           <div className="space-y-4">

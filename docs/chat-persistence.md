@@ -638,7 +638,7 @@ Details that matter:
 - **`settings` is a closed set, and it merges.** Each turn records how it was
   answered — `style`, `outputFormat`, `sendChatHistory`, the
   three `thinking*` fields, `enabledTools`, `websearchEnabled`,
-  `imageAspectRatio`, `imageQuality` — and nothing else: these arrive in a
+  `integrationScopes`, `imageAspectRatio`, `imageQuality` — and nothing else: these arrive in a
   request body and are read back for the life of the chat, so an open-ended
   blob would let a client store anything under a key the server never checks.
   Values of the wrong type are dropped rather than coerced, strings are capped

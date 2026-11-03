@@ -43,11 +43,7 @@ jest.mock('../../../client/src/features/voice/components', () => ({
 }));
 
 jest.mock('../../../client/src/api', () => ({
-  fetchToolsBasic: jest.fn(() => Promise.resolve([]))
-}));
-
-jest.mock('../../../client/src/utils/toolUsageTracker', () => ({
-  trackToolUsage: jest.fn()
+  saveIntegrationPreferences: jest.fn(() => Promise.resolve({}))
 }));
 
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
@@ -148,6 +144,7 @@ describe('integration scopes in the "+" menu', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Actions menu' }));
-    expect(screen.queryByText('Use in this chat')).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /iFinder/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Search in:/)).not.toBeInTheDocument();
   });
 });
