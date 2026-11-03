@@ -22,7 +22,7 @@ Two registries are preconfigured in `contents/config/registries.json`:
 
 | Registry                      | Catalog                                                                                     | Content |
 | ----------------------------- | ------------------------------------------------------------------------------------------- | ------- |
-| **iHub Official Marketplace** | `https://raw.githubusercontent.com/intrafind/ihub-marketplace/main/catalog.json`           | 90 apps (21 general apps and 69 department assistants for data, engineering, finance, HR, security, leadership, legal, marketing, operations, product, PR, sales and support), 98 skills, 19 model configurations, 6 workflows, 5 prompts |
+| **iHub Official Marketplace** | `https://raw.githubusercontent.com/intrafind/ihub-marketplace/main/catalog.json`           | 92 apps (22 general apps and department assistants for data, engineering, finance, HR, security, leadership, legal, marketing, operations, product, PR, sales and support), 195 skills, 30 integrations (CKAN and 29 hosted MCP servers), 19 model configurations, 6 workflows, 5 prompts |
 | **iHub Examples**             | `https://raw.githubusercontent.com/intrafind/ihub-apps/main/examples/catalog.json`         | Example apps, models (such as the [AWS Bedrock](models.md#aws-bedrock) models), prompts and skills from this repository |
 
 The official catalog can also be browsed without an iHub installation at

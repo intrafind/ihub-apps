@@ -3381,14 +3381,16 @@
       },
       "source": {
         "shipped": "Mitgeliefert",
-        "installed": "Aus Registry"
+        "installed": "Aus Registry",
+        "marketplace": "Marktplatz"
       },
       "facts": {
         "protocol": "Protokoll",
         "signIn": "Anmeldung",
         "actions": "Aktionen",
         "publisher": "Herausgeber",
-        "compatibility": "Benötigt"
+        "compatibility": "Benötigt",
+        "actionsDynamic": "Vom Server"
       },
       "actions": {
         "test": "{{id}} testen",
@@ -3480,7 +3482,10 @@
         "starttls": "StartTLS",
         "plaintext": "Unverschlüsselt",
         "unknown": "Transport unbekannt"
-      }
+      },
+      "installing": "Wird installiert…",
+      "marketplaceInstallFailed": "{{name}} konnte nicht aus {{registry}} installiert werden: {{error}}",
+      "marketplaceOff": "Der Katalog listet auch die Integrationen des Marktplatzes (gehostete MCP-Server wie GitHub, Linear oder Stripe), wenn die Funktion Marktplatz unter Admin → Funktionen eingeschaltet ist."
     },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",

@@ -22,16 +22,39 @@ function installTitle(item, t) {
 }
 
 /**
+ * Where a catalog entry comes from: shipped with iHub, installed from a
+ * registry, or offered by a registry and not installed yet.
+ *
+ * @param {Object} item - a definition as the catalog lists it
+ * @param {Function} t - the translation function
+ * @returns {string}
+ */
+function sourceLabel(item, t) {
+  if (item.source === 'marketplace') {
+    return t('admin.integrationCatalog.source.marketplace', 'Marketplace');
+  }
+  if (item.source === 'installed') {
+    return t('admin.integrationCatalog.source.installed', 'From registry');
+  }
+  return t('admin.integrationCatalog.source.shipped', 'Shipped');
+}
+
+/**
  * One definition on the Catalog tab: name, version, compatibility, update
  * badge, source, description, the facts (protocol, sign-in, actions,
  * publisher, required iHub version) and **Install**. An incompatible
  * definition is greyed with Install disabled and the reason shown.
  *
+ * A marketplace entry (`source: "marketplace"`) is not on this server yet:
+ * it names its registry, and Install fetches it from there before the setup
+ * dialog opens (`busy` while that runs).
+ *
  * @param {Object} props
  * @param {Object} props.item - a definition as `GET /api/admin/integrations/catalog` lists it
+ * @param {boolean} [props.busy] - the definition is being installed from its registry
  * @param {(definitionId: string) => void} props.onInstall - opens the install dialog
  */
-function CatalogTile({ item, onInstall }) {
+function CatalogTile({ item, busy = false, onInstall }) {
   const { t } = useTranslation();
   return (
     <li
@@ -68,10 +91,11 @@ function CatalogTile({ item, onInstall }) {
               </Badge>
             </Link>
           )}
-          <Badge tone={item.source === 'installed' ? 'info' : 'neutral'}>
-            {item.source === 'installed'
-              ? t('admin.integrationCatalog.source.installed', 'From registry')
-              : t('admin.integrationCatalog.source.shipped', 'Shipped')}
+          <Badge
+            tone={item.source === 'shipped' ? 'neutral' : 'info'}
+            title={item.marketplace?.registryName || undefined}
+          >
+            {sourceLabel(item, t)}
           </Badge>
         </div>
       </div>
@@ -96,7 +120,12 @@ function CatalogTile({ item, onInstall }) {
             .join(', ')}
         </dd>
         <dt>{t('admin.integrationCatalog.facts.actions', 'Actions')}</dt>
-        <dd>{item.actionCount}</dd>
+        <dd>
+          {item.actionCount ??
+            (item.dynamicActions
+              ? t('admin.integrationCatalog.facts.actionsDynamic', 'From the server')
+              : '—')}
+        </dd>
         <dt>{t('admin.integrationCatalog.facts.publisher', 'Publisher')}</dt>
         <dd>{item.publisher?.name || '—'}</dd>
         {item.requires && (
@@ -122,14 +151,17 @@ function CatalogTile({ item, onInstall }) {
         <button
           type="button"
           className={PRIMARY_BUTTON_CLASS}
-          disabled={!item.supported || item.compatible === false}
+          disabled={busy || !item.supported || item.compatible === false}
+          aria-busy={busy || undefined}
           title={installTitle(item, t)}
           aria-label={t('admin.integrations.catalog.installAria', 'Install {{name}}', {
             name: item.name
           })}
           onClick={() => onInstall(item.id)}
         >
-          {t('admin.integrationCatalog.install', 'Install')}
+          {busy
+            ? t('admin.integrationCatalog.installing', 'Installing…')
+            : t('admin.integrationCatalog.install', 'Install')}
         </button>
       </div>
     </li>

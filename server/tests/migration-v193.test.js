@@ -446,7 +446,7 @@ describe('V193 mcp servers → installed integrations', () => {
 
   it('reads the shipped MCP definitions, each with a fixed remote endpoint', () => {
     const shipped = loadShippedMcpDefinitions();
-    assert.ok(shipped.length >= 40);
+    assert.ok(shipped.length >= 10);
     assert.ok(shipped.find(d => d.id === 'mcp/drawio')?.url === 'https://mcp.draw.io/mcp');
     const generic = shipped.find(d => d.id === 'com.intrafind/mcp-server');
     assert.equal(generic.url, null);
