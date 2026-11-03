@@ -18,7 +18,7 @@ model ──tool_call──▶ AgentLoop._executeOne
                       ├─ preTool seams (approval gate; chatToolSeam emits tool/started{execution:'client'})
                       └─ request.executeTool  →  clientToolExecutor  (calls with executor:"client")
                               1. interactionService.raise({ kind:'client_tool', … })   ← stored, redacted prompt
-                              2. emit live interaction/raised (with liveArgs)
+                              2. emit interaction/raised (redacted) + live-only interaction/live (full args)
                               3. await waitForAnswer(id) ⟂ ctx.signal ⟂ timeout
                               4. return the outcome like any server tool
                       └─ normal completion: postTool (redaction) → tool/result → onToolEnd → tool/completed
@@ -76,7 +76,11 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
    })
    ```
    `raise()` persists the prompt and appends the `interaction/raised` ledger entry, so it must never see raw content.
-3. Emit the live `interaction/raised` SSE frame and `tool/started` with `execution: 'client'`. The live frame carries the stored prompt plus `liveArgs`, the full arguments the pane needs to execute. `liveArgs` exists only in that frame and in the waiting executor's memory. It is not written to the ledger, the interaction store or the replay buffer. A pane that reconnects after the frame was sent cannot recover `liveArgs`, so the call ends with `ClientTimeout` and the model may call the tool again.
+3. Emit two frames:
+   - `interaction/raised`, the normal frame, carrying the **stored, redacted** interaction. It is projected from the ledger like every other event, so a reconnecting client replays it.
+   - `interaction/live`, a new **live-only** event: `{ interactionId, kind: 'client_tool', payload: { toolCallId, tool, args, target } }`, where `args` are the full arguments (`liveArgs`) the pane needs to execute. It has no ledger counterpart. Replay is built by projecting ledger events (`server/services/loop/RunStream.js`), so this frame is never replayed. It is not stored in the interaction record either. The full arguments live only in this frame and in the waiting executor's memory.
+
+   Also emit `tool/started` with `execution: 'client'` (from `chatToolSeam`). A pane that reconnects after the request frame was sent sees the replayed `interaction/raised` but no `interaction/live`, so it cannot execute. The call ends with `ClientTimeout`, and the model may call the tool again.
 4. `await` the first of three: `waitForAnswer(id, { timeoutMs })`, `ctx.signal`, or the timeout.
 5. Validate the answer: it must be `{ ok: true, result }` or `{ ok: false, error: { name, code, message } }`, and the result size is capped.
 
@@ -87,8 +91,9 @@ The loop then runs its normal completion path for this call: `postTool` (where `
 
 ### Executing in the pane
 
-- `useAppChat` (`client/src/features/chat/hooks/useAppChat.js`) already folds `interaction/raised` through `reduceRunEvent` (`shared/run/runReducer.js`). The Office chat adds a handler. It runs only for `kind === 'client_tool'` and only when the current host is the embedded host.
-- The handler calls `host.executeClientTool(name, liveArgs)` from `EmbeddedHostContext`, then answers through `answerInteraction(runId, id, { decision: 'respond', data: { ok, result } }, { channel: 'office' })`, or with `{ ok: false, error }` on failure.
+- `useAppChat` (`client/src/features/chat/hooks/useAppChat.js`) folds `interaction/raised` through `reduceRunEvent` (`shared/run/runReducer.js`), which only stores `data.interaction`. The full arguments therefore do **not** go through the reducer. `useAppChat.handleEvent` passes `interaction/live` frames to an `onInteractionLive` callback. The Office chat uses it for `client_tool`, and the approval card for `approval` previews ([02](02-chat-approval-gate.md)). The reducer ignores the event, so the arguments never enter run state, message projection or stored activity.
+- The Office handler runs only when the current host is the embedded host. It matches the request to the pending `client_tool` interaction by `interactionId`.
+- The handler calls `host.executeClientTool(tool, args)` with the arguments from the `interaction/live` frame from `EmbeddedHostContext`, then answers through `answerInteraction(runId, id, { decision: 'respond', data: { ok, result } }, { channel: 'office' })`, or with `{ ok: false, error }` on failure.
 - **Pop-out window.** The handler calls `getOfficeRemote().call('runClientTool', { name, args })`. Register a generic `runClientTool` handler next to the existing ones in `client/src/features/office/utilities/officePopout.js`. `client/src/features/office/utilities/officePopoutBridge.js` already chunks large payloads.
 - **Target check.** Before every call, and again right before any write, the executor checks that the target is still the one the turn advertised. On a mismatch it answers `{ ok:false, error:{ name:'TargetChanged', code:null, message:'The open item or document changed.' } }` and changes nothing.
 
@@ -105,7 +110,9 @@ The loop then runs its normal completion path for this call: `postTool` (where `
 
 | File | Change |
 |---|---|
-| `shared/runEvents.js` | Add `'client_tool'` to `INTERACTION_KINDS` |
+| `shared/runEvents.js` | Add `'client_tool'` to `INTERACTION_KINDS`, and `INTERACTION_LIVE: 'interaction/live'` to `SSE_V2_EVENTS` (live-only; no `RUN_LOG_EVENTS` counterpart) |
+| `server/services/loop/contracts/sseV2.js` | Schema `interactionLiveData` `{ interactionId, kind, payload }`, with a payload schema per kind (`client_tool`: `{ toolCallId, tool, args, target }`; `approval`: `{ preview }`) |
+| `client/src/features/chat/hooks/useAppChat.js` | `handleEvent` hands `interaction/live` to an `onInteractionLive` callback; `reduceRunEvent` ignores it |
 | `server/services/loop/contracts/interaction.js` | Schema for the `client_tool` prompt `{tool, args, target}` (args already redacted) and answer `{ok}` with either `result` or the error envelope |
 | `server/services/loop/contracts/sseV2.js` | Add `'client'` to the `tool/started.execution` enum |
 | `server/services/loop/contracts/runLogEvents.js` | Same enum |
@@ -162,7 +169,8 @@ The same marker drives the approval preview ([02](02-chat-approval-gate.md)). Th
 - **Redaction:**
   - no tool output in the ledger, spill store, interaction log or stored chat
   - a **short** `setDraftBody` body copied from the email (under 100 characters) is still stored only as `{chars, sha256}`
-  - neither the stored interaction nor the `interaction/raised` ledger entry contains the body; the live SSE frame does
+  - neither the stored interaction nor the `interaction/raised` ledger entry or frame contains the body; the `interaction/live` frame does
+  - a reconnect replays `interaction/raised` but never `interaction/live`, and the reducer state never holds the full arguments
   - every string argument of every client tool is either `x-ihub-content` or on the structural allowlist
   - every error answer carries `name`, `code` and `message`
 - **Client:**

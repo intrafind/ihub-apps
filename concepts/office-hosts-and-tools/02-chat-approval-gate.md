@@ -40,7 +40,8 @@ The only approval UI is the workflow `HumanCheckpoint` (`ChatCheckpoint` in `cli
   - `reject` → `{handled:true, message:{role:'tool', content:'{"declined":true,"reason":"user declined"}'}}`. The model sees the refusal and can explain itself or try differently. A declined call is the one case that uses the `handled` early return, and that is safe: nothing executed and no content was read, so there is nothing for `postTool` to redact. The seam emits `tool/completed` with `status: 'declined'` itself, so the activity row does not hang.
 - **Headless.** Never approve automatically. Return an error result, exactly as `ask_user` does.
 - **Preview.** `preview` is built per tool by an optional `previewApproval(args)` on the tool definition. Examples: the recipients to add, the subject, the first 2,000 characters of a new body, `n` cells at `A1:D20`. Without one, the args summary is shown.
-  - The preview travels to the card in the live `interaction/raised` frame only.
+  - The full preview travels to the card in the live-only `interaction/live` frame (`kind: 'approval'`, `payload: { preview }`), which has no ledger counterpart and is never replayed ([01](01-client-executed-tools.md#the-round-trip)). The replayable `interaction/raised` frame carries only the redacted prompt.
+  - A card rendered after a reconnect therefore shows the tool, the target and the redacted summary, plus a note that the full preview is no longer available. **Allow** remains possible: the server still holds the full arguments for the executor.
   - The stored interaction and its ledger entries keep arguments marked `x-ihub-content` as `{chars, sha256}` ([01](01-client-executed-tools.md#redaction-what-is-stored)).
 - **Cleanup.** `isChatClarification` must exclude `origin:'policy'` approvals, as in [01](01-client-executed-tools.md).
 
