@@ -501,6 +501,25 @@ test.describe('Accessibility — the Artifacts panel', () => {
   });
 });
 
+// The immersive artifact viewer (#3184), open from a card of the shared chat.
+test.describe('Accessibility — the artifact viewer', () => {
+  test('has no critical or serious violations when open, with its menu open too', async ({
+    page
+  }) => {
+    await mockSharedChatWithArtifacts(page);
+    await page.goto(`/share/${SHARE_ID}`);
+    await page.getByTestId('generated-file-open').filter({ hasText: 'src/index.js' }).click();
+    const viewer = page.getByRole('dialog', { name: /src\/index\.js/ });
+    await expect(viewer).toBeVisible();
+    await expect(viewer.getByLabel('Content of src/index.js')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Artifact viewer');
+
+    await viewer.getByTestId('artifact-viewer-name').click();
+    await expect(viewer.getByRole('menu')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Artifact viewer menu');
+  });
+});
+
 test.describe('Accessibility — landmarks', () => {
   test.beforeEach(async ({ page }) => {
     await signInAsAdmin(page);
