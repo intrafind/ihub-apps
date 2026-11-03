@@ -260,8 +260,14 @@ const HOST_ITEM_HEADERS = Object.freeze({
 /** The text field that is the body of a host item. */
 const HOST_ITEM_BODY_KEY = Object.freeze({ email: 'body', meeting: 'description', page: 'body' });
 
+/** A value on one line: every line break (with the blanks around it) becomes one space. */
 function headerValue(value) {
-  return typeof value === 'string' ? value.replaceAll(/\s*[\r\n]+\s*/g, ' ').trim() : '';
+  if (typeof value !== 'string') return '';
+  return value
+    .split(/[\r\n]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 /**
@@ -313,11 +319,14 @@ export function parseHostItemText(kind, text) {
       fields[current] = `${fields[current]} ${line.trim()}`;
       continue;
     }
-    const m = /^([A-Za-z][A-Za-z-]*):[ \t]*(.*)$/.exec(line);
-    const match = m && headers.find(([, label]) => label.toLowerCase() === m[1].toLowerCase());
+    const colon = line.indexOf(':');
+    const name = colon > 0 ? line.slice(0, colon) : '';
+    const match = /^[A-Za-z][A-Za-z-]*$/.test(name)
+      ? headers.find(([, label]) => label.toLowerCase() === name.toLowerCase())
+      : null;
     if (!match) break;
     current = match[0];
-    fields[current] = m[2].trim();
+    fields[current] = line.slice(colon + 1).trim();
   }
   // A header block ends at a blank line or at the end of the text; a "header"
   // followed directly by prose is prose.

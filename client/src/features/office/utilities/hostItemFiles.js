@@ -83,18 +83,30 @@ export function sanitizeItemFileName(base, extension, fallback) {
     .replaceAll(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]+/g, '') // zero-width, bidi overrides
     .replaceAll(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ')
     .replaceAll(/[\\/:*?"<>|]+/g, ' ')
-    .replaceAll(/\s+/g, ' ')
-    .trim()
-    .replaceAll(/^[. ]+|[. ]+$/g, '');
-  const capped = Array.from(cleaned).slice(0, MAX_FILE_NAME_BASE).join('').trim();
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+  const capped = Array.from(trimDotsAndBlanks(cleaned))
+    .slice(0, MAX_FILE_NAME_BASE)
+    .join('')
+    .trim();
   return `${capped || fallback}${extension}`;
+}
+
+/** `value` without leading and trailing dots and blanks (linear, no regex backtracking). */
+function trimDotsAndBlanks(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && (value[start] === '.' || value[start] === ' ')) start += 1;
+  while (end > start && (value[end - 1] === '.' || value[end - 1] === ' ')) end -= 1;
+  return value.slice(start, end);
 }
 
 // 32-bit FNV-1a over UTF-16 code units: enough to tell items of one chat apart.
 function hashString(value) {
   let h = 0x811c9dc5;
   for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
+    h ^= value.codePointAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h.toString(36);
@@ -170,15 +182,17 @@ function utf8Base64(text) {
   const bytes = new TextEncoder().encode(text);
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    binary += String.fromCodePoint(...bytes.subarray(i, i + 0x8000));
   }
   return btoa(binary);
 }
 
 const singleLine = value =>
   String(value ?? '')
-    .replaceAll(/\s*[\r\n]+\s*/g, ' ')
-    .trim();
+    .split(/[\r\n]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join(' ');
 const isPrintableAscii = value => /^[\x20-\x7e]*$/.test(value);
 
 /**

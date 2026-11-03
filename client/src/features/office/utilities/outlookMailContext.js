@@ -154,7 +154,7 @@ export async function fetchCurrentOutlookItemContext() {
 
 // Reading the whole message is a download (the attachments are in it), and a
 // chat resends the open email with every turn — so the last one is kept.
-let lastEml = { itemId: null, base64: null };
+let lastEml = null;
 
 function getItemAsFileAsync(item) {
   return new Promise(resolve => {
@@ -197,7 +197,7 @@ export async function fetchCurrentMailEml(expectedItemId, keptAttachmentIds = []
   const kept = new Set(keptAttachmentIds);
   const live = Array.isArray(item.attachments) ? item.attachments : [];
   if (live.some(a => !kept.has(a?.id))) return null;
-  if (lastEml.itemId === expectedItemId && lastEml.base64) return lastEml.base64;
+  if (lastEml?.itemId === expectedItemId && lastEml.base64) return lastEml.base64;
   const base64 = await getItemAsFileAsync(item);
   if (!base64 || getLiveItemId() !== expectedItemId) return null;
   lastEml = { itemId: expectedItemId, base64 };

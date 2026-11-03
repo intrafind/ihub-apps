@@ -103,6 +103,15 @@ export function normalizeMediaType(mimeType, name) {
   return declared;
 }
 
+/** `value` without leading and trailing dots and blanks (linear, no regex backtracking). */
+function trimDotsAndBlanks(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && (value[start] === '.' || value[start] === ' ')) start += 1;
+  while (end > start && (value[end - 1] === '.' || value[end - 1] === ' ')) end -= 1;
+  return value.slice(start, end);
+}
+
 /**
  * A plain file name: last path segment, no control or reserved characters,
  * bounded. Falls back to `fallback` when nothing usable is left.
@@ -115,12 +124,14 @@ export function plainFileName(value, fallback = 'file') {
   const last = String(typeof value === 'string' ? value : '')
     .split(/[\\/]/)
     .pop();
-  const cleaned = last
-    .replaceAll(/[:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
-    .replaceAll(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
-    .replaceAll(/^[.\s]+|[.\s]+$/g, '');
+  const cleaned = trimDotsAndBlanks(
+    last
+      .replaceAll(/[:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 120)
+  );
   return cleaned || fallback;
 }
 

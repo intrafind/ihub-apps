@@ -152,7 +152,12 @@ export default function useChatFilePreUpload({
   // The user removed a file from the composer: stop its upload, free its storage.
   const handleFileSelect = useCallback(
     next => {
-      const kept = new Set([next].flat().filter(Boolean).map(entryKey));
+      const kept = new Set(
+        [next]
+          .flat()
+          .filter(Boolean)
+          .map(entry => entryKey(entry))
+      );
       for (const entry of [selectionRef.current].flat().filter(Boolean)) {
         const key = entryKey(entry);
         if (kept.has(key)) continue;

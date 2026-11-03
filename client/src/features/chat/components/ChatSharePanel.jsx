@@ -678,11 +678,13 @@ export default function ChatSharePanel({ chatId }) {
                   ].map(([value, label, hint]) => (
                     <label
                       key={value}
+                      htmlFor={`share-files-access-${value}`}
                       className={`flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 ${
                         value === 'original' && !anyOriginal ? 'opacity-60' : ''
                       }`}
                     >
                       <input
+                        id={`share-files-access-${value}`}
                         type="radio"
                         name="share-files-access"
                         value={value}
