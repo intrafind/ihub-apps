@@ -547,9 +547,16 @@ export default function registerChatShareRoutes(app) {
       const access = share.uploadedFilesAccess || 'none';
       const allowed = new Set(access === 'none' ? [] : share.fileIds || []);
       const scope = getChatRepository().fileScope(share.chatId);
+      // Viewers get what describes a file, never where it came from (the
+      // mailbox user, an e-mail's addresses, a connector path).
       const items =
         allowed.size > 0
-          ? (await getChatRepository().fileStore().list(scope)).filter(item => allowed.has(item.id))
+          ? (await getChatRepository().fileStore().list(scope))
+              .filter(item => allowed.has(item.id))
+              .map(({ meta: _meta, source: _source, ...visible }) => ({
+                ...visible,
+                hasOriginal: visible.hasOriginal && access === 'original'
+              }))
           : [];
       setViewerHeaders(res, share);
       res.json({ uploadedFilesAccess: access, items });

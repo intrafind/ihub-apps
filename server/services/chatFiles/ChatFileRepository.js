@@ -45,8 +45,83 @@ export const CHAT_FILE_VERSION = 1;
  * Scopes an uploaded file may belong to:
  * - `chat`: a durable or temporary chat (`originalRetentionDays` TTL applies to `.bin`).
  * - `task`: a scheduled task definition (exempt from age-based TTL; lives until task deletion).
+ * - `user`: files a user uploaded through the Inference API (`/api/inference/v1/files`),
+ *   referenced by `file_id` from any later request; the id is {@link userFileScope}.
  */
-export const CHAT_FILE_SCOPES = Object.freeze(['chat', 'task']);
+export const CHAT_FILE_SCOPES = Object.freeze(['chat', 'task', 'user']);
+
+/**
+ * Where a stored file came from. `upload` and `attachment` (a file attached to
+ * an e-mail) are the classic two; the rest are first-class sources whose files
+ * show in the Files drawer like any other.
+ */
+export const CHAT_FILE_ORIGINS = Object.freeze([
+  'upload',
+  'attachment',
+  'email',
+  'meeting',
+  'page',
+  'connector',
+  'api',
+  'mcp',
+  'a2a'
+]);
+
+/** Largest serialized `meta` a file keeps (it rides on every listing). */
+export const MAX_CHAT_FILE_META_BYTES = 8 * 1024;
+
+/**
+ * Scope of the files a user owns outside any chat (Inference API). The owner id
+ * is hashed: ids may hold characters a storage key cannot (or the `__`
+ * separator), and the scope must not leak who owns it.
+ *
+ * @param {string} ownerId
+ * @returns {{type: 'user', id: string}}
+ */
+export function userFileScope(ownerId) {
+  return {
+    type: 'user',
+    id: `u${createHash('sha256').update(String(ownerId)).digest('hex').slice(0, 32)}`
+  };
+}
+
+/**
+ * A `meta` object reduced to what a descriptor may carry: JSON values only,
+ * bounded in size. Anything else is dropped rather than failing the upload.
+ *
+ * @param {unknown} meta
+ * @returns {Object|null}
+ */
+export function sanitizeFileMeta(meta) {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  try {
+    const json = JSON.stringify(meta);
+    if (Buffer.byteLength(json, 'utf8') > MAX_CHAT_FILE_META_BYTES) return null;
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Connector provenance of a file (`{ kind, ref, refreshOnRun?, … }`), reduced to
+ * plain JSON.
+ *
+ * @param {unknown} source
+ * @returns {{kind: string, ref: Object, refreshOnRun?: boolean, lastFetchedAt?: string, sourceModified?: string}|null}
+ */
+export function sanitizeFileSource(source) {
+  if (!source || typeof source !== 'object' || typeof source.kind !== 'string') return null;
+  const ref = sanitizeFileMeta(source.ref);
+  if (!ref) return null;
+  return {
+    kind: source.kind.slice(0, 40),
+    ref,
+    ...(source.refreshOnRun === true ? { refreshOnRun: true } : {}),
+    ...(typeof source.lastFetchedAt === 'string' ? { lastFetchedAt: source.lastFetchedAt } : {}),
+    ...(typeof source.sourceModified === 'string' ? { sourceModified: source.sourceModified } : {})
+  };
+}
 
 const KEY_SEPARATOR = '__';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -77,7 +152,7 @@ export class ChatFileQuotaError extends Error {
  * Validate a scope, or return null when it cannot address storage.
  *
  * @param {{type: string, id: string}} scope
- * @returns {{type: 'chat'|'task', id: string}|null}
+ * @returns {{type: 'chat'|'task'|'user', id: string}|null}
  */
 export function normalizeFileScope(scope) {
   const type = scope?.type;
@@ -174,6 +249,8 @@ export function toFileDescriptor(id, data) {
     ...(data.truncated === true ? { truncated: true } : {}),
     ...(typeof data.sha256 === 'string' && data.sha256 ? { sha256: data.sha256 } : {}),
     ...(typeof data.origin === 'string' && data.origin ? { origin: data.origin } : {}),
+    ...(data.meta && typeof data.meta === 'object' ? { meta: data.meta } : {}),
+    ...(data.source && typeof data.source === 'object' ? { source: data.source } : {}),
     canUseAsTemplate: canUseFileAsTemplate(mimeType, hasOriginal),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString()
   };
@@ -221,9 +298,10 @@ export class ChatFileRepository {
    * Store a file (extracted text + optional page images + optional original binary)
    * after checking and enforcing all three quota tiers.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {Object} file
-   * @param {string} [file.id] - Optional explicit fileId (must be valid id).
+   * @param {string} [file.id] - Optional explicit fileId (must be valid id). When a file with
+   *   this id exists it is replaced in place (its bytes do not count against the quotas twice).
    * @param {string|null} [file.ownerId] - Owning principal id for user quota indexing.
    * @param {string} file.name - Display filename.
    * @param {string} file.mimeType - Media type.
@@ -233,7 +311,10 @@ export class ChatFileRepository {
    * @param {string[]} [file.pageImages] - Base64 JPEG page images for scanned PDFs.
    * @param {number} [file.pages] - Page/slide/sheet count when known.
    * @param {boolean} [file.truncated=false] - Whether extracted text was truncated.
-   * @param {string} [file.origin='upload'] - `'upload'` or `'attachment'`.
+   * @param {string} [file.origin='upload'] - One of {@link CHAT_FILE_ORIGINS}.
+   * @param {Object|null} [file.meta] - What identifies the item the file was made from
+   *   (`itemId`, `url`, `mailboxUser`, …); see {@link ChatFileRepository#findByMeta}.
+   * @param {Object|null} [file.source] - Connector provenance (`{ kind, ref, refreshOnRun }`).
    * @param {'original_and_text'|'server_text_only'|'client_text_only'} [file.storageMode]
    * @param {Object} [file.appConfig] - Optional app config for policy resolution.
    * @param {string} [file.createdAt] - Optional timestamp override (for tests).
@@ -254,6 +335,8 @@ export class ChatFileRepository {
       pages,
       truncated = false,
       origin = 'upload',
+      meta = null,
+      source = null,
       storageMode: explicitMode,
       appConfig = null,
       policy: explicitPolicy = null,
@@ -312,14 +395,6 @@ export class ChatFileRepository {
     const totalBytes = textBytes + originalBytes;
     const singleFileSize = rawOriginal ? rawOriginal.length : textBytes;
 
-    await this._enforceQuotas({
-      scope: target,
-      ownerId: ownerId ? String(ownerId) : null,
-      singleFileSize,
-      totalBytes,
-      settings
-    });
-
     const id = requestedId && isValidId(requestedId) ? requestedId : mintChatFileId();
     const key = chatFileKey(target, id);
     if (!isValidId(key) || !isValidId(textBlobKey(key)) || !isValidId(originalBlobKey(key))) {
@@ -330,6 +405,25 @@ export class ChatFileRepository {
       });
       return null;
     }
+
+    // Writing over a file that exists (a connector refresh): the old copy goes
+    // away with the new one, so its bytes and its slot do not count.
+    const previous = requestedId
+      ? (await this.documents.get(CHAT_FILES_NAMESPACE, key))?.data
+      : null;
+    const replaces =
+      previous && (!previous.scope || sameScope(previous.scope, target))
+        ? { key, bytes: Number(previous.bytes) || 0 }
+        : null;
+
+    await this._enforceQuotas({
+      scope: target,
+      ownerId: ownerId ? String(ownerId) : null,
+      singleFileSize,
+      totalBytes,
+      settings,
+      replaces
+    });
 
     const cleanName =
       typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_CHAT_FILE_NAME_CHARS) : id;
@@ -372,7 +466,9 @@ export class ChatFileRepository {
       ...(Number.isFinite(pages) ? { pages } : {}),
       ...(validPages.length > 0 ? { pageImageCount: validPages.length } : {}),
       ...(truncated === true ? { truncated: true } : {}),
-      origin: origin === 'attachment' ? 'attachment' : 'upload',
+      origin: CHAT_FILE_ORIGINS.includes(origin) ? origin : 'upload',
+      ...(sanitizeFileMeta(meta) ? { meta: sanitizeFileMeta(meta) } : {}),
+      ...(sanitizeFileSource(source) ? { source: sanitizeFileSource(source) } : {}),
       ...(mode === 'server_text_only' && candidateOriginal
         ? { originalDeleteReason: 'storage_mode', originalDeletedReason: 'storage_mode' }
         : {}),
@@ -397,6 +493,16 @@ export class ChatFileRepository {
       throw error;
     }
 
+    if (replaces) {
+      // The new copy may have no original or no page images where the old one had.
+      if (!rawOriginal) {
+        await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(() => {});
+      }
+      if (!pagesBuf) {
+        await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, pagesBlobKey(key)).catch(() => {});
+      }
+    }
+
     return toFileDescriptor(id, body);
   }
 
@@ -407,7 +513,7 @@ export class ChatFileRepository {
    *
    * @private
    */
-  async _enforceQuotas({ scope, ownerId, singleFileSize, totalBytes, settings }) {
+  async _enforceQuotas({ scope, ownerId, singleFileSize, totalBytes, settings, replaces = null }) {
     const { quotas, evictOldestOriginalsOnQuota } = settings;
 
     if (quotas.maxFileBytes > 0 && singleFileSize > quotas.maxFileBytes) {
@@ -421,7 +527,9 @@ export class ChatFileRepository {
 
     // Tier 1: Per-Chat / Per-Task quota
     if (quotas.maxChatFiles > 0 || quotas.maxChatBytes > 0) {
-      const existing = await this.list(scope);
+      const existing = (await this.list(scope)).filter(
+        item => !replaces || chatFileKey(scope, item.id) !== replaces.key
+      );
       if (quotas.maxChatFiles > 0 && existing.length >= quotas.maxChatFiles) {
         throw new ChatFileQuotaError(
           'QUOTA_CHAT_FILES',
@@ -444,7 +552,9 @@ export class ChatFileRepository {
     // Tier 2: Per-User quota (with LRU eviction of oldest chat originals)
     if (ownerId && quotas.maxUserBytes > 0) {
       let ownerDocs = await this._listOwnerDocs(ownerId);
-      let usedUserBytes = ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0);
+      let usedUserBytes =
+        ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
+        (replaces?.bytes || 0);
       if (usedUserBytes + totalBytes > quotas.maxUserBytes && evictOldestOriginalsOnQuota) {
         const needed = usedUserBytes + totalBytes - quotas.maxUserBytes;
         const freed = await this._evictOldestOriginals(ownerDocs, needed, {
@@ -466,7 +576,9 @@ export class ChatFileRepository {
     // Tier 3: Server-Total quota (with LRU eviction of oldest chat originals)
     if (quotas.maxServerBytes > 0) {
       let allDocs = await this._listAllDocs();
-      let usedServerBytes = allDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0);
+      let usedServerBytes =
+        allDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
+        (replaces?.bytes || 0);
       if (usedServerBytes + totalBytes > quotas.maxServerBytes && evictOldestOriginalsOnQuota) {
         const needed = usedServerBytes + totalBytes - quotas.maxServerBytes;
         const freed = await this._evictOldestOriginals(allDocs, needed, {
@@ -502,7 +614,7 @@ export class ChatFileRepository {
         const d = doc?.data;
         if (!d || d.hasOriginal !== true || !(d.originalBytes > 0)) return false;
         // Task-scoped files are exempt from automatic eviction (Q6).
-        if (d.scope?.type !== 'chat') return false;
+        if (d.scope?.type === 'task') return false;
         if (excludeScope && sameScope(d.scope, excludeScope)) return false;
         return true;
       })
@@ -529,7 +641,7 @@ export class ChatFileRepository {
   /**
    * Read a single file descriptor without loading any blob payloads.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
    * @returns {Promise<Object|null>}
    */
@@ -547,7 +659,7 @@ export class ChatFileRepository {
   /**
    * Read the extracted text (and any scanned-PDF page images) of a stored file.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
    * @returns {Promise<Object|null>} `{ ...descriptor, text, pageImages }`
    */
@@ -589,7 +701,7 @@ export class ChatFileRepository {
    * has been discarded by TTL / quota eviction, returns `{ ...descriptor,
    * discarded: true, data: null }` so callers can answer `410 ORIGINAL_DISCARDED`.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
    * @returns {Promise<Object|null>}
    */
@@ -632,7 +744,7 @@ export class ChatFileRepository {
    * Discard only the original binary blob of a file while preserving its
    * metadata document and extracted text blob.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
    * @param {{reason?: string, now?: string}} [options]
    * @returns {Promise<Object|null>} Updated descriptor, or null if not found.
@@ -699,7 +811,8 @@ export class ChatFileRepository {
     for (const doc of docs) {
       const data = doc?.data;
       if (!data || data.hasOriginal !== true) continue;
-      if (data.scope?.type !== 'chat') continue;
+      // Task files live as long as the task (Q6).
+      if (data.scope?.type === 'task') continue;
       const prefix = scopePrefix(data.scope);
       const fileId = doc.key.startsWith(prefix) ? doc.key.slice(prefix.length) : null;
       if (!fileId || retainedFileIds.has(fileId)) continue;
@@ -719,7 +832,7 @@ export class ChatFileRepository {
   /**
    * List all files in a scope, newest first, as descriptors without payloads.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @returns {Promise<Array<Object>>}
    */
   async list(scope) {
@@ -736,9 +849,25 @@ export class ChatFileRepository {
   }
 
   /**
+   * The file of a scope that was made from the item `meta[key] === value` — how an
+   * e-mail, a meeting or a web page that is sent with every turn is stored once
+   * per chat.
+   *
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
+   * @param {string} key - Field of `meta` (`itemId`, `url`).
+   * @param {string} value
+   * @returns {Promise<Object|null>} The newest matching descriptor.
+   */
+  async findByMeta(scope, key, value) {
+    if (typeof key !== 'string' || !key || typeof value !== 'string' || !value) return null;
+    const items = await this.list(scope);
+    return items.find(item => item.meta?.[key] === value) || null;
+  }
+
+  /**
    * Delete one file (metadata + all blobs).
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
    * @returns {Promise<boolean>}
    */
@@ -753,7 +882,7 @@ export class ChatFileRepository {
   /**
    * Delete named files in a scope.
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string[]} fileIds
    * @returns {Promise<number>}
    */
@@ -773,7 +902,7 @@ export class ChatFileRepository {
   /**
    * Delete every file in a scope (metadata documents + `.txt`, `.bin`, `.pages` blobs).
    *
-   * @param {{type: 'chat'|'task', id: string}} scope
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @returns {Promise<number>}
    */
   async deleteScope(scope) {

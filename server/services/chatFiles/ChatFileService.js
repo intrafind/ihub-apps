@@ -38,7 +38,11 @@ import { projectSettings } from '../projects/projectSettings.js';
 import { renderPagePreview } from '../documents/pdf/PdfService.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
-import { ChatFileQuotaError, getChatFileRepository } from './ChatFileRepository.js';
+import {
+  CHAT_FILE_ORIGINS,
+  ChatFileQuotaError,
+  getChatFileRepository
+} from './ChatFileRepository.js';
 
 const COMPONENT = 'ChatFileService';
 
@@ -90,7 +94,7 @@ async function renderScannedPdfPages(bytes) {
  * scheduled-task scope.
  *
  * @param {Object} params
- * @param {{type: 'chat'|'task', id: string}} params.scope
+ * @param {{type: 'chat'|'task'|'user', id: string}} params.scope
  * @param {string|null} [params.ownerId]
  * @param {string} params.name
  * @param {string} [params.mimeType]
@@ -99,7 +103,10 @@ async function renderScannedPdfPages(bytes) {
  * @param {string[]|null} [params.pageImages] - Optional rendered page images for scanned PDFs.
  * @param {number} [params.pages]
  * @param {string} [params.formatLabel]
- * @param {string} [params.origin='upload']
+ * @param {string} [params.origin='upload'] - One of `CHAT_FILE_ORIGINS`.
+ * @param {Object|null} [params.meta] - Identity of the item the file was made from (`itemId`, `url`, …).
+ * @param {Object|null} [params.source] - Connector provenance (`{ kind, ref, refreshOnRun }`).
+ * @param {string|null} [params.id] - Replace the stored file with this id (a connector refresh).
  * @param {Object|null} [params.appConfig]
  * @param {import('./ChatFileRepository.js').ChatFileRepository} [params.repository]
  * @param {Object} [params.scanner]
@@ -117,6 +124,9 @@ export async function ingestChatFile({
   pages,
   formatLabel,
   origin = 'upload',
+  meta = null,
+  source = null,
+  id = null,
   appConfig = null,
   policy: explicitPolicy = null,
   repository = null,
@@ -239,6 +249,9 @@ export async function ingestChatFile({
       pages: resolvedPages,
       truncated,
       origin,
+      meta,
+      source,
+      ...(id ? { id } : {}),
       storageMode: settings.storageMode,
       appConfig,
       policy: settings
@@ -288,6 +301,9 @@ export async function ingestChatFile({
     pages: resolvedPages,
     truncated,
     origin,
+    meta,
+    source,
+    ...(id ? { id } : {}),
     storageMode:
       settings.storageMode === 'original_and_text' ? 'server_text_only' : settings.storageMode,
     appConfig,
@@ -323,8 +339,28 @@ export function toPromptFileData(storedFile) {
       : {}),
     canUseAsTemplate: storedFile.canUseAsTemplate === true,
     hasOriginal: storedFile.hasOriginal === true,
-    origin: storedFile.origin === 'attachment' ? 'attachment' : 'upload',
+    origin: CHAT_FILE_ORIGINS.includes(storedFile.origin) ? storedFile.origin : 'upload',
+    ...(storedFile.meta ? { meta: storedFile.meta } : {}),
     fileSize: storedFile.bytes
+  };
+}
+
+/**
+ * The descriptor a stored message keeps for a file: what the transcript needs
+ * to show it and to find it again (`attachments` of `chat-messages`).
+ *
+ * @param {Object} stored - Descriptor or `getText` result.
+ * @returns {Object}
+ */
+export function describeStored(stored) {
+  return {
+    id: stored.id,
+    type: stored.mimeType,
+    name: stored.name,
+    bytes: stored.bytes,
+    ...(stored.origin && stored.origin !== 'upload' ? { origin: stored.origin } : {}),
+    ...(stored.hasOriginal ? { hasOriginal: true } : {}),
+    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
   };
 }
 
@@ -393,14 +429,7 @@ export async function prepareTurnFiles({
       if (!stored) continue;
       seenIds.add(fileId);
       resolvedPromptFiles.push(toPromptFileData(stored));
-      descriptors.push({
-        id: stored.id,
-        type: stored.mimeType,
-        name: stored.name,
-        bytes: stored.bytes,
-        ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-        ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-      });
+      descriptors.push(describeStored(stored));
     }
   }
 
@@ -414,14 +443,7 @@ export async function prepareTurnFiles({
       if (stored) {
         seenIds.add(existingId);
         resolvedPromptFiles.push(toPromptFileData(stored));
-        descriptors.push({
-          id: stored.id,
-          type: stored.mimeType,
-          name: stored.name,
-          bytes: stored.bytes,
-          ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-          ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-        });
+        descriptors.push(describeStored(stored));
         continue;
       }
     }
@@ -433,6 +455,29 @@ export async function prepareTurnFiles({
 
     if (activeRepo?.isAvailable() && (text || (pageImages && pageImages.length > 0))) {
       try {
+        const origin = CHAT_FILE_ORIGINS.includes(file.origin) ? file.origin : 'upload';
+        const meta = file.meta && typeof file.meta === 'object' ? file.meta : null;
+        // An e-mail, meeting or page that is sent with every turn is stored once
+        // per chat (by the item's id or URL); a changed one replaces the stored copy.
+        let replaceId = null;
+        const identity = meta?.itemId
+          ? ['itemId', meta.itemId]
+          : meta?.url
+            ? ['url', meta.url]
+            : null;
+        if (identity && ['email', 'meeting', 'page'].includes(origin)) {
+          const existing = await activeRepo.findByMeta(scope, identity[0], String(identity[1]));
+          if (existing) {
+            const current = await activeRepo.getText(scope, existing.id);
+            if (current && current.text === text && current.meta?.isCurrent === meta?.isCurrent) {
+              seenIds.add(existing.id);
+              resolvedPromptFiles.push({ ...toPromptFileData(current), origin });
+              descriptors.push(describeStored(current));
+              continue;
+            }
+            replaceId = existing.id;
+          }
+        }
         const storedDescriptor = await activeRepo.put(scope, {
           ownerId,
           name,
@@ -441,7 +486,9 @@ export async function prepareTurnFiles({
           text,
           originalBuffer: file.base64 ? Buffer.from(file.base64, 'base64') : null,
           pageImages,
-          origin: file.origin === 'attachment' ? 'attachment' : 'upload',
+          origin,
+          meta,
+          ...(replaceId ? { id: replaceId } : {}),
           appConfig
         });
         if (storedDescriptor) {
@@ -454,17 +501,12 @@ export async function prepareTurnFiles({
             fileType: storedDescriptor.mimeType,
             content: text,
             ...(pageImages ? { pageImages } : {}),
+            origin,
+            ...(meta ? { meta } : {}),
             canUseAsTemplate: storedDescriptor.canUseAsTemplate === true,
             hasOriginal: storedDescriptor.hasOriginal === true
           });
-          descriptors.push({
-            id: storedDescriptor.id,
-            type: storedDescriptor.mimeType,
-            name: storedDescriptor.name,
-            bytes: storedDescriptor.bytes,
-            ...(storedDescriptor.hasOriginal ? { hasOriginal: true } : {}),
-            ...(storedDescriptor.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-          });
+          descriptors.push(describeStored(storedDescriptor));
           continue;
         }
       } catch (error) {
