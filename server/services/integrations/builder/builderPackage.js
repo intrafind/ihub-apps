@@ -239,16 +239,24 @@ function remoteOverridesOf(actions) {
   return overrides;
 }
 
-/** What the builder decides in an override of an MCP tool or A2A skill. */
-const REMOTE_OVERRIDE_FIELDS = ['description', 'sideEffect', 'dataFlow'];
+/**
+ * What the builder decides about an action's description, side effect and data
+ * flow: for an MCP tool or A2A skill in the installation's override
+ * (`remoteOverridesOf`), for an action the definition declares in the
+ * definition itself (the draft carries the effective value, see `packageToDraft`).
+ */
+const BUILDER_OVERRIDE_FIELDS = ['description', 'sideEffect', 'dataFlow'];
 
 /**
  * The installation's per-action overrides after a builder save. The action
  * detail (#2974) writes overrides too (guidance, examples, and for an action
  * the definition declares also its description, side effect and data flow):
  * the builder keeps what it does not edit itself, for every action the draft
- * still has. For an MCP tool or A2A skill the description, side effect and
- * data flow are the builder's (`remoteOverridesOf`).
+ * still has. The description, side effect and data flow are the builder's:
+ * for an MCP tool or A2A skill it stores them as an override
+ * (`remoteOverridesOf`), for a declared action it writes them into the
+ * definition, where they replace an override the action detail had set (the
+ * builder showed that value, so the action behaves as before).
  *
  * @param {Array<Object>} actions - the draft's actions
  * @param {boolean} declaresActions - whether the definition lists its actions
@@ -261,7 +269,7 @@ function overridesOf(actions, declaresActions, existingInstance) {
   const overrides = {};
   for (const { name } of actions) {
     const kept = Object.hasOwn(stored, name) ? { ...stored[name] } : {};
-    if (!declaresActions) for (const field of REMOTE_OVERRIDE_FIELDS) delete kept[field];
+    for (const field of BUILDER_OVERRIDE_FIELDS) delete kept[field];
     const override = { ...kept, ...(Object.hasOwn(decided, name) ? decided[name] : {}) };
     if (Object.keys(override).length) overrides[name] = override;
   }
@@ -358,7 +366,13 @@ export function draftToPackage(draft, { previous = null, existingInstance = null
       disabled: draft.actions.filter(a => a.enabled === false).map(a => a.name),
       overrides: overridesOf(draft.actions, declaresActions, existingInstance)
     },
-    approval: Object.keys(approval).length ? approval : undefined,
+    // Nothing left to set removes the stored setting; `undefined` would keep it
+    // (a save that does not name the approval keeps the stored one).
+    approval: Object.keys(approval).length
+      ? approval
+      : existingInstance?.approval
+        ? null
+        : undefined,
     timeoutMs: existingInstance?.timeoutMs
   });
   return { definitionId, definition, files, installation };
@@ -443,25 +457,30 @@ export function packageToDraft({ definition, instance, moduleSource, document, l
     });
   }
 
+  const overrides = instance.actions?.overrides || {};
   if (['openapi', 'http', 'script'].includes(source)) {
-    draft.actions = (definition.actions || []).map(action =>
-      compact({
+    // The effective value: what the action detail (#2974) set wins over the
+    // definition, as it does when the action runs. A save writes it into the
+    // definition and drops the override (`overridesOf`), so nothing the admin
+    // sees here changes and an edit made here takes effect.
+    draft.actions = (definition.actions || []).map(action => {
+      const own = overrides[action.name] || {};
+      return compact({
         name: action.name,
         title: action.title,
-        description: action.description,
+        description: own.description ?? action.description,
         parameters: action.parameters,
-        sideEffect: action.sideEffect || 'unknown',
-        dataFlow: action.dataFlow || 'external',
+        sideEffect: own.sideEffect || action.sideEffect || 'unknown',
+        dataFlow: own.dataFlow || action.dataFlow || 'external',
         approval: approvals[action.name],
         enabled: !disabled.has(action.name),
         operationId: action.operationId,
         request: action.request,
         response: action.response,
         toolId: action.toolId
-      })
-    );
+      });
+    });
   } else {
-    const overrides = instance.actions?.overrides || {};
     const names = [
       ...liveActions.map(a => a.name),
       ...Object.keys(overrides),

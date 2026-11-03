@@ -17,7 +17,8 @@ function LanguageInput({
   required,
   onChange,
   hasError,
-  ariaLabel
+  ariaLabel,
+  maxLength
 }) {
   const inputClass = `block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
     hasError ? 'border-red-300 focus:border-red-500' : 'border-gray-300 dark:border-gray-600'
@@ -31,6 +32,7 @@ function LanguageInput({
     placeholder,
     className: inputClass,
     required,
+    maxLength,
     'aria-invalid': hasError || undefined,
     'aria-describedby': hasError && name ? `${name}-error` : undefined
   };
@@ -54,7 +56,8 @@ const DynamicLanguageEditor = ({
   error = null, // Error message to display
   name = null, // Field name used for aria-describedby linkage to error messages
   errors = null, // Optional `{ [lang]: 'message' }` for per-language errors
-  validationErrors = null // Optional full validation-errors map; picks `${name}.${lang}` keys
+  validationErrors = null, // Optional full validation-errors map; picks `${name}.${lang}` keys
+  maxLength = undefined // Longest text per language; the field stops accepting more
 }) => {
   const { t } = useTranslation();
   const labelId = useId();
@@ -381,6 +384,7 @@ const DynamicLanguageEditor = ({
                 name={name}
                 type={type}
                 rows={rows}
+                maxLength={maxLength}
                 value={currentValue[lang] || ''}
                 placeholder={placeholder[lang] || ''}
                 required={required && lang === 'en'}

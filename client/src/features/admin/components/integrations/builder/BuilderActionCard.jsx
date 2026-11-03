@@ -19,6 +19,7 @@ import {
 import {
   HTTP_BODY_TYPES,
   HTTP_METHODS,
+  MAX_ACTION_DESCRIPTION_LENGTH,
   parametersFromPlaceholders,
   parseJsonObject,
   sideEffectOfMethod,
@@ -181,6 +182,7 @@ function BuilderActionCard({ action, index, source, onChange, onRemove, errors }
           onChange={description => update({ description })}
           type="textarea"
           rows={2}
+          maxLength={MAX_ACTION_DESCRIPTION_LENGTH}
         />
         {action.remoteDescription && (
           <p className={HELP_CLASS}>

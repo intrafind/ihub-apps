@@ -234,6 +234,20 @@ describe('builder steps', () => {
     expect(draft.actions[0].request.method).toBe('DELETE');
   });
 
+  it('stops a description at the length the server accepts', () => {
+    const draft = {
+      ...model.emptyDraft(),
+      instanceId: 'orders',
+      actions: [
+        { ...model.emptyHttpAction([]), name: 'get_order', description: { en: 'Get one order' } }
+      ]
+    };
+    render(<BuilderActionsStep draft={draft} onChange={() => {}} errors={{}} />);
+    const field = screen.getByLabelText('Description for the model (EN)');
+    expect(field).toHaveAttribute('maxlength', String(model.MAX_ACTION_DESCRIPTION_LENGTH));
+    expect(model.MAX_ACTION_DESCRIPTION_LENGTH).toBe(4000);
+  });
+
   it('lists an MCP server’s tools as actions', async () => {
     mockApi.importBuilderActions.mockResolvedValue({
       success: true,

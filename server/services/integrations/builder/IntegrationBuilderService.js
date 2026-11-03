@@ -8,6 +8,8 @@ import { resolveAndValidatePath } from '../../../utils/pathSecurity.js';
 import integrationRegistry from '../definitions/IntegrationRegistry.js';
 import installedIntegrationService, { IntegrationError } from '../InstalledIntegrationService.js';
 import { getProtocolAdapter } from '../protocols/index.js';
+import { currentActionsOf } from '../actionReview.js';
+import { actionReviewState } from '../../../utils/actionFingerprint.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { sideEffectOfMethod } from '../protocols/http/HttpAdapter.js';
 import {
@@ -279,7 +281,54 @@ export class IntegrationBuilderService {
     await this.registry.dropPrevious(pkg.definitionId, kept);
     this.registry._announce();
     await this._definitionsChanged(pkg.definitionId);
+    if (['openapi', 'http', 'script'].includes(parsed.data.source)) {
+      instance = await this._acceptEditedActions(instanceId, language, instance);
+    }
     return { instance, definition: pkg.definition };
+  }
+
+  /**
+   * The actions an admin just edited in the builder are reviewed by that edit.
+   *
+   * For an openapi, http or script integration the definition is the builder's
+   * own: an action whose name, side effect or input schema changed in this save
+   * (or that this save added) shows as new or changed against the accepted
+   * fingerprints (#2916), and would then wait for approval until someone clicked
+   * "Mark reviewed" on what the same admin had just written. Their current
+   * fingerprints are accepted here. Nothing happens on an installation without
+   * a baseline (the first run takes it from the current actions), and an
+   * MCP tool or A2A skill is never accepted this way: its fingerprint is what
+   * the remote server declares, which the builder does not edit.
+   *
+   * A failure here does not fail the save, which is stored: the actions then
+   * stay new or changed, as before.
+   *
+   * @returns {Promise<Object>} the stored installation
+   */
+  async _acceptEditedActions(instanceId, language, stored) {
+    try {
+      const current = this.installations.get(instanceId) || stored;
+      if (!current?.approval || !current.actions?.fingerprints) return stored;
+      const resolved = await this.installations.resolve(instanceId, language);
+      const { fingerprints } = await currentActionsOf(resolved, language);
+      const pending = Object.entries(fingerprints)
+        .filter(([name, fingerprint]) => actionReviewState(current, name, fingerprint))
+        .map(([name]) => name);
+      if (pending.length === 0) return stored;
+      const { instance } = await this.installations.markActionsReviewed(
+        instanceId,
+        fingerprints,
+        pending
+      );
+      return instance;
+    } catch (error) {
+      logger.warn('Builder: could not mark the edited actions as reviewed', {
+        component: COMPONENT,
+        instanceId,
+        error: error.message
+      });
+      return stored;
+    }
   }
 
   /** Validate the definition before it is written, with the builder's paths in the message. */

@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
+import { boundedLocalizedSchema } from './integrationsConfigSchema.js';
 import {
   DATA_FLOWS,
   HTTP_BODY_TYPES,
@@ -59,7 +60,12 @@ const jsonSchemaObject = z.object({ type: z.literal('object') }).passthrough();
 const builderActionSchema = z.object({
   name: actionNameSchema,
   title: localizedStringSchema.optional(),
-  description: localizedStringSchema.optional(),
+  /**
+   * What the model reads. At most as long as the action detail allows
+   * (`MAX_ACTION_TEXT_LENGTH`): an MCP tool's or A2A skill's description is
+   * stored as an override of the installation, which refuses a longer one.
+   */
+  description: boundedLocalizedSchema.optional(),
   /** `http` and `script`: the argument schema. Read-only for the other sources. */
   parameters: jsonSchemaObject.optional(),
   sideEffect: z.enum(SIDE_EFFECTS).prefault('unknown'),

@@ -287,36 +287,182 @@ describe('create, load, save', () => {
     expect(definition.name).toEqual({ en: 'Orders', de: 'Bestellungen' });
   });
 
-  it('keeps the action detail overrides, the review and newOrChanged on a save', async () => {
+  it('shows an action detail override as the builder value, and keeps what the builder does not edit', async () => {
     const stored = state.integrations.installed.find(i => i.id === 'orders');
-    const fingerprint = `sha256:${'a'.repeat(64)}`;
+    const bogus = `sha256:${'a'.repeat(64)}`;
     stored.actions = {
       ...stored.actions,
       overrides: {
-        get_order: { guidance: { en: 'Ask for the order id first' }, dataFlow: 'external' },
+        get_order: {
+          guidance: { en: 'Ask for the order id first' },
+          // The definition declares `internal`; the admin set this in the action detail.
+          dataFlow: 'external',
+          description: { en: 'Get one order, as the model reads it' }
+        },
         gone: { guidance: { en: 'An action the draft no longer has' } }
       },
-      fingerprints: { get_order: fingerprint },
+      fingerprints: { get_order: bogus },
       reviewedAt: '2026-11-01T00:00:00.000Z'
     };
     stored.approval = { ...stored.approval, newOrChanged: 'writes' };
     const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
       200
     );
+    // The effective value, as the action runs with it.
+    const shown = loaded.body.actions.find(a => a.name === 'get_order');
+    expect(shown.dataFlow).toBe('external');
+    expect(shown.description).toEqual({ en: 'Get one order, as the model reads it' });
+
     await admin(request(app).put('/api/admin/integrations/builder/orders'))
       .send(loaded.body)
       .expect(200);
     const instance = state.integrations.installed.find(i => i.id === 'orders');
+    // The builder wrote its three fields into the definition, so nothing
+    // overrides them any more; the guidance is the action detail's and stays.
     expect(instance.actions.overrides).toEqual({
-      get_order: { guidance: { en: 'Ask for the order id first' }, dataFlow: 'external' }
+      get_order: { guidance: { en: 'Ask for the order id first' } }
     });
-    expect(instance.actions.fingerprints).toEqual({ get_order: fingerprint });
-    expect(instance.actions.reviewedAt).toBe('2026-11-01T00:00:00.000Z');
+    const declared = registryModule.default
+      .get('custom/orders')
+      .definition.actions.find(a => a.name === 'get_order');
+    expect(declared).toMatchObject({
+      dataFlow: 'external',
+      description: { en: 'Get one order, as the model reads it' }
+    });
     expect(instance.approval).toEqual({
       default: 'writes',
       actions: { get_order: 'never' },
       newOrChanged: 'writes'
     });
+  });
+
+  it('changes the value a declared action runs with when the builder edits it', async () => {
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    stored.actions = {
+      ...stored.actions,
+      overrides: { get_order: { dataFlow: 'external' } }
+    };
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    loaded.body.actions.find(a => a.name === 'get_order').dataFlow = 'internal';
+    await admin(request(app).put('/api/admin/integrations/builder/orders'))
+      .send(loaded.body)
+      .expect(200);
+    const instance = state.integrations.installed.find(i => i.id === 'orders');
+    // Without the override dropped, the old value would still win.
+    expect(instance.actions.overrides?.get_order?.dataFlow).toBeUndefined();
+    const declared = registryModule.default
+      .get('custom/orders')
+      .definition.actions.find(a => a.name === 'get_order');
+    expect(declared.dataFlow).toBe('internal');
+  });
+
+  /** The review state of every action of the stored installation. */
+  const reviewStates = async instanceId => {
+    const { currentActionsOf } = await import('../../services/integrations/actionReview.js');
+    const { actionReviewState } = await import('../../utils/actionFingerprint.js');
+    const resolved = await installedIntegrationService.resolve(instanceId, 'en');
+    const { fingerprints } = await currentActionsOf(resolved, 'en');
+    const stored = installedIntegrationService.get(instanceId);
+    return Object.fromEntries(
+      Object.entries(fingerprints).map(([name, fp]) => [name, actionReviewState(stored, name, fp)])
+    );
+  };
+
+  it('marks the actions it edited or added as reviewed', async () => {
+    // Take the baseline of the current actions, as the first chat run would.
+    const { currentActionsOf } = await import('../../services/integrations/actionReview.js');
+    const resolved = await installedIntegrationService.resolve('orders', 'en');
+    const { fingerprints: baseline } = await currentActionsOf(resolved, 'en');
+    await installedIntegrationService.markActionsReviewed('orders', baseline, null);
+    expect(await reviewStates('orders')).toEqual({ get_order: null });
+    const before = state.integrations.installed.find(i => i.id === 'orders').actions;
+
+    // Edit one action (its side effect is part of the fingerprint) and add one.
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    const draft = loaded.body;
+    draft.actions.find(a => a.name === 'get_order').sideEffect = 'write';
+    draft.actions.push({
+      name: 'list_orders',
+      sideEffect: 'read',
+      dataFlow: 'internal',
+      parameters: { type: 'object', properties: {} },
+      request: { method: 'GET', url: '/orders' }
+    });
+    await admin(request(app).put('/api/admin/integrations/builder/orders')).send(draft).expect(200);
+
+    // Nobody has to click "Mark reviewed" on what the admin just wrote.
+    expect(await reviewStates('orders')).toEqual({ get_order: null, list_orders: null });
+    const after = state.integrations.installed.find(i => i.id === 'orders').actions;
+    expect(after.fingerprints.get_order).not.toBe(before.fingerprints.get_order);
+    expect(Object.keys(after.fingerprints).sort()).toEqual(['get_order', 'list_orders']);
+  });
+
+  it('does not take a baseline on a save: an installation without one is left alone', async () => {
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    delete stored.actions.fingerprints;
+    delete stored.actions.reviewedAt;
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    await admin(request(app).put('/api/admin/integrations/builder/orders'))
+      .send(loaded.body)
+      .expect(200);
+    expect(
+      state.integrations.installed.find(i => i.id === 'orders').actions.fingerprints
+    ).toBeUndefined();
+  });
+
+  it('removes the approval a save no longer names', async () => {
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    stored.approval = { default: 'writes', actions: { get_order: 'never' } };
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    expect(loaded.body.approvalDefault).toBe('writes');
+    // The admin cleared the default and every action's own mode.
+    const draft = { ...loaded.body, approvalDefault: undefined };
+    draft.actions = draft.actions.map(({ approval: _approval, ...rest }) => rest);
+    await admin(request(app).put('/api/admin/integrations/builder/orders')).send(draft).expect(200);
+    expect(state.integrations.installed.find(i => i.id === 'orders').approval).toBeUndefined();
+  });
+
+  it('keeps newOrChanged when the default and the action modes are cleared', async () => {
+    const stored = state.integrations.installed.find(i => i.id === 'orders');
+    stored.approval = { default: 'writes', newOrChanged: 'always' };
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    const draft = { ...loaded.body, approvalDefault: undefined };
+    await admin(request(app).put('/api/admin/integrations/builder/orders')).send(draft).expect(200);
+    expect(state.integrations.installed.find(i => i.id === 'orders').approval).toEqual({
+      newOrChanged: 'always'
+    });
+  });
+
+  it('refuses a description longer than the action detail allows, and accepts the longest', async () => {
+    const loaded = await admin(request(app).get('/api/admin/integrations/builder/orders')).expect(
+      200
+    );
+    const withDescription = text => ({
+      ...loaded.body,
+      actions: loaded.body.actions.map(a =>
+        a.name === 'get_order' ? { ...a, description: { en: text } } : a
+      )
+    });
+    const refused = await admin(request(app).put('/api/admin/integrations/builder/orders'))
+      .send(withDescription('x'.repeat(4001)))
+      .expect(400);
+    expect(refused.body.code).toBe('INVALID_DRAFT');
+    expect(
+      refused.body.details.some(d => d.path.join('.').startsWith('actions.0.description'))
+    ).toBe(true);
+    await admin(request(app).put('/api/admin/integrations/builder/orders'))
+      .send(withDescription('x'.repeat(4000)))
+      .expect(200);
   });
 
   it('keeps only the tool ids a migrated tool brought', async () => {
