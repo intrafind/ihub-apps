@@ -234,11 +234,11 @@ export default function RequestableIntegrations({ onMessage }) {
                       entry={{ id: item.definition, name: item.name, icon: item.icon }}
                     />
                     <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-1 text-base font-semibold text-gray-900 dark:text-gray-100">
+                      <h3 className="break-words text-base font-semibold text-gray-900 dark:text-gray-100">
                         {item.name}
                       </h3>
                       {item.publisher && (
-                        <p className="line-clamp-1 text-xs text-gray-600 dark:text-gray-400">
+                        <p className="break-words text-xs text-gray-600 dark:text-gray-400">
                           {t('integrations.requests.publisher', 'by {{publisher}}', {
                             publisher: item.publisher
                           })}
@@ -247,10 +247,7 @@ export default function RequestableIntegrations({ onMessage }) {
                     </div>
                   </div>
                   {item.description && (
-                    <p
-                      className="mt-3 line-clamp-2 text-sm text-gray-600 dark:text-gray-400"
-                      title={item.description}
-                    >
+                    <p className="mt-3 break-words text-sm text-gray-600 dark:text-gray-400">
                       {item.description}
                     </p>
                   )}
