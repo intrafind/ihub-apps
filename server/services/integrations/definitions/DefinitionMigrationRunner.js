@@ -20,7 +20,8 @@ import {
 } from '../../../validators/integrationsConfigSchema.js';
 import {
   definitionIdToDirName,
-  isStrictSemver
+  isStrictSemver,
+  migrationModuleFiles
 } from '../../../validators/integrationDefinitionSchema.js';
 import {
   appBindsInstallation,
@@ -31,9 +32,11 @@ import {
   installationMigrationState,
   migrationsBetween,
   planMigration,
+  planMigrationAsync,
   validateMigrationResult
 } from './migrationPlanner.js';
 import * as backups from './migrationBackups.js';
+import { loadMigrationModules, runMigrationModule } from './migrationModules.js';
 
 /**
  * The definition migration runner (versioning concept §3, phase 2): brings
@@ -75,7 +78,17 @@ import * as backups from './migrationBackups.js';
  * bindings it kept (by key, not the whole app file), the definition's entry
  * of the marketplace manifest and, when the backup holds one, the definition
  * folder. Everything else that changed since stays as it is. Credentials and
- * the credential store are never touched.
+ * the credential store are never touched. A revert (phase 3) is the same
+ * restore, offered in every state and to any backup of the installation, so
+ * an admin can go back to an intermediate version of a multi-step update: the
+ * backup kept at each migration boundary holds that version's definition
+ * folder (fetched from the registry when the update ran) and manifest entry.
+ *
+ * `module` steps (phase 3) run code from the definition folder: every module
+ * of a run is loaded and checked against the code trust of the definition
+ * (`migrationModules.js`) before the first step runs; the planner hands each
+ * one copies without `auth` and takes back only values, actions and the
+ * bindings it was handed (`planMigrationAsync`).
  *
  * Files are read fresh through the configuration store, not from the cache:
  * the startup run happens before the cache exists, in the cluster primary
@@ -88,6 +101,17 @@ import * as backups from './migrationBackups.js';
 const COMPONENT = 'DefinitionMigrationRunner';
 const APPS_NAMESPACE = 'apps';
 const INSTALLATIONS_MANIFEST = 'config/installations.json';
+const REGISTRIES_FILE = 'config/registries.json';
+
+/**
+ * The package of one version of an installed definition, from the registry it
+ * came from (`ContentInstaller.fetchIntegrationVersionPackage`), imported
+ * lazily: the startup run in the cluster primary never needs the marketplace.
+ */
+async function defaultDefinitionVersions(definitionId, version) {
+  const { fetchIntegrationVersionPackage } = await import('../../marketplace/ContentInstaller.js');
+  return fetchIntegrationVersionPackage(definitionId, version);
+}
 export const MIGRATION_LOCK_PREFIX = 'integration-migration:';
 
 /**
@@ -188,19 +212,24 @@ export class DefinitionMigrationRunner {
    * @param {object} [options.store] - the configuration store
    * @param {object|(() => Promise<object>)} [options.locks] - a lock manager, or a function resolving one
    * @param {() => Date} [options.clock]
+   * @param {(definitionId: string, version: string) => Promise<{ files: object, manifestEntry: object }|null>} [options.definitionVersions]
+   *   - the package of one version of an installed definition, for the
+   *   backups kept at migration boundaries (default: from its registry)
    */
   constructor({
     registry = integrationRegistry,
     service = installedIntegrationService,
     store = configStore,
     locks = defaultLocks,
-    clock = () => new Date()
+    clock = () => new Date(),
+    definitionVersions = defaultDefinitionVersions
   } = {}) {
     this.registry = registry;
     this.service = service;
     this.store = store;
     this.locksSource = locks;
     this.clock = clock;
+    this.definitionVersions = definitionVersions;
   }
 
   async _locks() {
@@ -438,6 +467,9 @@ export class DefinitionMigrationRunner {
       if (notify) await this._afterCommit([outcome.unitResult], {});
       throw outcome.error;
     }
+    // Boundary backups fetch from the registry: never while the lock and the
+    // write queue are held.
+    if (outcome.boundarySnapshots) await outcome.boundarySnapshots();
     if (notify && outcome.changed) await this._afterCommit([outcome.unitResult], {});
     return { result: outcome.result, instance: outcome.instance, logEntry: outcome.logEntry };
   }
@@ -481,6 +513,7 @@ export class DefinitionMigrationRunner {
       instance: before,
       definition,
       currentEntry: entry,
+      definitionDir: entry.dir,
       allApps,
       by,
       trigger,
@@ -529,13 +562,18 @@ export class DefinitionMigrationRunner {
       const failed = await this._markCommitFailed(unit, error);
       return { error: this._failureError(failed), changed: true, unitResult: failed };
     }
-    await this._writeBoundarySnapshots(unit, { by, trigger });
+    const boundarySnapshots = await this._boundarySnapshotJob(unit, {
+      by,
+      trigger,
+      source: entry.source
+    });
     return {
       result: 'migrated',
       instance: unit.after,
       logEntry: unit.logEntry,
       changed: true,
-      unitResult: unit
+      unitResult: unit,
+      boundarySnapshots
     };
   }
 
@@ -620,11 +658,13 @@ export class DefinitionMigrationRunner {
     instance,
     definition,
     currentEntry,
+    definitionDir,
     allApps,
     by,
     trigger,
     lease,
-    manifest
+    manifest,
+    moduleTrust = null
   }) {
     const from = instance.definitionVersion;
     const to = definition.version;
@@ -678,18 +718,36 @@ export class DefinitionMigrationRunner {
       trigger,
       manifest
     });
-    const plan = planMigration({
+    const planInput = {
       instance,
       apps: boundApps.map(app => ({ path: app.path, app: app.data })),
       definition,
       from,
       to
-    });
+    };
+    let plan;
     let reason = null;
     let errors = [];
-    if (!plan.ok) {
+    try {
+      const modules = await this._loadModules({
+        definition,
+        currentEntry,
+        definitionDir,
+        selected,
+        moduleTrust
+      });
+      plan = await planMigrationAsync(planInput, {
+        runModule: request => this._runModule(modules, request)
+      });
+    } catch (error) {
+      // A module that may not or cannot run fails the run before any step ran.
+      plan = planMigration(planInput);
+      reason = `${error.message}${error.code ? ` (${error.code})` : ''}`;
+    }
+    // A refused module already failed the run; otherwise collisions, then validation.
+    if (!reason && !plan.ok) {
       reason = describeCollisions(plan.collisions);
-    } else {
+    } else if (!reason) {
       errors = validateMigrationResult({
         before: instance,
         after: plan.instance,
@@ -757,6 +815,81 @@ export class DefinitionMigrationRunner {
   }
 
   /**
+   * Load and check the migration modules the selected migrations name, before
+   * any step runs. Empty without module steps.
+   *
+   * @returns {Promise<Map<string, Function>>}
+   * @throws {Error} a module that may not or cannot run (`migrationModules.js` codes)
+   */
+  async _loadModules({ definition, currentEntry, definitionDir, selected, moduleTrust }) {
+    if (migrationModuleFiles(selected).length === 0) return new Map();
+    const trust = await this._moduleTrust({ definition, currentEntry, moduleTrust });
+    return loadMigrationModules({
+      definitionId: definition.id,
+      dir: definitionDir,
+      migrations: selected,
+      trust
+    });
+  }
+
+  /**
+   * Whether the code of a definition may run (`migrationModules.js`): a
+   * built-in always; a marketplace update by the registry's flag and the
+   * catalog hashes it passes; any other run of an installed definition by its
+   * registry's current `trustCode` and the hashes the installation manifest
+   * recorded (`codeIntegrity`). A definition the marketplace does not know
+   * (copied in by hand) is not trusted.
+   *
+   * @returns {Promise<import('./migrationModules.js').ModuleTrust>}
+   */
+  async _moduleTrust({ definition, currentEntry, moduleTrust }) {
+    if (moduleTrust) {
+      return {
+        builtIn: false,
+        trustCode: moduleTrust.trustCode === true,
+        integrity: moduleTrust.integrity || {},
+        source: 'the registry of this update'
+      };
+    }
+    if (
+      currentEntry?.source === 'shipped' &&
+      currentEntry.definition?.version === definition.version
+    ) {
+      return { builtIn: true, trustCode: true, integrity: {} };
+    }
+    const manifestData = await this.store.readJson(INSTALLATIONS_MANIFEST);
+    const entry = manifestData?.installations?.[manifestKeyOf(definition.id)];
+    if (!entry?.registryId) {
+      return {
+        builtIn: false,
+        trustCode: false,
+        integrity: {},
+        source: 'the definition was not installed from a registry'
+      };
+    }
+    const registries = await this.store.readJson(REGISTRIES_FILE);
+    const registry = (registries?.registries || []).find(r => r.id === entry.registryId);
+    return {
+      builtIn: false,
+      trustCode: registry?.trustCode === true,
+      integrity: entry.codeIntegrity || {},
+      source: `registry "${entry.registryId}"`
+    };
+  }
+
+  /** Run one module step's `up()` with the context the planner built, collecting its log lines. */
+  async _runModule(modules, request) {
+    const up = modules.get(request.file);
+    if (!up) throw new Error(`the module ${request.file} was not loaded`);
+    const logs = [];
+    const log = message => {
+      if (logs.length < 20) logs.push(String(message).slice(0, 400));
+    };
+    const result = await runMigrationModule(up, { ...request.context, log });
+    return { result, logs };
+  }
+
+  /**
    * Back an installation up before a run. The definition folder is copied
    * only for a marketplace definition whose folder still is the version the
    * installation was written for (the pre-update package).
@@ -808,15 +941,65 @@ export class DefinitionMigrationRunner {
     });
   }
 
-  /** Keep the state at every migration boundary a run passed (best effort, after the commit). */
-  async _writeBoundarySnapshots(unit, { by, trigger }) {
+  /**
+   * Read, while the lock is held, the committed state the boundary backups
+   * of `unit` are built from (`integrations.json` and the marketplace
+   * manifest), and return the job that fetches the boundary packages and
+   * writes the backups once the lock and the write queue are released; null
+   * when the run passed no boundary, or when that state cannot be read
+   * (logged). It runs after the commit, so a failure here never turns the
+   * committed migration into an error.
+   *
+   * @returns {Promise<(() => Promise<void>)|null>}
+   */
+  async _boundarySnapshotJob(unit, options) {
+    if (!(unit.plan?.boundaries || []).length) return null;
+    let integrations;
+    let manifest;
+    try {
+      integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
+      manifest = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || { installations: {} };
+    } catch (error) {
+      logger.warn('Could not prepare the backups of the migration boundaries', {
+        component: COMPONENT,
+        instanceId: unit.instanceId,
+        error: error.message
+      });
+      return null;
+    }
+    return () => this._writeBoundarySnapshots(unit, { ...options, integrations, manifest });
+  }
+
+  /**
+   * Keep the state at every migration boundary a run passed (best effort,
+   * after the commit): the installation's entry and its app bindings as they
+   * were at that version and, for a definition installed from a registry, the
+   * definition folder of that version and its marketplace manifest entry, so
+   * the installation can be reverted to it (phase 3). The intermediate
+   * definition never was on disk here, so its package is fetched from the
+   * registry once (`fetchDefinitionVersion`, the catalog's `versions[]`);
+   * without it the backup holds no folder and a revert to it is refused
+   * while another version is loaded.
+   */
+  async _writeBoundarySnapshots(
+    unit,
+    { by, trigger, source, fetchDefinitionVersion, integrations: committed, manifest }
+  ) {
+    const fetchVersion =
+      fetchDefinitionVersion ||
+      (source === 'installed'
+        ? version => this.definitionVersions(unit.definitionId, version)
+        : null);
     // Sequential on purpose: one backup at a time, in boundary order, each failure logged.
     for (const boundary of unit.plan?.boundaries || []) {
       try {
-        const integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
-        integrations.installed = (integrations.installed || []).map(inst =>
-          inst.id === unit.instanceId ? withoutState(boundary.instance) : inst
-        );
+        const integrations = {
+          ...committed,
+          installed: (committed.installed || []).map(inst =>
+            inst.id === unit.instanceId ? withoutState(boundary.instance) : inst
+          )
+        };
+        const pkg = await this._boundaryPackage(unit, boundary.version, fetchVersion, manifest);
         await backups.createSnapshot({
           instanceId: unit.instanceId,
           definitionId: unit.definitionId,
@@ -832,7 +1015,9 @@ export class DefinitionMigrationRunner {
               data: app.app,
               bindingKeys: this._rewritableKeys(app.app, unit.before)
             }))
-            .filter(app => app.bindingKeys.length > 0)
+            .filter(app => app.bindingKeys.length > 0),
+          installations: pkg?.installations || null,
+          definition: pkg?.definition || null
         });
       } catch (error) {
         logger.warn('Could not keep the backup of a migration boundary', {
@@ -842,6 +1027,40 @@ export class DefinitionMigrationRunner {
           error: error.message
         });
       }
+    }
+  }
+
+  /**
+   * The definition folder and manifest entry of one boundary version, for its
+   * backup; null when there is nothing to fetch it from or the fetch failed
+   * (logged).
+   */
+  async _boundaryPackage(unit, version, fetchVersion, manifest) {
+    if (!fetchVersion) return null;
+    try {
+      const pkg = await fetchVersion(version);
+      if (!pkg?.files) return null;
+      const definitionFile = pkg.files['integration.json'];
+      const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
+      if (raw?.id !== unit.definitionId || raw?.version !== version) return null;
+      const entryKey = manifestKeyOf(unit.definitionId);
+      const manifestData = { ...(manifest || { installations: {} }) };
+      manifestData.installations = {
+        ...manifestData.installations,
+        [entryKey]: { ...manifestData.installations?.[entryKey], ...pkg.manifestEntry, version }
+      };
+      return {
+        installations: { data: manifestData, entryKey },
+        definition: { folder: definitionIdToDirName(unit.definitionId), files: pkg.files, version }
+      };
+    } catch (error) {
+      logger.warn('Could not fetch the definition of a migration boundary for its backup', {
+        component: COMPONENT,
+        instanceId: unit.instanceId,
+        version,
+        error: error.message
+      });
+      return null;
     }
   }
 
@@ -1293,9 +1512,42 @@ export class DefinitionMigrationRunner {
    *   `BACKUP_NOT_FOUND`, `DEFINITION_MISSING`
    */
   async restore(instanceId, { backup, by = 'admin', notify = true } = {}) {
+    return this._restoreOrRevert(instanceId, { backup, by, notify, mode: 'restore' });
+  }
+
+  /**
+   * Revert an installation to a backup the admin picked (`_revert`, phase 3):
+   * any backup of the installation (not a journal), in any state, including
+   * one kept at a migration boundary of a multi-step update. The definition
+   * folder, the installation's entry in `integrations.json`, the binding keys
+   * of its apps and the definition's entry of the marketplace manifest go back
+   * together, merged into the files as they are now, under the installation's
+   * lock and through the staged commit (a failure rolls all four back). A
+   * backup whose version is not the loaded definition's must hold the
+   * definition folder of its version, or the revert is refused: the values
+   * of one version are never put under another version's definition. Other
+   * installations of the definition follow a changed folder like after a
+   * restore (`reconcileDowngrades`).
+   *
+   * @param {string} instanceId
+   * @param {{ backup: string, by?: string, notify?: boolean }} options
+   * @throws {IntegrationError} `NOT_FOUND`, `MIGRATION_LOCKED`, `BACKUP_REQUIRED`,
+   *   `BACKUP_NOT_FOUND`, `BACKUP_INVALID`, `REVERT_DEFINITION_MISSING`, `DEFINITION_MISSING`
+   */
+  async revert(instanceId, { backup, by = 'admin', notify = true } = {}) {
+    if (!backup) {
+      throw new IntegrationError('A revert names the backup to go back to', {
+        status: 400,
+        code: 'BACKUP_REQUIRED'
+      });
+    }
+    return this._restoreOrRevert(instanceId, { backup, by, notify, mode: 'revert' });
+  }
+
+  async _restoreOrRevert(instanceId, { backup, by, notify, mode }) {
     await this.registry.ensureLoaded();
     const outcome = await this._withInstanceLock(instanceId, lease =>
-      this.service._serialize(() => this._restoreLocked(instanceId, { backup, by, lease }))
+      this.service._serialize(() => this._restoreLocked(instanceId, { backup, by, lease, mode }))
     );
     if (notify)
       await this._afterCommit([outcome.unit], { definitionChanged: outcome.definitionChanged });
@@ -1309,9 +1561,9 @@ export class DefinitionMigrationRunner {
     };
   }
 
-  async _restoreLocked(instanceId, { backup, by, lease, automatic = false }) {
+  async _restoreLocked(instanceId, { backup, by, lease, mode = 'restore' }) {
     await this._recoverLocked(instanceId);
-    const { instance, entry, state } = await this._restorable(instanceId, automatic);
+    const { instance, entry, state } = await this._restorable(instanceId, mode);
     const snapshot = await this._backupToRestore(instanceId, { backup, state, entry });
     const keptEntry = await this._keptEntryOf(snapshot, instanceId);
     const representedVersion = snapshot.manifest.representedVersion;
@@ -1324,7 +1576,17 @@ export class DefinitionMigrationRunner {
         { status: 422, code: 'DEFINITION_MISSING' }
       );
     }
-    const trigger = automatic ? 'downgrade' : 'restore';
+    if (
+      mode === 'revert' &&
+      !restoreDefinition &&
+      entry?.definition?.version !== representedVersion
+    ) {
+      throw new IntegrationError(
+        `Backup "${snapshot.id}" holds the installation at v${representedVersion} but not the definition of that version, and v${entry?.definition?.version} is loaded; the values of one version are never put under another version's definition`,
+        { status: 422, code: 'REVERT_DEFINITION_MISSING' }
+      );
+    }
+    const trigger = { automatic: 'downgrade', revert: 'revert' }[mode] || 'restore';
     const journal = await this._restoreJournal({
       instance,
       entry,
@@ -1341,11 +1603,11 @@ export class DefinitionMigrationRunner {
       at: now,
       by,
       trigger,
-      result: 'restored',
+      result: mode === 'revert' ? 'reverted' : 'restored',
       migrations: [],
       steps: [],
       warnings: [],
-      reason: `restored backup ${snapshot.id}${restoreDefinition ? ' with its definition folder' : ''}`,
+      reason: `${mode === 'revert' ? 'reverted to' : 'restored'} backup ${snapshot.id}${restoreDefinition ? ' with its definition folder' : ''}`,
       backup: snapshot.id
     };
     const after = {
@@ -1371,7 +1633,7 @@ export class DefinitionMigrationRunner {
       logEntry
     };
     try {
-      await this._commit({ units: [unit], definitionSwap, manifest, trigger: 'restore' });
+      await this._commit({ units: [unit], definitionSwap, manifest, trigger });
     } catch (error) {
       if (definitionSwap) await this.registry.discardStaged(definitionSwap).catch(() => {});
       throw error;
@@ -1382,12 +1644,14 @@ export class DefinitionMigrationRunner {
   /**
    * The installation a restore works on, its definition entry and its
    * migration state. An admin restores only a failed migration or an
-   * installation that needs a review; an automatic restore (a downgrade)
-   * any.
+   * installation that needs a review; a revert and an automatic restore (a
+   * downgrade) work in any state.
    *
+   * @param {string} instanceId
+   * @param {'restore'|'revert'|'automatic'} mode
    * @throws {IntegrationError} 404 `NOT_FOUND`, 409 `RESTORE_NOT_APPLICABLE`
    */
-  async _restorable(instanceId, automatic) {
+  async _restorable(instanceId, mode) {
     const config = await this._readIntegrations();
     const instance = config.installed.find(inst => inst.id === instanceId);
     if (!instance) {
@@ -1395,7 +1659,7 @@ export class DefinitionMigrationRunner {
     }
     const entry = this.registry.get(instance.definition);
     const state = installationMigrationState(instance, entry);
-    if (!automatic && !['migrationFailed', 'needsReview'].includes(state.status)) {
+    if (mode === 'restore' && !['migrationFailed', 'needsReview'].includes(state.status)) {
       throw new IntegrationError(
         `"${instanceId}" has nothing to restore: a backup is restored for a failed migration or an installation that needs a review`,
         { status: 409, code: 'RESTORE_NOT_APPLICABLE' }
@@ -1639,7 +1903,7 @@ export class DefinitionMigrationRunner {
               backup: match.id,
               by,
               lease,
-              automatic: true
+              mode: 'automatic'
             });
           }),
         lockOptions
@@ -1678,6 +1942,11 @@ export class DefinitionMigrationRunner {
    * @param {object} input.manifestPatch - fields of the manifest entry to set
    * @param {string} [input.by]
    * @param {boolean} [input.notify=true]
+   * @param {{ trustCode: boolean, integrity: Record<string, string> }} [input.moduleTrust]
+   *   - whether the package's migration modules may run: the registry's
+   *   `trustCode` and the catalog's hashes of the package (default: not trusted)
+   * @param {(version: string) => Promise<{ files: object, manifestEntry: object }|null>} [input.fetchDefinitionVersion]
+   *   - the package of an intermediate version, for the boundary backups
    * @returns {Promise<{ installations: Array<object> }>}
    */
   async applyDefinitionUpdate({
@@ -1686,7 +1955,9 @@ export class DefinitionMigrationRunner {
     manifestKey,
     manifestPatch,
     by = 'admin',
-    notify = true
+    notify = true,
+    moduleTrust = { trustCode: false, integrity: {} },
+    fetchDefinitionVersion = null
   }) {
     await this.registry.ensureLoaded();
     const staged = await this.registry.stageInstalled(definitionId, files);
@@ -1708,10 +1979,22 @@ export class DefinitionMigrationRunner {
       }
       const outcome = await this._withInstanceLocks(ids, leases =>
         this.service._serialize(() =>
-          this._updateLocked({ definitionId, staged, leases, manifestKey, manifestPatch, by })
+          this._updateLocked({
+            definitionId,
+            staged,
+            leases,
+            manifestKey,
+            manifestPatch,
+            by,
+            moduleTrust,
+            fetchDefinitionVersion
+          })
         )
       );
       committed = true;
+      // Boundary backups fetch from the registry: after the locks and the
+      // write queue are released, one unit at a time.
+      for (const job of outcome.boundarySnapshots || []) await job();
       if (notify) {
         await this._afterCommit(outcome.units, { definitionChanged: true, definitionId });
       }
@@ -1721,7 +2004,16 @@ export class DefinitionMigrationRunner {
     }
   }
 
-  async _updateLocked({ definitionId, staged, leases, manifestKey, manifestPatch, by }) {
+  async _updateLocked({
+    definitionId,
+    staged,
+    leases,
+    manifestKey,
+    manifestPatch,
+    by,
+    moduleTrust,
+    fetchDefinitionVersion
+  }) {
     // Sequential on purpose: one installation at a time, in lock order.
     for (const id of leases.keys()) await this._recoverLocked(id);
     const config = await this._readIntegrations();
@@ -1758,11 +2050,13 @@ export class DefinitionMigrationRunner {
         instance,
         definition,
         currentEntry,
+        definitionDir: staged.staging,
         allApps,
         by,
         trigger: 'marketplace',
         lease,
-        manifest: true
+        manifest: true,
+        moduleTrust
       });
       units.push(unit);
       results.push({
@@ -1791,11 +2085,20 @@ export class DefinitionMigrationRunner {
       manifest: { entryKey: manifestKey, patch: manifestPatch },
       trigger: 'marketplace'
     });
-    // Sequential on purpose: boundary backups are written one unit at a time.
+    // What the boundary backups need from the committed state is read here;
+    // the registry fetches and the writes run after the locks are released.
+    const boundarySnapshots = [];
     for (const unit of units) {
-      if (!unit.failed) await this._writeBoundarySnapshots(unit, { by, trigger: 'marketplace' });
+      if (unit.failed) continue;
+      const job = await this._boundarySnapshotJob(unit, {
+        by,
+        trigger: 'marketplace',
+        source: 'installed',
+        fetchDefinitionVersion
+      });
+      if (job) boundarySnapshots.push(job);
     }
-    return { units, results };
+    return { units, results, boundarySnapshots };
   }
 
   // --- After a commit ------------------------------------------------------
