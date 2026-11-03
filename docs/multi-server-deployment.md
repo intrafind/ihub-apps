@@ -155,7 +155,7 @@ following are written at runtime and must therefore be on shared storage:
 | `contents/data/shortlinks.json`   | `shortLinkManager.js`                     | Shared chat / short link entries                     |
 | `contents/data/workflow-state/`   | Workflow `StateManager`                   | Optional persistence for in-flight workflow runs     |
 | `contents/uploads/assets/`        | Admin UI asset upload                     | Logos, icons referenced from the UI                  |
-| `contents/data/chat-files/` and its blob folder | Chat, task and API file uploads (filesystem storage provider) | Stored files; the server-wide quota counter lives there too, so all hosts count against one total (see [Chat files](chat-files.md)) |
+| `chat-files` storage namespace (under `contents/data/` on the filesystem provider) | Chat, task and API file uploads | Stored files; the server-wide quota counter lives there too, so all hosts count against one total (see [Chat files](chat-files.md)) |
 | `contents/.encryption-key`        | First-time setup                          | AES key for `ENC[...]` secrets — must be identical   |
 | `contents/.migration-history.json`| Migration runner on startup               | Tracks applied versions                              |
 | `contents/.migration-lock`        | Migration runner on startup               | Filesystem advisory lock so only one host migrates   |

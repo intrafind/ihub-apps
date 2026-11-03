@@ -796,7 +796,7 @@ stored answer now carries the same thing as `activity`:
   toolActivity: { items: [{ kind: 'search', scope: 'web', query, status, sources, details, durationMs, … }] },
   searchSummary: { queries, totalHits, rounds, applications, sources },  // iAssistant
   activeSkills: [{ name, description }],
-  answerSource: { sources: ['websearch', 'ifinder'] },                    // the badge (`['llm']`: the model's own knowledge)
+  answerSource: { sources: ['websearch', 'ifinder'] },                    // the badge (`['llm']`: the model's own knowledge; `['integration']`: "Based on connected systems", for MCP servers, remote agents and installed integrations)
   workflowSteps: [{ nodeName, nodeType, status }],
   workflowResult: { status, executionId, workflowName },
   outputFormat: 'markdown'
@@ -810,6 +810,10 @@ one (`services/chat/runActivity.js` taps `RunStreamEmitter.emit`, which every
 frame passes whether or not a browser is connected). The reopened answer
 therefore shows what the live one showed, in the same components.
 
+- **Skills show once.** A skill activated several times in an answer (started with `/name`,
+  loaded again by the model, loaded in several rounds) appears once above the answer; the thought
+  chain lists every activation as a **Used skill** row, saying whether the user started it or the
+  model loaded it.
 - **Recorded:** the turns of a persisted chat, and the workflow runs a tool
   started inside them. The answer text, reasoning and pictures are not — the
   transcript and the [artifact store](artifacts.md) hold those.
