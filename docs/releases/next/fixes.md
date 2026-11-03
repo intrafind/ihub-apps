@@ -1,5 +1,16 @@
 # Fixes — Unreleased
 
+## Shared Chats and Files Get a Descriptive Title
+
+The title of a shared link — in the browser tab, the link preview, **Shared with me** and your list
+of links — is now a name people recognise instead of an empty or technical one.
+
+- A shared **chat** is named after the chat; a chat that was never titled takes its first question.
+- A shared **file** is named after the conversation and the file ("Bakery landing page – page.html"),
+  not just `page.html`. A file without a name takes the chat's name.
+
+Links created before this version keep the title they were given.
+
 ## Integration Action Details Are Readable and Say What They Are For
 
 The details panel of an integration action (opened with **Details** on the integration's page)

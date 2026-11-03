@@ -220,6 +220,10 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
   so it works for a visitor who has no account, and carries the app's name and
   icon, the chat title, a _Read-only_ badge and, for a public link, a banner
   saying so.
+- **The title** of a link — the browser tab, the link preview and the lists —
+  is the chat's title, or the first question when the chat was never titled.
+  A single shared file is titled `<chat title> – <file name>`. The title is
+  copied when the link is created; renaming the chat later does not change it.
 - **Shared with me** on `/chats` lists the `users` shares addressed to the
   signed-in viewer, with a _New_ badge until they open one.
 
