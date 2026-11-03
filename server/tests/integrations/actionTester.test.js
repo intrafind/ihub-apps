@@ -23,6 +23,7 @@ const { recordOutbound, withOutboundRecording, MAX_RECORDED_REQUESTS } =
 const {
   argumentProblems,
   auditArgs,
+  resultReportsFailure,
   testTimeoutMs,
   DEFAULT_TEST_TIMEOUT_MS,
   MIN_TEST_TIMEOUT_MS,
@@ -185,6 +186,26 @@ describe('test arguments and confirmation', () => {
     for (const odd of ['600000', 1.5e3 + 0.5, Number.NaN, Infinity, -5, {}]) {
       assert.equal(testTimeoutMs(odd), DEFAULT_TEST_TIMEOUT_MS, String(odd));
     }
+  });
+
+  it('counts the "connect first" result as a failure, not a success', () => {
+    // error: true is the adapters' own failure …
+    assert.equal(resultReportsFailure({ error: true, status: 500, message: 'boom' }), true);
+    // … and so is the structured result an integration returns, without
+    // calling the vendor, when the connection the test runs with is missing.
+    for (const reason of ['not_connected', 'expired', 'insufficient_scope']) {
+      assert.equal(
+        resultReportsFailure({ error: 'INTEGRATION_AUTH_REQUIRED', integration: 'jira', reason }),
+        true,
+        reason
+      );
+    }
+    // Results that carry data, or a different error string, are not changed.
+    assert.equal(resultReportsFailure({ saved: true }), false);
+    assert.equal(resultReportsFailure({ error: false, items: [] }), false);
+    assert.equal(resultReportsFailure({ error: 'SOMETHING_ELSE' }), false);
+    assert.equal(resultReportsFailure('text'), false);
+    assert.equal(resultReportsFailure(null), false);
   });
 
   it('records arguments for the audit log without secrets, bounded', () => {
