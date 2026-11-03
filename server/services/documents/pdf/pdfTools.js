@@ -28,6 +28,11 @@ export function specFromToolArgs(args) {
     title: args.title,
     subtitle: args.subtitle,
     author: args.author,
+    // The cover page and the {date} placeholders share one date, today by default.
+    date: args.date || new Date().toISOString().slice(0, 10),
+    subject: args.subject,
+    keywords: args.keywords,
+    showTitle: args.showTitle,
     language: args.language,
     markdown: args.markdown,
     blocks,

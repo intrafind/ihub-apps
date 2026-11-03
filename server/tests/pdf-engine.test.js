@@ -432,12 +432,112 @@ describe('rendering', () => {
   it('accepts blocks, styles and images given as JSON strings', () => {
     const spec = specFromToolArgs({
       title: 't',
+      showTitle: false,
+      date: '2026-10-15',
+      accentColor: '#0f766e',
       blocks: '[{"text":"x","style":"badge"}]',
       styles: '{"badge":{"bold":true}}'
     });
     assert.deepEqual(spec.blocks, [{ text: 'x', style: 'badge' }]);
     assert.deepEqual(spec.styles, { badge: { bold: true } });
+    assert.equal(spec.showTitle, false);
+    assert.equal(spec.date, '2026-10-15');
+    assert.equal(spec.themeOptions.accentColor, '#0f766e');
     assert.throws(() => specFromToolArgs({ title: 't', blocks: '[' }), DocumentGenerationError);
+  });
+
+  it('strips a duplicate opening H1 from the first markdown block when title is shown on top', () => {
+    const { docDefinition } = buildDocument({
+      title: 'Quarterly Review',
+      blocks: [{ markdown: '# Quarterly Review\n\nFirst paragraph.' }]
+    });
+    const texts = JSON.stringify(docDefinition.content);
+    const occurrences = [...texts.matchAll(/Quarterly Review/g)].length;
+    assert.equal(occurrences, 1);
+  });
+
+  it('renders printable and pre-filled { form } blocks with text, checkbox, textarea and signature fields', () => {
+    const { docDefinition, warnings } = buildDocument({
+      title: 'Access Request Form',
+      blocks: [
+        {
+          form: {
+            title: 'Applicant Details',
+            columns: 2,
+            fields: [
+              { label: 'Full Name', value: 'Jane Doe', required: true },
+              { label: 'Employee ID', placeholder: 'EMP-0000' },
+              {
+                label: 'Environments',
+                type: 'checkbox',
+                options: [
+                  { label: 'Staging', checked: true },
+                  { label: 'Production', checked: false }
+                ],
+                span: 2
+              },
+              {
+                label: 'Business Justification',
+                type: 'textarea',
+                rows: 3,
+                value: 'Release verification',
+                span: 2
+              },
+              { label: 'Applicant Signature', type: 'signature', value: 'J. Doe' },
+              { label: 'Manager Signature', type: 'signature' }
+            ]
+          }
+        }
+      ]
+    });
+    assert.deepEqual(warnings, []);
+    const serialized = JSON.stringify(docDefinition.content);
+    assert.match(serialized, /Applicant Details/);
+    assert.match(serialized, /Jane Doe/);
+    assert.match(serialized, /EMP-0000/);
+    assert.match(serialized, /\u2611 Staging/);
+    assert.match(serialized, /\u2610 Production/);
+    assert.match(serialized, /Release verification/);
+  });
+
+  it('gives a form field that spans every column a row of its own and labels signatures by language', () => {
+    const fields = [
+      { label: 'First', value: 'a' },
+      { label: 'Wide one', span: 2, value: 'b' },
+      { label: 'Wide two', span: 2, value: 'c' },
+      { label: 'Left', value: 'd' },
+      { label: 'Right', value: 'e' },
+      { label: 'Odd one out', value: 'f' },
+      { type: 'signature' }
+    ];
+    const build = language =>
+      buildDocument({ title: 'F', language, blocks: [{ form: { columns: 2, fields } }] })
+        .docDefinition.content;
+    const findStacks = (node, found = []) => {
+      if (Array.isArray(node)) node.forEach(child => findStacks(child, found));
+      else if (node && typeof node === 'object') {
+        if (Array.isArray(node.stack) && node.stack.some(child => child?.columns)) {
+          found.push(node.stack);
+        }
+        Object.values(node).forEach(child => findStacks(child, found));
+      }
+      return found;
+    };
+    const [formStack] = findStacks(build('en'));
+    // [First] alone (the next field spans), Wide one, Wide two, [Left, Right], [Odd one out, signature].
+    assert.equal(formStack.length, 5);
+    assert.deepEqual(
+      formStack.map(entry => (entry.columns ? entry.columns.length : 'full')),
+      [2, 'full', 'full', 2, 2]
+    );
+    assert.match(JSON.stringify(build('en')), /"Signature"/);
+    assert.match(JSON.stringify(build('de')), /"Unterschrift"/);
+  });
+
+  it('gives the cover page and the {date} placeholders one date, today by default', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    assert.equal(specFromToolArgs({ title: 't', coverPage: true }).date, today);
+    assert.equal(specFromToolArgs({ title: 't', date: '2026-10-15' }).date, '2026-10-15');
   });
 
   it('declares blocks, styles and images as JSON text', () => {

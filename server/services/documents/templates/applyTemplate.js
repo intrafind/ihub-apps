@@ -212,4 +212,34 @@ export function applyTemplateToPptxSpec(spec, bundle) {
   };
 }
 
+/**
+ * Apply a template to an Excel workbook spec: brand colours, body font and
+ * company metadata.
+ *
+ * @param {Object} spec - See `../xlsx/buildXlsx.js`.
+ * @param {{ template: Object, assets: Object } | null} bundle
+ * @returns {{ spec: Object, assets: Object|undefined, templateId: string|null }}
+ */
+export function applyTemplateToXlsxSpec(spec, bundle) {
+  if (!bundle) return { spec, assets: undefined, templateId: null };
+  const { template } = bundle;
+  const { brand } = template;
+  return {
+    templateId: template.id,
+    spec: {
+      ...spec,
+      author: spec.author || brand.companyName || undefined,
+      company: brand.companyName || '',
+      brand: {
+        ...spec.brand,
+        primaryColor: pick(brand.primaryColor, spec.brand?.primaryColor),
+        accentColor: pick(brand.accentColor, spec.brand?.accentColor),
+        textColor: brand.textColor,
+        font: officeFontName(pick(brand.bodyFont, spec.brand?.font), undefined)
+      }
+    },
+    assets: undefined
+  };
+}
+
 export { dataUriOf, logoSettings, pick, withCompany };

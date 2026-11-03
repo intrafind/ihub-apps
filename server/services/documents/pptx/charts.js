@@ -117,6 +117,9 @@ function chartOptions(chart, rect, { colors, font }) {
     ...(chart.type === 'bar' ? { barDir: 'bar' } : {}),
     ...(chart.type === 'column' ? { barDir: 'col' } : {}),
     ...(chart.stacked ? { barGrouping: 'stacked' } : {}),
+    ...(chart.stacked && chart.showValues && (chart.type === 'bar' || chart.type === 'column')
+      ? { dataLabelPosition: 'ctr' }
+      : {}),
     ...(chart.type === 'line'
       ? { lineSize: 2.5, lineDataSymbol: 'circle', lineDataSymbolSize: 7 }
       : {})

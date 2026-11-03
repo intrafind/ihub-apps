@@ -16,6 +16,7 @@ Unknown keys or invalid values are dropped, and each drop is reported in the too
 | `ul` / `ol` | array of blocks                                                                 | Bullet or numbered list. Also `type` (`disc`, `circle`, `square`, `none`, `decimal`, `lower-alpha`, `upper-alpha`, `lower-roman`, `upper-roman`), `start`, `reversed` and `markerColor`. An item may set `listType`.      |
 | `callout`   | `{ tone, title, markdown \| text \| content }`                                  | Shaded box with a coloured left edge. `tone` is one of `info`, `success`, `warning`, `danger`, `note`. `fillColor` and `borderColor` override the tone's colours.                                                         |
 | `box`       | `{ markdown \| text \| content, fillColor, borderColor, borderWidth, padding }` | Bordered container; `content` is any block.                                                                                                                                                                               |
+| `form`      | `{ title, columns, fields }` or array of field objects                          | Structured printable or pre-filled form grid (`text`, `textarea`, `checkbox`, `signature`). See [Forms](#forms).                                                                                                          |
 | `image`     | data URI, or a name from `images`                                               | PNG or JPEG only. Sized to its natural size, never beyond the page. `width`, `height` or `fit: [w, h]` set the size; `alignment` places it. Inside `columns`, always set `width`: an image does not shrink to its column. |
 | `svg`       | SVG markup                                                                      | Up to 500 KB. Give the root `width`/`height` (points) or a `viewBox`. `width` or `fit` on the block scale it. No scripts, `foreignObject` or external images.                                                             |
 | `canvas`    | array of shapes                                                                 | See [Canvas](#canvas).                                                                                                                                                                                                    |
@@ -116,6 +117,50 @@ Shape properties:
 - Other: `closePath`, `linearGradient` (a list of colours).
 
 Use canvas for rules, colour bands and simple decoration; use SVG for charts.
+
+## Forms
+
+Use `form` to render clean printable or pre-filled forms without hand-building nested tables:
+
+```json
+{
+  "form": {
+    "title": "Employee Onboarding & Access Request",
+    "columns": 2,
+    "fields": [
+      { "label": "Employee Name", "value": "Alex Rivera", "required": true },
+      { "label": "Employee ID", "placeholder": "EMP-XXXX" },
+      {
+        "label": "Environment Access",
+        "type": "checkbox",
+        "options": [
+          { "label": "Production", "checked": false },
+          { "label": "Staging", "checked": true },
+          { "label": "Development", "checked": true }
+        ],
+        "span": 2
+      },
+      {
+        "label": "Business Justification",
+        "type": "textarea",
+        "rows": 3,
+        "value": "Required for Q4 release verification.",
+        "span": 2
+      },
+      { "label": "Employee Signature", "type": "signature", "value": "A. Rivera" },
+      { "label": "Manager Signature", "type": "signature" }
+    ]
+  }
+}
+```
+
+Field properties:
+
+- `label`: field label printed above the input box (or beside a single checkbox).
+- `type`: `"text"` (default), `"textarea"` (multi-line box; `rows` sets height from `2` to `12`), `"checkbox"` (single checkbox via `checked: true|false`, or multiple via `options: [{ label, checked }]`), or `"signature"` (taller signature box).
+- `value`: pre-filled text value (or `placeholder` for muted hint text in blank forms).
+- `required`: `true` appends a red `*` to the label.
+- `span`: set to `columns` (`2` or `3`) when a field inside a multi-column form should span the full row width.
 
 ## Named styles and images
 

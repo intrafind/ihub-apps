@@ -4,6 +4,7 @@
 import {
   ContentTypes,
   IMAGE_CONTENT_TYPES,
+  INVALID_XML_CHARS,
   NS,
   REL_TYPES,
   childElements,
@@ -36,6 +37,7 @@ import {
   PML_NAMESPACES,
   XML_HEAD,
   markdownToSlideText,
+  metricCards,
   paragraphsXml,
   pictureShape,
   placeholderShape,
@@ -151,11 +153,30 @@ function sanitizeImage(image, ctx, slideNumber) {
   };
 }
 
+function sanitizeMetrics(metrics) {
+  if (!Array.isArray(metrics)) return null;
+  const clean = (val, max) =>
+    typeof val === 'string' || typeof val === 'number'
+      ? String(val).replace(INVALID_XML_CHARS, '').trim().slice(0, max)
+      : '';
+  const items = metrics
+    .filter(m => m && typeof m === 'object')
+    .map(m => ({
+      value: clean(m.value, 40),
+      label: clean(m.label, 80),
+      note: clean(m.note ?? m.change ?? m.subtitle, 100)
+    }))
+    .filter(m => m.value && m.label)
+    .slice(0, 4);
+  return items.length ? items : null;
+}
+
 function sanitizeBlock(block, ctx, slideNumber) {
   if (!block || typeof block !== 'object') return null;
   return {
     heading: text(block.heading, DECK_LIMITS.maxTitleChars),
     text: text(block.text ?? block.markdown, DECK_LIMITS.maxTextChars),
+    metrics: sanitizeMetrics(block.metrics),
     table: sanitizeTable(block.table, ctx.warnings, slideNumber),
     chart: sanitizeChart(block.chart, ctx.warnings),
     image: sanitizeImage(block.image, ctx, slideNumber)
@@ -185,7 +206,9 @@ export function sanitizeSlides(slides, ctx) {
     const left = sanitizeBlock(source.left, ctx, number);
     const right = sanitizeBlock(source.right, ctx, number);
     const requested = LAYOUT_ALIASES[String(source.layout || '').toLowerCase()];
-    const hasBody = Boolean(content.text || content.table || content.chart || content.image);
+    const hasBody = Boolean(
+      content.text || content.metrics || content.table || content.chart || content.image
+    );
     let kind = requested;
     if (!kind) {
       if (left || right) kind = 'twoColumn';
@@ -431,7 +454,19 @@ class SlideBuilder {
     this.shapes.push(`<!--ihub-chart-${request}-->`);
   }
 
-  /** One block of content (text and/or a visual) in a rectangle. */
+  metrics(metrics, rect) {
+    this.shapes.push(
+      ...metricCards({
+        nextId: () => this.id(),
+        rect,
+        metrics,
+        lang: this.ctx.lang,
+        accent: this.ctx.accent
+      })
+    );
+  }
+
+  /** One block of content (text, KPI metrics and/or a visual) in a rectangle. */
   block(block, rect, { ph } = {}) {
     if (!block) return;
     const { paragraphs, table: markdownTable } = markdownToSlideText(block.text);
@@ -441,18 +476,35 @@ class SlideBuilder {
     if (block.heading) {
       paragraphs.unshift({ runs: [{ text: block.heading, bold: true }], heading: true });
     }
-    let visualRect = rect;
+    let bodyRect = rect;
+    if (block.metrics?.length) {
+      if (!paragraphs.length && !visual) {
+        this.metrics(block.metrics, rect);
+        return;
+      }
+      const bandHeight = Math.min(Math.round(1.35 * EMU_PER_INCH), Math.round(rect.cy * 0.34));
+      const gap = Math.round(0.2 * EMU_PER_INCH);
+      this.metrics(block.metrics, { x: rect.x, y: rect.y, cx: rect.cx, cy: bandHeight });
+      bodyRect = {
+        x: rect.x,
+        y: rect.y + bandHeight + gap,
+        cx: rect.cx,
+        cy: Math.max(1, rect.cy - bandHeight - gap)
+      };
+    }
+    let visualRect = bodyRect;
     if (paragraphs.length && visual) {
       // Text beside the visual: a third of the width for short text, more
       // for longer text.
       const share = textLength(paragraphs) > 300 ? 0.45 : 0.36;
-      const [textRect, otherRect] = splitHorizontally(rect, share, 0.3 * EMU_PER_INCH);
+      const [textRect, otherRect] = splitHorizontally(bodyRect, share, 0.3 * EMU_PER_INCH);
       if (ph) this.placeholder(ph, paragraphs, { rect: textRect });
       else this.textBox(textRect, paragraphs);
       visualRect = otherRect;
     } else if (paragraphs.length) {
-      if (ph) this.placeholder(ph, paragraphs, { rect: ph.rect === rect ? undefined : rect });
-      else this.textBox(rect, paragraphs);
+      if (ph)
+        this.placeholder(ph, paragraphs, { rect: ph.rect === bodyRect ? undefined : bodyRect });
+      else this.textBox(bodyRect, paragraphs);
       return;
     }
     if (visual === 'chart') this.chart(block.chart, visualRect);
@@ -531,6 +583,7 @@ function buildSlide(slide, number, ctx, spec) {
   } else if (slide.kind === 'twoColumn') {
     const left = slide.left || {
       text: slide.text,
+      metrics: slide.metrics,
       table: slide.table,
       chart: slide.chart,
       image: slide.image
@@ -559,7 +612,14 @@ function buildSlide(slide, number, ctx, spec) {
     }
     builder.block(left, rects[0], { ph: phs[0] });
     builder.block(right, rects[1], { ph: phs[1] });
-  } else if (slide.kind !== 'blank' || slide.text || slide.table || slide.chart || slide.image) {
+  } else if (
+    slide.kind !== 'blank' ||
+    slide.text ||
+    slide.metrics ||
+    slide.table ||
+    slide.chart ||
+    slide.image
+  ) {
     const area = contentArea(layout, ctx.layouts, ctx.slideSize);
     const ph = textPlaceholders.find(p => p.rect === area) || null;
     builder.block(slide, area, { ph });

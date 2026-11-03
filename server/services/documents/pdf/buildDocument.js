@@ -484,6 +484,8 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
         title: titleOnTop ? str(spec.title) : undefined
       })
     );
+  } else if (titleOnTop) {
+    ctx.stripOpeningTitle = str(spec.title);
   }
   if (spec.blocks !== undefined) body.push(...sanitizeBlocks(spec.blocks, ctx));
   if (!body.length) {

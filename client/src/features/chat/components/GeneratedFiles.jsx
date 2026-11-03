@@ -54,6 +54,9 @@ function GeneratedFileCard({ file, chatId }) {
     file.slides
       ? t('chatMessage.generatedFiles.slides', '{{count}} slides', { count: file.slides })
       : null,
+    file.sheets
+      ? t('chatMessage.generatedFiles.sheets', '{{count}} sheets', { count: file.sheets })
+      : null,
     formatBytes(file.bytes)
   ]
     .filter(Boolean)

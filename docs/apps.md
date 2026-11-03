@@ -1147,13 +1147,15 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | `skillSettings.maxActiveSkills` | Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out                                                                                                                                                                                                                                                                                           |
 | `skillSettings.allowPersonal`   | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Applies only when `skillSettings.enabled` is `true`. Set `false` to allow only the global skills listed in `skills`                                                                                                                                                                                                                                                                                                                                                       |
 
-**Documents in the corporate design:** the system skills `pdf`, `docx` and `pptx` create PDF, Word and PowerPoint files. Set `documentTemplate` to fix the [document template](document-templates.md) they use in this app:
+**Documents in the corporate design:** the system skills `pdf`, `docx` and `pptx` create PDF, Word and PowerPoint files, and `xlsx` creates Excel workbooks. Set `documentTemplate` to fix the [document template](document-templates.md) they use in this app:
 
 ```json
-"skills": ["pdf", "docx", "pptx"],
+"skills": ["pdf", "docx", "pptx", "xlsx"],
 "skillSettings": { "enabled": true },
 "documentTemplate": "acme"
 ```
+
+**Interactive pages and graphics:** the system skill `web-artifacts` lets the model create a self-contained interactive HTML page or a standalone SVG. The Artifacts panel shows it in a sandboxed preview with no network access; the corporate colours and font reach the page as the CSS variables `--brand-primary`, `--brand-accent` and `--brand-font`.
 
 A skill is only ever loaded for an app that sets `skillSettings.enabled: true`. A global skill is loaded then when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; an app with skills enabled offers them unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
 

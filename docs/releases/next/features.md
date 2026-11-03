@@ -771,3 +771,27 @@ the action ("Search people") and the integration, MCP server or remote agent it 
 - Tools without a title (custom tools) keep showing their name as before.
 - A search in a connected system — a Jira ticket search, an MCP server's search — is listed as a
   call to that system, with its query among the arguments, no longer as a web search with a globe.
+
+## Excel Workbooks and Interactive Web Artifacts from Chat, with Richer Previews
+
+Two new system skills let a chat produce more than documents. Admins enable them per app like the
+existing document skills, by adding `xlsx` and `web-artifacts` to the app's `skills`.
+
+- **Excel workbooks (`xlsx` skill):** the model creates multi-sheet `.xlsx` files with the
+  corporate design, a frozen header row, filters, fitted column widths, number, percent and date
+  formats, and live formulas that Excel calculates on open. A formula that reaches outside the
+  workbook (for example `WEBSERVICE` or `HYPERLINK`) is written as plain text, never as a live
+  formula.
+- **Web artifacts (`web-artifacts` skill):** the model creates a self-contained interactive
+  `.html` page (dashboard, calculator, simulator) or a standalone `.svg`, with the corporate
+  colours and font available as `--brand-primary`, `--brand-accent` and `--brand-font`.
+- **Previews in the Artifacts panel:** PDFs, HTML pages, SVG graphics, CSV/TSV tables and Jupyter
+  notebooks open in the panel, with a **Preview | Code** switch where both make sense. An HTML
+  artifact runs sandboxed and cannot contact other sites.
+- **PDF and Word:** `create_pdf` can lay out fillable and pre-filled forms (text, checkbox, radio,
+  choice and signature fields); both tools take `showTitle`, `accentColor` and `date` (today by
+  default). PowerPoint slides can show KPI metric cards.
+- **Uploaded PDF forms:** the fields of a form (name, type, value, options) are now part of the
+  text the model reads.
+
+See [Apps → Skill Settings](../../apps.md#skill-settings).

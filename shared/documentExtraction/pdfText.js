@@ -43,22 +43,92 @@ export function itemsToLines(items) {
 }
 
 /**
- * A page of the document model: its blocks (lines, headings, tables) before they are rendered.
+ * Format AcroForm widget annotations (`page.getAnnotations()`) into readable lines so
+ * uploaded blank or filled PDF forms expose their field names, types, options, and values.
+ *
+ * @param {Array<object>|null|undefined} annotations
+ * @returns {Array<{type: 'line', text: string}>}
+ */
+export function formatFormAnnotations(annotations) {
+  if (!Array.isArray(annotations) || annotations.length === 0) return [];
+  const lines = [];
+  const seen = new Set();
+  for (const a of annotations) {
+    if (!a || a.subtype !== 'Widget') continue;
+    const rawName = String(a.fieldName || a.alternativeText || '').trim();
+    if (!rawName) continue;
+    let kind = 'text';
+    let value = '';
+    let suffix = '';
+    if (a.checkBox) {
+      kind = 'checkbox';
+      // A checkbox is on when the field value is its export value (several
+      // checkboxes can share one field); without an export value, any value but Off.
+      const exportValue = typeof a.exportValue === 'string' ? a.exportValue : '';
+      const fieldValues = Array.isArray(a.fieldValue) ? a.fieldValue : [a.fieldValue];
+      const on =
+        exportValue && exportValue !== 'Off'
+          ? fieldValues.some(v => String(v ?? '') === exportValue)
+          : fieldValues.some(v => v && v !== 'Off');
+      value = on ? 'checked' : 'unchecked';
+    } else if (a.radioButton) {
+      kind = 'radio';
+      // Every widget of a radio group carries the group's value; this option is the
+      // selected one only when that value is its own button value.
+      const opt = a.buttonValue || a.fieldValue || '';
+      const selected =
+        Boolean(a.fieldValue) &&
+        a.fieldValue !== 'Off' &&
+        (a.buttonValue ? String(a.fieldValue) === String(a.buttonValue) : true);
+      value = selected ? `selected (${opt})` : `unselected (${opt})`;
+    } else if (a.fieldType === 'Ch') {
+      kind = 'choice';
+      value = Array.isArray(a.fieldValue)
+        ? a.fieldValue.filter(Boolean).join(', ')
+        : String(a.fieldValue ?? '').trim();
+      if (Array.isArray(a.options) && a.options.length > 0) {
+        const opts = a.options
+          .slice(0, 15)
+          .map(o => String(o?.displayValue ?? o?.exportValue ?? o ?? '').trim())
+          .filter(Boolean);
+        if (opts.length > 0) suffix = ` (options: ${opts.join(', ')})`;
+      }
+    } else {
+      value = String(a.fieldValue ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    const line = `- ${rawName} [${kind}]: ${value || '(empty)'}${suffix}`;
+    if (seen.has(line)) continue;
+    seen.add(line);
+    lines.push({ type: 'line', text: line });
+  }
+  if (lines.length === 0) return [];
+  return [{ type: 'line', text: '[Form fields]' }, ...lines];
+}
+
+/**
+ * A page of the document model: its blocks (lines, headings, tables, form fields) before they are rendered.
  *
  * @param {Array} items - Text items of the page
  * @param {number} number - 1-based physical page number
  * @param {string|null} [label] - Printed page label
  * @param {object|null} [structTree] - `await page.getStructTree()`, null for an untagged PDF
  * @param {object|null} [styles] - `getTextContent().styles` (font families by font name)
+ * @param {Array<object>|null} [annotations] - `await page.getAnnotations()`, for AcroForm fields
  * @returns {{number: number, label: string|null, blocks: Array}}
  */
-export function buildPdfPage(items, number, label, structTree, styles) {
+export function buildPdfPage(items, number, label, structTree, styles, annotations) {
   let blocks;
   try {
     blocks = pageBlocks(items, structTree, styles);
   } catch {
     // A tree that cannot be read must not cost the lines of the page.
     blocks = pageBlocks(items, null, styles);
+  }
+  const formBlocks = formatFormAnnotations(annotations);
+  if (formBlocks.length > 0) {
+    blocks = [...blocks, ...formBlocks];
   }
   return { number, label: label ?? null, blocks };
 }
@@ -156,7 +226,14 @@ export function assemblePdfText(pagesItems, labels, options = {}) {
   const list = Array.isArray(labels) ? labels : [];
   const pages = pagesItems.map((entry, index) => {
     const tagged = !Array.isArray(entry) && entry ? entry : { items: entry };
-    return buildPdfPage(tagged.items, index + 1, list[index], tagged.structTree, tagged.styles);
+    return buildPdfPage(
+      tagged.items,
+      index + 1,
+      list[index],
+      tagged.structTree,
+      tagged.styles,
+      tagged.annotations
+    );
   });
   addHeadings(pages, options.outline || []);
   return joinPdfPages(pages.map(renderPdfPage));
@@ -175,6 +252,14 @@ async function readPageLabels(pdf) {
 async function readStructTree(page) {
   try {
     return typeof page.getStructTree === 'function' ? await page.getStructTree() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readAnnotations(page) {
+  try {
+    return typeof page.getAnnotations === 'function' ? await page.getAnnotations() : null;
   } catch {
     return null;
   }
@@ -285,7 +370,8 @@ export async function extractPdfText(
       number,
       labels[number - 1],
       await readStructTree(page),
-      styles
+      styles,
+      await readAnnotations(page)
     );
     pages.push(built);
     for (const block of built.blocks) chars += blockChars(block);
