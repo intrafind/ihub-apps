@@ -746,22 +746,6 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }
 
-  // One-time re-index of the per-user integration tokens (Jira, cloud
-  // storage, per-user MCP) into the connection index, after the MCP manager
-  // knows its servers. Idempotent, marker-guarded and run under a storage
-  // lock, so every worker may call it; the connection service also indexes a
-  // token file it meets without a record, so nothing waits on this.
-  try {
-    const { reindexIntegrationConnections } =
-      await import('./services/integrations/auth/connectionReindex.js');
-    await reindexIntegrationConnections();
-  } catch (error) {
-    logger.warn('Integration connection re-index failed; connections are indexed as used', {
-      component: 'Server',
-      error: error.message
-    });
-  }
-
   // Initialise the A2A client manager (remote A2A agents as tools) from the
   // installed A2A integrations, on every worker; the singleton worker fetches
   // the Agent Cards in the background, the others lazily on first use. Failure
@@ -1109,6 +1093,24 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.error({
       component: 'Server',
       message: 'Legacy runtime store import failed; falling back to the legacy files',
+      error: error.message
+    });
+  }
+
+  // One-time re-index of the per-user integration tokens (Jira, cloud
+  // storage, per-user MCP) into the connection index, after the MCP manager
+  // knows its servers. Idempotent, marker-guarded and run under a storage
+  // lock, so every worker may call it. After the worker is serving, like the
+  // imports above: nothing on the request path waits on it, because the
+  // connection service indexes a token file it meets without a record
+  // (create-only, so the two never overwrite each other).
+  try {
+    const { reindexIntegrationConnections } =
+      await import('./services/integrations/auth/connectionReindex.js');
+    await reindexIntegrationConnections();
+  } catch (error) {
+    logger.warn('Integration connection re-index failed; connections are indexed as used', {
+      component: 'Server',
       error: error.message
     });
   }
