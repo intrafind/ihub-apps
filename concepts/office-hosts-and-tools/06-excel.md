@@ -12,7 +12,7 @@ In Excel the user can:
 
 Two constraints hold throughout:
 - **Cell data is capped and counted.** Workbooks often hold sensitive data, and every read says how many cells went to the model.
-- **Every write needs approval.**
+- **Every write that changes cell values or workbook structure needs approval.** Writes that change only how the data is shown (filters, formats, conditional formats) do not. They leave every value intact and can be reverted with Undo or one more call. Each exception is named in the table.
 
 ## Host adapter (`client/src/features/office/hosts/excel.js`)
 
@@ -32,11 +32,11 @@ Two constraints hold throughout:
 | `writeFormulas` | `range.formulas = …` | 1.1 | **always** |
 | `createTable` | `tables.add(address, hasHeaders)` | 1.1 | **always** |
 | `sortRange` | `range.sort.apply(…)` / `table.sort` | 1.2 | **always** |
-| `filterTable` | `table.columns.getItem(…).filter.apply(…)` | 1.2 | never (reversible) |
-| `clearFilter` | `table.autoFilter.clearCriteria()` | 1.9 | never |
-| `formatRange` | number format, fill, font, borders, column width | 1.1 | never |
-| `addConditionalFormat` | `range.conditionalFormats.add(…)` | 1.6 | never |
-| `addWorksheet` | `worksheets.add(name)` | 1.1 | never |
+| `filterTable` | `table.columns.getItem(…).filter.apply(…)` | 1.2 | never (view only; no value changes) |
+| `clearFilter` | `table.autoFilter.clearCriteria()` | 1.9 | never (view only; no value changes) |
+| `formatRange` | number format, fill, font, borders, column width | 1.1 | never (presentation only; no value changes; Undo) |
+| `addConditionalFormat` | `range.conditionalFormats.add(…)` | 1.6 | never (presentation only; removable) |
+| `addWorksheet` | `worksheets.add(name)` | 1.1 | **always** (changes workbook structure) |
 
 Later, not in v1: charts (`worksheet.charts.add`, 1.1), pivot tables (1.8), freeze panes, removing duplicates, deleting rows and columns. Each new write enters with `approval:'always'`.
 
@@ -64,7 +64,7 @@ Server-side `.xlsx` generation does not exist yet. The concept [Document Templat
 
 ## Tests
 
-- **Executor unit tests** against an Excel.js mock: the cell caps (read and write), the `cells="n of m"` report, the overwrite flag in the write preview, and the formula vs `formulasLocal` handling.
+- **Executor unit tests** against an Excel.js mock: the cell caps (read and write), the `cells="n of m"` report, the overwrite flag in the write preview, the formula vs `formulasLocal` handling, the approval column (value and structure writes ask; view and format writes do not), and that a write names `sheet` + `address` and still lands there after the user switches sheets during approval.
 - **Manual matrix:** Excel for the web, Windows and Mac.
 
 ## Acceptance criteria

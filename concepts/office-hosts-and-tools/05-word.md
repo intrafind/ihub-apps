@@ -19,8 +19,8 @@ Edits are **tracked changes by default**, so every change can be reviewed in Wor
   - the outline (paragraphs with built-in heading styles)
   - optionally the body text (`context.document.body.text`, capped)
 - **Toggles:** *Include selection* (on) and *Include whole document* (off).
-- **Insert action:** replace the selection, or insert after it when the selection is empty. Markdown is converted with `marked`, the same as `outlookMailActions.js`, and inserted with `insertHtml`.
-- **No item-change event.** The document is fixed for the pane's lifetime, so `itemId` is the document URL, or a session id for an unsaved document.
+- **Insert action:** replace the selection, or insert after it when the selection is empty. Markdown is converted with `renderMarkdown` (`client/src/config/marked.config.js`, DOMPurify-sanitized), never bare `marked.parse`, then filtered by a document allowlist (no `script`, `style`, `iframe`, `form`, event attributes, `javascript:`/`data:` links) and inserted with `insertHtml`.
+- **No item-change event.** The document is fixed for the pane's lifetime. The advertised target is `documentId`: the document URL, or a session id for an unsaved document ([01](01-client-executed-tools.md#executing-in-the-pane)).
 
 ## Tool set (v1)
 
@@ -41,7 +41,8 @@ Edits are **tracked changes by default**, so every change can be reviewed in Wor
 
 ### Tracked changes
 
-- **Switching on.** Before each write, the executor sets `context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll` (WordApi 1.4). It restores the user's mode afterwards.
+- **Switching on.** Before each write, the executor reads the user's `changeTrackingMode` and sets `Word.ChangeTrackingMode.trackAll` (WordApi 1.4).
+- **Restoring, including on failure.** The previous mode is restored in a `finally` block, so a rejected write or a rejected `context.sync()` never leaves `trackAll` switched on for the user's own later edits. If the restore itself fails, the pane shows a notice telling the user that Track Changes was left on.
 - **Setting.** The default comes from `officeIntegration.hosts.word.trackChanges` (`on` | `off` | `user`), and the user can override it in the pane's Settings dialog.
 - **Fallback.** On clients without WordApi 1.4 the writes are plain, and the activity row says so.
 - **Approval for untracked writes.** Writes that are *not* tracked, because the setting is off or the API is missing, need approval for `replaceSelection`.
@@ -67,7 +68,12 @@ Related: `create_docx` (`server/systemSkills/docx`, `server/services/documents/d
 
 ## Tests
 
-- **Executor unit tests** against a Word.js mock: tracked-mode on and restored, paging caps, the `findAndReplace` cap and preview.
+- **Executor unit tests** against a Word.js mock:
+  - tracked-mode on and restored after a successful write
+  - tracked-mode restored after a **rejected** write and after a rejected `context.sync()`
+  - paging caps
+  - the `findAndReplace` cap and preview
+  - hostile model output (`<script>`, `<img onerror>`, `<iframe>`, `[x](javascript:…)`) is inserted without any of it
 - **Manual matrix:** Word for the web, Word for Windows (Microsoft 365) and Word for Mac; WordApi 1.3 vs 1.5 behavior.
 
 ## Acceptance criteria

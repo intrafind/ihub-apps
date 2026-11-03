@@ -34,7 +34,12 @@ A MailApp (Outlook) and a TaskPaneApp (Word, Excel, PowerPoint) cannot share one
 **GUIDs.**
 - `resolveOfficeAddinId(cfg, host)` in `server/utils/officeAddinManifest.js` reads `officeIntegration.hosts.<host>.addinId`.
 - Outlook falls back to the existing `officeIntegration.addinId`, then to `LEGACY_OFFICE_ADDIN_ID`.
-- Word, Excel and PowerPoint get a fresh GUID when the admin enables the host. They never fall back to the Outlook id.
+- Word, Excel and PowerPoint never fall back to the Outlook id. Their id has this lifecycle, because the id **is** the add-in's identity in every tenant that deployed its manifest:
+  - **Disabled host:** `addinId` may be empty.
+  - **Enable** (`POST …/hosts/:host/enable`) creates a GUID only when the host has no valid stored id. An existing valid id is kept.
+  - **Disable** keeps the id. **Re-enable** reuses it, so a tenant's deployed add-in keeps working.
+  - **`PUT /config`** rejects an enabled host with an empty or invalid `addinId`. It never replaces a valid id with an empty one, and it ignores `addinId` in the body except through the explicit regenerate action.
+  - **Regenerate** (`POST …/hosts/:host/regenerate-addin-id`, same as Outlook's existing `regenerate-addin-id`) is the only way to change a valid id. The admin UI warns that every tenant must redeploy the manifest.
 
 **Pages.** All hosts use the same `/office/taskpane.html`, `/office/commands.html` and `/office/callback.html` (`server/routes/office.js`, `renderOfficeHtml`). No new top-level client routes are needed, so the `KNOWN_ROUTES` / `index.html` rule in CLAUDE.md is not affected.
 
@@ -66,15 +71,40 @@ A MailApp (Outlook) and a TaskPaneApp (Word, Excel, PowerPoint) cannot share one
   - Word: *Improve*, *Translate*, *Summarize*.
   - Excel: *Explain formula*, *Summarize sheet*.
   - PowerPoint: *Summarize presentation*, *Speaker notes*.
-- **Pane handoff.** Each button writes a pending action `{ host, action, ts }` to `localStorage` (`ihub.office.pending-action.v1`), shows the task pane (`Office.addin.showAsTaskpane()` where supported), and completes the event.
-  - The pane claims the action on start and runs the configured starter prompt for it, through the normal chat with tools and approvals.
-  - If the pane does not claim it within ~3 s, a small dialog tells the user to open the assistant.
+- **Pane handoff.** Each button writes a pending action, shows the task pane (`Office.addin.showAsTaskpane()` where supported), and completes the event.
+  - **Record.** `{ id, host, documentId, action, ts }`, where `id` is a `crypto.randomUUID()` and `documentId` is the same id the pane advertises ([01](01-client-executed-tools.md#executing-in-the-pane)). It is stored under its own key, `ihub.office.pending-action.v1:<id>`. One key per action means two clicks never overwrite each other.
+  - **Who may claim.** `localStorage` is shared by every pane and tab of the origin. A pane considers only records whose `host` and `documentId` match its own and whose `ts` is less than 10 s old.
+  - **Single-use claim.** `localStorage` has no atomic test-and-set, so read-then-clear (or write-then-read-back) can let two panes both win. The claim uses the **Web Locks API** instead:
+
+    ```js
+    navigator.locks.request(`ihub.office.pending-action:${id}`, { ifAvailable: true }, async lock => {
+      if (!lock) return;                           // another pane holds it
+      const record = read(key);                    // re-read *inside* the lock
+      if (!record || isStale(record)) return;      // already taken or expired
+      localStorage.removeItem(key);                // consume before running
+      await runPendingAction(record);
+    });
+    ```
+
+    The lock serializes the panes of the origin. The re-read inside the lock makes the action single-use even if a second pane acquires the lock after the first released it.
+  - **Without Web Locks.** Office's Edge WebView2 and Safari both have Web Locks. On a client without them the pane does **not** auto-run the action. It shows it as a one-click suggestion ("Run *Improve* from the ribbon?"). A user click cannot double-run in two panes.
+  - **Why the race is rare anyway.** Office opens at most one task pane of an add-in per document window, and only a pane with the matching `documentId` may claim. The lock covers the remaining cases, such as a pane reloading while another instance is still alive.
+  - **Stale records.** Older than 10 s: never claimed and removed on the next pane start.
+  - **Running it.** The owner runs the configured prompt for the action through the normal chat, with tools and approvals.
+  - **Unclaimed.** If no pane claims the action within ~3 s, a small dialog tells the user to open the assistant. When the pane opens later, the record is still claimable within its 10 s window, or it has expired.
 - **No token** is read in the commands page, and **no write** happens without the pane.
 - **Configuration.** The prompts are per host and per action, under `officeIntegration.hosts.<host>.ribbonActions`, so admins can localize or adjust them.
 
 ## Context types (`hostContext`)
 
-`renderUserMessage` in `shared/promptContext.js` already renders `type="email" | "meeting" | "page" | "document"`. Add three more:
+**Today's renderer handles only email, meeting and page.** `renderUserMessage` in `shared/promptContext.js` renders the open host item for `email`, `meeting` and `page`, through `HOST_ITEM_HEADERS`, `HOST_ITEM_BODY_KEY` and `buildHostItemText`. The `type="document"` blocks it also produces come from **uploaded files** (`renderDocuments(files)`), not from `hostContext`.
+
+A `hostContext` of a new type would therefore pass validation and then be dropped silently from the prompt. The three host types below each need their own rendering:
+- entries in `HOST_ITEM_HEADERS` and `HOST_ITEM_BODY_KEY`
+- branches in `buildHostItemText` and the host-item part of `renderUserMessage`
+- the same tag escaping as email
+
+Word's open document renders as `<content type="document" origin="open">`, which reuses the `document` tag name but with origin `open`, so `<context_rules>` covers it. Excel renders as `<content type="sheet" origin="open">`, PowerPoint as `<content type="slide" origin="open">`, and `<context_rules>` is extended to name both.
 
 | Type | Fields | Limits |
 |---|---|---|
@@ -116,8 +146,10 @@ Validate `hostContext` on the server for the first time:
   - Its existing inline validators (`validateOfficeStartPage`, `validateOfficeMailAction`, `validateOfficeAllowedApps`, `validateOfficeJsUrl`) are wrapped, not rewritten.
   - Register the schema in `server/validators/platformConfigSchema.js` for `officeIntegration`; today that key is not validated at all.
 - **Admin routes.**
-  - `POST /api/admin/office-integration/hosts/:host/enable` and `/disable`. Enable creates the host's GUID.
+  - `POST /api/admin/office-integration/hosts/:host/enable`, `/disable` and `/regenerate-addin-id`, with the GUID lifecycle described above.
   - `GET /status` returns per-host manifest URLs.
+  - **Authorization.** Every new route is registered in `registerAdminOfficeIntegrationRoutes` (`server/routes/admin/officeIntegration.js`) behind the existing `adminAuth` middleware (`server/middleware/adminAuth.js`). That middleware rejects delegated and machine principals through `isAdminEligiblePrincipal`.
+  - **Validation and audit.** `:host` is validated against the four known hosts before any lookup. The routes appear in the CI *Admin route audit*.
 - **Admin UI.** `client/src/features/admin/pages/AdminOfficeIntegrationPage.jsx` (1,600 lines) gets host tabs (Outlook, Word, Excel, PowerPoint).
   - Each tab holds Status/Enable, Manifest (URL, download, GUID), Starter prompts, Ribbon actions and Model tools.
   - The shared sections stay above the tabs.
@@ -136,10 +168,22 @@ Validate `hostContext` on the server for the first time:
   - Snapshot each host's manifest.
   - Validate against the Office add-in XML schema with `office-addin-manifest validate` in CI, if feasible.
   - Check that the legacy URL still serves the Outlook manifest.
-- **Add-in ids.** `resolveOfficeAddinId(cfg, host)`: Outlook gets legacy and configured ids; the other hosts get their own and never Outlook's. Register `server/tests/office-addin-manifest-id.test.js`, which exists but is in no npm script today.
-- **Validation.** `hostContext` Zod rejects oversized and unknown fields; `renderUserMessage` produces the new types with escaping.
-- **Ribbon handoff.** The pane claims a pending action; an unclaimed action shows the hint.
-- **Admin.** Host tabs render, enabling a host creates a GUID, and the axe baseline holds.
+- **Add-in ids.**
+  - `resolveOfficeAddinId(cfg, host)`: Outlook gets legacy and configured ids; the other hosts get their own and never Outlook's.
+  - Lifecycle: enable creates an id only when none is valid, disable keeps it, re-enable reuses it, `PUT /config` rejects an enabled host without a valid id and never clears one.
+  - Register `server/tests/office-addin-manifest-id.test.js`, which exists but is in no npm script today.
+- **Validation.** `hostContext` Zod rejects oversized and unknown fields.
+- **Rendering, end to end.** For each of `document`, `sheet` and `slide`, a chat request with that `hostContext` produces a model prompt containing the block with its fields, escaped. This is the guard against a type that validates but is silently dropped.
+- **Ribbon handoff:**
+  - one pane claims a pending action
+  - two panes of the same document compete for one action and exactly one runs it (Web Locks)
+  - without Web Locks, the action is offered as a click and never auto-run
+  - a pane of another document ignores it
+  - a stale record (over 10 s) is never run and is swept
+  - an unclaimed action shows the hint
+- **Admin.**
+  - Host tabs render, and the axe baseline holds.
+  - The new routes refuse non-admins and delegated or machine principals.
 
 ## Acceptance criteria
 
