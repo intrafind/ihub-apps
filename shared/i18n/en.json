@@ -6267,6 +6267,8 @@
       "reasonCount": "{{count}} of {{max}} characters",
       "send": "Send request",
       "sent": "Request for {{name}} sent. An administrator decides.",
+      "showAll": "Show all {{count}}",
+      "showFewer": "Show fewer",
       "alreadyRequested": "You have already requested {{name}}.",
       "failed": "Could not request {{name}}: {{message}}",
       "state": {

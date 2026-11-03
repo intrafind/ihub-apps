@@ -609,8 +609,9 @@ Users can now ask for an integration their administrator has not made available 
 administrators see what people ask for.
 
 - **Not available yet:** **Settings → Integrations** lists the catalog integrations the user's
-  groups cannot use yet, read-only, with **Request**. A request takes an optional reason (up to
-  500 characters); afterwards the row shows _Requested_, _Approved, being set up_ or _Declined_
+  groups cannot use yet as a compact card grid, like the marketplace: the first six cards, then
+  **Show all**, and a search from six entries on. Each card has **Request**. A request takes an
+  optional reason (up to 500 characters); afterwards the card shows _Requested_, _Approved, being set up_ or _Declined_
   with the administrator's note. One open request per user and integration.
 - **Requests tab:** **Admin → Integrations → Requests** lists who asked for what, when and why,
   with the number of open requests on the tab and next to **Integrations** in the admin sidebar.
