@@ -105,6 +105,7 @@ export default function registerAdminAuditLogRoutes(app) {
       const headers = [
         'ts',
         'actor',
+        'actorId',
         'authenticated',
         'action',
         'resource',
@@ -117,7 +118,8 @@ export default function registerAdminAuditLogRoutes(app) {
       ];
       const rows = entries.map(e => [
         e.ts,
-        e.actor?.username ?? e.admin ?? '',
+        e.actor?.displayName ?? e.actor?.username ?? e.admin ?? '',
+        e.actor?.id ?? '',
         e.actor?.authenticated ?? '',
         e.action,
         e.resource,

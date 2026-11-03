@@ -43,6 +43,9 @@ export const auditSources = ['web', 'mcp', 'api', 'admin'];
 export const auditActorSchema = z.object({
   id: z.string().min(1),
   username: z.string(),
+  // Display name at the time of the event. Optional: entries written before
+  // it was recorded only carry `username`.
+  name: z.string().optional(),
   groups: z.array(z.string()).prefault([]),
   authenticated: z.boolean()
 });
