@@ -210,6 +210,22 @@ export function artifactIdsOf(messages) {
 }
 
 /**
+ * Uploaded file ids named by a list of messages, without duplicates.
+ *
+ * @param {Object[]} messages - Stored or snapshot messages.
+ * @returns {string[]}
+ */
+export function fileIdsOf(messages) {
+  const ids = new Set();
+  for (const message of messages || []) {
+    for (const attachment of Array.isArray(message?.attachments) ? message.attachments : []) {
+      if (typeof attachment?.id === 'string' && attachment.id) ids.add(attachment.id);
+    }
+  }
+  return [...ids];
+}
+
+/**
  * Newest first, by creation time.
  *
  * @param {Object} a - Share.
@@ -378,7 +394,8 @@ export class ChatShareRepository {
       recipientViews: {},
       revokedAt: null,
       messageCount: snapshot.length,
-      artifactIds: artifactIdsOf(snapshot)
+      artifactIds: artifactIdsOf(snapshot),
+      ...(fileIdsOf(snapshot).length > 0 ? { fileIds: fileIdsOf(snapshot) } : {})
     };
     return this._writeShare(share, null);
   }
@@ -496,6 +513,24 @@ export class ChatShareRepository {
     for (const share of await this.listSharesForChat(chatId)) {
       if (shareState(share, now) !== 'active') continue;
       for (const id of Array.isArray(share.artifactIds) ? share.artifactIds : []) retained.add(id);
+    }
+    return retained;
+  }
+
+  /**
+   * Uploaded file ids that an active share of this chat still references.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {number} [options.now] - Clock, for tests.
+   * @returns {Promise<Set<string>>}
+   */
+  async fileIdsRetainedByShares(chatId, { now = Date.now() } = {}) {
+    const retained = new Set();
+    if (!this.isAvailable() || !isValidId(chatId)) return retained;
+    for (const share of await this.listSharesForChat(chatId)) {
+      if (shareState(share, now) !== 'active') continue;
+      for (const id of Array.isArray(share.fileIds) ? share.fileIds : []) retained.add(id);
     }
     return retained;
   }

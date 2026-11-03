@@ -44,6 +44,7 @@ import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { VARIABLE_NAME_PATTERN } from '../../../shared/validationPatterns.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
+import { getChatFileRepository } from '../chatFiles/ChatFileRepository.js';
 import { ChatShareRepository } from './ChatShareRepository.js';
 
 const COMPONENT = 'ChatRepository';
@@ -626,6 +627,22 @@ export function artifactIdsOfMessages(messages) {
 }
 
 /**
+ * Uploaded file ids referenced by a slice of the transcript.
+ *
+ * @param {Object[]} messages - Stored messages.
+ * @returns {string[]} File ids, without duplicates.
+ */
+export function fileIdsOfMessages(messages) {
+  const ids = new Set();
+  for (const message of messages || []) {
+    for (const attachment of Array.isArray(message?.attachments) ? message.attachments : []) {
+      if (typeof attachment?.id === 'string' && attachment.id) ids.add(attachment.id);
+    }
+  }
+  return [...ids];
+}
+
+/**
  * Index of the last stored message belonging to a run, or -1 when it wrote
  * none.
  *
@@ -730,12 +747,14 @@ export class ChatRepository {
     logger: log,
     maxMessages = null,
     artifacts = null,
+    files = null,
     shares = null
   } = {}) {
     this.documents = documents || null;
     this.locks = locks || null;
     this.logger = log || logger;
     this._artifacts = artifacts;
+    this._files = files;
     this._shares = shares;
     /**
      * Messages one chat may keep, or null for "ask the platform config".
@@ -765,6 +784,15 @@ export class ChatRepository {
   }
 
   /**
+   * The chat-file store this chat's uploaded files live in.
+   *
+   * @returns {import('../chatFiles/ChatFileRepository.js').ChatFileRepository}
+   */
+  fileStore() {
+    return this._files || getChatFileRepository();
+  }
+
+  /**
    * The share store of this repository's chats.
    *
    * @returns {import('./ChatShareRepository.js').ChatShareRepository}
@@ -788,6 +816,16 @@ export class ChatRepository {
    * @returns {{type: string, id: string}}
    */
   artifactScope(chatId) {
+    return { type: 'chat', id: chatId };
+  }
+
+  /**
+   * The uploaded-file scope of one chat.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {{type: string, id: string}}
+   */
+  fileScope(chatId) {
     return { type: 'chat', id: chatId };
   }
 
@@ -1590,6 +1628,7 @@ export class ChatRepository {
       // partial delete — a re-deleted chat sweeps whatever the first attempt
       // left behind.
       await this.artifactStore().deleteScope(this.artifactScope(chatId));
+      await this.fileStore().deleteScope(this.fileScope(chatId));
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChats(existing?.ownerId);
@@ -1794,6 +1833,18 @@ export class ChatRepository {
         }
       }
 
+      const orphanedFiles = fileIdsOfMessages(discarded);
+      if (orphanedFiles.length > 0) {
+        const stillUsedFiles = new Set(fileIdsOfMessages(messages));
+        const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
+        const deletableFiles = orphanedFiles.filter(
+          id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
+        );
+        if (deletableFiles.length > 0) {
+          await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
+        }
+      }
+
       return { message: entry, messages };
     });
   }
@@ -1836,6 +1887,17 @@ export class ChatRepository {
         const deletable = orphaned.filter(id => !stillUsed.has(id) && !retained.has(id));
         if (deletable.length > 0) {
           await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+        }
+      }
+      const orphanedFiles = fileIdsOfMessages([removed]);
+      if (orphanedFiles.length > 0) {
+        const stillUsedFiles = new Set(fileIdsOfMessages(messages));
+        const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
+        const deletableFiles = orphanedFiles.filter(
+          id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
+        );
+        if (deletableFiles.length > 0) {
+          await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
         }
       }
       return { deleted: true, chat: updated };

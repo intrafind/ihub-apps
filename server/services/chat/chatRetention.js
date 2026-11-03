@@ -48,6 +48,7 @@ import logger from '../../utils/logger.js';
 import runLog from '../loop/RunLog.js';
 import { CHATS_NAMESPACE, getChatRepository } from './ChatRepository.js';
 import { chatRetentionSettings, isChatHistoryConfigured } from './chatPersistence.js';
+import { chatFileSettings } from '../chatFiles/chatFilePolicy.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
 import { getWorkflowStateRepository } from '../workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from './chatDeletion.js';
@@ -310,11 +311,22 @@ export async function sweepChats({
   retentionDays,
   maxChatsPerUser,
   temporaryRetentionHours = null,
+  originalRetentionDays = 0,
   deleteRun = runId => runLog.deleteRun(runId),
   removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
   pageSize = SCAN_PAGE_SIZE,
   now = Date.now
 } = {}) {
+  if (originalRetentionDays > 0 && typeof repository?.fileStore === 'function') {
+    try {
+      await repository.fileStore().discardExpiredOriginals({ originalRetentionDays, now });
+    } catch (error) {
+      logger.error('Chat retention failed to discard expired original files', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+  }
   const documents = documentsOf(repository);
   if (!documents) return { removed: 0 };
   const sweepTemporary = temporaryRetentionHours > 0;
@@ -477,6 +489,7 @@ export function startChatRetentionSweep({
         retentionDays: historyDue ? retentionDays : 0,
         maxChatsPerUser: historyDue ? maxChatsPerUser : 0,
         temporaryRetentionHours,
+        originalRetentionDays: historyDue ? chatFileSettings(platform).originalRetentionDays : 0,
         now
       });
     } catch (error) {

@@ -253,6 +253,12 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * read. The chat's own `projectId` is the authority.
    */
   projectChats: 'project-chats',
+  /**
+   * Uploaded files of a chat or a scheduled task — one metadata document per
+   * file, keyed `<scopeType>__<scopeId>__<fileId>` and filed under the owner's
+   * principal id so per-user quota checks are an owner index read.
+   */
+  chatFiles: 'chat-files',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });
@@ -270,7 +276,15 @@ export const BLOB_NAMESPACES = Object.freeze({
    * `<projectId>__<itemId>__<versionId>` so a project's blobs are a prefix
    * listing and a re-upload never overwrites.
    */
-  projectFiles: 'project-files'
+  projectFiles: 'project-files',
+  /**
+   * Payloads of uploaded chat and scheduled-task files: extracted text
+   * (`<key>__text`) and optional original binary (`<key>__original`), kept as
+   * separate blobs so original binaries can expire or be evicted under quota
+   * pressure without losing the extracted text needed for multi-turn chat and
+   * replay.
+   */
+  chatFiles: 'chat-files'
 });
 
 /**

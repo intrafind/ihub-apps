@@ -198,10 +198,13 @@ export function normalizeFiles(fileData) {
 
 function fileAttributes(file) {
   const attrs = [];
+  const id = file.fileId || file.id;
+  if (id) attrs.push(`id="${escapeAttribute(id)}"`);
   const name = file.fileName || file.name;
   if (name) attrs.push(`name="${escapeAttribute(name)}"`);
   const format = file.displayType || file.fileType || file.type;
   if (format) attrs.push(`format="${escapeAttribute(format)}"`);
+  if (file.canUseAsTemplate === true) attrs.push('can_use_as_template="true"');
   return attrs;
 }
 
