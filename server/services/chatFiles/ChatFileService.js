@@ -22,6 +22,7 @@
  *
  * @module services/chatFiles/ChatFileService
  */
+import { createHash } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import {
@@ -416,6 +417,33 @@ export function describeStored(stored) {
   };
 }
 
+const sha256Of = bytes => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * The stored file of a chat that is the same e-mail attachment: same name and the
+ * same content (sha256 of the original bytes when present, else of the text).
+ * A copy stored without its original also matches by the hash of its text, so a
+ * later turn that carries the bytes upgrades it instead of adding a second file.
+ *
+ * @param {Object} repo
+ * @param {{type: string, id: string}} scope
+ * @param {{name: string, text: string, originalBuffer: Buffer|null}} candidate
+ * @returns {Promise<Object|null>}
+ */
+async function findAttachmentDuplicate(repo, scope, { name, text, originalBuffer }) {
+  const textHash = sha256Of(Buffer.from(text, 'utf8'));
+  const byteHash = originalBuffer ? sha256Of(originalBuffer) : null;
+  const items = await repo.list(scope);
+  return (
+    items.find(item => {
+      if (item.origin !== 'attachment' || item.name !== String(name).trim()) return false;
+      if (!item.sha256) return false;
+      if (item.sha256 === (byteHash || textHash)) return true;
+      return Boolean(byteHash) && !item.hasOriginal && item.sha256 === textHash;
+    }) || null
+  );
+}
+
 /**
  * Persist any inline `fileData` carried on a new user message into
  * `ChatFileRepository` (if not already stored) and resolve any pre-uploaded
@@ -530,13 +558,34 @@ export async function prepareTurnFiles({
             replaceId = existing.id;
           }
         }
+        const originalBuffer = await vettedInlineOriginal(file, text, activeRepo);
+        // E-mail attachments have no item identity; the same attachment sent with
+        // every turn is recognised by its content and name instead.
+        if (origin === 'attachment') {
+          const duplicate = await findAttachmentDuplicate(activeRepo, scope, {
+            name,
+            text,
+            originalBuffer
+          });
+          if (duplicate && (!originalBuffer || duplicate.hasOriginal)) {
+            const current = await activeRepo.getText(scope, duplicate.id);
+            if (current) {
+              seenIds.add(duplicate.id);
+              resolvedPromptFiles.push({ ...toPromptFileData(current), origin });
+              descriptors.push(describeStored(current));
+              continue;
+            }
+          }
+          // The stored copy has no original but this one does: upgrade it in place.
+          if (duplicate) replaceId = duplicate.id;
+        }
         const storedDescriptor = await activeRepo.put(scope, {
           ownerId,
           name,
           mimeType,
           formatLabel: file.displayType || null,
           text,
-          originalBuffer: await vettedInlineOriginal(file, text, activeRepo),
+          originalBuffer,
           pageImages,
           origin,
           meta,
