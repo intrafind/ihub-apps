@@ -14,11 +14,9 @@ This comprehensive guide covers how to configure and customize AI applications i
 - [Property Details](#property-details)
 - [Advanced Configuration](#advanced-configuration-options)
 - [Variables and User Input](#variables)
-- [Tool Integration](#tool-integration)
-- [Structured Output](#structured-output)
-- [Upload Features](#upload-features)
-- [UI Customization](#ui-customization)
-- [Complete Examples](#complete-examples)
+- [Integrations](#integrations-binding-an-installed-integration)
+- [Upload Configuration](#upload-configuration)
+- [Settings Configuration Examples](#settings-configuration-examples)
 - [Web Search Configuration](#web-search-configuration)
 - [Troubleshooting](#troubleshooting)
   - [Common Configuration Issues](#common-configuration-issues)
@@ -333,7 +331,7 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 6. **Test the embedded app** to ensure it loads and functions correctly
 
-**Iframe Sandbox Permissions:**
+#### Iframe Sandbox Permissions
 
 The `sandbox` attribute restricts what the embedded application can do. Include only the permissions your application needs:
 

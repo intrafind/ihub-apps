@@ -18,6 +18,7 @@
     - [Skills](skills.md)
     - [Content Management](content-management.md)
     - [Projects](projects.md)
+      - [Sources (now Projects)](sources.md)
     - [Chat and Task Files](chat-files.md)
     - [Mimetype Configuration](mimetypes.md)
     - [Configuration Validation](configuration-validation.md)
