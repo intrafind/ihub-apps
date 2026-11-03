@@ -253,20 +253,23 @@ listed (`codeIntegrity`), so a migration module that runs later is checked again
 An iHub that cannot reach GitHub cannot refresh the two shipped registries. For such installations
 the [ihub-marketplace](https://github.com/intrafind/ihub-marketplace) repository publishes the
 **offline marketplace**: the official catalog and every file it points at as static files, which
-you host inside your network and add as a registry. It comes in two forms, built by the repository's
-**Offline Marketplace** workflow:
+you host inside your network and add as a registry. Every merge to the repository is a release,
+versioned by the UTC build time as `yyyymmddhhmm` (for example `202611032031`), and a release comes
+in two forms, built by the repository's **Offline Marketplace** workflow:
 
-- a **Docker image**, `ghcr.io/intrafind/ihub-marketplace` (nginx on port 8080, no configuration, no
-  volume, runs as a non-root user, `linux/amd64` and `linux/arm64`);
-- a **`.tar.gz` bundle** with its SHA-256 file, to unpack on any web server.
+- a **Docker image**, `ghcr.io/intrafind/ihub-marketplace:<version>` (nginx on port 8080, no
+  configuration, no volume, runs as a non-root user, `linux/amd64` and `linux/arm64`; `latest` is
+  the newest release);
+- a **`.tar.gz` bundle** with its SHA-256 file, attached to the GitHub release, to unpack on any
+  web server.
 
 ```bash
 # connected machine
-docker pull ghcr.io/intrafind/ihub-marketplace:latest
-docker save ghcr.io/intrafind/ihub-marketplace:latest | gzip > ihub-marketplace-image.tar.gz
+docker pull ghcr.io/intrafind/ihub-marketplace:202611032031
+docker save ghcr.io/intrafind/ihub-marketplace:202611032031 | gzip > ihub-marketplace-image.tar.gz
 # air-gapped network
 docker load < ihub-marketplace-image.tar.gz
-docker run -d --restart unless-stopped -p 8080:8080 ghcr.io/intrafind/ihub-marketplace:latest
+docker run -d --restart unless-stopped -p 8080:8080 ghcr.io/intrafind/ihub-marketplace:202611032031
 ```
 
 Then add it under **Manage Registries → Add Registry** with the Catalog URL
@@ -283,7 +286,7 @@ and **iHub Examples**, which need internet access. The bundle's website shows th
   the platform's SSL whitelist (`ssl.domainWhitelist`).
 - **What the items connect to is unchanged.** The 29 hosted MCP integrations still need the
   internet, and a model configuration still needs a reachable endpoint of its provider.
-- **Updating** is publishing a new image or bundle; iHub's **Refresh** or **Auto Refresh** picks it up
+- **Updating** is publishing a new release (a new version tag or bundle); iHub's **Refresh** or **Auto Refresh** picks it up
   and the cards show **Update available** as usual.
 
 The registry's guide, [docs/offline.md](https://github.com/intrafind/ihub-marketplace/blob/main/docs/offline.md),
