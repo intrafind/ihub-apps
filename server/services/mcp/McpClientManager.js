@@ -1025,6 +1025,16 @@ class McpClientManager {
   }
 
   /**
+   * The `instructions` a shared connection's server sent in `initialize`, or
+   * null (not connected yet, a per-user server, or none sent).
+   * @param {string} serverId
+   * @returns {string|null}
+   */
+  serverInstructions(serverId) {
+    return this.getConnection(serverId)?.instructions || null;
+  }
+
+  /**
    * Identify whether a given iHub tool id was sourced from MCP. toolLoader
    * uses this to decide which dispatch branch to take in `runTool`.
    */

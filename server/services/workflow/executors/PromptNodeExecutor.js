@@ -17,6 +17,7 @@
  * @module services/workflow/executors/PromptNodeExecutor
  */
 
+import { appendIntegrationGuidance } from '../../integrations/actionGuidance.js';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
@@ -36,7 +37,21 @@ import { buildQuestionPrompt } from '../../loop/questionPrompt.js';
 import interactionService from '../../loop/InteractionService.js';
 import runLog from '../../loop/RunLog.js';
 import { validateAskUserParams } from '../../../tools/askUser.js';
-import { buildQuestionCheckpoint, pausedLoopState, resumeTranscript } from '../questionPause.js';
+import {
+  buildQuestionCheckpoint,
+  buildToolApprovalCheckpoint,
+  pausedLoopState,
+  resumeApprovalPlan,
+  resumeTranscript
+} from '../questionPause.js';
+import {
+  approvalSeam,
+  approvalDisplayData,
+  justificationOf,
+  oneShotGrant
+} from '../../loop/seams/approvalSeam.js';
+import { actorSnapshot } from '../executionActor.js';
+import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { v4 as uuidv4 } from 'uuid';
 import { repairToolArguments, matchTool } from '../../loop/toolArgs.js';
 import { classifyToolResult } from '../../loop/toolClassify.js';
@@ -555,6 +570,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // A node bound to a scope does not offer the tools that look for
       // another one, and tells the model the scope is fixed, as a chat does.
       tools = applyIntegrationScopes(messages, tools, context.integrationScopes);
+      // The instructions and action guidance of the integrations the node offers (#2974).
+      appendIntegrationGuidance(messages, tools);
 
       // Thread the workflow state into the context so agent tools
       // (createTask / listTasks / markTaskDone / writeArtifact) can read and
@@ -647,16 +664,24 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // loop transcript (the answer replaces the awaiting tool result)
       // instead of starting the step over.
       const resumedTranscript = this._resumedQuestionTranscript(node, state);
+      // A node resumed after its approver answered a parked tool call runs
+      // that call with the stored arguments (or hands the model the
+      // rejection) and continues the same loop (#2945).
+      const approvalPlan = resumedTranscript ? null : this._resumedApprovalPlan(node, state);
+      // Recorded before the call runs: a retry of this step (the model call
+      // after it fails) must not run the approved side effect a second time.
+      if (approvalPlan?.resume) await this._consumeApproval(node, context, state);
 
       // Execute LLM call (with tool loop if tools are available)
       const response = await this.executeLLMWithTools({
         model,
-        messages: resumedTranscript || messages,
+        messages: approvalPlan?.messages || resumedTranscript || messages,
         tools,
         config,
         context: contextForLLM,
         nodeId: node.id,
-        nativeWebSearch
+        nativeWebSearch,
+        resume: approvalPlan?.resume || null
       });
 
       // The model asked the user: the execution pauses on a question
@@ -715,7 +740,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Build state updates (include source cache if sources were loaded)
       const stateUpdates = {
         ...(config.outputVariable ? { [config.outputVariable]: output } : {}),
-        ...(resumedTranscript ? { _pausedLoops: { [node.id]: null } } : {})
+        ...(resumedTranscript || approvalPlan ? { _pausedLoops: { [node.id]: null } } : {})
       };
 
       // ── Runtime-owned lifecycle: auto-persist task results and synthesizer
@@ -1487,7 +1512,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     config = {},
     context = {},
     nodeId,
-    nativeWebSearch = null
+    nativeWebSearch = null,
+    resume = null
   }) {
     const budgets = context._agentProfile?.budgets || {};
     const roundCap = Math.max(
@@ -1555,7 +1581,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       },
       state: { budget: runBudget },
       meta: { stepLog: context._stepLog || null },
+      ...(resume ? { resume } : {}),
       seams: [
+        // First: a call that needs approval never runs unasked (#2945).
+        approvalSeam(this._approvalSeamOptions({ context, nodeId, runState, config, resume })),
         this._workflowSeam({ context, nodeId }),
         questionSeam(this._questionSeamOptions({ context, nodeId, runState }))
       ],
@@ -1644,14 +1673,117 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * The paused node result for an `ask_user` question: a checkpoint (shown
-   * like a `human` node's) plus the loop transcript persisted on the state so
-   * the step continues from the answer.
+   * Options for the shared approval seam inside a workflow / agent node
+   * (#2945). Nobody sits in the loop of a node: a call that needs approval is
+   * refused (`APPROVAL_REQUIRED_NO_USER`) unless the node names approver
+   * groups (`config.toolApproval.approverGroups`); then a durable `approval`
+   * interaction is parked for them on the execution's run and the node
+   * pauses. The one call an approver approved runs on resume.
+   * @private
+   */
+  _approvalSeamOptions({ context, nodeId, runState, config = {}, resume = null }) {
+    const executionId = context.executionId || runState?.executionId;
+    const approverGroups = (
+      Array.isArray(config.toolApproval?.approverGroups) ? config.toolApproval.approverGroups : []
+    ).filter(group => typeof group === 'string' && group);
+    const platform = configCache.getPlatform?.() || null;
+    return {
+      resolvePolicy: toolDef => resolveToolApproval(toolDef, null, platform),
+      // The approved call runs once, with exactly the approved arguments.
+      isGranted: oneShotGrant(
+        resume?.toolCall?.id ? { callId: resume.toolCall.id, args: resume.args } : null
+      ),
+      // Nobody to park it for: refuse instead (the seam's `park` fallback).
+      raise:
+        approverGroups.length > 0 && executionId
+          ? async (info, ctx, policy) => {
+              const checkpointId = `ckpt-${uuidv4()}`;
+              const runMeta = runLog.getRunMeta(executionId);
+              const displayData = approvalDisplayData(info, policy, {
+                justification: justificationOf(ctx, info.call)
+              });
+              return interactionService.raise({
+                id: checkpointId,
+                runId: executionId,
+                step: ctx.iteration,
+                kind: 'approval',
+                origin: 'tool',
+                prompt: {
+                  title: `Run ${displayData.toolName}?`,
+                  message: `An agent step wants to run "${displayData.toolName}". It waits for an approver.`,
+                  inputType: 'confirm',
+                  displayData
+                },
+                policy: { approverGroups, fallback: 'park', onTimeout: 'fail' },
+                source: {
+                  checkpointId,
+                  executionId,
+                  nodeId,
+                  ...(info.call?.id ? { toolCallId: String(info.call.id) } : {}),
+                  toolId: displayData.toolId,
+                  ...(context.chatId && context.chatId !== executionId
+                    ? { chatId: context.chatId }
+                    : {}),
+                  ...(runMeta?.principalId ? { principalId: String(runMeta.principalId) } : {}),
+                  ...(runMeta?.identityMode ? { identityMode: runMeta.identityMode } : {}),
+                  ...(runMeta?.anonymous ? { anonymous: true } : {})
+                }
+              });
+            }
+          : null,
+      onDenied: (info, _ctx, payload) => {
+        this.logger.info('Tool call refused: it needs approval and the node names no approvers', {
+          component: 'PromptNodeExecutor',
+          executionId,
+          nodeId,
+          toolId: info.toolId,
+          code: payload.code
+        });
+      }
+    };
+  }
+
+  /**
+   * Mark this node's approved call as used, on the persisted state, before
+   * it runs. A step that is retried afterwards (a later model call failed)
+   * finds it used and hands the model `APPROVAL_ALREADY_USED` instead of
+   * running the side effect again. Throws when the mark cannot be stored:
+   * running the call unrecorded would make it repeatable.
+   * @private
+   */
+  async _consumeApproval(node, context, state) {
+    const paused = state?.data?._pausedLoops?.[node.id];
+    if (!paused?.approval) return;
+    const consumed = { ...paused, approval: { ...paused.approval, consumed: true } };
+    const executionId = context.executionId || context._workflowState?.executionId;
+    const stateManager = context.engine?.stateManager;
+    if (stateManager && executionId) {
+      await stateManager.update(executionId, { data: { _pausedLoops: { [node.id]: consumed } } });
+    }
+    for (const data of [state?.data, context._workflowState?.data]) {
+      if (data?._pausedLoops) data._pausedLoops[node.id] = consumed;
+    }
+  }
+
+  /** How this node continues after its parked tool approval was answered, or null. */
+  _resumedApprovalPlan(node, state) {
+    const paused = state?.data?._pausedLoops?.[node.id];
+    if (!paused || paused.kind !== 'approval') return null;
+    return resumeApprovalPlan(paused, state.data?._approvalAnswers?.[paused.checkpointId] || null);
+  }
+
+  /**
+   * The paused node result for an `ask_user` question or a parked tool
+   * approval: a checkpoint (shown like a `human` node's) plus the loop
+   * transcript persisted on the state so the step continues from the answer.
    * @private
    */
   _pauseForQuestion({ node, context, response, language }) {
     const interaction = response.pendingInteraction;
-    const checkpoint = buildQuestionCheckpoint({ node, interaction, language });
+    const isApproval = interaction?.kind === 'approval';
+    const checkpoint = isApproval
+      ? buildToolApprovalCheckpoint({ node, interaction, language })
+      : buildQuestionCheckpoint({ node, interaction, language });
     const executionId = context.executionId;
     this.logger.info('Agent node paused on a question', {
       component: 'PromptNodeExecutor',
@@ -1669,7 +1801,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       status: 'paused',
       output: { awaitingHuman: true, checkpointId: checkpoint.id },
       checkpoint,
-      pauseReason: 'question',
+      pauseReason: isApproval ? 'approval' : 'question',
       stateUpdates: {
         pendingCheckpoint: checkpoint,
         ...(Number.isInteger(context._workflowState?.data?._questionCount)
@@ -1679,17 +1811,39 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           [node.id]: pausedLoopState({
             checkpointId: checkpoint.id,
             toolCallId: interaction.source?.toolCallId || null,
-            messages: response.messages
+            messages: response.messages,
+            // The parked call, run with exactly these arguments once approved.
+            approval: isApproval
+              ? {
+                  toolCallId: interaction.source?.toolCallId || null,
+                  toolId: interaction.source?.toolId || null,
+                  name: this._pausedCallName(response.messages, interaction.source?.toolCallId),
+                  args: interaction.prompt?.displayData?.args || {},
+                  // The call runs as the execution's principal, never as the approver.
+                  actor: actorSnapshot(context.user)
+                }
+              : null
           })
         }
       }
     };
   }
 
+  /** The function name the model used for a call (the loop matches tools by it). */
+  _pausedCallName(messages, toolCallId) {
+    for (const m of Array.isArray(messages) ? messages : []) {
+      const call = Array.isArray(m?.tool_calls)
+        ? m.tool_calls.find(c => c?.id === toolCallId)
+        : null;
+      if (call?.function?.name) return call.function.name;
+    }
+    return null;
+  }
+
   /** The resumed loop transcript for this node, or null when it was not paused on a question. */
   _resumedQuestionTranscript(node, state) {
     const paused = state?.data?._pausedLoops?.[node.id];
-    if (!paused) return null;
+    if (!paused || paused.kind === 'approval') return null;
     return resumeTranscript(paused, state.data?._questionAnswers?.[paused.checkpointId] || null);
   }
 

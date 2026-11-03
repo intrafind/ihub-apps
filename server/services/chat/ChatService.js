@@ -43,6 +43,7 @@ import {
 } from '../../../shared/runEvents.js';
 import { storedSourceSet } from '../../../shared/sources/index.js';
 import {
+  approvalSeam,
   imageLiftSeam,
   knowledgeSourceSeam,
   markInteractiveTools,
@@ -63,8 +64,16 @@ import {
   chatTurnSeam,
   chatToolSeam,
   chatQuestionOptions,
-  chatPassthroughOptions
+  chatPassthroughOptions,
+  chatApprovalOptions,
+  approvalRefusalPayload
 } from './chatSeams.js';
+import {
+  continuationMessages,
+  pausedTurnQuestion,
+  pausedTurnTranscript,
+  replaceToolResult
+} from './chatToolApproval.js';
 import { describeChatError } from './chatErrors.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
@@ -434,8 +443,17 @@ class ChatService {
    *   becomes valid ends the turn as an error (`OUTPUT_VALIDATION_FAILED`). A valid answer's
    *   content is the validated JSON, and the summary carries `structuredOutput`.
    * @param {Array<Object>} [params.extraSeams] - Further loop seams, run after the tool
-   *   projection and before the question and passthrough seams (a scheduled run's approval
-   *   gate).
+   *   projection and before the question and passthrough seams (a scheduled run's
+   *   integration check).
+   * @param {Object} [params.approvalGate] - The approval seam to use instead of the chat's
+   *   (a scheduled run's, which pauses for the task owner). Runs before every other seam.
+   * @param {Object} [params.toolApproval] - Chat tool approval state (#2945):
+   *   `{ grants?: string[], resume?: { interactionId, outcome: 'approved'|'rejected'|'expired',
+   *   call: { id, name, toolId }, args, transcript } }` from `settleChatApprovals`. With
+   *   `resume` the turn continues the paused one: its transcript replaces the decision
+   *   message, and the approved call runs with exactly `args`.
+   * @param {boolean} [params.canApproveTools] - The client renders approval cards. Without
+   *   it (and for a headless turn) a gated call gets `APPROVAL_REQUIRED_NO_USER`.
    * @param {{type: string, source?: string}} [params.trigger] - What started the turn, as the
    *   run ledger records it (default: a user).
    * @param {number} [params.maxWallClockMs] - Tighter wall-clock ceiling for a durable turn
@@ -462,6 +480,9 @@ class ChatService {
     headless = !streaming,
     structuredOutput = null,
     extraSeams = [],
+    approvalGate = null,
+    toolApproval = null,
+    canApproveTools = !headless,
     trigger = null,
     maxWallClockMs = null,
     clientTimezone = null
@@ -703,9 +724,36 @@ class ChatService {
             onAttemptRejected: structuredOutput.onAttemptRejected
           })
         : null;
-    // knowledgeSourceSeam runs first so its `outcome.knowledgeSource` is on the
-    // outcome when chatToolSeam projects the tool result to `tool/completed`.
+    // The approval gate (#2945) takes a call over before anything announces
+    // or runs it: a gated call never shows as started. A scheduled run brings
+    // its own (it pauses for the task owner); a chat turn asks the person in
+    // the chat, or — headless, or a client that cannot draw the card — refuses
+    // the call with APPROVAL_REQUIRED_NO_USER.
+    const resume = toolApproval?.resume || null;
+    const gate =
+      approvalGate ||
+      approvalSeam(
+        chatApprovalOptions({
+          chatId,
+          app,
+          platform: configCache.getPlatform?.() || null,
+          // A turn that is not stored cannot be continued after the answer.
+          headless: headless || canApproveTools === false || !persist,
+          grants: toolApproval?.grants || [],
+          approvedCall:
+            resume?.outcome === 'approved' && resume.call?.id
+              ? { callId: resume.call.id, args: resume.args }
+              : null,
+          buildLogData: log,
+          logInteraction: this.logInteraction,
+          interactionService: this.interactionService,
+          runLog: this.runLog
+        })
+      );
+    // knowledgeSourceSeam runs before chatToolSeam so its `outcome.knowledgeSource`
+    // is on the outcome when chatToolSeam projects the tool result to `tool/completed`.
     const seams = [
+      gate,
       knowledgeSourceSeam,
       chatToolSeam({
         chatId,
@@ -750,13 +798,57 @@ class ChatService {
 
     const pageReads = createPageReadGate(resolveMaxPageReads(app));
 
+    // A continuation of a turn that paused on an approval: the stored part of
+    // that turn replaces the decision message. An approved call is run by the
+    // loop itself (`resume`), with the arguments that were approved; a
+    // rejected or expired one gets its refusal as the tool result.
+    let loopMessages = llmMessages;
+    let loopResume = null;
+    if (resume?.call?.id && Array.isArray(resume.transcript) && resume.transcript.length) {
+      loopMessages = continuationMessages(llmMessages, resume.transcript, {
+        question: resume.question
+      });
+      const toolName = String(resume.call.name || resume.call.toolId || 'tool');
+      if (resume.outcome === 'approved') {
+        loopResume = {
+          toolCall: {
+            id: resume.call.id,
+            type: 'function',
+            function: { name: resume.call.name, arguments: JSON.stringify(resume.args || {}) }
+          },
+          args: resume.args || {}
+        };
+      } else {
+        const payload = approvalRefusalPayload(resume.outcome, toolName);
+        replaceToolResult(loopMessages, resume.call.id, payload);
+        stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+          step: 0,
+          callId: String(resume.call.id),
+          toolId: String(resume.call.toolId || toolName),
+          name: toolName,
+          resultPreview: payload,
+          error: { code: payload.code, message: payload.message }
+        });
+      }
+    }
+    // The last message before what this turn's loop adds (a continuation
+    // starts after the stored transcript's predecessor), found by identity.
+    const turnStartMessage =
+      loopMessages === llmMessages
+        ? llmMessages[llmMessages.length - 1]
+        : loopMessages[loopMessages.length - resume.transcript.length - 1];
+
+    // From here the answered approval is used: a caller must not put it back.
+    if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
+
     let outcome;
     try {
       const result = await this.agentLoop.run({
         runId,
         kind: 'chat',
         model,
-        messages: llmMessages,
+        messages: loopMessages,
+        ...(loopResume ? { resume: loopResume } : {}),
         tools: loopTools,
         toolExecution: 'server',
         policies: {
@@ -823,6 +915,46 @@ class ChatService {
             }
           )
       });
+      // Paused on a chat approval: keep what the continuation needs with the
+      // chat, and only then show the card (`interaction/raised`), so even an
+      // immediate answer finds it. One that could not be kept is cancelled
+      // and never shown as answerable.
+      if (
+        !approvalGate &&
+        persist &&
+        result.status === 'paused' &&
+        result.pendingInteraction?.kind === 'approval'
+      ) {
+        const stored = await this._storePendingApproval({
+          repository: persist.repository,
+          chatId,
+          runId,
+          grants: toolApproval?.grants || [],
+          interaction: result.pendingInteraction,
+          messages: result.messages,
+          startMessage: turnStartMessage
+        });
+        if (stored) {
+          stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
+        } else {
+          const toolCallId = result.pendingInteraction.source?.toolCallId;
+          stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+            step: result.pendingInteraction.step || 0,
+            callId: String(toolCallId || '0'),
+            toolId: String(result.pendingInteraction.source?.toolId || 'tool'),
+            name: String(result.pendingInteraction.source?.toolId || 'tool'),
+            resultPreview: {
+              error: true,
+              code: 'APPROVAL_NOT_STORED',
+              message: 'The approval could not be kept with the chat; the call was not run.'
+            },
+            error: {
+              code: 'APPROVAL_NOT_STORED',
+              message: 'The approval could not be kept with the chat; the call was not run.'
+            }
+          });
+        }
+      }
       outcome = await this._finishTurn({
         result,
         runId,
@@ -926,6 +1058,70 @@ class ChatService {
         activeRequests.delete(chatId);
       }
     }
+  }
+
+  /**
+   * Keep a paused turn's tool transcript with the chat (`toolApproval.pending`),
+   * for the turn that continues it once the approval is answered
+   * (see `chatToolApproval.js`). The stored chat transcript holds only text,
+   * so this is the one place the call and its sibling results survive.
+   *
+   * A transcript that cannot be stored leaves the approval unanswerable: the
+   * interaction is cancelled so the card does not wait for nothing.
+   *
+   * @private
+   */
+  async _storePendingApproval({
+    repository,
+    chatId,
+    runId,
+    grants,
+    interaction,
+    messages,
+    startMessage
+  }) {
+    const toolCallId = interaction.source?.toolCallId;
+    const transcript = toolCallId
+      ? pausedTurnTranscript(messages, { startMessage, toolCallId })
+      : null;
+    const call = transcript
+      ?.flatMap(m => (Array.isArray(m.tool_calls) ? m.tool_calls : []))
+      .find(c => c?.id === toolCallId);
+    let stored = null;
+    if (transcript && call) {
+      try {
+        stored = await repository.updateChat(chatId, {
+          toolApproval: {
+            grants,
+            pending: {
+              interactionId: interaction.id,
+              runId,
+              call: {
+                id: toolCallId,
+                name: call.function?.name || interaction.source?.toolId,
+                toolId: interaction.source?.toolId || call.function?.name,
+                args: interaction.prompt?.displayData?.args || {}
+              },
+              transcript,
+              // For an app that sends no chat history: the continuation puts it back.
+              question: pausedTurnQuestion(startMessage),
+              createdAt: new Date().toISOString()
+            }
+          }
+        });
+      } catch (error) {
+        logger.error('Paused tool approval could not be stored with the chat', {
+          component: COMPONENT,
+          chatId,
+          runId,
+          error: error.message
+        });
+      }
+    }
+    if (!stored) {
+      await this.interactionService.cancel(interaction.id, 'unrecoverable').catch(() => {});
+    }
+    return Boolean(stored);
   }
 
   /**
@@ -1090,14 +1286,18 @@ class ChatService {
     }
 
     if (result.status === 'paused') {
-      // The turn pauses for the user's answer: the question seam already sent
-      // `interaction/raised`; no badge.
+      // The turn pauses for the user's answer: the question or approval seam
+      // already sent `interaction/raised`; no badge.
       const pendingInteraction = result.pendingInteraction;
       stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {
         reason: 'interaction',
         ...(pendingInteraction?.id ? { interactionId: String(pendingInteraction.id) } : {})
       });
-      return { ...summary, finishReason: 'clarification', pendingInteraction };
+      return {
+        ...summary,
+        finishReason: result.finishReason === 'approval' ? 'approval' : 'clarification',
+        pendingInteraction
+      };
     }
 
     // The output contract, checked on the answer the run ended with. A
@@ -1416,6 +1616,18 @@ class ChatService {
         timeoutMs,
         refs: { chatId, appId: app.id, userId: user?.id, executionId: parentRunId },
         seams: [
+          // Nobody can approve inside an app invoked as a tool, over MCP or
+          // A2A: a gated call is refused with APPROVAL_REQUIRED_NO_USER (#2945).
+          approvalSeam(
+            chatApprovalOptions({
+              chatId,
+              app,
+              platform: configCache.getPlatform?.() || null,
+              headless: true,
+              buildLogData,
+              logInteraction: this.logInteraction
+            })
+          ),
           questionSeam(
             chatQuestionOptions({
               chatId,

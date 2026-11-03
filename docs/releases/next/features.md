@@ -94,6 +94,40 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
 
+## Integrations: Every Action Has a Detail With Guidance and a Test Runner
+
+Every action on the page of an installation (**Admin → Integrations → an installation**) now has
+**Details**, a panel that answers what the action does, how the model should use it, and whether
+it works, without a chat:
+
+- **What it does:** the description and the parameter schema exactly as the model receives them.
+  Vendor descriptions are often written for developers; replace the description for the model
+  per language, or reset it to the vendor's.
+- **Side effect, data flow, approval:** each value with where it came from (integration
+  definition, vendor annotation, admin override, platform default). Override the side effect or
+  data flow, set the action's approval mode, or mark a new or changed action as reviewed.
+  For an OpenAPI operation without a declared side effect, the HTTP method's suggestion is shown.
+- **How to use:** **model guidance** and **example prompts** per action, editable per language.
+  The guidance of every action a chat offers, with the integration's own **instructions**, is now
+  added to the system prompt while the integration is active (it used to be appended to the tool
+  description). The instructions are editable on the Overview, for MCP servers too, whose own
+  `instructions` are shown when the server sends them. The panel also lists the apps, workflows
+  and scheduled tasks that use the action.
+- **Test:** a form built from the parameter schema runs the action directly, without a model, as
+  you or with the installation's shared credential. It shows status, duration, the request as
+  sent (credentials, secret parameters and every resolved secret redacted), the raw response and
+  the Answer Sources it produced. An action that is not a confirmed read only runs after you tick
+  the confirmation; the server refuses it otherwise. Every test is written to the audit log
+  (`action.test`, with the arguments redacted).
+- **Usage:** calls, approvals, rejections, expired approvals, errors and admin tests in the last
+  7 days, counted per action from this version on.
+- **Try in chat** opens the installation's chat test from the panel.
+
+The built-in iFinder, Jira, Entra ID, iHub (asking the user, scheduled tasks) and web search
+integrations ship guidance and example prompts for their actions (definition version 1.1.0; no
+migration, no action shows as changed). The web search engines' instructions are now written for
+the model.
+
 ## Integrations Can Bring Their Own Code
 
 A definition in a registry may ship a connector module (`"protocol": { "type": "script",
@@ -446,6 +480,47 @@ the list is `permissions.integrations`.
   may use iHub's own tools and every web search engine.
 
 See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
+
+## Tool Calls Can Need a Person's Approval
+
+Admins decide which of the model's tool calls a person has to approve before anything is sent —
+for example, before an external MCP server receives what was found in your own documents, or
+before a comment lands on a Jira issue. Nothing changes on upgrade: approval is off until you set
+a mode.
+
+- **Three modes:** never, ask unless the call only reads, always. Every tool carries what it does
+  (reads, writes, deletes or overwrites, unknown) and where its data goes (internal, external).
+- **Where to set it:** a platform default for internal and external tools (**Admin → Security →
+  Tool approval**), a default and a mode per action on each integration (**Admin → Integrations
+  → an installation → Overview**), `approval` on a tool (**Admin → Tools → Edit**), and an app
+  override (**Admin → Apps → Edit → Tools**). The strictest setting wins; an app can make it
+  stricter, never looser.
+- **Approval card in the chat:** the tool and integration, what it does, the exact arguments, and
+  any text the assistant wrote, labelled as such. **Approve**, **Approve & allow for this chat**
+  or **Reject**. On approve, iHub runs exactly the call that was shown; the assistant does not
+  issue it again. A rejected or expired approval is reported to the assistant, which carries on.
+- **MCP App views ask too:** when an interactive view calls a tool that needs approval, the chat
+  shows the card below the view, and the view gets the result once you approve.
+- **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
+  under "ask unless it only reads" until an admin confirms the tool as a read.
+- **New and changed actions ask until reviewed:** iHub fingerprints every action of an
+  integration (name, what it does, its input). When a vendor adds an action or changes one, it
+  is badged **New** or **Changed** on the integration page and asks every time (configurable) until
+  you choose **Mark reviewed** or **Mark all reviewed**. This applies to integrations you have set
+  approval for.
+- **Sensible start for new integrations:** installing an integration preselects "ask unless it
+  only reads", and "always ask" for MCP servers, A2A agents and other external integrations that
+  do not declare what their actions do. You can change it before saving; existing integrations
+  are left as they are.
+- **Where nobody can approve** (OpenAI-compatible API, apps as tools, the MCP and A2A gateways,
+  workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
+  step that names approver groups parks the approval for them instead. Scheduled tasks keep
+  asking their owner, now for every tool the settings gate.
+- **Custom tools with `requiresApproval: true`** used to ask only in scheduled runs. They now ask
+  in the chat too, and are refused where nobody can approve (the API, other clients without the
+  approval card).
+
+See [Tool Approval](../../tool-approval.md).
 
 ## Integrations: One Admin Page, Grouped Tiles and a Page per Installation
 

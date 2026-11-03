@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import { ApprovalModeSelect, ToolEffectSelect } from './ToolApprovalFields';
 
 /**
  * ToolFormEditor - Form interface for editing tool configurations
@@ -157,6 +158,43 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
           {t('admin.tools.concurrencyHelp', 'Maximum number of concurrent executions')}
         </p>
       </div>
+
+      {/* Tool approval (#2945): ask a person before the model's call runs */}
+      <fieldset className="space-y-4 rounded-md border border-gray-200 dark:border-gray-700 p-4">
+        <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+          {t('admin.toolApproval.toolSection', 'Approval')}
+        </legend>
+        <ApprovalModeSelect
+          label={t('admin.toolApproval.toolMode', 'Ask before a call runs')}
+          value={value.approval}
+          inheritLabel={t('admin.toolApproval.inheritPlatform', 'Platform default')}
+          onChange={mode => handleInputChange('approval', mode)}
+          help={t(
+            'admin.toolApproval.toolModeHelp',
+            'The strictest of the platform default, this setting and the app wins. A function can set its own "approval" in the JSON.'
+          )}
+        />
+        <ToolEffectSelect
+          kind="sideEffect"
+          label={t('admin.toolApproval.sideEffect', 'What a call does')}
+          value={value.sideEffect}
+          onChange={effect => handleInputChange('sideEffect', effect)}
+          help={t(
+            'admin.toolApproval.sideEffectHelp',
+            '"Ask unless it only reads" asks for everything that is not declared as a read.'
+          )}
+        />
+        <ToolEffectSelect
+          kind="dataFlow"
+          label={t('admin.toolApproval.dataFlowLabel', 'Where its data goes')}
+          value={value.dataFlow}
+          onChange={flow => handleInputChange('dataFlow', flow)}
+          help={t(
+            'admin.toolApproval.dataFlowHelp',
+            'Picks which platform default applies (internal or external).'
+          )}
+        />
+      </fieldset>
 
       {/* Enabled toggle */}
       <div className="flex items-center">

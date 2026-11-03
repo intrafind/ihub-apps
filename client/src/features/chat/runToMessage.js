@@ -31,8 +31,34 @@ import { buildAuthPrompts } from '../integrations/connect/authPrompts';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
-  isClarificationInteraction
+  isClarificationInteraction,
+  isToolApprovalInteraction
 } from '../../shared/run/interactionToCheckpoint';
+
+/**
+ * Build the `toolApproval` message field from a chat tool approval (#2945):
+ * what `ApprovalCard` shows. The arguments are data to display, never markup.
+ *
+ * @param {Object} interaction - interaction of kind `approval` raised by a chat turn
+ * @returns {Object} `{ interactionId, status, toolId, toolName, integration, sideEffect,
+ *   dataFlow, args, justification, expiresAt }`
+ */
+export function buildToolApproval(interaction) {
+  const display = interaction.prompt?.displayData || {};
+  return {
+    interactionId: interaction.id,
+    status: interaction.status || 'pending',
+    toolId: display.toolId || interaction.source?.toolId || '',
+    toolName: display.toolName || display.toolId || interaction.source?.toolId || '',
+    integration: display.integration || null,
+    sideEffect: display.sideEffect || 'unknown',
+    sideEffectSource: display.sideEffectSource || null,
+    dataFlow: display.dataFlow || 'internal',
+    args: display.args && typeof display.args === 'object' ? display.args : {},
+    justification: typeof display.justification === 'string' ? display.justification : '',
+    expiresAt: interaction.policy?.expiresAt || null
+  };
+}
 
 /** Fallback when a stream/error frame carries no message (callers pass the translated string). */
 export const DEFAULT_STREAM_ERROR_MESSAGE = 'An error occurred during streaming';
@@ -120,6 +146,19 @@ export function projectRunToMessage(run, options = {}) {
     }
   }
 
+  // ── tool approval (#2945) ────────────────────────────────────────────
+  // A pending approval hands control back to the user like a question: the
+  // card waits for Approve / Reject, which the next message carries.
+  const approval = last(interactions, isToolApprovalInteraction);
+  let awaitingApproval = false;
+  if (approval) {
+    extras.toolApproval = buildToolApproval(approval);
+    if (approval.status === 'pending') {
+      awaitingApproval = true;
+      extras.awaitingInput = true;
+    }
+  }
+
   // ── chat-launched workflow: checkpoint, steps, result ────────────────
   const workflow = run.meta?.extra?.workflow;
   const checkpoint = last(interactions, isCheckpointInteraction);
@@ -193,7 +232,9 @@ export function projectRunToMessage(run, options = {}) {
   // spinner (the turn continues once the checkpoint is answered) while a
   // clarification pause hands control back to the user.
   const loading =
-    !run.error && (run.status === 'running' || (run.status === 'paused' && !awaitingQuestion));
+    !run.error &&
+    (run.status === 'running' ||
+      (run.status === 'paused' && !awaitingQuestion && !awaitingApproval));
 
   return { content, loading, extras };
 }

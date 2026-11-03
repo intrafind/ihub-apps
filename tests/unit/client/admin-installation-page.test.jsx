@@ -28,7 +28,12 @@ const mockApi = {
   deleteInstalledIntegration: jest.fn(),
   setInstalledIntegrationEnabled: jest.fn(),
   fetchAdminApps: jest.fn(),
-  fetchAdminPlatformConfig: jest.fn()
+  fetchAdminPlatformConfig: jest.fn(),
+  markInstalledIntegrationActionsReviewed: jest.fn(),
+  fetchIntegrationDefinition: jest.fn(),
+  installIntegration: jest.fn(),
+  fetchIntegrationAction: jest.fn(),
+  saveIntegrationInstructions: jest.fn()
 };
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   fetchInstalledIntegration: (...args) => mockApi.fetchInstalledIntegration(...args),
@@ -38,10 +43,14 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   deleteInstalledIntegration: (...args) => mockApi.deleteInstalledIntegration(...args),
   setInstalledIntegrationEnabled: (...args) => mockApi.setInstalledIntegrationEnabled(...args),
   fetchIntegrationDefinitionFile: jest.fn(),
-  fetchIntegrationDefinition: jest.fn(),
-  installIntegration: jest.fn(),
+  markInstalledIntegrationActionsReviewed: (...args) =>
+    mockApi.markInstalledIntegrationActionsReviewed(...args),
+  fetchIntegrationDefinition: (...args) => mockApi.fetchIntegrationDefinition(...args),
+  installIntegration: (...args) => mockApi.installIntegration(...args),
   testIntegrationDraft: jest.fn(),
-  fetchIntegrationConnections: jest.fn().mockResolvedValue([])
+  fetchIntegrationConnections: jest.fn().mockResolvedValue([]),
+  fetchIntegrationAction: (...args) => mockApi.fetchIntegrationAction(...args),
+  saveIntegrationInstructions: (...args) => mockApi.saveIntegrationInstructions(...args)
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
@@ -87,6 +96,8 @@ jest.mock('react-i18next', () => ({
 
 const AdminInstallationPage =
   require('../../../client/src/features/admin/pages/AdminInstallationPage').default;
+const IntegrationInstallForm =
+  require('../../../client/src/features/admin/components/integrations/IntegrationInstallForm').default;
 
 beforeAll(async () => {
   await mockI18n.init({
@@ -461,5 +472,184 @@ describe('installation page: settings', () => {
     await screen.findByRole('heading', { level: 1, name: 'Our iFinder' });
     expect(screen.queryByRole('tab', { name: /Releases/ })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+describe('installation page: new and changed actions (#2916)', () => {
+  const REVIEW_DETAIL = {
+    ...CKAN_DETAIL,
+    instance: { ...CKAN_DETAIL.instance, approval: { default: 'writes' } },
+    actions: [
+      { name: 'search_datasets', title: 'Search datasets', sideEffect: 'read', review: null },
+      { name: 'get_dataset', title: 'Get dataset', sideEffect: 'read', review: 'new' },
+      { name: 'update_dataset', title: 'Update dataset', sideEffect: 'write', review: 'changed' }
+    ]
+  };
+
+  test('badges new and changed actions and marks one or all reviewed', async () => {
+    mockApi.fetchInstalledIntegration.mockResolvedValue(REVIEW_DETAIL);
+    mockApi.markInstalledIntegrationActionsReviewed.mockResolvedValue({
+      instance: REVIEW_DETAIL.instance,
+      reviewed: ['get_dataset']
+    });
+    renderAt('/admin/integrations/govdata');
+    await screen.findByRole('heading', { level: 1, name: 'GovData' });
+
+    const actions = screen.getByTestId('installation-actions');
+    expect(within(actions).getByText('New')).toBeInTheDocument();
+    expect(within(actions).getByText('Changed')).toBeInTheDocument();
+    expect(within(actions).getAllByTestId('action-review-badge')).toHaveLength(2);
+    expect(screen.getByTestId('installation-actions-review')).toHaveTextContent(
+      '2 actions are new or changed since the last review.'
+    );
+    // The mode for new or changed actions, next to the installation default.
+    expect(screen.getByLabelText('New or changed actions')).toHaveValue('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Get dataset reviewed' }));
+    await waitFor(() =>
+      expect(mockApi.markInstalledIntegrationActionsReviewed).toHaveBeenCalledWith('govdata', [
+        'get_dataset'
+      ])
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark all reviewed' }));
+    await waitFor(() =>
+      expect(mockApi.markInstalledIntegrationActionsReviewed).toHaveBeenLastCalledWith(
+        'govdata',
+        null
+      )
+    );
+    expectNoMissingKeys();
+  });
+
+  test('reviewed actions show no badge and no review callout', async () => {
+    renderAt('/admin/integrations/govdata');
+    await screen.findByRole('heading', { level: 1, name: 'GovData' });
+    expect(screen.queryByTestId('action-review-badge')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('installation-actions-review')).not.toBeInTheDocument();
+  });
+});
+
+describe('install form: approval preselection (#2916)', () => {
+  const definitionFor = approvalPreset => ({
+    ...CKAN_DETAIL.definition,
+    id: 'org.example/remote',
+    approvalPreset,
+    dynamicActions: approvalPreset === 'always'
+  });
+
+  test.each([
+    ['always', 'always'],
+    ['writes', 'writes']
+  ])('preselects %s from the definition and installs with it', async (preset, expected) => {
+    mockApi.fetchIntegrationDefinition.mockResolvedValue(definitionFor(preset));
+    mockApi.installIntegration.mockImplementation(async body => body);
+    const onSaved = jest.fn();
+    render(
+      <MemoryRouter>
+        <IntegrationInstallForm
+          definitionId="org.example/remote"
+          variant="page"
+          onCancel={() => {}}
+          onSaved={onSaved}
+        />
+      </MemoryRouter>
+    );
+    const select = await screen.findByLabelText('Ask before an action runs');
+    expect(select).toHaveValue(expected);
+    fireEvent.change(screen.getByLabelText('Portal URL'), {
+      target: { value: 'https://portal.example' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(mockApi.installIntegration).toHaveBeenCalled());
+    expect(mockApi.installIntegration.mock.calls[0][0].approval).toEqual({ default: expected });
+    expectNoMissingKeys();
+  });
+
+  test('the admin can change the preselection before saving', async () => {
+    mockApi.fetchIntegrationDefinition.mockResolvedValue(definitionFor('always'));
+    mockApi.installIntegration.mockImplementation(async body => body);
+    render(
+      <MemoryRouter>
+        <IntegrationInstallForm
+          definitionId="org.example/remote"
+          variant="page"
+          onCancel={() => {}}
+          onSaved={() => {}}
+        />
+      </MemoryRouter>
+    );
+    const select = await screen.findByLabelText('Ask before an action runs');
+    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Portal URL'), {
+      target: { value: 'https://portal.example' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(mockApi.installIntegration).toHaveBeenCalled());
+    expect(mockApi.installIntegration.mock.calls[0][0].approval).toBeUndefined();
+  });
+
+  test('editing an installation shows no preselection and sends the stored approval back', async () => {
+    mockApi.fetchInstalledIntegration.mockResolvedValue({
+      ...CKAN_DETAIL,
+      instance: { ...CKAN_DETAIL.instance, approval: { default: 'never' } }
+    });
+    mockApi.fetchIntegrationDefinition.mockResolvedValue({
+      ...CKAN_DETAIL.definition,
+      approvalPreset: 'always'
+    });
+    render(
+      <MemoryRouter>
+        <IntegrationInstallForm
+          definitionId={CKAN_DETAIL.definition.id}
+          instanceId="govdata"
+          variant="page"
+          onCancel={() => {}}
+          onSaved={() => {}}
+        />
+      </MemoryRouter>
+    );
+    await screen.findByLabelText('Portal URL');
+    expect(screen.queryByTestId('install-approval-default')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalled());
+    expect(mockApi.updateInstalledIntegration.mock.calls[0][1].approval).toEqual({
+      default: 'never'
+    });
+  });
+});
+
+describe('installation page: action detail and instructions (#2974)', () => {
+  test('opens the action detail from an action and edits the integration instructions', async () => {
+    mockApi.fetchInstalledIntegration.mockResolvedValue({
+      ...CKAN_DETAIL,
+      instructions: { text: 'Start with search_datasets.', source: 'definition', own: null }
+    });
+    mockApi.fetchIntegrationAction.mockReturnValue(new Promise(() => {}));
+    mockApi.saveIntegrationInstructions.mockResolvedValue({});
+    renderAt('/admin/integrations/govdata');
+    await screen.findByRole('heading', { level: 1, name: 'GovData' });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Details of Search datasets: what it does, how to use it, test it'
+      })
+    );
+    expect(await screen.findByTestId('integration-action-drawer')).toBeInTheDocument();
+    expect(mockApi.fetchIntegrationAction).toHaveBeenCalledWith('govdata', 'search_datasets');
+
+    const card = screen.getByTestId('installation-instructions');
+    expect(within(card).getByText('Start with search_datasets.')).toBeInTheDocument();
+    expect(within(card).getByText('From the integration definition')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit instructions' }));
+    fireEvent.change(within(card).getByRole('textbox'), {
+      target: { value: 'Always link the dataset.' }
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('govdata', {
+        en: 'Always link the dataset.'
+      })
+    );
+    expectNoMissingKeys();
   });
 });

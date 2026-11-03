@@ -10,6 +10,7 @@ import SsrfConfig from '../components/SsrfConfig';
 import ProxyConfig from '../components/ProxyConfig';
 import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import RateLimitConfig from '../components/RateLimitConfig';
+import ToolApprovalConfig from '../components/ToolApprovalConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
@@ -294,6 +295,11 @@ function AdminSecurityPage() {
           id: 'ssrf',
           label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
           children: <SsrfConfig />
+        },
+        {
+          id: 'toolApproval',
+          label: t('admin.security.sections.toolApproval', 'Tool approval'),
+          children: <ToolApprovalConfig />
         },
         {
           id: 'proxy',
