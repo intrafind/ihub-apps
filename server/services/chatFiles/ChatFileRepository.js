@@ -127,6 +127,12 @@ const KEY_SEPARATOR = '__';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCAN_PAGE_SIZE = 200;
 
+/** How long the cached server-wide byte total is trusted. */
+const SERVER_BYTES_CACHE_MS = 30 * 1000;
+
+/** Share of `maxServerBytes` above which an upload checks the exact total. */
+const SERVER_QUOTA_EXACT_FRACTION = 0.9;
+
 export const MAX_CHAT_FILE_NAME_CHARS = 300;
 
 /**
@@ -272,6 +278,8 @@ export class ChatFileRepository {
     this.blobs = blobs || null;
     this.logger = log || logger;
     this.policy = policy;
+    /** @type {{value: number, at: number}|null} */
+    this._serverBytes = null;
   }
 
   /** Whether both document and blob facets are available. @returns {boolean} */
@@ -503,6 +511,7 @@ export class ChatFileRepository {
       }
     }
 
+    this._noteServerBytes(totalBytes - (replaces?.bytes || 0));
     return toFileDescriptor(id, body);
   }
 
@@ -573,29 +582,62 @@ export class ChatFileRepository {
       }
     }
 
-    // Tier 3: Server-Total quota (with LRU eviction of oldest chat originals)
+    // Tier 3: Server-Total quota (with LRU eviction of oldest chat originals).
+    // The total is read from a short-lived cache, not from every document of the
+    // namespace on every upload; a full read is made only when the upload could
+    // come close to the limit, where the answer has to be exact.
     if (quotas.maxServerBytes > 0) {
-      let allDocs = await this._listAllDocs();
-      let usedServerBytes =
-        allDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
-        (replaces?.bytes || 0);
-      if (usedServerBytes + totalBytes > quotas.maxServerBytes && evictOldestOriginalsOnQuota) {
-        const needed = usedServerBytes + totalBytes - quotas.maxServerBytes;
-        const freed = await this._evictOldestOriginals(allDocs, needed, {
-          excludeScope: scope,
-          reason: 'quota_evicted'
-        });
-        usedServerBytes -= freed;
+      const limit = quotas.maxServerBytes;
+      let used = await this._serverUsedBytes();
+      if (used + totalBytes > limit * SERVER_QUOTA_EXACT_FRACTION) {
+        used = await this._serverUsedBytes({ exact: true });
       }
-      if (usedServerBytes + totalBytes > quotas.maxServerBytes) {
+      used -= replaces?.bytes || 0;
+      if (used + totalBytes > limit && evictOldestOriginalsOnQuota) {
+        const freed = await this._evictOldestOriginals(
+          await this._listAllDocs(),
+          used + totalBytes - limit,
+          {
+            excludeScope: scope,
+            reason: 'quota_evicted'
+          }
+        );
+        used -= freed;
+        this._serverBytes = null;
+      }
+      if (used + totalBytes > limit) {
         throw new ChatFileQuotaError(
           'QUOTA_SERVER_BYTES',
           'Server file upload storage quota is full',
-          { limit: quotas.maxServerBytes, used: usedServerBytes, size: totalBytes },
+          { limit, used, size: totalBytes },
           507
         );
       }
     }
+  }
+
+  /**
+   * Bytes stored by all chat files of the server. Answered from a cache that is
+   * kept current by this process's own writes and expires after
+   * {@link SERVER_BYTES_CACHE_MS}, so uploads do not read the whole namespace;
+   * `exact` forces a fresh read (another instance may have written too).
+   *
+   * @param {{exact?: boolean}} [options]
+   * @returns {Promise<number>}
+   * @private
+   */
+  async _serverUsedBytes({ exact = false } = {}) {
+    const cached = this._serverBytes;
+    if (!exact && cached && Date.now() - cached.at < SERVER_BYTES_CACHE_MS) return cached.value;
+    const docs = await this._listAllDocs();
+    const value = docs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0);
+    this._serverBytes = { value, at: Date.now() };
+    return value;
+  }
+
+  /** Keep the cached server total current after this process wrote `delta` bytes. */
+  _noteServerBytes(delta) {
+    if (this._serverBytes) this._serverBytes.value = Math.max(0, this._serverBytes.value + delta);
   }
 
   /**
@@ -758,6 +800,7 @@ export class ChatFileRepository {
     const data = doc?.data;
     if (!data || (data.scope && !sameScope(data.scope, target))) return null;
 
+    this._serverBytes = null;
     await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(error => {
       this.logger.warn('Failed to delete original binary blob during discardOriginal', {
         component: COMPONENT,
@@ -928,6 +971,7 @@ export class ChatFileRepository {
   }
 
   async _deleteKey(key, scope) {
+    this._serverBytes = null;
     let removed = false;
     try {
       removed = await this.documents.delete(CHAT_FILES_NAMESPACE, key);

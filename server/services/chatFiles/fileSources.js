@@ -184,7 +184,7 @@ export async function fetchSourceFile({ source, user, maxBytes = 0, signal } = {
       const bytes = await readContent(content, maxBytes);
       const name =
         content.fileName ||
-        `${ref.documentId}${text || /^text\//.test(content.contentType || '') ? '.txt' : ''}`;
+        `${ref.documentId}${text || String(content.contentType || '').startsWith('text/') ? '.txt' : ''}`;
       return {
         bytes,
         contentType: String(

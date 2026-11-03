@@ -105,7 +105,7 @@ export function uploadedStorageState(file) {
  * @returns {{ headers: Array<{name: string, value: string}>, body: string }}
  */
 export function parseStructuredText(text) {
-  const source = String(text || '').replace(/\r\n/g, '\n');
+  const source = String(text || '').replaceAll('\r\n', '\n');
   const headers = [];
   const lines = source.split('\n');
   let index = 0;
@@ -116,7 +116,7 @@ export function parseStructuredText(text) {
     if (match) {
       headers.push({ name: match[1], value: match[2] });
     } else if (/^\s+\S/.test(line) && headers.length > 0) {
-      headers[headers.length - 1].value += ` ${line.trim()}`;
+      headers.at(-1).value += ` ${line.trim()}`;
     } else {
       // Not a header block after all: everything is body.
       return { headers: [], body: source };
@@ -142,7 +142,7 @@ export function blobToBase64(blob) {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error || new Error('read failed'));
     reader.onload = () => {
-      const result = String(reader.result || '');
+      const result = typeof reader.result === 'string' ? reader.result : '';
       resolve(result.slice(result.indexOf(',') + 1));
     };
     reader.readAsDataURL(blob);

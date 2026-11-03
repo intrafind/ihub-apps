@@ -263,31 +263,23 @@ export default function AttachedFilesList({
                       </span>
                     )}
                     {file.uploadState === 'error' && (
-                      <span
+                      <output
                         className="ml-2 text-amber-700 dark:text-amber-400"
-                        role="status"
                         data-testid="attached-file-upload-error"
                       >
                         · {uploadErrorText(file.uploadError, t)}
-                      </span>
+                      </output>
                     )}
                   </div>
                   {file.uploadState === 'uploading' && (
-                    <div
-                      className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(file.uploadProgress || 0)}
+                    <progress
+                      className="mt-1 block h-1.5 w-full overflow-hidden rounded-full accent-indigo-500"
+                      max={100}
+                      value={Math.round(file.uploadProgress || 0)}
                       aria-label={t('attachedFiles.uploading', 'Uploading {{name}}', {
                         name: file.fileName
                       })}
-                    >
-                      <div
-                        className="h-full bg-indigo-500 transition-[width]"
-                        style={{ width: `${Math.round(file.uploadProgress || 0)}%` }}
-                      />
-                    </div>
+                    />
                   )}
                 </div>
 

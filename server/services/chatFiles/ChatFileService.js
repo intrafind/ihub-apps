@@ -206,7 +206,7 @@ export async function ingestChatFile({
     try {
       const extracted = await extractText(
         { bytes: buf, contentType: accepted, name: name || 'upload' },
-        { maxChars: MAX_TEXT_CHARS, ...(extractOptions || {}) }
+        { maxChars: MAX_TEXT_CHARS, ...extractOptions }
       );
       extractedText = extracted.text || '';
       resolvedMime = extracted.contentType || accepted;

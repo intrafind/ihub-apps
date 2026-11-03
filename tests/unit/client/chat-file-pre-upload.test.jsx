@@ -309,7 +309,7 @@ describe('AttachedFilesList upload state', () => {
         onRemoveAll={() => {}}
       />
     );
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '55');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '55');
   });
 
   it('says when the file is saved and when it can be a template', () => {

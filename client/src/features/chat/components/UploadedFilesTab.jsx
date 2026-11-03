@@ -116,9 +116,9 @@ function UploadedPreview({ file, source, getBlob }) {
 
   if (needsText && text.status === 'loading') {
     return (
-      <p className="text-sm text-gray-500 dark:text-gray-400" role="status">
+      <output className="block text-sm text-gray-500 dark:text-gray-400">
         {t('chatArtifacts.previewLoading', 'Loading preview…')}
-      </p>
+      </output>
     );
   }
   if (needsText && text.status === 'error') {
@@ -488,7 +488,7 @@ export default function UploadedFilesTab({
                 </span>
               )}
             </p>
-            <div aria-live="polite" role="status" className="empty:hidden">
+            <output aria-live="polite" className="block empty:hidden">
               {notice && (
                 <p
                   className={`mb-2 text-sm ${notice.tone === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}
@@ -496,7 +496,7 @@ export default function UploadedFilesTab({
                   {notice.text}
                 </p>
               )}
-            </div>
+            </output>
             <UploadedPreview key={current.id} file={current} source={source} getBlob={getBlob} />
           </>
         )}

@@ -405,4 +405,61 @@ describe('chat file foundation', () => {
       assert.deepEqual(data.meta, { itemId: 'evt1' });
     });
   });
+
+  describe('server-wide quota', () => {
+    const policy = maxServerBytes => ({ quotas: { maxServerBytes } });
+    const put = (n, extra = {}) =>
+      repo.put(
+        { type: 'chat', id: `chat-srv-${n}` },
+        {
+          ownerId: `u${n}`,
+          name: `f${n}.txt`,
+          mimeType: 'text/plain',
+          text: 'x'.repeat(100),
+          ...extra
+        }
+      );
+
+    it('does not read every file document on each upload while far from the limit', async () => {
+      let scans = 0;
+      const scan = repo._listAllDocs.bind(repo);
+      repo._listAllDocs = async () => {
+        scans += 1;
+        return scan();
+      };
+      const limit = policy(1_000_000);
+      for (let i = 0; i < 6; i += 1) await put(i, { policy: limit });
+      assert.equal(scans, 1, 'one read fills the cache, the next uploads add to it');
+    });
+
+    it('checks the exact total near the limit, so a stale cache never refuses a fitting upload', async () => {
+      const limit = policy(1000);
+      const first = await put(1, { policy: limit, text: 'a'.repeat(600) });
+      // Another instance frees the space behind this one's cache.
+      const other = new ChatFileRepository({
+        documents: provider.documents,
+        blobs: provider.blobs
+      });
+      await other.delete({ type: 'chat', id: 'chat-srv-1' }, first.id);
+      const stored = await put(2, { policy: limit, text: 'b'.repeat(600) });
+      assert.ok(stored.id);
+      // And a full server is still reported as full.
+      await assert.rejects(put(3, { policy: limit, text: 'c'.repeat(600) }), error => {
+        assert.equal(error.code, 'QUOTA_SERVER_BYTES');
+        assert.equal(error.status, 507);
+        return true;
+      });
+    });
+
+    it('forgets the cached total when a file is deleted', async () => {
+      const limit = policy(1000);
+      const first = await put(1, { policy: limit, text: 'a'.repeat(800) });
+      await assert.rejects(put(2, { policy: limit, text: 'b'.repeat(800) }), {
+        code: 'QUOTA_SERVER_BYTES'
+      });
+      await repo.delete({ type: 'chat', id: 'chat-srv-1' }, first.id);
+      const stored = await put(2, { policy: limit, text: 'b'.repeat(800) });
+      assert.ok(stored.id);
+    });
+  });
 });

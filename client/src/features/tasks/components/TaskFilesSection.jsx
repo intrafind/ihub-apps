@@ -96,7 +96,7 @@ export default function TaskFilesSection({ taskId, staged = [], onStagedChange, 
     load();
   }, [load]);
 
-  if (uploads && uploads.enabled === false) return null;
+  if (uploads?.enabled === false) return null;
 
   const upload = async file => {
     setBusy(file.name);
@@ -205,9 +205,7 @@ export default function TaskFilesSection({ taskId, staged = [], onStagedChange, 
         </p>
       )}
       {status === 'loading' && (
-        <p className="text-sm text-gray-500" role="status">
-          {t('common.loading', 'Loading…')}
-        </p>
+        <output className="block text-sm text-gray-500">{t('common.loading', 'Loading…')}</output>
       )}
       {status === 'error' && (
         <p className="text-sm text-red-600" role="alert">
@@ -215,9 +213,9 @@ export default function TaskFilesSection({ taskId, staged = [], onStagedChange, 
         </p>
       )}
       {busy && (
-        <p className="text-sm text-gray-600 dark:text-gray-300" role="status">
+        <output className="block text-sm text-gray-600 dark:text-gray-300">
           {t('scheduledTasks.files.uploading', 'Uploading {{name}}…', { name: busy })}
-        </p>
+        </output>
       )}
       {error && (
         <p className="text-sm text-red-600" role="alert" data-testid="task-files-error">
