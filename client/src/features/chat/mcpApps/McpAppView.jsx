@@ -148,16 +148,22 @@ function McpAppView({ view, appId, chatId, host = null }) {
 
   // A view's call that waits for the user's approval (#2945): the card shown
   // below the view, and how to hand the decision's result back to the view.
+  // One approval waits at a time: a second gated call while the card is
+  // shown is refused (its interaction lapses on the server), so neither call
+  // is left without an answer.
   const [pendingApproval, setPendingApproval] = useState(null);
   const approvalWaitRef = useRef(null);
-  const waitForApproval = useCallback(
-    (interaction, toolRef) =>
-      new Promise(resolve => {
-        approvalWaitRef.current = { resolve, toolRef };
-        setPendingApproval(buildToolApproval(interaction));
-      }),
-    []
-  );
+  const waitForApproval = useCallback((interaction, toolRef) => {
+    if (approvalWaitRef.current) {
+      return Promise.reject(
+        new Error('Another call of this view is waiting for approval. Try again after it.')
+      );
+    }
+    return new Promise(resolve => {
+      approvalWaitRef.current = { resolve, toolRef };
+      setPendingApproval(buildToolApproval(interaction));
+    });
+  }, []);
   const decideApproval = useCallback(async answer => {
     const decided = toolApprovalAnswer(answer);
     const waiting = approvalWaitRef.current;

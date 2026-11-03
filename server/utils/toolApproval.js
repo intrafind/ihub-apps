@@ -96,15 +96,15 @@ export function toolApprovalConfigProblem(value) {
     return 'toolApproval must be an object';
   }
   const defaults = value.defaults;
-  if (defaults === undefined || defaults === null) return null;
-  if (typeof defaults !== 'object' || Array.isArray(defaults)) {
+  if (defaults === undefined) return null;
+  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) {
     return 'toolApproval.defaults must be an object';
   }
   for (const [key, mode] of Object.entries(defaults)) {
     if (!['default', ...DATA_FLOWS].includes(key)) {
       return `toolApproval.defaults.${key} is not a known key (default, internal, external)`;
     }
-    if (mode !== undefined && mode !== null && !isApprovalMode(mode)) {
+    if (mode !== undefined && !isApprovalMode(mode)) {
       return `toolApproval.defaults.${key} must be one of ${APPROVAL_MODES.join(', ')}`;
     }
   }
@@ -337,7 +337,7 @@ export function toolNeedsApproval(toolDef, app = null, platform = null) {
 
 /**
  * Whether a call that reaches a tool outside the agent loop — the MCP gateway,
- * the direct tool API for a token caller, an MCP App view — needs a person's
+ * the direct tool API for a token caller — needs a person's
  * approval. Nobody on those paths can give it, so such a call is refused
  * (`APPROVAL_REQUIRED_NO_USER`). Resolved like in a chat without an app:
  * platform default, tool or installation, action.

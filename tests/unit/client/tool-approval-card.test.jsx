@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ApprovalCard, {
   formatApprovalArgs
@@ -18,7 +18,10 @@ import {
   withActionMode,
   withDefaultMode
 } from '../../../client/src/features/admin/components/integrations/installationApproval';
-import { toolApprovalFromForm } from '../../../client/src/features/admin/components/ToolApprovalConfig';
+import ToolApprovalConfig, {
+  toolApprovalFromForm
+} from '../../../client/src/features/admin/components/ToolApprovalConfig';
+import { makeAdminApiCall } from '../../../client/src/api/adminApi';
 import { toolApprovalAnswer } from '../../../client/src/features/chat/toolApprovalAnswer';
 
 /**
@@ -244,5 +247,31 @@ describe('installation approval editing', () => {
       defaults: { external: 'writes' }
     });
     expect(toolApprovalFromForm({ default: '', internal: '', external: '' })).toBeNull();
+  });
+
+  it('the platform form saves only its own block, never the redacted platform config', async () => {
+    // The GET answer leaves out secrets such as a proxy JWT provider's jwkUrl;
+    // posting it back would write the platform config without them.
+    makeAdminApiCall.mockReset();
+    makeAdminApiCall.mockImplementation(async (_url, { method } = {}) =>
+      method === 'POST'
+        ? { data: {} }
+        : {
+            data: {
+              proxyAuth: { jwtProviders: [{ name: 'sso', header: 'X-Token' }] },
+              toolApproval: { defaults: { external: 'writes' } }
+            }
+          }
+    );
+    render(<ToolApprovalConfig />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(makeAdminApiCall).toHaveBeenCalledWith(
+        '/admin/configs/platform',
+        expect.objectContaining({ method: 'POST' })
+      )
+    );
+    const post = makeAdminApiCall.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(post[1].body).toEqual({ toolApproval: { defaults: { external: 'writes' } } });
   });
 });
