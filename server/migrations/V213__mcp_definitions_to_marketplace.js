@@ -41,7 +41,9 @@
  *
  * A definition folder that already exists (installed from a registry or by
  * hand) is left as it is, and so is an existing record; a generic
- * installation is re-linked to it only when it holds the snapshot's version. Definitions no
+ * installation is re-linked only when that definition, too, yields exactly
+ * its connection (the folder may hold any version, or a file written by
+ * hand). Definitions no
  * installation uses are not written; the catalog offers them from the
  * marketplace. Idempotent: a second run finds the folders and changes
  * nothing.
@@ -688,42 +690,70 @@ function sameRecord(a, b) {
 }
 
 /**
- * The moved definition a generic installation can be re-linked to, as
- * `{ folder, instance }` with the re-linked installation, or `{ reason }`
- * when its endpoint is a moved one but the connection would change, or null
- * when its endpoint is none of them.
+ * The moved definition a generic installation's endpoint belongs to, as
+ * `[folder, definition]` from the snapshot, or null.
+ * @param {object} inst - a `com.intrafind/mcp-server` installation
+ */
+export function movedDefinitionFor(inst) {
+  const url = normalizeUrl(inst?.values?.url);
+  if (!url) return null;
+  return (
+    Object.entries(MOVED_DEFINITIONS).find(
+      ([, def]) => normalizeUrl(def.protocol.transport.url) === url
+    ) || null
+  );
+}
+
+/**
+ * The installation re-linked to `def`, or `{ reason }` when the connection
+ * `def` builds would differ from the one the generic installation has. `def`
+ * is the snapshot or a definition already on disk under the same folder (a
+ * hand-written one may say anything, so every field is checked, not assumed).
  *
  * @param {object} inst - a `com.intrafind/mcp-server` installation
- * @returns {{ folder: string, instance: object } | { reason: string } | null}
+ * @param {object} def - the definition to re-link to
+ * @returns {{ instance: object } | { reason: string }}
  */
-export function relinkFor(inst) {
+export function relinkTo(inst, def) {
   const values = inst.values && typeof inst.values === 'object' ? inst.values : {};
+  const protocol = def?.protocol;
+  const fixed = protocol?.transport;
+  if (protocol?.type !== 'mcp' || !fixed || typeof fixed.url !== 'string') {
+    return { reason: `${def?.id ?? 'the definition'} is not a hosted MCP definition` };
+  }
+  if (normalizeUrl(fixed.url) !== normalizeUrl(values.url) || fixed.url.includes('{')) {
+    return { reason: `${def.id} connects to ${fixed.url}, not ${values.url}` };
+  }
   const transport = values.transport || 'streamableHttp';
-  const url = normalizeUrl(values.url);
-  if (!url) return null;
-  const entry = Object.entries(MOVED_DEFINITIONS).find(
-    ([, def]) => normalizeUrl(def.protocol.transport.url) === url
-  );
-  if (!entry) return null;
-  const [folder, def] = entry;
-  const fixed = def.protocol.transport;
   if (transport !== fixed.type) return { reason: `transport "${transport}" is not ${fixed.type}` };
+  // Settings the definition fixes itself would replace the installation's.
+  const fixedSettings = ['toolPrefix', 'timeoutMs', 'reconnect'].filter(
+    key => protocol[key] !== undefined
+  );
+  if (fixedSettings.length) {
+    return { reason: `${def.id} fixes ${fixedSettings.join(', ')}` };
+  }
+  if (protocol.apps?.enabled === false) return { reason: `${def.id} switches MCP App views off` };
 
   const mode = inst.auth?.mode || 'none';
-  if (!def.auth.modes.includes(mode)) {
+  if (!Array.isArray(def.auth?.modes) || !def.auth.modes.includes(mode)) {
     return { reason: `sign-in mode "${mode}" is not offered by ${def.id}` };
   }
   if (mode === 'service-account') {
-    const account = def.auth.serviceAccount;
+    const account = def.auth.serviceAccount || {};
     const kind = values.authKind || 'bearer';
-    if (kind !== account.kind) {
+    if (kind !== (account.kind || 'bearer')) {
       return { reason: `the credential is sent as "${kind}", ${def.id} sends "${account.kind}"` };
     }
     if (kind === 'header') {
       const name = String(values.headerName || '').toLowerCase();
       const prefix = values.valuePrefix || '';
-      if (name !== account.header.toLowerCase() || prefix !== (account.valuePrefix || '')) {
-        return { reason: `the credential header differs from ${def.id}'s ${account.header}` };
+      const header = typeof account.header === 'string' ? account.header : '';
+      if (!header || header.includes('{') || name !== header.toLowerCase()) {
+        return { reason: `the credential header differs from ${def.id}'s ${header || '(none)'}` };
+      }
+      if (prefix !== (account.valuePrefix || '')) {
+        return { reason: `the credential prefix differs from ${def.id}'s` };
       }
     }
   }
@@ -754,14 +784,32 @@ export function relinkFor(inst) {
   if (other.length) return { reason: `${other.join(', ')} set (${def.id} has no such field)` };
 
   // The definition's fixed headers, overridden by the admin's, must be
-  // exactly the headers the installation sends now.
+  // exactly the headers the installation sends now. Header names compare
+  // case-insensitively; a kept header is written in the definition's
+  // spelling, because the adapter merges the two lists by exact name.
+  const fixedHeaders = fixed.headers && typeof fixed.headers === 'object' ? fixed.headers : {};
+  if (Object.entries(fixedHeaders).some(([name, value]) => `${name}${value}`.includes('{'))) {
+    return { reason: `${def.id} fills its headers from install values` };
+  }
+  const spelling = new Map(Object.keys(fixedHeaders).map(name => [name.toLowerCase(), name]));
   const own = parseHeaderLines(values.headers);
-  const fixedHeaders = Object.fromEntries(
-    Object.entries(fixed.headers || {}).map(([name, value]) => [name.toLowerCase(), value])
+  const lowerFixed = Object.fromEntries(
+    Object.entries(fixedHeaders).map(([name, value]) => [name.toLowerCase(), value])
   );
-  if (!sameRecord({ ...fixedHeaders, ...own }, own)) {
-    const missing = Object.keys(fixedHeaders).filter(name => !(name in own));
+  if (!sameRecord({ ...lowerFixed, ...own }, own)) {
+    const missing = Object.keys(fixedHeaders).filter(name => !(name.toLowerCase() in own));
     return { reason: `${def.id} would add the header(s) ${missing.join(', ')}` };
+  }
+  const headerLines = (Array.isArray(values.headers) ? values.headers : []).map(line => {
+    const idx = String(line).indexOf(':');
+    if (idx <= 0) return line;
+    const name = String(line).slice(0, idx).trim();
+    const canonical = spelling.get(name.toLowerCase());
+    return canonical && canonical !== name ? `${canonical}${String(line).slice(idx)}` : line;
+  });
+  const hasHeadersField = (def.install || []).some(field => field?.key === 'headers');
+  if (headerLines.length && !hasHeadersField) {
+    return { reason: `${def.id} has no headers field for the installation's headers` };
   }
 
   const timeout = Number(values.timeoutMs);
@@ -776,16 +824,34 @@ export function relinkFor(inst) {
     ...inst,
     definition: def.id,
     definitionVersion: def.version,
-    values:
-      Array.isArray(values.headers) && values.headers.length ? { headers: values.headers } : {}
+    values: headerLines.length ? { headers: headerLines } : {}
   };
   if (hasTimeout) instance.timeoutMs = timeout;
-  return { folder, instance };
+  return { instance };
 }
 
 /**
- * Re-link the generic installations that qualify (see {@link relinkFor}) in
- * place; logs each one, and each that matched an endpoint but stays generic.
+ * The moved definition a generic installation can be re-linked to, checked
+ * against the snapshot: `{ folder, instance }`, `{ reason }` when its
+ * endpoint is a moved one but the connection would change, or null when its
+ * endpoint is none of them.
+ *
+ * @param {object} inst - a `com.intrafind/mcp-server` installation
+ * @returns {{ folder: string, instance: object } | { reason: string } | null}
+ */
+export function relinkFor(inst) {
+  const entry = movedDefinitionFor(inst);
+  if (!entry) return null;
+  const [folder, def] = entry;
+  const result = relinkTo(inst, def);
+  return result.reason ? result : { folder, instance: result.instance };
+}
+
+/**
+ * Re-link the generic installations that qualify in place: against the
+ * snapshot, and, when the definition's folder exists already (it is what
+ * will load), against that definition too. Logs each one, and each that
+ * matched an endpoint but stays generic.
  * @returns {Promise<boolean>} whether any installation changed
  */
 async function relinkGeneric(ctx, installed) {
@@ -793,31 +859,30 @@ async function relinkGeneric(ctx, installed) {
   for (let i = 0; i < installed.length; i++) {
     const inst = installed[i];
     if (inst?.definition !== GENERIC_DEFINITION) continue;
-    const result = relinkFor(inst);
+    let result = relinkFor(inst);
     if (!result) continue;
+    if (!result.reason) {
+      const rel = `${DEFINITIONS_DIR}/${result.folder}/integration.json`;
+      if (await ctx.fileExists(rel)) {
+        let existing = null;
+        try {
+          existing = await ctx.readJson(rel);
+        } catch {
+          existing = null;
+        }
+        const onDisk = existing ? relinkTo(inst, existing) : { reason: `${rel} is unreadable` };
+        result = onDisk.reason
+          ? { reason: `${rel}: ${onDisk.reason}` }
+          : { folder: result.folder, instance: onDisk.instance };
+      }
+    }
     if (result.reason) {
       ctx.log(`${inst.id}: stays an installation of ${GENERIC_DEFINITION}: ${result.reason}`);
       continue;
     }
-    const def = MOVED_DEFINITIONS[result.folder];
-    const rel = `${DEFINITIONS_DIR}/${result.folder}/integration.json`;
-    if (await ctx.fileExists(rel)) {
-      let existing = null;
-      try {
-        existing = await ctx.readJson(rel);
-      } catch {
-        existing = null;
-      }
-      if (existing?.version !== def.version) {
-        ctx.log(
-          `${inst.id}: stays an installation of ${GENERIC_DEFINITION}: ${rel} holds version ${existing?.version ?? 'unknown'}, not ${def.version}`
-        );
-        continue;
-      }
-    }
     installed[i] = result.instance;
     changed = true;
-    ctx.log(`${inst.id}: re-linked from ${GENERIC_DEFINITION} to ${def.id}`);
+    ctx.log(`${inst.id}: re-linked from ${GENERIC_DEFINITION} to ${result.instance.definition}`);
   }
   return changed;
 }

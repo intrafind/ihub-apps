@@ -250,13 +250,15 @@ describe('V213 hosted MCP definitions → marketplace', () => {
       assert.ok(logs.some(m => m.includes('linear: re-linked')));
     });
 
-    it('does not re-link to an existing folder of another version', async () => {
-      const generic = fromV193({
+    const stripe = () =>
+      fromV193({
         id: 'stripe',
         transport: { type: 'streamableHttp', url: 'https://mcp.stripe.com' },
         auth: { type: 'bearer', tokenRef: 's' }
       });
-      await seed('config/integrations.json', { installed: [generic] });
+
+    it('does not re-link to an unusable folder on disk', async () => {
+      await seed('config/integrations.json', { installed: [stripe()] });
       await seed('integration-definitions/mcp__stripe/integration.json', {
         id: 'mcp/stripe',
         version: '2.0.0'
@@ -264,6 +266,45 @@ describe('V213 hosted MCP definitions → marketplace', () => {
       await up(ctxFor());
       const config = await ctxFor().readJson('config/integrations.json');
       assert.equal(config.installed[0].definition, 'com.intrafind/mcp-server');
+    });
+
+    it('checks the connection of a hand-written folder of the same version, not its version', async () => {
+      const elsewhere = structuredClone(MOVED_DEFINITIONS.mcp__stripe);
+      elsewhere.protocol.transport.url = 'https://collector.example.com/mcp';
+      await seed('config/integrations.json', { installed: [stripe()] });
+      await seed('integration-definitions/mcp__stripe/integration.json', elsewhere);
+      await up(ctxFor());
+      const config = await ctxFor().readJson('config/integrations.json');
+      assert.equal(config.installed[0].definition, 'com.intrafind/mcp-server');
+      assert.ok(logs.some(m => m.includes('stays an installation') && m.includes('collector')));
+    });
+
+    it('re-links to a folder on disk whose connection matches, at its version', async () => {
+      const newer = structuredClone(MOVED_DEFINITIONS.mcp__stripe);
+      newer.version = '1.1.0';
+      await seed('config/integrations.json', { installed: [stripe()] });
+      await seed('integration-definitions/mcp__stripe/integration.json', newer);
+      await up(ctxFor());
+      const config = await ctxFor().readJson('config/integrations.json');
+      assert.equal(config.installed[0].definition, 'mcp/stripe');
+      assert.equal(config.installed[0].definitionVersion, '1.1.0');
+    });
+
+    it('writes a kept header in the definition spelling', () => {
+      const result = relinkFor(
+        fromV193({
+          id: 'close',
+          transport: {
+            type: 'streamableHttp',
+            url: 'https://mcp.close.com/mcp',
+            headers: { 'close-scope': 'mcp.write_safe', 'X-Trace': '1' }
+          },
+          auth: { type: 'header', headerName: 'close-api-key', valueRef: 'c' }
+        })
+      );
+      assert.deepEqual(result.instance.values, {
+        headers: ['Close-Scope: mcp.write_safe', 'X-Trace: 1']
+      });
     });
   });
 });
@@ -291,6 +332,15 @@ describe('V213 re-linking keeps the connection', () => {
       });
       delete config.name;
       delete config.description;
+      // HTTP header names are case-insensitive, but two spellings of one
+      // name would both be sent: fail on that, then compare in lower case.
+      const headers = config.transport.headers || {};
+      const lower = Object.fromEntries(
+        Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value])
+      );
+      assert.equal(Object.keys(lower).length, Object.keys(headers).length, 'duplicate header');
+      if (config.transport.headers) config.transport.headers = lower;
+      if (config.auth?.headerName) config.auth.headerName = config.auth.headerName.toLowerCase();
       return config;
     };
     for (const [folder, def] of Object.entries(MOVED_DEFINITIONS)) {
@@ -305,16 +355,31 @@ describe('V213 re-linking keeps the connection', () => {
               valueRef: 'ref'
             }
           : { type: 'bearer', tokenRef: 'ref' };
-      const server = {
-        id: 'srv',
-        transport: { ...def.protocol.transport },
-        auth,
-        timeoutMs: 45000
-      };
-      const before = instanceFrom(server, []);
-      const result = relinkFor(before);
-      assert.ok(result?.instance, `${folder}: ${result?.reason}`);
-      assert.deepEqual(connection(def, result.instance), connection(generic, before), folder);
+      // As the definition spells the headers, and as an admin may have
+      // typed them by hand (lower case).
+      for (const lowerCase of [false, true]) {
+        const spell = name => (lowerCase ? name.toLowerCase() : name);
+        const headers = Object.fromEntries(
+          Object.entries(def.protocol.transport.headers || {}).map(([n, v]) => [spell(n), v])
+        );
+        const server = {
+          id: 'srv',
+          transport: {
+            ...def.protocol.transport,
+            headers: Object.keys(headers).length ? headers : undefined
+          },
+          auth: auth.headerName ? { ...auth, headerName: spell(auth.headerName) } : auth,
+          timeoutMs: 45000
+        };
+        const before = instanceFrom(server, []);
+        const result = relinkFor(before);
+        assert.ok(result?.instance, `${folder}: ${result?.reason}`);
+        assert.deepEqual(
+          connection(def, result.instance),
+          connection(generic, before),
+          `${folder}${lowerCase ? ' (lower case)' : ''}`
+        );
+      }
     }
   });
 });

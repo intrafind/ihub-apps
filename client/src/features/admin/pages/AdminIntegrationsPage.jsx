@@ -143,7 +143,7 @@ function AdminIntegrationsPage() {
   // Whether the marketplace feeds the catalog, and its registries ({ id, name, fetchedAt }).
   const [marketplace, setMarketplace] = useState(null);
   // Registries without a cached catalog are refreshed once per visit.
-  const refreshedRegistries = useRef(false);
+  const refreshedRegistriesRef = useRef(false);
   const [apps, setApps] = useState([]);
   // The groups (id → group), for who grants each installation; null when unknown.
   const [groups, setGroups] = useState(null);
@@ -211,9 +211,9 @@ function AdminIntegrationsPage() {
   // catalogs; a registry that was never refreshed is fetched once, so the
   // catalog lists its integrations without a trip to the Marketplace page.
   useEffect(() => {
-    if (refreshedRegistries.current || !marketplace?.enabled) return;
+    if (refreshedRegistriesRef.current || !marketplace?.enabled) return;
     const missing = (marketplace.registries || []).filter(registry => !registry.fetchedAt);
-    refreshedRegistries.current = true;
+    refreshedRegistriesRef.current = true;
     if (missing.length === 0) return;
     void Promise.allSettled(missing.map(registry => refreshMarketplaceRegistry(registry.id))).then(
       results => {
@@ -257,6 +257,47 @@ function AdminIntegrationsPage() {
     return () => window.clearTimeout(timer);
   }, [message]);
 
+  /**
+   * Install a definition from the catalog: a marketplace entry is first
+   * installed from its registry (the marketplace's own install and checks),
+   * then the setup dialog opens for it like for any loaded definition.
+   */
+  const startInstall = useCallback(
+    async (definitionId, prefill) => {
+      const item = catalog.find(entry => entry.id === definitionId);
+      if (item?.source !== 'marketplace') {
+        setDialog({ definitionId, prefill });
+        return;
+      }
+      setBusy(definitionId);
+      try {
+        await installMarketplaceItem(
+          item.marketplace.registryId,
+          'integration',
+          item.marketplace.name
+        );
+        await load();
+        setDialog({ definitionId, prefill });
+      } catch (err) {
+        setMessage({
+          type: 'error',
+          text: t(
+            'admin.integrationCatalog.marketplaceInstallFailed',
+            '{{name}} could not be installed from {{registry}}: {{error}}',
+            {
+              name: item.name,
+              registry: item.marketplace.registryName,
+              error: getAdminApiErrorMessage(err)
+            }
+          )
+        });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [catalog, load, t]
+  );
+
   // Deep link: /admin/integrations?install=<folder name>[&label=…][&v.<key>=…]
   useEffect(() => {
     const definitionId = definitionIdFromParam(installParam);
@@ -268,7 +309,7 @@ function AdminIntegrationsPage() {
     // Iterate the original: deleting from `next` while iterating it would skip keys.
     for (const key of searchParams.keys()) if (key.startsWith('v.')) next.delete(key);
     setSearchParams(next, { replace: true });
-  }, [installParam, loading, searchParams, setSearchParams]);
+  }, [installParam, loading, searchParams, setSearchParams, startInstall]);
 
   const setTab = next => {
     const params = new URLSearchParams(searchParams);
@@ -415,44 +456,6 @@ function AdminIntegrationsPage() {
       setBusy(null);
     }
   };
-
-  /**
-   * Install a definition from the catalog: a marketplace entry is first
-   * installed from its registry (the marketplace's own install and checks),
-   * then the setup dialog opens for it like for any loaded definition.
-   */
-  async function startInstall(definitionId, prefill) {
-    const item = catalog.find(entry => entry.id === definitionId);
-    if (item?.source !== 'marketplace') {
-      setDialog({ definitionId, prefill });
-      return;
-    }
-    setBusy(definitionId);
-    try {
-      await installMarketplaceItem(
-        item.marketplace.registryId,
-        'integration',
-        item.marketplace.name
-      );
-      await load();
-      setDialog({ definitionId, prefill });
-    } catch (err) {
-      flash(
-        'error',
-        t(
-          'admin.integrationCatalog.marketplaceInstallFailed',
-          '{{name}} could not be installed from {{registry}}: {{error}}',
-          {
-            name: item.name,
-            registry: item.marketplace.registryName,
-            error: getAdminApiErrorMessage(err)
-          }
-        )
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
 
   const reload = async () => {
     try {
