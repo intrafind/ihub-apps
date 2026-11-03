@@ -875,68 +875,6 @@ export const updateContentAccess = async (type, id, { grant = [], revoke = [] } 
   return response.data;
 };
 
-// Tools API functions
-export const fetchAdminTools = async () => {
-  try {
-    const response = await makeAdminApiCall('/admin/tools');
-    const data = response.data;
-
-    // Ensure we return an array
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error in fetchAdminTools:', error);
-    throw error;
-  }
-};
-
-export const fetchAdminTool = async toolId => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}`);
-  return response.data;
-};
-
-export const createTool = async toolData => {
-  const response = await makeAdminApiCall('/admin/tools', {
-    method: 'POST',
-    body: toolData
-  });
-  return response.data;
-};
-
-export const updateTool = async (toolId, toolData) => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}`, {
-    method: 'PUT',
-    body: toolData
-  });
-  return response.data;
-};
-
-export const deleteTool = async toolId => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}`, {
-    method: 'DELETE'
-  });
-  return response.data;
-};
-
-export const toggleTool = async toolId => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}/toggle`, {
-    method: 'POST'
-  });
-  return response.data;
-};
-
-export const fetchToolScript = async toolId => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}/script`);
-  return response.data;
-};
-
-export const updateToolScript = async (toolId, content) => {
-  const response = await makeAdminApiCall(`/admin/tools/${toolId}/script`, {
-    method: 'PUT',
-    body: { content }
-  });
-  return response.data;
-};
-
 // Credential store API functions
 
 /**
@@ -1007,22 +945,6 @@ export const updateCredential = async (id, data) => {
 export const deleteCredential = async id => {
   const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`, {
     method: 'DELETE'
-  });
-  return response.data;
-};
-
-/**
- * Parses an OpenAPI specification from a URL, inline text, or uploaded content.
- * Returns the spec info, servers, and a flattened list of operations for the
- * OpenAPI tool editor.
- *
- * @param {string} source - OpenAPI source (URL or inline JSON/YAML text)
- * @returns {Promise<{info: Object, servers: Array, operations: Array}>}
- */
-export const parseOpenApiSpec = async source => {
-  const response = await makeAdminApiCall('/admin/tools/openapi/parse', {
-    method: 'POST',
-    body: { source }
   });
   return response.data;
 };
@@ -1532,17 +1454,6 @@ export const adminApi = {
   // Workflow Execution functions
   fetchAdminExecutions,
   cancelAdminExecution,
-
-  // Tools functions
-  fetchAdminTools,
-  fetchAdminTool,
-  createTool,
-  updateTool,
-  deleteTool,
-  toggleTool,
-  fetchToolScript,
-  updateToolScript,
-  parseOpenApiSpec,
 
   // Credential store functions
   listCredentials,
