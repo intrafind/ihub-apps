@@ -406,12 +406,14 @@ describe('/v1/files quotas', () => {
   });
 
   it('maps the file count of the user scope to 413 and a full server to 507', async () => {
-    setUploads({ quotas: { maxChatFiles: 1 } });
+    // The API user scope has limits of its own: the per-chat ones do not apply to it.
+    setUploads({ quotas: { maxChatFiles: 1, maxApiFiles: 2 } });
     const { app } = setup();
     assert.equal((await upload(app, 'one')).status, 200);
-    const second = await upload(app, 'two');
-    assert.equal(second.status, 413);
-    assert.equal(second.body.error.code, 'quota_chat_files');
+    assert.equal((await upload(app, 'two')).status, 200);
+    const third = await upload(app, 'three');
+    assert.equal(third.status, 413);
+    assert.equal(third.body.error.code, 'quota_api_files');
 
     setUploads({ quotas: { maxServerBytes: 10 }, evictOldestOriginalsOnQuota: false });
     const full = await upload(app, 'this is more than ten bytes');
@@ -862,5 +864,108 @@ describe('files of conversation turns', () => {
       (await getChatRepository().fileStore().list({ type: 'chat', id: conv.id })).length,
       0
     );
+  });
+});
+
+describe('files on conversation items', () => {
+  const part = (name, body) => ({
+    type: 'input_file',
+    filename: name,
+    file_data: dataUrl(body, 'text/plain')
+  });
+  const item = (text, ...files) => ({
+    type: 'message',
+    role: 'user',
+    content: [{ type: 'input_text', text }, ...files]
+  });
+
+  it('stores an inline file of an added item in the conversation and names it on the item', async () => {
+    const { app, requests } = setup([openaiText(['ok'])]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const added = await request(app)
+      .post(`${CONVERSATIONS}/${conv.id}/items`)
+      .send({
+        items: [item('Please keep this.', part('terms.txt', 'Term 9: notice period 3 months'))]
+      });
+    assert.equal(added.status, 200, JSON.stringify(added.body));
+    const [stored] = (await getChatRepository().getMessages(conv.id)).messages;
+    assert.equal(stored.content, 'Please keep this.');
+    const [attachment] = stored.attachments;
+    assert.equal(attachment.name, 'terms.txt');
+    assert.match(attachment.id, /^file_/);
+    const files = await getChatRepository().fileStore().list({ type: 'chat', id: conv.id });
+    assert.equal(files.length, 1);
+    assert.equal(files[0].origin, 'api');
+    assert.equal(files[0].hasOriginal, true);
+    assert.equal(added.body.data[0].content[1].file_id, attachment.id);
+
+    // The next response in the conversation sees the file.
+    const answer = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'oa', conversation: conv.id, input: 'Which notice period?' });
+    assert.equal(answer.status, 200, JSON.stringify(answer.body));
+    assert.match(userText(requests[0]), /notice period 3 months/);
+  });
+
+  it('copies an uploaded file by id, once, and reads a Chat Completions file part', async () => {
+    const { app } = setup([]);
+    const uploaded = await upload(app, 'Uploaded memo text', { filename: 'memo.txt' });
+    assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    for (let i = 0; i < 2; i += 1) {
+      const added = await request(app)
+        .post(`${CONVERSATIONS}/${conv.id}/items`)
+        .send({
+          items: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: `again ${i}` },
+                { type: 'file', file: { file_id: uploaded.body.id } }
+              ]
+            }
+          ]
+        });
+      assert.equal(added.status, 200, JSON.stringify(added.body));
+    }
+    const files = await getChatRepository().fileStore().list({ type: 'chat', id: conv.id });
+    assert.equal(files.length, 1, 'the same upload is not copied twice');
+    assert.equal(files[0].name, 'memo.txt');
+  });
+
+  it('takes files when a conversation is created with items', async () => {
+    const { app } = setup([]);
+    const created = await request(app)
+      .post(CONVERSATIONS)
+      .send({ items: [item('Start here', part('seed.txt', 'seed content'))] });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const files = await getChatRepository().fileStore().list({ type: 'chat', id: created.body.id });
+    assert.equal(files.length, 1);
+    assert.equal(files[0].name, 'seed.txt');
+  });
+
+  it('refuses files on assistant items, other parts, foreign file ids and URLs', async () => {
+    const { app } = setup([]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const post = items => request(app).post(`${CONVERSATIONS}/${conv.id}/items`).send({ items });
+    const assistant = await post([
+      { role: 'assistant', content: [{ type: 'output_text', text: 'x' }, part('a.txt', 'a')] }
+    ]);
+    assert.equal(assistant.status, 400);
+    assert.equal(assistant.body.error.code, 'invalid_items');
+    const image = await post([
+      { role: 'user', content: [{ type: 'input_image', image_url: 'data:image/png;base64,AA==' }] }
+    ]);
+    assert.equal(image.status, 400);
+    assert.equal(image.body.error.code, 'unsupported_content_part');
+    const unknown = await post([
+      { role: 'user', content: [{ type: 'input_file', file_id: 'file_doesnotexist0000000000' }] }
+    ]);
+    assert.equal(unknown.status, 404);
+    const url = await post([
+      { role: 'user', content: [{ type: 'input_file', file_url: 'https://example.com/a.pdf' }] }
+    ]);
+    assert.equal(url.status, 400);
+    assert.equal((await getChatRepository().getMessages(conv.id)).messages.length, 0);
   });
 });

@@ -81,6 +81,9 @@ An app that pins a `documentTemplate` keeps it unless it sets `allowUserTemplate
   `/v1/chat/completions` (`file` parts). Inline files, `.xlsx` and scanned PDFs included, go through
   the same extraction as uploads. A file in a `/v1/responses` conversation turn is stored in the
   chat, so the web UI and API turns on the same chat see each other's files.
+  `POST /v1/conversations/{id}/items` (and `POST /v1/conversations` with `items`) take `input_file` /
+  `file` parts with `file_data` or `file_id` on user items the same way; the files are stored in the
+  conversation and named on the item (`attachments`).
 - **MCP client:** binary `resource` and `image` blocks a tool returns are stored in the chat and
   appear in the Files drawer; the model sees `{ fileId, name, mimeType, bytes }` instead of base64.
 - **MCP server:** `app__*` and `workflow__*` tools take optional `files` (`name`, `mimeType`,

@@ -293,7 +293,7 @@ const FILE_HINT =
  * @param {string} partParam
  * @param {{files?: {resolve: Function}}} ctx
  */
-async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam, ctx) {
+export async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam, ctx) {
   if (fileUrl) {
     refuseHostedReference(
       `${kind}.file_url`,

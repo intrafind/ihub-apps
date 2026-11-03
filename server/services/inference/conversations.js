@@ -27,6 +27,7 @@ import { isChatHistoryConfigured } from '../chat/chatPersistence.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
 import { hydrateHistoryForPrompt } from '../chatFiles/ChatFileService.js';
 import { InferenceApiError } from './errors.js';
+import { fileFromPart } from './inputContent.js';
 
 /** `origin.createdVia` of a chat made through the Responses / Conversations API. */
 export const API_CREATED_VIA = 'responses-api';
@@ -430,16 +431,10 @@ export function runStillAlive(chatId) {
 }
 
 /**
- * Items to add to a conversation → messages to store. Only text messages of
- * the user and the assistant: a stored item has to be replayable to any
- * model later, and a file's content is extracted only when a response runs.
- *
- * @param {unknown} items
- * @param {string} [param='items']
- * @returns {Array<{role: 'user'|'assistant', content: string}>}
- * @throws {InferenceApiError}
+ * Read the items of a request: roles, texts and — when `files` is set — the file
+ * parts, unresolved. Shared by the text-only and the file-aware readers.
  */
-export function messagesFromItems(items, param = 'items') {
+function readItems(items, param, { files = false } = {}) {
   if (items === undefined || items === null) return [];
   if (!Array.isArray(items)) {
     throw new InferenceApiError(400, 'invalid_items', `${param} must be an array`, { param });
@@ -469,25 +464,30 @@ export function messagesFromItems(items, param = 'items') {
         param: `${at}.role`
       });
     }
-    let text;
-    if (typeof item.content === 'string') text = item.content;
+    const text = [];
+    const fileParts = [];
+    if (typeof item.content === 'string') text.push(item.content);
     else if (Array.isArray(item.content)) {
-      text = item.content
-        .map((part, p) => {
-          if (
-            ['input_text', 'output_text', 'text'].includes(part?.type) &&
-            typeof part.text === 'string'
-          ) {
-            return part.text;
-          }
+      item.content.forEach((part, p) => {
+        const partParam = `${at}.content[${p}]`;
+        if (
+          ['input_text', 'output_text', 'text'].includes(part?.type) &&
+          typeof part.text === 'string'
+        ) {
+          text.push(part.text);
+        } else if (files && (part?.type === 'input_file' || part?.type === 'file')) {
+          fileParts.push({ part, partParam });
+        } else {
           throw new InferenceApiError(
             400,
             'unsupported_content_part',
-            `${at}.content[${p}]: items added to a conversation carry text only; send files with a response`,
-            { param: `${at}.content[${p}]` }
+            files
+              ? `${partParam}: items added to a conversation carry text and files (input_file); other content parts are not supported`
+              : `${partParam}: items added to a conversation carry text only; send files with a response`,
+            { param: partParam }
           );
-        })
-        .join('\n');
+        }
+      });
     } else {
       throw new InferenceApiError(
         400,
@@ -498,6 +498,66 @@ export function messagesFromItems(items, param = 'items') {
         }
       );
     }
-    return { role: item.role, content: text };
+    if (fileParts.length > 0 && item.role !== 'user') {
+      throw new InferenceApiError(400, 'invalid_items', `${at}: only user items carry files`, {
+        param: at
+      });
+    }
+    return { role: item.role, content: text.join('\n'), fileParts };
   });
+}
+
+/**
+ * Items to add to a conversation → messages to store. Only text messages of
+ * the user and the assistant; see {@link messagesFromItemsWithFiles} for items
+ * that carry files.
+ *
+ * @param {unknown} items
+ * @param {string} [param='items']
+ * @returns {Array<{role: 'user'|'assistant', content: string}>}
+ * @throws {InferenceApiError}
+ */
+export function messagesFromItems(items, param = 'items') {
+  return readItems(items, param).map(({ role, content }) => ({ role, content }));
+}
+
+/**
+ * Items to add to a conversation → messages to store, with the files of user
+ * items: `input_file` (or Chat Completions `file`) parts with `file_data` (inline,
+ * base64 or a `data:` URL) or `file_id` (an uploaded file of the caller, or one of
+ * the conversation's), read like the files of `POST /v1/responses`
+ * (`services/inference/inputContent.js`). A message with files comes with
+ * `fileData`; store it with `persistTurnFiles`.
+ *
+ * @param {unknown} items
+ * @param {{files?: {resolve: Function}}} [ctx] - Resolves `file_id` references
+ *   (`createFileContext`); without it they are refused.
+ * @param {string} [param='items']
+ * @returns {Promise<Array<{role: 'user'|'assistant', content: string, fileData?: Array<Object>}>>}
+ * @throws {InferenceApiError}
+ */
+export async function messagesFromItemsWithFiles(items, ctx = {}, param = 'items') {
+  const read = readItems(items, param, { files: true });
+  const messages = [];
+  for (const { role, content, fileParts } of read) {
+    const fileData = [];
+    for (const { part, partParam } of fileParts) {
+      const file = part.type === 'file' ? part.file || {} : part;
+      fileData.push(
+        await fileFromPart(
+          {
+            fileId: file.file_id,
+            fileUrl: file.file_url,
+            data: file.file_data,
+            filename: file.filename
+          },
+          part.type,
+          partParam,
+          ctx
+        )
+      );
+    }
+    messages.push({ role, content, ...(fileData.length > 0 ? { fileData } : {}) });
+  }
+  return messages;
 }

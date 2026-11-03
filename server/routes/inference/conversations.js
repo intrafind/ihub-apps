@@ -36,11 +36,14 @@ import {
   conversationObject,
   itemFromMessage,
   loadConversation,
-  messagesFromItems,
+  messagesFromItemsWithFiles,
   ownerOf,
   requireConversations,
   validateMetadata
 } from '../../services/inference/conversations.js';
+import { attachmentsOf } from '../../services/inference/inputContent.js';
+import { createFileContext, persistTurnFiles } from '../../services/inference/files.js';
+import { renderUserMessage } from '../../../shared/promptContext.js';
 import { apiUser } from './shared.js';
 
 const COMPONENT = 'ConversationsApi';
@@ -66,13 +69,29 @@ function send(res, error) {
   return sendOpenAiError(res, storageFailure(error), COMPONENT);
 }
 
-/** Append text messages to a chat, in order. */
-async function appendItems(repository, chatId, messages) {
+/**
+ * Append messages to a chat, in order. The files of a user message are stored in
+ * the chat's file store and named on the stored message (`attachments`), the way
+ * a response turn does; a file that could not be stored is rendered into the text
+ * replayed on later turns instead.
+ */
+async function appendItems(repository, chat, messages) {
   const stored = [];
   for (const message of messages) {
-    const appended = await repository.appendMessage(chatId, {
+    let attachments = [];
+    let renderedContent;
+    if (message.fileData?.length) {
+      const files = await persistTurnFiles({ repository, chat, message });
+      attachments = attachmentsOf(message, files.descriptors);
+      if (!files.complete) {
+        renderedContent = renderUserMessage({ content: message.content, files: message.fileData });
+      }
+    }
+    const appended = await repository.appendMessage(chat.id, {
       role: message.role,
-      content: message.content
+      content: message.content,
+      ...(renderedContent !== undefined ? { renderedContent } : {}),
+      ...(attachments.length > 0 ? { attachments } : {})
     });
     if (appended?.message) stored.push(appended.message);
   }
@@ -114,7 +133,7 @@ export default function registerConversationsRoutes(app) {
    *             properties:
    *               items:
    *                 type: array
-   *                 description: Up to 20 text message items (user / assistant) to start with
+   *                 description: Up to 20 message items (user / assistant) to start with; user items may carry `input_file` parts (`file_data` or `file_id`)
    *               metadata:
    *                 type: object
    *                 additionalProperties:
@@ -132,7 +151,8 @@ export default function registerConversationsRoutes(app) {
       const user = apiUser(req);
       const repository = requireConversations(user);
       const metadata = validateMetadata(req.body?.metadata);
-      const messages = messagesFromItems(req.body?.items);
+      const files = createFileContext({ user });
+      const messages = await messagesFromItemsWithFiles(req.body?.items, { files });
       const owner = await ownerOf(user);
       const chatId = crypto.randomUUID();
       const firstUser = messages.find(message => message.role === 'user');
@@ -150,7 +170,7 @@ export default function registerConversationsRoutes(app) {
           'conversations_unavailable',
           'Could not store the conversation'
         );
-      await appendItems(repository, chatId, messages);
+      await appendItems(repository, chat, messages);
       res.json(conversationObject((await repository.getChat(chatId)) || chat));
     } catch (error) {
       send(res, error);
@@ -348,7 +368,7 @@ export default function registerConversationsRoutes(app) {
    *             properties:
    *               items:
    *                 type: array
-   *                 description: Up to 20 text message items (user / assistant)
+   *                 description: Up to 20 message items (user / assistant); user items may carry `input_file` parts (`file_data` or `file_id`), stored in the conversation
    *     responses:
    *       200:
    *         description: The added items
@@ -408,8 +428,11 @@ export default function registerConversationsRoutes(app) {
           param: 'items'
         });
       }
-      const messages = messagesFromItems(req.body.items);
-      const stored = await appendItems(repository, chat.id, messages);
+      // A `file_id` resolves in the caller's own files and in this conversation's.
+      const files = createFileContext({ user });
+      files.useChat(chat.id);
+      const messages = await messagesFromItemsWithFiles(req.body.items, { files });
+      const stored = await appendItems(repository, chat, messages);
       res.json(itemList(stored.map(message => itemFromMessage(message))));
     } catch (error) {
       send(res, error);
