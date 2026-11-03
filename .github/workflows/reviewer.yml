@@ -32,6 +32,14 @@
 #   The job runs the repo's `review-pr-inline` skill
 #   (.claude/skills/review-pr-inline/SKILL.md, taken from the base branch) with
 #   `--post`, so changing that skill changes what @reviewer does.
+#
+# Watching a run
+#   The run is not a claude.ai session, so follow it in the Actions run of this
+#   workflow: `show_full_output` writes every message and tool result of the
+#   reviewer into the "Run review-pr-inline skill" step log, and
+#   `display_report` adds the Claude Code report to the job's Step Summary when
+#   the run ends. Both are public on this repository. The reviewer only reads
+#   the PR and the base branch; GitHub masks the secrets it holds in the log.
 
 name: Reviewer
 
@@ -173,6 +181,10 @@ jobs:
         uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Make the reviewer's work visible: full transcript in the step log,
+          # report in the Step Summary (see "Watching a run" above).
+          show_full_output: 'true'
+          display_report: 'true'
           # Listing mcp__github__* tools makes the action start its GitHub MCP
           # server with the Claude App token, so the review is posted as
           # claude[bot]. Only read and pending-review tools are allowed: no
