@@ -301,10 +301,13 @@ function useAppSettings(
     defaultPreferences
   ]);
 
-  // Save settings when they change
+  // Save settings when they change — once initialized, so the hook's first
+  // values never replace what the browser kept before it was read. Other keys
+  // of the entry stay (the integration state stays until its one-time import).
   useEffect(() => {
-    if (app && !isolated) {
+    if (app && !isolated && !modelsLoading && !defaultsLoading) {
       saveAppSettings(settingsAppId, {
+        ...loadAppSettings(settingsAppId),
         selectedModel,
         selectedStyle,
         selectedOutputFormat,
@@ -322,6 +325,8 @@ function useAppSettings(
     settingsAppId,
     app,
     isolated,
+    modelsLoading,
+    defaultsLoading,
     selectedModel,
     selectedStyle,
     selectedOutputFormat,

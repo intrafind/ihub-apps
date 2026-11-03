@@ -201,6 +201,37 @@ describe('start page chat input features', () => {
     });
   });
 
+  it("does not start the chat before the user's default is in, and keeps the draft", async () => {
+    let answer;
+    api.fetchIntegrationPreferences.mockImplementationOnce(
+      () => new Promise(resolve => (answer = resolve))
+    );
+    await renderStartPage();
+    await waitFor(() => expect(api.fetchIntegrationPreferences).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('textbox').closest('form'));
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveValue('hello');
+
+    await act(async () => {
+      answer({
+        stored: true,
+        available: true,
+        preferences: { enabledTools: ['jira'], websearchEnabled: true, integrationScopes: {} }
+      });
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('textbox').closest('form'));
+    });
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/apps/chat?prefill=hello'));
+    expect(consumePendingChatStart('chat')).toMatchObject({
+      settings: { websearchEnabled: true, enabledTools: ['jira'] }
+    });
+  });
+
   it("seeds the toggles from the user's default for the app, kept on the server", async () => {
     mockPreferences.current = {
       stored: true,

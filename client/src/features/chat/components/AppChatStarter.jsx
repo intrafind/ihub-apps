@@ -299,7 +299,9 @@ export default function AppChatStarter({
   const handleSubmit = useCallback(
     e => {
       if (e?.preventDefault) e.preventDefault();
-      if (!app || !appDetails) return;
+      // Until the user's default is in, the toggles are not what the chat
+      // would start with; the draft stays in the input.
+      if (!app || !appDetails || integrationDefaults.loading) return;
       const text = draft.trim();
       const hasFile = fileUploadHandler.selectedFile != null;
       if (!text && !hasFile && !appDetails.allowEmptyContent) return;
@@ -337,7 +339,8 @@ export default function AppChatStarter({
       effectiveEnabledTools,
       websearchEnabled,
       imageAspectRatio,
-      imageQuality
+      imageQuality,
+      integrationDefaults.loading
     ]
   );
 

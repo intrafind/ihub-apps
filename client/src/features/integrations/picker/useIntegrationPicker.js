@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { consumeConnectResult } from '../connect/connectResult';
 import { isRowOn, setRowOn } from './pickerState';
+import { useViewerKey } from '../../../shared/contexts/authContextValue';
 
 // The API modules are loaded when first needed: the composer imports this
 // hook, and a composer that never shows the picker needs no API client.
@@ -82,13 +83,15 @@ export default function useIntegrationPicker({
   onEnabledToolsChange
 }) {
   const appId = app?.id || null;
+  // Rows carry the viewer's connection status, so they belong to one viewer.
+  const viewer = useViewerKey();
   const [answer, setAnswer] = useState({ key: null, rows: NO_ROWS });
   const [generation, setGeneration] = useState(0);
-  const key = appId ? `${appId}|${language || ''}` : null;
+  const key = appId && viewer !== null ? `${viewer}|${appId}|${language || ''}` : null;
   const reload = useCallback(() => setGeneration(value => value + 1), []);
 
   useEffect(() => {
-    if (!appId) return undefined;
+    if (!key) return undefined;
     let cancelled = false;
     Promise.resolve()
       .then(() => loadApi())
@@ -106,7 +109,8 @@ export default function useIntegrationPicker({
   }, [appId, language, key, generation]);
 
   const rows = answer.key === key ? answer.rows : NO_ROWS;
-  const loading = Boolean(key) && answer.key !== key;
+  // Also while the sign-in is still resolving (no key yet).
+  const loading = Boolean(appId) && (key === null || answer.key !== key);
 
   // Reload when another tab says it finished a sign-in, and when the user
   // comes back to this tab after starting one here.

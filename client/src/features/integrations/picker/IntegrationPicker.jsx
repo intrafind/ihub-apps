@@ -43,9 +43,9 @@ function onActivateKey(action) {
 /**
  * The search field of the picker. Rendered above the menu list, outside it,
  * so the list's arrow-key handling does not take the keys typed here;
- * ArrowDown moves into the list.
+ * ArrowDown moves into the list, Escape closes the menu.
  */
-export function IntegrationPickerSearch({ value, onChange, onArrowDown, inputRef }) {
+export function IntegrationPickerSearch({ value, onChange, onArrowDown, onClose, inputRef }) {
   const { t } = useTranslation();
   return (
     <div className="border-b border-gray-200 p-2 dark:border-gray-700">
@@ -66,6 +66,10 @@ export function IntegrationPickerSearch({ value, onChange, onArrowDown, inputRef
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               onArrowDown?.();
+            } else if (event.key === 'Escape' && onClose) {
+              // The menu list's Escape handling does not see this field.
+              event.preventDefault();
+              onClose();
             }
           }}
           placeholder={t('integrationPicker.searchPlaceholder', 'Search integrations…')}

@@ -158,6 +158,68 @@ function connectionOf(entry, user) {
 }
 
 /**
+ * One row per owner (installation, MCP server, remote agent or tool) of the
+ * app's tools, with the side effects of its actions.
+ *
+ * @returns {{rows: Map<string, Object>, actionsOf: Map<string, Object[]>}}
+ */
+function collectRows({ tools, candidates, app, language, isBoundToolEnabled }) {
+  const rows = new Map();
+  const actionsOf = new Map();
+  for (const tool of Array.isArray(tools) ? tools : []) {
+    // The model's channel to ask the user is not a switch (`isInteractiveTool`).
+    if (!tool?.id || isInteractiveTool(tool)) continue;
+    const matching = candidates.filter(ref => isBoundToolEnabled(app, tool, [ref]));
+    // Injected tools (sources, workflows, skills, other apps) are not the
+    // app's references and have no row.
+    if (matching.length === 0) continue;
+    const owner = ownerOfTool(tool, matching[0]);
+    let row = rows.get(owner.key);
+    if (!row) {
+      row = {
+        id: owner.key,
+        kind: owner.kind,
+        integration: owner.integration,
+        refs: [owner.ref],
+        coveredBy: new Set(),
+        name: localized(owner.name, language) || owner.ref,
+        description: owner.kind === 'tool' ? shortDescription(tool.description, language) : '',
+        icon: null,
+        capabilities: [],
+        connection: null,
+        order: Math.min(...matching.map(ref => candidates.indexOf(ref)))
+      };
+      rows.set(owner.key, row);
+      actionsOf.set(owner.key, []);
+    }
+    for (const ref of matching) if (ref !== owner.ref) row.coveredBy.add(ref);
+    actionsOf.get(owner.key).push({ sideEffect: tool.sideEffect || 'unknown' });
+  }
+  return { rows, actionsOf };
+}
+
+/**
+ * Name, icon, capabilities and connection of the installations among the
+ * rows, as Settings → Integrations lists them. Empty when there are none or
+ * the listing fails.
+ *
+ * @returns {Promise<Map<string, Object>>}
+ */
+async function describeIntegrations({ rows, user, language, listIntegrations }) {
+  if (![...rows.values()].some(row => row.integration)) return new Map();
+  try {
+    const listed = await listIntegrations({ user, language });
+    return new Map((listed || []).map(entry => [entry.id, entry]));
+  } catch (error) {
+    logger.warn('Could not describe the integrations for the picker', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return new Map();
+  }
+}
+
+/**
  * The picker rows of an app for a user, in the app's order of references.
  *
  * @param {Object} params
@@ -194,54 +256,9 @@ export async function pickerRowsForApp({ app, user, language = 'en', deps = {} }
     return [];
   }
 
-  const rows = new Map();
-  const actionsOf = new Map();
-  for (const tool of Array.isArray(tools) ? tools : []) {
-    // The model's channel to ask the user is not a switch (`isInteractiveTool`).
-    if (!tool?.id || isInteractiveTool(tool)) continue;
-    const matching = candidates.filter(ref => isBoundToolEnabled(app, tool, [ref]));
-    // Injected tools (sources, workflows, skills, other apps) are not the
-    // app's references and have no row.
-    if (matching.length === 0) continue;
-    const owner = ownerOfTool(tool, matching[0]);
-    let row = rows.get(owner.key);
-    if (!row) {
-      row = {
-        id: owner.key,
-        kind: owner.kind,
-        integration: owner.integration,
-        refs: [owner.ref],
-        coveredBy: new Set(),
-        name: localized(owner.name, language) || owner.ref,
-        description: owner.kind === 'tool' ? shortDescription(tool.description, language) : '',
-        icon: null,
-        capabilities: [],
-        connection: null,
-        order: Math.min(...matching.map(ref => candidates.indexOf(ref)))
-      };
-      rows.set(owner.key, row);
-      actionsOf.set(owner.key, []);
-    }
-    for (const ref of matching) if (ref !== owner.ref) row.coveredBy.add(ref);
-    actionsOf.get(owner.key).push({ sideEffect: tool.sideEffect || 'unknown' });
-  }
+  const { rows, actionsOf } = collectRows({ tools, candidates, app, language, isBoundToolEnabled });
   if (rows.size === 0) return [];
-
-  // Name, icon, capabilities and connection of the installations, as
-  // Settings → Integrations lists them.
-  const integrationIds = [...rows.values()].filter(row => row.integration);
-  let entries = new Map();
-  if (integrationIds.length > 0) {
-    try {
-      const listed = await listIntegrations({ user, language });
-      entries = new Map((listed || []).map(entry => [entry.id, entry]));
-    } catch (error) {
-      logger.warn('Could not describe the integrations for the picker', {
-        component: COMPONENT,
-        error: error.message
-      });
-    }
-  }
+  const entries = await describeIntegrations({ rows, user, language, listIntegrations });
 
   return [...rows.values()]
     .sort((a, b) => a.order - b.order)

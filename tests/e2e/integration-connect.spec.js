@@ -443,7 +443,9 @@ test('picker → Connect → consent in a new tab → back in the same chat → 
 
   // Back in the first tab: the row is on in this chat.
   await page.bringToFront();
-  await page.getByRole('button', { name: 'Actions menu' }).first().click();
+  // Connect leaves the menu open; open it only when it is closed.
+  const trigger = page.getByRole('button', { name: 'Actions menu' }).first();
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
   await expect(
     page.getByRole('menu').getByRole('menuitemcheckbox', { name: /E2E directory/ })
   ).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });

@@ -59,9 +59,13 @@ const {
 } = require('../../../client/src/features/integrations/picker/pickerState');
 const useIntegrationPicker =
   require('../../../client/src/features/integrations/picker/useIntegrationPicker').default;
+const useIntegrationDefaults =
+  require('../../../client/src/features/integrations/picker/useIntegrationDefaults').default;
 const {
-  loadIntegrationDefaults
+  loadIntegrationDefaults,
+  saveIntegrationDefault
 } = require('../../../client/src/features/integrations/picker/useIntegrationDefaults');
+const { AuthContext } = require('../../../client/src/shared/contexts/authContextValue');
 const {
   startIntegrationConnect
 } = require('../../../client/src/features/integrations/connect/integrationInfo');
@@ -265,6 +269,15 @@ describe('the "+" menu as the integrations picker', () => {
     expect(within(menu).getByText('Saved')).toBeInTheDocument();
   });
 
+  it('closes on Escape in the search field and gives focus back to "+"', () => {
+    openMenu();
+    const search = screen.getByPlaceholderText('Search integrations…');
+    search.focus();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Actions menu' })).toHaveFocus();
+  });
+
   it('shows no menu when the server lists nothing and nothing else is offered', () => {
     render(
       <ChatInputActionsMenu
@@ -410,5 +423,82 @@ describe('the default for new chats', () => {
     expect(answer.preferences.enabledTools).toEqual(['ifinder']);
     expect(mockApi.saveIntegrationPreferences).not.toHaveBeenCalled();
     expect(JSON.parse(sessionStorage.getItem('ai_hub_app_settings_research'))).toEqual({});
+  });
+
+  it('hands a default saved from the picker to the next chat without a reload', async () => {
+    mockApi.fetchIntegrationPreferences.mockResolvedValue({
+      stored: true,
+      available: true,
+      preferences: { enabledTools: ['ifinder'] }
+    });
+    function Defaults() {
+      const { loading, preferences } = useIntegrationDefaults('research');
+      return (
+        <span data-testid="default">
+          {loading ? 'loading' : preferences.enabledTools.join(',')}
+        </span>
+      );
+    }
+    render(<Defaults />);
+    await waitFor(() => expect(screen.getByTestId('default')).toHaveTextContent('ifinder'));
+    mockApi.saveIntegrationPreferences.mockResolvedValue({
+      stored: true,
+      available: true,
+      preferences: { enabledTools: ['ifinder', 'jira'] }
+    });
+    await act(async () => {
+      await saveIntegrationDefault('research', { enabledTools: ['ifinder', 'jira'] });
+    });
+    expect(screen.getByTestId('default')).toHaveTextContent('ifinder,jira');
+    expect(mockApi.fetchIntegrationPreferences).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a sign-in while the composer stays mounted', () => {
+  function Rows() {
+    const picker = useIntegrationPicker({
+      app: { id: 'research' },
+      language: 'en',
+      enabledTools: [],
+      onEnabledToolsChange: jest.fn()
+    });
+    return <span data-testid="rows">{picker.loading ? 'loading' : picker.rows.length}</span>;
+  }
+  function Defaults() {
+    const { loading, preferences } = useIntegrationDefaults('research');
+    return (
+      <span data-testid="default">{loading ? 'loading' : String(preferences?.enabledTools)}</span>
+    );
+  }
+  const as = (auth, ui) => <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>;
+  const guest = { isLoading: false, isAuthenticated: false, user: null };
+  const alice = { isLoading: false, isAuthenticated: true, user: { id: 'alice' } };
+
+  it('waits for the sign-in to resolve, then loads the rows again for the new viewer', async () => {
+    mockApi.fetchIntegrationPicker.mockResolvedValueOnce([ROWS[0]]).mockResolvedValueOnce(ROWS);
+    const { rerender } = render(as({ isLoading: true }, <Rows />));
+    expect(screen.getByTestId('rows')).toHaveTextContent('loading');
+    expect(mockApi.fetchIntegrationPicker).not.toHaveBeenCalled();
+    rerender(as(guest, <Rows />));
+    await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('1'));
+    rerender(as(alice, <Rows />));
+    await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('3'));
+    expect(mockApi.fetchIntegrationPicker).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not use the previous viewer's default", async () => {
+    mockApi.fetchIntegrationPreferences
+      .mockResolvedValueOnce({ stored: false, available: true, preferences: { enabledTools: [] } })
+      .mockResolvedValueOnce({
+        stored: true,
+        available: true,
+        preferences: { enabledTools: ['jira'] }
+      });
+    const { rerender } = render(as(guest, <Defaults />));
+    await waitFor(() => expect(screen.getByTestId('default')).not.toHaveTextContent('loading'));
+    rerender(as(alice, <Defaults />));
+    // Loading again rather than the guest's answer, then Alice's own.
+    expect(screen.getByTestId('default')).toHaveTextContent('loading');
+    await waitFor(() => expect(screen.getByTestId('default')).toHaveTextContent('jira'));
   });
 });

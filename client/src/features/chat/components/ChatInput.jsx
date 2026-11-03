@@ -48,6 +48,8 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
  * every render for surfaces that don't pass a conversation.
  */
 const NO_MESSAGES = [];
+// Stable, so memos that depend on the selection keep their identity.
+const NO_TOOLS = [];
 
 /** Format elapsed seconds as m:ss for the recording timer. */
 const formatElapsed = seconds => {
@@ -222,7 +224,7 @@ function ChatInput({
   // Callers pass `null` on purpose (no tool selection), so it is told apart
   // from a prop that was left out (an empty selection).
   const offersToolSelection = enabledToolsProp !== null;
-  const enabledTools = enabledToolsProp === undefined ? [] : enabledToolsProp;
+  const enabledTools = enabledToolsProp === undefined ? NO_TOOLS : enabledToolsProp;
   // The integrations picker (#2923): one row per integration of the app,
   // from the server; the "+" menu, the chips and `@` all show these rows.
   const picker = useIntegrationPicker({
