@@ -60,7 +60,7 @@ If `create_docx` returns `warnings`, read them. They name content that was skipp
 - **Images** only as `data:image/png;base64,…` or `data:image/jpeg;base64,…`; you cannot fetch images from URLs.
 - **Sub- and superscript**: `H<sub>2</sub>O`, `m<sup>2</sup>`.
 - **Not supported**: Mermaid, LaTeX math, HTML layout, footnotes, comments and tracked changes. Charts are not drawn in Word documents; give the numbers as a table, or create a PDF or presentation for charts.
-- **Letters**: set `showTitle: false` and `pageNumbers: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body.
+- **Letters**: set `showTitle: false` and `pageNumbers: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body. A document template that sets `document.pageNumbers` wins over `pageNumbers: false`, so with such a template a letter can still show page numbers.
 
 ## Quality checklist
 
