@@ -1220,7 +1220,11 @@ describe('sharing a single artifact', () => {
     const { share } = created.body;
     assert.equal(share.target, 'artifact');
     assert.deepEqual(share.artifactIds, [page.id]);
-    assert.equal(share.title, 'page.html');
+    assert.equal(
+      share.title,
+      'A shared chat – page.html',
+      'names the file and the conversation it came from'
+    );
     assert.equal(share.messageCount, 0);
 
     const opened = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });

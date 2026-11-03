@@ -16,6 +16,7 @@
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isChatHistoryConfigured } from './chatPersistence.js';
+import { deriveChatTitle, MAX_TITLE_LENGTH } from './ChatRepository.js';
 
 /** Feature flag gating chat sharing as a whole. */
 export const CHAT_SHARING_FEATURE = 'chatSharing';
@@ -302,4 +303,38 @@ export function resolveShareLimits({ expiresAt, maxViews }, settings, now = Date
     }
   }
   return { ok: true, expiresAt: resolvedExpiry, maxViews: resolvedViews };
+}
+
+/**
+ * The title a new share carries: a name people recognise in the browser tab,
+ * the link preview, the "Shared with me" list and the owner's link list.
+ *
+ * - A chat share is named after the chat; a chat that was never titled falls
+ *   back to its first user message, as the chat list does.
+ * - An artifact share names the file *and* the conversation it came from
+ *   ("Landing page for a bakery – page.html"), because a bare file name like
+ *   `page.html` or `image-1.png` says nothing to the person opening the link.
+ *   An unnamed artifact takes the chat's name alone.
+ *
+ * @param {Object} params
+ * @param {{ title?: string }|null} [params.chat] - The shared chat.
+ * @param {Array<{ role?: string, content?: unknown }>} [params.messages] - Transcript, for the fallback.
+ * @param {{ name?: string }|null} [params.artifact] - The shared file, for an artifact share.
+ * @returns {string} The title, '' when nothing usable exists.
+ */
+export function buildShareTitle({ chat, messages = [], artifact = null } = {}) {
+  let chatTitle =
+    typeof chat?.title === 'string' ? deriveChatTitle(chat.title, MAX_TITLE_LENGTH) : '';
+  if (!chatTitle) {
+    const firstUser = messages.find(message => message?.role === 'user');
+    chatTitle = deriveChatTitle(firstUser?.content);
+  }
+  if (!artifact) return chatTitle;
+  const fileName = typeof artifact.name === 'string' ? artifact.name.trim() : '';
+  if (!fileName) return chatTitle;
+  if (!chatTitle || chatTitle === fileName) return deriveChatTitle(fileName, MAX_TITLE_LENGTH);
+  // Keep the file name whole and shorten the chat part, so the extension and
+  // the name survive a long conversation title.
+  const room = Math.max(MAX_TITLE_LENGTH - fileName.length - 3, 20);
+  return deriveChatTitle(`${deriveChatTitle(chatTitle, room)} – ${fileName}`, MAX_TITLE_LENGTH);
 }
