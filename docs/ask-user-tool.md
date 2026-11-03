@@ -38,10 +38,10 @@ capability, not a user-selectable one:
   (`enabledTools`). A user cannot switch it off, and a stale saved selection
   that predates it cannot strip it — otherwise the model would lose its only way
   to ask, and an interview would loop instead of pausing for the user.
-- **Hidden from the chat tools menu.** It never appears as a toggle in the `+`
-  actions menu, where a switch for it could only disable the model's ability to
-  ask. Only genuine capabilities (web search, MCP servers, source and workflow
-  tools) are listed there.
+- **Hidden from the chat's integrations picker.** It never appears as a row in
+  the `+` menu, where a switch for it could only disable the model's ability to
+  ask: the server leaves it out of the picker rows
+  (`GET /api/integrations/picker`).
 
 No configuration is needed for this — listing `ask_user` (or any
 `requiresUserInput` tool) in the app's `tools` is enough. `ask_user` is an

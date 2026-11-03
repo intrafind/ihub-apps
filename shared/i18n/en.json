@@ -2702,6 +2702,7 @@
           "scopeAny": "users pick",
           "scopePicker": "Scope picker",
           "picker": {
+            "inline": "In the chat input",
             "menu": "In the menu",
             "hidden": "Hidden"
           },
@@ -8386,6 +8387,39 @@
       "noProfiles": "None of your own entries is offered here, so only the default is listed.",
       "unavailable": "The list could not be loaded, so only the default is offered."
     }
+  },
+  "integrationPicker": {
+    "search": "Search integrations",
+    "searchPlaceholder": "Search integrations…",
+    "attach": "Attach",
+    "upload": "Upload file",
+    "imageGeneration": "Image generation",
+    "effect": {
+      "read": "read",
+      "write": "write",
+      "destructive": "delete"
+    },
+    "status": {
+      "ready": "Ready",
+      "notConnected": "Not connected",
+      "reconnect": "Reconnect needed",
+      "unavailable": "Unavailable"
+    },
+    "connect": "Connect →",
+    "reconnect": "Reconnect →",
+    "connectFailed": "The sign-in could not be started.",
+    "noMatch": "No integrations match.",
+    "none": "This app uses no integrations.",
+    "saveDefault": "Use as default for new chats",
+    "defaultSaved": "Saved",
+    "defaultFailed": "Not saved",
+    "manage": "Manage integrations…"
+  },
+  "mentions": {
+    "empty": "Nothing to mention here",
+    "noResults": "No results",
+    "integrationOn": "Integration · on in this chat",
+    "integrationOff": "Integration · switch on for this chat"
   },
   "chatArtifacts": {
     "title": "Artifacts",

@@ -486,7 +486,7 @@ const integrationScopeId = z
 
 const integrationScopeSettingsSchema = z
   .object({
-    scopePicker: z.enum(['menu', 'hidden']).optional(),
+    scopePicker: z.enum(['inline', 'menu', 'hidden']).optional(),
     defaultScope: integrationScopeId.optional(),
     pinnedScope: integrationScopeId.optional()
   })

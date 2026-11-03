@@ -2994,6 +2994,7 @@
           "scopeAny": "Nutzer wählen",
           "scopePicker": "Bereichsauswahl",
           "picker": {
+            "inline": "Im Eingabefeld",
             "menu": "Im Menü",
             "hidden": "Verborgen"
           },
@@ -8351,6 +8352,39 @@
       "noProfiles": "Keiner Ihrer eigenen Einträge wird hier angeboten, daher wird nur die Voreinstellung aufgeführt.",
       "unavailable": "Die Liste konnte nicht geladen werden, daher wird nur die Voreinstellung angeboten."
     }
+  },
+  "integrationPicker": {
+    "search": "Integrationen durchsuchen",
+    "searchPlaceholder": "Integrationen durchsuchen…",
+    "attach": "Anhängen",
+    "upload": "Datei hochladen",
+    "imageGeneration": "Bildgenerierung",
+    "effect": {
+      "read": "lesen",
+      "write": "schreiben",
+      "destructive": "löschen"
+    },
+    "status": {
+      "ready": "Bereit",
+      "notConnected": "Nicht verbunden",
+      "reconnect": "Neu verbinden nötig",
+      "unavailable": "Nicht verfügbar"
+    },
+    "connect": "Verbinden →",
+    "reconnect": "Neu verbinden →",
+    "connectFailed": "Die Anmeldung konnte nicht gestartet werden.",
+    "noMatch": "Keine Integration passt.",
+    "none": "Diese App nutzt keine Integrationen.",
+    "saveDefault": "Als Standard für neue Chats verwenden",
+    "defaultSaved": "Gespeichert",
+    "defaultFailed": "Nicht gespeichert",
+    "manage": "Integrationen verwalten…"
+  },
+  "mentions": {
+    "empty": "Hier gibt es nichts zu erwähnen",
+    "noResults": "Keine Treffer",
+    "integrationOn": "Integration · in diesem Chat an",
+    "integrationOff": "Integration · für diesen Chat einschalten"
   },
   "chatArtifacts": {
     "title": "Artefakte",

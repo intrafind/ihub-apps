@@ -6,12 +6,14 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 
 /**
- * The one connect flow end to end (#2917), with a per-user MCP server:
+ * The one connect flow end to end (#2917, #2923), with a per-user MCP server:
  *
  *   1. not connected → the chat shows the Connect card → Connect → consent
  *      (the stub authorization server approves at once) → back in the same
  *      chat → the request is retried once → the answer names the account;
- *   2. expired → the card says Reconnect → Reconnect → back in the chat → answer.
+ *   2. expired → the card says Reconnect → Reconnect → back in the chat → answer;
+ *   3. from the chat's integrations picker: `Connect →` → consent in a new tab →
+ *      back in the same chat → the row is on → the tool call succeeds.
  *
  * Everything between the browser and the vendor is the real iHub: the Vite
  * client, the Express server, the connection service and its OAuth client,
@@ -410,6 +412,46 @@ test('expired → Reconnect → back in the chat → answer', async ({ page, con
   vendor.rejectTokens = false;
   const calls = vendor.toolCalls;
   await card.getByRole('button', { name: /Reconnect/ }).click();
+  await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
+    timeout: 60_000
+  });
+  expect(vendor.toolCalls).toBe(calls + 1);
+});
+
+// #2923: the same flow started from the chat's integrations picker.
+test('picker → Connect → consent in a new tab → back in the same chat → row on → answer', async ({
+  page,
+  context
+}) => {
+  await signIn(context);
+  // Start disconnected.
+  const disconnected = await api.post(`/api/integrations/${INSTALLATION_ID}/disconnect`, {
+    data: {}
+  });
+  expect(disconnected.ok(), await disconnected.text()).toBeTruthy();
+
+  await page.goto(`/apps/${APP_ID}`);
+  await page.getByRole('button', { name: 'Actions menu' }).first().click();
+  const row = page.getByRole('menu').getByRole('menuitem', { name: /E2E directory/ });
+  await expect(row).toContainText('Connect →');
+  const chatPath = new URL(page.url()).pathname;
+
+  // The consent opens in a new tab and comes back to the same chat there.
+  const [consent] = await Promise.all([context.waitForEvent('page'), row.click()]);
+  await consent.waitForURL(url => url.pathname === chatPath, { timeout: 60_000 });
+  await consent.close();
+
+  // Back in the first tab: the row is on in this chat.
+  await page.bringToFront();
+  await page.getByRole('button', { name: 'Actions menu' }).first().click();
+  await expect(
+    page.getByRole('menu').getByRole('menuitemcheckbox', { name: /E2E directory/ })
+  ).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+
+  const calls = vendor.toolCalls;
+  await page.getByRole('textbox').first().fill(QUESTION);
+  await page.keyboard.press('Enter');
   await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
     timeout: 60_000
   });

@@ -269,6 +269,14 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   integrationOAuthFlows: 'integration-oauth-flows',
   /**
+   * What a user's new chats of an app start with (#2923): the integrations
+   * switched on, web search and the scope per integration. One document per
+   * (user, app), keyed `ip_<hash(userId)>__<appId>` and owned by the user. A
+   * chat keeps its own copy in its settings; scheduled tasks and workflows
+   * keep theirs, and nothing reads this one but a new chat.
+   */
+  integrationPreferences: 'integration-preferences',
+  /**
    * Users' requests for catalog integrations (#2926), one document per
    * (user, definition), keyed `ireq_<hash>` and owned by the requester, so
    * "one open request per user and definition" is a create-only write.
