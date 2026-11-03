@@ -393,6 +393,28 @@ describe('run', () => {
     assert.equal(requests[0].headers['x-ckan-api-key'], 'tok-123');
   });
 
+  it('refuses a service account whose credential holds no secret, sending nothing', async () => {
+    for (const secret of [undefined, null, '']) {
+      requests = [];
+      await assert.rejects(
+        adapter.run({
+          definition,
+          instance: instanceWith(
+            { apiPath: '/custom', tokenHeader: 'X-CKAN-API-Key' },
+            { mode: 'service-account', credentialRef: 'integration-portal-apiToken' }
+          ),
+          document,
+          security,
+          action: searchAction,
+          args: { q: 'x' },
+          resolveSecret: () => secret
+        }),
+        /holds no secret/
+      );
+      assert.equal(requests.length, 0, String(secret));
+    }
+  });
+
   it('refuses a base URL that is not http(s)', async () => {
     await assert.rejects(
       adapter.run({

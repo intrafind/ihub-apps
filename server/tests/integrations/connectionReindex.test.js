@@ -276,3 +276,15 @@ describe('re-index of the token tree', () => {
     assert.equal(result.reason, 'in-progress');
   });
 });
+
+describe('re-index at startup', () => {
+  it('runs after the worker is serving, not on the path to listen', () => {
+    const source = readFileSync(new URL('../../server.js', import.meta.url), 'utf8');
+    const reindex = source.indexOf('await reindexIntegrationConnections()');
+    assert.ok(reindex > 0, 'server.js runs the re-index');
+    assert.ok(
+      reindex > source.indexOf('server.listen(PORT'),
+      'the re-index must not delay binding the port'
+    );
+  });
+});
