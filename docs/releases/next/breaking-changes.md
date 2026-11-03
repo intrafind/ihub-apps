@@ -100,7 +100,7 @@ then replaces `websearch` with one installed integration per engine that worked,
   without native search, never another engine. Apps with web search on stay available without
   any engine and search natively on Google, OpenAI and Anthropic models;
   `websearch.required: true` hides the app while its engine is not available.
-- **Tools:** the search tools are not listed under **Admin → Tools**; switch an engine (or its
+- **Tools:** the search tools are no longer tool files; switch an engine (or its
   **Search the web** action) off instead. A `tools` entry naming `braveSearch`, `staanSearch` or
   `qwantSearch` (an app's, a workflow node's — the shipped `claude-style-agent` and
   `research-assistant` workflows name `braveSearch`) selects the tool only while that engine is
@@ -144,7 +144,7 @@ no longer carries a `jira` key.
 ## Entra People Search Tool File Retired
 
 Migration V197 deletes `contents/tools/entraPeopleSearch.json`; the tools belong to the installed
-integration `entra` and are no longer listed under **Admin → Tools**.
+integration `entra` and are no longer tool files.
 
 - **Apps:** `tools: ["entraPeopleSearch"]` or `["entraPeopleSearch_findUser", …]` selects nothing
   any more; the migration turns such entries into the binding `integrations.entra`. The example
@@ -201,7 +201,7 @@ start. The tools keep their ids: `ask_user` and the scheduled-task tools are act
 always-installed integration `ihub` (`com.intrafind/ihub`), the knowledge tools belong to
 projects, and the agent workspace and evidence tools to workflows and agents.
 
-- **Admin → Tools** no longer lists them. Switch `ask_user` or a scheduled-task tool off on the
+- They are no longer tool files. Switch `ask_user` or a scheduled-task tool off on the
   `ihub` installation instead (a file that was `enabled: false` is migrated into
   `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a warning in
   the log and keeps serving its tool until it is deleted; move the change over first.
@@ -504,8 +504,9 @@ migrations). Three things change for scripts and hand-written files:
   `MIGRATION_PENDING`, `MIGRATION_FAILED` or `NEEDS_REVIEW` while it is in one of these states.
 - **A release's `migration` must exist.** In `integration.json`, `releases[].migration` names the
   release's own version and a migration of that id listed in `migrations`; a definition that
-  names a migration it does not list, or that uses a `module` step, is not loaded and is refused by
-  the marketplace.
+  names a migration it does not list is not loaded and is refused by the marketplace. A `module`
+  step loads, but its code runs only for a built-in definition or one from a registry trusted for
+  code (see "Integrations: Revert to an Earlier Version, Version Pins and Code Migrations").
 
 **Before upgrading:** scripts that read the live connection status from `status` read
 `liveStatus` instead. Hand-written entries in `contents/config/integrations.json` carry a

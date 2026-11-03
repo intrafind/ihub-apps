@@ -371,7 +371,7 @@ See [Integrations → Built-in integrations](../../integrations.md#built-in-inte
   profiles and apps name them in `tools` as before, and group grants select them.
 - **Migrated for you:** migrations V199 and V202 remove the shipped tool files from
   `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
-  **Admin → Tools** lists only custom tools from now on.
+  The tools are actions of the installation; they are no longer tool files.
 
 ## Marketplace: Integration Cards Show Sign-in, Effect, Where It Runs and Actions
 
@@ -499,8 +499,9 @@ a mode.
   (reads, writes, deletes or overwrites, unknown) and where its data goes (internal, external).
 - **Where to set it:** a platform default for internal and external tools (**Admin → Security →
   Tool approval**), a default and a mode per action on each integration (**Admin → Integrations
-  → an installation → Overview**), `approval` on a tool (**Admin → Tools → Edit**), and an app
-  override (**Admin → Apps → Edit → Tools**). The strictest setting wins; an app can make it
+  → an installation → Overview**), `approval` in a hand-written tool file or, for a custom
+  integration, in the integration builder, and an app override (**Admin → Apps → Edit →
+  Tools**). The strictest setting wins; an app can make it
   stricter, never looser.
 - **Approval card in the chat:** the tool and integration, what it does, the exact arguments, and
   any text the assistant wrote, labelled as such. **Approve**, **Approve & allow for this chat**

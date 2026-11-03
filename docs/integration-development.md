@@ -14,10 +14,11 @@ needs no code in any of them.
 
 | You have | Build | Code in iHub | Details |
 |---|---|---|---|
-| An HTTP API with an OpenAPI document | An OpenAPI tool (`"type": "openapi"`) | none | [Tool Calling](tool-calling.md) |
-| An MCP server | An MCP server entry | none | [MCP Integration](mcp-integration.md) |
-| A remote A2A agent | An A2A agent entry | none | [Remote A2A Agents](a2a-agents.md) |
-| An SDK, several calls per answer, or a per-user sign-in | A script tool: `contents/tools/<id>.json` and `server/tools/<script>.js` | JavaScript | [Tool Calling](tool-calling.md), this guide |
+| An HTTP API with an OpenAPI document | A custom integration with the **OpenAPI** source (**Admin → Integrations → Add manually**) | none | [Integrations → Custom integrations](integrations.md#custom-integrations-add-manually) |
+| A few REST endpoints without a document | A custom integration with the **HTTP** source: one request template per action | none | [Integrations → HTTP request actions](integrations.md#http-request-actions-http) |
+| An MCP server | An installation of the **MCP server** integration (or the builder's **MCP** source) | none | [MCP Integration](mcp-integration.md) |
+| A remote A2A agent | An installation of the **A2A agent** integration (or the builder's **A2A** source) | none | [Remote A2A Agents](a2a-agents.md) |
+| An SDK, several calls per answer, or a per-user sign-in | A **script** integration: a definition folder with a connector module (a tool file `contents/tools/<id>.json` with `server/tools/<script>.js` still loads for developers) | JavaScript | [Integrations](integrations.md#writing-a-definition), [Tool Calling](tool-calling.md), this guide |
 | A service that answers like a model (iAssistant) | A model adapter | JavaScript | [LLM Client](llm-client.md) |
 | A web search engine for apps with web search on | An integration definition of `"type": "web-search"` with one action `search` | none (`openapi`) or one connector file (`script`) | [Web search engines](#web-search-engines) below, [Integrations](integrations.md) |
 
@@ -29,8 +30,10 @@ that view.
 After every tool call, the loop asks for the call's sources (`server/services/sources/index.js`).
 The first of these that applies wins:
 
-1. **A `sources` declaration in the tool definition** (no code). It maps fields of the result to
-   source fields. Use it for an OpenAPI tool, or for any tool whose result you cannot change. See
+1. **A `sources` declaration** (no code), in the integration definition's `sources` map (per
+   action) or, for a tool file, in the tool definition. It maps fields of the result to source
+   fields. Use it for an OpenAPI or HTTP action, or for any tool whose result you cannot change.
+   See [Integrations → Writing a definition](integrations.md#writing-a-definition) and
    [Answer Sources → Declare a mapping](answer-sources.md#1-declare-a-mapping-in-the-tool-definition-no-code).
 2. **A registered producer** (code). Use it when several tools share a result shape of their own,
    as the iFinder tools do, or when the mapping needs logic. See
@@ -280,8 +283,12 @@ the tool definition instead. The paths point into that tool's result:
 - **Run it.** Put a new test file where a `test:*` script in `package.json` picks it up, so that
   `npm run test:quick` runs it. `server/tests/loop/*.test.js` (`test:loop`) is picked up
   automatically.
-- **Try it.** Start iHub with `npm run dev`, enable the tool for an app, and ask something that
-  calls it. Then check four things:
+- **Try it.** Start iHub with `npm run dev`, install the integration under **Admin →
+  Integrations**, and run each action with **Test** on the installation page. The test result
+  shows the request, the raw response and the **Answer Sources** the action produced. Then bind
+  the installation to an app (or create the definition's **example app**) and use **Test in chat**
+  to ask something that calls it. See [Integrations](integrations.md#the-integrations-page). Then
+  check four things:
   - The **Sources** panel lists your results.
   - Each action works.
   - A cited result is numbered like its badge.
@@ -357,6 +364,7 @@ other. A full example connector is in [Web Tools → Writing your own engine](we
 ## Related
 
 - [Answer Sources](answer-sources.md): the contract, the stored and shared forms, and privacy.
+- [Integrations](integrations.md): the installed-integration model, the integration builder (**Add manually**), the action test runner and example apps.
 - [Tool Calling](tool-calling.md): tool definitions, scripts and methods.
 - [MCP Integration](mcp-integration.md): what an MCP tool's results contribute.
 - [Agent Loop](agent-loop.md): where tool calls and their sources are collected.

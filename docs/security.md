@@ -409,11 +409,11 @@ For custom or local LLM endpoints:
 - User data stored with appropriate access controls
 - Logs rotated and archived securely
 - Backup encryption recommended
-- **Integration secrets encrypted in `platform.json`** using AES-256-GCM (see [Secret Encryption at Rest](#secret-encryption-at-rest) below)
+- **Secrets encrypted on disk** (`platform.json` and `integrations.json`) using AES-256-GCM (see [Secret Encryption at Rest](#secret-encryption-at-rest) below)
 
 ### Secret Encryption at Rest
 
-Platform configuration secrets (Jira, OIDC, LDAP, NTLM, Cloud Storage) are automatically encrypted on disk using `TokenStorageService` with AES-256-GCM authenticated encryption. This means even if `platform.json` is read by an unauthorized party, the raw secret values are not exposed.
+Configuration secrets (OIDC, LDAP, NTLM and the secrets of installed integrations such as Jira, iFinder and the storage providers) are automatically encrypted on disk using `TokenStorageService` with AES-256-GCM authenticated encryption. This means even if `platform.json` is read by an unauthorized party, the raw secret values are not exposed.
 
 #### Encrypted Format
 
@@ -429,13 +429,13 @@ The format encodes the algorithm, encrypted data, initialization vector, authent
 
 The AES-256 encryption key is stored at `contents/.encryption-key` with mode `0600` (owner read/write only). If the file does not exist at startup, a new key is generated automatically and persisted.
 
-**Important**: Back up this file securely. Losing it makes all encrypted secrets in `platform.json` unrecoverable without re-entering them through the admin interface.
+**Important**: Back up this file securely. Losing it makes all encrypted secrets in `platform.json` and `integrations.json` unrecoverable without re-entering them through the admin interface.
 
 The key path can be overridden by setting the `TOKEN_ENCRYPTION_KEY` environment variable, which is required for multi-node deployments to ensure all nodes share the same key.
 
 #### Encrypted Fields
 
-These integrations no longer keep secrets inline in `platform.json`. Each one
+These sections no longer keep secrets inline in `platform.json`. Each one
 stores a `*Ref` field pointing to a named profile in the central credential
 store (`contents/config/credentials.json`, managed under Admin >
 Credentials), and the secret-bearing fields of that profile are what's
@@ -443,13 +443,11 @@ actually encrypted at rest:
 
 | Config Section | `*Ref` Field |
 |----------------|-------|
-| `jira` | `clientSecretRef` |
 | `oidcAuth.providers[]` | `clientSecretRef` |
 | `ldapAuth.providers[]` | `adminPasswordRef` |
 | `ntlmAuth` | `domainControllerPasswordRef` |
-| `iFinder` | `privateKeyRef` |
 
-The cloud storage providers (Office 365, Google Drive, Nextcloud) are installed integrations since V200; their client secrets are credential references in `contents/config/integrations.json` (`values.clientSecretRef`), like every installed integration's secret.
+Jira (V196), iFinder (V192) and the cloud storage providers (Office 365, Google Drive, Nextcloud; V200) are installed integrations. Their secrets (`clientSecretRef`, `privateKeyRef`, and so on) are credential references in the installation's `values` in `contents/config/integrations.json`, like every installed integration's secret. See [Integrations](integrations.md).
 
 #### Encryption Lifecycle
 

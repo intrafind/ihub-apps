@@ -103,10 +103,20 @@ call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frame
 
 ### Tool Registration and Discovery
 
+> **Custom tools are built as integrations.** The supported way to add a tool is **Admin →
+> Integrations → Add manually**, the integration builder, which takes an OpenAPI document, an
+> HTTP request, a script, an MCP server or an A2A agent as its source (see
+> [Integrations → Custom integrations](integrations.md#custom-integrations-add-manually)). The
+> **Admin → Tools** page is gone, and OpenAPI tool files in `contents/tools/` are no longer read
+> (migration V211 turned existing ones into custom integrations). The tool-file sections below
+> describe what developers can still put in `contents/tools/` by hand: script tools and the
+> shipped platform tools.
+
 Tools are registered through three methods:
 
-1. **Static Configuration** (one JSON file per tool under `contents/tools/`)
-2. **MCP Server Discovery** (Model Context Protocol)
+1. **Static Configuration** (one JSON file per tool under `contents/tools/`; script tools only for
+   new tools, see above)
+2. **MCP Server Discovery** (Model Context Protocol; MCP servers are installed integrations)
 3. **Dynamic Registration** (Runtime API)
 
 ## Tool Development Lifecycle
@@ -1160,10 +1170,10 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Comprehensive document search, content retrieval, and management for iFinder document management systems
-- **Type**: Server-side execution (method-based)
-- **Methods**: `search`, `getContent`, `getMetadata`, `download`
-- **Authentication**: Requires authenticated users and JWT configuration
-- **App Usage**: Reference specific methods with dot notation: `"tools": ["iFinder.search", "iFinder.getContent"]`
+- **Type**: Actions of the built-in installed integration **iFinder** (`com.intrafind/ifinder`, installation `ifinder` under **Admin → Integrations**); there is no tool file any more
+- **Tools**: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_discover`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles` (ids unchanged)
+- **Authentication**: Requires authenticated users and the iFinder JWT configuration of the installation
+- **App Usage**: bind the installation (`"integrations": { "ifinder": {} }` for all seven actions, or `{ "actions": ["search", "getContent"] }`); `iFinder` or `iFinder.*` entries in `tools` select nothing (migration V192 rewrote them, see [Apps → Integrations: binding an installed integration](apps.md#integrations-binding-an-installed-integration))
 - **Documentation**: See [iFinder Integration](iFinder-Integration.md) for detailed setup and usage
 
 ### People directories (`<directoryId>__search_people`, …)
