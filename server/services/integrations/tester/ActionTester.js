@@ -46,6 +46,7 @@ import {
   toolDefinitionOf
 } from '../actionDetail.js';
 import { recordActionEvent } from '../actionUsage.js';
+import { INTEGRATION_AUTH_REQUIRED } from '../auth/integrationAuthRequired.js';
 
 const COMPONENT = 'ActionTester';
 
@@ -362,9 +363,7 @@ export async function testAction({
     error: request.error ? scrubSecrets(request.error, secrets) : null
   }));
 
-  const failed =
-    Boolean(outcome.error) ||
-    (outcome.result && typeof outcome.result === 'object' && outcome.result.error === true);
+  const failed = Boolean(outcome.error) || resultReportsFailure(outcome.result);
   const timedOut = outcome.error instanceof ActionTestError && outcome.error.code === 'TIMEOUT';
   let sources = null;
   if (!outcome.error) {
@@ -383,7 +382,7 @@ export async function testAction({
   const errorMessage = outcome.error
     ? scrubSecrets(String(outcome.error?.message || outcome.error), secrets)
     : failed
-      ? scrubSecrets(String(outcome.result?.message || 'The action reported an error'), secrets)
+      ? scrubSecrets(String(outcome.result?.message || failureFallback(outcome.result)), secrets)
       : null;
   const lastStatus = [...http].reverse().find(r => Number.isInteger(r.status))?.status ?? null;
 
@@ -415,6 +414,27 @@ export async function testAction({
     response: { text: response.text, truncated: response.truncated },
     sources
   };
+}
+
+/**
+ * Whether an action's result reports a failure: `error: true`, or the
+ * structured "connect first" result (`error: 'INTEGRATION_AUTH_REQUIRED'`) an
+ * integration returns, without calling the vendor, when the connection the
+ * test runs with is missing or expired. That one is no success: nothing ran.
+ *
+ * @param {*} result
+ * @returns {boolean}
+ */
+export function resultReportsFailure(result) {
+  if (!result || typeof result !== 'object') return false;
+  return result.error === true || result.error === INTEGRATION_AUTH_REQUIRED;
+}
+
+/** The message of a failed result that carries none of its own. */
+function failureFallback(result) {
+  return result?.error === INTEGRATION_AUTH_REQUIRED
+    ? 'The connection this test runs with is missing or expired. Connect it, then run the test again.'
+    : 'The action reported an error';
 }
 
 /**
