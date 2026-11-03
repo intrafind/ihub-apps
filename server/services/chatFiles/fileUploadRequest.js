@@ -13,6 +13,7 @@ import multer from 'multer';
 import { sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
 import { ChatFileQuotaError } from './ChatFileRepository.js';
 import { ChatFileError, ingestChatFile } from './ChatFileService.js';
+import { ingestFromSource } from './fileSources.js';
 
 /**
  * Whether `req` is a `multipart/form-data` request.
@@ -102,6 +103,7 @@ export function sendChatFileFailure(res, error) {
  * @param {Object|null} [params.appConfig]
  * @param {Object} params.policy
  * @param {Object} params.store - `ChatFileRepository`.
+ * @param {Object} [params.user] - The caller; needed for `source` (its stored connector credentials).
  * @param {string} [params.origin='upload']
  * @returns {Promise<Object>} The stored file's descriptor.
  * @throws {ChatFileError} `BAD_REQUEST` (status 400) when the request carries no file.
@@ -113,8 +115,27 @@ export async function ingestRequestFile({
   appConfig = null,
   policy,
   store,
+  user = null,
   origin = 'upload'
 }) {
+  // A file in a connected system (`{ source: { kind, ref, refreshOnRun? } }`):
+  // the server fetches the original itself.
+  const requestedSource = req.body?.source;
+  if (!req.file && requestedSource !== undefined && requestedSource !== null) {
+    if (typeof requestedSource !== 'object' || Array.isArray(requestedSource)) {
+      throw new ChatFileError('BAD_REQUEST', '"source" must be an object { kind, ref }', 400);
+    }
+    return ingestFromSource({
+      source: requestedSource,
+      user,
+      scope,
+      ownerId,
+      appConfig,
+      policy,
+      store
+    });
+  }
+
   if (req.file) {
     return ingestChatFile({
       scope,
@@ -137,7 +158,7 @@ export async function ingestRequestFile({
   if (!hasText && !hasPages && !hasBase64) {
     throw new ChatFileError(
       'BAD_REQUEST',
-      'Provide either a multipart "file" upload or a JSON body with "text", "data" or "pageImages"',
+      'Provide a multipart "file" upload, or a JSON body with "text", "data", "pageImages" or "source"',
       400
     );
   }

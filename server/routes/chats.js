@@ -545,7 +545,8 @@ export default function registerChatRoutes(app) {
         ownerId: owner.id,
         appConfig: chatApp,
         policy,
-        store: fileStore
+        store: fileStore,
+        user: req.user
       });
       return res.status(201).json({ file: descriptor });
     } catch (error) {

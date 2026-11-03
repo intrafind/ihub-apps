@@ -626,7 +626,8 @@ export default function registerScheduledTaskRoutes(app) {
         ownerId,
         appConfig: taskApp,
         policy,
-        store
+        store,
+        user: req.user
       });
       audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
       res.status(201).json({ file });

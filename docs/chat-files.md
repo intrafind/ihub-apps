@@ -1,0 +1,69 @@
+# Chat and Scheduled-Task Files
+
+Files users attach to a chat or to a scheduled task are stored by the server, so the assistant keeps
+reading them on every later turn, after a reload and on other devices. The design is in
+[`concepts/chat-files/README.md`](../concepts/chat-files/README.md).
+
+## What is stored
+
+Every file has a metadata document, the extracted text, optional page images (scanned PDFs) and
+optionally the original. Scopes:
+
+| Scope  | Belongs to                               | Original TTL                | Removed with                  |
+| ------ | ---------------------------------------- | --------------------------- | ----------------------------- |
+| `chat` | a chat (uploads, e-mails, meetings, pages, tool results) | `originalRetentionDays`     | the chat, or the file         |
+| `task` | a scheduled task definition              | none (kept while it exists) | the task, or the file         |
+| `user` | a user of the Inference API (`/v1/files`) | `originalRetentionDays`     | `DELETE /v1/files/:id`        |
+
+## Platform settings (`platform.uploads`)
+
+Edited in **Admin → Chat history → Uploaded files**.
+
+| Setting                       | Default        | Meaning                                                                                  |
+| ----------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `enabled`                     | `true`         | Store uploaded files on the server                                                       |
+| `storageMode`                 | `original_and_text` | `original_and_text`, `server_text_only` or `client_text_only` (app override: `app.uploads.storageMode`) |
+| `originalRetentionDays`       | `14`           | Days an original is kept; `0` keeps it as long as the chat. The text stays with the chat |
+| `evictOldestOriginalsOnQuota` | `true`         | When a user or the server is full, drop the oldest chat originals before refusing        |
+| `quotas.maxFileBytes`         | 25 MB          | One file                                                                                 |
+| `quotas.maxChatBytes` / `maxChatFiles` | 100 MB / 25 | One chat or one task                                                                  |
+| `quotas.maxUserBytes`         | 1 GB           | One user (chats, tasks, API files)                                                       |
+| `quotas.maxServerBytes`       | 50 GB          | The whole server                                                                         |
+
+Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_BYTES`,
+`QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
+
+## HTTP API
+
+- `POST /api/chats/:chatId/files`, `POST /api/scheduled-tasks/:taskId/files`: a multipart `file`, or
+  JSON with `text`, `pageImages`, base64 `data`, or `source`.
+- `GET /api/chats/:chatId/files`, `GET .../files/:fileId` (`?format=text` for the text,
+  `?download=1` for the original; `410 ORIGINAL_DISCARDED` when only the text is kept), and
+  `DELETE .../files/:fileId`. The same under `/api/scheduled-tasks/:taskId/files`.
+- A chat message names stored files with `fileIds`; `fileData` still works and is stored from the
+  message.
+- `GET /api/shares/:shareId/files[/:fileId]`: what a share lets viewers open. Creating a share takes
+  `uploadedFilesAccess` (`none` by default, `extracted_text`, `original`) and `sharedFileIds`.
+
+### Files from connected systems
+
+```json
+{ "source": { "kind": "nextcloud", "ref": { "providerId": "nc", "path": "/Documents/brief.docx" }, "refreshOnRun": true } }
+```
+
+`kind` is `nextcloud`, `office365`, `google-drive` or `ifinder-document`; `ref` is the one the
+project items use. The server downloads the file with the user's stored credentials. On a task file
+`refreshOnRun` fetches it again at the start of every run with the task owner's credentials.
+
+## Using a file in the document skills
+
+The model sees `id="…"` and `can_use_as_template="true"` on the file's `<content>` tag.
+
+- `create_docx({ templateFileId, templateMode })`: `styles_only` (default when the file has no
+  `{{content}}` marker), `fill_placeholders`, `append`.
+- `create_pptx({ templateFileId, templateMode })`: `styles_only` (default) or `append`.
+- `create_pdf({ templateFileId, fillFormFields, flattenForm })`: fills the form fields in place;
+  without `fillFormFields` the new document is printed on the file as letterhead.
+- `create_xlsx({ sourceFileId })`: keeps the workbook and replaces or adds the sheets given.
+
+An app that pins a `documentTemplate` keeps it unless it sets `allowUserTemplateUploads: true`.
