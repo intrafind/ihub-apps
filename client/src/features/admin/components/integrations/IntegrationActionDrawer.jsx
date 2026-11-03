@@ -36,8 +36,12 @@ import {
   withLanguageText
 } from './actionTestForm';
 
-const SECTION_CLASS = 'border-b border-gray-200 py-4 last:border-b-0 dark:border-gray-700';
-const SECTION_TITLE_CLASS = 'mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100';
+const SECTION_CLASS = 'border-b border-gray-200 py-6 last:border-b-0 dark:border-gray-700';
+const SECTION_TITLE_CLASS = 'text-base font-semibold text-gray-900 dark:text-gray-100';
+const SECTION_LEAD_CLASS = 'mb-4 mt-1 text-sm text-gray-600 dark:text-gray-400';
+const FIELD_LABEL_CLASS = 'text-sm font-semibold text-gray-900 dark:text-gray-100';
+const VALUE_BOX_CLASS =
+  'mt-1.5 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200';
 const LINK_CLASS =
   'rounded-sm text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300';
 const TEXT_BUTTON_CLASS =
@@ -126,7 +130,7 @@ function EditableText({
   return (
     <div data-testid={testId}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className={LABEL_CLASS.replace('mb-1', 'mb-0')}>{label}</span>
+        <span className={FIELD_LABEL_CLASS}>{label}</span>
         {overridden && (
           <Badge tone="accent" shape="rounded">
             {t('admin.integrations.actionDetail.edited', 'Edited')}
@@ -186,9 +190,9 @@ function EditableText({
           </div>
         </form>
       ) : value ? (
-        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{value}</p>
+        <p className={`${VALUE_BOX_CLASS} whitespace-pre-wrap`}>{value}</p>
       ) : (
-        <p className="mt-1 text-sm italic text-gray-600 dark:text-gray-400">{placeholder}</p>
+        <p className="mt-1.5 text-sm italic text-gray-600 dark:text-gray-400">{placeholder}</p>
       )}
     </div>
   );
@@ -212,7 +216,7 @@ function ParameterTable({ schema }) {
           {t('admin.integrations.actionDetail.test.noParameters', 'This action takes no input.')}
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-md border border-gray-200 px-3 py-1 dark:border-gray-700">
           <table className="min-w-full text-left text-sm" data-testid="action-parameters">
             <caption className="sr-only">
               {t('admin.integrations.actionDetail.parameters', 'Parameters')}
@@ -271,8 +275,18 @@ function ParameterTable({ schema }) {
  * A select for an admin override of a side effect or data flow; the empty
  * option keeps what the vendor declared.
  */
-function OverrideSelect({ label, value, options, optionLabel, inheritLabel, disabled, onChange }) {
+function OverrideSelect({
+  label,
+  help,
+  value,
+  options,
+  optionLabel,
+  inheritLabel,
+  disabled,
+  onChange
+}) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div>
       <label htmlFor={id} className={LABEL_CLASS}>
@@ -280,6 +294,7 @@ function OverrideSelect({ label, value, options, optionLabel, inheritLabel, disa
       </label>
       <select
         id={id}
+        aria-describedby={help ? helpId : undefined}
         className={INPUT_CLASS}
         value={value || ''}
         disabled={disabled}
@@ -292,6 +307,11 @@ function OverrideSelect({ label, value, options, optionLabel, inheritLabel, disa
           </option>
         ))}
       </select>
+      {help && (
+        <p id={helpId} className={HELP_CLASS}>
+          {help}
+        </p>
+      )}
     </div>
   );
 }
@@ -413,6 +433,7 @@ function IntegrationActionDrawer({
       isOpen={isOpen}
       onClose={onClose}
       size="lg"
+      bodyClassName="px-5 py-4"
       title={title}
       description={detail ? <span className="font-mono">{detail.action.toolId}</span> : undefined}
       icon={<Icon name="wrench" className="h-5 w-5 text-indigo-500" />}
@@ -453,7 +474,16 @@ function IntegrationActionDrawer({
               </p>
             )}
           </div>
+          <p className={`mb-3 ${CALLOUT_CLASS.info}`} data-testid="action-intro">
+            {t(
+              'admin.integrations.actionDetail.intro',
+              'This is one action of the integration: a single thing the AI model can ask this system to do. Here you control what the model is told about it, how iHub treats it (read or write, where the data goes, whether a person must approve) and you can run it once to see that it works.'
+            )}
+          </p>
           <div className="flex flex-wrap items-center gap-1.5" data-testid="action-badges">
+            <span className="mr-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+              {t('admin.integrations.actionDetail.badgesLabel', 'Current settings:')}
+            </span>
             <ActionReviewBadge review={detail.action.review} />
             <SideEffectBadge sideEffect={detail.effect.sideEffect} />
             <Badge
@@ -476,6 +506,12 @@ function IntegrationActionDrawer({
             <h3 id="action-what-title" className={SECTION_TITLE_CLASS}>
               {t('admin.integrations.actionDetail.what', 'What it does')}
             </h3>
+            <p className={SECTION_LEAD_CLASS}>
+              {t(
+                'admin.integrations.actionDetail.whatLead',
+                'What the AI model is told about this action. It reads the description and the parameters to decide when to call it and what to pass.'
+              )}
+            </p>
             <EditableText
               testId="action-description"
               label={t(
@@ -497,8 +533,8 @@ function IntegrationActionDrawer({
               }
               onReset={() => saveOverride({ description: null })}
             />
-            <div className="mt-3">
-              <span className={LABEL_CLASS}>
+            <div className="mt-4">
+              <span className={`mb-1.5 block ${FIELD_LABEL_CLASS}`}>
                 {t('admin.integrations.actionDetail.parameters', 'Parameters')}
               </span>
               <ParameterTable schema={detail.action.parameters} />
@@ -509,11 +545,17 @@ function IntegrationActionDrawer({
             <h3 id="action-effect-title" className={SECTION_TITLE_CLASS}>
               {t('admin.integrations.actionDetail.effect', 'Side effect, data flow, approval')}
             </h3>
+            <p className={SECTION_LEAD_CLASS}>
+              {t(
+                'admin.integrations.actionDetail.effectLead',
+                'How iHub treats a call to this action. These values decide whether a person has to approve it first. The vendor’s declaration is not trusted on its own; your overrides are.'
+              )}
+            </p>
             <dl
-              className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm"
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800"
               data-testid="action-effect-sources"
             >
-              <dt className="text-gray-600 dark:text-gray-400">
+              <dt className="font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.integrations.actionDetail.sideEffect', 'Side effect')}
               </dt>
               <dd className="text-gray-800 dark:text-gray-200">
@@ -522,7 +564,7 @@ function IntegrationActionDrawer({
                   source: sourceLabel(t, detail.effect.sideEffectSource)
                 })}
               </dd>
-              <dt className="text-gray-600 dark:text-gray-400">
+              <dt className="font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.integrations.actionDetail.dataFlowLabel', 'Data flow')}
               </dt>
               <dd className="text-gray-800 dark:text-gray-200">
@@ -531,7 +573,7 @@ function IntegrationActionDrawer({
                   source: sourceLabel(t, detail.effect.dataFlowSource)
                 })}
               </dd>
-              <dt className="text-gray-600 dark:text-gray-400">
+              <dt className="font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.integrations.actionDetail.approval', 'Approval')}
               </dt>
               <dd className="text-gray-800 dark:text-gray-200">
@@ -555,11 +597,18 @@ function IntegrationActionDrawer({
                   )}
                 </p>
               )}
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <h4 className="mb-2 mt-5 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.integrations.actionDetail.overridesTitle', 'Change these settings')}
+            </h4>
+            <div className="space-y-4">
               <OverrideSelect
                 label={t(
                   'admin.integrations.actionDetail.overrideSideEffect',
                   'Side effect override'
+                )}
+                help={t(
+                  'admin.integrations.actionDetail.sideEffectHelp',
+                  'What a call changes in the connected system: nothing (read), something (write) or it deletes data.'
                 )}
                 value={detail.effect.override.sideEffect}
                 options={SIDE_EFFECTS}
@@ -576,6 +625,10 @@ function IntegrationActionDrawer({
               />
               <OverrideSelect
                 label={t('admin.integrations.actionDetail.overrideDataFlow', 'Data flow override')}
+                help={t(
+                  'admin.integrations.actionDetail.dataFlowHelp',
+                  'Whether the result stays inside iHub or is sent on to an outside service.'
+                )}
                 value={detail.effect.override.dataFlow}
                 options={DATA_FLOWS}
                 optionLabel={flowLabel}
@@ -593,12 +646,16 @@ function IntegrationActionDrawer({
                   'admin.toolApproval.inheritInstallation',
                   'Approval: as the integration'
                 )}
+                help={t(
+                  'admin.integrations.actionDetail.approvalHelp',
+                  'Whether a person has to confirm each call to this action in the chat before it runs.'
+                )}
                 modes={['writes', 'always']}
                 disabled={busy}
                 onChange={saveActionMode}
               />
             </div>
-            <p className={HELP_CLASS}>
+            <p className={`mt-4 ${HELP_CLASS}`}>
               {t(
                 'admin.integrations.actionDetail.effectHelp',
                 'An override is your decision and is trusted: it can make a gate stricter or, for a confirmed read, looser. The strictest of the platform default, the integration, this action and the app wins.'
@@ -635,6 +692,12 @@ function IntegrationActionDrawer({
             <h3 id="action-use-title" className={SECTION_TITLE_CLASS}>
               {t('admin.integrations.actionDetail.howToUse', 'How to use')}
             </h3>
+            <p className={SECTION_LEAD_CLASS}>
+              {t(
+                'admin.integrations.actionDetail.howLead',
+                'Extra help for using this action well, and where it is already in use.'
+              )}
+            </p>
             <EditableText
               testId="action-guidance"
               label={t('admin.integrations.actionDetail.guidance', 'Model guidance')}
@@ -654,7 +717,7 @@ function IntegrationActionDrawer({
               }
               onReset={() => saveOverride({ guidance: null })}
             />
-            <div className="mt-3">
+            <div className="mt-4">
               <EditableText
                 testId="action-examples"
                 label={t('admin.integrations.actionDetail.examples', 'Example prompts')}
@@ -679,8 +742,8 @@ function IntegrationActionDrawer({
               />
             </div>
             {detail.instructions.text && (
-              <div className="mt-3">
-                <span className={LABEL_CLASS}>
+              <div className="mt-4">
+                <span className={`mb-1 block ${FIELD_LABEL_CLASS}`}>
                   {t(
                     'admin.integrations.actionDetail.integrationInstructions',
                     'Integration instructions'
@@ -707,8 +770,8 @@ function IntegrationActionDrawer({
                 </p>
               </div>
             )}
-            <div className="mt-3" data-testid="action-bindings">
-              <span className={LABEL_CLASS}>
+            <div className="mt-4" data-testid="action-bindings">
+              <span className={`mb-1 block ${FIELD_LABEL_CLASS}`}>
                 {t('admin.integrations.actionDetail.usedBy', 'Used by')}
               </span>
               {detail.bindings.apps.length +
@@ -779,6 +842,12 @@ function IntegrationActionDrawer({
                 days: detail.usage?.days || 7
               })}
             </h3>
+            <p className={SECTION_LEAD_CLASS}>
+              {t(
+                'admin.integrations.actionDetail.usageLead',
+                'How often this action was used, and how often approvals were granted or refused.'
+              )}
+            </p>
             {detail.usage ? (
               <dl
                 className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3"
@@ -811,7 +880,7 @@ function IntegrationActionDrawer({
                 )}
               </p>
             )}
-            <p className={HELP_CLASS}>
+            <p className={`mt-2 ${HELP_CLASS}`}>
               {t(
                 'admin.integrations.actionDetail.usageHelp',
                 'Counted by this server since this version: calls from chats, workflows and scheduled runs, answers to approval requests, and admin tests (not counted as calls).'
