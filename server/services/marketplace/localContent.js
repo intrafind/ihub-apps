@@ -17,6 +17,7 @@
  * @module services/marketplace/localContent
  */
 
+import { isUpdate } from './versionPolicy.js';
 import integrationRegistry from '../integrations/definitions/IntegrationRegistry.js';
 import { definitionIdToDirName } from '../../validators/integrationDefinitionSchema.js';
 
@@ -51,22 +52,19 @@ export function getLocalContentIds(cc) {
 }
 
 /**
- * Installation status of one catalog item. An installed item whose catalog
- * version differs from the recorded one is `update-available`, which the
- * marketplace UI shows as installed with an **Update** button.
+ * Installation status of one catalog item. An installed item whose offered
+ * version (the registry's channel and pin applied, `versionPolicy.js`) is
+ * newer than the recorded one is `update-available`, which the marketplace
+ * UI shows as installed with an **Update** button.
  *
  * @param {object|undefined} installation - Its entry in installations.json
  * @param {boolean} existsLocally - Whether an item with its type and name is loaded
- * @param {string} [catalogVersion] - The version the catalog offers now
+ * @param {string|null} [offered] - The version the registry offers now (`offeredVersion`)
  * @returns {'installed'|'update-available'|'local'|'available'}
  */
-export function installationStatusFor(installation, existsLocally, catalogVersion) {
+export function installationStatusFor(installation, existsLocally, offered) {
   if (installation) {
-    const installedVersion = installation.version;
-    if (catalogVersion && installedVersion && catalogVersion !== installedVersion) {
-      return 'update-available';
-    }
-    return 'installed';
+    return isUpdate(offered, installation.version) ? 'update-available' : 'installed';
   }
   return existsLocally ? 'local' : 'available';
 }

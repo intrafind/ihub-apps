@@ -9,6 +9,7 @@ import {
   testMarketplaceRegistry
 } from '../../../../api/adminApi';
 import AdminLoadError from '../AdminLoadError';
+import { PIN_KEY_PATTERN, pinsToRows, rowsToPins } from './registryPins';
 
 /**
  * Modal dialog for creating or editing a marketplace registry.
@@ -19,7 +20,11 @@ import AdminLoadError from '../AdminLoadError';
  * - basic: HTTP Basic Auth (username + password)
  * - header: Custom HTTP header (name + value)
  *
- * Also allows configuring auto-refresh intervals for periodic catalog syncing.
+ * Also allows configuring auto-refresh intervals for periodic catalog syncing,
+ * and the version policy of the registry (versioning phase 3): the `channel`
+ * (`stable` hides pre-release versions, `all` offers them) and per-item
+ * `pins`, each a semver range (`1.3.x`) keyed `<type>:<name>`; install and the
+ * update badge offer only versions inside an item's pin.
  *
  * @param {Object} props
  * @param {Object|null} props.registry - Existing registry for editing, or null for create mode
@@ -39,8 +44,10 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
     enabled: true,
     autoRefresh: false,
     refreshIntervalHours: 24,
-    trustCode: false
+    trustCode: false,
+    channel: 'stable'
   });
+  const [pinRows, setPinRows] = useState([]);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -58,10 +65,24 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
         enabled: registry.enabled ?? true,
         autoRefresh: registry.autoRefresh ?? false,
         refreshIntervalHours: registry.refreshIntervalHours ?? 24,
-        trustCode: registry.trustCode ?? false
+        trustCode: registry.trustCode ?? false,
+        channel: registry.channel === 'all' ? 'all' : 'stable'
       });
+      setPinRows(pinsToRows(registry.pins));
     }
   }, [registry]);
+
+  /**
+   * Updates one field of a pin row and clears the pins error.
+   *
+   * @param {number} index - Row index
+   * @param {'key'|'range'} field
+   * @param {string} value
+   */
+  const setPin = (index, field, value) => {
+    setPinRows(rows => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+    setErrors(e => ({ ...e, pins: undefined }));
+  };
 
   /**
    * Updates a top-level form field and clears its validation error.
@@ -106,6 +127,13 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
         'ID must contain only lowercase letters, numbers, and hyphens'
       );
     }
+    const filled = pinRows.filter(row => row.key.trim() || row.range.trim());
+    if (filled.some(row => !PIN_KEY_PATTERN.test(row.key.trim()) || !row.range.trim())) {
+      errs.pins = t(
+        'admin.marketplace.registries.form.pinInvalid',
+        'Each pin needs an item as <type>:<name> (for example integration:org.ckan__open-data-portal) and a version range.'
+      );
+    }
     return errs;
   };
 
@@ -141,11 +169,12 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
     }
 
     setSaving(true);
+    const payload = { ...form, pins: rowsToPins(pinRows) };
     try {
       if (isEdit) {
-        await updateMarketplaceRegistry(registry.id, form);
+        await updateMarketplaceRegistry(registry.id, payload);
       } else {
-        await createMarketplaceRegistry(form);
+        await createMarketplaceRegistry(payload);
       }
       onSave();
     } catch (err) {
@@ -430,6 +459,98 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               </p>
             </div>
           </div>
+
+          {/* Version policy: channel and pins */}
+          <fieldset className="space-y-3" data-testid="registry-version-policy">
+            <legend className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.marketplace.registries.form.versionPolicy', 'Versions')}
+            </legend>
+            <div>
+              <label
+                htmlFor="registry-channel"
+                className="block text-sm text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.marketplace.registries.form.channel', 'Channel')}
+              </label>
+              <select
+                id="registry-channel"
+                value={form.channel}
+                onChange={e => set('channel', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              >
+                <option value="stable">
+                  {t('admin.marketplace.registries.form.channelStable', 'Stable releases only')}
+                </option>
+                <option value="all">
+                  {t(
+                    'admin.marketplace.registries.form.channelAll',
+                    'All releases, including pre-releases'
+                  )}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.marketplace.registries.form.channelHelp',
+                  'Stable hides versions such as 2.0.0-rc.1 from install and the update badge.'
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                {t('admin.marketplace.registries.form.pins', 'Version pins')}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                {t(
+                  'admin.marketplace.registries.form.pinsHelp',
+                  'Keep an item on a version range, for example 1.3.x or ~1.3.0. Install and the update badge offer only versions inside the pin.'
+                )}
+              </p>
+              {pinRows.length > 0 && (
+                <ul className="space-y-2 mb-2">
+                  {pinRows.map((row, index) => (
+                    // eslint-disable-next-line @eslint-react/no-array-index-key -- rows have no id; the index is their identity while editing
+                    <li key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={row.key}
+                        onChange={e => setPin(index, 'key', e.target.value)}
+                        placeholder="integration:org.ckan__open-data-portal"
+                        aria-label={t('admin.marketplace.registries.form.pinItem', 'Item')}
+                        className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                      />
+                      <input
+                        type="text"
+                        value={row.range}
+                        onChange={e => setPin(index, 'range', e.target.value)}
+                        placeholder="1.3.x"
+                        aria-label={t(
+                          'admin.marketplace.registries.form.pinRange',
+                          'Version range'
+                        )}
+                        className="w-28 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPinRows(rows => rows.filter((_, i) => i !== index))}
+                        className="text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                        aria-label={t('admin.marketplace.registries.form.removePin', 'Remove pin')}
+                      >
+                        &#x2715;
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                onClick={() => setPinRows(rows => [...rows, { key: '', range: '' }])}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
+                {t('admin.marketplace.registries.form.addPin', 'Add pin')}
+              </button>
+              {errors.pins && <p className="text-red-500 text-xs mt-1">{errors.pins}</p>}
+            </div>
+          </fieldset>
 
           {/* Footer buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
