@@ -366,7 +366,9 @@ describe('file names, ids and meta', () => {
     expect(sanitizeItemFileName('a/b\\c:d*e?"f<g>h|i', '.eml', 'Email')).toBe(
       'a b c d e f g h i.eml'
     );
-    expect(sanitizeItemFileName('line\nbreak\u0000nul‮', '.md', 'Page')).toBe('line break nul.md');
+    expect(sanitizeItemFileName('line\nbreak\u0000nul\u202e', '.md', 'Page')).toBe(
+      'line break nul.md'
+    );
     expect(sanitizeItemFileName('  ..hidden..  ', '.eml', 'Email')).toBe('hidden.eml');
     expect(sanitizeItemFileName('', '.eml', 'Email')).toBe('Email.eml');
     expect(sanitizeItemFileName(null, '.ics', 'Meeting')).toBe('Meeting.ics');

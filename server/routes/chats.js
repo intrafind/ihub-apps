@@ -517,8 +517,10 @@ export default function registerChatRoutes(app) {
         if (!parsed) return;
       }
 
+      // A chat that exists keeps its app: the app decides the storage policy, so a
+      // request must not be able to pick a looser one for somebody's chat.
       const requestedAppId =
-        (typeof req.body?.appId === 'string' && req.body.appId) || auth.chat?.appId || null;
+        auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
       const chatApp = requestedAppId
         ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
         : null;
@@ -596,6 +598,8 @@ export default function registerChatRoutes(app) {
         if (req.query.raw === '1' || req.query.raw === 'true') {
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
           res.setHeader('X-Content-Type-Options', 'nosniff');
+          // Served as text/plain with nosniff: never interpreted as HTML.
+          // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
           return res.send(textFile.text);
         }
         return res.json({ file: textFile });

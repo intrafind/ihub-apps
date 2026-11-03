@@ -348,6 +348,56 @@ export function toPromptFileData(storedFile) {
 }
 
 /**
+ * The original bytes of an inline `fileData` entry (`base64`), when they may be
+ * stored: a type the extraction knows, within the file size limit, and clean
+ * under the configured malware scanner. Anything else is dropped — the text is
+ * still stored — rather than keeping bytes that never passed the checks an upload
+ * to `POST /api/chats/:chatId/files` goes through.
+ *
+ * @param {Object} file - The `fileData` entry.
+ * @param {string} text - Its extracted text (what the client sent).
+ * @param {Object} repo
+ * @returns {Promise<Buffer|null>}
+ */
+async function vettedInlineOriginal(file, text, repo) {
+  if (typeof file.base64 !== 'string' || !file.base64) return null;
+  try {
+    // `data:` URLs carry the media type in front of the payload.
+    const payload = file.base64.replace(/^data:[^,]*,/, '');
+    const bytes = Buffer.from(payload, 'base64');
+    if (bytes.length === 0) return null;
+    const name = file.fileName || file.name || 'document';
+    const mimeType = file.fileType || file.mimeType || file.type;
+    const limit = (repo?.policy?.() || chatFileSettingsSafe()).quotas?.maxFileBytes ?? 0;
+    if (limit > 0 && bytes.length > limit) return null;
+    const accepted = acceptedTypeOf({ contentType: mimeType, name });
+    if (!accepted) return null;
+    const scanner = scannerFor(projectSettings(configCache.getPlatform?.() || {}).scan);
+    if (scanner && scanner.id !== 'none') {
+      const result = await scanner.scan({ bytes, contentType: accepted, name });
+      if (result?.clean === false) {
+        logger.warn('Inline original rejected by the security scanner; storing text only', {
+          component: COMPONENT,
+          name
+        });
+        return null;
+      }
+    }
+    return bytes;
+  } catch (error) {
+    logger.warn('Inline original could not be checked; storing text only', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+function chatFileSettingsSafe() {
+  return normalizeChatFilePolicy(null, null);
+}
+
+/**
  * The descriptor a stored message keeps for a file: what the transcript needs
  * to show it and to find it again (`attachments` of `chat-messages`).
  *
@@ -486,7 +536,7 @@ export async function prepareTurnFiles({
           mimeType,
           formatLabel: file.displayType || null,
           text,
-          originalBuffer: file.base64 ? Buffer.from(file.base64, 'base64') : null,
+          originalBuffer: await vettedInlineOriginal(file, text, activeRepo),
           pageImages,
           origin,
           meta,

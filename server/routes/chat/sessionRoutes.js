@@ -94,7 +94,10 @@ export function historyForPrompt(stored) {
     .map(entry => {
       // The skills an answer activated stay active in the chat; the request
       // builder reads them from here and re-checks access every turn.
-      const skills = entry.role === 'assistant' ? entry.activity?.activeSkills : null;
+      // A stored answer carries them in `activity`; a history rebuilt from the file
+      // store (`hydrateHistoryForPrompt`) already has them as `activeSkills`.
+      const skills =
+        entry.role === 'assistant' ? (entry.activity?.activeSkills ?? entry.activeSkills) : null;
       return {
         role: entry.role,
         content: typeof entry.content === 'string' ? entry.content : '',
