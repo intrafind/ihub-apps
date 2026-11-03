@@ -37,6 +37,22 @@ function uploadErrorText(code, t) {
         'attachedFiles.errors.fileTooLarge',
         'Too large to save; the file is sent with the message only'
       );
+    case 'UNSUPPORTED_TYPE':
+      return t(
+        'attachedFiles.errors.unsupportedType',
+        'This file type cannot be saved to the chat; the file is sent with the message only'
+      );
+    case 'NO_TEXT':
+    case 'EXTRACTION_FAILED':
+      return t(
+        'attachedFiles.errors.unreadable',
+        'The server could not read this file, so it was not saved to the chat; the file is sent with the message only'
+      );
+    case 'SCAN_REJECTED':
+      return t(
+        'attachedFiles.errors.scanRejected',
+        'Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only'
+      );
     default:
       return t(
         'attachedFiles.errors.notSaved',

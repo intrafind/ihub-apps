@@ -25,6 +25,9 @@
       "chatQuota": "This chat has no room for more saved files; the file is sent with the message only",
       "storageQuota": "Your file storage is full; the file is sent with the message only",
       "fileTooLarge": "Too large to save; the file is sent with the message only",
+      "unsupportedType": "This file type cannot be saved to the chat; the file is sent with the message only",
+      "unreadable": "The server could not read this file, so it was not saved to the chat; the file is sent with the message only",
+      "scanRejected": "Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only",
       "notSaved": "Could not be saved to the chat; the file is sent with the message only"
     },
     "stored": "Saved to this chat",
