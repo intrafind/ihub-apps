@@ -93,24 +93,8 @@ function last(list, predicate) {
   return null;
 }
 
-/**
- * Project a run onto the assistant message.
- *
- * @param {Object|null} run - RunState from the run reducer
- * @param {Object} [options]
- * @param {string} [options.fallbackErrorMessage] - Used when a stream/error frame has no message
- * @returns {{ content: string, loading: boolean, extras: Object }}
- */
-export function projectRunToMessage(run, options = {}) {
-  if (!run) return { content: '', loading: false, extras: {} };
-  const fallbackErrorMessage = options.fallbackErrorMessage || DEFAULT_STREAM_ERROR_MESSAGE;
-  const extras = {};
-  const finished = isRunFinished(run);
-  const interactions = getInteractions(run);
-  // The run behind the message: feedback and human events are recorded on it.
-  if (run.runId) extras.runId = run.runId;
-
-  // ── content ───────────────────────────────────────────────────────────
+/** The answer text with the run's sources and, on the legacy error path, its error appended. */
+function contentOf(run, extras, fallbackErrorMessage) {
   // Everything the run found (`sources/added`, folded by the reducer). Google's
   // answer text carries no links: its grounding supports say which passage
   // each source backs, and the markers go there — the stored answer gets the
@@ -123,43 +107,40 @@ export function projectRunToMessage(run, options = {}) {
     // Legacy 'error' path: the error text is appended to whatever streamed.
     content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
   }
+  return content;
+}
 
-  // ── reasoning / media ────────────────────────────────────────────────
-  if (run.thinking?.length) extras.thoughts = run.thinking;
-  if (run.images?.length) extras.images = run.images;
-
-  // ── clarification (ask_user) ─────────────────────────────────────────
+/** The clarification (ask_user) card. @returns {boolean} Whether the run waits for the answer. */
+function addClarification(extras, interactions) {
   const question = last(interactions, isClarificationInteraction);
-  let awaitingQuestion = false;
-  if (question) {
-    extras.clarification = buildClarification(question);
-    if (question.status === 'pending' && !finished) {
-      awaitingQuestion = true;
-      extras.awaitingInput = true;
-    } else if (question.status === 'pending') {
-      // Turn ended (status paused) while the question is still open.
-      awaitingQuestion = true;
-      extras.awaitingInput = true;
-    } else {
-      extras.awaitingInput = false;
-      extras.clarificationAnswered = true;
-    }
+  if (!question) return false;
+  extras.clarification = buildClarification(question);
+  // A question still open when the turn ended (status paused) waits just the same.
+  if (question.status === 'pending') {
+    extras.awaitingInput = true;
+    return true;
   }
+  extras.awaitingInput = false;
+  extras.clarificationAnswered = true;
+  return false;
+}
 
-  // ── tool approval (#2945) ────────────────────────────────────────────
-  // A pending approval hands control back to the user like a question: the
-  // card waits for Approve / Reject, which the next message carries.
+/**
+ * Tool approval (#2945). A pending approval hands control back to the user like a
+ * question: the card waits for Approve / Reject, which the next message carries.
+ * @returns {boolean} Whether the run waits for the decision.
+ */
+function addToolApproval(extras, interactions) {
   const approval = last(interactions, isToolApprovalInteraction);
-  let awaitingApproval = false;
-  if (approval) {
-    extras.toolApproval = buildToolApproval(approval);
-    if (approval.status === 'pending') {
-      awaitingApproval = true;
-      extras.awaitingInput = true;
-    }
-  }
+  if (!approval) return false;
+  extras.toolApproval = buildToolApproval(approval);
+  if (approval.status !== 'pending') return false;
+  extras.awaitingInput = true;
+  return true;
+}
 
-  // ── chat-launched workflow: checkpoint, steps, result ────────────────
+/** Chat-launched workflow: checkpoint, steps, result. */
+function addWorkflowState(extras, run, interactions, finished) {
   const workflow = run.meta?.extra?.workflow;
   const checkpoint = last(interactions, isCheckpointInteraction);
   if (checkpoint) {
@@ -184,8 +165,10 @@ export function projectRunToMessage(run, options = {}) {
     extras.workflowResult = workflowResultOf(run);
     extras.outputFormat = workflow.outputFormat || 'markdown';
   }
+}
 
-  // ── tool side channels ───────────────────────────────────────────────
+/** What the turn's tools reported beside their answers. */
+function addToolSideChannels(extras, run) {
   if (run.skills?.length) extras.activeSkills = run.skills;
   // Which projects the turn reached and how (`knowledge/scope`): the badge
   // of the answer, streamed and stored alike.
@@ -216,8 +199,9 @@ export function projectRunToMessage(run, options = {}) {
   // Files the turn's tools generated (a PDF from `create_pdf`): download cards.
   const generatedFiles = generatedFilesOf((run.tools || []).flatMap(tool => tool.files || []));
   if (generatedFiles.length) extras.generatedFiles = generatedFiles;
+}
 
-  // ── completion metadata ──────────────────────────────────────────────
+function addCompletionMetadata(extras, run, finished) {
   if (finished) {
     const answerSource = answerSourceOf(run);
     if (answerSource) extras.answerSource = answerSource;
@@ -226,6 +210,36 @@ export function projectRunToMessage(run, options = {}) {
     }
   }
   if (run.meta?.responseMessageId) extras.ifinderMessageId = run.meta.responseMessageId;
+}
+
+/**
+ * Project a run onto the assistant message.
+ *
+ * @param {Object|null} run - RunState from the run reducer
+ * @param {Object} [options]
+ * @param {string} [options.fallbackErrorMessage] - Used when a stream/error frame has no message
+ * @returns {{ content: string, loading: boolean, extras: Object }}
+ */
+export function projectRunToMessage(run, options = {}) {
+  if (!run) return { content: '', loading: false, extras: {} };
+  const fallbackErrorMessage = options.fallbackErrorMessage || DEFAULT_STREAM_ERROR_MESSAGE;
+  const extras = {};
+  const finished = isRunFinished(run);
+  const interactions = getInteractions(run);
+  // The run behind the message: feedback and human events are recorded on it.
+  if (run.runId) extras.runId = run.runId;
+
+  const content = contentOf(run, extras, fallbackErrorMessage);
+
+  // ── reasoning / media ────────────────────────────────────────────────
+  if (run.thinking?.length) extras.thoughts = run.thinking;
+  if (run.images?.length) extras.images = run.images;
+
+  const awaitingQuestion = addClarification(extras, interactions);
+  const awaitingApproval = addToolApproval(extras, interactions);
+  addWorkflowState(extras, run, interactions, finished);
+  addToolSideChannels(extras, run);
+  addCompletionMetadata(extras, run, finished);
 
   // ── loading ──────────────────────────────────────────────────────────
   // Streaming while the run is running; a workflow checkpoint pause keeps the

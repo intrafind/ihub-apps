@@ -566,33 +566,7 @@ export class A2aAgentConnection {
     else signal?.addEventListener?.('abort', onCallerAbort, { once: true });
     const callSignal = controller.signal;
 
-    const parts = [{ kind: 'text', text }];
-    if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
-      parts.push({ kind: 'data', data });
-    }
-    for (const file of Array.isArray(files) ? files : []) {
-      if (!file?.bytes?.length) continue;
-      parts.push({
-        kind: 'file',
-        file: {
-          name: file.name,
-          ...(file.mimeType ? { mimeType: file.mimeType } : {}),
-          bytes: Buffer.from(file.bytes).toString('base64')
-        }
-      });
-    }
-    const params = {
-      message: {
-        kind: 'message',
-        role: 'user',
-        messageId: randomUUID(),
-        parts,
-        ...(contextId ? { contextId } : {}),
-        ...(continueTaskId ? { taskId: continueTaskId } : {}),
-        metadata: { skillId }
-      },
-      configuration: { blocking: true, acceptedOutputModes: ACCEPTED_OUTPUT_MODES }
-    };
+    const params = buildSendParams({ skillId, text, data, files, contextId, continueTaskId });
 
     let taskId = null;
     const track = id => {
@@ -609,26 +583,34 @@ export class A2aAgentConnection {
       return await this._settle(result, { signal: callSignal, onProgress, track });
     } catch (err) {
       if (callSignal.aborted || err?.name === 'AbortError') {
-        const reason = timedOut ? 'timeout' : 'stop';
-        if (taskId) this._cancelTask(taskId, reason);
-        if (!timedOut) {
-          throw a2aError(
-            A2A_CLIENT_ERRORS.CANCELLED,
-            `The call to agent ${this.config.id} was stopped`,
-            { taskId }
-          );
-        }
-        throw a2aError(
-          A2A_CLIENT_ERRORS.TIMEOUT,
-          `Agent ${this.config.id} did not finish within ${timeoutMs} ms`,
-          { taskId }
-        );
+        throw this._abortedError({ taskId, timedOut, timeoutMs });
       }
       throw err;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener?.('abort', onCallerAbort);
     }
+  }
+
+  /**
+   * The error for a call that was aborted, by the timeout or by the caller;
+   * cancels a running task (best effort) on the way.
+   * @private
+   */
+  _abortedError({ taskId, timedOut, timeoutMs }) {
+    if (taskId) this._cancelTask(taskId, timedOut ? 'timeout' : 'stop');
+    if (!timedOut) {
+      return a2aError(
+        A2A_CLIENT_ERRORS.CANCELLED,
+        `The call to agent ${this.config.id} was stopped`,
+        { taskId }
+      );
+    }
+    return a2aError(
+      A2A_CLIENT_ERRORS.TIMEOUT,
+      `Agent ${this.config.id} did not finish within ${timeoutMs} ms`,
+      { taskId }
+    );
   }
 
   /**
@@ -669,23 +651,31 @@ export class A2aAgentConnection {
       );
     }
     track(result.id);
-    let task = result;
     const pollIntervalMs = this.config.pollIntervalMs ?? 1500;
-    while (isRunning(task)) {
-      report(onProgress, task.status?.state, statusMessageText(task));
-      await sleep(pollIntervalMs, signal);
-      task = await this.rpc('tasks/get', { id: result.id }, { signal });
-      if (task?.kind !== 'task') {
-        throw a2aError(A2A_CLIENT_ERRORS.RPC_ERROR, 'tasks/get did not return a task');
-      }
-      if (task.id !== result.id) {
-        throw a2aError(
-          A2A_CLIENT_ERRORS.RPC_ERROR,
-          `tasks/get for task ${result.id} returned another task (${task.id})`
-        );
-      }
-    }
+    const task = await this._pollUntilSettled(result, { signal, onProgress, pollIntervalMs });
     return this._taskResult(task);
+  }
+
+  /**
+   * `tasks/get` every `pollIntervalMs` until the task stops running. Each poll
+   * depends on the previous one, so the steps run strictly in sequence.
+   * @private
+   */
+  async _pollUntilSettled(task, { signal, onProgress, pollIntervalMs }) {
+    if (!isRunning(task)) return task;
+    report(onProgress, task.status?.state, statusMessageText(task));
+    await sleep(pollIntervalMs, signal);
+    const next = await this.rpc('tasks/get', { id: task.id }, { signal });
+    if (next?.kind !== 'task') {
+      throw a2aError(A2A_CLIENT_ERRORS.RPC_ERROR, 'tasks/get did not return a task');
+    }
+    if (next.id !== task.id) {
+      throw a2aError(
+        A2A_CLIENT_ERRORS.RPC_ERROR,
+        `tasks/get for task ${task.id} returned another task (${next.id})`
+      );
+    }
+    return this._pollUntilSettled(next, { signal, onProgress, pollIntervalMs });
   }
 
   /** The answer held by a settled task. */
@@ -819,65 +809,85 @@ export class A2aAgentConnection {
    *   `{ fileId, name, mimeType, bytes, id? }` — `id` names the held download card
    */
   async receiveFiles(refs, { chatId, ownerId = null, signal, store = null } = {}) {
+    const list = Array.isArray(refs) ? refs : [];
+    const received = await Promise.all(
+      list.map((ref, index) => this._receiveFile(ref, index, { chatId, ownerId, signal, store }))
+    );
     const files = [];
     const images = [];
-    const list = Array.isArray(refs) ? refs : [];
-    for (const [index, ref] of list.entries()) {
-      if (index >= A2A_RESPONSE_LIMITS.files) {
-        files.push({
-          name: plainFileName(ref.name, `file-${index + 1}`),
-          error: `More than ${A2A_RESPONSE_LIMITS.files} files in one answer; this one was not stored.`
-        });
-        continue;
-      }
-      const name = plainFileName(ref.name, `file-${index + 1}`);
-      let bytes = null;
-      let mimeType = ref.mimeType;
-      let failure = null;
-      if (typeof ref.bytes === 'string') {
-        const decoded = decodeBase64Capped(ref.bytes, A2A_RESPONSE_LIMITS.fileBytes);
-        if (decoded.ok) bytes = decoded.buffer;
-        else failure = decoded.reason;
-      } else {
-        try {
-          const fetched = await this._fetchFileUri(ref.uri, { signal });
-          bytes = fetched.bytes;
-          mimeType = mimeType || fetched.mimeType;
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          failure = error?.message || 'fetch failed';
-        }
-      }
-      if (!bytes) {
-        files.push({
-          name,
-          ...(mimeType ? { mimeType } : {}),
-          error:
-            failure === 'too-large'
-              ? `The file is larger than ${A2A_RESPONSE_LIMITS.fileBytes / 1024 / 1024} MB and was not stored.`
-              : `The file could not be read (${String(failure || 'empty').slice(0, 120)}).`
-        });
-        continue;
-      }
-      const stored = await storeToolOutputFile({
-        chatId,
-        ownerId,
-        bytes,
-        name,
-        mimeType: normalizeMediaType(mimeType, name) || mimeType,
-        uri: ref.uri,
-        index,
-        origin: 'a2a',
-        meta: { agentId: this.config.id },
-        store
-      });
-      const held = stored.images[0] || stored.files[0];
-      const descriptor = { ...stored.descriptor };
-      delete descriptor.type;
-      if (held) descriptor.id = held.id;
-      (stored.images.length > 0 ? images : files).push(descriptor);
-    }
+    for (const { isImage, descriptor } of received) (isImage ? images : files).push(descriptor);
     return { files, images };
+  }
+
+  /**
+   * Take one returned file into the chat (see `receiveFiles`).
+   * @private
+   * @returns {Promise<{isImage: boolean, descriptor: Object}>}
+   */
+  async _receiveFile(ref, index, { chatId, ownerId, signal, store }) {
+    const name = plainFileName(ref.name, `file-${index + 1}`);
+    if (index >= A2A_RESPONSE_LIMITS.files) {
+      return {
+        isImage: false,
+        descriptor: {
+          name,
+          error: `More than ${A2A_RESPONSE_LIMITS.files} files in one answer; this one was not stored.`
+        }
+      };
+    }
+    const { bytes, mimeType, failure } = await this._readFileRef(ref, { signal });
+    if (!bytes) {
+      const reason =
+        failure === 'too-large'
+          ? `The file is larger than ${A2A_RESPONSE_LIMITS.fileBytes / 1024 / 1024} MB and was not stored.`
+          : `The file could not be read (${String(failure || 'empty').slice(0, 120)}).`;
+      return {
+        isImage: false,
+        descriptor: { name, ...(mimeType ? { mimeType } : {}), error: reason }
+      };
+    }
+    const stored = await storeToolOutputFile({
+      chatId,
+      ownerId,
+      bytes,
+      name,
+      mimeType: normalizeMediaType(mimeType, name) || mimeType,
+      uri: ref.uri,
+      index,
+      origin: 'a2a',
+      meta: { agentId: this.config.id },
+      store
+    });
+    const held = stored.images[0] || stored.files[0];
+    const descriptor = { ...stored.descriptor };
+    delete descriptor.type;
+    if (held) descriptor.id = held.id;
+    return { isImage: stored.images.length > 0, descriptor };
+  }
+
+  /**
+   * The bytes of a file part: decoded `bytes`, else fetched `uri`.
+   * @private
+   * @returns {Promise<{bytes: Buffer|null, mimeType: string|undefined, failure: string|null}>}
+   */
+  async _readFileRef(ref, { signal }) {
+    if (typeof ref.bytes === 'string') {
+      const decoded = decodeBase64Capped(ref.bytes, A2A_RESPONSE_LIMITS.fileBytes);
+      return decoded.ok
+        ? { bytes: decoded.buffer, mimeType: ref.mimeType, failure: null }
+        : { bytes: null, mimeType: ref.mimeType, failure: decoded.reason };
+    }
+    try {
+      const fetched = await this._fetchFileUri(ref.uri, { signal });
+      return {
+        bytes: fetched.bytes,
+        mimeType: ref.mimeType || fetched.mimeType,
+        failure: null
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return { bytes: null, mimeType: ref.mimeType, failure: error?.message || 'fetch failed' };
+    }
   }
 
   /**
@@ -1007,11 +1017,46 @@ function refuseRedirect(resp, who) {
   if (resp?.type !== 'opaqueredirect' && !(status >= 300 && status < 400)) return;
   void discardBody(resp);
   const location = resp.headers?.get?.('location');
+  const target = location ? ` to ${location}` : '';
   throw a2aError(
     A2A_CLIENT_ERRORS.REDIRECT_REFUSED,
-    `${who} answered with a redirect (HTTP ${status}${location ? ` to ${location}` : ''}); ` +
+    `${who} answered with a redirect (HTTP ${status}${target}); ` +
       'A2A requests do not follow redirects, so configure the final URL instead'
   );
+}
+
+/**
+ * The `message/send` / `message/stream` params: text, optional data part and
+ * file parts (`bytes` base64 on the wire).
+ */
+function buildSendParams({ skillId, text, data, files, contextId, continueTaskId }) {
+  const parts = [{ kind: 'text', text }];
+  if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
+    parts.push({ kind: 'data', data });
+  }
+  for (const file of Array.isArray(files) ? files : []) {
+    if (!file?.bytes?.length) continue;
+    parts.push({
+      kind: 'file',
+      file: {
+        name: file.name,
+        ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+        bytes: Buffer.from(file.bytes).toString('base64')
+      }
+    });
+  }
+  return {
+    message: {
+      kind: 'message',
+      role: 'user',
+      messageId: randomUUID(),
+      parts,
+      ...(contextId ? { contextId } : {}),
+      ...(continueTaskId ? { taskId: continueTaskId } : {}),
+      metadata: { skillId }
+    },
+    configuration: { blocking: true, acceptedOutputModes: ACCEPTED_OUTPUT_MODES }
+  };
 }
 
 /** Release a response body that will not be read; never throws. */

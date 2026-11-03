@@ -126,11 +126,19 @@ export function a2aError(code, message, extra = {}) {
  * @returns {string}
  */
 export function skillSlug(skillId) {
-  return String(skillId ?? '')
+  const slug = String(skillId ?? '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, MAX_SKILL_SLUG_LENGTH);
+    .replace(/[^a-z0-9]+/g, '_');
+  return trimUnderscores(slug).slice(0, MAX_SKILL_SLUG_LENGTH);
+}
+
+/** `value` without its leading and trailing underscores. */
+function trimUnderscores(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '_') start++;
+  while (end > start && value[end - 1] === '_') end--;
+  return value.slice(start, end);
 }
 
 /**
@@ -155,8 +163,11 @@ function skillDescription(skill) {
     .filter(example => typeof example === 'string' && example.trim())
     .slice(0, 5);
   if (examples.length === 0) return base;
-  const separator = !base ? '' : /[.!?]$/.test(base) ? ' ' : '. ';
-  return `${base}${separator}Examples: ${examples.map(example => `"${example.trim()}"`).join('; ')}`;
+  let separator = '. ';
+  if (!base) separator = '';
+  else if (/[.!?]$/.test(base)) separator = ' ';
+  const quoted = examples.map(example => `"${example.trim()}"`).join('; ');
+  return `${base}${separator}Examples: ${quoted}`;
 }
 
 /**
@@ -174,15 +185,21 @@ function skillDescription(skill) {
  * @returns {Map<string, string>} skill id → slug
  */
 function assignSkillSlugs(skillIds, budget) {
-  const sorted = Array.from(new Set(skillIds)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const compare = (a, b) => {
+    if (a < b) return -1;
+    return a > b ? 1 : 0;
+  };
+  const sorted = Array.from(new Set(skillIds)).sort(compare);
   const used = new Set();
   const slugs = new Map();
   for (const skillId of sorted) {
     const base = skillSlug(skillId).slice(0, budget) || 'skill';
     let slug = base;
-    for (let n = 2; used.has(slug); n++) {
+    let n = 2;
+    while (used.has(slug)) {
       const suffix = `_${n}`;
       slug = `${base.slice(0, Math.max(1, budget - suffix.length))}${suffix}`;
+      n++;
     }
     used.add(slug);
     slugs.set(skillId, slug);
@@ -205,9 +222,7 @@ function assignSkillSlugs(skillIds, budget) {
  * @returns {{tools: Array<Object>, skillsByToolId: Map<string, Object>}}
  */
 export function buildSkillTools(agentConfig, card) {
-  const allow = Array.isArray(agentConfig.allowedSkills) ? agentConfig.allowedSkills : ['*'];
-  const allowAll = allow.includes('*');
-  const deny = new Set(Array.isArray(agentConfig.deniedSkills) ? agentConfig.deniedSkills : []);
+  const isAllowed = skillFilter(agentConfig);
   const prefix = `${A2A_TOOL_PREFIX}${agentConfig.id}__`;
   const budget = Math.max(1, Math.min(MAX_SKILL_SLUG_LENGTH, MAX_TOOL_ID_LENGTH - prefix.length));
   const tools = [];
@@ -225,47 +240,59 @@ export function buildSkillTools(agentConfig, card) {
   for (const skill of skills) {
     if (seen.has(skill.id)) continue; // a card listing one skill id twice
     seen.add(skill.id);
-    if ((!allowAll && !allow.includes(skill.id)) || deny.has(skill.id)) continue;
+    if (!isAllowed(skill.id)) continue;
 
     const id = `${prefix}${slugs.get(skill.id)}`;
     // The schema keeps agent ids to what a provider accepts; a hand-edited id
     // that slipped past it must not break every chat request of the app.
     if (!PROVIDER_TOOL_NAME_PATTERN.test(id)) continue;
-    const tool = {
-      id,
-      name: id,
-      description: skillDescription(skill),
-      parameters: {
-        type: 'object',
-        properties: {
-          message: { type: 'string', description: 'What to ask the agent' },
-          data: {
-            type: 'object',
-            description: 'Optional structured input (sent as a data part)',
-            additionalProperties: true
-          },
-          fileIds: {
-            type: 'array',
-            description:
-              "Optional ids of files of this chat (uploads, or files an earlier tool returned) to send to the agent along with the message (as file parts). Use the 'fileId' of the file.",
-            items: { type: 'string' }
-          }
-        },
-        required: ['message']
-      },
-      // Internal marker so toolLoader.runTool and the tool pickers know the
-      // owning agent; never sent to the model.
-      _a2a: {
-        agentId: agentConfig.id,
-        agentName: agentConfig.name || agentConfig.id,
-        skillId: skill.id,
-        skillName: typeof skill.name === 'string' && skill.name ? skill.name : skill.id
-      }
-    };
-    tools.push(tool);
+    tools.push(skillTool(id, agentConfig, skill));
     skillsByToolId.set(id, skill);
   }
   return { tools, skillsByToolId };
+}
+
+/** A predicate for the skill ids an agent's `allowedSkills` / `deniedSkills` let through. */
+function skillFilter(agentConfig) {
+  const allow = Array.isArray(agentConfig.allowedSkills) ? agentConfig.allowedSkills : ['*'];
+  const allowAll = allow.includes('*');
+  const deny = new Set(Array.isArray(agentConfig.deniedSkills) ? agentConfig.deniedSkills : []);
+  return skillId => (allowAll || allow.includes(skillId)) && !deny.has(skillId);
+}
+
+/** The tool definition of one skill. */
+function skillTool(id, agentConfig, skill) {
+  return {
+    id,
+    name: id,
+    description: skillDescription(skill),
+    parameters: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'What to ask the agent' },
+        data: {
+          type: 'object',
+          description: 'Optional structured input (sent as a data part)',
+          additionalProperties: true
+        },
+        fileIds: {
+          type: 'array',
+          description:
+            "Optional ids of files of this chat (uploads, or files an earlier tool returned) to send to the agent along with the message (as file parts). Use the 'fileId' of the file.",
+          items: { type: 'string' }
+        }
+      },
+      required: ['message']
+    },
+    // Internal marker so toolLoader.runTool and the tool pickers know the
+    // owning agent; never sent to the model.
+    _a2a: {
+      agentId: agentConfig.id,
+      agentName: agentConfig.name || agentConfig.id,
+      skillId: skill.id,
+      skillName: typeof skill.name === 'string' && skill.name ? skill.name : skill.id
+    }
+  };
 }
 
 /**
@@ -372,20 +399,21 @@ export class StreamCollector {
    *   before the stream is refused (`A2A_RESPONSE_TOO_LARGE`)
    */
   constructor({ maxArtifactChars = A2A_RESPONSE_LIMITS.artifactChars } = {}) {
-    this.task = null;
-    this.message = null;
-    this.status = null;
-    this.final = false;
-    /** @type {Map<string, {artifactId: string, name?: string, text: string, done: boolean, files: Array<Object>}>} */
-    this.artifacts = new Map();
     this.maxArtifactChars = maxArtifactChars;
-    this._artifactChars = 0;
-    // Learned from the first event that names them: `TaskStatusUpdateEvent`
-    // and `TaskArtifactUpdateEvent` carry `taskId` / `contextId` themselves,
-    // and agents such as Google ADK never send a `Task` event at all.
-    this._taskId = null;
-    this._contextId = null;
   }
+
+  task = null;
+  message = null;
+  status = null;
+  final = false;
+  /** @type {Map<string, {artifactId: string, name?: string, text: string, done: boolean, files: Array<Object>}>} */
+  artifacts = new Map();
+  _artifactChars = 0;
+  // Learned from the first event that names them: `TaskStatusUpdateEvent`
+  // and `TaskArtifactUpdateEvent` carry `taskId` / `contextId` themselves,
+  // and agents such as Google ADK never send a `Task` event at all.
+  _taskId = null;
+  _contextId = null;
 
   /**
    * Whether an event belongs to the task this stream is about. The first
@@ -425,13 +453,7 @@ export class StreamCollector {
     this._learn(taskId, event.contextId);
     switch (event.kind) {
       case 'task':
-        this.task = event;
-        if (event.status) this.status = event.status;
-        if (Array.isArray(event.artifacts)) {
-          for (const artifact of event.artifacts) this._replace(artifact);
-        }
-        if (FINAL_TASK_STATES.has(event.status?.state)) this.final = true;
-        return { kind: 'task', state: event.status?.state };
+        return this._addTask(event);
       case 'message':
         this.message = event;
         this.final = true;
@@ -444,25 +466,38 @@ export class StreamCollector {
           state: event.status?.state,
           message: statusMessageText(event)
         };
-      case 'artifact-update': {
-        const artifact = event.artifact;
-        if (!artifact || typeof artifact.artifactId !== 'string') return null;
-        const existing = this.artifacts.get(artifact.artifactId);
-        if (existing && event.append === true) {
-          const chunk = partsText(artifact.parts);
-          this._count(chunk.length);
-          existing.text += chunk;
-          existing.files.push(...partsFiles(artifact.parts));
-          if (artifact.name && !existing.name) existing.name = artifact.name;
-        } else {
-          this._replace(artifact);
-        }
-        if (event.lastChunk === true) this.artifacts.get(artifact.artifactId).done = true;
-        return { kind: 'artifact' };
-      }
+      case 'artifact-update':
+        return this._addArtifactUpdate(event);
       default:
         return null;
     }
+  }
+
+  _addTask(event) {
+    this.task = event;
+    if (event.status) this.status = event.status;
+    if (Array.isArray(event.artifacts)) {
+      for (const artifact of event.artifacts) this._replace(artifact);
+    }
+    if (FINAL_TASK_STATES.has(event.status?.state)) this.final = true;
+    return { kind: 'task', state: event.status?.state };
+  }
+
+  _addArtifactUpdate(event) {
+    const artifact = event.artifact;
+    if (!artifact || typeof artifact.artifactId !== 'string') return null;
+    const existing = this.artifacts.get(artifact.artifactId);
+    if (existing && event.append === true) {
+      const chunk = partsText(artifact.parts);
+      this._count(chunk.length);
+      existing.text += chunk;
+      existing.files.push(...partsFiles(artifact.parts));
+      if (artifact.name && !existing.name) existing.name = artifact.name;
+    } else {
+      this._replace(artifact);
+    }
+    if (event.lastChunk === true) this.artifacts.get(artifact.artifactId).done = true;
+    return { kind: 'artifact' };
   }
 
   _replace(artifact) {
@@ -548,56 +583,79 @@ export async function* parseSseStream(
   } = {}
 ) {
   const decoder = new TextDecoder();
-  let buffer = '';
-  let data = [];
-  let dataSize = 0;
+  const parser = new SseEventParser(maxEventBytes);
   let total = 0;
-  const tooLarge = what => a2aError(A2A_CLIENT_ERRORS.RESPONSE_TOO_LARGE, `Agent stream ${what}`);
-
-  const flush = () => {
-    if (data.length === 0) return undefined;
-    const text = data.join('\n');
-    data = [];
-    dataSize = 0;
-    return parseFrame(text);
-  };
-  const take = line => {
-    if (!line.startsWith('data:')) return;
-    const value = line.slice(5).replace(/^ /, '');
-    dataSize += value.length + 1;
-    if (dataSize > maxEventBytes) {
-      throw tooLarge(`sent an event larger than ${maxEventBytes} bytes`);
-    }
-    data.push(value);
-  };
 
   for await (const chunk of body) {
     total += typeof chunk === 'string' ? chunk.length : chunk.byteLength;
-    if (total > maxTotalBytes) throw tooLarge(`sent more than ${maxTotalBytes} bytes`);
-    buffer += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+    if (total > maxTotalBytes) throw sseTooLarge(`sent more than ${maxTotalBytes} bytes`);
+    yield* parser.push(typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true }));
+  }
+  yield* parser.end(decoder.decode());
+}
+
+const sseTooLarge = what => a2aError(A2A_CLIENT_ERRORS.RESPONSE_TOO_LARGE, `Agent stream ${what}`);
+
+/** Line-by-line SSE state for `parseSseStream`: the buffered text and the `data:` lines of the open event. */
+class SseEventParser {
+  constructor(maxEventBytes) {
+    this.maxEventBytes = maxEventBytes;
+  }
+
+  buffer = '';
+  data = [];
+  dataSize = 0;
+
+  _flush() {
+    if (this.data.length === 0) return undefined;
+    const text = this.data.join('\n');
+    this.data = [];
+    this.dataSize = 0;
+    return parseFrame(text);
+  }
+
+  _take(line) {
+    if (!line.startsWith('data:')) return;
+    const value = line.slice(5).replace(/^ /, '');
+    this.dataSize += value.length + 1;
+    if (this.dataSize > this.maxEventBytes) {
+      throw sseTooLarge(`sent an event larger than ${this.maxEventBytes} bytes`);
+    }
+    this.data.push(value);
+  }
+
+  /** Handle one line; returns the frame it completed, if any. */
+  _line(rawLine) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (line === '') return this._flush();
+    if (!line.startsWith(':')) this._take(line);
+    return undefined;
+  }
+
+  /** Feed decoded text; yields the frames of every completed event. */
+  *push(text) {
+    this.buffer += text;
     let end;
-    while ((end = buffer.indexOf('\n')) >= 0) {
-      let line = buffer.slice(0, end);
-      buffer = buffer.slice(end + 1);
-      if (line.endsWith('\r')) line = line.slice(0, -1);
-      if (line === '') {
-        const frame = flush();
-        if (frame !== undefined) yield frame;
-        continue;
-      }
-      if (line.startsWith(':')) continue;
-      take(line);
+    while ((end = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, end);
+      this.buffer = this.buffer.slice(end + 1);
+      const frame = this._line(line);
+      if (frame !== undefined) yield frame;
     }
     // What is left has no newline yet; it must not grow without bound.
-    if (buffer.length > maxEventBytes) {
-      throw tooLarge(`sent a line longer than ${maxEventBytes} bytes`);
+    if (this.buffer.length > this.maxEventBytes) {
+      throw sseTooLarge(`sent a line longer than ${this.maxEventBytes} bytes`);
     }
   }
-  buffer += decoder.decode();
-  const tail = buffer.replace(/\r$/, '');
-  if (tail) take(tail);
-  const last = flush();
-  if (last !== undefined) yield last;
+
+  /** The stream ended: deliver a trailing event that has no blank line. */
+  *end(rest) {
+    this.buffer += rest;
+    const tail = this.buffer.replace(/\r$/, '');
+    if (tail) this._take(tail);
+    const last = this._flush();
+    if (last !== undefined) yield last;
+  }
 }
 
 function parseFrame(text) {

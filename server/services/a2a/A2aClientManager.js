@@ -28,6 +28,10 @@ const DEFAULT_SECURITY = { blockPrivateIps: true, allowedHosts: [] };
 /** `tool/progress` phase the chat receives while a remote agent works. */
 const PROGRESS_PHASE = 'a2a.status';
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
  * Slim down a card skill for the admin UI and the app editor's picker.
  */
@@ -328,10 +332,7 @@ class A2aClientManager {
 
     const text = typeof params.message === 'string' ? params.message.trim() : '';
     if (!text) throw new Error(`Tool ${toolId} needs a non-empty "message"`);
-    const data =
-      params.data && typeof params.data === 'object' && !Array.isArray(params.data)
-        ? params.data
-        : undefined;
+    const data = isPlainObject(params.data) ? params.data : undefined;
 
     const files = await chatFilesToSend(params);
 
@@ -372,21 +373,7 @@ class A2aClientManager {
         }
       });
 
-    let result;
-    try {
-      result = await send(pendingTaskId);
-    } catch (err) {
-      if (!pendingTaskId) throw err;
-      // The waiting task could not be continued: forget it, so the next call
-      // starts a new task in the same conversation.
-      if (ref) await this.contexts.set(ref, { contextId });
-      // It is gone on the agent's side (expired, cleaned up): send the reply
-      // as a new task of the same conversation right away.
-      if (err?.code !== A2A_CLIENT_ERRORS.RPC_ERROR || err.rpcCode !== TASK_NOT_FOUND_RPC_CODE) {
-        throw err;
-      }
-      result = await send(undefined);
-    }
+    const result = await this._sendContinuing(send, { ref, pendingTaskId, contextId });
     if (ref) {
       await this.contexts.set(ref, {
         contextId: result.contextId || contextId,
@@ -406,6 +393,28 @@ class A2aClientManager {
       };
     }
     return result.text;
+  }
+
+  /**
+   * Send, continuing the remembered waiting task when there is one. When that
+   * task cannot be continued it is forgotten, and — if it is gone on the
+   * agent's side (expired, cleaned up) — the reply goes out as a new task of
+   * the same conversation right away.
+   * @private
+   */
+  async _sendContinuing(send, { ref, pendingTaskId, contextId }) {
+    try {
+      return await send(pendingTaskId);
+    } catch (err) {
+      if (!pendingTaskId) throw err;
+      // The waiting task could not be continued: forget it, so the next call
+      // starts a new task in the same conversation.
+      if (ref) await this.contexts.set(ref, { contextId });
+      if (err?.code !== A2A_CLIENT_ERRORS.RPC_ERROR || err.rpcCode !== TASK_NOT_FOUND_RPC_CODE) {
+        throw err;
+      }
+      return send(undefined);
+    }
   }
 
   /**
