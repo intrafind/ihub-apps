@@ -61,10 +61,15 @@ Translate deck, restyle deck, write speaker notes for every slide, and generate 
 
      A failure in step 1 or 2 deletes nothing. A failure in step 3 reports *partially applied*: both versions are present, and a **Remove originals** offer deletes exactly the recorded originals.
    - **Idempotent retries, including a lost response.** The server cannot see what the pane did if the answer never arrives, so the deck itself carries the proof:
-     1. Before it asks the pane to apply, the server records `applied: { state: 'inserting', attemptId, mode }` on the handle. `attemptId` is a fresh UUID.
-     2. The pane inserts the slides and tags each one: `slide.tags.add('ihub-apply', attemptId)` (PowerPointApi 1.3).
+     1. Before inserting, the pane reads the deck's current slide ids and sends them with its acknowledgement. The server records `applied: { state: 'inserting', attemptId, mode, preInsertSlideIds }`. `attemptId` is a fresh UUID. Only then does the pane insert.
+     2. The pane inserts the slides, then tags each new one with `slide.tags.add('ihub-apply', attemptId)` (PowerPointApi 1.3). The tags make the common case cheap; they are not the only evidence.
      3. When the answer arrives, the server stores `state: 'inserted'` with `insertedSlideIds`, and later `state: 'done'` with `originalsDeleted`.
-     4. A retry that finds `state: 'inserting'` first asks the pane to look for slides tagged with that `attemptId`. If they exist, the earlier insert happened: they are recorded as inserted and **nothing is inserted again**. If none exist, the insert really did not happen, and it runs once.
+     4. A retry that finds `state: 'inserting'` treats the outcome as **uncertain** and reconciles before doing anything:
+        - **Slides tagged with this `attemptId` exist:** the insert happened. They are recorded as inserted, and nothing is inserted again.
+        - **No tags, but the deck has slides that are not in `preInsertSlideIds`:** the insert may have happened before tagging. **Nothing is inserted automatically.** The pane shows the untagged new slides and asks the user: *Use these as the result* (they are tagged and recorded) or *Insert again*.
+        - **No tags and no slides beyond `preInsertSlideIds`:** the insert did not happen, so it runs once.
+
+        Missing tags alone are never treated as proof that nothing was inserted.
      5. A retry in `inserted` only continues the deletion of recorded originals; in `done` it answers *already applied*.
 
 This is the competitor's approach (snapshot, then apply as a copy or a replacement), built on our document stack.
@@ -106,7 +111,9 @@ This is the competitor's approach (snapshot, then apply as a copy or a replaceme
 - **Handle authorization:** each server-side edit and the `applyDeck` lookup refuse a handle from another user, another run, or past its expiry (404), and accept the owner's handle in the same run.
 - **Step 2:** a round trip on a sample deck (snapshot, translate, apply as copy), verified with the existing PPTX parsing in `server/services/documents/`.
 - **Manual matrix:** PowerPoint for the web, Windows and Mac. Expect gaps on Mac and older builds, and document them.
-- **Lost response:** the answer to an `applyDeck` call is dropped after `insertSlidesFromBase64` succeeded; the retry finds the slides tagged with the `attemptId`, records them and inserts nothing; with no tagged slides the retry inserts exactly once.
+- **Lost response:** the answer to an `applyDeck` call is dropped after `insertSlidesFromBase64` succeeded; the retry finds the slides tagged with the `attemptId`, records them and inserts nothing.
+- **Crash before tagging:** the insert succeeds but the pane stops before tagging; the retry finds new slides outside `preInsertSlideIds`, inserts nothing on its own and asks the user.
+- **No insert:** with no tags and no new slide ids, the retry inserts exactly once.
 - **Replace recovery:** a failure injected after insertion and before deletion leaves both versions and reports *partially applied*; a retry only deletes the recorded originals and never inserts twice.
 - **Upload limits:** a deck over `maxDeckBytes`, a missing slice and an 11th snapshot within an hour each fail with the error envelope and leave no stored snapshot.
 
