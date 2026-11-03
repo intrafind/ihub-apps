@@ -86,8 +86,12 @@ fetched from the registry and rendered when you open them, without installing an
   one keeps that one's API key and its `default` flag.
 - Installed content behaves like any other: who can use an app, model, prompt or skill is decided by
   the [group permissions](admin-ui.md#managing-groups), and it can be edited in its admin page.
-- **Update** replaces the installed item with the catalog's current version. An update is offered
-  when the catalog's `version` differs from the installed one. Local edits to the item are
+- **Update** replaces the installed item with the version the registry offers: the catalog's
+  current version, unless the registry's channel or the item's pin selects an older one (see
+  [Versions, channel and pins](#versions-channel-and-pins)). An update is offered when that
+  version is newer than the installed one; an update never goes back to an older version
+  (`409 VERSION_NOT_NEWER`: revert the installations instead,
+  [Integrations → Migrations](integrations.md#migrations)). Local edits to the item are
   overwritten — **Detach** it first if you want to keep them. For an integration, the dialog
   lists the releases between the installed and the catalog version (newest first) with their
   summaries, the compatibility line, and opens each release's notes on request. **Admin →
@@ -159,7 +163,8 @@ registry out of browsing without deleting it.
 | Catalog URL      | The URL of the `catalog.json` (or of the directory that holds it)                               |
 | Authentication   | **None**, **Bearer Token**, **Basic Auth** or **Custom Header** — for private catalogs, e.g. a private GitHub repository read with a token |
 | Auto Refresh     | Re-fetch the catalog periodically, every 1–168 hours (default 24)                               |
-| Trust for code   | Off by default. On, the registry may deliver integrations that run their own connector module in the server process (`script` protocol); every code file must carry a hash in the catalog. Turn it on only for a publisher you trust |
+| Trust for code   | Off by default. On, the registry may deliver integrations that run their own connector module in the server process (`script` protocol) or migration modules (`module` steps); every code file must carry a hash in the catalog. Turn it on only for a publisher you trust |
+| Versions         | **Channel**: *Stable releases only* (default) or *All releases, including pre-releases*. **Version pins**: per item (`<type>:<name>`, e.g. `integration:org.ckan__open-data-portal`) a semver range such as `1.3.x`; see [Versions, channel and pins](#versions-channel-and-pins) |
 
 **Test Connection** fetches the catalog with the entered values before you save. Credentials are
 stored encrypted with the other platform secrets.
@@ -200,6 +205,47 @@ integration is not affected by this check; it is governed by the registry's trus
 
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.
+
+### Versions, channel and pins
+
+A catalog item lists its current `version` and may list the versions the registry still serves:
+
+```jsonc
+"versions": [
+  { "version": "1.4.0", "ref": "versions/integrations/org.ckan__open-data-portal/1.4.0.json" },
+  { "version": "1.3.2", "ref": "versions/integrations/org.ckan__open-data-portal/1.3.2.json" }
+]
+```
+
+`ref` points at the **version descriptor**, a catalog item of that version (its own `source` with
+the companions and integrity of that version), relative to the catalog or as an absolute URL.
+Without `ref`, iHub asks the catalog URL itself:
+`<catalog URL>?type=integration&name=<name>&version=<version>` must answer with the descriptor, for
+a registry server that serves versions dynamically. The descriptor must name the same type, name and
+version, or the install is refused (`VERSION_DESCRIPTOR_INVALID`). The
+[ihub-marketplace](https://github.com/intrafind/ihub-marketplace) repository tags every integration
+release `integrations/<id>@<version>` and its site build publishes one descriptor and folder per tag.
+
+The registry config decides which of these versions this server is offered:
+
+- **`channel`**: `stable` (the default when the field is absent) hides pre-release versions
+  (`2.0.0-rc.1`); `all` offers every listed version.
+- **`pins`**: `{ "<type>:<name>": "<semver range>" }`, e.g. `{ "integration:org.ckan__open-data-portal": "1.3.x" }`.
+  Only versions inside the range are offered.
+
+The **offered version** is the newest listed version that passes both. Install and update take it
+when no version is named (`POST …/_install` and `…/_update` accept `{ "version": "1.3.2" }`, which
+must be listed and pass both, else `409 VERSION_NOT_LISTED` / `VERSION_NOT_OFFERED`; when nothing
+passes, `409 NO_VERSION_OFFERED`). The update badge, `GET /api/admin/marketplace/updates`, the
+**Update to vX** badge in **Admin → Integrations** and the update dialog (with its migration
+preview) all use the offered version, so a pinned item is offered updates inside its pin only.
+Browse results and the item detail carry `offeredVersion`, `availableVersions`, `channel` and `pin`;
+the item detail shows **Pinned to 1.3.x** and the version offered when it is not the catalog's
+current one. An item whose version is not a semantic version has no channel; its one version is
+offered unless it is pinned.
+
+The installation manifest records, for an integration with code files, the hashes the catalog
+listed (`codeIntegrity`), so a migration module that runs later is checked against them.
 
 ## Security
 
@@ -252,10 +298,10 @@ add skills with are listed under [Skills → API](skills.md#api).
 | `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters); an integration item carries `facts` (`authModes`, `effect`, `runs`, `actionCount`, `protocol`; null when its definition could not be read) |
 | `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an integration also `facts` with its `actions` (`name`, `title`, `sideEffect`), and an installed one `migrationPreview` (below) |
 | `GET …/items/integration/:name/_file?path=…`                                  | One Markdown companion file of an integration item (a release's notes), fetched from the registry |
-| `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy) |
-| `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update, uninstall, detach; an integration update answers with `integrationMigrations` (one result per installation: `migrated`, `stamped`, `failed`, `skipped`) and is `409 MIGRATION_LOCKED` while a migration of one of them runs |
+| `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy; `{ "version": "…" }` for a listed version, default the offered one) |
+| `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update (`{ "version": "…" }` optional, default the offered version; `409 VERSION_NOT_NEWER` for an older one), uninstall, detach; an integration update answers with `integrationMigrations` (one result per installation: `migrated`, `stamped`, `failed`, `skipped`) and is `409 MIGRATION_LOCKED` while a migration of one of them runs |
 | `GET /api/admin/marketplace/installations`                                    | What the marketplace installed              |
-| `GET /api/admin/marketplace/updates`                                          | Installed items with a newer catalog version |
+| `GET /api/admin/marketplace/updates`                                          | Installed items whose offered version (channel and pin applied) is newer |
 | `GET` · `POST /api/admin/marketplace/registries`                              | List, create registries                     |
 | `GET` · `PUT` · `DELETE /api/admin/marketplace/registries/:registryId`        | Read, edit, delete a registry               |
 | `POST /api/admin/marketplace/registries/:registryId/_refresh`                 | Re-fetch a catalog                          |
@@ -286,11 +332,12 @@ add skills with are listed under [Skills → API](skills.md#api).
 
 | File                                                   | Responsibility                                        |
 | ------------------------------------------------------ | ----------------------------------------------------- |
-| `server/services/marketplace/RegistryService.js`       | Fetching, caching and refreshing catalogs             |
+| `server/services/marketplace/RegistryService.js`       | Fetching, caching and refreshing catalogs; the descriptor of a listed version (`fetchItemVersion`) |
+| `server/services/marketplace/versionPolicy.js`         | The offered version of an item: the registry's channel and the item's pin (pure) |
 | `server/services/marketplace/ContentInstaller.js`      | Install, update, uninstall, detach; the installations manifest |
 | `server/services/marketplace/marketplaceFetch.js`      | Every marketplace download: allowed hosts, redirects, credential scope |
 | `server/validators/catalogSchema.js`                   | Catalog schema                                        |
 | `server/validators/registryConfigSchema.js`            | Registry configuration schema                         |
 | `server/routes/admin/marketplace.js`                   | The HTTP surface                                      |
 | `client/src/features/admin/pages/AdminMarketplacePage.jsx` | Browse page                                       |
-| `client/src/features/admin/components/marketplace/`    | Cards, detail panel, type tabs, registry form         |
+| `client/src/features/admin/components/marketplace/`    | Cards, detail panel, type tabs, registry form (channel and pins: `registryPins.js`) |

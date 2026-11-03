@@ -12,6 +12,11 @@
  */
 
 import { z } from 'zod';
+import semver from 'semver';
+
+/** The key of a pin: `<type>:<name>` of a catalog item (`integration:org.ckan__open-data-portal`). */
+export const PIN_KEY_PATTERN =
+  /^(app|model|prompt|skill|workflow|integration):[A-Za-z0-9._-]{1,100}$/;
 
 /**
  * Authentication strategies for accessing a registry endpoint.
@@ -60,7 +65,32 @@ export const registryConfigSchema = z.object({
    * server process (`script` protocol). Off by default: the admin grants it to
    * registries whose publisher they trust, such as the IntraFind registry.
    */
-  trustCode: z.boolean().prefault(false)
+  trustCode: z.boolean().prefault(false),
+  /**
+   * Which versions of the catalog this server is offered (versioning phase
+   * 3): `stable` (absent reads as stable) offers no pre-release version
+   * (`2.0.0-rc.1`), `all` every version the catalog lists.
+   */
+  channel: z.enum(['stable', 'all']).optional(),
+  /**
+   * Per-item version pins, keyed `<type>:<name>` like the installation
+   * manifest (`integration:org.ckan__open-data-portal`), each a semver range
+   * (`1.3.x`, `~1.3.0`, `<2`). Install and the update badge offer only
+   * versions inside the pin.
+   */
+  pins: z
+    .record(
+      z.string().regex(PIN_KEY_PATTERN, 'a pin is keyed <type>:<name>'),
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(100)
+        .refine(range => semver.validRange(range, { includePrerelease: true }) !== null, {
+          message: 'a pin is a semver range such as 1.3.x, ~1.3.0 or <2'
+        })
+    )
+    .optional()
 });
 
 /**
@@ -77,6 +107,27 @@ export const registryConfigSchema = z.object({
  */
 export function validateRegistryConfig(data) {
   const result = registryConfigSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return {
+    success: false,
+    errors: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`)
+  };
+}
+
+/**
+ * Validate only the version policy of a registry config (`channel`, `pins`),
+ * as an edit of an existing registry does: the rest of a stored registry is
+ * not re-validated on edit.
+ *
+ * @param {unknown} data - the registry config (other fields are ignored)
+ * @returns {{ success: true, data: { channel?: string, pins?: Record<string, string> } } | { success: false, errors: string[] }}
+ */
+export function validateRegistryVersionPolicy(data) {
+  const result = registryConfigSchema
+    .pick({ channel: true, pins: true })
+    .safeParse({ channel: data?.channel, pins: data?.pins });
   if (result.success) {
     return { success: true, data: result.data };
   }
