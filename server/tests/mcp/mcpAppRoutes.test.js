@@ -545,6 +545,36 @@ describe('a view calling a tool that needs approval (#2945)', () => {
     expect(conn.callToolRaw).not.toHaveBeenCalled();
   });
 
+  it("the app's approval override gates a view's call like a model's call", async () => {
+    platform = { anonymousAuth: { enabled: false }, auth: {} };
+    const call = () =>
+      asUser(
+        request(app)
+          .post('/api/mcp-apps/tools/call')
+          .send({ ...gated, chatId: 'chat-1', toolApprovalCapable: true })
+      );
+    // Per tool, by the app-facing id (prefix + the server's tool name).
+    apps = [
+      {
+        id: 'whiteboard',
+        tools: ['excalidraw__create_view'],
+        toolApproval: { tools: { excalidraw__save_checkpoint: 'always' } }
+      }
+    ];
+    const perTool = await call();
+    expect(perTool.status).toBe(202);
+    expect(perTool.body.interaction.prompt.displayData.approvalSource).toBe('app');
+    // The app's default for all its tools.
+    apps = [
+      { id: 'whiteboard', tools: ['excalidraw__create_view'], toolApproval: { default: 'always' } }
+    ];
+    expect((await call()).status).toBe(202);
+    // Without an override, nothing asks.
+    apps = [{ id: 'whiteboard', tools: ['excalidraw__create_view'] }];
+    expect((await call()).status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
+  });
+
   it('only the view that asked, and only its user, may answer', async () => {
     const { interaction } = (await askApproval()).body;
     const otherUser = await decide(interaction.id, 'approve', 'u2');

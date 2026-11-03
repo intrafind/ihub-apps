@@ -208,9 +208,12 @@ token, agents) are refused gated tools with `APPROVAL_REQUIRED_NO_USER`.
 
 ## MCP App views
 
-An MCP App view in the chat can call its own server's tools (`tools/call`). A gated tool waits for
-the user's approval like a model's call: the view shows nothing, the chat shows the approval card
-below the view (no "allow for this chat" there), and the view's call waits for the decision. On
+An MCP App view in the chat can call its own server's tools (`tools/call`). Whether such a call is
+gated is resolved as for a model's call in the same app, the app's own overrides included (keyed by
+the tool's iHub id, e.g. `<server>__<tool>`). A gated tool waits for the user's approval like a
+model's call: the view shows nothing, the chat shows the approval card
+below the view (no "allow for this chat" there), and the view's call waits for the decision. One
+call of a view waits at a time: a second gated call while the card is shown is refused. On
 **Approve** the server runs the stored call with the arguments shown on the card and returns the
 result to the view; **Reject** or expiry returns a tool error to the view (`USER_REJECTED`,
 `APPROVAL_EXPIRED`). A host that cannot show the card gets `APPROVAL_REQUIRED_NO_USER`.
@@ -225,8 +228,8 @@ is the view's `tools/call` result. Answered exactly once.
 A workflow or agent run resumed after a person answered a `human` node, a question or a tool
 approval continues as the principal it started with — the user who started it, or the agent's
 service account — never as the person who answered: an approver group can hold many people. Who
-answered is documented on the answer (`answer.approver`: id, display name unless the run ledger is
-pseudonymized, `via` = `approverGroups` | `admin` | `owner`, the approver groups that matched) and
+answered is documented on the answer (`answer.approver`: id, display name only when the run ledger records full
+identities (`identityMode: full`), `via` = `approverGroups` | `admin` | `owner`, the approver groups that matched) and
 in the execution's answer log. A run started before this release records no principal and cannot
 be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
 
