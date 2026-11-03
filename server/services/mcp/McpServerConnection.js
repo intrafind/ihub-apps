@@ -324,6 +324,12 @@ export class McpServerConnection {
         );
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
+        // The server's own model guidance from `initialize` (MCP
+        // `instructions`), shown and editable on the installation page and
+        // added to the system prompt while the integration is active (#2974).
+        const instructions = this.client.getInstructions?.();
+        this.instructions =
+          typeof instructions === 'string' && instructions.trim() ? instructions : null;
         this.connected = true;
         this.consecutiveFailures = 0;
         this.unhealthy = false;
@@ -525,7 +531,13 @@ export class McpServerConnection {
             ? { title: t.title || t.annotations.title }
             : {}),
           ...(this.config.name ? { serverName: this.config.name } : {}),
-          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
+          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {}),
+          // What the server says about its own tool (`readOnlyHint`, …). Read
+          // by the approval resolver as an untrusted side effect: shown, but
+          // never allowed to relax a gate (#2945).
+          ...(t.annotations && typeof t.annotations === 'object'
+            ? { annotations: t.annotations }
+            : {})
         }
       });
     }

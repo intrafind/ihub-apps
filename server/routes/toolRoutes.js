@@ -15,6 +15,9 @@ import { sendInternalError } from '../utils/responseHelpers.js';
 import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
 import { getVisibleToolIds } from '../services/mcp/permissions.js';
 import { isToolSelected } from '../utils/toolSelection.js';
+import { directCallNeedsApproval, isUnattendedCaller } from '../utils/toolApproval.js';
+import { installedIntegrationById } from '../services/integrations/installedRefs.js';
+import { APPROVAL_ERROR_CODES } from '../../shared/toolApproval.js';
 import {
   directoryToolOfId,
   mayUseDirectoryTool
@@ -131,6 +134,29 @@ export default function registerToolRoutes(app) {
         }
       } catch (error) {
         return sendInternalError(res, error, `authorize tool ${toolId}`);
+      }
+
+      // A program (OAuth client, personal API key, an app acting with a
+      // user's token) cannot approve a call: a tool that needs a person's
+      // approval is refused for it (#2945). A person calling a tool directly
+      // chose the call themselves and is not asked.
+      if (isUnattendedCaller(caller)) {
+        try {
+          const language = platformConfig.defaultLanguage || 'en';
+          const toolDef = (await loadTools(language)).find(t => t.id === toolId);
+          if (
+            directCallNeedsApproval(toolDef, platformConfig, {
+              getInstallation: installedIntegrationById
+            })
+          ) {
+            return res.status(403).json({
+              error: 'This tool needs a person’s approval and cannot be run by this client',
+              code: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
+            });
+          }
+        } catch (error) {
+          return sendInternalError(res, error, `check approval of tool ${toolId}`);
+        }
       }
 
       // The caller's arguments never carry iHub's context: `user` (whose

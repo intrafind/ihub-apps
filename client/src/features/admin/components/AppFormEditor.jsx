@@ -227,6 +227,8 @@ function AppFormEditor({
               onToolsChange={tools => handleInputChange('tools', tools)}
               toolChoice={app.toolChoice}
               onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
+              toolApproval={app.toolApproval}
+              onToolApprovalChange={toolApproval => handleInputChange('toolApproval', toolApproval)}
             />
 
             {/* Workflows Configuration */}

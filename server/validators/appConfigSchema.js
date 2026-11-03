@@ -10,6 +10,7 @@ import {
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
+import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import { zHttpUrl, zSafeId } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
@@ -586,6 +587,16 @@ const baseAppConfigSchema = z.object({
   // `required`: the model's first call of each turn must call one of the app's
   // tools (see services/loop/toolChoice.js); later calls are `auto`.
   toolChoice: z.enum(['auto', 'required']).optional(),
+  // Tool approval override (#2945): ask a person before a tool call runs.
+  // `default` applies to every tool of the app, `tools` per tool id or
+  // installation id. It can only tighten what the admin set (platform default,
+  // tool, installation, action); a looser value is ignored and logged.
+  toolApproval: z
+    .object({
+      default: z.enum(APPROVAL_MODES).optional(),
+      tools: z.record(z.string().min(1).max(200), z.enum(APPROVAL_MODES)).optional()
+    })
+    .optional(),
   workflows: z.array(z.string()).optional(),
   // Other app ids this app may invoke as synthetic `app__<id>` tools
   // (requires the `appAsTool` platform feature; see appToolsGateway).

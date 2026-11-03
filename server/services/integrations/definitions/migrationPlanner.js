@@ -200,7 +200,8 @@ function policyHas(policy, name) {
   return (
     policy.enabled.includes(name) ||
     policy.disabled.includes(name) ||
-    Object.hasOwn(policy.overrides, name)
+    Object.hasOwn(policy.overrides, name) ||
+    Object.hasOwn(policy.approvalActions, name)
   );
 }
 
@@ -225,7 +226,10 @@ function workingState(instance, apps) {
     policy: {
       enabled: Array.isArray(actions.enabled) ? [...actions.enabled] : ['*'],
       disabled: Array.isArray(actions.disabled) ? [...actions.disabled] : [],
-      overrides: clone(actions.overrides || {})
+      overrides: clone(actions.overrides || {}),
+      // Per-action tool approval (#2945) follows a renamed action, so a
+      // rename never drops the gate an admin set on it.
+      approvalActions: clone(instance.approval?.actions || {})
     },
     apps: apps.map(entry => ({ path: entry.path, app: clone(entry.app) }))
   };
@@ -365,6 +369,7 @@ function renamePolicyAction(run, from, to) {
   policy.enabled = renameInList(policy.enabled, from, to);
   policy.disabled = renameInList(policy.disabled, from, to);
   policy.overrides = renameKey(policy.overrides, from, to);
+  policy.approvalActions = renameKey(policy.approvalActions, from, to);
   run.out.policyActions.add(from);
 }
 
@@ -407,6 +412,7 @@ function removePolicyAction(run, name) {
   policy.enabled = policy.enabled.filter(n => n !== name);
   policy.disabled = policy.disabled.filter(n => n !== name);
   delete policy.overrides[name];
+  delete policy.approvalActions[name];
   run.out.policyActions.add(name);
 }
 
@@ -526,17 +532,34 @@ function warnTypeBinding(entry, keys, out, migrationId, match) {
 
 /** The installation and app files a working state stands for. */
 function materialize(instance, state, to) {
+  const out = {
+    ...clone(instance),
+    definitionVersion: to,
+    values: clone(state.values),
+    actions: {
+      enabled: [...state.policy.enabled],
+      disabled: [...state.policy.disabled],
+      overrides: clone(state.policy.overrides),
+      // The accepted fingerprints (#2916) stay as they are: a renamed action
+      // is new until an admin reviews it, like any action a vendor adds.
+      ...(instance.actions?.fingerprints
+        ? { fingerprints: clone(instance.actions.fingerprints) }
+        : {}),
+      ...(instance.actions?.reviewedAt ? { reviewedAt: instance.actions.reviewedAt } : {})
+    }
+  };
+  if (instance.approval) {
+    const approvalActions = clone(state.policy.approvalActions);
+    const approval = {
+      ...(instance.approval.default ? { default: instance.approval.default } : {}),
+      ...(Object.keys(approvalActions).length ? { actions: approvalActions } : {}),
+      ...(instance.approval.newOrChanged ? { newOrChanged: instance.approval.newOrChanged } : {})
+    };
+    if (Object.keys(approval).length) out.approval = approval;
+    else delete out.approval;
+  }
   return {
-    instance: {
-      ...clone(instance),
-      definitionVersion: to,
-      values: clone(state.values),
-      actions: {
-        enabled: [...state.policy.enabled],
-        disabled: [...state.policy.disabled],
-        overrides: clone(state.policy.overrides)
-      }
-    },
+    instance: out,
     apps: state.apps.map(entry => ({ path: entry.path, app: clone(entry.app) }))
   };
 }
@@ -667,7 +690,14 @@ function modulePolicy(actions, current) {
   const disabled = actions.disabled ?? current.disabled;
   const overrides = actions.overrides ?? current.overrides;
   if (!list(enabled) || !list(disabled) || !isPlainObject(overrides)) return null;
-  return { enabled: [...enabled], disabled: [...disabled], overrides: clone(overrides) };
+  // A module does not see or change the tool approval; its per-action modes
+  // carry over so later steps (a renameAction) still find them.
+  return {
+    enabled: [...enabled],
+    disabled: [...disabled],
+    overrides: clone(overrides),
+    approvalActions: clone(current.approvalActions || {})
+  };
 }
 
 /**

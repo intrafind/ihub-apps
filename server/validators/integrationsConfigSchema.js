@@ -3,6 +3,8 @@
 
 import { z } from 'zod';
 import { zSafeId } from './common.js';
+import { APPROVAL_MODES, DATA_FLOWS } from '../../shared/toolApproval.js';
+import { FINGERPRINT_PATTERN } from '../utils/actionFingerprint.js';
 import {
   AUTH_MODES,
   integrationIdSchema,
@@ -32,16 +34,71 @@ const installedAuthSchema = z.object({
   credentialRef: z.string().min(1).max(128).optional()
 });
 
-const actionOverrideSchema = z.object({
-  description: localizedStringSchema.optional(),
-  sideEffect: z.enum(SIDE_EFFECTS).optional()
+/** Most example prompts one action keeps (#2974). */
+export const MAX_ACTION_EXAMPLES = 10;
+/** Longest model description, guidance or example prompt an admin can store, per language. */
+export const MAX_ACTION_TEXT_LENGTH = 4000;
+
+/** A `{ en, de }` text (or one plain string) of bounded length. */
+export const boundedLocalizedSchema = z.union([
+  z.record(z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/), z.string().max(MAX_ACTION_TEXT_LENGTH)),
+  z.string().max(MAX_ACTION_TEXT_LENGTH)
+]);
+
+/**
+ * The admin's override of one action. `sideEffect` and `dataFlow` are trusted
+ * (an admin confirmed them) and win over what the definition or a remote
+ * server declares (`utils/toolApproval.js`).
+ *
+ * The texts (#2974) replace the definition's or the server's own:
+ * `description` is the tool description the model reads, `guidance` is added
+ * to the system prompt while the integration is active in a chat
+ * (`actionGuidance.js`), `examples` are the example prompts shown to admins
+ * and users. Absent means the definition's (or the server's) text.
+ */
+export const actionOverrideSchema = z.object({
+  description: boundedLocalizedSchema.optional(),
+  guidance: boundedLocalizedSchema.optional(),
+  examples: z.array(boundedLocalizedSchema).max(MAX_ACTION_EXAMPLES).optional(),
+  sideEffect: z.enum(SIDE_EFFECTS).optional(),
+  dataFlow: z.enum(DATA_FLOWS).optional()
 });
 
 const installedActionsSchema = z.object({
   /** Action names, or `["*"]` for every action the definition enables by default. */
   enabled: z.array(z.string().min(1).max(64)).prefault(['*']),
   disabled: z.array(z.string().min(1).max(64)).prefault([]),
-  overrides: z.record(z.string(), actionOverrideSchema).prefault({})
+  overrides: z.record(z.string(), actionOverrideSchema).prefault({}),
+  /**
+   * The action fingerprints an admin accepted (#2916), by action name:
+   * `sha256:` over name, declared side effect and canonical input schema
+   * (`utils/actionFingerprint.js`). Written by the server only (a baseline
+   * once, then "Mark reviewed"); an action that is not here, or whose
+   * fingerprint differs, is new or changed. Absent: no baseline yet.
+   */
+  fingerprints: z
+    .record(z.string().min(1).max(128), z.string().regex(FINGERPRINT_PATTERN))
+    .optional(),
+  /** When an admin last marked actions as reviewed (ISO time). */
+  reviewedAt: z.string().max(64).optional()
+});
+
+/**
+ * Tool approval of an installation (#2945): whether a person approves a call
+ * before it runs. `default` applies to every action; `actions` sets a mode per
+ * action, keyed by the action's own name (the MCP tool's name, never the
+ * prefixed tool id). The strictest of platform default, `default`, the
+ * action's mode and the app's override wins (`utils/toolApproval.js`). Absent
+ * means nothing is asked on account of the installation.
+ */
+export const installedApprovalSchema = z.object({
+  default: z.enum(APPROVAL_MODES).optional(),
+  actions: z.record(z.string().min(1).max(128), z.enum(APPROVAL_MODES)).optional(),
+  /**
+   * The mode an action resolves to at least while it is new or changed since
+   * the last admin review (#2916). Absent means `always`.
+   */
+  newOrChanged: z.enum(APPROVAL_MODES).optional()
 });
 
 const healthSchema = z.object({
@@ -172,11 +229,20 @@ const installedIntegrationObjectSchema = z.object({
     .catch(undefined),
   label: localizedStringSchema.optional(),
   description: localizedStringSchema.optional(),
+  /**
+   * The admin's integration-level model guidance (#2974): replaces the
+   * definition's `instructions` (an MCP server's own `instructions` or the
+   * connector's guidance) in the system prompt while the integration is
+   * active. Absent: the definition's.
+   */
+  instructions: boundedLocalizedSchema.optional(),
   enabled: z.boolean().prefault(true),
   /** Non-sensitive install field values (a `list` field holds an array of strings). */
   values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
+  /** Tool approval: `{ default?, actions?, newOrChanged? }` (see {@link installedApprovalSchema}). */
+  approval: installedApprovalSchema.optional(),
   // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),

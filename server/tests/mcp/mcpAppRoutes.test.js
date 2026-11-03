@@ -19,11 +19,42 @@ const connectionForUser = jest.fn();
 const withUserConnection = jest.fn();
 const connectUrlFor = jest.fn(id => `/api/mcp/oauth/authorize?serverId=${id}`);
 
+let platform = { anonymousAuth: { enabled: false }, auth: {} };
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
-    getPlatform: () => ({ anonymousAuth: { enabled: false }, auth: {} }),
-    getAppsForUser: jest.fn(async () => ({ data: apps }))
+    getPlatform: () => platform,
+    getAppsForUser: jest.fn(async () => ({ data: apps })),
+    getIntegrations: () => ({ data: { installed: [] } }),
+    get: () => ({ data: { installed: [] } })
   }
+}));
+
+/** An in-memory interaction store with the service's answer-once semantics. */
+const interactions = new Map();
+const interactionError = (message, code) => Object.assign(new Error(message), { code });
+jest.unstable_mockModule('../../services/loop/InteractionService.js', () => ({
+  default: {
+    raise: jest.fn(async params => {
+      const interaction = { ...params, status: 'pending', createdAt: new Date().toISOString() };
+      interactions.set(params.id, interaction);
+      return interaction;
+    }),
+    get: jest.fn(async id => interactions.get(id) || null),
+    answer: jest.fn(async (id, answer) => {
+      const current = interactions.get(id);
+      if (!current) throw interactionError('Interaction not found', 'NOT_FOUND');
+      if (current.status === 'expired') throw interactionError('Interaction expired', 'EXPIRED');
+      if (current.status !== 'pending') throw interactionError('not pending', 'NOT_PENDING');
+      const answered = { ...current, status: 'answered', answer };
+      interactions.set(id, answered);
+      return answered;
+    })
+  }
+}));
+jest.unstable_mockModule('../../services/loop/runAccess.js', () => ({
+  authorizeInteraction: jest.fn(async (interaction, user) => {
+    return !interaction.source?.principalId || interaction.source.principalId === user?.id;
+  })
 }));
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   authRequired: (req, _res, next) => {
@@ -426,5 +457,137 @@ describe('POST /api/mcp-apps/resources/read', () => {
     expect(res.status).toBe(200);
     expect(res.body.contents[0].uri).toBe('ui://excalidraw/fonts.json');
     expect(conn.readResource).toHaveBeenCalledWith('ui://excalidraw/fonts.json');
+  });
+});
+
+describe('a view calling a tool that needs approval (#2945)', () => {
+  const gated = { ...ref, name: 'save_checkpoint', arguments: { id: 'cp1', token: 's3cret' } };
+
+  beforeEach(() => {
+    interactions.clear();
+    platform = {
+      anonymousAuth: { enabled: false },
+      auth: {},
+      toolApproval: { defaults: { external: 'always' } }
+    };
+  });
+
+  const askApproval = () =>
+    asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...gated, chatId: 'chat-1', toolApprovalCapable: true })
+    );
+  const decide = (interactionId, decision, user = 'u1') =>
+    request(app)
+      .post('/api/mcp-apps/tools/call/approval')
+      .set('x-test-user', user)
+      .send({ ...ref, interactionId, decision });
+
+  it('raises an approval for the hosting chat instead of running the call', async () => {
+    const res = await askApproval();
+    expect(res.status).toBe(202);
+    expect(res.body.awaitingApproval).toBe(true);
+    const { interaction } = res.body;
+    expect(interaction.kind).toBe('approval');
+    expect(interaction.source.chatId).toBe('chat-1');
+    expect(interaction.source.viewCall).toEqual({
+      appId: 'whiteboard',
+      viewToolId: 'excalidraw__create_view',
+      serverId: 'excalidraw',
+      name: 'save_checkpoint'
+    });
+    expect(interaction.prompt.displayData.args).toEqual({ id: 'cp1', token: 's3cret' });
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+
+  it('a host that cannot show the card is refused (APPROVAL_REQUIRED_NO_USER)', async () => {
+    for (const body of [{ ...gated }, { ...gated, chatId: 'chat-1' }]) {
+      const res = await asUser(request(app).post('/api/mcp-apps/tools/call').send(body));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('APPROVAL_REQUIRED_NO_USER');
+    }
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+
+  it('approve runs the stored call with the approved arguments and returns its result to the view', async () => {
+    const { interaction } = (await askApproval()).body;
+    const res = await decide(interaction.id, 'approve');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      content: [{ type: 'text', text: 'ok' }],
+      structuredContent: { saved: true }
+    });
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
+    expect(conn.callToolRaw).toHaveBeenCalledWith('save_checkpoint', {
+      id: 'cp1',
+      token: 's3cret'
+    });
+    // A second answer cannot run it again.
+    const again = await decide(interaction.id, 'approve');
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('APPROVAL_ALREADY_ANSWERED');
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('reject and expiry come back to the view as structured tool errors; nothing runs', async () => {
+    const rejected = (await askApproval()).body.interaction;
+    const r1 = await decide(rejected.id, 'reject');
+    expect(r1.status).toBe(200);
+    expect(r1.body.isError).toBe(true);
+    expect(r1.body.structuredContent.error).toBe('USER_REJECTED');
+
+    const lapsed = (await askApproval()).body.interaction;
+    interactions.set(lapsed.id, { ...interactions.get(lapsed.id), status: 'expired' });
+    const r2 = await decide(lapsed.id, 'approve');
+    expect(r2.status).toBe(200);
+    expect(r2.body.structuredContent.error).toBe('APPROVAL_EXPIRED');
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+
+  it("the app's approval override gates a view's call like a model's call", async () => {
+    platform = { anonymousAuth: { enabled: false }, auth: {} };
+    const call = () =>
+      asUser(
+        request(app)
+          .post('/api/mcp-apps/tools/call')
+          .send({ ...gated, chatId: 'chat-1', toolApprovalCapable: true })
+      );
+    // Per tool, by the app-facing id (prefix + the server's tool name).
+    apps = [
+      {
+        id: 'whiteboard',
+        tools: ['excalidraw__create_view'],
+        toolApproval: { tools: { excalidraw__save_checkpoint: 'always' } }
+      }
+    ];
+    const perTool = await call();
+    expect(perTool.status).toBe(202);
+    expect(perTool.body.interaction.prompt.displayData.approvalSource).toBe('app');
+    // The app's default for all its tools.
+    apps = [
+      { id: 'whiteboard', tools: ['excalidraw__create_view'], toolApproval: { default: 'always' } }
+    ];
+    expect((await call()).status).toBe(202);
+    // Without an override, nothing asks.
+    apps = [{ id: 'whiteboard', tools: ['excalidraw__create_view'] }];
+    expect((await call()).status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('only the view that asked, and only its user, may answer', async () => {
+    const { interaction } = (await askApproval()).body;
+    const otherUser = await decide(interaction.id, 'approve', 'u2');
+    expect(otherUser.status).toBe(403);
+    const otherView = await asUser(
+      request(app).post('/api/mcp-apps/tools/call/approval').send({
+        appId: 'whiteboard',
+        toolId: 'excalidraw__other',
+        interactionId: interaction.id,
+        decision: 'approve'
+      })
+    );
+    expect([403, 404]).toContain(otherView.status);
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
   });
 });
