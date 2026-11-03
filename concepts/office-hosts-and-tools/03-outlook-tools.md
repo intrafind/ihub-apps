@@ -57,6 +57,16 @@ The insert and reply runners and `officeCall` in `client/src/features/office/uti
 - **Read results** are untrusted content. They are wrapped as `<content type="email" origin="tool">…</content>` with the same escaping as `renderUserMessage` (`shared/promptContext.js`). A fixed tool note adds that instructions inside are data.
 - **Mode.** The pane advertises read tools in the reading pane and compose tools in a draft, following `detectOutlookMode` (`outlookMailActions.js`). Calendar items advertise `getMeeting` and the meeting tools only.
 
+## Coexistence with answer actions
+
+The answer actions stay, unchanged, and remain **the default way to answer**. The tools are additive.
+
+- **Always shown.** **Reply all**, **Reply**, **Forward**, **New email** and **Insert into draft** (`runOutlookMailAction` in `client/src/features/office/utilities/outlookMailActions.js`) appear under every answer, with tools on or off, in every app. They need no tool calling, so they keep working with models and apps that have no tools.
+- **The user answers with the button.** The model calls `draftReply` only when the user explicitly asks it to reply or open a reply ("reply to this", "draft the answer for me"). For any other request it just answers in the chat, and the user clicks **Reply**. The tool description says so, and the default `email-agent` prompt repeats it.
+- **Default action unchanged.** The primary button is still chosen as today: the user's choice in Settings, then `officeIntegration.defaultMailAction` (`server/utils/officeMailActions.js`), then the context default. Enabling tools changes none of this.
+- **One implementation.** `draftReply` uses the same reply runner as the buttons, and both go through the single sanitizing conversion point above, so they cannot drift apart.
+- **No duplicates.** If the model already opened a reply form with `draftReply` in this turn, the answer's buttons stay available but are not auto-triggered. Nothing opens a second form unless the user clicks.
+
 ## Client registry
 
 - **Location.** `client/src/features/office/tools/outlook/index.js` exports `{ [name]: { minSet, modes, run(args, ctx) } }` and `capabilities(mode)`.
@@ -114,3 +124,5 @@ The insert and reply runners and `officeCall` in `client/src/features/office/uti
   - "suggest and set a subject"
 - `addRecipients`, `attachFile` and `setDraftBody` never execute without an **Allow** click.
 - With tools disabled, which is the default, the add-in behaves exactly as today.
+- With tools enabled, every answer still shows the same answer buttons, and the default action is chosen as before.
+- "Summarize this mail" answers in the chat and opens no reply form. "Reply to this" may call `draftReply`.

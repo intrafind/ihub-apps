@@ -37,6 +37,7 @@ iHub is ahead on several points, and the design keeps all of them:
 - Every change that touches recipients, attachments or whole bodies, or overwrites cells, needs explicit user **approval** in the chat.
 - Word, Excel and PowerPoint add-ins reuse the existing pane, sign-in, start page and admin page.
 - Content the model reads through a tool is **not stored**, consistent with the documented promise that the open email is not stored.
+- The existing Outlook answer actions (reply, reply all, forward, new email, insert into draft) stay unchanged and remain the default way to answer. Tools are additive and off by default.
 
 ## Non-goals
 
@@ -56,6 +57,7 @@ iHub is ahead on several points, and the design keeps all of them:
 | D5 | Ribbon buttons only **hand the action to the pane**. | No token in a commands page, and no unattended writes. |
 | D6 | Outlook keeps `ReadWriteItem` and gets no send tool. | The tools need no more permission than that. |
 | D7 | Word writes are tracked changes by default. An admin setting changes the default, and users can override it. | Changes stay reviewable in Word itself. |
+| D8 | The Outlook answer buttons stay the default way to answer. The model calls `draftReply` only on an explicit request. | The buttons work with every app and model, need no approval, and keep the admin default action. |
 
 ## Documents
 
