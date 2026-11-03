@@ -8475,6 +8475,8 @@
     "open": "Artefakte",
     "openPanel": "Vorschau und Download als ZIP",
     "close": "Artefakte schließen",
+    "fullScreen": "Vollbild",
+    "exitFullScreen": "Vollbild beenden",
     "count_one": "{{count}} Datei",
     "count_other": "{{count}} Dateien",
     "loading": "Die Dateien dieses Chats werden geladen…",

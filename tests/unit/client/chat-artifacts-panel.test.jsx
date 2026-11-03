@@ -366,4 +366,19 @@ describe('ArtifactsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close artifacts' }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it('fills the window in full screen and goes back to the side panel', async () => {
+    render(<ArtifactsPanel isOpen onClose={() => {}} source={makeSource()} />);
+    await screen.findByRole('list');
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('sm:max-w-4xl');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
+    expect(dialog.className).not.toContain('sm:max-w-4xl');
+    const exit = screen.getByRole('button', { name: 'Exit full screen' });
+    expect(exit).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(exit);
+    expect(screen.getByRole('dialog').className).toContain('sm:max-w-4xl');
+  });
 });
