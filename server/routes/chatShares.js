@@ -59,9 +59,11 @@ import {
   withPublicCause
 } from '../services/chat/ChatShareRepository.js';
 import { authorizeShareView } from '../services/chat/chatShareAccess.js';
+import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import {
   CHAT_SHARING_FEATURE,
   MAX_SHARE_RECIPIENTS,
+  UPLOADED_FILES_ACCESS,
   SHARE_MODES,
   allowedShareModes,
   chatSharingSettings,
@@ -97,7 +99,11 @@ const createShareSchema = z
     recipients: z.array(z.string().min(1).max(200)).max(MAX_SHARE_RECIPIENTS).optional(),
     expiresAt: z.string().max(64).nullable().optional(),
     maxViews: z.number().nullable().optional(),
-    showOwnerName: z.boolean().optional()
+    showOwnerName: z.boolean().optional(),
+    // What viewers may do with the files uploaded to the chat (default: none),
+    // and, with access, which of them (default: all the transcript names).
+    uploadedFilesAccess: z.enum(UPLOADED_FILES_ACCESS).optional(),
+    sharedFileIds: z.array(z.string().min(1).max(100)).max(200).optional()
   })
   .strict();
 
@@ -241,6 +247,7 @@ function viewerView(share) {
     expiresAt: share.expiresAt || null,
     sharedBy: sharedBy || null,
     messageCount: share.messageCount || 0,
+    uploadedFilesAccess: share.uploadedFilesAccess || 'none',
     readOnly: true
   };
 }
@@ -251,13 +258,23 @@ function viewerView(share) {
  * @param {Object[]} messages - Snapshot messages.
  * @returns {Object[]}
  */
-function viewerMessages(messages) {
+function viewerMessages(messages, share = null) {
+  const sharedFiles = new Set(
+    share?.uploadedFilesAccess && share.uploadedFilesAccess !== 'none' ? share.fileIds || [] : []
+  );
   return (messages || []).map(message => {
     // A viewer renders none of these: `usage` is billing, `clientMessageId`
     // the owner's browser bookkeeping, `runId` a handle onto endpoints the
     // viewer is not authorized for anyway.
     // eslint-disable-next-line no-unused-vars
     const { usage, clientMessageId, runId, ...rest } = message;
+    // An attachment chip always shows its name; whether the file behind it may
+    // be opened is the owner's choice per file (`shared`).
+    if (Array.isArray(rest.attachments)) {
+      rest.attachments = rest.attachments.map(attachment =>
+        attachment?.id ? { ...attachment, shared: sharedFiles.has(attachment.id) } : attachment
+      );
+    }
     // Snapshots taken before causes were cut down to the public part carry
     // the actor and the worker; the viewer gets the explanation only.
     return rest.error?.cause ? { ...rest, error: withPublicCause(rest.error) } : rest;
@@ -347,7 +364,15 @@ export default function registerChatShareRoutes(app) {
               .join('; ')}`
           );
         }
-        const { mode, recipients = [], expiresAt, maxViews, showOwnerName = false } = parsed.data;
+        const {
+          mode,
+          recipients = [],
+          expiresAt,
+          maxViews,
+          showOwnerName = false,
+          uploadedFilesAccess = 'none',
+          sharedFileIds
+        } = parsed.data;
         if (!allowedShareModes(deps.settings)[mode]) {
           return sendErrorResponse(res, 403, `Sharing mode '${mode}' is not allowed here`, {
             details: { code: 'SHARE_MODE_DISABLED' }
@@ -410,7 +435,9 @@ export default function registerChatShareRoutes(app) {
           showOwnerName: pseudonymized ? false : showOwnerName,
           expiresAt: limits.expiresAt,
           maxViews: limits.maxViews,
-          messages
+          messages,
+          uploadedFilesAccess,
+          sharedFileIds
         });
         if (!share) return sendSharingUnavailable(res);
 
@@ -500,11 +527,113 @@ export default function registerChatShareRoutes(app) {
       setViewerHeaders(res, share);
       res.json({
         share: viewerView(share),
-        messages: viewerMessages(snapshot.messages),
+        messages: viewerMessages(snapshot.messages, share),
         version: snapshot.version
       });
     } catch (error) {
       sendStorageError(res, error, 'open chat share');
+    }
+  });
+
+  // The uploaded files of a shared chat. Hidden unless the owner opted in when
+  // creating the share (`uploadedFilesAccess`), and then only the files they
+  // left ticked: the transcript names every attachment, these routes serve
+  // the shared ones.
+  app.get(buildServerPath('/api/shares/:shareId/files'), async (req, res) => {
+    try {
+      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
+      if (!loaded) return;
+      const { share } = loaded;
+      const access = share.uploadedFilesAccess || 'none';
+      const allowed = new Set(access === 'none' ? [] : share.fileIds || []);
+      const scope = getChatRepository().fileScope(share.chatId);
+      // Viewers get what describes a file, never where it came from (the
+      // mailbox user, an e-mail's addresses, a connector path).
+      const items =
+        allowed.size > 0
+          ? (await getChatRepository().fileStore().list(scope))
+              .filter(item => allowed.has(item.id))
+              .map(({ meta: _meta, source: _source, ...visible }) => ({
+                ...visible,
+                hasOriginal: visible.hasOriginal && access === 'original'
+              }))
+          : [];
+      setViewerHeaders(res, share);
+      res.json({ uploadedFilesAccess: access, items });
+    } catch (error) {
+      sendStorageError(res, error, 'list shared files');
+    }
+  });
+
+  app.get(buildServerPath('/api/shares/:shareId/files/:fileId'), async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      if (!validateIdForPath(fileId, 'file', res)) return;
+      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
+      if (!loaded) return;
+      const { share } = loaded;
+      const access = share.uploadedFilesAccess || 'none';
+      if (access === 'none') {
+        return sendErrorResponse(res, 403, 'The owner did not share the attached files', {
+          details: { code: 'FILES_NOT_SHARED' }
+        });
+      }
+      // A file the owner left out answers like one that does not exist.
+      if (!(share.fileIds || []).includes(fileId)) return sendNotFound(res, 'File');
+      const store = getChatRepository().fileStore();
+      const scope = getChatRepository().fileScope(share.chatId);
+      setViewerHeaders(res, share);
+
+      if (req.query.format === 'text') {
+        const textFile = await store.getText(scope, fileId);
+        if (!textFile) return sendNotFound(res, 'File');
+        // The viewer gets the text and what describes it, nothing of the
+        // owner's storage bookkeeping.
+        return res.json({
+          file: {
+            id: textFile.id,
+            name: textFile.name,
+            mimeType: textFile.mimeType,
+            formatLabel: textFile.formatLabel,
+            bytes: textFile.bytes,
+            pages: textFile.pages,
+            origin: textFile.origin,
+            text: textFile.text,
+            hasOriginal: textFile.hasOriginal && access === 'original'
+          }
+        });
+      }
+
+      if (access !== 'original') {
+        return sendErrorResponse(
+          res,
+          403,
+          'The owner shared the text of this file, not the original',
+          {
+            details: { code: 'ORIGINAL_NOT_SHARED' }
+          }
+        );
+      }
+      const original = await store.getOriginal(scope, fileId);
+      if (!original) return sendNotFound(res, 'File');
+      if (original.discarded) {
+        return sendErrorResponse(res, 410, 'The original file is no longer available', {
+          details: { code: 'ORIGINAL_DISCARDED' }
+        });
+      }
+      const download = req.query.download === '1' || req.query.download === 'true';
+      res.setHeader('Content-Type', servedMediaType(original.mimeType));
+      res.setHeader('Content-Length', String(original.data.length));
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+      res.setHeader(
+        'Content-Disposition',
+        download ? buildContentDisposition(original.name) : 'inline'
+      );
+      return res.send(original.data);
+    } catch (error) {
+      return sendStorageError(res, error, 'get shared file');
     }
   });
 

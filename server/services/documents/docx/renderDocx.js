@@ -16,6 +16,8 @@ import { mergeIntoWordTemplate, readWordTemplateLayout } from './wordTemplate.js
  * @param {import('./buildDocx.js').DocxSpec} spec
  * @param {Object} [assets]
  * @param {Uint8Array} [assets.wordTemplate]
+ * @param {string} [spec.templateMode] - `auto`, `styles_only`, `fill_placeholders`
+ *   or `append` for a template that is an uploaded document.
  * @returns {Promise<{ buffer: Buffer, meta: Object, warnings: string[] }>}
  */
 export async function renderDocx(spec, assets = {}) {
@@ -35,7 +37,17 @@ export async function renderDocx(spec, assets = {}) {
       { forTemplate: true, setupOverride: layout.setup }
     );
     warnings = built.warnings;
+    // An uploaded document (`spec.templateMode` is set by `templateFileId`)
+    // that has no `{{content}}` marker is used for its look only: its old body
+    // is cleared instead of having the new content appended to it.
+    const mode =
+      spec.templateMode === 'auto'
+        ? layout.placeholders.has('content')
+          ? 'fill_placeholders'
+          : 'styles_only'
+        : spec.templateMode;
     buffer = await mergeIntoWordTemplate(built.buffer, template, {
+      mode,
       values: {
         title: spec.title || '',
         subtitle: spec.subtitle || '',

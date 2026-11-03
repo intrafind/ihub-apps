@@ -25,7 +25,9 @@ import { authorizeChat } from '../chat/chatAccess.js';
 import { getChatRepository, isPersistableChatId } from '../chat/ChatRepository.js';
 import { isChatHistoryConfigured } from '../chat/chatPersistence.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
+import { hydrateHistoryForPrompt } from '../chatFiles/ChatFileService.js';
 import { InferenceApiError } from './errors.js';
+import { fileFromPart } from './inputContent.js';
 
 /** `origin.createdVia` of a chat made through the Responses / Conversations API. */
 export const API_CREATED_VIA = 'responses-api';
@@ -258,7 +260,12 @@ export function itemFromMessage(message) {
       ...attachments.map(attachment =>
         attachment.type?.startsWith('image/')
           ? { type: 'input_image', ...(attachment.name ? { filename: attachment.name } : {}) }
-          : { type: 'input_file', ...(attachment.name ? { filename: attachment.name } : {}) }
+          : {
+              type: 'input_file',
+              // A file stored with the conversation can be referenced by this id.
+              ...(attachment.id ? { file_id: attachment.id } : {}),
+              ...(attachment.name ? { filename: attachment.name } : {})
+            }
       )
     ],
     ...(message.variables && Object.keys(message.variables).length > 0
@@ -269,10 +276,30 @@ export function itemFromMessage(message) {
 }
 
 /**
+ * What a stored message is replayed as: the text of a user turn as it was rendered
+ * (template and variables included), an answer as stored. Null for a message that is
+ * not replayed — a failed answer (an error must not steer the next one), other roles.
+ *
+ * @param {Object} message - Stored message.
+ * @returns {{role: 'user'|'assistant', content: string}|null}
+ */
+function replayed(message) {
+  if (message?.role !== 'user' && message?.role !== 'assistant') return null;
+  if (message.role === 'assistant' && message.error) return null;
+  const content =
+    message.role === 'user' && typeof message.renderedContent === 'string'
+      ? message.renderedContent
+      : message.content;
+  return { role: message.role, content: typeof content === 'string' ? content : '' };
+}
+
+/**
  * The stored history as the model sees it: user turns as they were rendered
- * (template, variables and document text included), answers as stored.
- * Failed and empty turns are left out — an error must not steer the next
- * answer, and providers reject blank messages.
+ * (template, variables and — for a turn stored before files had their own store —
+ * document text included), answers as stored. Failed and empty turns are left
+ * out — an error must not steer the next answer, and providers reject blank messages.
+ *
+ * Files of a turn are not part of this text; see {@link hydratedHistoryForModel}.
  *
  * @param {Array<Object>} messages - Stored messages.
  * @returns {Array<{role: string, content: string}>}
@@ -280,14 +307,46 @@ export function itemFromMessage(message) {
 export function historyForModel(messages) {
   const out = [];
   for (const message of messages || []) {
-    if (message?.role !== 'user' && message?.role !== 'assistant') continue;
-    if (message.role === 'assistant' && message.error) continue;
-    const content =
-      message.role === 'user' && typeof message.renderedContent === 'string'
-        ? message.renderedContent
-        : message.content;
-    if (typeof content !== 'string' || !content.trim()) continue;
-    out.push({ role: message.role, content });
+    const entry = replayed(message);
+    if (entry && entry.content.trim()) out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * {@link historyForModel}, with the files of the user turns put back from the file
+ * repository: a turn that has attachments with an id (a file uploaded in the Web UI,
+ * or one an earlier API turn stored) gets them as `fileData`, so the Web UI and the
+ * API see each other's files in the same chat. A turn with a file and no text is
+ * replayed too.
+ *
+ * @param {string} chatId
+ * @param {Array<Object>} messages - Stored messages.
+ * @param {{store?: Object}} [options] - `store`: the chat's file repository.
+ * @returns {Promise<Array<{role: string, content: string, fileData?: Array}>>}
+ */
+export async function hydratedHistoryForModel(chatId, messages, { store = null } = {}) {
+  const out = [];
+  for (const message of messages || []) {
+    const entry = replayed(message);
+    if (!entry) continue;
+    const attached =
+      entry.role === 'user' &&
+      Array.isArray(message.attachments) &&
+      message.attachments.some(
+        attachment => typeof (attachment?.id || attachment?.fileId) === 'string'
+      );
+    let fileData = null;
+    if (attached) {
+      const [hydrated] = await hydrateHistoryForPrompt(
+        chatId,
+        [{ role: 'user', content: '', attachments: message.attachments }],
+        { store }
+      );
+      if (hydrated?.fileData?.length) fileData = hydrated.fileData;
+    }
+    if (!entry.content.trim() && !fileData) continue;
+    out.push(fileData ? { ...entry, fileData } : entry);
   }
   return out;
 }
@@ -372,16 +431,10 @@ export function runStillAlive(chatId) {
 }
 
 /**
- * Items to add to a conversation → messages to store. Only text messages of
- * the user and the assistant: a stored item has to be replayable to any
- * model later, and a file's content is extracted only when a response runs.
- *
- * @param {unknown} items
- * @param {string} [param='items']
- * @returns {Array<{role: 'user'|'assistant', content: string}>}
- * @throws {InferenceApiError}
+ * Read the items of a request: roles, texts and — when `files` is set — the file
+ * parts, unresolved. Shared by the text-only and the file-aware readers.
  */
-export function messagesFromItems(items, param = 'items') {
+function readItems(items, param, { files = false } = {}) {
   if (items === undefined || items === null) return [];
   if (!Array.isArray(items)) {
     throw new InferenceApiError(400, 'invalid_items', `${param} must be an array`, { param });
@@ -411,25 +464,30 @@ export function messagesFromItems(items, param = 'items') {
         param: `${at}.role`
       });
     }
-    let text;
-    if (typeof item.content === 'string') text = item.content;
+    const text = [];
+    const fileParts = [];
+    if (typeof item.content === 'string') text.push(item.content);
     else if (Array.isArray(item.content)) {
-      text = item.content
-        .map((part, p) => {
-          if (
-            ['input_text', 'output_text', 'text'].includes(part?.type) &&
-            typeof part.text === 'string'
-          ) {
-            return part.text;
-          }
+      item.content.forEach((part, p) => {
+        const partParam = `${at}.content[${p}]`;
+        if (
+          ['input_text', 'output_text', 'text'].includes(part?.type) &&
+          typeof part.text === 'string'
+        ) {
+          text.push(part.text);
+        } else if (files && (part?.type === 'input_file' || part?.type === 'file')) {
+          fileParts.push({ part, partParam });
+        } else {
           throw new InferenceApiError(
             400,
             'unsupported_content_part',
-            `${at}.content[${p}]: items added to a conversation carry text only; send files with a response`,
-            { param: `${at}.content[${p}]` }
+            files
+              ? `${partParam}: items added to a conversation carry text and files (input_file); other content parts are not supported`
+              : `${partParam}: items added to a conversation carry text only; send files with a response`,
+            { param: partParam }
           );
-        })
-        .join('\n');
+        }
+      });
     } else {
       throw new InferenceApiError(
         400,
@@ -440,6 +498,66 @@ export function messagesFromItems(items, param = 'items') {
         }
       );
     }
-    return { role: item.role, content: text };
+    if (fileParts.length > 0 && item.role !== 'user') {
+      throw new InferenceApiError(400, 'invalid_items', `${at}: only user items carry files`, {
+        param: at
+      });
+    }
+    return { role: item.role, content: text.join('\n'), fileParts };
   });
+}
+
+/**
+ * Items to add to a conversation → messages to store. Only text messages of
+ * the user and the assistant; see {@link messagesFromItemsWithFiles} for items
+ * that carry files.
+ *
+ * @param {unknown} items
+ * @param {string} [param='items']
+ * @returns {Array<{role: 'user'|'assistant', content: string}>}
+ * @throws {InferenceApiError}
+ */
+export function messagesFromItems(items, param = 'items') {
+  return readItems(items, param).map(({ role, content }) => ({ role, content }));
+}
+
+/**
+ * Items to add to a conversation → messages to store, with the files of user
+ * items: `input_file` (or Chat Completions `file`) parts with `file_data` (inline,
+ * base64 or a `data:` URL) or `file_id` (an uploaded file of the caller, or one of
+ * the conversation's), read like the files of `POST /v1/responses`
+ * (`services/inference/inputContent.js`). A message with files comes with
+ * `fileData`; store it with `persistTurnFiles`.
+ *
+ * @param {unknown} items
+ * @param {{files?: {resolve: Function}}} [ctx] - Resolves `file_id` references
+ *   (`createFileContext`); without it they are refused.
+ * @param {string} [param='items']
+ * @returns {Promise<Array<{role: 'user'|'assistant', content: string, fileData?: Array<Object>}>>}
+ * @throws {InferenceApiError}
+ */
+export async function messagesFromItemsWithFiles(items, ctx = {}, param = 'items') {
+  const read = readItems(items, param, { files: true });
+  const messages = [];
+  for (const { role, content, fileParts } of read) {
+    const fileData = [];
+    for (const { part, partParam } of fileParts) {
+      const file = part.type === 'file' ? part.file || {} : part;
+      fileData.push(
+        await fileFromPart(
+          {
+            fileId: file.file_id,
+            fileUrl: file.file_url,
+            data: file.file_data,
+            filename: file.filename
+          },
+          part.type,
+          partParam,
+          ctx
+        )
+      );
+    }
+    messages.push({ role, content, ...(fileData.length > 0 ? { fileData } : {}) });
+  }
+  return messages;
 }

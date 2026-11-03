@@ -9,6 +9,7 @@ import {
   SUPPORTED_TEXT_FORMATS
 } from './fileProcessing';
 import { extractionOptionsOf } from './extractionOptions';
+import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
 const AUDIO_TYPES = new Set([
@@ -125,6 +126,7 @@ async function processCloudDocument(file, fileUploadConfig) {
     );
     return {
       type: 'document',
+      [ORIGINAL_FILE]: file,
       content,
       pageImages: pageImages || [],
       fileName: file.name,

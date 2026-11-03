@@ -1,16 +1,20 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useStoredChatHydration from '../../chat/hooks/useStoredChatHydration';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { preUploadAvailable, resolveUploadMode } from '../../chat/utils/chatFileUpload';
 import {
-  buildHostContext,
+  buildHostItems,
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
   collectAttachmentsForSend
 } from '../utilities/buildChatApiMessages';
+import { keepsOriginals, omitRepeatedOriginals } from '../utilities/hostItemFiles';
+import { fetchCurrentMailEml } from '../utilities/outlookMailContext';
 
 /**
  * Combines manual upload data with email attachment data.
@@ -47,7 +51,9 @@ function combineUploadData(manualData, mailData) {
  *
  * Intercepts sendMessage to:
  * 1. Read the current Outlook mail context (body + attachments)
- * 2. Send the item (email, page, meeting) as apiMessage.hostContext
+ * 2. Send the item (email, page, meeting) as apiMessage.hostContext — or, when the
+ *    chat stores its files on the server, as chat files in apiMessage.fileData
+ *    (`origin: 'email' | 'meeting' | 'page'`), so it outlives the turn
  * 3. Combine manual uploads with mail attachment images in apiMessage.imageData
  * 4. Combine manual uploads with mail attachment documents in apiMessage.fileData
  *
@@ -72,6 +78,7 @@ function combineUploadData(manualData, mailData) {
  *   not sent anything in it yet, so there is nothing stored to fetch
  * @param {Object} [options.fileUploadConfig] - The app's `upload.fileUpload` block; carries the
  *   Word review options (tracked changes, comments) for mail attachments
+ * @param {Object} [options.app] - The app; its `uploads.storageMode` overrides the platform's
  * @returns {Object} useAppChat's result with the enriched `sendMessage`, plus
  *   `storedChatSettings` and `storedChatVariables` — the settings and the app
  *   variables a reopened chat was last answered with.
@@ -83,12 +90,17 @@ function useOfficeChatAdapter({
   onMessageAccepted,
   ephemeral = false,
   isFreshChat = false,
-  fileUploadConfig
+  fileUploadConfig,
+  app
 }) {
   const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, ephemeral });
   const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
     useStoredChatHydration({ chat, chatId, isFreshChat });
   const host = useEmbeddedHost();
+  const { platformConfig } = usePlatformConfig() ?? {};
+  const uploads = platformConfig?.uploads;
+  // Originals (an email's .eml, an attachment's bytes) this chat has already sent.
+  const sentOriginalsRef = useRef({ chatId: null, sent: new Set() });
 
   const sendMessage = useCallback(
     async ({ displayMessage, apiMessage, params, sendChatHistory, messageMetadata }) => {
@@ -134,10 +146,45 @@ function useOfficeChatAdapter({
       // type="page" in the extension, type="meeting" on a calendar item). `content` stays
       // exactly what the user typed. Calendar items have no pin flow.
       const isAppointment = ctx?.itemKind === 'appointment';
-      const hostContext = buildHostContext({
+      const pinnedForSend = isAppointment ? [] : pinnedEmails;
+
+      // A chat that stores its files keeps the host item with the chat: as files
+      // the email, meeting or page is listed in the Files drawer, obeys quotas and
+      // retention, and is still there on the next turn, after a reload and on
+      // another device. Otherwise it travels as `hostContext` with this message only.
+      const storage = preUploadAvailable({ uploads, chatId })
+        ? {
+            mode: resolveUploadMode(uploads, app),
+            ...(Number.isFinite(uploads?.quotas?.maxFileBytes)
+              ? { maxFileBytes: uploads.quotas.maxFileBytes }
+              : {})
+          }
+        : null;
+      if (sentOriginalsRef.current.chatId !== chatId) {
+        sentOriginalsRef.current = { chatId, sent: new Set() };
+      }
+
+      // The open email as Outlook's own RFC 5322 message, when the mode keeps
+      // originals and there is a body to keep (a body the user excluded stays out).
+      const isMail = !isAppointment && ctx?.itemKind !== 'page' && ctx?.available !== false;
+      const emlBase64 =
+        storage && keepsOriginals(storage) && isMail && ctx?.bodyText
+          ? await fetchCurrentMailEml(
+              ctx.itemId ?? null,
+              (ctx.attachments ?? []).map(a => a?.id)
+            ).catch(() => null)
+          : null;
+
+      // The server renders either form as tagged blocks around the typed text
+      // (<content type="email" origin="open">, or type="page" in the extension,
+      // type="meeting" on a calendar item). `content` stays exactly what the user
+      // typed. Calendar items have no pin flow.
+      const { hostContext, fileData: hostItemFiles } = buildHostItems({
         item: ctx,
         currentItemId: ctx?.itemId ?? null,
-        pinned: isAppointment ? [] : pinnedEmails
+        pinned: pinnedForSend,
+        storage,
+        emlBase64
       });
 
       // Combine manual uploads with attachments harvested from the host
@@ -150,13 +197,21 @@ function useOfficeChatAdapter({
         ? []
         : collectAttachmentsForSend(ctx.attachments, pinnedEmails, ctx.itemId ?? null);
       const hostImageData = await buildImageDataFromMailAttachments(mergedAttachments);
-      const hostFileData = await buildFileDataFromMailAttachments(
+      const hostAttachmentFiles = await buildFileDataFromMailAttachments(
         mergedAttachments,
-        fileUploadConfig
+        fileUploadConfig,
+        storage
+      );
+      const hostFileData = omitRepeatedOriginals(
+        [...(hostItemFiles ?? []), ...(hostAttachmentFiles ?? [])],
+        sentOriginalsRef.current.sent
       );
 
       const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
-      const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);
+      const combinedFileData = combineUploadData(
+        apiMessage.fileData,
+        hostFileData.length ? hostFileData : null
+      );
 
       // hostContextFlags + pinnedEmails are client-only signals — strip
       // them before forwarding so they don't show up in the outgoing
@@ -183,7 +238,7 @@ function useOfficeChatAdapter({
         messageMetadata
       });
     },
-    [chat, host, fileUploadConfig]
+    [chat, chatId, host, fileUploadConfig, uploads, app]
   );
 
   return { ...chat, sendMessage, storedChatSettings, storedChatVariables };

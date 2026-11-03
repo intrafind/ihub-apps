@@ -22,6 +22,7 @@
  *
  * @module services/chatFiles/ChatFileService
  */
+import { createHash } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import {
@@ -37,8 +38,12 @@ import { scannerFor } from '../projects/scan/MalwareScanner.js';
 import { projectSettings } from '../projects/projectSettings.js';
 import { renderPagePreview } from '../documents/pdf/PdfService.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
-import { chatFilePolicy, normalizeChatFilePolicy } from './chatFilePolicy.js';
-import { ChatFileQuotaError, getChatFileRepository } from './ChatFileRepository.js';
+import { normalizeChatFilePolicy } from './chatFilePolicy.js';
+import {
+  CHAT_FILE_ORIGINS,
+  ChatFileQuotaError,
+  getChatFileRepository
+} from './ChatFileRepository.js';
 
 const COMPONENT = 'ChatFileService';
 
@@ -90,7 +95,7 @@ async function renderScannedPdfPages(bytes) {
  * scheduled-task scope.
  *
  * @param {Object} params
- * @param {{type: 'chat'|'task', id: string}} params.scope
+ * @param {{type: 'chat'|'task'|'user', id: string}} params.scope
  * @param {string|null} [params.ownerId]
  * @param {string} params.name
  * @param {string} [params.mimeType]
@@ -99,8 +104,12 @@ async function renderScannedPdfPages(bytes) {
  * @param {string[]|null} [params.pageImages] - Optional rendered page images for scanned PDFs.
  * @param {number} [params.pages]
  * @param {string} [params.formatLabel]
- * @param {string} [params.origin='upload']
+ * @param {string} [params.origin='upload'] - One of `CHAT_FILE_ORIGINS`.
+ * @param {Object|null} [params.meta] - Identity of the item the file was made from (`itemId`, `url`, …).
+ * @param {Object|null} [params.source] - Connector provenance (`{ kind, ref, refreshOnRun }`).
+ * @param {string|null} [params.id] - Replace the stored file with this id (a connector refresh).
  * @param {Object|null} [params.appConfig]
+ * @param {{speakerNotes?: 'include'|'ignore'}|null} [params.extractOptions] - Extra `extractText` options.
  * @param {import('./ChatFileRepository.js').ChatFileRepository} [params.repository]
  * @param {Object} [params.scanner]
  * @returns {Promise<Object>} Stored file descriptor.
@@ -117,8 +126,12 @@ export async function ingestChatFile({
   pages,
   formatLabel,
   origin = 'upload',
+  meta = null,
+  source = null,
+  id = null,
   appConfig = null,
   policy: explicitPolicy = null,
+  extractOptions = null,
   repository = null,
   store = null,
   scanner = null
@@ -194,7 +207,7 @@ export async function ingestChatFile({
     try {
       const extracted = await extractText(
         { bytes: buf, contentType: accepted, name: name || 'upload' },
-        { maxChars: MAX_TEXT_CHARS }
+        { maxChars: MAX_TEXT_CHARS, ...extractOptions }
       );
       extractedText = extracted.text || '';
       resolvedMime = extracted.contentType || accepted;
@@ -239,6 +252,9 @@ export async function ingestChatFile({
       pages: resolvedPages,
       truncated,
       origin,
+      meta,
+      source,
+      ...(id ? { id } : {}),
       storageMode: settings.storageMode,
       appConfig,
       policy: settings
@@ -288,6 +304,9 @@ export async function ingestChatFile({
     pages: resolvedPages,
     truncated,
     origin,
+    meta,
+    source,
+    ...(id ? { id } : {}),
     storageMode:
       settings.storageMode === 'original_and_text' ? 'server_text_only' : settings.storageMode,
     appConfig,
@@ -323,9 +342,106 @@ export function toPromptFileData(storedFile) {
       : {}),
     canUseAsTemplate: storedFile.canUseAsTemplate === true,
     hasOriginal: storedFile.hasOriginal === true,
-    origin: storedFile.origin === 'attachment' ? 'attachment' : 'upload',
+    origin: CHAT_FILE_ORIGINS.includes(storedFile.origin) ? storedFile.origin : 'upload',
+    ...(storedFile.meta ? { meta: storedFile.meta } : {}),
     fileSize: storedFile.bytes
   };
+}
+
+/**
+ * The original bytes of an inline `fileData` entry (`base64`), when they may be
+ * stored: a type the extraction knows, within the file size limit, and clean
+ * under the configured malware scanner. Anything else is dropped — the text is
+ * still stored — rather than keeping bytes that never passed the checks an upload
+ * to `POST /api/chats/:chatId/files` goes through.
+ *
+ * @param {Object} file - The `fileData` entry.
+ * @param {string} text - Its extracted text (what the client sent).
+ * @param {Object} repo
+ * @returns {Promise<Buffer|null>}
+ */
+async function vettedInlineOriginal(file, text, repo) {
+  if (typeof file.base64 !== 'string' || !file.base64) return null;
+  try {
+    // `data:` URLs carry the media type in front of the payload.
+    const payload = file.base64.replace(/^data:[^,]*,/, '');
+    const bytes = Buffer.from(payload, 'base64');
+    if (bytes.length === 0) return null;
+    const name = file.fileName || file.name || 'document';
+    const mimeType = file.fileType || file.mimeType || file.type;
+    const limit = (repo?.policy?.() || chatFileSettingsSafe()).quotas?.maxFileBytes ?? 0;
+    if (limit > 0 && bytes.length > limit) return null;
+    const accepted = acceptedTypeOf({ contentType: mimeType, name });
+    if (!accepted) return null;
+    const scanner = scannerFor(projectSettings(configCache.getPlatform?.() || {}).scan);
+    if (scanner && scanner.id !== 'none') {
+      const result = await scanner.scan({ bytes, contentType: accepted, name });
+      if (result?.clean === false) {
+        logger.warn('Inline original rejected by the security scanner; storing text only', {
+          component: COMPONENT,
+          name
+        });
+        return null;
+      }
+    }
+    return bytes;
+  } catch (error) {
+    logger.warn('Inline original could not be checked; storing text only', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+function chatFileSettingsSafe() {
+  return normalizeChatFilePolicy(null, null);
+}
+
+/**
+ * The descriptor a stored message keeps for a file: what the transcript needs
+ * to show it and to find it again (`attachments` of `chat-messages`).
+ *
+ * @param {Object} stored - Descriptor or `getText` result.
+ * @returns {Object}
+ */
+export function describeStored(stored) {
+  return {
+    id: stored.id,
+    type: stored.mimeType,
+    name: stored.name,
+    bytes: stored.bytes,
+    ...(stored.origin && stored.origin !== 'upload' ? { origin: stored.origin } : {}),
+    ...(stored.hasOriginal ? { hasOriginal: true } : {}),
+    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
+  };
+}
+
+const sha256Of = bytes => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * The stored file of a chat that is the same e-mail attachment: same name and the
+ * same content (sha256 of the original bytes when present, else of the text).
+ * A copy stored without its original also matches by the hash of its text, so a
+ * later turn that carries the bytes upgrades it instead of adding a second file.
+ *
+ * @param {Object} repo
+ * @param {{type: string, id: string}} scope
+ * @param {{name: string, text: string, originalBuffer: Buffer|null}} candidate
+ * @returns {Promise<Object|null>}
+ */
+async function findAttachmentDuplicate(repo, scope, { name, text, originalBuffer }) {
+  const textHash = sha256Of(Buffer.from(text, 'utf8'));
+  const byteHash = originalBuffer ? sha256Of(originalBuffer) : null;
+  const items = await repo.list(scope);
+  return (
+    items.find(item => {
+      if (item.origin !== 'attachment' || item.name !== String(name).trim()) return false;
+      if (!item.sha256) return false;
+      if (item.sha256 === (byteHash || textHash)) return true;
+      return Boolean(byteHash) && !item.hasOriginal && item.sha256 === textHash;
+    }) || null
+  );
 }
 
 /**
@@ -359,9 +475,15 @@ export async function prepareTurnFiles({
   const activeRepo = store || fileRepository || getChatFileRepository();
   const scope = { type: 'chat', id: chatId };
   const inlineFiles = normalizeFiles(message?.fileData);
-  const explicitIds = Array.isArray(message?.attachmentIds)
-    ? message.attachmentIds.filter(id => typeof id === 'string' && id)
-    : null;
+  // `fileIds` is what the composer sends for files it already uploaded
+  // (`POST /api/chats/:chatId/files`); `attachmentIds` is the same list under
+  // its older name.
+  const idList = Array.isArray(message?.fileIds)
+    ? message.fileIds
+    : Array.isArray(message?.attachmentIds)
+      ? message.attachmentIds
+      : null;
+  const explicitIds = idList ? idList.filter(id => typeof id === 'string' && id) : null;
 
   // When regenerating a hydrated message (`replaceFromMessageId`), the client
   // does not have `fileData` in memory after a reload. If the caller did not
@@ -387,14 +509,7 @@ export async function prepareTurnFiles({
       if (!stored) continue;
       seenIds.add(fileId);
       resolvedPromptFiles.push(toPromptFileData(stored));
-      descriptors.push({
-        id: stored.id,
-        type: stored.mimeType,
-        name: stored.name,
-        bytes: stored.bytes,
-        ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-        ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-      });
+      descriptors.push(describeStored(stored));
     }
   }
 
@@ -408,14 +523,7 @@ export async function prepareTurnFiles({
       if (stored) {
         seenIds.add(existingId);
         resolvedPromptFiles.push(toPromptFileData(stored));
-        descriptors.push({
-          id: stored.id,
-          type: stored.mimeType,
-          name: stored.name,
-          bytes: stored.bytes,
-          ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-          ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-        });
+        descriptors.push(describeStored(stored));
         continue;
       }
     }
@@ -427,15 +535,61 @@ export async function prepareTurnFiles({
 
     if (activeRepo?.isAvailable() && (text || (pageImages && pageImages.length > 0))) {
       try {
+        const origin = CHAT_FILE_ORIGINS.includes(file.origin) ? file.origin : 'upload';
+        const meta = file.meta && typeof file.meta === 'object' ? file.meta : null;
+        // An e-mail, meeting or page that is sent with every turn is stored once
+        // per chat (by the item's id or URL); a changed one replaces the stored copy.
+        let replaceId = null;
+        const identity = meta?.itemId
+          ? ['itemId', meta.itemId]
+          : meta?.url
+            ? ['url', meta.url]
+            : null;
+        if (identity && ['email', 'meeting', 'page'].includes(origin)) {
+          const existing = await activeRepo.findByMeta(scope, identity[0], String(identity[1]));
+          if (existing) {
+            const current = await activeRepo.getText(scope, existing.id);
+            if (current && current.text === text && current.meta?.isCurrent === meta?.isCurrent) {
+              seenIds.add(existing.id);
+              resolvedPromptFiles.push({ ...toPromptFileData(current), origin });
+              descriptors.push(describeStored(current));
+              continue;
+            }
+            replaceId = existing.id;
+          }
+        }
+        const originalBuffer = await vettedInlineOriginal(file, text, activeRepo);
+        // E-mail attachments have no item identity; the same attachment sent with
+        // every turn is recognised by its content and name instead.
+        if (origin === 'attachment') {
+          const duplicate = await findAttachmentDuplicate(activeRepo, scope, {
+            name,
+            text,
+            originalBuffer
+          });
+          if (duplicate && (!originalBuffer || duplicate.hasOriginal)) {
+            const current = await activeRepo.getText(scope, duplicate.id);
+            if (current) {
+              seenIds.add(duplicate.id);
+              resolvedPromptFiles.push({ ...toPromptFileData(current), origin });
+              descriptors.push(describeStored(current));
+              continue;
+            }
+          }
+          // The stored copy has no original but this one does: upgrade it in place.
+          if (duplicate) replaceId = duplicate.id;
+        }
         const storedDescriptor = await activeRepo.put(scope, {
           ownerId,
           name,
           mimeType,
           formatLabel: file.displayType || null,
           text,
-          originalBuffer: file.base64 ? Buffer.from(file.base64, 'base64') : null,
+          originalBuffer,
           pageImages,
-          origin: file.origin === 'attachment' ? 'attachment' : 'upload',
+          origin,
+          meta,
+          ...(replaceId ? { id: replaceId } : {}),
           appConfig
         });
         if (storedDescriptor) {
@@ -448,17 +602,12 @@ export async function prepareTurnFiles({
             fileType: storedDescriptor.mimeType,
             content: text,
             ...(pageImages ? { pageImages } : {}),
+            origin,
+            ...(meta ? { meta } : {}),
             canUseAsTemplate: storedDescriptor.canUseAsTemplate === true,
             hasOriginal: storedDescriptor.hasOriginal === true
           });
-          descriptors.push({
-            id: storedDescriptor.id,
-            type: storedDescriptor.mimeType,
-            name: storedDescriptor.name,
-            bytes: storedDescriptor.bytes,
-            ...(storedDescriptor.hasOriginal ? { hasOriginal: true } : {}),
-            ...(storedDescriptor.canUseAsTemplate ? { canUseAsTemplate: true } : {})
-          });
+          descriptors.push(describeStored(storedDescriptor));
           continue;
         }
       } catch (error) {

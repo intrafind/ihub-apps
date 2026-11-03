@@ -48,10 +48,78 @@ export const WORKBOOK_LIMITS = Object.freeze({
 /**
  * Functions added after the original OOXML (Excel 2007) specification require
  * an `_xlfn.` prefix in SpreadsheetML `<f>` elements so Excel does not flag
- * them as `#NAME?` on open.
+ * them as `#NAME?` on open. `FILTER` and `SORT` live in the `_xlws` namespace
+ * and are stored as `_xlfn._xlws.FILTER(` / `_xlfn._xlws.SORT(`.
+ *
+ * Dynamic-array functions (`UNIQUE`, `SORT`, `SORTBY`, `FILTER`, `SEQUENCE`)
+ * are written as plain formulas without the dynamic-array metadata, so Excel
+ * evaluates them with implicit intersection and they do not spill.
  */
-const XLFN_FUNCTIONS =
-  /\b(?<!_xlfn\.)(IFS|SWITCH|TEXTJOIN|CONCAT|MAXIFS|MINIFS|XLOOKUP|XMATCH|UNIQUE|SORT|SORTBY|FILTER)\s*\(/gi;
+const XLWS_FUNCTIONS = ['FILTER', 'SORT'];
+const XLFN_FUNCTIONS = [
+  'IFS',
+  'SWITCH',
+  'TEXTJOIN',
+  'CONCAT',
+  'MAXIFS',
+  'MINIFS',
+  'XLOOKUP',
+  'XMATCH',
+  'UNIQUE',
+  'SORTBY',
+  'SEQUENCE',
+  'IFNA',
+  'DAYS',
+  'XOR',
+  'ISOWEEKNUM',
+  'STDEV.S',
+  'STDEV.P',
+  'VAR.S',
+  'VAR.P',
+  'RANK.EQ',
+  'RANK.AVG',
+  'PERCENTILE.INC',
+  'PERCENTILE.EXC',
+  'QUARTILE.INC',
+  'QUARTILE.EXC',
+  'MODE.SNGL'
+];
+const FUTURE_FUNCTION_RE = new RegExp(
+  `(?<![\\w.])(${[...XLWS_FUNCTIONS, ...XLFN_FUNCTIONS].map(fn => fn.replace('.', '\\.')).join('|')})\\(`,
+  'gi'
+);
+
+/**
+ * Functions that read from or send data to the outside world, or run code. A
+ * model can be steered by document text or web pages it was given, and
+ * `fullCalcOnLoad` evaluates every formula on open, so a cell with one of
+ * these is written as plain text instead of a live formula.
+ */
+const BLOCKED_FORMULA_FUNCTIONS = [
+  'WEBSERVICE',
+  'FILTERXML',
+  'HYPERLINK',
+  // Fetch a URL or hand cell text to a cloud service when the workbook opens.
+  'IMAGE',
+  'STOCKHISTORY',
+  'TRANSLATE',
+  'DETECTLANGUAGE',
+  'COPILOT',
+  'RTD',
+  'CALL',
+  'REGISTER',
+  'REGISTER.ID',
+  'EXEC',
+  'SQL.REQUEST',
+  'IMPORTDATA',
+  'IMPORTXML',
+  'IMPORTHTML',
+  'IMPORTRANGE'
+];
+const BLOCKED_FORMULA_RE = new RegExp(
+  `(?<![\\w.])(?:_xlfn\\.)?(${BLOCKED_FORMULA_FUNCTIONS.map(fn => fn.replace('.', '\\.')).join('|')})\\s*\\(`,
+  'i'
+);
 
 const BUILTIN_FORMATS = Object.freeze({
   general: 0,
@@ -128,9 +196,41 @@ function isoToExcelSerial(value) {
   return Math.round((utc - epoch) / 86400000);
 }
 
+const QUOTED_RE = /"(?:[^"]|"")*"|'(?:[^']|'')*'/g;
+
+/**
+ * Apply `transform` to the parts of a formula outside string literals
+ * (`"…"`) and quoted sheet names (`'…'`); quoted parts are kept as they are.
+ */
+function mapOutsideQuotes(formula, transform) {
+  let result = '';
+  let last = 0;
+  for (const match of formula.matchAll(QUOTED_RE)) {
+    result += transform(formula.slice(last, match.index)) + match[0];
+    last = match.index + match[0].length;
+  }
+  return result + transform(formula.slice(last));
+}
+
+/**
+ * Whether a formula (as returned by {@link normalizeFormula}) reads or sends
+ * data outside the workbook or runs code: a blocked function, or a DDE-style
+ * `|` link (not a valid operator outside a string).
+ */
+export function isBlockedFormula(formula) {
+  let blocked = false;
+  mapOutsideQuotes(String(formula || ''), part => {
+    if (BLOCKED_FORMULA_RE.test(part) || part.includes('|')) blocked = true;
+    return part;
+  });
+  return blocked;
+}
+
 /**
  * Normalize an Excel formula: strip leading `=`, strip invalid XML chars, and
- * prefix modern Excel functions (`XLOOKUP`, `IFS`, `MAXIFS`, …) with `_xlfn.`.
+ * prefix modern Excel functions (`XLOOKUP`, `IFS`, `MAXIFS`, …) with `_xlfn.`
+ * (`FILTER`/`SORT`: `_xlfn._xlws.`). Text in string literals and quoted sheet
+ * names is left alone, and an already prefixed function is not prefixed again.
  */
 export function normalizeFormula(raw) {
   const body = String(raw || '')
@@ -138,7 +238,12 @@ export function normalizeFormula(raw) {
     .trim()
     .replace(/^=+/, '')
     .slice(0, WORKBOOK_LIMITS.maxFormulaChars);
-  return body.replace(XLFN_FUNCTIONS, (_, fn) => `_xlfn.${fn.toUpperCase()}(`);
+  return mapOutsideQuotes(body, part =>
+    part.replace(FUTURE_FUNCTION_RE, (_, fn) => {
+      const name = fn.toUpperCase();
+      return XLWS_FUNCTIONS.includes(name) ? `_xlfn._xlws.${name}(` : `_xlfn.${name}(`;
+    })
+  );
 }
 
 function sanitizeSheetName(raw, index, usedLower) {
@@ -396,7 +501,7 @@ class StyleRegistry {
   }
 }
 
-function classifyCell(rawCell, colFormat) {
+function classifyCell(rawCell, colFormat, warnings) {
   if (rawCell === null || rawCell === undefined || rawCell === '') {
     return { kind: 'empty', displayLength: 0 };
   }
@@ -406,9 +511,16 @@ function classifyCell(rawCell, colFormat) {
   const cellFormat = isObj && typeof rawCell.format === 'string' ? rawCell.format : colFormat;
   const isInput = Boolean(isObj && (rawCell.input || rawCell.assumption));
 
+  let textOverride = null;
   if (rawFormula || (typeof val === 'string' && val.trim().startsWith('='))) {
     const formula = normalizeFormula(rawFormula || val);
-    if (formula) {
+    if (formula && isBlockedFormula(formula)) {
+      // Kept as visible text: never a live formula that could reach outside the workbook.
+      warnings?.push(
+        `A formula that calls an external-data or command function was written as text: =${formula.slice(0, 60)}`
+      );
+      textOverride = `=${formula}`;
+    } else if (formula) {
       return {
         kind: 'formula',
         formula,
@@ -418,9 +530,11 @@ function classifyCell(rawCell, colFormat) {
       };
     }
   }
-  if (typeof val === 'number' && Number.isFinite(val)) {
+  if (textOverride === null && typeof val === 'number' && Number.isFinite(val)) {
+    // Integers keep the column's format; only a general-format column shows plain
+    // digits, so a year (2026) or an ID is never rendered as "2,026".
     const fmt =
-      cellFormat === 'general' ? (Number.isInteger(val) ? 'integer' : 'decimal') : cellFormat;
+      cellFormat === 'general' ? (Number.isInteger(val) ? 'general' : 'decimal') : cellFormat;
     return {
       kind: 'number',
       value: val,
@@ -429,7 +543,7 @@ function classifyCell(rawCell, colFormat) {
       displayLength: String(val).length + 3
     };
   }
-  if (typeof val === 'boolean') {
+  if (textOverride === null && typeof val === 'boolean') {
     return {
       kind: 'boolean',
       value: val ? 1 : 0,
@@ -438,10 +552,10 @@ function classifyCell(rawCell, colFormat) {
       displayLength: 5
     };
   }
-  const str = cleanText(val, WORKBOOK_LIMITS.maxCellChars);
+  const str = cleanText(textOverride ?? val, WORKBOOK_LIMITS.maxCellChars);
   if (!str) return { kind: 'empty', displayLength: 0 };
 
-  if (cellFormat === 'date' || ISO_DATE_RE.test(str)) {
+  if (textOverride === null && (cellFormat === 'date' || ISO_DATE_RE.test(str))) {
     const serial = isoToExcelSerial(str);
     if (serial !== null) {
       return {
@@ -462,7 +576,7 @@ function classifyCell(rawCell, colFormat) {
   };
 }
 
-function buildWorksheetXml(sheet, styles) {
+function buildWorksheetXml(sheet, styles, warnings) {
   const { columns, rows, hasHeader } = sheet;
   const colCount = columns.length;
   const colMaxLengths = columns.map(col => (hasHeader ? col.header.length + 4 : 8));
@@ -496,7 +610,7 @@ function buildWorksheetXml(sheet, styles) {
     const cellsXml = row.cells
       .map((rawCell, cIdx) => {
         const col = columns[cIdx];
-        const cell = classifyCell(rawCell, col.format);
+        const cell = classifyCell(rawCell, col.format, warnings);
         colMaxLengths[cIdx] = Math.max(colMaxLengths[cIdx], cell.displayLength);
         const ref = `${columnLetter(cIdx)}${rowNumber}`;
         const fmtName =
@@ -605,7 +719,7 @@ export async function buildXlsx(spec) {
       const sheetNum = idx + 1;
       const relId = `rId${sheetNum + 1}`;
       const partPath = `xl/worksheets/sheet${sheetNum}.xml`;
-      zip.file(partPath, buildWorksheetXml(sheet, styles));
+      zip.file(partPath, buildWorksheetXml(sheet, styles, warnings));
       types.setOverride(partPath, WORKSHEET_TYPE);
       workbookRels.push({
         id: relId,

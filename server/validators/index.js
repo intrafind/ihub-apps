@@ -134,6 +134,14 @@ export const chatPostSchema = {
      * `{ ifinder: 'contracts' }`. Checked against what each integration
      * offers the user in the route (`resolveChatScopes`).
      */
-    integrationScopes: z.record(z.string().max(64), z.string().max(256)).optional()
+    integrationScopes: z.record(z.string().max(64), z.string().max(256)).optional(),
+    /**
+     * The client draws tool approval cards (#2945) and answers them with the
+     * next message's `approvalResponse`. A client that does not say so (an
+     * integration, an embed without the card) is treated as headless: a call
+     * that needs approval is refused with `APPROVAL_REQUIRED_NO_USER`
+     * instead of pausing a turn nobody can resume.
+     */
+    toolApprovalCapable: z.boolean().optional()
   })
 };

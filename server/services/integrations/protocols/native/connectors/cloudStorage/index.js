@@ -6,7 +6,7 @@
  * `com.intrafind/google-drive` and `com.intrafind/nextcloud` (any number of
  * installations each). They have no model-facing actions: an installation
  * holds one OAuth app, every user connects their own account
- * (`/api/integrations/<service>/auth?providerId=<installation id>`), and the
+ * (`POST /api/integrations/<installation id>/connect`), and the
  * file browsers, the picker and the project cloud kinds read the providers
  * through `cloudStorageConfig.js`. The connectors supply the installation
  * test, the "n users connected" status and the Connections dialog, each per
@@ -23,6 +23,8 @@ import {
   providerFromInstance,
   resolveCloudStorageRedirectUri
 } from '../../../../cloudStorageConfig.js';
+
+import { getIntegrationConnectionService } from '../../../../auth/IntegrationConnectionService.js';
 
 const TEST_TIMEOUT_MS = 10000;
 const CONNECTION_COUNT_REFRESH_MS = 30 * 1000;
@@ -62,6 +64,15 @@ function refreshCount(type, instanceId, { force = false } = {}) {
     });
   counts.set(instanceId, entry);
   return entry.inFlight;
+}
+
+/**
+ * Re-count an installation's connections now (after a disconnect).
+ * @param {string} type
+ * @param {string} instanceId
+ */
+export function refreshCloudStorageConnectionCount(type, instanceId) {
+  refreshCount(type, instanceId, { force: true }).catch(() => {});
 }
 
 /** Test seam: forget the counts. */
@@ -178,29 +189,6 @@ function redirectUriStep(provider, req) {
   };
 }
 
-let services = null;
-/** The provider services, imported when first needed (they import the config cache and the token store). */
-async function loadServices() {
-  if (!services) {
-    const [office365, googledrive, nextcloud] = await Promise.all([
-      import('../../../../Office365Service.js'),
-      import('../../../../GoogleDriveService.js'),
-      import('../../../../NextcloudService.js')
-    ]);
-    services = {
-      office365: office365.default,
-      googledrive: googledrive.default,
-      nextcloud: nextcloud.default
-    };
-  }
-  return services;
-}
-
-function serviceFor(type) {
-  if (!services) throw new Error('cloud storage services not loaded');
-  return services[type];
-}
-
 /** The installation's id, or empty when the connector got none. */
 function idOf(instance) {
   return typeof instance?.id === 'string' ? instance.id : '';
@@ -299,17 +287,20 @@ function connectorFor(type) {
         userConnections: countOf(instanceId)
       };
     },
+    /** The users connected to this installation, from the connection index. */
     async listConnections(instance) {
       const instanceId = idOf(instance);
-      const connections = await listCloudStorageConnections(type, instanceId);
-      setCount(instanceId, connections.length);
+      const connections = await getIntegrationConnectionService().listUserConnections(instanceId);
+      setCount(instanceId, connections.filter(c => !c.expired).length);
       return connections;
     },
-    async disconnectUser(instance, userId) {
-      await loadServices();
-      const instanceId = idOf(instance);
-      const removed = await serviceFor(type).deleteUserTokens(userId, instanceId);
-      if (removed) refreshCount(type, instanceId, { force: true }).catch(() => {});
+    /** Disconnect one user (revoked upstream when supported; audit `connection.revoke`). */
+    async disconnectUser(instance, userId, { req } = {}) {
+      const { removed } = await getIntegrationConnectionService().disconnect({
+        installationId: idOf(instance),
+        userId,
+        req
+      });
       return { removed: Boolean(removed) };
     },
     invalidate() {},

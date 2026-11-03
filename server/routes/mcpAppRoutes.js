@@ -28,7 +28,7 @@
  * never tools of another server.
  *
  * A per-user OAuth server the caller has not connected answers **409**
- * `{ error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl }` — never
+ * `{ error: 'auth_required', code: 'INTEGRATION_AUTH_REQUIRED', integration, connectUrl }` — never
  * 401, which the client reads as an expired iHub session and signs the user
  * out for. A sign-in that could not be renewed right now answers 503.
  *
@@ -37,11 +37,16 @@
 import { z } from 'zod';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
+import { INTEGRATION_AUTH_REQUIRED } from '../services/integrations/auth/integrationAuthRequired.js';
+import { installedIntegrationById } from '../services/integrations/installedRefs.js';
+import interactionService from '../services/loop/InteractionService.js';
+import { authorizeInteraction } from '../services/loop/runAccess.js';
 import {
-  isAuthRequiredError,
-  isTokenRefreshError,
-  MCP_AUTH_REQUIRED
-} from '../services/mcp/McpUserOAuthProvider.js';
+  answerViewToolApproval,
+  isViewToolApproval,
+  requestViewToolCall
+} from '../services/mcp/mcpViewToolApproval.js';
+import { isAuthRequiredError, isTokenRefreshError } from '../services/mcp/McpUserOAuthProvider.js';
 import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
 import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
@@ -81,7 +86,17 @@ const resourceQuerySchema = z.object(toolRefShape);
 const toolCallBodySchema = z.object({
   ...toolRefShape,
   name: z.string().min(1).max(200),
-  arguments: z.record(z.string(), z.any()).optional()
+  arguments: z.record(z.string(), z.any()).optional(),
+  /** The chat hosting the view, where a call that needs approval is asked for (#2945). */
+  chatId: z.string().min(1).max(200).optional(),
+  /** The host draws the approval card; without it a gated call is refused. */
+  toolApprovalCapable: z.boolean().optional()
+});
+
+const approvalBodySchema = z.object({
+  ...toolRefShape,
+  interactionId: z.string().min(1).max(256),
+  decision: z.enum(['approve', 'reject'])
 });
 
 const resourceReadBodySchema = z.object({
@@ -201,8 +216,10 @@ export async function resolveMcpApp(req, appId, toolId, { declaredView = false }
 /** The "connect first" answer for a per-user server. */
 function authRequiredAccessError(serverId) {
   return new McpAppAccessError(MCP_APP_AUTH_REQUIRED_STATUS, 'auth_required', {
-    code: MCP_AUTH_REQUIRED,
-    ...(serverId ? { connectUrl: mcpClientManager.connectUrlFor(serverId) } : {})
+    code: INTEGRATION_AUTH_REQUIRED,
+    ...(serverId
+      ? { integration: serverId, connectUrl: mcpClientManager.connectUrlFor(serverId) }
+      : {})
   });
 }
 
@@ -291,10 +308,16 @@ export default function registerMcpAppRoutes(app) {
     authRequired,
     validate({ body: toolCallBodySchema }),
     async (req, res) => {
-      const { appId, toolId, name } = req.body;
+      const { appId, toolId, name, chatId = null } = req.body;
       const args = req.body.arguments || {};
       try {
-        const { run, user, serverId } = await resolveMcpApp(req, appId, toolId);
+        const {
+          app: appConfig,
+          run,
+          user,
+          serverId,
+          tool: viewTool
+        } = await resolveMcpApp(req, appId, toolId);
         if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
           return res.status(413).json({ error: 'Tool arguments too large' });
         }
@@ -302,6 +325,25 @@ export default function registerMcpAppRoutes(app) {
           // Visibility: only tools of this same server that list "app".
           const target = await conn.getAppTool(name);
           if (!target) return { forbidden: true };
+          // A tool that needs a person's approval (#2945) waits for it like a
+          // model's call: the chat hosting the view shows the approval card,
+          // and the server runs the stored call once it is approved. A host
+          // that cannot show the card gets APPROVAL_REQUIRED_NO_USER.
+          const gate = await requestViewToolCall({
+            user,
+            appId,
+            app: appConfig,
+            viewTool,
+            serverId,
+            name,
+            args,
+            target,
+            chatId,
+            canApprove: req.body.toolApprovalCapable === true,
+            platform: configCache.getPlatform?.() || null,
+            getInstallation: installedIntegrationById
+          });
+          if (gate.status !== 'run') return { gate };
           // The specification asks hosts to log view-initiated calls.
           logger.info('MCP App tool call', {
             component: COMPONENT,
@@ -317,9 +359,76 @@ export default function registerMcpAppRoutes(app) {
         if (outcome.forbidden) {
           return res.status(403).json({ error: `Tool ${name} is not callable from this app` });
         }
+        if (outcome.gate?.status === 'refused') {
+          return res.status(403).json({ error: outcome.gate.message, code: outcome.gate.code });
+        }
+        if (outcome.gate?.status === 'awaiting') {
+          // Nothing ran: the host shows the card and answers with
+          // POST /api/mcp-apps/tools/call/approval, which runs the call.
+          return res
+            .status(202)
+            .json({ awaitingApproval: true, interaction: outcome.gate.interaction });
+        }
         return res.json(toViewToolResult(outcome.result));
       } catch (error) {
         return sendError(res, error, 'tool call');
+      }
+    }
+  );
+
+  /**
+   * The decision on an MCP App view's call that waits for approval (#2945):
+   * `{ appId, toolId, interactionId, decision: 'approve' | 'reject' }`. On
+   * approve the stored call runs and its result is the answer (the view's
+   * `tools/call` result); reject and expiry answer with a structured tool
+   * error (`USER_REJECTED`, `APPROVAL_EXPIRED`). Answered exactly once.
+   */
+  app.post(
+    buildServerPath('/api/mcp-apps/tools/call/approval'),
+    authRequired,
+    validate({ body: approvalBodySchema }),
+    async (req, res) => {
+      const { appId, toolId, interactionId, decision } = req.body;
+      try {
+        const { run, user } = await resolveMcpApp(req, appId, toolId);
+        const interaction = await interactionService.get(interactionId);
+        if (interaction) {
+          const view = interaction.source?.viewCall;
+          if (
+            !isViewToolApproval(interaction) ||
+            view.appId !== appId ||
+            view.viewToolId !== toolId
+          ) {
+            return res.status(404).json({ error: 'Approval not found' });
+          }
+          if (!(await authorizeInteraction(interaction, user))) {
+            return res.status(403).json({ error: 'This approval belongs to another user' });
+          }
+        }
+        const answered = await answerViewToolApproval({
+          interaction,
+          decision,
+          user,
+          call: (callName, callArgs) =>
+            run(async conn => {
+              // Still a tool this view may call (the server may have changed).
+              if (!(await conn.getAppTool(callName))) {
+                throw new McpAppAccessError(403, `Tool ${callName} is not callable from this app`);
+              }
+              logger.info('MCP App tool call (approved)', {
+                component: COMPONENT,
+                appId,
+                viaToolId: toolId,
+                tool: callName,
+                userId: user.id,
+                interactionId
+              });
+              return conn.callToolRaw(callName, callArgs);
+            })
+        });
+        return res.status(answered.status).json(answered.body);
+      } catch (error) {
+        return sendError(res, error, 'tool call approval');
       }
     }
   );

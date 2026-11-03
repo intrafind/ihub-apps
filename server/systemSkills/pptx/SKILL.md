@@ -20,6 +20,8 @@ You create presentations with the `create_pptx` tool. You decide what goes on ea
 
 If the user uploaded a `.pptx`, its extracted text is already in the conversation as `<content type="document">`. Read it directly; to revise or reformat it as a new deck, build the full `slides` array and call `create_pptx`.
 
+When its `<content>` tag says `can_use_as_template="true"`, pass the tag's `id` as `templateFileId` to build the new slides on that deck's own master, layouts and theme. `templateMode` is `styles_only` (default: the deck's old slides are dropped) or `append` (its slides stay and yours follow).
+
 ## The company template
 
 If the app uses a **document template**, its slide design is applied automatically. Then:

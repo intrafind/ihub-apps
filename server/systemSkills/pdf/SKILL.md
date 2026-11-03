@@ -25,7 +25,9 @@ You create PDFs with the `create_pdf` tool. The server lays the document out and
 - **Create** a new PDF from Markdown, optionally with layout blocks (columns, callouts, boxes, printable/pre-filled `{ form }` blocks, tables with merged cells, SVG charts, vector canvas shapes, images, QR codes).
 - **Check** a page of a PDF you created with `preview_pdf` (when the tool is offered).
 - **Reading uploaded PDFs & forms:** When the user uploads a PDF in chat, the platform has **already extracted its text, tables, and AcroForm widget fields (`[Form fields]`) into `<content type="document">` in your prompt context** (or attached rendered page images for scanned PDFs). Answer questions, summarize, or extract form values directly from that context — never claim you cannot read an uploaded PDF.
-- **Filling or recreating uploaded PDF forms:** Because `create_pdf` always builds a fresh document, you cannot mutate an uploaded PDF binary in place. When the user uploads a PDF form and asks you to fill it out or produce a clean printable version, read the `[Form fields]` and surrounding labels from `<content type="document">` and call `create_pdf` using `{ "form": { "title": "…", "columns": 2, "fields": […] } }` blocks to generate the completed PDF form.
+- **Filling uploaded PDF forms in place:** when the uploaded PDF has interactive fields (`[Form fields]`) and its `<content>` tag says `can_use_as_template="true"`, call `create_pdf` with `templateFileId` (the tag's `id`) and `fillFormFields` (a JSON object of field name → value; check boxes take `true`/`false`, radio groups and drop-downs one of their option names). The original is filled as it is, so the layout stays exact; add `flattenForm: true` to make it non-editable. Unknown field names come back with the names the form really has.
+- **Printing on an uploaded letterhead:** `templateFileId` without `fillFormFields` prints your Markdown on the first page of the uploaded PDF (its second page, if any, for the following pages).
+- **Recreating a form (no original available):** when `can_use_as_template` is not `"true"` (for example the original was discarded), read the `[Form fields]` and labels from `<content type="document">` and call `create_pdf` using `{ "form": { "title": "…", "columns": 2, "fields": […] } }` blocks to generate the completed form.
 
 ## Workflow
 
@@ -52,18 +54,18 @@ If the app uses a **document template**, the server applies it automatically: th
 
 ## Document settings
 
-| Setting                               | Use it for                                                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`, `subtitle`, `author`, `date` | Printed at the top (or on the cover) and stored as PDF metadata (`date` also fills `{date}` in headers/footers).                            |
-| `showTitle`                           | Set to `false` for letters, certificates, invoices or visual posters that arrange their own header in `blocks` (default `true`).            |
-| `language`                            | Always set it to the language of the content (`en`, `de`, …): page labels and metadata.                                                     |
-| `theme`                               | `default` (friendly, blue headings), `professional` (serif, restrained, business), `minimal` (black and white).                             |
-| `primaryColor`, `accentColor`         | Brand colour (`primaryColor`) for headings/table headers and secondary (`accentColor`) for callout borders, as hex (`#0f766e`).             |
-| `coverPage`                           | Formal documents of more than about three pages.                                                                                            |
-| `toc`                                 | Long documents with four or more sections.                                                                                                  |
-| `header` / `footer`                   | Running text. Placeholders: `{title}`, `{page}`, `{pages}`, `{date}`. Page numbers are on by default (`pageNumbers: false` turns them off). |
-| `pageSize`, `orientation`, `margins`  | `A4` by default; `LETTER` for US users. Use `landscape` for wide tables. Set `margins` (`[left, top, right, bottom]`) for posters/flyers.   |
-| `watermark`                           | `"DRAFT"`, `"CONFIDENTIAL"`, … when the user asks for one.                                                                                  |
+| Setting                               | Use it for                                                                                                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`, `subtitle`, `author`, `date` | Printed at the top (or on the cover); `title` and `author` are also stored as PDF metadata. `date` fills the cover and `{date}` in headers/footers, it is not stored as metadata. |
+| `showTitle`                           | Set to `false` for letters, certificates, invoices or visual posters that arrange their own header in `blocks` (default `true`).                                                  |
+| `language`                            | Always set it to the language of the content (`en`, `de`, …): page labels and metadata.                                                                                           |
+| `theme`                               | `default` (friendly, blue headings), `professional` (serif, restrained, business), `minimal` (black and white).                                                                   |
+| `primaryColor`, `accentColor`         | Brand colour (`primaryColor`) for headings/table headers and secondary (`accentColor`) for callout borders, as hex (`#0f766e`).                                                   |
+| `coverPage`                           | Formal documents of more than about three pages.                                                                                                                                  |
+| `toc`                                 | Long documents with four or more sections.                                                                                                                                        |
+| `header` / `footer`                   | Running text. Placeholders: `{title}`, `{page}`, `{pages}`, `{date}`. Page numbers are on by default (`pageNumbers: false` turns them off).                                       |
+| `pageSize`, `orientation`, `margins`  | `A4` by default; `LETTER` for US users. Use `landscape` for wide tables. Set `margins` (`[left, top, right, bottom]`) for posters/flyers.                                         |
+| `watermark`                           | `"DRAFT"`, `"CONFIDENTIAL"`, … when the user asks for one.                                                                                                                        |
 
 ## Writing good Markdown for print
 
@@ -109,7 +111,7 @@ If the app uses a **document template**, the server applies it automatically: th
 - **Callouts** (`info`, `success`, `warning`, `danger`, `note`) for key takeaways, risks and next steps. Use one or two per page at most.
 - **Columns** for side-by-side comparisons, KPI stat cards, and for the header of invoices and letters (sender left, details right). The gap between columns is automatic (`columnGap` sets it).
 - **SVG Charts & Visual Graphics (`svg-to-pdfkit` rules):**
-  - Always set explicit numeric `width`, `height`, and a matching `viewBox="0 0 W H"` on the root `<svg>` element (keep `width` ≤ `480` in portrait so it fits within page margins).
+  - Always set explicit numeric `width`, `height`, and a matching `viewBox="0 0 W H"` on the root `<svg>` element (keep `width` ≤ the usable content width, i.e. the page width minus the left and right margins: `495` on A4 portrait with the default margins, `539` with `margins: [28, 28, 28, 28]`; `480` is a safe default).
   - Always set explicit `fill="#111827"` (or another hex colour) and `font-family="sans-serif"` on `<text>` elements — never rely on `currentColor`, CSS variables, or external stylesheets.
   - Leave at least `16px` of padding inside the `viewBox` around edge labels so text is never clipped.
   - Never use `<foreignObject>`, `<script>`, or external `<image>` URLs (all are stripped for security).

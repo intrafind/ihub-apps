@@ -3,6 +3,7 @@
 
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+import { createFileApi } from '../utils/fileApi';
 
 /**
  * Request config for the viewer calls. A 401 is an expected answer here — it
@@ -36,6 +37,10 @@ const VIEWER_REQUEST = { _suppressAuthExpired: true };
  * @param {string|null} [body.expiresAt] - ISO instant, or null for none.
  * @param {number|null} [body.maxViews] - Positive integer, or null for unlimited.
  * @param {boolean} [body.showOwnerName] - Whether a public viewer sees the owner's name.
+ * @param {'none'|'extracted_text'|'original'} [body.uploadedFilesAccess] - What viewers may do
+ *   with the files uploaded to the chat (default `none`: the transcript only names them).
+ * @param {string[]} [body.sharedFileIds] - With access, the files the owner leaves ticked
+ *   (default: every file the transcript names).
  * @returns {Promise<{ share: Object }>} the response body, where `share` is the
  *   owner's view: `{ id, chatId, mode, recipients, recipientDetails, title,
  *   createdAt, expiresAt, maxViews, viewCount, lastViewedAt, recipientViews,
@@ -190,3 +195,19 @@ export const lookupUsers = async q => {
     null
   );
 };
+
+/**
+ * The uploaded files a share lets its viewers open
+ * (`/api/shares/:shareId/files`): empty unless the owner opted in. A file left
+ * out answers 404, and every file 403 `FILES_NOT_SHARED` when the share offers none.
+ */
+const sharedFiles = createFileApi('/shares', VIEWER_REQUEST);
+
+/** @returns {Promise<{ uploadedFilesAccess: string, items: Object[] }>} */
+export const fetchSharedChatFiles = shareId => sharedFiles.list(shareId);
+
+/** The extracted text of a shared file. */
+export const fetchSharedChatFileText = (shareId, fileId) => sharedFiles.text(shareId, fileId);
+
+/** The original of a shared file (needs `uploadedFilesAccess: 'original'`). */
+export const fetchSharedChatFileBlob = (shareId, fileId) => sharedFiles.blob(shareId, fileId);

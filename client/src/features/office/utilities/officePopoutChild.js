@@ -20,7 +20,13 @@ import { POPOUT_READ_TIMEOUT_MS, isOwnOrigin } from './officePopout';
 const HELLO_TIMEOUT_MS = 15 * 1000;
 
 /** Calls that go through Outlook's own, sometimes slow, APIs in the pane. */
-const SLOW_METHODS = new Set(['readItemContext', 'readMailContext', 'runMailAction', 'attachFile']);
+const SLOW_METHODS = new Set([
+  'readItemContext',
+  'readMailContext',
+  'readMailEml',
+  'runMailAction',
+  'attachFile'
+]);
 
 /**
  * Connect to the pane.

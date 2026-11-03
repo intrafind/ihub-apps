@@ -62,11 +62,9 @@ import {
   PLACEHOLDER_PUBLIC_BASE
 } from './mcpOAuthPublicUrl.js';
 import logger from '../../utils/logger.js';
+import { INTEGRATION_AUTH_REQUIRED } from '../integrations/auth/integrationAuthRequired.js';
 
 const COMPONENT = 'McpUserOAuthProvider';
-
-/** Error code of every "the user must connect first" condition. */
-export const MCP_AUTH_REQUIRED = 'MCP_AUTH_REQUIRED';
 
 /** Error code of a refresh that failed for a transient reason (tokens kept). */
 export const MCP_AUTH_REFRESH_FAILED = 'MCP_AUTH_REFRESH_FAILED';
@@ -76,18 +74,25 @@ export const MCP_OAUTH_REDIRECT_REFUSED = 'MCP_OAUTH_REDIRECT_REFUSED';
 
 /**
  * Thrown instead of redirecting: the user has to complete the interactive
- * sign-in before this server can be used.
+ * sign-in before this server can be used. Its `code` is the one
+ * `INTEGRATION_AUTH_REQUIRED` of every integration.
  */
 export class McpAuthRequiredError extends Error {
   /**
    * @param {string} serverId
    * @param {string} [message]
    */
-  constructor(serverId, message = 'Sign-in required for this MCP server') {
+  constructor(
+    serverId,
+    message = 'Sign-in required for this MCP server',
+    reason = 'not_connected'
+  ) {
     super(message);
     this.name = 'McpAuthRequiredError';
-    this.code = MCP_AUTH_REQUIRED;
+    this.code = INTEGRATION_AUTH_REQUIRED;
     this.serverId = serverId;
+    /** `not_connected` | `expired` | `insufficient_scope` (see integrationAuthRequired.js) */
+    this.reason = reason;
   }
 }
 
@@ -118,7 +123,9 @@ export class McpTokenRefreshError extends Error {
  */
 export function isAuthRequiredError(error) {
   if (!error) return false;
-  if (error instanceof McpAuthRequiredError || error?.code === MCP_AUTH_REQUIRED) return true;
+  if (error instanceof McpAuthRequiredError || error?.code === INTEGRATION_AUTH_REQUIRED) {
+    return true;
+  }
   if (error instanceof UnauthorizedError) return true;
   return error?.name === 'UnauthorizedError';
 }
@@ -178,6 +185,27 @@ export function buildMcpOAuthFetch(security = {}) {
     blockPrivateIps: security.blockPrivateIps !== false
   };
   return withoutRedirects((input, init = {}) => safeFetch(input, init, policy));
+}
+
+/**
+ * The pre-registered client of a server config (`auth.clientId` plus an
+ * optional `auth.clientSecretRef` resolved from the credential store), or null.
+ *
+ * @param {Object} serverConfig
+ * @returns {{client_id: string, client_secret?: string, token_endpoint_auth_method?: string}|null}
+ */
+export function configuredMcpClientInformation(serverConfig) {
+  const auth = serverConfig?.auth || {};
+  if (typeof auth.clientId !== 'string' || !auth.clientId) return null;
+  const info = { client_id: auth.clientId };
+  if (auth.clientSecretRef) {
+    const secret = credentialService.tryResolveSecret(auth.clientSecretRef);
+    if (secret) info.client_secret = secret;
+    else info.token_endpoint_auth_method = 'none';
+  } else {
+    info.token_endpoint_auth_method = 'none';
+  }
+  return info;
 }
 
 export class McpUserOAuthProvider {
@@ -282,17 +310,7 @@ export class McpUserOAuthProvider {
    * @returns {{client_id: string, client_secret?: string}|null}
    */
   configuredClientInformation() {
-    const auth = this.serverConfig.auth || {};
-    if (typeof auth.clientId !== 'string' || !auth.clientId) return null;
-    const info = { client_id: auth.clientId };
-    if (auth.clientSecretRef) {
-      const secret = credentialService.tryResolveSecret(auth.clientSecretRef);
-      if (secret) info.client_secret = secret;
-      else info.token_endpoint_auth_method = 'none';
-    } else {
-      info.token_endpoint_auth_method = 'none';
-    }
-    return info;
+    return configuredMcpClientInformation(this.serverConfig);
   }
 
   async saveClientInformation(info) {

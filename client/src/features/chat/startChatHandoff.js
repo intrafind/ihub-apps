@@ -48,7 +48,7 @@ export function setPendingChatStart(data) {
  * @returns {{ appId: string, files?: any, settings?: Object } | null}
  */
 export function consumePendingChatStart(appId) {
-  if (pending && pending.appId === appId) {
+  if (pending?.appId === appId) {
     const data = pending;
     pending = null;
     return data;

@@ -30,7 +30,7 @@ const TABS = ['skills', 'user'];
  * - **User skills** (`user`): the personal skills users shared with groups or
  *   everyone, and the settings for personal skills (see AdminUserSkillsTab).
  *
- * Follows the same layout conventions as AdminToolsPage and AdminPromptsPage.
+ * Follows the same layout conventions as AdminPromptsPage.
  */
 function AdminSkillsPage() {
   const { t } = useTranslation();

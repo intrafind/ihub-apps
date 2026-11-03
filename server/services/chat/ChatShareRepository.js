@@ -49,7 +49,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
-import { SHARE_MODES, shareState } from './chatSharing.js';
+import { SHARE_MODES, UPLOADED_FILES_ACCESS, shareState } from './chatSharing.js';
 import { shareableActivity } from './runActivity.js';
 import { shareableSourceSet } from '../../../shared/sources/index.js';
 import { publicAbortCause } from './abortCause.js';
@@ -331,6 +331,8 @@ export class ChatShareRepository {
     expiresAt = null,
     maxViews = null,
     messages = [],
+    uploadedFilesAccess = 'none',
+    sharedFileIds = null,
     now = new Date().toISOString()
   } = {}) {
     if (!this.isAvailable() || !isValidId(chatId) || !ownerId) return null;
@@ -340,6 +342,18 @@ export class ChatShareRepository {
       });
     }
     const snapshot = (Array.isArray(messages) ? messages : []).map(snapshotMessage);
+    // Uploaded files are opt-in (PM-07): none by default, and with access the
+    // owner may still leave single files out. Only the shared ones are pinned
+    // against deletion by a message edit.
+    const filesAccess = UPLOADED_FILES_ACCESS.includes(uploadedFilesAccess)
+      ? uploadedFilesAccess
+      : 'none';
+    const sharedFiles =
+      filesAccess === 'none'
+        ? []
+        : fileIdsOf(snapshot).filter(
+            id => !Array.isArray(sharedFileIds) || sharedFileIds.includes(id)
+          );
     const recipientIds =
       mode === 'users' ? [...new Set(recipients.map(String).filter(Boolean))] : [];
 
@@ -395,7 +409,8 @@ export class ChatShareRepository {
       revokedAt: null,
       messageCount: snapshot.length,
       artifactIds: artifactIdsOf(snapshot),
-      ...(fileIdsOf(snapshot).length > 0 ? { fileIds: fileIdsOf(snapshot) } : {})
+      uploadedFilesAccess: filesAccess,
+      ...(sharedFiles.length > 0 ? { fileIds: sharedFiles } : {})
     };
     return this._writeShare(share, null);
   }
@@ -530,6 +545,7 @@ export class ChatShareRepository {
     if (!this.isAvailable() || !isValidId(chatId)) return retained;
     for (const share of await this.listSharesForChat(chatId)) {
       if (shareState(share, now) !== 'active') continue;
+      if (!share.uploadedFilesAccess || share.uploadedFilesAccess === 'none') continue;
       for (const id of Array.isArray(share.fileIds) ? share.fileIds : []) retained.add(id);
     }
     return retained;

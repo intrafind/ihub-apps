@@ -18,6 +18,7 @@ import IntegrationReleaseNotes from '../components/integrations/IntegrationRelea
 import IntegrationFactList from '../components/integrations/IntegrationFactList';
 import { InstallationStatusPills } from '../components/integrations/IntegrationPills';
 import InstallationMigrationPanel from '../components/integrations/InstallationMigrationPanel';
+import InstallationBackups from '../components/integrations/InstallationBackups';
 import {
   MigrationConfirmDialog,
   MigrationLog,
@@ -45,9 +46,25 @@ import {
   fetchInstalledIntegration,
   fetchInstalledIntegrations,
   fetchIntegrationDefinitionFile,
+  markInstalledIntegrationActionsReviewed,
+  setInstalledIntegrationApproval,
   setInstalledIntegrationEnabled,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
+import { ApprovalModeSelect } from '../components/ToolApprovalFields';
+import {
+  actionsPendingReview,
+  approvalChanged,
+  approvalPayload,
+  normalizeApproval,
+  withActionMode,
+  withDefaultMode,
+  withNewOrChangedMode
+} from '../components/integrations/installationApproval';
+import ActionReviewBadge from '../components/integrations/ActionReviewBadge';
+import IntegrationActionDrawer from '../components/integrations/IntegrationActionDrawer';
+import IntegrationInstructionsCard from '../components/integrations/IntegrationInstructionsCard';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
@@ -122,8 +139,9 @@ function bindingViaLabel(app, instance, t) {
  *
  * - **Overview**: the key facts of its values (never a secret), description,
  *   docs link, groups, the actions with their side effects, the apps that
- *   bind it (by installation id, by definition id or by `type:<type>`) and
- *   the migration log (the last 10 runs).
+ *   bind it (by installation id, by definition id or by `type:<type>`), the
+ *   migration log (the last 10 runs) and the backups the migration runner
+ *   kept, each with **Revert to this version** (`InstallationBackups`).
  * - **Settings**: the dedicated editor of its definition (`editors/index.js`),
  *   or the generic form built from the install fields; read-only while a
  *   migration state makes `PUT` refuse the save.
@@ -231,6 +249,12 @@ function InstallationPageContent({ instanceId }) {
 
   const instance = detail?.instance || null;
   const definition = detail?.definition || null;
+  // The tool approval being edited on the Overview (#2945); reset when the
+  // stored installation changes.
+  const [approvalDraft, setApprovalDraft] = useState(() => normalizeApproval(null));
+  useEffect(() => {
+    setApprovalDraft(normalizeApproval(instance?.approval));
+  }, [instance]);
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
   const tab = activeTab(tabParam, hasReleases);
@@ -247,6 +271,24 @@ function InstallationPageContent({ instanceId }) {
     const params = new URLSearchParams(searchParams);
     if (open) params.set('test', 'chat');
     else params.delete('test');
+    setSearchParams(params, { replace: true });
+  };
+
+  // The action detail (#2974); `?action=<name>` opens the page with it.
+  const user = useOptionalAuth()?.user || null;
+  const openAction = searchParams.get('action');
+  const setOpenAction = name => {
+    const params = new URLSearchParams(searchParams);
+    if (name) params.set('action', name);
+    else params.delete('action');
+    setSearchParams(params, { replace: true });
+  };
+  /** Try the integration in chat from the action detail: close it, open the chat test. */
+  const tryInChat = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('action');
+    params.set('test', 'chat');
+    setTestOpen(true);
     setSearchParams(params, { replace: true });
   };
 
@@ -293,6 +335,41 @@ function InstallationPageContent({ instanceId }) {
   const flash = (type, text) => {
     setMessage({ type, text });
     window.setTimeout(() => setMessage(null), 6000);
+  };
+
+  // Actions new or changed since the last review (#2916).
+  const pendingReview = useMemo(() => actionsPendingReview(detail?.actions), [detail]);
+
+  /** Accept the current fingerprints of these actions (null: all). */
+  const markReviewed = async names => {
+    setBusy(true);
+    try {
+      const { reviewed } = await markInstalledIntegrationActionsReviewed(instance.id, names);
+      await load();
+      flash(
+        'success',
+        t('admin.integrations.actionReview.marked', 'Marked as reviewed: {{actions}}', {
+          actions: reviewed.join(', ')
+        })
+      );
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveApproval = async () => {
+    setBusy(true);
+    try {
+      await setInstalledIntegrationApproval(instance.id, approvalPayload(approvalDraft));
+      await load();
+      flash('success', t('admin.toolApproval.installationSaved', 'Approval settings saved.'));
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const runTest = async () => {
@@ -445,6 +522,17 @@ function InstallationPageContent({ instanceId }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* A custom integration (built here or migrated from a tool file)
+                  is edited in the integration builder. */}
+              {String(instance.definition || '').startsWith('custom/') && (
+                <Link
+                  to={`/admin/integrations/builder/${encodeURIComponent(instance.id)}`}
+                  className={SECONDARY_BUTTON_CLASS}
+                >
+                  <Icon name="pencil" size="sm" />
+                  {t('admin.integrationBuilder.editInBuilder', 'Edit in builder')}
+                </Link>
+              )}
               {instance.perUser && (
                 <button
                   type="button"
@@ -607,6 +695,88 @@ function InstallationPageContent({ instanceId }) {
                       ({(detail.actions || []).length})
                     </span>
                   </h2>
+                  {/* Tool approval (#2945): the installation's default and a mode per action. */}
+                  <div
+                    className="mb-3 flex flex-wrap items-end gap-3"
+                    data-testid="installation-approval"
+                  >
+                    <div className="min-w-[240px]">
+                      <ApprovalModeSelect
+                        label={t(
+                          'admin.toolApproval.installationMode',
+                          'Ask before an action runs'
+                        )}
+                        value={approvalDraft.default}
+                        inheritLabel={t('admin.toolApproval.inheritPlatform', 'Platform default')}
+                        disabled={busy}
+                        onChange={mode => setApprovalDraft(draft => withDefaultMode(draft, mode))}
+                        help={t(
+                          'admin.toolApproval.installationModeHelp',
+                          'The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.'
+                        )}
+                      />
+                    </div>
+                    <div className="min-w-[240px]">
+                      <ApprovalModeSelect
+                        label={t('admin.toolApproval.newOrChangedMode', 'New or changed actions')}
+                        value={approvalDraft.newOrChanged}
+                        inheritLabel={t(
+                          'admin.toolApproval.newOrChangedDefault',
+                          'Always ask (default)'
+                        )}
+                        disabled={busy}
+                        onChange={mode =>
+                          setApprovalDraft(draft => withNewOrChangedMode(draft, mode))
+                        }
+                        help={t(
+                          'admin.toolApproval.newOrChangedHelp',
+                          'An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.'
+                        )}
+                      />
+                    </div>
+                    {approvalChanged(instance.approval, approvalDraft) && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={saveApproval}
+                          disabled={busy}
+                          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                        >
+                          {t('admin.toolApproval.saveApproval', 'Save approval')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApprovalDraft(normalizeApproval(instance.approval))}
+                          disabled={busy}
+                          className={SECONDARY_BUTTON_CLASS}
+                        >
+                          {t('common.cancel', 'Cancel')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {pendingReview.length > 0 && (
+                    <div
+                      className={`${CALLOUT_CLASS.warning} mb-3 flex flex-wrap items-center justify-between gap-2`}
+                      data-testid="installation-actions-review"
+                    >
+                      <span>
+                        {t(
+                          'admin.integrations.actionReview.pending',
+                          '{{count}} actions are new or changed since the last review.',
+                          { count: pendingReview.length }
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => markReviewed(null)}
+                        disabled={busy}
+                        className={SECONDARY_BUTTON_CLASS}
+                      >
+                        {t('admin.integrations.actionReview.markAll', 'Mark all reviewed')}
+                      </button>
+                    </div>
+                  )}
                   {(detail.actions || []).length === 0 ? (
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {noActionsText(t, isMigrationBlocked(instance), definition?.dynamicActions)}
@@ -631,8 +801,53 @@ function InstallationPageContent({ instanceId }) {
                               </p>
                             )}
                           </div>
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <ActionReviewBadge review={action.review} />
                             <SideEffectBadge sideEffect={action.sideEffect} />
+                            <ApprovalModeSelect
+                              compact
+                              label={t('admin.toolApproval.actionMode', 'Approval for {{action}}', {
+                                action: action.title || action.name
+                              })}
+                              value={approvalDraft.actions[action.name]}
+                              inheritLabel={t(
+                                'admin.toolApproval.inheritInstallation',
+                                'Approval: as the integration'
+                              )}
+                              modes={['writes', 'always']}
+                              disabled={busy}
+                              onChange={mode =>
+                                setApprovalDraft(draft => withActionMode(draft, action.name, mode))
+                              }
+                            />
+                            {action.review && (
+                              <button
+                                type="button"
+                                onClick={() => markReviewed([action.name])}
+                                disabled={busy}
+                                className="inline-flex min-h-6 items-center rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:text-indigo-300"
+                                aria-label={t(
+                                  'admin.integrations.actionReview.markOneLabel',
+                                  'Mark {{action}} reviewed',
+                                  { action: action.title || action.name }
+                                )}
+                              >
+                                {t('admin.integrations.actionReview.markOne', 'Mark reviewed')}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setOpenAction(action.name)}
+                              className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300"
+                              aria-label={t(
+                                'admin.integrations.actionDetail.openLabel',
+                                'Details of {{action}}: what it does, how to use it, test it',
+                                { action: action.title || action.name }
+                              )}
+                              data-testid={`action-details-${action.name}`}
+                            >
+                              {t('admin.integrations.actionDetail.open', 'Details')}
+                            </button>
                             {action.enabled === false ? (
                               <Badge tone="neutral">
                                 {t('admin.integrations.page.actionOff', 'Off')}
@@ -651,6 +866,15 @@ function InstallationPageContent({ instanceId }) {
                   )}
                 </section>
 
+                {!unusable && (
+                  <IntegrationInstructionsCard
+                    instanceId={instance.id}
+                    instructions={detail.instructions}
+                    disabled={isMigrationBlocked(instance)}
+                    onSaved={load}
+                  />
+                )}
+
                 {(instance.migrationLog || []).length > 0 && (
                   <section
                     className={CARD_CLASS}
@@ -665,6 +889,14 @@ function InstallationPageContent({ instanceId }) {
                     <MigrationLog log={instance.migrationLog} appName={appName} />
                   </section>
                 )}
+
+                <InstallationBackups
+                  instance={instance}
+                  onRequest={migration.request}
+                  busy={busy || migration.running === instance.id}
+                  cardClassName={CARD_CLASS}
+                  titleClassName={CARD_TITLE_CLASS}
+                />
               </div>
 
               <div className="space-y-5">
@@ -824,10 +1056,25 @@ function InstallationPageContent({ instanceId }) {
             />
           )}
 
+          {openAction && !unusable && (
+            <IntegrationActionDrawer
+              key={openAction}
+              isOpen
+              onClose={() => setOpenAction(null)}
+              instanceId={instance.id}
+              actionName={openAction}
+              approval={instance.approval || null}
+              userName={user?.username || user?.name || user?.id || ''}
+              onChanged={load}
+              onTryInChat={tryInChat}
+            />
+          )}
+
           <MigrationConfirmDialog
             pending={migration.pending}
             onConfirm={migration.confirm}
             onCancel={migration.cancel}
+            onSelectBackup={migration.selectBackup}
           />
 
           <ConfirmDialog

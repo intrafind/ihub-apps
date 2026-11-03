@@ -74,7 +74,7 @@ test("a chat's stored settings are applied when they arrive", async () => {
   expect(result.current.websearchEnabled).toBe(true);
 });
 
-test('leaving a chat stops its snapshot applying, rather than the app default returning', async () => {
+test('leaving a chat stops its snapshot applying: the next chat starts from the default', async () => {
   const app = makeApp({ websearch: { enabledByDefault: false } });
   const { result, rerender } = await settled({
     app,
@@ -84,13 +84,16 @@ test('leaving a chat stops its snapshot applying, rather than the app default re
 
   // `AppChat` drops the previous chat's snapshot the moment the chat changes,
   // rather than waiting for the next one's document to arrive. What the chat
-  // falls back to is the *browser* layer, not the app's default: the save
-  // effect has written every setting to sessionStorage by now, so the value
-  // the user was last answered with is still what a fresh chat starts from.
+  // falls back to is the user's default for the app (#2923), never the chat
+  // that was left: web search switched on in one chat does not reach the next.
   await act(async () => {
     rerender({ app, chatSettings: null });
   });
-  expect(result.current.websearchEnabled).toBe(true);
+  expect(result.current.websearchEnabled).toBe(false);
+
+  act(() => {
+    result.current.setWebsearchEnabled(true);
+  });
 
   // The point of the reset: the chat that was left no longer has a say. Turn
   // the toggle off here and refetch the app, and nothing replays the old

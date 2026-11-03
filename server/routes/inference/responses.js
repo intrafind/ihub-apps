@@ -51,8 +51,11 @@ import {
 } from '../../services/inference/structuredOutput.js';
 import {
   attachmentsOf,
-  messagesFromResponsesInput
+  messagesFromResponsesInput,
+  renderedWithoutFiles,
+  toModelMessage
 } from '../../services/inference/inputContent.js';
+import { createFileContext, persistTurnFiles } from '../../services/inference/files.js';
 import {
   appTurnError,
   executeAppTurn,
@@ -65,7 +68,7 @@ import {
   assertBinding,
   bindingPatch,
   conversationIdOf,
-  historyForModel,
+  hydratedHistoryForModel,
   isFirstTurn,
   loadConversation,
   requireConversations,
@@ -156,16 +159,6 @@ function frameSink(assembler) {
   };
 }
 
-/** A user message of the input as a plain model receives it: documents rendered as text. */
-function toModelMessage(message) {
-  if (message.role !== 'user') return { role: message.role, content: message.content };
-  return {
-    role: 'user',
-    content: renderUserMessage({ content: message.content, files: message.fileData }),
-    ...(message.imageData ? { imageData: message.imageData } : {})
-  };
-}
-
 export default function registerResponsesRoutes(
   app,
   { llmClient, chatService, getLocalizedError, DEFAULT_TIMEOUT }
@@ -225,7 +218,9 @@ export default function registerResponsesRoutes(
    *                 description: |
    *                   A string, or message items (`{ role, content }`) whose content parts are
    *                   `input_text`, `input_image` (`image_url` as a data URL) or `input_file`
-   *                   (`file_data` as a data URL, `filename`; PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp) and text files).
+   *                   (`file_data` as a data URL with `filename`, or `file_id` of a file uploaded with `/inference/v1/files`;
+   *                   PDF — scanned ones as page images —, Word, PowerPoint, Excel, OpenDocument, HTML, e-mail and text files).
+   *                   In a conversation, files are stored with it and replayed on later turns.
    *               instructions:
    *                 type: string
    *                 description: System instructions (plain models only)
@@ -282,7 +277,19 @@ export default function registerResponsesRoutes(
       if (body.input === undefined || body.input === null || body.input === '') {
         throw new InferenceApiError(400, 'missing_input', 'input is required', { param: 'input' });
       }
-      const inputMessages = await messagesFromResponsesInput(body.input);
+      // A `file_id` resolves in the caller's files and, in a conversation, in that chat's:
+      // the conversation is therefore loaded (and authorized) before the input is read.
+      const files = createFileContext({ user });
+      const conversationId = conversationIdOf(body.conversation);
+      let loaded = null;
+      if (conversationId) {
+        const repository = requireConversations(user);
+        const chat = await loadConversation(repository, conversationId, user, 'write');
+        assertBinding(chat, target);
+        files.useChat(chat.id);
+        loaded = { repository, chat };
+      }
+      const inputMessages = await messagesFromResponsesInput(body.input, { files });
       if (inputMessages.length === 0 || inputMessages[inputMessages.length - 1].role !== 'user') {
         throw new InferenceApiError(400, 'invalid_input', 'input must end with a user message', {
           param: 'input'
@@ -303,11 +310,7 @@ export default function registerResponsesRoutes(
         validate: validationRequested(req),
         conversation: null
       };
-      const conversationId = conversationIdOf(body.conversation);
-      if (conversationId) {
-        const repository = requireConversations(user);
-        const chat = await loadConversation(repository, conversationId, user, 'write');
-        assertBinding(chat, target);
+      if (loaded) {
         if (inputMessages.some(message => message.role === 'system')) {
           throw new InferenceApiError(
             400,
@@ -316,8 +319,8 @@ export default function registerResponsesRoutes(
             { param: 'input' }
           );
         }
-        const { messages: stored } = await repository.getMessages(chat.id);
-        params.conversation = { repository, chat, stored };
+        const { messages: stored } = await loaded.repository.getMessages(loaded.chat.id);
+        params.conversation = { ...loaded, stored };
       }
       if (target.kind === 'app') await runAppResponse(params);
       else await runModelResponse(params);
@@ -399,17 +402,42 @@ export default function registerResponsesRoutes(
   }
 
   /**
-   * Store the input items that precede this turn's user message, with the
-   * documents they carried rendered into the text replayed on later turns.
+   * Store the files of the input messages in the conversation (its `chat` scope), once
+   * the turn holds the claim: the stored messages then name them by id, and a later
+   * turn — from the API or the Web UI — finds them again.
+   *
+   * @returns {Promise<Map<Object, {descriptors: Array, complete: boolean}>>} By input message.
    */
-  async function storeEarlierInput(conversation, inputMessages, runId) {
+  async function storeInputFiles(conversation, inputMessages) {
+    const stored = new Map();
+    for (const message of inputMessages) {
+      if (!message.fileData?.length) continue;
+      stored.set(
+        message,
+        await persistTurnFiles({
+          repository: conversation.repository,
+          chat: conversation.chat,
+          message
+        })
+      );
+    }
+    return stored;
+  }
+
+  /**
+   * Store the input items that precede this turn's user message. Their files are stored
+   * with the conversation (`storeInputFiles`); a file that could not be is rendered into the
+   * text replayed on later turns, as before files were stored.
+   */
+  async function storeEarlierInput(conversation, inputMessages, runId, storedFiles) {
     for (const message of inputMessages.slice(0, -1)) {
-      const attachments = attachmentsOf(message);
+      const files = storedFiles.get(message);
+      const attachments = attachmentsOf(message, files?.descriptors);
       await conversation.repository.appendMessage(conversation.chat.id, {
         role: message.role,
         content: message.content,
         runId,
-        ...(message.fileData?.length
+        ...(message.fileData?.length && !files?.complete
           ? {
               renderedContent: renderUserMessage({
                 content: message.content,
@@ -500,7 +528,12 @@ export default function registerResponsesRoutes(
       stored: chat?.variables,
       historyReplayed
     });
-    const history = conversation && historyReplayed ? historyForModel(conversation.stored) : [];
+    const history =
+      conversation && historyReplayed
+        ? await hydratedHistoryForModel(chat.id, conversation.stored, {
+            store: conversation.repository.fileStore()
+          })
+        : [];
     const chatId = chat ? chat.id : `${APP_ID}:${crypto.randomUUID()}`;
     const prepared = await prepareAppTurn({
       chatService,
@@ -550,22 +583,27 @@ export default function registerResponsesRoutes(
       if (chat) {
         await claimConversation(conversation, runId, target);
         claimed = true;
-        await storeEarlierInput(conversation, inputMessages, runId);
+        const storedFiles = await storeInputFiles(conversation, inputMessages);
+        await storeEarlierInput(conversation, inputMessages, runId, storedFiles);
         const current = inputMessages[inputMessages.length - 1];
+        const currentFiles = storedFiles.get(current);
         persistence = {
           repository: conversation.repository,
           ownerId: chat.ownerId,
           identityMode: chat.identityMode,
           content: current.content,
           clientMessageId: null,
-          attachments: attachmentsOf(current),
+          attachments: attachmentsOf(current, currentFiles?.descriptors),
           // The chat's variable set, shared with the chat UI (its start
           // form stores the same field): replaced by a turn that sets them.
           ...(prompt.storeVariables ? { variables: prompt.variables } : {}),
           message: {
             // The variables this turn was rendered with, when it was.
             ...(prompt.applyTemplate ? { variables: prompt.variables } : {}),
-            renderedContent: prepared.renderedContent
+            // The files of a stored turn come back from the file repository on replay.
+            renderedContent: currentFiles?.complete
+              ? renderedWithoutFiles(prepared.renderedContent, current)
+              : prepared.renderedContent
           },
           chat: bindingPatch(target),
           assistant: { model: prepared.label },
@@ -646,7 +684,13 @@ export default function registerResponsesRoutes(
     const instructions =
       typeof body.instructions === 'string' && body.instructions ? body.instructions : null;
     const chat = conversation?.chat || null;
-    const history = conversation ? historyForModel(conversation.stored) : [];
+    const history = conversation
+      ? (
+          await hydratedHistoryForModel(chat.id, conversation.stored, {
+            store: conversation.repository.fileStore()
+          })
+        ).map(toModelMessage)
+      : [];
     const current = inputMessages[inputMessages.length - 1];
     const renderedCurrent = toModelMessage(current);
     const messages = [
@@ -694,6 +738,7 @@ export default function registerResponsesRoutes(
 
     let durable = false;
     let claimed = false;
+    let currentFiles = null;
     let userTurnStored = false;
     let answerStored = false;
     const storeAnswer = async summary => {
@@ -712,7 +757,9 @@ export default function registerResponsesRoutes(
       if (chat) {
         await claimConversation(conversation, runId, target);
         claimed = true;
-        await storeEarlierInput(conversation, inputMessages, runId);
+        const storedFiles = await storeInputFiles(conversation, inputMessages);
+        await storeEarlierInput(conversation, inputMessages, runId, storedFiles);
+        currentFiles = storedFiles.get(current);
         markChatDurable(chat.id);
         durable = true;
         // Reachable by Stop and by a delete of the conversation, like a
@@ -727,8 +774,10 @@ export default function registerResponsesRoutes(
           modelId: model.id,
           runId,
           content: current.content,
-          attachments: attachmentsOf(current),
-          message: { renderedContent: renderedCurrent.content },
+          attachments: attachmentsOf(current, currentFiles?.descriptors),
+          message: {
+            renderedContent: currentFiles?.complete ? current.content : renderedCurrent.content
+          },
           chat: bindingPatch(target),
           origin: apiOrigin(user)
         });

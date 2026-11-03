@@ -58,7 +58,13 @@ export function resolveInvokableApp(appId) {
  * @param {number} [params.maxWallClockMs] - Deadline for the whole invocation
  * @param {AbortSignal} [params.abortSignal]
  * @param {(text: string) => void} [params.onTextDelta] - Streamed text fragments
- * @returns {Promise<{text: string, result: Object}>} Assistant text ('' when none) and the raw result
+ * @param {Array<Object>} [params.files] - Files the caller brought (see `inboundFiles.js`):
+ *   ingested into the invocation's chat, attached to the last user message
+ * @param {'mcp'|'a2a'} [params.origin='mcp'] - Where the files came from
+ * @param {string} [params.chatId] - The chat the caller already stored files under (the message
+ *   then carries them as `fileData`); `files` mint and use a chat of their own
+ * @returns {Promise<{text: string, result: Object}>} Assistant text ('' when none) and the raw
+ *   result, which carries the `generatedFiles` and `images` the app produced
  * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
  */
 export async function invokeApp({
@@ -72,13 +78,27 @@ export async function invokeApp({
   timeoutMs = 60000,
   maxWallClockMs,
   abortSignal,
-  onTextDelta
+  onTextDelta,
+  files = [],
+  origin = 'mcp',
+  chatId: callerChatId
 }) {
   const app = resolveInvokableApp(appId);
-  const list = Array.isArray(messages) ? messages : [];
+  let list = Array.isArray(messages) ? messages : [];
   const last = list.at(-1);
   if (!last || last.role !== 'user' || typeof last.content !== 'string' || !last.content.trim()) {
     throw new Error("Missing required argument: 'message'");
+  }
+
+  // Files the caller brought join the invocation's own chat, so the app (and
+  // the document skills it calls) read them like an upload.
+  let chatId = typeof callerChatId === 'string' && callerChatId ? callerChatId : undefined;
+  const effectiveRunId = runId || `mcp-${Date.now()}`;
+  if (Array.isArray(files) && files.length > 0) {
+    const { ingestInboundFiles, inboundChatId } = await import('./inboundFiles.js');
+    chatId = inboundChatId(effectiveRunId);
+    const ingested = await ingestInboundFiles({ files, chatId, user, origin, message: last });
+    list = [...list.slice(0, -1), ingested.message];
   }
 
   const result = await chatService.invokeAppInternal({
@@ -88,7 +108,8 @@ export async function invokeApp({
     variables,
     modelOverride: modelId, // undefined → RequestBuilder picks app.preferredModel
     language: language || configCache.getPlatform()?.defaultLanguage || 'en',
-    runId: runId || `mcp-${Date.now()}`,
+    runId: effectiveRunId,
+    ...(chatId ? { chatId } : {}),
     timeoutMs,
     ...(maxWallClockMs ? { maxWallClockMs } : {}),
     ...(abortSignal ? { abortSignal } : {}),
@@ -134,10 +155,20 @@ export async function invokeApp({
  * @param {Object} params.user - Acting user (req.user-like), used for permissions and the ledger
  * @param {string} [params.language] - Response language; defaults to the platform default
  * @param {number} [params.timeoutMs=60000] - Hard timeout for the model call
+ * @param {(outputs: {generatedFiles: Array<Object>, images: Array<Object>}) => void} [params.onOutputs] -
+ *   Receives the files and pictures the app produced (`{ id, name, mimeType, bytes, data }` /
+ *   `{ mimeType, data, name? }`, `data` base64); the return value stays the text
  * @returns {Promise<string>} Assistant text ('' when the model produced none)
  * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
  */
-export async function invokeAppNonStreaming({ appId, args, user, language, timeoutMs = 60000 }) {
+export async function invokeAppNonStreaming({
+  appId,
+  args,
+  user,
+  language,
+  timeoutMs = 60000,
+  onOutputs
+}) {
   const message = args?.message;
   if (typeof message !== 'string' || !message.trim()) {
     // Validate the app first so an unknown app is reported as such even
@@ -161,14 +192,29 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
   delete variables.message;
   delete variables.modelId;
 
-  const { text } = await invokeApp({
+  // `files: [{ name, mimeType?, data (base64) | text }]` is the file input of
+  // the tool, not a prompt variable (an app variable that happens to be named
+  // `files` is a string and stays one).
+  let files = [];
+  if (Array.isArray(args?.files)) {
+    const { normalizeMcpFiles } = await import('./inboundFiles.js');
+    files = normalizeMcpFiles(args.files);
+    delete variables.files;
+  }
+
+  const { text, result } = await invokeApp({
     appId,
     messages: [{ role: 'user', content: message }],
     variables,
     user,
     modelId,
     language,
-    timeoutMs
+    timeoutMs,
+    files,
+    origin: 'mcp'
   });
+  if (typeof onOutputs === 'function') {
+    onOutputs({ generatedFiles: result?.generatedFiles || [], images: result?.images || [] });
+  }
   return text;
 }

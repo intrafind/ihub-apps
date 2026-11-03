@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
   VOICE_THINKING_LEVELS,
@@ -505,6 +506,37 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Uploaded files of chats and scheduled tasks (`services/chatFiles`).
+    // `storageMode` decides what the server keeps: `original_and_text` (the
+    // file and its text), `server_text_only` (the text; the file is dropped
+    // after extraction) or `client_text_only` (the browser extracts, only text
+    // is uploaded). Originals older than `originalRetentionDays` are removed
+    // (the text stays with the chat); zero or less keeps them as long as the
+    // chat. Quotas of zero or less mean "no cap".
+    uploads: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        storageMode: z
+          .enum(['original_and_text', 'server_text_only', 'client_text_only'])
+          .prefault('original_and_text'),
+        originalRetentionDays: z.number().prefault(14),
+        evictOldestOriginalsOnQuota: z.boolean().prefault(true),
+        quotas: z
+          .object({
+            maxFileBytes: z.number().prefault(25 * 1024 * 1024),
+            maxChatBytes: z.number().prefault(100 * 1024 * 1024),
+            maxChatFiles: z.number().prefault(25),
+            maxUserBytes: z.number().prefault(1024 * 1024 * 1024),
+            maxServerBytes: z.number().prefault(50 * 1024 * 1024 * 1024),
+            // Files an Inference API user keeps through /v1/files (scope `user`).
+            maxApiFiles: z.number().prefault(200),
+            maxApiBytes: z.number().prefault(1024 * 1024 * 1024)
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // User prompts: prompts signed-in users keep in the prompt library and
     // share with users, groups or everyone. Stored through the storage
     // abstraction; `maxPromptsPerUser` of zero or less means no limit. When
@@ -844,7 +876,26 @@ export const platformConfigSchema = z
           .prefault({})
       })
       .passthrough()
-      .prefault({})
+      .prefault({}),
+    /**
+     * Tool approval defaults (#2945): whether a person approves a model's tool
+     * call before it runs. `defaults.internal` / `defaults.external` apply to
+     * tools of that data flow, `defaults.default` to the rest. Modes:
+     * `never` (run), `writes` (ask unless the call only reads), `always`.
+     * Absent means `never`: approval is opt-in. Installations, tools, actions
+     * and apps can only tighten this (`utils/toolApproval.js`).
+     */
+    toolApproval: z
+      .object({
+        defaults: z
+          .object({
+            default: z.enum(APPROVAL_MODES).optional(),
+            internal: z.enum(APPROVAL_MODES).optional(),
+            external: z.enum(APPROVAL_MODES).optional()
+          })
+          .optional()
+      })
+      .optional()
   })
   .passthrough();
 

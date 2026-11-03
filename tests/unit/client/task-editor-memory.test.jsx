@@ -44,7 +44,18 @@ jest.mock('../../../client/src/features/tasks/hooks/useScheduledTasksConfig', ()
   useScheduledTaskLimits: jest.fn()
 }));
 
+jest.mock('../../../client/src/shared/components/Icon', () => ({
+  __esModule: true,
+  default: ({ name }) => <span data-testid={`icon-${name}`} />
+}));
+// The attached-files section of the editor reads and writes through these.
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => ({ platformConfig: {} })
+}));
 jest.mock('../../../client/src/api', () => ({
+  fetchScheduledTaskFiles: jest.fn(async () => ({ items: [] })),
+  uploadScheduledTaskFile: jest.fn(async () => ({ file: { id: 'file_1' } })),
+  deleteScheduledTaskFile: jest.fn(async () => ({ deleted: true })),
   browserTimezone: () => 'Europe/Berlin',
   createScheduledTask: jest.fn(),
   fetchModels: jest.fn(),

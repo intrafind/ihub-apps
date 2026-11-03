@@ -16,6 +16,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
+import { actorSnapshot } from './executionActor.js';
 
 /** Presence kind announcing which worker holds a running execution's abort controller. */
 export const EXECUTION_PRESENCE_KIND = 'execution';
@@ -422,7 +423,10 @@ export class WorkflowEngine {
         ...startData,
         _workflow: {
           startedBy: options.user?.id || 'anonymous',
-          startedAt: new Date().toISOString()
+          startedAt: new Date().toISOString(),
+          // Who the execution acts as, so a resume after a person's answer
+          // continues as this principal, not the answerer (executionActor.js).
+          actor: actorSnapshot(options.user)
         },
         _executionDeadline: executionDeadline,
         _workflowSummary: workflowSummary

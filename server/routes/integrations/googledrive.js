@@ -13,12 +13,15 @@ import rateLimit from 'express-rate-limit';
 import {
   sendInternalError,
   sendAuthRequired,
-  sendBadRequest,
-  sendErrorResponse
+  sendBadRequest
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
-import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
-import { requireCloudStorageGrant } from './cloudStorageAccess.js';
+import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
+import {
+  requireCloudStorageGrant,
+  requestedProviderId,
+  respondIfAuthRequired
+} from './cloudStorageAccess.js';
 
 const router = express.Router();
 
@@ -39,14 +42,6 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('googledrive'));
 
-// Rate limiter for Google Drive OAuth initiation to prevent abuse/DoS
-const googleDriveAuthLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
 // Rate limiter for status and other authenticated endpoints
 const googleDriveApiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -55,30 +50,13 @@ const googleDriveApiLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
-createOAuthIntegrationRouter(router, {
+// The OAuth callback registered in the vendor app: an alias of the one integration
+// callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
+// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+registerIntegrationCallbackAlias(router, {
   providerKey: 'googledrive',
-  displayName: 'Google Drive',
   requiresProviderId: true,
-  usesPkce: true,
-  authLimiter: googleDriveAuthLimiter,
-  statusLimiter: googleDriveApiLimiter,
-  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
-    GoogleDriveService.generateAuthUrl(providerId, state, codeVerifier, req),
-  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
-    GoogleDriveService.exchangeCodeForTokens(providerId, code, codeVerifier, req),
-  storeUserTokens: (userId, tokens) => GoogleDriveService.storeUserTokens(userId, tokens),
-  isUserAuthenticated: (userId, providerId) =>
-    GoogleDriveService.isUserAuthenticated(userId, providerId),
-  getUserInfo: (userId, providerId) => GoogleDriveService.getUserInfo(userId, providerId),
-  getTokenExpirationInfo: (userId, providerId) =>
-    GoogleDriveService.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId) => GoogleDriveService.deleteUserTokens(userId, providerId),
-  formatUserInfo: userInfo => ({
-    displayName: userInfo.displayName,
-    mail: userInfo.mail,
-    picture: userInfo.picture
-  })
+  stack: 'cloud-storage'
 });
 
 /**
@@ -198,9 +176,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'list Google Drive drives');
   }
@@ -252,9 +228,7 @@ router.get('/items', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'list Google Drive items');
   }
@@ -300,9 +274,7 @@ router.get('/download', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'download Google Drive file');
   }

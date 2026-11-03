@@ -19,6 +19,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import useIntegrationRequestCount from '../hooks/useIntegrationRequestCount';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import IHubLogo from '../../../shared/components/IHubLogo';
@@ -27,6 +28,25 @@ import IHubLogo from '../../../shared/components/IHubLogo';
 const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
 // Items within aiWorkspace visible to content-admin-only users
 const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'projects']);
+
+/** A count next to a nav item (open integration requests), with its meaning for screen readers. */
+function NavBadge({ item, isCollapsed }) {
+  if (!item.badge) return null;
+  const text = item.badge > 99 ? '99+' : String(item.badge);
+  return (
+    <span
+      className={
+        isCollapsed
+          ? 'absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-indigo-600 text-white text-[0.625rem] leading-4 text-center font-semibold'
+          : 'ml-auto min-w-5 h-5 px-1.5 rounded-full bg-indigo-600 text-white text-xs leading-5 text-center font-semibold'
+      }
+      data-testid={`nav-badge-${item.key}`}
+    >
+      <span aria-hidden="true">{text}</span>
+      <span className="sr-only">{item.badgeLabel || text}</span>
+    </span>
+  );
+}
 
 function NavItem({ item, isCollapsed }) {
   const location = useLocation();
@@ -43,13 +63,14 @@ function NavItem({ item, isCollapsed }) {
         <Link
           to={item.href}
           aria-current={isActive ? 'page' : undefined}
-          className={`flex items-center justify-center h-9 w-9 mx-auto rounded-md transition-colors ${
+          className={`relative flex items-center justify-center h-9 w-9 mx-auto rounded-md transition-colors ${
             isActive
               ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
           }`}
         >
           <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+          <NavBadge item={item} isCollapsed />
         </Link>
         {/* Flyout tooltip */}
         <div
@@ -74,6 +95,7 @@ function NavItem({ item, isCollapsed }) {
     >
       <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
       <span>{item.label}</span>
+      <NavBadge item={item} isCollapsed={false} />
     </Link>
   );
 }
@@ -232,7 +254,15 @@ export default function AdminSidebar({ onMobileToggle }) {
   const isContentAdminOnly =
     user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin;
 
-  let sections = getAdminNavSections({ t, showAdminPage, featureFlags });
+  // Open integration requests (#2926); only full admins can read the queue.
+  const openIntegrationRequests = useIntegrationRequestCount(Boolean(user) && !isContentAdminOnly);
+
+  let sections = getAdminNavSections({
+    t,
+    showAdminPage,
+    featureFlags,
+    badges: { integrations: openIntegrationRequests }
+  });
 
   // Filter sections for content-admin-only users
   if (isContentAdminOnly) {

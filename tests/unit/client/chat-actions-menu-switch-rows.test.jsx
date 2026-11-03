@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
  * On/off rows of the `+` actions menu (intrafind/ihub-apps#2925).
  *
- * Tools, MCP-server groups and the embedded host's message-context toggles
- * are `menuitemcheckbox` items of the `role="menu"`. The switch drawn in each
+ * The embedded host's message-context toggles are `menuitemcheckbox` items
+ * of the `role="menu"`, like the integration rows of the picker (#2923,
+ * `integration-picker.test.jsx`). The switch drawn in each
  * row is the shared `SwitchIndicator` (visual only): a checkbox or switch
  * inside a menu item would be a nested interactive control, and a bare
  * checkbox in a menu is not reachable with the arrow keys. These tests pin
@@ -47,13 +48,8 @@ jest.mock('../../../client/src/features/voice/components', () => ({
   }
 }));
 
-const mockFetchToolsBasic = jest.fn();
 jest.mock('../../../client/src/api', () => ({
-  fetchToolsBasic: (...args) => mockFetchToolsBasic(...args)
-}));
-
-jest.mock('../../../client/src/utils/toolUsageTracker', () => ({
-  trackToolUsage: jest.fn()
+  saveIntegrationPreferences: jest.fn()
 }));
 
 let mockEmbeddedHost = null;
@@ -63,18 +59,6 @@ jest.mock('../../../client/src/features/office/contexts/EmbeddedHostContext', ()
 
 const ChatInputActionsMenu =
   require('../../../client/src/features/chat/components/ChatInputActionsMenu').default;
-
-const BRAVE = { id: 'braveSearch', name: 'Brave Search', description: 'Search the web.' };
-const DRAW = {
-  id: 'drawio_create',
-  name: 'Create diagram',
-  _mcp: { serverId: 'drawio', serverName: 'draw.io' }
-};
-const SHAPES = {
-  id: 'drawio_shapes',
-  name: 'Search shapes',
-  _mcp: { serverId: 'drawio', serverName: 'draw.io' }
-};
 
 /**
  * Asserts that a row draws the shared SwitchIndicator in `state`, hidden from
@@ -90,68 +74,8 @@ function expectVisualOnlySwitch(row, state) {
   expect(row.querySelector('input, button, [role="switch"]')).toBeNull();
 }
 
-describe('ChatInputActionsMenu tool rows', () => {
-  beforeEach(() => {
-    mockEmbeddedHost = null;
-    mockFetchToolsBasic.mockReset();
-    mockFetchToolsBasic.mockResolvedValue([BRAVE, DRAW, SHAPES]);
-  });
-
-  async function openToolsMenu(enabledTools) {
-    const onEnabledToolsChange = jest.fn();
-    render(
-      <ChatInputActionsMenu
-        app={{ id: 'demo', tools: ['braveSearch', 'drawio_create', 'drawio_shapes'] }}
-        enabledTools={enabledTools}
-        onEnabledToolsChange={onEnabledToolsChange}
-        uploadConfig={{}}
-      />
-    );
-    await waitFor(() => expect(mockFetchToolsBasic).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'Actions menu' }));
-    await screen.findByText('Brave Search');
-    return { onEnabledToolsChange };
-  }
-
-  it('toggles a single tool exactly once on click, with a visual-only switch', async () => {
-    const { onEnabledToolsChange } = await openToolsMenu(['braveSearch']);
-
-    const row = screen.getByRole('menuitemcheckbox', { name: /Brave Search/ });
-    expect(row).toHaveAttribute('aria-checked', 'true');
-    expectVisualOnlySwitch(row, 'on');
-
-    fireEvent.click(row);
-    expect(onEnabledToolsChange).toHaveBeenCalledTimes(1);
-    expect(onEnabledToolsChange).toHaveBeenCalledWith([]);
-  });
-
-  it('toggles a single tool on Space', async () => {
-    const { onEnabledToolsChange } = await openToolsMenu([]);
-
-    fireEvent.keyDown(screen.getByRole('menuitemcheckbox', { name: /Brave Search/ }), {
-      key: ' '
-    });
-    expect(onEnabledToolsChange).toHaveBeenCalledTimes(1);
-    expect(onEnabledToolsChange).toHaveBeenCalledWith(['braveSearch']);
-  });
-
-  it('shows a partly enabled server as mixed and enables all of it on click', async () => {
-    const { onEnabledToolsChange } = await openToolsMenu(['drawio_create']);
-
-    const row = screen.getByRole('menuitemcheckbox', { name: /draw\.io/ });
-    expect(row).toHaveAttribute('aria-checked', 'mixed');
-    expectVisualOnlySwitch(row, 'off');
-
-    fireEvent.click(row);
-    expect(onEnabledToolsChange).toHaveBeenCalledTimes(1);
-    expect(onEnabledToolsChange).toHaveBeenCalledWith(['drawio_create', 'drawio_shapes']);
-  });
-});
-
 describe('ChatInputActionsMenu message-context rows', () => {
   beforeEach(() => {
-    mockFetchToolsBasic.mockReset();
-    mockFetchToolsBasic.mockResolvedValue([]);
     mockEmbeddedHost = {
       contextToggles: [
         {
@@ -180,7 +104,7 @@ describe('ChatInputActionsMenu message-context rows', () => {
     return { onHostContextFlagChange };
   }
 
-  it('renders each toggle as a menuitemcheckbox in the roving tab order', () => {
+  it('renders each toggle as a menuitemcheckbox the menu navigation can focus', () => {
     openContextMenu({ includeSelection: true });
 
     const menu = screen.getByRole('menu');
@@ -191,8 +115,11 @@ describe('ChatInputActionsMenu message-context rows', () => {
     expect(page).toHaveAttribute('aria-checked', 'true');
     expect(selection).toHaveAttribute('aria-checked', 'true');
     expectVisualOnlySwitch(page, 'on');
-    // One item owns tabindex 0, the others -1.
-    expect([page, selection].map(row => row.getAttribute('tabindex')).sort()).toEqual(['-1', '0']);
+    // Focusable by script like the picker's rows; `useKeyboardNavigation`
+    // hands the active item tabindex 0 (jsdom reports no layout, so it stays idle).
+    expect(page).toHaveAttribute('tabindex', '-1');
+    page.focus();
+    expect(page).toHaveFocus();
   });
 
   it('flips the flag once on click, Space and Enter', () => {

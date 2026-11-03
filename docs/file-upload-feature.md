@@ -247,7 +247,7 @@ Seite 1 von 3
 | Lines | One line of text per line of the page. Words are no longer separated by double spaces; a hyphen at the end of a line stays where it is (`re-` / `gelt`) |
 | A page without a text layer inside a PDF that has text elsewhere | `[Page 2: no extractable text]`, so a missing page is visible |
 | Headings | `#` … `######`, **when the PDF tells where its headings are** (see below) |
-| Tables | A Markdown table when the PDF is tagged (see below); otherwise the cells of a row are one line |
+| Tables | A Markdown table when the PDF is tagged, or when the position of the text shows one (see below); otherwise the cells of a row are one line |
 | Running headers and footers (`Page 3 of 10`) | Kept as ordinary text |
 | Scanned PDF (no text, or less than 50 characters of real text — markers do not count) | No text; the first five pages are rendered as images for vision models, as before. Text on a later page is kept instead, so it is not lost |
 
@@ -257,7 +257,9 @@ Seite 1 von 3
 2. **Outline** (bookmarks) — the entries of the outline are looked up as lines on the page they point to; the nesting depth is the heading level. The outline is only used when at least half of its entries are found in the text of their pages.
 3. **Font size** — a last resort for untagged PDFs without an outline: short lines that are clearly larger than the body text (at least 15 %; 5 % for a numbered line such as `2.1 Geltungsbereich`) become headings, the largest size is `#`. Nothing is marked when a clear picture is missing — large text that makes up a fifth of the document, more than four sizes, sentences that end in a period, lines that repeat on most pages (running headers), code in a fixed-width font. Headings set in bold at body size cannot be recognised this way; the model sees them as ordinary lines.
 
-Heading levels from the outline and from the font size are relative (a document that starts with a level 2 heading shows it as `#`); levels from tags are the ones in the file. No text is dropped or reordered: the structure only adds `#` and `|`.
+**Tables without tags.** A page of an untagged PDF is also searched for tables by where the text sits: cells that line up in columns from row to row, with the lines of a wrapped cell joined into one row. The first row is marked as the header (a `---` row follows it) when it is set in another font or size than the rows below; a table that continues on the next page starts again with its repeated header. Detection is conservative and leaves the lines as they are when the picture is not clear: fewer than three rows or two columns, lists with bullets or numbers, a table of contents (titles with page numbers), code in a fixed-width font, justified text and two columns of prose. Tags win: a page with a tagged table is read from the tags only. A line that ends in a hyphen keeps a space after it inside a cell, as everywhere else.
+
+Heading levels from the outline and from the font size are relative (a document that starts with a level 2 heading shows it as `#`); levels from tags are the ones in the file. No text is dropped, and outside a recognised table nothing is reordered: the structure only adds `#` and `|`.
 
 Multi-column layouts are read in the order the PDF stores the text, which is not always the reading order.
 

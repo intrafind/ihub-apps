@@ -13,7 +13,8 @@ import { buildPptx } from './buildPptx.js';
  * template has one (`assets.powerpointTemplate`), otherwise into iHub's
  * built-in template made from the brand (`baseTemplate.js`).
  *
- * @param {Object} spec - See `buildPptx.js`; `brand` describes the built-in
+ * @param {Object} spec - See `buildPptx.js` (`templateMode: 'append'` keeps the
+ *   slides of an uploaded deck); `brand` describes the built-in
  *   template, `layouts` names the template's layouts by kind.
  * @param {Object} [assets]
  * @param {Uint8Array} [assets.powerpointTemplate]
@@ -26,7 +27,8 @@ export async function renderPptx(spec, assets = {}) {
     : await buildBaseTemplate({ ...spec.brand, logo: assets?.logo });
   const { buffer, slides, warnings } = await buildPptx(spec, {
     template,
-    layouts: spec.layouts
+    layouts: spec.layouts,
+    keepTemplateSlides: spec.templateMode === 'append'
   });
   // Read the result back: a package whose parts do not parse is an error,
   // not a download.

@@ -18,6 +18,10 @@ import configCache from '../../configCache.js';
 import tokenStorage from '../../services/TokenStorageService.js';
 import { runWithContext } from '../../utils/requestContext.js';
 import {
+  connectionIdFor,
+  getIntegrationConnectionService
+} from '../../services/integrations/auth/IntegrationConnectionService.js';
+import {
   cloudStorageCallbackPath,
   cloudStorageStatus,
   findCloudStorageProvider,
@@ -248,6 +252,26 @@ describe('storage providers as installations', () => {
     );
     assert.deepEqual(await listCloudStorageConnections('googledrive', 'googledrive'), []);
     assert.deepEqual(await listCloudStorageConnections('nextcloud'), [], 'an id is needed');
+    // The Connections dialog reads the connection index (seeded here; the
+    // re-index and every connect write it in production).
+    const connections = getIntegrationConnectionService();
+    for (const [integration, userId] of [
+      ['office365-main', 'erin'],
+      ['office365-main', 'frank'],
+      ['nextcloud', 'erin'],
+      ['nextcloud-branch', 'hana'],
+      ['nextcloud-branch', 'ivan']
+    ]) {
+      await connections.putConnection({
+        id: connectionIdFor(integration, { type: 'user', id: userId }),
+        integration,
+        principal: { type: 'user', id: userId },
+        kind: 'oauth-user',
+        status: 'active',
+        secretRef: `tokenstore:office365/${userId}__${integration}`,
+        createdAt: '2026-01-01T00:00:00Z'
+      });
+    }
     const viaConnector = await office365Connector.listConnections(INSTALLED[0]);
     assert.equal(viaConnector.length, 2);
     const status = office365Connector.status(INSTALLED[0]);

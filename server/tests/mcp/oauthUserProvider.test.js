@@ -6,8 +6,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import tokenStorage from '../../services/TokenStorageService.js';
+import { tokenStorageIdFor } from '../../services/integrations/auth/tokenSecrets.js';
 import {
-  tokenStorageIdFor,
   readUserTokens,
   writeUserTokens,
   listServerConnections,
@@ -24,10 +24,9 @@ import {
   registrationFingerprint
 } from '../../services/mcp/mcpOAuthClientStore.js';
 import {
-  issueMcpOAuthTicket,
-  verifyMcpOAuthTicket,
-  MCP_OAUTH_TICKET_TTL_MS
-} from '../../services/mcp/mcpOAuthTicket.js';
+  OAuthFlowStore,
+  OAUTH_FLOW_TTL_MS
+} from '../../services/integrations/auth/oauthFlowStore.js';
 import { buildMcpClientMetadata } from '../../services/mcp/mcpOAuthPublicUrl.js';
 import { validateClientMetadata } from '../../utils/clientIdMetadata.js';
 import { mcpServerConfigSchema } from '../../validators/mcpServerConfigSchema.js';
@@ -302,9 +301,10 @@ describe('McpUserOAuthProvider', () => {
   });
 });
 
-describe('MCP OAuth state ticket', () => {
+describe('MCP OAuth state (server-side flow record)', () => {
   const context = {
-    serverId: 'okta',
+    stack: 'mcp',
+    installationId: 'okta',
     userId: 'alice',
     returnUrl: '/chat/1',
     codeVerifier: 'the-pkce-verifier',
@@ -313,52 +313,52 @@ describe('MCP OAuth state ticket', () => {
     authorizationServerUrl: 'https://okta-mcp.example.com/',
     clientId: 'dcr-1',
     issRequired: true,
-    resource: 'https://okta-mcp.example.com/mcp'
+    resource: 'https://okta-mcp.example.com/mcp',
+    scopes: []
   };
 
-  it('signs the context and never carries the verifier in clear text', () => {
-    const ticket = issueMcpOAuthTicket(context);
-    const payload = Buffer.from(ticket.split('.')[0], 'base64url').toString('utf8');
-    expect(payload).not.toContain('the-pkce-verifier');
-    const verified = verifyMcpOAuthTicket(ticket);
-    expect(verified.ok).toBe(true);
-    expect(verified.ticket).toMatchObject({ ...context, codeVerifier: 'the-pkce-verifier' });
-    expect(verified.ticket.nonce).toEqual(expect.any(String));
+  it('keeps the context server-side; the state is an opaque random handle', async () => {
+    const store = new OAuthFlowStore({ documents: null });
+    const state = await store.create(context);
+    expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(state).not.toContain('alice');
+    const [record] = [...store.memory.values()];
+    expect(JSON.stringify(record)).not.toContain('the-pkce-verifier');
+    const consumed = await store.consume(state);
+    expect(consumed.ok).toBe(true);
+    expect(consumed.flow).toMatchObject({ ...context, codeVerifier: 'the-pkce-verifier' });
   });
 
-  it('rejects a tampered ticket', () => {
-    const ticket = issueMcpOAuthTicket(context);
-    const [payload, signature] = ticket.split('.');
-    const forged = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    forged.userId = 'mallory';
-    const forgedPayload = Buffer.from(JSON.stringify(forged)).toString('base64url');
-    expect(verifyMcpOAuthTicket(`${forgedPayload}.${signature}`)).toEqual({
-      ok: false,
-      reason: 'invalid'
-    });
-    // A different first character every time: a fixed 'x' leaves the signature
-    // unchanged (and valid) whenever it already starts with 'x'.
-    const swapped = signature[0] === 'x' ? 'y' : 'x';
-    expect(verifyMcpOAuthTicket(`${payload}.${swapped}${signature.slice(1)}`).ok).toBe(false);
-    expect(verifyMcpOAuthTicket('garbage').ok).toBe(false);
-    expect(verifyMcpOAuthTicket('').ok).toBe(false);
+  it('is single use and refuses unknown states', async () => {
+    const store = new OAuthFlowStore({ documents: null });
+    const state = await store.create(context);
+    expect((await store.consume(state)).ok).toBe(true);
+    expect(await store.consume(state)).toEqual({ ok: false, reason: 'invalid' });
+    expect((await store.consume('garbage')).ok).toBe(false);
+    expect((await store.consume('')).ok).toBe(false);
   });
 
-  it('refuses to issue a ticket without the issuer and client it is bound to', () => {
-    expect(() => issueMcpOAuthTicket({ ...context, issuer: '' })).toThrow(/issuer/);
-    expect(() => issueMcpOAuthTicket({ ...context, clientId: undefined })).toThrow(/clientId/);
-  });
-
-  it('expires after 15 minutes', () => {
-    const now = Date.now();
-    const ticket = issueMcpOAuthTicket({ ...context, now });
-    expect(verifyMcpOAuthTicket(ticket, { now: now + MCP_OAUTH_TICKET_TTL_MS - 1000 }).ok).toBe(
-      true
+  it('refuses to record a flow without the user, installation or verifier', async () => {
+    const store = new OAuthFlowStore({ documents: null });
+    await expect(store.create({ ...context, userId: '' })).rejects.toThrow(/userId/);
+    await expect(store.create({ ...context, installationId: undefined })).rejects.toThrow(
+      /installationId/
     );
-    expect(verifyMcpOAuthTicket(ticket, { now: now + MCP_OAUTH_TICKET_TTL_MS + 1000 })).toEqual({
-      ok: false,
-      reason: 'expired'
-    });
+    await expect(store.create({ ...context, codeVerifier: '' })).rejects.toThrow(/codeVerifier/);
+  });
+
+  it('expires after 15 minutes', async () => {
+    let now = Date.now();
+    const store = new OAuthFlowStore({ documents: null, now: () => now });
+    const fresh = await store.create(context);
+    now += OAUTH_FLOW_TTL_MS - 1000;
+    expect((await store.consume(fresh)).ok).toBe(true);
+    const stale = await store.create(context);
+    now += OAUTH_FLOW_TTL_MS + 1000;
+    const expired = await store.consume(stale);
+    expect(expired.ok).toBe(false);
+    expect(expired.reason).toBe('expired');
+    expect(expired.flow).not.toHaveProperty('codeVerifier');
   });
 });
 

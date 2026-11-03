@@ -23,6 +23,55 @@ tokenStorage.storageBasePath = tmp;
 tokenStorage.encryptionKey = 'd'.repeat(64);
 
 const JiraService = (await import('../services/integrations/JiraService.js')).default;
+const { default: configCache } = await import('../configCache.js');
+const { default: credentialService } = await import('../services/CredentialService.js');
+const { IntegrationConnectionService } =
+  await import('../services/integrations/auth/IntegrationConnectionService.js');
+const { setIntegrationConnectionServiceForTests } =
+  await import('../services/integrations/auth/IntegrationConnectionService.js');
+const { OAuthFlowStore } = await import('../services/integrations/auth/oauthFlowStore.js');
+const { fakeTokenEndpoint, connectThroughService } =
+  await import('./helpers/integrationConnect.js');
+
+// The Jira installation, its client secret and a local token endpoint.
+configCache.getIntegrations = () => ({
+  data: {
+    installed: [
+      {
+        id: 'jira',
+        definition: 'com.intrafind/jira',
+        enabled: true,
+        values: {
+          clientId: 'client-1',
+          clientSecretRef: 'jira-secret',
+          redirectUri: 'https://ihub.example/api/integrations/jira/callback'
+        }
+      }
+    ]
+  }
+});
+credentialService.resolveSecret = () => 'jira-client-secret';
+const tokenEndpoint = fakeTokenEndpoint([{}]);
+const originalStrategy = JiraService.oauthStrategy;
+JiraService.oauthStrategy = function oauthStrategyForTest() {
+  const strategy = originalStrategy.call(this);
+  return {
+    ...strategy,
+    async resolve(ctx) {
+      return { ...(await strategy.resolve(ctx)), fetchFn: tokenEndpoint };
+    }
+  };
+};
+const service = new IntegrationConnectionService({
+  documents: null,
+  flowStore: new OAuthFlowStore({ documents: null })
+});
+setIntegrationConnectionServiceForTests(service);
+
+/** Connect a user (or connect again: a re-consent rewrites the same file). */
+function connect(userId) {
+  return connectThroughService({ service, installationId: 'jira', userId });
+}
 const {
   JIRA_CONNECTION_COUNT_REFRESH_MS,
   adjustJiraConnectionCount,
@@ -35,7 +84,6 @@ const connector = (
 ).default;
 
 const jiraDir = path.join(tmp, 'jira');
-const tokens = { accessToken: 'a', refreshToken: 'r', expiresIn: 3600 };
 
 /** A token file another worker wrote; the listing only needs the file to exist. */
 async function writeForeignTokenFile(userId) {
@@ -56,18 +104,19 @@ describe('Jira connection count', () => {
   });
   beforeEach(async () => {
     await clearTokenFiles();
+    service.memory.clear();
     resetJiraConnectionCount();
   });
   after(async () => {
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
-  it('counts a first connection, not a token refresh, and a disconnect', async () => {
-    await JiraService.storeUserTokens('u1', tokens);
+  it('counts a first connection, not a reconnect, and a disconnect', async () => {
+    await connect('u1');
     assert.equal(getJiraConnectionCount(), 1);
-    await JiraService.storeUserTokens('u1', { ...tokens, accessToken: 'refreshed' });
-    assert.equal(getJiraConnectionCount(), 1, 'a refresh is not a new connection');
-    await JiraService.storeUserTokens('u2', tokens);
+    await connect('u1');
+    assert.equal(getJiraConnectionCount(), 1, 'a reconnect is not a new connection');
+    await connect('u2');
     assert.equal(getJiraConnectionCount(), 2);
 
     assert.equal(await JiraService.deleteUserTokens('u1'), true);
@@ -129,10 +178,10 @@ describe('Jira connection count', () => {
   });
 
   it('listConnections() and an admin disconnect keep the count exact', async () => {
-    await JiraService.storeUserTokens('u1', tokens);
-    await JiraService.storeUserTokens('u2', tokens);
+    await connect('u1');
+    await connect('u2');
     resetJiraConnectionCount();
-    const list = await connector.listConnections();
+    const list = await connector.listConnections({ id: 'jira' });
     assert.deepEqual(
       list.map(c => c.userId),
       ['u1', 'u2']

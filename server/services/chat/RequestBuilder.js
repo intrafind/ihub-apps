@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { appendIntegrationGuidance } from '../integrations/actionGuidance.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { getToolsForApp, resolveAppNativeWebSearch, READ_URL_TOOL_ID } from '../../toolLoader.js';
@@ -688,6 +689,9 @@ class RequestBuilder {
         await getToolsForApp(app, language, context),
         integrationScopes
       );
+      // How to use the integrations this turn offers: their instructions and
+      // the guidance of each offered action (#2974).
+      appendIntegrationGuidance(llmMessages, tools);
       // Native search is the app's own: it needs no engine installation.
       const nativeWebSearch = resolveAppNativeWebSearch(
         app,

@@ -17,13 +17,15 @@ You create Word documents with the `create_docx` tool. You write the content as 
 - **PDF (`create_pdf`, if the `pdf` skill is available)** when the user wants a finished, printable document with a fixed layout, SVG charts, QR codes or a multi-column layout.
 - **PowerPoint (`create_pptx`, `pptx` skill)** when the user wants a slide deck or presentation.
 - **Excel (`create_xlsx`, `xlsx` skill)** when the user wants a spreadsheet, workbook or multi-sheet data table with formulas.
-- **Code, HTML artifacts, CSV or archives (`create_file` / `create_zip`, `files` skill)** when the user wants source code, a standalone interactive HTML page, a calendar invite (`.ics`), or a ZIP archive.
+- **Interactive HTML pages or standalone SVGs (`create_web_artifact`, `web-artifacts` skill)** when the user wants an interactive dashboard, calculator, simulator or a standalone `.svg`. These go through `create_web_artifact`, not `create_file`: it adds the brand tokens, checks the page and shows a sandboxed preview.
+- **Code, CSV, calendar invites or archives (`create_file` / `create_zip`, `files` skill)** when the user wants source code, a data file, a calendar invite (`.ics`), or a ZIP archive.
 - If the user just says "a document", ask only if it matters; otherwise prefer Word for drafts and PDF for final hand-outs.
 
 ## How uploaded Word files work
 
 - **Reading uploaded `.docx` files:** When the user uploads a Word document in chat, the platform has **already extracted its text and tables into `<content type="document">` in your prompt context**. Read, summarize or answer questions directly from that context.
 - **Revising an uploaded `.docx` file:** `create_docx` always generates a fresh Word document; it cannot insert Track Changes (`<w:ins>` / `<w:del>`) or comments into the original file in place. When the user asks to revise or rewrite an uploaded Word document, generate a new `.docx` from the extracted text in your context.
+- **Using an uploaded `.docx` as a template:** when its `<content>` tag says `can_use_as_template="true"`, pass its `id` as `templateFileId`. The new document then gets the upload's styles, headers/footers and page setup. `templateMode` decides what happens to the upload's own body text: `styles_only` (the default when the file has no `{{content}}` marker) drops it, `fill_placeholders` fills `{{title}}`, `{{date}}`, … and inserts your content at `{{content}}`, `append` adds your content after it. Do not claim to have used the user's template unless you passed `templateFileId`.
 
 ## The company template
 
@@ -59,7 +61,7 @@ If `create_docx` returns `warnings`, read them. They name content that was skipp
 - **Images** only as `data:image/png;base64,…` or `data:image/jpeg;base64,…`; you cannot fetch images from URLs.
 - **Sub- and superscript**: `H<sub>2</sub>O`, `m<sup>2</sup>`.
 - **Not supported**: Mermaid, LaTeX math, HTML layout, footnotes, comments and tracked changes. Charts are not drawn in Word documents; give the numbers as a table, or create a PDF or presentation for charts.
-- **Letters**: set `showTitle: false` and `pageNumbers: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body.
+- **Letters**: set `showTitle: false` and `pageNumbers: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body. A document template that sets `document.pageNumbers` wins over `pageNumbers: false`, so with such a template a letter can still show page numbers.
 
 ## Quality checklist
 

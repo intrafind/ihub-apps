@@ -154,7 +154,7 @@ export class AgentLoop {
       opts.resolveNativeWebSearchFallbackTools || defaultResolveNativeWebSearchFallbackTools;
   }
 
-  /** Register a seam `{ name, preStep, preTool, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
+  /** Register a seam `{ name, preStep, preTool, liftResult, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
   use(seam) {
     if (seam) this._seams.push(seam);
     return this;
@@ -182,6 +182,10 @@ export class AgentLoop {
    * @param {Array} [request.seams] - per-run seams (in addition to `use()`d ones)
    * @param {string} [request.purpose='agent-step']
    * @param {number} [request.timeoutMs] - hard timeout for each model call
+   * @param {Object} [request.resume] - continue a turn that paused on an approval:
+   *   `{ toolCall: { id, type, function: { name, arguments } }, args }`. Before the
+   *   first model call the loop runs this call with `args` (through the seams, like any
+   *   call) and puts its result where the transcript's placeholder for `toolCall.id` is.
    * @returns {Promise<Object>} LoopResult
    */
   async run(request) {
@@ -384,7 +388,51 @@ export class AgentLoop {
       await applyNativeWebSearchFallback('provider rejected native web search earlier');
     }
 
+    /** The result of a run a seam ended (pause, passthrough answer, refusal). */
+    const terminalResult = terminal =>
+      buildResult(terminal.status || 'completed', {
+        finishReason: terminal.finishReason || finishReason,
+        pendingInteraction: terminal.pendingInteraction,
+        content: terminal.content !== undefined ? content + terminal.content : content,
+        ...(terminal.error ? { error: terminal.error } : {}),
+        terminate: terminal
+      });
+
     try {
+      // ── resume: run the one call a person approved ─────────────────────
+      // A turn that paused on an approval continues here: the transcript ends
+      // with the model's tool call and an `awaiting_approval` placeholder for
+      // it. The call runs with exactly the arguments that were approved (the
+      // model is not asked to issue it again) and its result takes the
+      // placeholder's place; then the model continues as usual.
+      if (request.resume?.toolCall && toolExecution === 'server') {
+        const resumed = request.resume;
+        const call = resumed.toolCall;
+        const item = {
+          call,
+          toolDef: matchTool(call.function?.name, tools),
+          args: resumed.args && typeof resumed.args === 'object' ? resumed.args : {},
+          argsRepaired: false,
+          position: 0
+        };
+        ctx.iteration = 0;
+        const outcome = await this._executeOne(ctx, item, {
+          seams,
+          iteration: 0,
+          groupIndex: 0,
+          toolExecution
+        });
+        const [first, ...rest] = outcome.messages;
+        const placeholder = ctx.messages.findIndex(
+          m => m?.role === 'tool' && m.tool_call_id === call.id
+        );
+        if (first && placeholder >= 0) ctx.messages.splice(placeholder, 1, first);
+        else if (first) ctx.messages.push(first);
+        // A circuit-breaker nudge (a user message) goes after the tool block.
+        for (const message of rest) ctx.messages.push(message);
+        if (outcome.terminate) return terminalResult(outcome.terminate);
+      }
+
       // Past the round cap, exactly one more call is allowed when a budget gate
       // fired on the last round without a tool-less final call having been
       // made yet (a cap of 1 spends its only round on tools).
@@ -739,14 +787,7 @@ export class AgentLoop {
         }
 
         if (aborted) throw aborted;
-        if (terminal) {
-          return buildResult(terminal.status || 'completed', {
-            finishReason: terminal.finishReason || finishReason,
-            pendingInteraction: terminal.pendingInteraction,
-            content: terminal.content !== undefined ? content + terminal.content : content,
-            terminate: terminal
-          });
-        }
+        if (terminal) return terminalResult(terminal);
 
         // ── proactive compaction ────────────────────────────────────────
         const compaction = compactIfOversized(ctx.messages, {
@@ -947,6 +988,8 @@ export class AgentLoop {
     let message;
     let rawResult;
     let failure = null;
+    // Files a seam took out of the result before it was serialised (`liftResult`).
+    let lifted = null;
     // Sources the call reports beside its result (services/sources/toolCallScope).
     const reported = [];
     if (!toolDef) {
@@ -1002,6 +1045,13 @@ export class AgentLoop {
           message = rawResult;
           rawResult = undefined;
         } else {
+          // A seam may take binary payloads out of the result (an MCP tool's
+          // base64 blocks) before it is serialised and bounded, so they never
+          // reach the transcript or the run log's spill store.
+          const holder = { rawResult };
+          await runHooks(seams, 'liftResult', ctx, info, holder);
+          rawResult = holder.rawResult;
+          lifted = holder.lifted || null;
           message = {
             role: 'tool',
             tool_call_id: call.id,
@@ -1026,6 +1076,7 @@ export class AgentLoop {
       message: bound.message,
       durationMs: Date.now() - started,
       error: failure,
+      ...(lifted ? { lifted } : {}),
       // What the call found, taken from the full result: the previews that
       // reach clients are too short to hold it (see services/sources).
       sources: extractToolSources({

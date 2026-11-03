@@ -42,6 +42,7 @@ import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
 import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from './routes/mcpOAuth.js';
+import registerIntegrationOAuthCallback from './routes/integrations/oauthCallback.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
 import registerUserSkillRoutes from './routes/userSkillRoutes.js';
 import registerExportRoutes from './routes/exports.js';
@@ -83,6 +84,7 @@ import conversationStateManager from './services/integrations/ConversationStateM
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
+import { startActionUsageTracking } from './services/integrations/actionUsage.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -102,6 +104,8 @@ import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
 import personalApiKeyRoutes from './routes/integrations/personalApiKeys.js';
 import connectionRoutes from './routes/integrations/connections.js';
+import userIntegrationRoutes from './routes/integrations/userIntegrations.js';
+import integrationRequestRoutes from './routes/integrations/integrationRequests.js';
 import integrationScopeRoutes from './routes/integrations/scopes.js';
 import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
@@ -836,6 +840,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerToolRoutes(app);
   registerMcpAppRoutes(app);
   registerMcpOAuthRoutes(app);
+  registerIntegrationOAuthCallback(app);
   registerSkillRoutes(app);
   registerUserSkillRoutes(app);
   registerExportRoutes(app);
@@ -865,6 +870,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // A chat clarification that is settled (answered, superseded or expired)
   // ends the run its question paused.
   registerChatClarificationLifecycle();
+  // Approvals, rejections and expiries of integration actions, for the
+  // action detail's Usage (#2974).
+  startActionUsageTracking(interactionService);
   // ownsClusterSingletons computed above, before the rollup/audit schedulers.
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();
@@ -888,6 +896,13 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
+  // The user's integrations and the one connect flow (GET /api/integrations,
+  // POST /api/integrations/:id/connect|reconnect|disconnect). First, so an
+  // installation id that equals a provider slug still reaches /:id/connect.
+  // Requests for catalog integrations (GET/POST /api/integrations/requests), before
+  // the user integrations, whose GET /:id hands ids it does not know on.
+  app.use(buildApiPath('/integrations/requests'), integrationRequestRoutes);
+  app.use(buildApiPath('/integrations'), userIntegrationRoutes);
   app.use(buildApiPath('/integrations/jira'), jiraRoutes);
   app.use(buildApiPath('/integrations/office365'), office365Routes);
   app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);
@@ -1078,6 +1093,24 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.error({
       component: 'Server',
       message: 'Legacy runtime store import failed; falling back to the legacy files',
+      error: error.message
+    });
+  }
+
+  // One-time re-index of the per-user integration tokens (Jira, cloud
+  // storage, per-user MCP) into the connection index, after the MCP manager
+  // knows its servers. Idempotent, marker-guarded and run under a storage
+  // lock, so every worker may call it. After the worker is serving, like the
+  // imports above: nothing on the request path waits on it, because the
+  // connection service indexes a token file it meets without a record
+  // (create-only, so the two never overwrite each other).
+  try {
+    const { reindexIntegrationConnections } =
+      await import('./services/integrations/auth/connectionReindex.js');
+    await reindexIntegrationConnections();
+  } catch (error) {
+    logger.warn('Integration connection re-index failed; connections are indexed as used', {
+      component: 'Server',
       error: error.message
     });
   }

@@ -10,7 +10,7 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, sources,
+ * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, integrationAuthRequired, sources,
  * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
@@ -27,12 +27,38 @@ import {
 import { insertSupportMarkers } from '../../../../shared/sources/index.js';
 import { generatedFilesOf } from '../../../../shared/generatedFiles.js';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
-import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
+import { buildAuthPrompts } from '../integrations/connect/authPrompts';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
-  isClarificationInteraction
+  isClarificationInteraction,
+  isToolApprovalInteraction
 } from '../../shared/run/interactionToCheckpoint';
+
+/**
+ * Build the `toolApproval` message field from a chat tool approval (#2945):
+ * what `ApprovalCard` shows. The arguments are data to display, never markup.
+ *
+ * @param {Object} interaction - interaction of kind `approval` raised by a chat turn
+ * @returns {Object} `{ interactionId, status, toolId, toolName, integration, sideEffect,
+ *   dataFlow, args, justification, expiresAt }`
+ */
+export function buildToolApproval(interaction) {
+  const display = interaction.prompt?.displayData || {};
+  return {
+    interactionId: interaction.id,
+    status: interaction.status || 'pending',
+    toolId: display.toolId || interaction.source?.toolId || '',
+    toolName: display.toolName || display.toolId || interaction.source?.toolId || '',
+    integration: display.integration || null,
+    sideEffect: display.sideEffect || 'unknown',
+    sideEffectSource: display.sideEffectSource || null,
+    dataFlow: display.dataFlow || 'internal',
+    args: display.args && typeof display.args === 'object' ? display.args : {},
+    justification: typeof display.justification === 'string' ? display.justification : '',
+    expiresAt: interaction.policy?.expiresAt || null
+  };
+}
 
 /** Fallback when a stream/error frame carries no message (callers pass the translated string). */
 export const DEFAULT_STREAM_ERROR_MESSAGE = 'An error occurred during streaming';
@@ -67,24 +93,8 @@ function last(list, predicate) {
   return null;
 }
 
-/**
- * Project a run onto the assistant message.
- *
- * @param {Object|null} run - RunState from the run reducer
- * @param {Object} [options]
- * @param {string} [options.fallbackErrorMessage] - Used when a stream/error frame has no message
- * @returns {{ content: string, loading: boolean, extras: Object }}
- */
-export function projectRunToMessage(run, options = {}) {
-  if (!run) return { content: '', loading: false, extras: {} };
-  const fallbackErrorMessage = options.fallbackErrorMessage || DEFAULT_STREAM_ERROR_MESSAGE;
-  const extras = {};
-  const finished = isRunFinished(run);
-  const interactions = getInteractions(run);
-  // The run behind the message: feedback and human events are recorded on it.
-  if (run.runId) extras.runId = run.runId;
-
-  // ── content ───────────────────────────────────────────────────────────
+/** The answer text with the run's sources and, on the legacy error path, its error appended. */
+function contentOf(run, extras, fallbackErrorMessage) {
   // Everything the run found (`sources/added`, folded by the reducer). Google's
   // answer text carries no links: its grounding supports say which passage
   // each source backs, and the markers go there — the stored answer gets the
@@ -97,30 +107,40 @@ export function projectRunToMessage(run, options = {}) {
     // Legacy 'error' path: the error text is appended to whatever streamed.
     content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
   }
+  return content;
+}
 
-  // ── reasoning / media ────────────────────────────────────────────────
-  if (run.thinking?.length) extras.thoughts = run.thinking;
-  if (run.images?.length) extras.images = run.images;
-
-  // ── clarification (ask_user) ─────────────────────────────────────────
+/** The clarification (ask_user) card. @returns {boolean} Whether the run waits for the answer. */
+function addClarification(extras, interactions) {
   const question = last(interactions, isClarificationInteraction);
-  let awaitingQuestion = false;
-  if (question) {
-    extras.clarification = buildClarification(question);
-    if (question.status === 'pending' && !finished) {
-      awaitingQuestion = true;
-      extras.awaitingInput = true;
-    } else if (question.status === 'pending') {
-      // Turn ended (status paused) while the question is still open.
-      awaitingQuestion = true;
-      extras.awaitingInput = true;
-    } else {
-      extras.awaitingInput = false;
-      extras.clarificationAnswered = true;
-    }
+  if (!question) return false;
+  extras.clarification = buildClarification(question);
+  // A question still open when the turn ended (status paused) waits just the same.
+  if (question.status === 'pending') {
+    extras.awaitingInput = true;
+    return true;
   }
+  extras.awaitingInput = false;
+  extras.clarificationAnswered = true;
+  return false;
+}
 
-  // ── chat-launched workflow: checkpoint, steps, result ────────────────
+/**
+ * Tool approval (#2945). A pending approval hands control back to the user like a
+ * question: the card waits for Approve / Reject, which the next message carries.
+ * @returns {boolean} Whether the run waits for the decision.
+ */
+function addToolApproval(extras, interactions) {
+  const approval = last(interactions, isToolApprovalInteraction);
+  if (!approval) return false;
+  extras.toolApproval = buildToolApproval(approval);
+  if (approval.status !== 'pending') return false;
+  extras.awaitingInput = true;
+  return true;
+}
+
+/** Chat-launched workflow: checkpoint, steps, result. */
+function addWorkflowState(extras, run, interactions, finished) {
   const workflow = run.meta?.extra?.workflow;
   const checkpoint = last(interactions, isCheckpointInteraction);
   if (checkpoint) {
@@ -145,8 +165,10 @@ export function projectRunToMessage(run, options = {}) {
     extras.workflowResult = workflowResultOf(run);
     extras.outputFormat = workflow.outputFormat || 'markdown';
   }
+}
 
-  // ── tool side channels ───────────────────────────────────────────────
+/** What the turn's tools reported beside their answers. */
+function addToolSideChannels(extras, run) {
   if (run.skills?.length) extras.activeSkills = run.skills;
   // Which projects the turn reached and how (`knowledge/scope`): the badge
   // of the answer, streamed and stored alike.
@@ -167,8 +189,8 @@ export function projectRunToMessage(run, options = {}) {
   const mcpApps = buildMcpAppViews(run);
   if (mcpApps) extras.mcpApps = mcpApps;
   // MCP servers with per-user sign-in the user has to connect (one per server).
-  const mcpAuthRequired = buildMcpAuthPrompts(run);
-  if (mcpAuthRequired) extras.mcpAuthRequired = mcpAuthRequired;
+  const integrationAuthRequired = buildAuthPrompts(run);
+  if (integrationAuthRequired) extras.integrationAuthRequired = integrationAuthRequired;
   // Scheduled tasks a scheduling tool proposed: confirmation cards.
   const scheduledTaskProposals = (run.tools || [])
     .map(tool => tool.scheduledTaskProposal)
@@ -177,8 +199,9 @@ export function projectRunToMessage(run, options = {}) {
   // Files the turn's tools generated (a PDF from `create_pdf`): download cards.
   const generatedFiles = generatedFilesOf((run.tools || []).flatMap(tool => tool.files || []));
   if (generatedFiles.length) extras.generatedFiles = generatedFiles;
+}
 
-  // ── completion metadata ──────────────────────────────────────────────
+function addCompletionMetadata(extras, run, finished) {
   if (finished) {
     const answerSource = answerSourceOf(run);
     if (answerSource) extras.answerSource = answerSource;
@@ -187,13 +210,45 @@ export function projectRunToMessage(run, options = {}) {
     }
   }
   if (run.meta?.responseMessageId) extras.ifinderMessageId = run.meta.responseMessageId;
+}
+
+/**
+ * Project a run onto the assistant message.
+ *
+ * @param {Object|null} run - RunState from the run reducer
+ * @param {Object} [options]
+ * @param {string} [options.fallbackErrorMessage] - Used when a stream/error frame has no message
+ * @returns {{ content: string, loading: boolean, extras: Object }}
+ */
+export function projectRunToMessage(run, options = {}) {
+  if (!run) return { content: '', loading: false, extras: {} };
+  const fallbackErrorMessage = options.fallbackErrorMessage || DEFAULT_STREAM_ERROR_MESSAGE;
+  const extras = {};
+  const finished = isRunFinished(run);
+  const interactions = getInteractions(run);
+  // The run behind the message: feedback and human events are recorded on it.
+  if (run.runId) extras.runId = run.runId;
+
+  const content = contentOf(run, extras, fallbackErrorMessage);
+
+  // ── reasoning / media ────────────────────────────────────────────────
+  if (run.thinking?.length) extras.thoughts = run.thinking;
+  if (run.images?.length) extras.images = run.images;
+
+  const awaitingQuestion = addClarification(extras, interactions);
+  const awaitingApproval = addToolApproval(extras, interactions);
+  addWorkflowState(extras, run, interactions, finished);
+  addToolSideChannels(extras, run);
+  addCompletionMetadata(extras, run, finished);
 
   // ── loading ──────────────────────────────────────────────────────────
   // Streaming while the run is running; a workflow checkpoint pause keeps the
   // spinner (the turn continues once the checkpoint is answered) while a
   // clarification pause hands control back to the user.
   const loading =
-    !run.error && (run.status === 'running' || (run.status === 'paused' && !awaitingQuestion));
+    !run.error &&
+    (run.status === 'running' ||
+      (run.status === 'paused' && !awaitingQuestion && !awaitingApproval));
 
   return { content, loading, extras };
 }

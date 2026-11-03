@@ -208,31 +208,36 @@ export function tableLayouts(theme) {
     i >= headerRows && theme.tableStripeFill && (i - headerRows) % 2 === 1
       ? theme.tableStripeFill
       : null;
-  return {
-    ihubTable: {
-      fillColor: (i, node) =>
-        i < (node.table.headerRows || 0)
-          ? theme.tableHeaderFill
-          : stripe(i, node.table.headerRows || 0),
-      hLineWidth: (i, node) =>
-        theme.tableLines === 'horizontal'
-          ? i === 0 || i === node.table.body.length
+  // The table layout of the theme, with the cell padding as a parameter: a
+  // table with too many columns for the normal padding uses the dense one
+  // (see `tableFit.js`).
+  const themedTable = (sidePadding, verticalPadding) => ({
+    fillColor: (i, node) =>
+      i < (node.table.headerRows || 0)
+        ? theme.tableHeaderFill
+        : stripe(i, node.table.headerRows || 0),
+    hLineWidth: (i, node) =>
+      theme.tableLines === 'horizontal'
+        ? i === 0 || i === node.table.body.length
+          ? 0.8
+          : i === (node.table.headerRows || 0)
             ? 0.8
-            : i === (node.table.headerRows || 0)
-              ? 0.8
-              : 0.4
-          : 0.5,
-      vLineWidth: () => (theme.tableLines === 'horizontal' ? 0 : 0.5),
-      hLineColor: (i, node) =>
-        theme.tableLines === 'horizontal' && (i === 0 || i === node.table.body.length)
-          ? theme.text
-          : light,
-      vLineColor: () => light,
-      paddingLeft: () => 6,
-      paddingRight: () => 6,
-      paddingTop: () => 4,
-      paddingBottom: () => 4
-    },
+            : 0.4
+        : 0.5,
+    vLineWidth: () => (theme.tableLines === 'horizontal' ? 0 : 0.5),
+    hLineColor: (i, node) =>
+      theme.tableLines === 'horizontal' && (i === 0 || i === node.table.body.length)
+        ? theme.text
+        : light,
+    vLineColor: () => light,
+    paddingLeft: () => sidePadding,
+    paddingRight: () => sidePadding,
+    paddingTop: () => verticalPadding,
+    paddingBottom: () => verticalPadding
+  });
+  return {
+    ihubTable: themedTable(6, 4),
+    ihubTableDense: themedTable(3, 3),
     ihubGrid: {
       hLineWidth: () => 0.5,
       vLineWidth: () => 0.5,

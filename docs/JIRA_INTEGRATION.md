@@ -37,7 +37,9 @@ once (OAuth 2.0 with PKCE), and all calls run as that user. Nothing about Jira l
    "iHub Apps Jira Integration".
 3. **Authorization**: add the callback URL
    `https://<your iHub>/api/integrations/jira/callback` (development:
-   `http://localhost:5173/api/integrations/jira/callback`).
+   `http://localhost:5173/api/integrations/jira/callback`). It is an alias of iHub's one
+   integration callback `…/api/integrations/oauth/callback`; registering that one instead (and
+   entering it as the installation's Redirect URI) works as well.
 4. **Permissions**: `read:jira-user`, `read:jira-work`, `write:jira-work` and `offline_access`
    (required for refresh tokens).
 5. **Copy the client id and the client secret** for the installation below.
@@ -70,7 +72,9 @@ The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassia
    who may use Jira at all.
 
 The installation's **Connections** button lists the users who connected their Atlassian account
-and lets an admin disconnect one (the tokens are deleted). The "users connected" count on the
+(from the connection index, with each connection's status) and lets an admin disconnect one (the
+tokens are deleted; the audit log records `connection.revoke`). Changing the OAuth client id ends
+every user's connection: tokens issued to the old client are deleted and users connect again. The "users connected" count on the
 installed list follows connects and disconnects as they happen and is re-counted from the token
 files in the background at most every 30 seconds, so every cluster worker shows the same number.
 
@@ -165,7 +169,7 @@ Download ticket attachments.
 ### OAuth 2.0 Flow Details
 
 1. **Initial Request**: User attempts to use a Jira tool without a connection (the app binds the `jira` installation)
-2. **Auth Prompt**: System shows connection prompt with "Connect to JIRA" button (also under **Settings → Integrations**)
+2. **Connect card**: the tool answers `INTEGRATION_AUTH_REQUIRED` before calling Atlassian, and the chat shows the one Connect card of every integration: why iHub needs to act as the user in Jira, the permissions (the enabled actions as read / write), that the sign-in is at `auth.atlassian.com`, **Connect** and **Not now** (also under **Settings → Integrations**). Connect calls `POST /api/integrations/jira/connect` with the current chat as return URL.
 3. **OAuth Initiation**: 
    - Generates PKCE code verifier and challenge for enhanced security
    - Redirects to: `https://auth.atlassian.com/authorize`
@@ -188,14 +192,21 @@ Download ticket attachments.
 7. **API Access**: 
    - Discovers user's cloudId from accessible resources
    - Makes API calls to `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/`
-8. **Tool Execution**: Original JIRA request executes seamlessly
+8. **Back in the chat**: the callback returns to the same chat (`?integration_connected=jira`) and the chat retries the request that needed the connection once. See [Integrations → The connect flow for users](integrations.md#the-connect-flow-for-users).
 
 ## Error Handling
 
 The JIRA connector provides comprehensive error handling:
 
-- **JIRA_AUTH_REQUIRED**: User needs to connect JIRA account
-- **Authentication Expired**: Automatic token refresh or re-authentication prompt
+- **INTEGRATION_AUTH_REQUIRED** (`integration: "jira"`, `reason: not_connected | expired`): the
+  user needs to connect (or reconnect) their JIRA account; the result carries the `connectUrl`
+  (`/api/integrations/jira/connect`) and is returned before any call to Atlassian.
+  It replaces the former `JIRA_AUTH_REQUIRED`. A scheduled run whose owner has no Jira
+  connection fails with the same code when it calls a Jira tool.
+- **Authentication Expired**: Automatic token refresh or re-authentication prompt; the tokens are
+  deleted when Atlassian refuses the refresh token (including its `403 unauthorized_client`
+  "refresh_token is invalid"), a temporary failure keeps them; after repeated failures iHub backs
+  off and finally asks the user to reconnect
 - **Permission Denied**: Clear messages about access limitations
 - **API Errors**: Meaningful error messages from JIRA API
 - **Network Issues**: Graceful handling of connectivity problems
@@ -223,7 +234,7 @@ The JIRA connector provides comprehensive error handling:
 - **PKCE Support**: Implements Proof Key for Code Exchange for enhanced security
 - **API Version**: Uses JIRA REST API v3 (latest stable version)
 - **Cloud Gateway**: All API calls routed through `api.atlassian.com`
-- **Token Isolation**: JIRA tokens are stored per user in their own encrypted file, separate from the user's iHub sign-in. Connecting keeps no server-side session: the OAuth `state` is a signed ticket bound to the user who started the flow.
+- **Token Isolation**: JIRA tokens are stored per user in their own encrypted file (`contents/integrations/jira/<user>.json`), separate from the user's iHub sign-in. The sign-in runs through iHub's shared OAuth client and connection service: the `state` names a single-use, server-side flow bound to the user who started it, which also keeps the PKCE verifier (see [Integrations → Connections](integrations.md#connections)).
 - **Token Refresh**: Automatic refresh with 2-minute buffer before expiration
 - **Encryption**: AES-256-GCM for token storage with context-aware keys
 
@@ -232,8 +243,11 @@ The JIRA connector provides comprehensive error handling:
 server/
 ├── services/integrations/JiraService.js    # Core JIRA service
 ├── tools/jira.js                           # Tool wrapper
-├── routes/integrations/jira.js             # Jira-specific routes + provider config for the shared OAuth routes
-└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
+├── routes/integrations/jira.js             # The attachment proxy, the connection test, the /callback alias
+├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered callback aliases
+├── routes/integrations/userIntegrations.js # GET /api/integrations, POST /api/integrations/:id/connect|reconnect|disconnect
+├── routes/integrations/oauthCallback.js    # The one integration OAuth callback
+└── services/integrations/auth/             # Shared OAuth client and connection service
 
 server/
 ├── defaults/integration-definitions/com.intrafind__jira/   # The built-in definition (fields, actions)
@@ -285,7 +299,8 @@ contents/
 **Token Expiration Handling**
 - Tokens expire after 1 hour
 - System refreshes automatically with 2-minute buffer
-- If refresh fails, user must reconnect
+- If Atlassian refuses the refresh token, the user must reconnect; a network error or an
+  Atlassian outage keeps the connection and the call reports Jira as temporarily unavailable
 
 #### 3. API Access Issues
 

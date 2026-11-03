@@ -10,6 +10,7 @@ import {
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
+import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import { zHttpUrl, zSafeId } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
@@ -485,7 +486,7 @@ const integrationScopeId = z
 
 const integrationScopeSettingsSchema = z
   .object({
-    scopePicker: z.enum(['menu', 'hidden']).optional(),
+    scopePicker: z.enum(['inline', 'menu', 'hidden']).optional(),
     defaultScope: integrationScopeId.optional(),
     pinnedScope: integrationScopeId.optional()
   })
@@ -586,6 +587,16 @@ const baseAppConfigSchema = z.object({
   // `required`: the model's first call of each turn must call one of the app's
   // tools (see services/loop/toolChoice.js); later calls are `auto`.
   toolChoice: z.enum(['auto', 'required']).optional(),
+  // Tool approval override (#2945): ask a person before a tool call runs.
+  // `default` applies to every tool of the app, `tools` per tool id or
+  // installation id. It can only tighten what the admin set (platform default,
+  // tool, installation, action); a looser value is ignored and logged.
+  toolApproval: z
+    .object({
+      default: z.enum(APPROVAL_MODES).optional(),
+      tools: z.record(z.string().min(1).max(200), z.enum(APPROVAL_MODES)).optional()
+    })
+    .optional(),
   workflows: z.array(z.string()).optional(),
   // Other app ids this app may invoke as synthetic `app__<id>` tools
   // (requires the `appAsTool` platform feature; see appToolsGateway).
@@ -608,6 +619,16 @@ const baseAppConfigSchema = z.object({
   documentTemplate: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+    .optional(),
+  // Uploaded files a user can use as a Word/PowerPoint template (`templateFileId`)
+  // even when `documentTemplate` pins the corporate one (default: only when the
+  // app pins none).
+  allowUserTemplateUploads: z.boolean().optional(),
+  // Per-app override of `platform.uploads` (chat and task file storage).
+  uploads: z
+    .object({
+      storageMode: z.enum(['original_and_text', 'server_text_only', 'client_text_only']).optional()
+    })
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),

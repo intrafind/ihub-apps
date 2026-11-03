@@ -15,10 +15,11 @@ import {
   unsupportedSchemaMessage,
   dirNameToDefinitionId,
   definitionIdToDirName,
+  migrationModuleFiles,
   EXAMPLE_APP_FILE_PATTERN
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
-import { checkScriptCodeFiles } from './scriptModule.js';
+import { checkMigrationModuleFiles, checkScriptCodeFiles } from './scriptModule.js';
 import { registryProtocolRefusal } from './registryItems.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
 import { publishDefinitionTypes } from '../integrationTypes.js';
@@ -215,9 +216,11 @@ export class IntegrationRegistry {
    *
    * @param {string} id - definition id (validated against the files' integration.json)
    * @param {Record<string, string|object>} files - relative path → content
+   * @param {{ local?: boolean }} [options] - `local`: written by an admin on
+   *   this server (the integration builder), not delivered by a registry
    */
-  async writeInstalled(id, files) {
-    const staged = await this.stageInstalled(id, files);
+  async writeInstalled(id, files, options = {}) {
+    const staged = await this.stageInstalled(id, files, options);
     await this.commitStaged(staged);
     await this.reload();
     this._announce();
@@ -233,13 +236,14 @@ export class IntegrationRegistry {
    *
    * @param {string} id - definition id
    * @param {Record<string, string|object>} files - relative path → content
+   * @param {{ local?: boolean }} [options] - see {@link IntegrationRegistry#writeInstalled}
    * @returns {Promise<{ id: string, dir: string, staging: string, definition: object }>}
    */
-  async stageInstalled(id, files) {
+  async stageInstalled(id, files, options = {}) {
     const definitionFile = files[DEFINITION_FILE];
     if (!definitionFile) throw new Error(`${DEFINITION_FILE} is missing`);
     const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
-    const definition = this._validateForInstall(id, raw, files);
+    const definition = this._validateForInstall(id, raw, files, options);
     const dir = await this._installedDir(id);
     const staging = this._helperFolder('staging');
     await fs.mkdir(staging, { recursive: true });
@@ -281,6 +285,10 @@ export class IntegrationRegistry {
       const definition = this._validateForInstall(id, raw, null);
       if (definition.protocol.type === 'script') {
         await fs.access(path.join(staging, definition.protocol.module));
+      }
+      // Sequential on purpose: the first missing migration module fails the copy.
+      for (const file of migrationModuleFiles(definition.migrations)) {
+        await fs.access(path.join(staging, file));
       }
       const { type, document } = definition.protocol;
       if (type === 'openapi' && !isHttpUrl(document)) {
@@ -373,9 +381,10 @@ export class IntegrationRegistry {
    * @param {string} id
    * @param {object} raw - parsed integration.json
    * @param {Record<string, string|object>|null} files - the package files (null for a folder copy)
+   * @param {{ local?: boolean }} [options] - `local`: the admin's own (builder) definition
    * @returns {object} the validated definition
    */
-  _validateForInstall(id, raw, files) {
+  _validateForInstall(id, raw, files, options = {}) {
     const revision = definitionSchemaRevision(raw);
     if (!revision.supported) {
       const error = new Error(
@@ -399,11 +408,15 @@ export class IntegrationRegistry {
       }
       checkScriptCodeFiles(validation.data, files);
     }
+    if (files) checkMigrationModuleFiles(validation.data, files);
     // A registry may only publish remote MCP servers with a fixed transport.
     // The catalog already drops such items when it is loaded
     // (RegistryService); this is the same check again for the files that
-    // are actually installed.
-    const refusal = registryProtocolRefusal(validation.data);
+    // are actually installed. A local process (`stdio`) is the admin's own
+    // decision, taken in the generic "MCP server" definition that ships with
+    // iHub or in the integration builder (`local`).
+    const localStdio = options.local && validation.data.protocol.transport?.type === 'stdio';
+    const refusal = localStdio ? null : registryProtocolRefusal(validation.data);
     if (refusal) throw new Error(refusal);
     return validation.data;
   }

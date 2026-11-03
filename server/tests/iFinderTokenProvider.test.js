@@ -32,7 +32,7 @@ for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'A
 const { default: configCache } = await import('../configCache.js');
 const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
 const { default: credentialService } = await import('../services/CredentialService.js');
-const { tokenStorageIdFor } = await import('../services/mcp/mcpUserTokens.js');
+const { tokenStorageIdFor } = await import('../services/integrations/auth/tokenSecrets.js');
 const provider = await import('../services/integrations/iFinderTokenProvider.js');
 const { stubInstallations, installationsFor } = await import('./helpers/installedIFinder.js');
 const { iFinderConfigFromInstance } = await import('../services/integrations/ifinderConfig.js');

@@ -21,6 +21,7 @@ import {
 } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
+import ApprovalCard from './ApprovalCard';
 import GeneratedImage from './GeneratedImage';
 import AnswerSources, { CitedSources } from './AnswerSources';
 import { resolveCitations } from '../../../../../shared/sources/index.js';
@@ -68,7 +69,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
-import McpConnectCards from '../mcpApps/McpConnectCard';
+import ConnectCards from '../../integrations/connect/ConnectCard';
 import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProposalCard';
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
@@ -76,6 +77,8 @@ import { findSkillDraft } from '../../skills/utils/skillDraft';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import { foldSkill } from '../../../../../shared/run/runReducer.js';
 import './ChatMessage.css';
+import { useChatFiles } from '../contexts/ChatFilesContext';
+import { formatBytes } from '../utils/artifactFiles';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
 
 /** How an answer ends when it stopped before it was complete. */
@@ -116,6 +119,8 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
+  // Tool approval (#2945): `({ interactionId, decision, grant }) => void`.
+  onToolApproval = null,
   // `(source, appId)`: open a source in a new chat of another app ("Open in
   // App"). Only surfaces with a router pass it.
   onOpenSourceInApp = null,
@@ -140,6 +145,7 @@ function ChatMessage({
   // when the user may keep skills of their own.
   onSaveAsSkill = null
 }) {
+  const chatFiles = useChatFiles();
   const { t } = useTranslation();
   const auth = useOptionalAuth();
   const featureFlags = useFeatureFlags();
@@ -989,8 +995,8 @@ function ChatMessage({
             readOnly={readOnly}
           />
         )}
-        {!isUser && message.mcpAuthRequired?.length > 0 && (
-          <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
+        {!isUser && message.integrationAuthRequired?.length > 0 && (
+          <ConnectCards prompts={message.integrationAuthRequired} readOnly={readOnly} />
         )}
         {/* Everything the answer found — web pages, documents, records —
             behind "Searched for …" / "N sources" above it, opening the
@@ -1042,15 +1048,26 @@ function ChatMessage({
                 className="flex items-center gap-2 text-xs italic text-gray-500 dark:text-gray-400"
               >
                 <Icon name="paper-clip" size="sm" />
-                <span>
-                  {t('chatSharing.viewer.attachmentNotIncluded', {
-                    name:
-                      attachment?.name ||
-                      attachment?.type ||
-                      t('chatSharing.viewer.attachmentUnnamed', 'file'),
-                    defaultValue: 'Attachment not included: {{name}}'
-                  })}
-                </span>
+                {attachment?.shared && attachment?.id && chatFiles?.openFile ? (
+                  <button
+                    type="button"
+                    onClick={() => chatFiles.openFile(attachment.id)}
+                    className="not-italic underline underline-offset-2 text-indigo-700 dark:text-indigo-300"
+                    data-testid="shared-attachment-chip"
+                  >
+                    {attachment.name || attachment.type}
+                  </button>
+                ) : (
+                  <span>
+                    {t('chatSharing.viewer.attachmentNotIncluded', {
+                      name:
+                        attachment?.name ||
+                        attachment?.type ||
+                        t('chatSharing.viewer.attachmentUnnamed', 'file'),
+                      defaultValue: 'Attachment not included: {{name}}'
+                    })}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -1067,19 +1084,39 @@ function ChatMessage({
               className="flex flex-wrap gap-1"
               aria-label={t('chatMessage.attachmentsLabel', 'Attachments')}
             >
-              {message.attachments.map((attachment, idx) => (
-                <li
-                  key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-gray-600 px-2 py-1 text-sm text-white"
-                >
-                  <Icon name="paper-clip" size="sm" />
-                  <span>
-                    {attachment?.name ||
-                      attachment?.type ||
-                      t('chatSharing.viewer.attachmentUnnamed', 'file')}
-                  </span>
-                </li>
-              ))}
+              {message.attachments.map((attachment, idx) => {
+                const label =
+                  attachment?.name ||
+                  attachment?.type ||
+                  t('chatSharing.viewer.attachmentUnnamed', 'file');
+                const detail = formatBytes(attachment?.bytes);
+                // A file the server stores opens in the Files drawer.
+                const openable = Boolean(chatFiles?.openFile && attachment?.id);
+                return (
+                  <li
+                    key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-gray-600 px-2 py-1 text-sm text-white"
+                  >
+                    <Icon name="paper-clip" size="sm" />
+                    {openable ? (
+                      <button
+                        type="button"
+                        onClick={() => chatFiles.openFile(attachment.id)}
+                        className="underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-sm"
+                        title={t('chatFiles.openInDrawer', 'Open {{name}} in the Files panel', {
+                          name: label
+                        })}
+                        data-testid="attachment-chip"
+                      >
+                        {label}
+                      </button>
+                    ) : (
+                      <span>{label}</span>
+                    )}
+                    {detail && <span className="text-xs text-gray-300">{detail}</span>}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -1140,6 +1177,11 @@ function ChatMessage({
             onSubmit={onClarificationSubmit}
             onSkip={onClarificationSkip}
           />
+        )}
+
+        {/* Tool approval (#2945): the call waits for the user's decision. */}
+        {!isUser && message.toolApproval && (
+          <ApprovalCard approval={message.toolApproval} onDecide={onToolApproval} />
         )}
 
         {/* What the finished turn searched for and found. Rendered here rather

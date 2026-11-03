@@ -103,6 +103,8 @@ A `.ipynb` file is strict JSON following `nbformat` v4. Each cell's `source` is 
 
 ## 3. Calendar Invites (`.ics`) & Contacts (`.vcf`)
 
+Both formats require **CRLF (`\r\n`) line endings**. `create_file` keeps the bytes exactly as sent, so write every line break in the tool `content` as `\r\n` (not a bare `\n`), or strict clients may refuse to import the file.
+
 - **`.ics` (RFC 5545 iCalendar)**:
   ```text
   BEGIN:VCALENDAR

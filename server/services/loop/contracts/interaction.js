@@ -105,6 +105,21 @@ export const interactionAnswerSchema = z.object({
   reason: z.string().optional(),
   skipped: z.boolean().optional(),
   by: z.string(),
+  /**
+   * Who answered and on what authority, so an approval is documented (#2945):
+   * their id in the run's identity mode, their display name (not in the
+   * pseudonymized mode), whether an approver group, admin rights or owning
+   * the run let them answer, and the approver groups that matched. Never the
+   * identity a resumed run acts as.
+   */
+  approver: z
+    .object({
+      id: z.string(),
+      name: z.string().optional(),
+      via: z.enum(['approverGroups', 'admin', 'owner']),
+      groups: z.array(z.string()).prefault([])
+    })
+    .optional(),
   at: ts,
   channel: z.enum(['chat', 'run_page', 'queue', 'api', 'system', 'headless']).prefault('api')
 });
@@ -121,6 +136,19 @@ export const interactionSourceSchema = z.object({
   profileId: z.string().optional(),
   /** Legacy checkpoint id for the workflow `human` node bridge. */
   checkpointId: z.string().optional(),
+  /**
+   * A tool approval raised for an MCP App view's own `tools/call` (#2945): the
+   * view's app and rendering tool, so only that view's host may answer it, and
+   * the server runs the stored call when it is approved.
+   */
+  viewCall: z
+    .object({
+      appId: z.string().max(128),
+      viewToolId: z.string().max(200),
+      serverId: z.string().max(200),
+      name: z.string().max(200)
+    })
+    .optional(),
   /** The scheduled task and run an approval of an unattended run belongs to. */
   scheduledTaskId: z.string().optional(),
   scheduledRunId: z.string().optional(),

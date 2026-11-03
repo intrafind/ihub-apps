@@ -51,6 +51,17 @@ export const CREATE_PPTX_TOOL = {
       primaryColor: {
         type: 'string',
         description: 'Hex accent colour when no company template is used, e.g. "#0f766e".'
+      },
+      templateFileId: {
+        type: 'string',
+        description:
+          'Optional id of a .pptx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). Its slide master, layouts and theme are used for the new slides.'
+      },
+      templateMode: {
+        type: 'string',
+        enum: ['styles_only', 'append'],
+        description:
+          'How to use templateFileId. "styles_only" (default) builds the new slides on the deck\'s master and layouts and drops its existing slides; "append" keeps its existing slides and adds the new ones after them.'
       }
     },
     required: ['filename', 'title', 'slides']

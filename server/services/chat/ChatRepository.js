@@ -169,8 +169,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
   'mcpApps',
-  // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-  'mcpAuthRequired',
+  // Connect cards for integrations to connect first (see chatSeams.authRequiredOf).
+  'integrationAuthRequired',
   // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
   'scheduledTaskProposals',
   // What the run did before it answered — searches, tool calls, workflow steps
@@ -1319,6 +1319,52 @@ export class ChatRepository {
       const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return null;
       return this._writeChat(applyChatPatch(existing, patch), etag);
+    });
+  }
+
+  /**
+   * Take the chat's pending tool approval (#2945) if it is the one named:
+   * a compare-and-set under the chat lock, so of two requests answering the
+   * same approval exactly one gets it. The grants are set at the same time.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} interactionId - The approval being answered.
+   * @param {{grants: string[]}} next - The chat's grants after the answer.
+   * @returns {Promise<Object|null>} The pending approval that was taken, or
+   *   null when another request took it (or it is not pending).
+   */
+  async takeToolApproval(chatId, interactionId, { grants }) {
+    if (!this._usable(chatId, 'takeToolApproval')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      const pending = existing?.toolApproval?.pending;
+      if (!pending || pending.interactionId !== interactionId) return null;
+      await this._writeChat(
+        applyChatPatch(existing, { toolApproval: { grants, pending: null } }),
+        etag
+      );
+      return pending;
+    });
+  }
+
+  /**
+   * Put a taken tool approval back, when the turn that took it was refused
+   * before the call could run. Only while no other approval is pending.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} pending - The pending approval as taken, with `settled`.
+   * @returns {Promise<boolean>} Whether it was put back.
+   */
+  async restoreToolApproval(chatId, pending) {
+    if (!this._usable(chatId, 'restoreToolApproval')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing || existing.toolApproval?.pending) return false;
+      const grants = Array.isArray(existing.toolApproval?.grants)
+        ? existing.toolApproval.grants
+        : [];
+      await this._writeChat(applyChatPatch(existing, { toolApproval: { grants, pending } }), etag);
+      return true;
     });
   }
 

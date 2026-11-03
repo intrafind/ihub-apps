@@ -21,6 +21,22 @@ import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
+import { installedIntegrationById } from '../integrations/installedRefs.js';
+import { directCallNeedsApproval } from '../../utils/toolApproval.js';
+import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+
+/**
+ * Whether a tool exposed through the gateway needs a person's approval
+ * (#2945). The gateway has nobody to ask: such a call is refused with
+ * `APPROVAL_REQUIRED_NO_USER` instead of running.
+ *
+ * @param {Object} tool
+ * @param {Object} platform
+ * @returns {boolean}
+ */
+export function gatewayCallNeedsApproval(tool, platform) {
+  return directCallNeedsApproval(tool, platform, { getInstallation: installedIntegrationById });
+}
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -153,6 +169,26 @@ export function jsonSchemaToInputSchema(jsonSchema) {
   return { inputSchema: shape };
 }
 
+/**
+ * The optional file input of an app or workflow tool: files the app should
+ * work with, taken into the invocation's chat like an upload.
+ */
+const FILES_INPUT_SCHEMA = Object.freeze({
+  type: 'array',
+  description:
+    'Optional files for the app to work with. Each file needs a name and either `data` (base64) or `text`.',
+  items: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'File name, e.g. report.pdf' },
+      mimeType: { type: 'string', description: 'Media type, e.g. application/pdf' },
+      data: { type: 'string', description: 'File content, base64 encoded' },
+      text: { type: 'string', description: 'File content as text (instead of data)' }
+    },
+    required: ['name']
+  }
+});
+
 function buildAppToolName(appId) {
   return `app__${appId}`;
 }
@@ -174,6 +210,7 @@ export function buildAppInputSchema(app) {
     }
   };
   const required = ['message'];
+  properties.files = FILES_INPUT_SCHEMA;
   // Let callers pick a model unless the app pins one. When the app restricts
   // models, advertise the choices as an enum; otherwise accept any model id.
   // RequestBuilder falls back to the app's preferred model when the requested
@@ -341,6 +378,12 @@ export async function buildMcpServer({ user, platform }) {
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
+          // A gated tool waits for a person's approval; nobody here can give it.
+          if (gatewayCallNeedsApproval(tool, configCache.getPlatform?.() || platform)) {
+            return toolErrorResult(
+              `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
+            );
+          }
           try {
             // Inject the authenticated caller's identity + a tracking chatId.
             // Integration tools (iFinder, Entra, Jira, ...) run *as the user* and
@@ -389,13 +432,17 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
           try {
+            let outputs = null;
             const text = await invokeAppNonStreaming({
               appId: app.id,
               args: args || {},
               user,
-              language: platform?.defaultLanguage || 'en'
+              language: platform?.defaultLanguage || 'en',
+              onOutputs: produced => {
+                outputs = produced;
+              }
             });
-            return toolSuccessResult(text || '');
+            return appToolResult(text || '', outputs);
           } catch (err) {
             logger.warn('MCP gateway app invocation failed', {
               component: 'McpServerService',
@@ -439,9 +486,14 @@ export async function buildMcpServer({ user, platform }) {
             // The workflow runs as the authenticated caller (its per-user
             // OAuth MCP calls use the caller's own token); the arguments can
             // never name another user.
+            const { input: workflowArgs, context } = await workflowFileInput(args, user);
             const result = await runTool(
               `workflow_${wf.id}`,
-              withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
+              withTrustedToolContext(workflowArgs, {
+                user,
+                chatId: context.chatId || `mcp-${Date.now()}`,
+                ...(context.fileData ? { _fileData: context.fileData } : {})
+              })
             );
             return workflowToolResult(result);
           } catch (err) {
@@ -538,10 +590,78 @@ function toolSuccessResult(payload) {
 }
 
 /**
+ * The MCP result of an app run: its answer as a text block, then the files and
+ * pictures the app produced as standard content blocks — an embedded resource
+ * (`{ type: 'resource', resource: { uri, mimeType, blob } }`) per file and an
+ * image block (`{ type: 'image', data, mimeType }`) per picture, the bytes
+ * base64 as the protocol says.
+ *
+ * @param {string} text - The app's answer
+ * @param {{generatedFiles?: Array<Object>, images?: Array<Object>}|null} [outputs]
+ * @returns {Object} An MCP tool result
+ */
+export function appToolResult(text, outputs = null) {
+  const content = [{ type: 'text', text }];
+  for (const file of outputs?.generatedFiles || []) {
+    if (!file?.data) continue;
+    content.push({
+      type: 'resource',
+      resource: {
+        uri: `ihub://generated/${encodeURIComponent(file.id || 'file')}/${encodeURIComponent(file.name || 'file')}`,
+        mimeType: file.mimeType,
+        blob: file.data
+      }
+    });
+  }
+  for (const image of outputs?.images || []) {
+    if (!image?.data || !image?.mimeType) continue;
+    content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
+  }
+  return { content };
+}
+
+/**
+ * The `files` input of a workflow tool call: the arguments without it, and —
+ * when files came — the chat they were taken into and their `fileData`, which
+ * the workflow receives as its uploaded files.
+ *
+ * @param {Object} args - The tool's arguments
+ * @param {Object} user - The authenticated caller
+ * @returns {Promise<{input: Object, context: {chatId?: string, fileData?: Array<Object>}}>}
+ * @throws {InboundFileError} A file that cannot be taken
+ */
+async function workflowFileInput(args, user) {
+  if (!Array.isArray(args?.files)) return { input: args, context: {} };
+  const { files, ...input } = args;
+  const { normalizeMcpFiles, ingestInboundFiles, inboundChatId } =
+    await import('./inboundFiles.js');
+  const normalized = normalizeMcpFiles(files);
+  if (normalized.length === 0) return { input, context: {} };
+  const chatId = inboundChatId(`mcp-${Date.now()}`);
+  const { fileData } = await ingestInboundFiles({
+    files: normalized,
+    chatId,
+    user,
+    origin: 'mcp',
+    message: { role: 'user', content: String(input.input ?? '') }
+  });
+  return { input, context: { chatId, fileData } };
+}
+
+/**
  * The MCP result of a workflow run: its answer and nothing else. Text comes as
  * text; JSON comes as `structuredContent` (`{ output: <the JSON> }`), with the
  * same JSON written out as text for a client that reads only text. A run that
  * did not finish with an answer is an error.
+ *
+ * Unlike an app run ({@link appToolResult}), a workflow run returns no generated
+ * files or pictures, on purpose: a workflow's result is its `output` (text or
+ * JSON) and nothing in the workflow engine collects files. The tool node stores a
+ * tool's result in the workflow state as data, the prompt node's loop has no
+ * file-lifting seam, and `workflowRunner` resolves with `{ status, output,
+ * executionId }` only. A file a workflow node produced therefore cannot be handed
+ * to the caller here; inventing a side channel for it would hide the gap. Files a
+ * caller *sends* to a workflow do work (`files`, see `workflowFileInput`).
  *
  * @param {Object|string} result - What `workflowRunner` resolved with
  * @returns {Object} An MCP tool result
@@ -571,6 +691,7 @@ export function buildWorkflowMcpParams(wf) {
     input: { type: 'string', description: 'Primary input for the workflow' }
   };
   const required = ['input'];
+  properties.files = FILES_INPUT_SCHEMA;
   const startNode = (wf.nodes || []).find(n => n.type === 'start');
   for (const v of startNode?.config?.inputVariables || []) {
     if (typeof v === 'string') {
