@@ -652,14 +652,16 @@
       "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert",
       "slides": "{{count}} Folien",
-      "sheets": "{{count}} Tabellenblätter"
+      "sheets": "{{count}} Tabellenblätter",
+      "open": "Öffnen"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
     "readAloudPause": "Pausieren",
     "readAloudResume": "Fortsetzen",
     "readAloudStop": "Vorlesen beenden",
-    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}"
+    "readAloudError": "Vorlesen fehlgeschlagen: {{error}}",
+    "openImage": "Bild {{number}} öffnen"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -3386,14 +3388,16 @@
       },
       "source": {
         "shipped": "Mitgeliefert",
-        "installed": "Aus Registry"
+        "installed": "Aus Registry",
+        "marketplace": "Marktplatz"
       },
       "facts": {
         "protocol": "Protokoll",
         "signIn": "Anmeldung",
         "actions": "Aktionen",
         "publisher": "Herausgeber",
-        "compatibility": "Benötigt"
+        "compatibility": "Benötigt",
+        "actionsDynamic": "Vom Server"
       },
       "actions": {
         "test": "{{id}} testen",
@@ -3485,7 +3489,10 @@
         "starttls": "StartTLS",
         "plaintext": "Unverschlüsselt",
         "unknown": "Transport unbekannt"
-      }
+      },
+      "installing": "Wird installiert…",
+      "marketplaceInstallFailed": "{{name}} konnte nicht aus {{registry}} installiert werden: {{error}}",
+      "marketplaceOff": "Der Katalog listet auch die Integrationen des Marktplatzes (gehostete MCP-Server wie GitHub, Linear oder Stripe), wenn die Funktion Marktplatz unter Admin → Funktionen eingeschaltet ist."
     },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
@@ -8677,8 +8684,6 @@
     "open": "Artefakte",
     "openPanel": "Vorschau und Download als ZIP",
     "close": "Artefakte schließen",
-    "fullScreen": "Vollbild",
-    "exitFullScreen": "Vollbild beenden",
     "count_one": "{{count}} Datei",
     "count_other": "{{count}} Dateien",
     "loading": "Die Dateien dieses Chats werden geladen…",
@@ -8710,7 +8715,29 @@
     "previewTab": "Vorschau",
     "codeTab": "Code",
     "csvRowsShown": "{{shown}} von {{total}} Zeilen werden angezeigt.",
-    "share": "Teilen"
+    "share": "Teilen",
+    "openViewer": "Öffnen",
+    "openNamed": "{{name}} öffnen",
+    "viewerLabel": "Artefakt: {{name}}",
+    "fileMenu": "Datei-Aktionen",
+    "showPreview": "Vorschau anzeigen",
+    "showCode": "Code anzeigen",
+    "exitPresent": "Vollbild beenden",
+    "present": "Vollbild",
+    "showChat": "Chat anzeigen",
+    "hideChat": "Chat ausblenden",
+    "previous": "Vorheriges Artefakt",
+    "next": "Nächstes Artefakt",
+    "position": "{{current}} von {{total}}",
+    "exportFailed": "Der Export ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "exportHtml": "Als HTML exportieren",
+    "exportMarkdown": "Als Markdown exportieren",
+    "exportPdf": "Als PDF exportieren",
+    "exportMenu": "Exportieren",
+    "showInFiles": "In Dateien anzeigen",
+    "openInNewTab": "In neuem Tab öffnen",
+    "closeViewer": "Artefakt schließen",
+    "pageNotFound": "Diese Datei wurde nicht gefunden."
   },
   "chatFiles": {
     "attached": "{{name}} wurde an Ihre E-Mail angehängt.",

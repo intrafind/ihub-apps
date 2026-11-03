@@ -3089,14 +3089,16 @@
       },
       "source": {
         "shipped": "Shipped",
-        "installed": "From registry"
+        "installed": "From registry",
+        "marketplace": "Marketplace"
       },
       "facts": {
         "protocol": "Protocol",
         "signIn": "Sign-in",
         "actions": "Actions",
         "publisher": "Publisher",
-        "compatibility": "Needs"
+        "compatibility": "Needs",
+        "actionsDynamic": "From the server"
       },
       "actions": {
         "test": "Test {{id}}",
@@ -3188,7 +3190,10 @@
         "starttls": "StartTLS",
         "plaintext": "Plain text",
         "unknown": "Transport unknown"
-      }
+      },
+      "installing": "Installing…",
+      "marketplaceInstallFailed": "{{name}} could not be installed from {{registry}}: {{error}}",
+      "marketplaceOff": "The catalog also lists the integrations of the marketplace (hosted MCP servers such as GitHub, Linear or Stripe) when the Marketplace feature is on under Admin → Features."
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
@@ -5944,14 +5949,16 @@
       "failed": "Download failed. Please try again.",
       "notKept": "This file was not kept with the chat",
       "slides": "{{count}} slides",
-      "sheets": "{{count}} sheets"
+      "sheets": "{{count}} sheets",
+      "open": "Open"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
     "readAloudPause": "Pause",
     "readAloudResume": "Resume",
     "readAloudStop": "Stop reading",
-    "readAloudError": "Read aloud failed: {{error}}"
+    "readAloudError": "Read aloud failed: {{error}}",
+    "openImage": "Open image {{number}}"
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -8712,8 +8719,6 @@
     "open": "Artifacts",
     "openPanel": "Preview and download as ZIP",
     "close": "Close artifacts",
-    "fullScreen": "Full screen",
-    "exitFullScreen": "Exit full screen",
     "count_one": "{{count}} file",
     "count_other": "{{count}} files",
     "loading": "Loading the files of this chat…",
@@ -8745,7 +8750,29 @@
     "previewTab": "Preview",
     "codeTab": "Code",
     "csvRowsShown": "Showing {{shown}} of {{total}} rows.",
-    "share": "Share"
+    "share": "Share",
+    "openViewer": "Open",
+    "openNamed": "Open {{name}}",
+    "viewerLabel": "Artifact: {{name}}",
+    "fileMenu": "File actions",
+    "showPreview": "Show preview",
+    "showCode": "Show code",
+    "exitPresent": "Exit full screen",
+    "present": "Full screen",
+    "showChat": "Show chat",
+    "hideChat": "Hide chat",
+    "previous": "Previous artifact",
+    "next": "Next artifact",
+    "position": "{{current}} of {{total}}",
+    "exportFailed": "The export failed. Please try again.",
+    "exportHtml": "Export as HTML",
+    "exportMarkdown": "Export as Markdown",
+    "exportPdf": "Export as PDF",
+    "exportMenu": "Export",
+    "showInFiles": "Show in files",
+    "openInNewTab": "Open in new tab",
+    "closeViewer": "Close artifact",
+    "pageNotFound": "This file could not be found."
   },
   "chatFiles": {
     "attached": "Attached {{name}} to your email.",

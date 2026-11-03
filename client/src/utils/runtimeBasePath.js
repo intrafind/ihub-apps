@@ -30,6 +30,7 @@ export const KNOWN_ROUTES = [
   'tasks', // Scheduled tasks
   'projects', // User projects (documents, instructions and chats)
   'share', // Read-only shared chat (public or sign-in gated per link)
+  'artifacts', // One artifact of a chat on its own page (viewer, "Open in new tab")
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution

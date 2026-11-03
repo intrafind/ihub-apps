@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
 import { saveBlobAs } from '../../../utils/externalNavigation';
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import ArtifactPreview from './ArtifactPreview';
 import UploadedFilesTab from './UploadedFilesTab';
 import {
@@ -13,6 +14,7 @@ import {
   fileLookOf,
   formatBytes,
   isTextArtifact,
+  previewTypeOf,
   saveName,
   zipErrorCode
 } from '../utils/artifactFiles';
@@ -160,8 +162,8 @@ export default function ArtifactsPanel({
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [tab, setTab] = useState(initialTab);
-  // Full screen: the drawer covers the whole window, so a preview has room.
-  const [expanded, setExpanded] = useState(false);
+  // Opens a file in the immersive viewer, where the page has one.
+  const viewer = useArtifactViewer();
   const [uploaded, setUploaded] = useState({ status: 'loading', items: [] });
   const [uploadedReload, setUploadedReload] = useState(0);
   const uploadedKey = useMemo(() => uploadedKeyOf(messages), [messages]);
@@ -421,7 +423,7 @@ export default function ArtifactsPanel({
         aria-modal="true"
         aria-labelledby={headingId}
         data-testid="artifacts-panel"
-        className={`relative h-full w-full ${expanded ? '' : 'sm:max-w-4xl'} bg-white dark:bg-gray-800 shadow-xl flex flex-col`}
+        className="relative h-full w-full sm:max-w-4xl bg-white dark:bg-gray-800 shadow-xl flex flex-col"
       >
         <header className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
           <h2 id={headingId} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -433,25 +435,6 @@ export default function ArtifactsPanel({
             )}
           </h2>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setExpanded(value => !value)}
-              aria-pressed={expanded}
-              data-testid="artifacts-fullscreen"
-              className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label={
-                expanded
-                  ? t('chatArtifacts.exitFullScreen', 'Exit full screen')
-                  : t('chatArtifacts.fullScreen', 'Full screen')
-              }
-              title={
-                expanded
-                  ? t('chatArtifacts.exitFullScreen', 'Exit full screen')
-                  : t('chatArtifacts.fullScreen', 'Full screen')
-              }
-            >
-              <Icon name={expanded ? 'arrows-pointing-in' : 'arrows-pointing-out'} size="md" />
-            </button>
             <button
               ref={closeRef}
               type="button"
@@ -600,6 +583,7 @@ export default function ArtifactsPanel({
                     <button
                       type="button"
                       onClick={() => setPreviewId(item.id)}
+                      onDoubleClick={viewer ? () => viewer.openArtifact(item, items) : undefined}
                       aria-current={current ? 'true' : undefined}
                       className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-md p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
@@ -683,6 +667,20 @@ export default function ArtifactsPanel({
                         {t('chatArtifacts.share', 'Share')}
                       </button>
                     )}
+                    {viewer && previewTypeOf(preview) !== 'none' && (
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        onClick={() => viewer.openArtifact(preview, items)}
+                        data-testid="artifact-open"
+                        aria-label={t('chatArtifacts.openNamed', 'Open {{name}}', {
+                          name: artifactDisplayName(preview)
+                        })}
+                      >
+                        <Icon name="arrows-pointing-out" size="sm" />
+                        {t('chatArtifacts.openViewer', 'Open')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={SECONDARY}
@@ -696,12 +694,7 @@ export default function ArtifactsPanel({
                       {t('chatArtifacts.download', 'Download')}
                     </button>
                   </div>
-                  <ArtifactPreview
-                    key={preview.id}
-                    artifact={preview}
-                    getBlob={getBlob}
-                    expanded={expanded}
-                  />
+                  <ArtifactPreview key={preview.id} artifact={preview} getBlob={getBlob} />
                 </>
               )}
             </section>

@@ -17,6 +17,8 @@ function Modal({
   closeOnBackdropClick = true,
   initialFocusRef,
   panelClassName = '',
+  // Stacking of the overlay; raised where the dialog opens above a full-window viewer.
+  zIndexClassName = 'z-50',
   // Id of the element that names the dialog (its heading).
   labelledBy
 }) {
@@ -43,7 +45,9 @@ function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+    <div
+      className={`fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full ${zIndexClassName} flex items-center justify-center p-4`}
+    >
       <div
         className="fixed inset-0"
         aria-hidden="true"

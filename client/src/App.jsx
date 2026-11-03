@@ -14,6 +14,7 @@ import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 const SharedChatPage = lazyWithRetry(() => import('./features/chat/pages/SharedChatPage'));
+const ArtifactPage = lazyWithRetry(() => import('./features/chat/pages/ArtifactPage'));
 const TasksPage = lazyWithRetry(() => import('./features/tasks/pages/TasksPage'));
 const TaskDetailPage = lazyWithRetry(() => import('./features/tasks/pages/TaskDetailPage'));
 const TaskEditorPage = lazyWithRetry(() => import('./features/tasks/pages/TaskEditorPage'));
@@ -436,6 +437,17 @@ function App() {
           element={
             <Suspense fallback={<AdminLoading />}>
               <SharedChatPage />
+            </Suspense>
+          }
+        />
+
+        {/* One artifact of a chat, full window ("Open in new tab" of the viewer) —
+            outside Layout: the page is the artifact under a slim toolbar. */}
+        <Route
+          path="artifacts/:chatId/:artifactId"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <ArtifactPage />
             </Suspense>
           }
         />

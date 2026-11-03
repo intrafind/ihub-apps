@@ -255,3 +255,65 @@ export async function zipErrorCode(error) {
     return null;
   }
 }
+
+/**
+ * A Blob from base64 text: the bytes of a file or picture a live turn carries
+ * inline (`data`) before it is stored.
+ *
+ * @param {string} data - Base64 payload.
+ * @param {string} [mimeType]
+ * @returns {Blob}
+ */
+export function blobOfBase64(data, mimeType) {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
+/** Whether an artifact descriptor can be opened in the viewer. */
+export function isOpenable(artifact) {
+  if (!artifact || artifact.unavailable) return false;
+  if (!artifact.id && !artifact.data) return false;
+  return previewTypeOf(artifact) !== 'none';
+}
+
+/**
+ * Whether the bytes of an artifact exist only in this browser tab (a live turn
+ * that is not stored yet): it has no URL and cannot be opened in a new tab.
+ */
+export function isLiveArtifact(artifact) {
+  return !artifact?.id || String(artifact.id).startsWith('live:') || Boolean(artifact.data);
+}
+
+/**
+ * The artifacts a conversation produced that the viewer can open, in order:
+ * generated files and pictures of each answer. A live picture has no id yet;
+ * it gets a stable `live:` key so the viewer can step to it.
+ *
+ * @param {Object[]} messages
+ * @returns {Object[]} Descriptors (as the cards carry them; `data` kept inline).
+ */
+export function collectOpenableArtifacts(messages) {
+  const out = [];
+  const seen = new Set();
+  (messages || []).forEach((message, messageIndex) => {
+    if (message?.role !== 'assistant') return;
+    const items = [
+      ...(Array.isArray(message.generatedFiles) ? message.generatedFiles : []),
+      ...(Array.isArray(message.images) ? message.images : [])
+    ];
+    items.forEach((item, index) => {
+      if (!isOpenable(item)) return;
+      const id = item.id || `live:${messageIndex}:${index}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push({
+        ...item,
+        id,
+        kind: item.kind || (item.mimeType?.startsWith('image/') ? 'image' : undefined)
+      });
+    });
+  });
+  return out;
+}

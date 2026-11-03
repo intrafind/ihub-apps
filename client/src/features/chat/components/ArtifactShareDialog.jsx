@@ -28,6 +28,7 @@ export default function ArtifactShareDialog({ isOpen, onClose, chatId, artifact 
       onClose={onClose}
       maxWidthClassName="max-w-2xl"
       initialFocusRef={titleRef}
+      zIndexClassName="z-[70]"
     >
       <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2

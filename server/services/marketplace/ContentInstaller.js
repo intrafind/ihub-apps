@@ -315,7 +315,7 @@ export async function fetchItemContent(registryId, type, name, { version } = {})
     responseData = JSON.parse(text);
   } catch {
     // Non-JSON content (e.g., SKILL.md markdown) — check for companion files
-    return { item, content: await buildSkillContent(item, text, authHeaders, registry) };
+    return { item, content: await buildSkillContent(item, itemUrl, text, authHeaders, registry) };
   }
 
   // GitHub Contents API wraps file content in base64
@@ -326,7 +326,10 @@ export async function fetchItemContent(registryId, type, name, { version } = {})
     try {
       responseData = JSON.parse(decoded);
     } catch {
-      return { item, content: await buildSkillContent(item, decoded, authHeaders, registry) };
+      return {
+        item,
+        content: await buildSkillContent(item, itemUrl, decoded, authHeaders, registry)
+      };
     }
   }
 
@@ -612,13 +615,16 @@ function unwrapGitHubContent(text) {
  * which host the catalog pointed at.
  *
  * @param {object} item - Catalog item descriptor (may have source.companions)
+ * @param {string} itemUrl - Where the SKILL.md was fetched from; the companions
+ *   sit next to it, whether the item's source is a `url` or a path relative to
+ *   the registry
  * @param {string} skillMd - Raw SKILL.md content
  * @param {Record<string, string>} authHeaders - Auth headers for companion fetches
  * @param {object} registry - Registry config (`source` names its own host)
  * @returns {Promise<string|{ files: Record<string, string> }>}
  * @throws {import('./marketplaceFetch.js').MarketplaceTargetError} When a companion's host is refused
  */
-async function buildSkillContent(item, skillMd, authHeaders, registry) {
+async function buildSkillContent(item, itemUrl, skillMd, authHeaders, registry) {
   let companions = item.source?.companions;
 
   // Fallback: discover companions at install time if cache is stale (no companions field)
@@ -637,8 +643,9 @@ async function buildSkillContent(item, skillMd, authHeaders, registry) {
 
   if (!companions || companions.length === 0) return skillMd;
 
-  // Derive skill directory URL from the SKILL.md URL (strip the filename)
-  const skillDirUrl = item.source.url.replace(/\/SKILL\.md$/, '');
+  // Derive skill directory URL from the SKILL.md URL (strip the filename).
+  // A `relative` source has no `source.url`, so this is the resolved item URL.
+  const skillDirUrl = itemUrl.replace(/[?#].*$/, '').replace(/\/SKILL\.md$/, '');
 
   const files = { 'SKILL.md': skillMd };
 

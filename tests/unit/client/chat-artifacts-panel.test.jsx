@@ -30,6 +30,8 @@ jest.mock('../../../client/src/utils/externalNavigation', () => ({
 }));
 
 const { saveBlobAs } = require('../../../client/src/utils/externalNavigation');
+const ArtifactViewerContext =
+  require('../../../client/src/features/chat/contexts/ArtifactViewerContext').default;
 const ArtifactsPanel =
   require('../../../client/src/features/chat/components/ArtifactsPanel').default;
 const {
@@ -367,18 +369,24 @@ describe('ArtifactsPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it('fills the window in full screen and goes back to the side panel', async () => {
-    render(<ArtifactsPanel isOpen onClose={() => {}} source={makeSource()} />);
+  it('has no full screen toggle: it offers Open, which hands the file to the viewer', async () => {
+    const openArtifact = jest.fn();
+    render(
+      <ArtifactViewerContext.Provider value={{ openArtifact }}>
+        <ArtifactsPanel isOpen onClose={() => {}} source={makeSource()} />
+      </ArtifactViewerContext.Provider>
+    );
     await screen.findByRole('list');
-    const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('sm:max-w-4xl');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
-    expect(dialog.className).not.toContain('sm:max-w-4xl');
-    const exit = screen.getByRole('button', { name: 'Exit full screen' });
-    expect(exit).toHaveAttribute('aria-pressed', 'true');
-
-    fireEvent.click(exit);
+    expect(screen.queryByRole('button', { name: 'Full screen' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('artifacts-fullscreen')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog').className).toContain('sm:max-w-4xl');
+
+    fireEvent.click(screen.getByTestId('artifact-open'));
+    expect(openArtifact).toHaveBeenCalledTimes(1);
+    expect(openArtifact.mock.calls[0][0].id).toBeTruthy();
+
+    // A double-click on a list entry opens it as well.
+    fireEvent.doubleClick(screen.getAllByRole('button', { name: /index\.js/ })[0]);
+    expect(openArtifact).toHaveBeenCalledTimes(2);
   });
 });

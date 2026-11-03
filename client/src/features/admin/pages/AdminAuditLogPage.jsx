@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useFilterParams } from '../hooks/useFilterState';
 import { DataTable, FilterMultiSelect, SearchInput } from '../components/data-table';
@@ -16,6 +17,7 @@ import {
   setExcluded
 } from '../utils/auditLogFilters';
 import AdminLoadError from '../components/AdminLoadError';
+import { getAuditActorLink, getAuditResourceLink } from '../utils/auditLinks';
 
 const ACTION_PILL_COLORS = {
   create: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -461,11 +463,26 @@ function AdminAuditLogPage() {
       key: 'actor',
       header: t('admin.auditLog.actorColumn', 'Actor'),
       hideBelow: 'md',
-      render: e => (
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          {e.actor?.username ?? e.admin ?? '-'}
-        </span>
-      )
+      render: e => {
+        const label = e.actor?.displayName ?? e.actor?.username ?? e.admin ?? '-';
+        const href = getAuditActorLink(e);
+        return href ? (
+          <Link
+            to={href}
+            title={e.actor?.id}
+            className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {label}
+          </Link>
+        ) : (
+          <span
+            title={e.actor?.id}
+            className="text-sm font-medium text-gray-900 dark:text-gray-100"
+          >
+            {label}
+          </span>
+        );
+      }
     },
     {
       key: 'action',
@@ -483,9 +500,31 @@ function AdminAuditLogPage() {
       key: 'resource',
       header: t('admin.auditLog.resourceColumn', 'Resource'),
       hideBelow: 'md',
-      render: e => (
-        <span className="text-sm text-gray-600 dark:text-gray-300">{e.resource || '-'}</span>
-      )
+      render: e => {
+        const href = getAuditResourceLink(e);
+        return (
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="block">{e.resource || '-'}</span>
+            {e.resourceId &&
+              (href ? (
+                <Link
+                  to={href}
+                  className="block max-w-[14rem] truncate text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  title={e.resourceId}
+                >
+                  {e.resourceId}
+                </Link>
+              ) : (
+                <span
+                  className="block max-w-[14rem] truncate text-xs text-gray-500 dark:text-gray-400"
+                  title={e.resourceId}
+                >
+                  {e.resourceId}
+                </span>
+              ))}
+          </div>
+        );
+      }
     },
     {
       key: 'source',

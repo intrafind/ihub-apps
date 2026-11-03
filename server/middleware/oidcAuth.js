@@ -832,7 +832,10 @@ export function createOidcCallbackHandler(providerName) {
           source: 'web',
           actor: {
             id: user.id,
-            username: user.username ?? user.name ?? user.email ?? user.id,
+            // Same username a later request's JWT carries (it falls back to the
+            // persisted id), so login and follow-up entries share one identity.
+            username: user.username ?? user.id,
+            name: user.name ?? user.email ?? user.id,
             groups: user.groups || [],
             authenticated: true
           }

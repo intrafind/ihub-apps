@@ -27,9 +27,9 @@ and no `mcpServers.json` any more (see [Migration](#migration-from-mcp_server_ur
 Two kinds of definition install an MCP server:
 
 - **Hosted servers** from the **Catalog** tab (see
-  [Catalog](#mcp-servers-in-the-catalog)) — Microsoft Learn, Context7,
-  GitHub, Atlassian, Stripe, draw.io, Excalidraw and so on ship as
-  definitions `mcp/<id>` (`mcp/github`, `mcp/drawio`, …) with a fixed
+  [Catalog](#mcp-servers-in-the-catalog)) — Context7, Atlassian, draw.io,
+  Excalidraw and a few more ship with iHub, GitHub, Linear, Stripe, Zapier and
+  25 others come from the marketplace; all are definitions `mcp/<id>` (`mcp/github`, `mcp/drawio`, …) with a fixed
   endpoint, so the wizard asks only for the credential and, where the vendor
   needs them, extra headers.
 - **Any other server**, including a local process, is installed from the
@@ -750,9 +750,35 @@ shows where to create the key plus region-specific URLs and URL options.
 **Test connection** lists the tools, the admin switches off the ones the
 model should not get, and nothing is saved until **Install**.
 
-The definitions ship with iHub
-(`server/defaults/integration-definitions/mcp__<id>/`), so they update with
-each release and need no configuration. A server not in the catalog, or one
+Ten of them ship with iHub (`server/defaults/integration-definitions/mcp__<id>/`):
+Context7, DeepWiki, Sentry, Render, Atlassian,
+Coda, draw.io, Excalidraw, Sanity and Debitura. The other 29 are integration
+items of the **iHub Official Marketplace** (`mcp__<id>` in
+[intrafind/ihub-marketplace](https://github.com/intrafind/ihub-marketplace)),
+so they are updated without an iHub release. The Catalog tab lists them next
+to the shipped ones with the badge **Marketplace**; **Install** first installs
+the definition from the registry (the marketplace's own install, with its
+checks) and then opens the same setup dialog. This needs the Marketplace
+feature on and outbound HTTPS to the registry; the tab fetches a registry that
+was never refreshed once when it opens, and **Reload catalog** refreshes all of
+them. Without the marketplace the tab says where the other servers went.
+
+Upgrading moves existing installations along: migration V213 writes the
+definition of every moved server an installation uses to
+`contents/integration-definitions/mcp__<id>/` and records it as installed from
+`ihub-official`, so the installation, its tool ids and its credential stay as
+they were, and later versions arrive as marketplace updates. It also re-links
+installations of the generic **MCP server** definition whose endpoint is one of the
+moved servers — what V193 makes of a server from the 5.6.x catalog, or a server
+added by hand — to the matching `mcp/<id>` definition, but only when the
+connection stays exactly the same: endpoint and transport, headers (a fixed
+header such as Close's `Close-Scope` must already be set), a sign-in mode and
+credential scheme the definition offers, the default tool prefix, MCP App views
+on and no reconnect setting. Id, label, credential, action policy and app
+bindings are kept; an installation that does not qualify stays generic and the
+migration log says why.
+
+A server not in the catalog, or one
 that only supports an interactive OAuth login for each user, is installed
 from the generic **MCP server** definition (`com.intrafind/mcp-server`), with
 the sign-in mode **Per-user OAuth** where needed (see
@@ -764,47 +790,47 @@ as disabled installations with the ids `drawio` and `excalidraw`, so on most
 installations the catalog shows them as installed — enable them in the
 **Installed** list instead.
 
-| Server                        | Category                 | Endpoint                                          | Authentication                            |
-| ----------------------------- | ------------------------ | ------------------------------------------------- | ----------------------------------------- |
-| Microsoft Learn               | Documentation            | `https://learn.microsoft.com/api/mcp`             | none                                      |
-| Context7                      | Documentation            | `https://mcp.context7.com/mcp`                    | none                                      |
-| DeepWiki                      | Documentation            | `https://mcp.deepwiki.com/mcp`                    | none                                      |
-| Astro Docs                    | Documentation            | `https://mcp.docs.astro.build/mcp`                | none                                      |
-| GitHub                        | Development & operations | `https://api.githubcopilot.com/mcp/`              | Bearer token                              |
-| Sentry                        | Development & operations | `https://mcp.sentry.dev/mcp`                      | `Authorization: Sentry-Bearer <key>`      |
-| Postman                       | Development & operations | `https://mcp.postman.com/minimal`                 | Bearer token                              |
-| Cloudflare                    | Development & operations | `https://mcp.cloudflare.com/mcp`                  | Bearer token                              |
-| Supabase                      | Development & operations | `https://mcp.supabase.com/mcp`                    | Bearer token                              |
-| Neon                          | Development & operations | `https://mcp.neon.tech/mcp`                       | Bearer token                              |
-| Render                        | Development & operations | `https://mcp.render.com/mcp`                      | Bearer token                              |
-| Buildkite                     | Development & operations | `https://mcp.buildkite.com/direct`                | Bearer token                              |
-| Honeycomb                     | Development & operations | `https://mcp.honeycomb.io/mcp`                    | Bearer token                              |
-| PagerDuty                     | Development & operations | `https://mcp.pagerduty.com/mcp`                   | `Authorization: Token token=<key>`        |
-| Braintrust                    | Development & operations | `https://api.braintrust.dev/mcp`                  | Bearer token                              |
-| Atlassian (Jira & Confluence) | Productivity             | `https://mcp.atlassian.com/v2/mcp`                | Basic (email + API token)                 |
-| Linear                        | Productivity             | `https://mcp.linear.app/mcp`                      | Bearer token                              |
-| monday.com                    | Productivity             | `https://mcp.monday.com/mcp`                      | Bearer token                              |
-| Coda                          | Productivity             | `https://coda.io/apis/mcp`                        | Bearer token                              |
-| draw.io                       | Design & diagrams        | `https://mcp.draw.io/mcp`                         | none                                      |
-| Excalidraw                    | Design & diagrams        | `https://mcp.excalidraw.com/mcp`                  | none                                      |
-| Sanity                        | Content & media          | `https://mcp.sanity.io`                           | Bearer token                              |
-| Cloudinary                    | Content & media          | `https://asset-management.mcp.cloudinary.com/mcp` | `cloudinary-url: <key>`                   |
-| Wix                           | Content & media          | `https://mcp.wix.com/mcp`                         | `Authorization: <key>` + `wix-account-id` |
-| Zapier                        | Automation & web         | `https://mcp.zapier.com/api/v1/connect`           | Bearer token                              |
-| Apify                         | Automation & web         | `https://mcp.apify.com`                           | Bearer token                              |
-| Browser Use                   | Automation & web         | `https://api.browser-use.com/v3/mcp`              | `X-Browser-Use-API-Key: <key>`            |
-| superglue                     | Automation & web         | `https://api.superglue.cloud/mcp`                 | Bearer token                              |
-| Close                         | Sales & support          | `https://mcp.close.com/mcp`                       | `Close-API-Key: <key>` + `Close-Scope`    |
-| Intercom                      | Sales & support          | `https://mcp.intercom.com/mcp`                    | Bearer token                              |
-| Fireflies.ai                  | Sales & support          | `https://api.fireflies.ai/mcp`                    | Bearer token                              |
-| Modjo                         | Sales & support          | `https://api.mcp.modjo.ai/v1/mcp`                 | Bearer token                              |
-| PostHog                       | Analytics                | `https://mcp.posthog.com/mcp`                     | Bearer token                              |
-| Hugging Face                  | Data & research          | `https://huggingface.co/mcp`                      | none                                      |
-| Google Maps                   | Data & research          | `https://mapstools.googleapis.com/mcp`            | `X-Goog-Api-Key: <key>`                   |
-| Statista                      | Data & research          | `https://api.statista.ai/v1/mcp`                  | `x-api-key: <key>`                        |
-| PRIMAMCP                      | Data & research          | `https://mcp.planitprima.com/mcp`                 | Bearer token                              |
-| Stripe                        | Finance & payments       | `https://mcp.stripe.com`                          | Bearer token                              |
-| Debitura                      | Finance & payments       | `https://mcp.debitura.com/mcp`                    | Bearer token                              |
+| Server                        | Category                 | Endpoint                                          | Authentication                            | Source |
+| ----------------------------- | ------------------------ | ------------------------------------------------- | ----------------------------------------- | ----------- |
+| Microsoft Learn               | Documentation            | `https://learn.microsoft.com/api/mcp`             | none                                      | Marketplace |
+| Context7                      | Documentation            | `https://mcp.context7.com/mcp`                    | none                                      | iHub |
+| DeepWiki                      | Documentation            | `https://mcp.deepwiki.com/mcp`                    | none                                      | iHub |
+| Astro Docs                    | Documentation            | `https://mcp.docs.astro.build/mcp`                | none                                      | Marketplace |
+| GitHub                        | Development & operations | `https://api.githubcopilot.com/mcp/`              | Bearer token                              | Marketplace |
+| Sentry                        | Development & operations | `https://mcp.sentry.dev/mcp`                      | `Authorization: Sentry-Bearer <key>`      | iHub |
+| Postman                       | Development & operations | `https://mcp.postman.com/minimal`                 | Bearer token                              | Marketplace |
+| Cloudflare                    | Development & operations | `https://mcp.cloudflare.com/mcp`                  | Bearer token                              | Marketplace |
+| Supabase                      | Development & operations | `https://mcp.supabase.com/mcp`                    | Bearer token                              | Marketplace |
+| Neon                          | Development & operations | `https://mcp.neon.tech/mcp`                       | Bearer token                              | Marketplace |
+| Render                        | Development & operations | `https://mcp.render.com/mcp`                      | Bearer token                              | iHub |
+| Buildkite                     | Development & operations | `https://mcp.buildkite.com/direct`                | Bearer token                              | Marketplace |
+| Honeycomb                     | Development & operations | `https://mcp.honeycomb.io/mcp`                    | Bearer token                              | Marketplace |
+| PagerDuty                     | Development & operations | `https://mcp.pagerduty.com/mcp`                   | `Authorization: Token token=<key>`        | Marketplace |
+| Braintrust                    | Development & operations | `https://api.braintrust.dev/mcp`                  | Bearer token                              | Marketplace |
+| Atlassian (Jira & Confluence) | Productivity             | `https://mcp.atlassian.com/v2/mcp`                | Basic (email + API token)                 | iHub |
+| Linear                        | Productivity             | `https://mcp.linear.app/mcp`                      | Bearer token                              | Marketplace |
+| monday.com                    | Productivity             | `https://mcp.monday.com/mcp`                      | Bearer token                              | Marketplace |
+| Coda                          | Productivity             | `https://coda.io/apis/mcp`                        | Bearer token                              | iHub |
+| draw.io                       | Design & diagrams        | `https://mcp.draw.io/mcp`                         | none                                      | iHub |
+| Excalidraw                    | Design & diagrams        | `https://mcp.excalidraw.com/mcp`                  | none                                      | iHub |
+| Sanity                        | Content & media          | `https://mcp.sanity.io`                           | Bearer token                              | iHub |
+| Cloudinary                    | Content & media          | `https://asset-management.mcp.cloudinary.com/mcp` | `cloudinary-url: <key>`                   | Marketplace |
+| Wix                           | Content & media          | `https://mcp.wix.com/mcp`                         | `Authorization: <key>` + `wix-account-id` | Marketplace |
+| Zapier                        | Automation & web         | `https://mcp.zapier.com/api/v1/connect`           | Bearer token                              | Marketplace |
+| Apify                         | Automation & web         | `https://mcp.apify.com`                           | Bearer token                              | Marketplace |
+| Browser Use                   | Automation & web         | `https://api.browser-use.com/v3/mcp`              | `X-Browser-Use-API-Key: <key>`            | Marketplace |
+| superglue                     | Automation & web         | `https://api.superglue.cloud/mcp`                 | Bearer token                              | Marketplace |
+| Close                         | Sales & support          | `https://mcp.close.com/mcp`                       | `Close-API-Key: <key>` + `Close-Scope`    | Marketplace |
+| Intercom                      | Sales & support          | `https://mcp.intercom.com/mcp`                    | Bearer token                              | Marketplace |
+| Fireflies.ai                  | Sales & support          | `https://api.fireflies.ai/mcp`                    | Bearer token                              | Marketplace |
+| Modjo                         | Sales & support          | `https://api.mcp.modjo.ai/v1/mcp`                 | Bearer token                              | Marketplace |
+| PostHog                       | Analytics                | `https://mcp.posthog.com/mcp`                     | Bearer token                              | Marketplace |
+| Hugging Face                  | Data & research          | `https://huggingface.co/mcp`                      | none                                      | Marketplace |
+| Google Maps                   | Data & research          | `https://mapstools.googleapis.com/mcp`            | `X-Goog-Api-Key: <key>`                   | Marketplace |
+| Statista                      | Data & research          | `https://api.statista.ai/v1/mcp`                  | `x-api-key: <key>`                        | Marketplace |
+| PRIMAMCP                      | Data & research          | `https://mcp.planitprima.com/mcp`                 | Bearer token                              | Marketplace |
+| Stripe                        | Finance & payments       | `https://mcp.stripe.com`                          | Bearer token                              | Marketplace |
+| Debitura                      | Finance & payments       | `https://mcp.debitura.com/mcp`                    | Bearer token                              | iHub |
 
 Endpoints and credential requirements are the vendors' and change over
 time. **Test connection** in the install wizard shows at once whether a

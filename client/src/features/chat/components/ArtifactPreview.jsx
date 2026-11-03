@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { highlightCode, renderMarkdown } from '../../../config/marked.config';
@@ -137,6 +137,19 @@ function parseNotebookPreview(text) {
   }
 }
 
+/** The box a `fill` preview lives in: as big as its parent, content stacked inside. */
+function FillRoot({ children, type }) {
+  return (
+    <div
+      className="flex h-full w-full min-h-0 flex-1 flex-col"
+      data-testid="artifact-preview-fill"
+      data-artifact-type={type}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * Preview of one artifact: a picture, rendered Markdown, pretty-printed JSON
  * or highlighted code. Office documents and archives have no preview; the
@@ -149,21 +162,38 @@ function parseNotebookPreview(text) {
  * @param {Object} props
  * @param {Object} props.artifact - Descriptor `{ id, kind, mimeType, bytes, name? }`.
  * @param {(id: string) => Promise<Blob>} props.getBlob - Fetches (and caches) the bytes.
- * @param {boolean} [props.expanded] - The panel is full screen: the preview takes the height
- *   of the window instead of a fixed share of it.
+ * @param {'panel'|'fill'} [props.mode] - Who decides the size. `panel` (default) is the card in
+ *   the Files drawer: a fixed share of the window, framed. `fill` takes the height and width its
+ *   parent gives it (`h-full`), with no frame, rounding or padding: the immersive viewer.
+ * @param {'preview'|'code'} [props.viewMode] - Controlled Preview/Code state. When given, the
+ *   component draws no toggle of its own: the parent (the viewer toolbar) owns it.
+ * @param {(mode: 'preview'|'code') => void} [props.onViewModeChange] - Needed with `viewMode`.
  */
-export default function ArtifactPreview({ artifact, getBlob, expanded = false }) {
+export default function ArtifactPreview({
+  artifact,
+  getBlob,
+  mode = 'panel',
+  viewMode: controlledViewMode,
+  onViewModeChange
+}) {
   const { t } = useTranslation();
   const type = previewTypeOf(artifact);
   const name = artifactDisplayName(artifact);
   const [state, setState] = useState({ status: 'loading' });
-  const [viewMode, setViewMode] = useState('preview');
-  // Window height left under the panel's header, tabs, toolbar and file name.
-  const tall = expanded ? 'h-[calc(100dvh-17rem)] min-h-[20rem]' : 'h-[65vh]';
-  const maxTall = expanded ? 'max-h-[calc(100dvh-17rem)]' : 'max-h-[60vh]';
+  const [ownViewMode, setOwnViewMode] = useState('preview');
+  const controlled = controlledViewMode !== undefined;
+  const viewMode = controlled ? controlledViewMode : ownViewMode;
+  const setViewMode = controlled ? (onViewModeChange ?? (() => {})) : setOwnViewMode;
+  const fill = mode === 'fill';
+  // Panel: a fixed share of the window, framed. Fill: whatever the parent gives.
+  const frame = fill ? 'border-0' : 'rounded-md border border-gray-200 dark:border-gray-700';
+  const tall = fill ? 'flex-1 min-h-0' : 'h-[65vh]';
+  const maxTall = fill ? 'flex-1 min-h-0' : 'max-h-[60vh]';
+  const Root = fill ? FillRoot : Fragment;
+  const rootProps = fill ? { type } : {};
 
   useEffect(() => {
-    setViewMode('preview');
+    if (!controlled) setOwnViewMode('preview');
     if (type === 'none') {
       setState({ status: 'none' });
       return undefined;
@@ -185,25 +215,25 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
       active = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [artifact.id, type, getBlob]);
+  }, [artifact.id, type, getBlob, controlled]);
 
   if (state.status === 'loading') {
     return (
-      <p className="text-sm text-gray-500 dark:text-gray-400" role="status">
+      <p className={`text-sm text-gray-500 dark:text-gray-400 ${fill ? 'p-4' : ''}`} role="status">
         {t('chatArtifacts.previewLoading', 'Loading preview…')}
       </p>
     );
   }
   if (state.status === 'error') {
     return (
-      <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+      <p className={`text-sm text-red-700 dark:text-red-400 ${fill ? 'p-4' : ''}`} role="alert">
         {t('chatArtifacts.previewFailed', 'The preview could not be loaded.')}
       </p>
     );
   }
   if (state.status === 'none') {
     return (
-      <p className="text-sm text-gray-600 dark:text-gray-300">
+      <p className={`text-sm text-gray-600 dark:text-gray-300 ${fill ? 'p-4' : ''}`}>
         {t(
           'chatArtifacts.noPreview',
           'There is no preview for this file type. Download it to open it.'
@@ -213,7 +243,9 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
   }
 
   const truncatedNote = state.truncated ? (
-    <p className="mb-2 text-xs text-amber-800 dark:text-amber-200">
+    <p
+      className={`text-xs text-amber-800 dark:text-amber-200 ${fill ? 'px-4 py-1 bg-amber-50 dark:bg-amber-900/20' : 'mb-2'}`}
+    >
       {t(
         'chatArtifacts.previewTruncated',
         'Showing the first {{size}}. Download the file to see all of it.',
@@ -225,7 +257,13 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
   ) : null;
 
   if (type === 'image') {
-    return (
+    return fill ? (
+      <Root {...rootProps}>
+        <div className="flex flex-1 min-h-0 items-center justify-center bg-gray-100 dark:bg-gray-900">
+          <img src={state.url} alt={name} className="max-h-full max-w-full object-contain" />
+        </div>
+      </Root>
+    ) : (
       <img
         src={state.url}
         alt={name}
@@ -236,67 +274,63 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
 
   if (type === 'pdf') {
     return (
-      <iframe
-        src={state.url}
-        title={name}
-        className={`w-full ${tall} rounded-md border border-gray-200 dark:border-gray-700 bg-white`}
-      />
+      <Root {...rootProps}>
+        <iframe src={state.url} title={name} className={`w-full ${tall} ${frame} bg-white`} />
+      </Root>
     );
   }
 
   if (type === 'markdown') {
     return (
-      <>
+      <Root {...rootProps}>
         {truncatedNote}
-        <article
-          className="prose prose-sm dark:prose-invert max-w-none"
-          // Sanitized by renderMarkdown (DOMPurify).
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(state.text) }}
-        />
-      </>
+        <div className={fill ? 'flex-1 min-h-0 overflow-auto' : undefined}>
+          <article
+            className={`prose prose-sm dark:prose-invert max-w-none ${fill ? 'mx-auto max-w-3xl px-6 py-8' : ''}`}
+            // Sanitized by renderMarkdown (DOMPurify).
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(state.text) }}
+          />
+        </div>
+      </Root>
     );
   }
 
   const notebook = type === 'ipynb' ? parseNotebookPreview(state.text) : null;
   const hasRichPreview =
     type === 'html' || type === 'svg' || type === 'csv' || (type === 'ipynb' && Boolean(notebook));
-  const modeToggle = hasRichPreview ? (
-    <div className="mb-2 flex items-center justify-end">
-      <div
-        className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5 text-xs"
-        role="group"
-        aria-label={t('chatArtifacts.viewMode', 'Preview mode')}
-      >
-        <button
-          type="button"
-          onClick={() => setViewMode('preview')}
-          className={`rounded px-2.5 py-1 font-medium transition-colors ${
-            viewMode === 'preview'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}
+  const modeToggle =
+    hasRichPreview && !controlled ? (
+      <div className="mb-2 flex items-center justify-end">
+        <div
+          className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5 text-xs"
+          role="group"
+          aria-label={t('chatArtifacts.viewMode', 'Preview mode')}
         >
-          {t('chatArtifacts.previewTab', 'Preview')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('code')}
-          className={`rounded px-2.5 py-1 font-medium transition-colors ${
-            viewMode === 'code'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}
-        >
-          {t('chatArtifacts.codeTab', 'Code')}
-        </button>
+          {[
+            ['preview', t('chatArtifacts.previewTab', 'Preview')],
+            ['code', t('chatArtifacts.codeTab', 'Code')]
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setViewMode(id)}
+              className={`rounded px-2.5 py-1 font-medium transition-colors ${
+                viewMode === id
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
   if (hasRichPreview && viewMode === 'preview') {
     if (type === 'html') {
       return (
-        <>
+        <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
           <iframe
@@ -304,32 +338,34 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
             referrerPolicy="no-referrer"
             srcDoc={withPreviewCsp(state.text)}
             title={name}
-            className={`w-full ${tall} rounded-md border border-gray-200 dark:border-gray-700 bg-white`}
+            className={`w-full ${tall} ${frame} bg-white`}
           />
-        </>
+        </Root>
       );
     }
     if (type === 'svg') {
       return (
-        <>
+        <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
           <div
-            className={`flex items-center justify-center p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-auto ${maxTall}`}
+            className={
+              fill
+                ? 'flex flex-1 min-h-0 items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-4 [&>svg]:max-h-full [&>svg]:max-w-full'
+                : `flex items-center justify-center p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-auto ${maxTall}`
+            }
             dangerouslySetInnerHTML={{ __html: sanitizeMermaidSvg(state.text) }}
           />
-        </>
+        </Root>
       );
     }
     if (type === 'csv') {
       const { header, rows, totalRows } = parseCsvPreview(state.text);
       return (
-        <>
+        <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
-          <div
-            className={`overflow-auto ${maxTall} rounded-md border border-gray-200 dark:border-gray-700`}
-          >
+          <div className={`overflow-auto ${maxTall} ${fill ? '' : frame}`}>
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
               {header.length > 0 && (
                 <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
@@ -366,23 +402,25 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
             </table>
           </div>
           {totalRows > rows.length && (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p
+              className={`text-xs text-gray-500 dark:text-gray-400 ${fill ? 'px-4 py-1' : 'mt-1.5'}`}
+            >
               {t('chatArtifacts.csvRowsShown', 'Showing {{shown}} of {{total}} rows.', {
                 shown: rows.length,
                 total: totalRows
               })}
             </p>
           )}
-        </>
+        </Root>
       );
     }
     if (type === 'ipynb' && notebook) {
       let codeIndex = 0;
       return (
-        <>
+        <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
-          <div className={`space-y-3 overflow-auto ${maxTall} pr-1`}>
+          <div className={`space-y-3 overflow-auto ${maxTall} ${fill ? 'p-4' : 'pr-1'}`}>
             {notebook.cells.map(cell => {
               if (cell.type === 'markdown') {
                 return (
@@ -414,7 +452,7 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
               );
             })}
           </div>
-        </>
+        </Root>
       );
     }
   }
@@ -424,7 +462,7 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
   const language = isJsonLike ? 'json' : codeLanguageOf(artifact.name);
   const html = DOMPurify.sanitize(highlightCode(code, language));
   return (
-    <>
+    <Root {...rootProps}>
       {truncatedNote}
       {modeToggle}
       <pre
@@ -432,13 +470,15 @@ export default function ArtifactPreview({ artifact, getBlob, expanded = false })
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         aria-label={t('chatArtifacts.codeOf', 'Content of {{name}}', { name })}
-        className={`bg-gray-900 text-gray-100 rounded-md p-4 overflow-auto text-xs leading-relaxed ${maxTall} focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+        className={`bg-gray-900 text-gray-100 overflow-auto text-xs leading-relaxed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+          fill ? 'flex-1 min-h-0 p-4' : `rounded-md p-4 ${maxTall}`
+        }`}
       >
         <code
           className={language ? `hljs language-${language}` : undefined}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </pre>
-    </>
+    </Root>
   );
 }
