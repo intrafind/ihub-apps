@@ -70,7 +70,10 @@ export function formatFormAnnotations(annotations) {
         exportValue && exportValue !== 'Off'
           ? fieldValues.some(v => String(v ?? '') === exportValue)
           : fieldValues.some(v => v && v !== 'Off');
-      value = on ? 'checked' : 'unchecked';
+      // Name the option when the widget has an export value, so checkboxes that share
+      // a field stay distinguishable (and are not merged into one line below).
+      const option = exportValue && exportValue !== 'Off' ? ` (${exportValue})` : '';
+      value = `${on ? 'checked' : 'unchecked'}${option}`;
     } else if (a.radioButton) {
       kind = 'radio';
       // Every widget of a radio group carries the group's value; this option is the
