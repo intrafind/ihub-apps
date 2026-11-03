@@ -17,7 +17,9 @@ You create `.xlsx` spreadsheets with the `create_xlsx` tool. The server builds a
 - **`.csv` (`create_file` in `files` skill)**: raw flat text data exports for scripts or imports when no formulas, styling or multiple sheets are wanted.
 - **`.pdf` (`create_pdf`)** / **`.docx` (`create_docx`)** / **`.pptx` (`create_pptx`)**: reports, prose documents, slide decks.
 
-If the user uploaded an `.xlsx` or `.csv` file, its extracted contents are already in the conversation as `<content type="document">`. Read them directly; to deliver a new or updated workbook, pass the full `sheets` JSON array to `create_xlsx`.
+If the user uploaded an `.xlsx` or `.csv` file, its extracted contents are already in the conversation as `<content type="document">`. Read them directly to answer questions or to build a **new** workbook from the data.
+
+Do not present a rebuilt workbook as a faithful update of the upload. The extracted text holds the values the file showed when it was saved, not its formulas, charts, styles or macros, and it stops at 2,000 rows per sheet and 300,000 characters per workbook (the text says `[… N more rows omitted]` where it was cut). A workbook rebuilt from it therefore replaces formulas with static values and drops any omitted rows. Before you rebuild an uploaded workbook, tell the user this and offer the rebuild only if they agree; say in your answer that the result is a new file, not an edit of the original.
 
 When the uploaded `.xlsx`'s `<content>` tag says `can_use_as_template="true"`, pass its `id` as `sourceFileId` to **keep the user's workbook and change only what was asked**: its sheets, formatting and defined names stay; each sheet in `sheets` replaces the sheet with the same name, or is added as a new one. Send only the new or changed sheets, with the complete content of each.
 

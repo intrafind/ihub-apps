@@ -611,7 +611,12 @@ function renderFormField(field, ctx) {
           ? [labelNode]
           : [
               {
-                text: signatureLabel(ctx.language),
+                text: required
+                  ? [
+                      { text: signatureLabel(ctx.language), bold: true, fontSize: 8.5 },
+                      { text: ' *', bold: true, fontSize: 8.5, color: '#dc2626' }
+                    ]
+                  : signatureLabel(ctx.language),
                 bold: true,
                 fontSize: 8.5,
                 color: ctx.theme.muted || '#475569',

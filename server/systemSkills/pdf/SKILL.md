@@ -54,18 +54,18 @@ If the app uses a **document template**, the server applies it automatically: th
 
 ## Document settings
 
-| Setting                               | Use it for                                                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`, `subtitle`, `author`, `date` | Printed at the top (or on the cover) and stored as PDF metadata (`date` also fills `{date}` in headers/footers).                            |
-| `showTitle`                           | Set to `false` for letters, certificates, invoices or visual posters that arrange their own header in `blocks` (default `true`).            |
-| `language`                            | Always set it to the language of the content (`en`, `de`, …): page labels and metadata.                                                     |
-| `theme`                               | `default` (friendly, blue headings), `professional` (serif, restrained, business), `minimal` (black and white).                             |
-| `primaryColor`, `accentColor`         | Brand colour (`primaryColor`) for headings/table headers and secondary (`accentColor`) for callout borders, as hex (`#0f766e`).             |
-| `coverPage`                           | Formal documents of more than about three pages.                                                                                            |
-| `toc`                                 | Long documents with four or more sections.                                                                                                  |
-| `header` / `footer`                   | Running text. Placeholders: `{title}`, `{page}`, `{pages}`, `{date}`. Page numbers are on by default (`pageNumbers: false` turns them off). |
-| `pageSize`, `orientation`, `margins`  | `A4` by default; `LETTER` for US users. Use `landscape` for wide tables. Set `margins` (`[left, top, right, bottom]`) for posters/flyers.   |
-| `watermark`                           | `"DRAFT"`, `"CONFIDENTIAL"`, … when the user asks for one.                                                                                  |
+| Setting                               | Use it for                                                                                                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`, `subtitle`, `author`, `date` | Printed at the top (or on the cover); `title` and `author` are also stored as PDF metadata. `date` fills the cover and `{date}` in headers/footers, it is not stored as metadata. |
+| `showTitle`                           | Set to `false` for letters, certificates, invoices or visual posters that arrange their own header in `blocks` (default `true`).                                                  |
+| `language`                            | Always set it to the language of the content (`en`, `de`, …): page labels and metadata.                                                                                           |
+| `theme`                               | `default` (friendly, blue headings), `professional` (serif, restrained, business), `minimal` (black and white).                                                                   |
+| `primaryColor`, `accentColor`         | Brand colour (`primaryColor`) for headings/table headers and secondary (`accentColor`) for callout borders, as hex (`#0f766e`).                                                   |
+| `coverPage`                           | Formal documents of more than about three pages.                                                                                                                                  |
+| `toc`                                 | Long documents with four or more sections.                                                                                                                                        |
+| `header` / `footer`                   | Running text. Placeholders: `{title}`, `{page}`, `{pages}`, `{date}`. Page numbers are on by default (`pageNumbers: false` turns them off).                                       |
+| `pageSize`, `orientation`, `margins`  | `A4` by default; `LETTER` for US users. Use `landscape` for wide tables. Set `margins` (`[left, top, right, bottom]`) for posters/flyers.                                         |
+| `watermark`                           | `"DRAFT"`, `"CONFIDENTIAL"`, … when the user asks for one.                                                                                                                        |
 
 ## Writing good Markdown for print
 

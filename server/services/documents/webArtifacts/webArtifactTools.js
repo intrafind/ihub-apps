@@ -23,6 +23,9 @@ import { templateBundleFor } from '../templates/applyTemplate.js';
 const RELATIVE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'](?!https?:\/\/|data:)([^"']+)["']/i;
 const RELATIVE_LINK_RE =
   /<link\b[^>]*\bhref\s*=\s*["'](?!https?:\/\/|data:)([^"']+\.css[^"']*)["']/i;
+// An absolute URL the preview's CSP (no network) blocks: script, stylesheet or image.
+const EXTERNAL_RESOURCE_RE =
+  /<(?:script\b[^>]*\bsrc|link\b[^>]*\bhref|img\b[^>]*\bsrc)\s*=\s*["'](?:https?:)?\/\/[^"']+["']/i;
 const STORAGE_RE = /\b(?:localStorage|sessionStorage)\b/g;
 const TRY_OPEN_RE = /\btry\s*\{/g;
 const BRAND_TOKEN_DEFINITION_RE = /--brand-primary\s*:|\bid\s*=\s*["']ihub-brand-tokens["']/i;
@@ -107,6 +110,11 @@ export function inspectWebArtifact(content, format) {
       `Relative stylesheet <link href="${relLink[1]}"> will not load inside the sandboxed srcDoc preview. Inline all CSS inside <style>…</style>.`
     );
   }
+  if (EXTERNAL_RESOURCE_RE.test(text)) {
+    warnings.push(
+      'An external script, stylesheet or image URL is blocked in the sandboxed preview, which has no network access. Inline all JavaScript and CSS, and embed images as data: URIs.'
+    );
+  }
   if (hasUnguardedStorageAccess(text)) {
     warnings.push(
       'localStorage/sessionStorage is used outside a try/catch block. The preview runs in <iframe sandbox="allow-scripts"> without allow-same-origin, where storage access throws SecurityError unless wrapped in try { … } catch {}.'
@@ -121,21 +129,38 @@ export function inspectWebArtifact(content, format) {
 }
 
 /**
+ * A value that is safe inside a `<style>` custom property: letters, digits, spaces
+ * and the few characters colours and font stacks use. Anything that could end the
+ * declaration or the style block (`;`, `}`, `<`, `>`) is dropped.
+ */
+function cssValue(value, fallback) {
+  let clean = String(value ?? '')
+    .replaceAll(/[^\w\s#%.,'"()-]/g, '')
+    .trim();
+  // An unbalanced quote would open a CSS string that swallows the rest of the rule.
+  for (const quote of ["'", '"']) {
+    if (clean.split(quote).length % 2 === 0) clean = clean.replaceAll(quote, '');
+  }
+  return clean.trim() || fallback;
+}
+
+/**
  * Inject `--brand-primary`, `--brand-accent`, `--brand-text` and `--brand-font`
  * CSS custom properties into an HTML document if not already defined.
  */
 export function injectBrandTokens(html, brand = {}) {
-  const primary = brand.primaryColor || '#1e3a8a';
-  const accent = brand.accentColor || '#0f766e';
-  const text = brand.textColor || '#0f172a';
-  const font = brand.font || 'system-ui, -apple-system, sans-serif';
+  const primary = cssValue(brand.primaryColor, '#1e3a8a');
+  const accent = cssValue(brand.accentColor, '#0f766e');
+  const text = cssValue(brand.textColor, '#0f172a');
+  const font = cssValue(brand.font, 'system-ui, -apple-system, sans-serif');
   if (BRAND_TOKEN_DEFINITION_RE.test(html)) return html;
   const styleTag = `<style id="ihub-brand-tokens">:root{--brand-primary:${primary};--brand-accent:${accent};--brand-text:${text};--brand-font:${font};}</style>`;
+  // Function replacers: a `$&` or `$'` in a value must not be read as a replacement pattern.
   if (/<head\b[^>]*>/i.test(html)) {
-    return html.replace(/(<head\b[^>]*>)/i, `$1\n${styleTag}`);
+    return html.replace(/(<head\b[^>]*>)/i, (_, tag) => `${tag}\n${styleTag}`);
   }
   if (/<html\b[^>]*>/i.test(html)) {
-    return html.replace(/(<html\b[^>]*>)/i, `$1\n<head>${styleTag}</head>`);
+    return html.replace(/(<html\b[^>]*>)/i, (_, tag) => `${tag}\n<head>${styleTag}</head>`);
   }
   return `${styleTag}\n${html}`;
 }

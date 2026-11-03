@@ -534,6 +534,28 @@ describe('rendering', () => {
     assert.match(JSON.stringify(build('de')), /"Unterschrift"/);
   });
 
+  it('marks a required signature field with the red asterisk, labelled or not', () => {
+    const content = buildDocument({
+      title: 'F',
+      language: 'de',
+      blocks: [
+        {
+          form: {
+            fields: [
+              { type: 'signature', required: true },
+              { type: 'signature', label: 'Manager', required: true },
+              { type: 'signature' }
+            ]
+          }
+        }
+      ]
+    }).docDefinition.content;
+    const serialized = JSON.stringify(content);
+    // The unlabelled required one: fallback label followed by the marker; the others: one marker only.
+    assert.equal(serialized.match(/"text":" \*"/g)?.length, 2);
+    assert.match(serialized, /"text":"Unterschrift"/);
+  });
+
   it('gives the cover page and the {date} placeholders one date, today by default', () => {
     const today = new Date().toISOString().slice(0, 10);
     assert.equal(specFromToolArgs({ title: 't', coverPage: true }).date, today);

@@ -99,6 +99,12 @@ const BLOCKED_FORMULA_FUNCTIONS = [
   'WEBSERVICE',
   'FILTERXML',
   'HYPERLINK',
+  // Fetch a URL or hand cell text to a cloud service when the workbook opens.
+  'IMAGE',
+  'STOCKHISTORY',
+  'TRANSLATE',
+  'DETECTLANGUAGE',
+  'COPILOT',
   'RTD',
   'CALL',
   'REGISTER',
