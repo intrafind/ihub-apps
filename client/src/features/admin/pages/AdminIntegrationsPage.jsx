@@ -559,6 +559,7 @@ function AdminIntegrationsPage() {
         pending={migration.pending}
         onConfirm={migration.confirm}
         onCancel={migration.cancel}
+        onSelectBackup={migration.selectBackup}
       />
 
       <ConfirmDialog
