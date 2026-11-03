@@ -40,7 +40,6 @@ const NEW_RESOURCE_ID = 'new';
  *   data: any,
  *   setData: (updater: any) => void,
  *   initialData: any,
- *   setInitialData: (value: any) => void,
  *   isDirty: boolean,
  *   loading: boolean,
  *   error: string|null,
@@ -157,9 +156,18 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
 
   const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, data);
 
+  // Always the newest `data`, so `save()` can tell whether the user kept editing
+  // while the save request was in flight.
+  const latestDataRef = useRef(data);
+  latestDataRef.current = data;
+
   const save = useCallback(async () => {
-    const result = await saveResourceRef.current(data, resourceId);
-    markSaved();
+    const snapshot = data;
+    const result = await saveResourceRef.current(snapshot, resourceId);
+    // What was just saved is the new baseline for the unsaved-changes check.
+    setInitialData(snapshot);
+    // Edits made while the request ran are still unsaved: keep them guarded.
+    if (latestDataRef.current === snapshot) markSaved();
     return result;
   }, [data, resourceId, markSaved]);
 
@@ -167,7 +175,6 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
     data,
     setData,
     initialData,
-    setInitialData,
     isDirty,
     loading,
     error,

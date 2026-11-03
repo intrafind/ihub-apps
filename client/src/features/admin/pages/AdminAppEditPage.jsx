@@ -249,7 +249,6 @@ function AdminAppEditPage() {
     data: app,
     setData: setApp,
     initialData,
-    setInitialData,
     isDirty,
     loading,
     error,
@@ -369,8 +368,6 @@ function AdminAppEditPage() {
         return;
       }
 
-      // The saved state is the new baseline for the unsaved-changes check.
-      setInitialData(savedApp);
       setPreviewReloadKey(key => key + 1);
       showToast(t('admin.apps.edit.saved', 'App saved'));
     } catch (err) {

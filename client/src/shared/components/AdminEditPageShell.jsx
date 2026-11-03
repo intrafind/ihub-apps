@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
+import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from '../../features/admin/components/AdminBreadcrumb';
 import ConfirmDialog from './ConfirmDialog';
 import LoadingSpinner from './LoadingSpinner';
@@ -55,6 +56,8 @@ function AdminEditPageShell({
   extra,
   blocker
 }) {
+  const { t } = useTranslation();
+
   if (loading) {
     return (
       loadingFallback ?? (
@@ -88,10 +91,10 @@ function AdminEditPageShell({
 
       <ConfirmDialog
         isOpen={blocker?.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
+        title={t('admin.unsavedChanges.title', 'Unsaved changes')}
+        message={t('admin.unsavedChanges.message', 'You have unsaved changes. Leave anyway?')}
+        confirmLabel={t('admin.unsavedChanges.leave', 'Leave')}
+        denyLabel={t('admin.unsavedChanges.stay', 'Stay')}
         danger={false}
         onConfirm={() => blocker?.proceed?.()}
         onDeny={() => blocker?.reset?.()}
