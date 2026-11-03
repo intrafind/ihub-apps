@@ -113,10 +113,11 @@ export function tokenStoreSecret({ service, providerId, allowLegacy = () => fals
   }
 
   /**
-   * Delete the unscoped legacy file of a storage id when it is this
-   * installation's (the only installation of the service, and the payload
-   * names no other one). Without this, a legacy file left beside the scoped
-   * one is adopted again after a disconnect.
+   * Delete the unscoped legacy file of a storage id when `fileOf` would adopt
+   * it: the only installation of the service, and a payload without a
+   * `providerId` (the startup migration already moved every file that names
+   * one). Without this, a legacy file left beside the scoped one is adopted
+   * again after a disconnect.
    */
   async function removeAdmissibleLegacy(storageId) {
     if (!providerId || !allowLegacy()) return;
@@ -126,7 +127,7 @@ export function tokenStoreSecret({ service, providerId, allowLegacy = () => fals
     } catch {
       return;
     }
-    if (legacy?.providerId && legacy.providerId !== providerId) return;
+    if (!legacy || legacy.providerId) return;
     await tokenStorage.deleteUserTokens(storageId, service, null);
   }
 
