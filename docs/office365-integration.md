@@ -308,7 +308,7 @@ The sign-in is kept in the storage provider every worker shares (`integration-oa
 - **State validation**: The OAuth `state` is an opaque handle of a sign-in kept server-side, bound to the installation and the signed-in user who started it, valid once and for 15 minutes. The callback requires the same user and the same installation, so a sign-in from one browser cannot complete in another and a code for one installation cannot complete another's.
 - **PKCE verifier protection**: The PKCE code verifier stays on the server, encrypted with AES-256-GCM; the browser never sees it
 - **Shared OAuth client**: the sign-in, refresh and disconnect run through iHub's one OAuth client and connection service, like every other integration (see [Integrations → Connections](integrations.md#connections)); a refresh token is only ever sent to the authorization server and client that issued it
-- **Sign-in ticket lifetime**: The ticket expires after 15 minutes. A user who does not finish the Microsoft consent in that time has to start again (`integration_error=state_expired`).
+- **Sign-in lifetime**: A started sign-in expires after 15 minutes. A user who does not finish the Microsoft consent in that time has to start again (`integration_error=state_expired`).
 - **Rate limiting**: starting a sign-in (`POST /api/integrations/<installation id>/connect`) is limited to 20 per user and minute
 - **Input validation**: Drive IDs and file IDs passed to the Microsoft Graph API are validated against a strict character allowlist
 
@@ -320,7 +320,7 @@ The sign-in is kept in the storage provider every worker shares (`integration-oa
 server/
 ├── services/integrations/Office365Service.js   # Microsoft Graph API calls and Microsoft-specific OAuth endpoints
 ├── services/integrations/cloudStorageConfig.js # The installations in the provider shape; redirect URI derivation
-├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
+├── services/integrations/OAuthIntegrationBase.js # Provider config, callback URL, 401 retry (tokens via the connection service)
 ├── routes/integrations/office365.js            # Browsing API routes and the /callback alias
 ├── routes/integrations/cloudStorageAccess.js   # ?providerId= required, unknown → 404, not granted → 403
 ├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered /callback aliases

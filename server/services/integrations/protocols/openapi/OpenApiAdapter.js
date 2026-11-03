@@ -80,10 +80,14 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
       // The profile's own type decides how it is sent (the runner applies it).
       return { baseUrl, headers, credentialRef: ref };
     }
+    const secret = resolveSecret(ref);
+    if (secret === undefined || secret === null || secret === '') {
+      throw new Error(`Integration ${instance.id}: the credential "${ref}" holds no secret`);
+    }
     Object.assign(
       headers,
       serviceAccountHeaders({
-        secret: resolveSecret(ref),
+        secret,
         serviceAccount: account,
         fillTemplate: template => fillTemplate(template, values)
       })
