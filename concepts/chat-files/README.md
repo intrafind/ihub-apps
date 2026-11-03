@@ -1,6 +1,6 @@
 # Durable Chat & Scheduled-Task Files: Server-Side Extraction, Quotas, Sharing, Template Reuse & Integrations
 
-**Status:** Approved (2026-11-03)
+**Status:** Implemented (2026-11-03) — sections 1–9 below are the design as approved, written before the code. Two deviations: `workflow__*` MCP tools return no generated files (a workflow run has no output path for them; only `app__*` tools emit `resource`/`image` blocks), and the server-wide quota is a shared counter document in the `chat-files` namespace (compare-and-set), so several instances enforce it together. The current behaviour is described in [Chat and Scheduled-Task Files](../../docs/chat-files.md).
 **Epic:** [#3156](https://github.com/intrafind/ihub-apps/issues/3156)
 **Implementation Slices:** [#3157](https://github.com/intrafind/ihub-apps/issues/3157) (Slice 1), [#3158](https://github.com/intrafind/ihub-apps/issues/3158) (Slice 2), [#3159](https://github.com/intrafind/ihub-apps/issues/3159) (Slice 3), [#3160](https://github.com/intrafind/ihub-apps/issues/3160) (Slice 4)
 
