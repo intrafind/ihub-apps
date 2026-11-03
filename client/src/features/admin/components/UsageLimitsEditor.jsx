@@ -31,7 +31,7 @@ const BYTES_PER_MB = 1024 * 1024;
  *   `null` when the text is not a valid limit (the caller keeps the old value)
  */
 export function parseLimitInput(raw) {
-  if (raw === '' || raw === null || raw === undefined) return undefined;
+  if (raw == null || raw === '') return undefined;
   const n = Number(raw);
   if (!Number.isInteger(n) || n < -1) return null;
   return n;
@@ -124,7 +124,7 @@ export function bytesToMb(bytes) {
  * @returns {number|undefined|null} bytes, `undefined` for empty, `null` if invalid
  */
 export function mbInputToBytes(raw) {
-  if (raw === '' || raw === null || raw === undefined) return undefined;
+  if (raw == null || raw === '') return undefined;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < -1) return null;
   if (n === -1) return -1;
@@ -164,7 +164,7 @@ export function useUsageLimitCeilings() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
+    void Promise.all([
       fetchAdminModels().catch(() => []),
       makeAdminApiCall('/admin/usage/limits/settings')
         .then(response => response.data?.allModels || {})

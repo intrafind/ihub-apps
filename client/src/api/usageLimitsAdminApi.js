@@ -19,7 +19,8 @@ export const saveUsageLimitSettings = async settings =>
 export const fetchUsageLimitUsers = async (query = {}) => {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    if (value == null || value === '') continue;
+    params.set(key, String(value));
   }
   return (await makeAdminApiCall(`/admin/usage/limits/users?${params}`)).data;
 };

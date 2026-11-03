@@ -24,7 +24,7 @@ export function quotaLevel(used, limit) {
  * @param {Object} props
  * @param {string} props.label
  * @param {number} props.used
- * @param {number|null} props.limit - null for unlimited (no bar)
+ * @param {number|null|undefined} props.limit - null/undefined for unlimited (no bar)
  * @param {string} [props.resetAt] - ISO time of the next reset
  * @param {string} [props.hint] - e.g. where the limit comes from
  * @param {(value: number) => string} [props.format] - Default: token counts
@@ -34,7 +34,7 @@ export function quotaLevel(used, limit) {
 function QuotaBar({ label, used, limit, resetAt, hint, format, size = 'md', className = '' }) {
   const { t, i18n } = useTranslation();
   const fmt = format || (v => formatTokens(v, i18n.language));
-  const unlimited = limit === null || limit === undefined;
+  const unlimited = limit == null;
   const level = quotaLevel(used, limit);
   const percent = unlimited ? 0 : limit > 0 ? Math.min(100, (used / limit) * 100) : 100;
   const value = unlimited

@@ -158,15 +158,15 @@ export function withUserFileLimit(policy, user) {
   };
 }
 
-function bucket({ scope, modelId = null, modelName = null, window, entry, used, windows }) {
+function bucket({ scope, modelId, modelName, window, entry, used, windows }) {
   const limit = entry.limit;
   const remaining = Math.max(0, limit - used);
   const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 1000) / 10) : 100;
   return {
     id: scope === 'model' ? `model:${modelId}:${window}` : `allModels:${window}`,
     scope,
-    modelId,
-    modelName,
+    modelId: modelId ?? null,
+    modelName: modelName ?? null,
     window,
     used,
     limit,
