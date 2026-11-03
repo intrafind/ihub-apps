@@ -127,8 +127,18 @@ const KEY_SEPARATOR = '__';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCAN_PAGE_SIZE = 200;
 
-/** How long the cached server-wide byte total is trusted. */
-const SERVER_BYTES_CACHE_MS = 30 * 1000;
+/**
+ * Key of the counter document that holds the server-wide byte total. It lives in
+ * the `chat-files` namespace beside the files, so every server instance sharing
+ * the storage sees (and updates) the same number.
+ */
+const SERVER_COUNTER_KEY = '_meta__server-bytes';
+
+/** How long the counter is trusted before an exact recount heals any drift. */
+const SERVER_COUNTER_RECOUNT_MS = 5 * 60 * 1000;
+
+/** Attempts of a compare-and-set update of the counter before giving up. */
+const SERVER_COUNTER_CAS_ATTEMPTS = 8;
 
 /** Share of `maxServerBytes` above which an upload checks the exact total. */
 const SERVER_QUOTA_EXACT_FRACTION = 0.9;
@@ -278,8 +288,6 @@ export class ChatFileRepository {
     this.blobs = blobs || null;
     this.logger = log || logger;
     this.policy = policy;
-    /** @type {{value: number, at: number}|null} */
-    this._serverBytes = null;
   }
 
   /** Whether both document and blob facets are available. @returns {boolean} */
@@ -511,7 +519,7 @@ export class ChatFileRepository {
       }
     }
 
-    this._noteServerBytes(totalBytes - (replaces?.bytes || 0));
+    await this._adjustServerBytes(totalBytes - (replaces?.bytes || 0));
     return toFileDescriptor(id, body);
   }
 
@@ -611,7 +619,6 @@ export class ChatFileRepository {
           }
         );
         used -= freed;
-        this._serverBytes = null;
       }
       if (used + totalBytes > limit) {
         throw new ChatFileQuotaError(
@@ -625,27 +632,112 @@ export class ChatFileRepository {
   }
 
   /**
-   * Bytes stored by all chat files of the server. Answered from a cache that is
-   * kept current by this process's own writes and expires after
-   * {@link SERVER_BYTES_CACHE_MS}, so uploads do not read the whole namespace;
-   * `exact` forces a fresh read (another instance may have written too).
+   * Bytes stored by all chat files of the server, from the shared counter document.
+   * Every instance that writes adjusts the same counter (a compare-and-set on the
+   * document's etag), so several instances enforce `maxServerBytes` consistently
+   * without reading the whole namespace on every upload. The counter is rebuilt
+   * from the documents when it does not exist, when it is older than
+   * {@link SERVER_COUNTER_RECOUNT_MS} (self-healing after a crash between a
+   * write and its counter update) and when `exact` asks for it.
    *
    * @param {{exact?: boolean}} [options]
    * @returns {Promise<number>}
    * @private
    */
   async _serverUsedBytes({ exact = false } = {}) {
-    const cached = this._serverBytes;
-    if (!exact && cached && Date.now() - cached.at < SERVER_BYTES_CACHE_MS) return cached.value;
+    if (!exact) {
+      const counter = await this._readServerCounter();
+      const recountedAt = Date.parse(counter?.data?.recountedAt);
+      if (
+        counter &&
+        Number.isFinite(counter.data?.serverBytes) &&
+        Number.isFinite(recountedAt) &&
+        Date.now() - recountedAt < SERVER_COUNTER_RECOUNT_MS
+      ) {
+        return counter.data.serverBytes;
+      }
+    }
     const docs = await this._listAllDocs();
     const value = docs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0);
-    this._serverBytes = { value, at: Date.now() };
+    await this._writeServerCounter(value);
     return value;
   }
 
-  /** Keep the cached server total current after this process wrote `delta` bytes. */
-  _noteServerBytes(delta) {
-    if (this._serverBytes) this._serverBytes.value = Math.max(0, this._serverBytes.value + delta);
+  async _readServerCounter() {
+    try {
+      return await this.documents.get(CHAT_FILES_NAMESPACE, SERVER_COUNTER_KEY);
+    } catch (error) {
+      this.logger.warn('Chat file counter could not be read', {
+        component: COMPONENT,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  /** Store an exact recount, keeping the last adjustment's etag chain intact. */
+  async _writeServerCounter(value) {
+    try {
+      await this.documents.put(CHAT_FILES_NAMESPACE, SERVER_COUNTER_KEY, {
+        serverBytes: value,
+        recountedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      this.logger.warn('Chat file counter could not be written', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Add `delta` bytes to the shared counter (negative when files went away) with
+   * a compare-and-set, retrying when another instance wrote in between. A missing
+   * counter is left alone: the next quota check recounts and creates it.
+   *
+   * @param {number} delta
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _adjustServerBytes(delta) {
+    if (!delta) return;
+    for (let attempt = 0; attempt < SERVER_COUNTER_CAS_ATTEMPTS; attempt += 1) {
+      const counter = await this._readServerCounter();
+      if (!counter || !Number.isFinite(counter.data?.serverBytes)) return;
+      try {
+        await this.documents.put(
+          CHAT_FILES_NAMESPACE,
+          SERVER_COUNTER_KEY,
+          {
+            ...counter.data,
+            serverBytes: Math.max(0, counter.data.serverBytes + delta)
+          },
+          { etag: counter.etag }
+        );
+        return;
+      } catch (error) {
+        if (error?.code !== 'ETAG_MISMATCH') {
+          this.logger.warn('Chat file counter could not be updated', {
+            component: COMPONENT,
+            error: error.message
+          });
+          return;
+        }
+      }
+    }
+    // Contention beyond the retries: drop the counter's age so the next check recounts.
+    this.logger.warn('Chat file counter update kept losing; it will be recounted', {
+      component: COMPONENT
+    });
+    await this._expireServerCounter();
+  }
+
+  async _expireServerCounter() {
+    try {
+      await this.documents.delete(CHAT_FILES_NAMESPACE, SERVER_COUNTER_KEY);
+    } catch {
+      // Best effort; the periodic recount heals it anyway.
+    }
   }
 
   /**
@@ -808,7 +900,6 @@ export class ChatFileRepository {
     const data = doc?.data;
     if (!data || (data.scope && !sameScope(data.scope, target))) return null;
 
-    this._serverBytes = null;
     await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(error => {
       this.logger.warn('Failed to delete original binary blob during discardOriginal', {
         component: COMPONENT,
@@ -832,6 +923,7 @@ export class ChatFileRepository {
       updated,
       data.ownerId ? { ownerId: String(data.ownerId) } : {}
     );
+    await this._adjustServerBytes(updated.bytes - (Number(data.bytes) || 0));
     return toFileDescriptor(fileId, updated);
   }
 
@@ -927,7 +1019,7 @@ export class ChatFileRepository {
     if (!target || !isValidId(fileId)) return false;
     const key = chatFileKey(target, fileId);
     if (!isValidId(key)) return false;
-    return this._deleteKey(key, target);
+    return (await this._deleteKey(key, target)).removed;
   }
 
   /**
@@ -941,12 +1033,16 @@ export class ChatFileRepository {
     const target = this._scope(scope, 'deleteMany');
     if (!target) return 0;
     let removed = 0;
+    let freed = 0;
     for (const fileId of fileIds || []) {
       if (!isValidId(fileId)) continue;
       const key = chatFileKey(target, fileId);
       if (!isValidId(key)) continue;
-      if (await this._deleteKey(key, target)) removed += 1;
+      const result = await this._deleteKey(key, target, { adjust: false });
+      if (result.removed) removed += 1;
+      freed += result.bytes;
     }
+    await this._adjustServerBytes(-freed);
     return removed;
   }
 
@@ -964,9 +1060,13 @@ export class ChatFileRepository {
       docKeys.add(doc.key);
     }
     let removed = 0;
+    let freed = 0;
     for (const key of docKeys) {
-      if (await this._deleteKey(key, target)) removed += 1;
+      const result = await this._deleteKey(key, target, { adjust: false });
+      if (result.removed) removed += 1;
+      freed += result.bytes;
     }
+    await this._adjustServerBytes(-freed);
     // Also sweep any orphaned blobs under the scope prefix whose metadata doc never landed.
     for (const blobKey of await this._scanScopeBlobs(target)) {
       try {
@@ -978,9 +1078,20 @@ export class ChatFileRepository {
     return removed;
   }
 
-  async _deleteKey(key, scope) {
-    this._serverBytes = null;
+  /**
+   * Delete one file's document and blobs. The shared byte counter follows unless
+   * the caller adds up several deletes and adjusts it once (`adjust: false`).
+   *
+   * @returns {Promise<{removed: boolean, bytes: number}>} `bytes`: what the document counted.
+   */
+  async _deleteKey(key, scope, { adjust = true } = {}) {
     let removed = false;
+    let bytes = 0;
+    try {
+      bytes = Number((await this.documents.get(CHAT_FILES_NAMESPACE, key))?.data?.bytes) || 0;
+    } catch {
+      // The delete below reports what matters.
+    }
     try {
       removed = await this.documents.delete(CHAT_FILES_NAMESPACE, key);
     } catch (error) {
@@ -1005,7 +1116,10 @@ export class ChatFileRepository {
         });
       }
     }
-    return removed;
+    // Only a removed document counted towards the total.
+    const freedBytes = removed ? bytes : 0;
+    if (adjust) await this._adjustServerBytes(-freedBytes);
+    return { removed, bytes: freedBytes };
   }
 
   async _scanScopeDocs(scope, { includeData = false } = {}) {
@@ -1101,7 +1215,7 @@ export class ChatFileRepository {
           ...(cursor ? { cursor } : {})
         });
         for (const doc of page.items || []) {
-          if (doc?.data) docs.push(doc);
+          if (doc?.data && doc.key !== SERVER_COUNTER_KEY) docs.push(doc);
         }
         cursor = page.nextCursor || null;
       } while (cursor);
