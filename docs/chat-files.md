@@ -84,8 +84,10 @@ An app that pins a `documentTemplate` keeps it unless it sets `allowUserTemplate
 - **MCP client:** binary `resource` and `image` blocks a tool returns are stored in the chat and
   appear in the Files drawer; the model sees `{ fileId, name, mimeType, bytes }` instead of base64.
 - **MCP server:** `app__*` and `workflow__*` tools take optional `files` (`name`, `mimeType`,
-  `data` base64 or `text`) and return generated files and pictures as MCP `resource` and `image`
-  blocks.
+  `data` base64 or `text`). `app__*` tools return generated files and pictures as MCP `resource` and
+  `image` blocks. `workflow__*` tools return the workflow's answer only: a workflow run has no output
+  path for generated files (its result is the `output`, text or JSON; no workflow node hands files to
+  the run), so none are returned.
 - **A2A:** the server accepts inbound `FilePart`s (`bytes` or an https `uri`), advertises file types
   on the Agent Card and returns generated files as `FilePart` artifacts. The A2A tools take
   `fileIds` to forward chat files and store the files a remote agent returns.
