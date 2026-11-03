@@ -141,14 +141,15 @@ profile, or the one the model names after the usual checks.
 
 ### Attached files
 
-A task can carry files: a brief, a template, a price list. The form has a **Files** section where
-the user uploads files or picks them from a connected system (Nextcloud, Microsoft 365, Google
-Drive, iFinder). Every run reads them, like files in a chat, and the document skills can use them as
-templates (see [Chat and Scheduled-Task Files](chat-files.md)).
+A task can carry files: a brief, a template, a price list. The form has an **Attached files**
+section where the user uploads files (**Attach files**) and removes them. Every run reads them, like
+files in a chat, and the document skills can use them as templates (see
+[Chat and Scheduled-Task Files](chat-files.md)).
 
-- A file picked from a connected system can be set to **refresh on each run**: the run fetches it
-  again at its start with the task owner's credentials. When that fails (access revoked, document
-  gone, system down), the run uses the last stored version and says so in its answer.
+- Through the API a file can instead name a document in a connected system (Nextcloud, Microsoft
+  365, Google Drive, iFinder) with `refreshOnRun: true`: the run fetches it again at its start with
+  the task owner's credentials. When that fails (access revoked, document gone, system down), the
+  run uses the last stored version and says so in its answer.
 - The task's files count toward the usual limits (`platform.uploads.quotas`), and the original of a
   task file is kept as long as the task exists.
 - **Duplicate** copies the files too; **Delete** removes them with the task.

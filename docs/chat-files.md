@@ -27,9 +27,10 @@ optionally the original. Scopes:
   the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
   file chip under a message opens the file in the drawer. In the Outlook task pane, while a mail is
   being written, **Attach to email** attaches the file to it.
-- **Task editor.** A scheduled task's form has a **Files** section to upload files or pick them from a
-  connected system, and to switch **refresh on each run** on for those. If a refresh fails, the run
-  uses the last stored version and says so (see [Scheduled Tasks](scheduled-tasks.md#attached-files)).
+- **Task editor.** A scheduled task's form has an **Attached files** section to upload and remove
+  files. Files from a connected system with `refreshOnRun` are set through the API; if a refresh
+  fails, the run uses the last stored version and says so (see
+  [Scheduled Tasks](scheduled-tasks.md#attached-files)).
 - **E-mail attachments.** The same attachment is stored once per chat: a second copy with the same
   name and content (byte hash, or text hash when no original is kept) is recognised and not stored
   again.
