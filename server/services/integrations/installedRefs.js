@@ -22,3 +22,17 @@ export function installedIntegrationRefs() {
         : {})
     }));
 }
+
+/**
+ * One installed integration as the cache holds it, or null. Cheap enough to
+ * call per tool (the tool approval resolver reads `approval` and the action
+ * overrides from it).
+ *
+ * @param {string} instanceId
+ * @returns {Object|null}
+ */
+export function installedIntegrationById(instanceId) {
+  if (typeof instanceId !== 'string' || !instanceId) return null;
+  const installed = configCache.getIntegrations?.()?.data?.installed || [];
+  return installed.find(instance => instance?.id === instanceId) || null;
+}

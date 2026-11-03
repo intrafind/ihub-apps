@@ -104,7 +104,9 @@ export function buildInstallationPayload(instance, changes) {
     enabled: instance.enabled !== false,
     values: cleanInstallValues(changes.values),
     auth: { mode: instance.auth?.mode || 'none' },
-    actions: changes.actions ?? instance.actions ?? undefined
+    actions: changes.actions ?? instance.actions ?? undefined,
+    // Tool approval (#2945) is edited on the Overview; a settings save sends it back.
+    approval: instance.approval ?? undefined
   };
   if (changes.secrets && Object.keys(changes.secrets).length) payload.secrets = changes.secrets;
   return payload;

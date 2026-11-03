@@ -283,6 +283,48 @@ describe('POST /api/admin/configs/platform section persistence', () => {
     expect(saved.auth).toEqual(before.auth);
     expect(saved.oauth).toEqual(before.oauth);
   });
+
+  test('a save carrying only toolApproval stores it and leaves proxyAuth (jwkUrl) as stored', async () => {
+    const app = createTestApp();
+    const before = await readPlatform();
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ toolApproval: { defaults: { external: 'writes' } } });
+
+    expect(response.status).toBe(200);
+    const saved = await readPlatform();
+    expect(saved.toolApproval).toEqual({ defaults: { external: 'writes' } });
+    expect(saved.proxyAuth).toEqual(before.proxyAuth);
+  });
+
+  test('toolApproval: null removes the block instead of storing null', async () => {
+    const app = createTestApp();
+    await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ toolApproval: { defaults: { default: 'always' } } });
+    expect((await readPlatform()).toolApproval).toEqual({ defaults: { default: 'always' } });
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ toolApproval: null });
+
+    expect(response.status).toBe(200);
+    expect(Object.hasOwn(await readPlatform(), 'toolApproval')).toBe(false);
+  });
+
+  test.each([{ defaults: null }, { defaults: { external: null } }])(
+    'refuses the toolApproval block %j the platform schema rejects',
+    async toolApproval => {
+      const before = await readPlatform();
+      const response = await request(createTestApp())
+        .post('/api/admin/configs/platform')
+        .send({ toolApproval });
+
+      expect(response.status).toBe(400);
+      expect(await readPlatform()).toEqual(before);
+    }
+  );
 });
 
 describe('POST /api/admin/configs/platform proxyAuth.sharedSecretHeader', () => {
