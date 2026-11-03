@@ -21,7 +21,7 @@ import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
-import { liftToolOutputs } from './toolOutputFiles.js';
+import { liftMcpResultEarly, settleToolOutputs } from './toolOutputFiles.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
 import crypto from 'node:crypto';
@@ -354,6 +354,12 @@ export function chatToolSeam({
   };
   return {
     name: 'chat-tools',
+    liftResult(ctx, info, holder) {
+      return liftMcpResultEarly(
+        { toolDef: info.toolDef, chatId, ownerId: ctx?.refs?.userId || null, store: fileStore },
+        holder
+      );
+    },
     preTool(ctx, info) {
       logger.info('Chat tool call', {
         component: COMPONENT,
@@ -453,17 +459,12 @@ export function chatToolSeam({
       // through `generatedFiles`. An MCP tool's binary blocks (`resource`
       // blob, `image`) are stored here and replaced by `{ fileId, name,
       // mimeType, bytes }` descriptors before the model reads the result.
-      const lifted = await liftToolOutputs({
+      const lifted = await settleToolOutputs(outcome, {
         toolDef: info.toolDef,
-        rawResult: outcome.rawResult,
         chatId,
         ownerId: ctx?.refs?.userId || null,
         store: fileStore
       });
-      if (lifted.replaced) {
-        outcome.rawResult = lifted.rawResult;
-        outcome.message.content = JSON.stringify(lifted.rawResult);
-      }
       const files = lifted.files;
       if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
       for (const image of lifted.images) {

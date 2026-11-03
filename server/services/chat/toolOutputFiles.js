@@ -547,6 +547,51 @@ export async function liftToolOutputs({
 }
 
 /**
+ * The part of {@link liftToolOutputs} that has to run before the result is
+ * serialised: an MCP tool's binary blocks. Taken out here, the base64 never
+ * reaches the transcript bound or the run log's spill store.
+ *
+ * @param {Object} params - As for {@link liftToolOutputs}.
+ * @param {{rawResult?: *, lifted?: Object}} holder - The loop's `liftResult` holder.
+ * @returns {Promise<void>}
+ */
+export async function liftMcpResultEarly(
+  { toolDef, chatId, ownerId = null, store = null },
+  holder
+) {
+  if (!toolDef?._mcp || !Array.isArray(holder?.rawResult)) return;
+  const lifted = await liftToolOutputs({
+    toolDef,
+    rawResult: holder.rawResult,
+    chatId,
+    ownerId,
+    store
+  });
+  if (!lifted.replaced) return;
+  holder.rawResult = lifted.rawResult;
+  holder.lifted = { files: lifted.files, images: lifted.images };
+}
+
+/**
+ * What a tool produced for the client and the stored answer: the early lift when
+ * the loop already did it, else the lift of the finished result. Updates the
+ * outcome in place when it replaces the result the model reads.
+ *
+ * @param {Object} outcome - The loop's tool outcome.
+ * @param {Object} params - As for {@link liftToolOutputs} (without `rawResult`).
+ * @returns {Promise<{files: Array<Object>, images: Array<Object>}>}
+ */
+export async function settleToolOutputs(outcome, params) {
+  if (outcome.lifted) return outcome.lifted;
+  const lifted = await liftToolOutputs({ ...params, rawResult: outcome.rawResult });
+  if (lifted.replaced) {
+    outcome.rawResult = lifted.rawResult;
+    outcome.message.content = JSON.stringify(lifted.rawResult);
+  }
+  return lifted;
+}
+
+/**
  * Seam for runs without a client (`ChatService.invokeAppInternal`: the MCP and
  * A2A gateways): the same lift as the chat's tool seam, collecting what the
  * run's tools produced instead of streaming it.
@@ -567,19 +612,20 @@ export function headlessToolOutputSeam({
 }) {
   return {
     name: 'headless-tool-outputs',
+    liftResult(_ctx, info, holder) {
+      return liftMcpResultEarly(
+        { toolDef: info.toolDef, chatId, ownerId: user?.id || null, store },
+        holder
+      );
+    },
     async postTool(_ctx, info, outcome) {
       if (outcome.error) return;
-      const lifted = await liftToolOutputs({
+      const lifted = await settleToolOutputs(outcome, {
         toolDef: info.toolDef,
-        rawResult: outcome.rawResult,
         chatId,
         ownerId: user?.id || null,
         store
       });
-      if (lifted.replaced) {
-        outcome.rawResult = lifted.rawResult;
-        outcome.message.content = JSON.stringify(lifted.rawResult);
-      }
       for (const file of lifted.files) {
         if (generatedFiles.length < 20) generatedFiles.push(file);
       }
