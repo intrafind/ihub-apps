@@ -17,7 +17,8 @@ You create Word documents with the `create_docx` tool. You write the content as 
 - **PDF (`create_pdf`, if the `pdf` skill is available)** when the user wants a finished, printable document with a fixed layout, SVG charts, QR codes or a multi-column layout.
 - **PowerPoint (`create_pptx`, `pptx` skill)** when the user wants a slide deck or presentation.
 - **Excel (`create_xlsx`, `xlsx` skill)** when the user wants a spreadsheet, workbook or multi-sheet data table with formulas.
-- **Code, HTML artifacts, CSV or archives (`create_file` / `create_zip`, `files` skill)** when the user wants source code, a standalone interactive HTML page, a calendar invite (`.ics`), or a ZIP archive.
+- **Interactive HTML pages or standalone SVGs (`create_web_artifact`, `web-artifacts` skill)** when the user wants an interactive dashboard, calculator, simulator or a standalone `.svg`. These go through `create_web_artifact`, not `create_file`: it adds the brand tokens, checks the page and shows a sandboxed preview.
+- **Code, CSV, calendar invites or archives (`create_file` / `create_zip`, `files` skill)** when the user wants source code, a data file, a calendar invite (`.ics`), or a ZIP archive.
 - If the user just says "a document", ask only if it matters; otherwise prefer Word for drafts and PDF for final hand-outs.
 
 ## How uploaded Word files work

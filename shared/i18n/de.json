@@ -642,7 +642,8 @@
       "expired": "Diese Datei ist nicht mehr verfügbar",
       "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert",
-      "slides": "{{count}} Folien"
+      "slides": "{{count}} Folien",
+      "sheets": "{{count}} Tabellenblätter"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
@@ -8132,6 +8133,10 @@
     "previewFailed": "Die Vorschau konnte nicht geladen werden.",
     "previewTruncated": "Angezeigt werden die ersten {{size}}. Laden Sie die Datei herunter, um alles zu sehen.",
     "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter, um sie zu öffnen.",
-    "codeOf": "Inhalt von {{name}}"
+    "codeOf": "Inhalt von {{name}}",
+    "viewMode": "Vorschaumodus",
+    "previewTab": "Vorschau",
+    "codeTab": "Code",
+    "csvRowsShown": "{{shown}} von {{total}} Zeilen werden angezeigt."
   }
 }

@@ -23,17 +23,55 @@ import { templateBundleFor } from '../templates/applyTemplate.js';
 const RELATIVE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'](?!https?:\/\/|data:)([^"']+)["']/i;
 const RELATIVE_LINK_RE =
   /<link\b[^>]*\bhref\s*=\s*["'](?!https?:\/\/|data:)([^"']+\.css[^"']*)["']/i;
-const STORAGE_RE = /\b(?:localStorage|sessionStorage)\b/;
-const TRY_BLOCK_RE = /\btry\s*\{/;
+const STORAGE_RE = /\b(?:localStorage|sessionStorage)\b/g;
+const TRY_OPEN_RE = /\btry\s*\{/g;
+const BRAND_TOKEN_DEFINITION_RE = /--brand-primary\s*:|\bid\s*=\s*["']ihub-brand-tokens["']/i;
 const PLACEHOLDER_RE =
   /\/\/\s*(?:TODO|FIXME|rest of (?:the )?code|implement .* here)|\bplaceholder only\b/i;
 
 function detectFormat(filename, requestedFormat, content) {
-  if (requestedFormat === 'svg' || /\.svg$/i.test(String(filename || ''))) return 'svg';
-  if (requestedFormat === 'html' || /\.html?$/i.test(String(filename || ''))) return 'html';
+  // An explicit, valid `format` wins over what the filename suggests.
+  if (requestedFormat === 'svg' || requestedFormat === 'html') return requestedFormat;
+  if (/\.svg$/i.test(String(filename || ''))) return 'svg';
+  if (/\.html?$/i.test(String(filename || ''))) return 'html';
   const trimmed = String(content || '').trim();
   if (/^(?:<\?xml[^>]*>\s*)?<svg\b/i.test(trimmed)) return 'svg';
   return 'html';
+}
+
+/**
+ * The `[start, end)` ranges of every `try { … }` block body in a script, found
+ * by matching braces (braces inside strings or comments are not special-cased).
+ */
+function tryBlockRanges(text) {
+  const ranges = [];
+  for (const match of text.matchAll(TRY_OPEN_RE)) {
+    const open = match.index + match[0].length - 1;
+    let depth = 0;
+    let end = text.length;
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === '{') depth += 1;
+      else if (text[i] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    ranges.push([open, end]);
+  }
+  return ranges;
+}
+
+/** Whether a `localStorage`/`sessionStorage` access sits outside every `try` block. */
+function hasUnguardedStorageAccess(text) {
+  const ranges = tryBlockRanges(text);
+  for (const match of text.matchAll(STORAGE_RE)) {
+    const guarded = ranges.some(([start, end]) => match.index > start && match.index < end);
+    if (!guarded) return true;
+  }
+  return false;
 }
 
 /**
@@ -69,9 +107,9 @@ export function inspectWebArtifact(content, format) {
       `Relative stylesheet <link href="${relLink[1]}"> will not load inside the sandboxed srcDoc preview. Inline all CSS inside <style>…</style>.`
     );
   }
-  if (STORAGE_RE.test(text) && !TRY_BLOCK_RE.test(text)) {
+  if (hasUnguardedStorageAccess(text)) {
     warnings.push(
-      'localStorage/sessionStorage is used without a try/catch block. The preview runs in <iframe sandbox="allow-scripts"> without allow-same-origin, where storage access throws SecurityError unless wrapped in try { … } catch {}.'
+      'localStorage/sessionStorage is used outside a try/catch block. The preview runs in <iframe sandbox="allow-scripts"> without allow-same-origin, where storage access throws SecurityError unless wrapped in try { … } catch {}.'
     );
   }
   if (PLACEHOLDER_RE.test(text)) {
@@ -91,7 +129,7 @@ export function injectBrandTokens(html, brand = {}) {
   const accent = brand.accentColor || '#0f766e';
   const text = brand.textColor || '#0f172a';
   const font = brand.font || 'system-ui, -apple-system, sans-serif';
-  if (html.includes('--brand-primary')) return html;
+  if (BRAND_TOKEN_DEFINITION_RE.test(html)) return html;
   const styleTag = `<style id="ihub-brand-tokens">:root{--brand-primary:${primary};--brand-accent:${accent};--brand-text:${text};--brand-font:${font};}</style>`;
   if (/<head\b[^>]*>/i.test(html)) {
     return html.replace(/(<head\b[^>]*>)/i, `$1\n${styleTag}`);

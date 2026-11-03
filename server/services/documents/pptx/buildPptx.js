@@ -460,7 +460,8 @@ class SlideBuilder {
         nextId: () => this.id(),
         rect,
         metrics,
-        lang: this.ctx.lang
+        lang: this.ctx.lang,
+        accent: this.ctx.accent
       })
     );
   }

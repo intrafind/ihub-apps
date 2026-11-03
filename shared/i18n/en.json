@@ -5567,7 +5567,8 @@
       "expired": "This file is no longer available",
       "failed": "Download failed. Please try again.",
       "notKept": "This file was not kept with the chat",
-      "slides": "{{count}} slides"
+      "slides": "{{count}} slides",
+      "sheets": "{{count}} sheets"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -8167,6 +8168,10 @@
     "previewFailed": "The preview could not be loaded.",
     "previewTruncated": "Showing the first {{size}}. Download the file to see all of it.",
     "noPreview": "There is no preview for this file type. Download it to open it.",
-    "codeOf": "Content of {{name}}"
+    "codeOf": "Content of {{name}}",
+    "viewMode": "Preview mode",
+    "previewTab": "Preview",
+    "codeTab": "Code",
+    "csvRowsShown": "Showing {{shown}} of {{total}} rows."
   }
 }

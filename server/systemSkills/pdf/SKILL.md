@@ -109,7 +109,7 @@ If the app uses a **document template**, the server applies it automatically: th
 - **Callouts** (`info`, `success`, `warning`, `danger`, `note`) for key takeaways, risks and next steps. Use one or two per page at most.
 - **Columns** for side-by-side comparisons, KPI stat cards, and for the header of invoices and letters (sender left, details right). The gap between columns is automatic (`columnGap` sets it).
 - **SVG Charts & Visual Graphics (`svg-to-pdfkit` rules):**
-  - Always set explicit numeric `width`, `height`, and a matching `viewBox="0 0 W H"` on the root `<svg>` element (keep `width` ≤ `480` in portrait so it fits within page margins).
+  - Always set explicit numeric `width`, `height`, and a matching `viewBox="0 0 W H"` on the root `<svg>` element (keep `width` ≤ the usable content width, i.e. the page width minus the left and right margins: `495` on A4 portrait with the default margins, `539` with `margins: [28, 28, 28, 28]`; `480` is a safe default).
   - Always set explicit `fill="#111827"` (or another hex colour) and `font-family="sans-serif"` on `<text>` elements — never rely on `currentColor`, CSS variables, or external stylesheets.
   - Leave at least `16px` of padding inside the `viewBox` around edge labels so text is never clipped.
   - Never use `<foreignObject>`, `<script>`, or external `<image>` URLs (all are stripped for security).

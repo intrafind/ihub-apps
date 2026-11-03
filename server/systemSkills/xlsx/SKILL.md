@@ -59,6 +59,10 @@ Pass `sheets` as a JSON array of 1–20 worksheet objects:
    - Put model assumptions or drivers on an `Assumptions` tab (mark input rows with `{ "cells": [...], "assumption": true }` so hardcoded inputs render in financial-model blue) and reference them across tabs: `=Assumptions!B2` or `='Key Drivers'!B2` (quote tab names that contain spaces).
 5. **Prevent formula errors (`#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`)**:
    - Wrap ratios that could divide by zero in `=IF(B2=0, 0, (C2-B2)/B2)` or `=IFERROR((C2-B2)/B2, 0)`.
+6. **Stay inside the workbook**:
+   - Formulas that fetch data from outside or run commands (`WEBSERVICE`, `FILTERXML`, `HYPERLINK`, `RTD`, `CALL`, `REGISTER`, DDE links) are never written as live formulas; they appear as plain text. Put such values in the cell as text instead.
+   - Dynamic-array functions (`FILTER`, `SORT`, `SORTBY`, `UNIQUE`, `SEQUENCE`) do not spill into neighbouring cells in these workbooks. Do not rely on them; list the rows explicitly, or use `INDEX`/`SMALL`/`SUMIFS` style formulas.
+7. **Years, IDs and postal codes stay plain**: a whole number in a `general` column is shown without thousands separators (`2026`, not `2,026`). Set `"format": "integer"` only for quantities that should read `1,250,000`.
 
 ## Example
 
