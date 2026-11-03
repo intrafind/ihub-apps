@@ -15,12 +15,13 @@ A tool can declare that the **client** executes it. The loop hands the call to t
 
 ```
 model ──tool_call──▶ AgentLoop._executeOne
-                      └─ preTool seams
-                          └─ clientToolSeam  (handles calls with executor:"client")
-                              1. interactionService.raise({ kind:'client_tool', … })
-                              2. emit interaction/raised + tool/started{execution:'client'}
+                      ├─ preTool seams (approval gate; chatToolSeam emits tool/started{execution:'client'})
+                      └─ request.executeTool  →  clientToolExecutor  (calls with executor:"client")
+                              1. interactionService.raise({ kind:'client_tool', … })   ← stored, redacted prompt
+                              2. emit live interaction/raised (with liveArgs)
                               3. await waitForAnswer(id) ⟂ ctx.signal ⟂ timeout
-                              4. return { handled:true, message:{ role:'tool', … } }
+                              4. return the outcome like any server tool
+                      └─ normal completion: postTool (redaction) → tool/result → onToolEnd → tool/completed
 pane  ◀──SSE── interaction/raised
 pane  ── executes Office.js (directly, or through the pop-out bridge)
 pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionService.answer
@@ -31,9 +32,9 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
 
 | Piece | Where | Use |
 |---|---|---|
-| `preTool` seam contract | `server/services/loop/seams/index.js`, called from `AgentLoop._executeOne` (`server/services/loop/AgentLoop.js`) | A seam returning `{handled:true, message}` with no `terminate` lets the loop continue in the same run |
-| Reference seam | `server/services/loop/seams/questionSeam.js` | Pattern for the new seam, including how it refuses on headless turns (`NO_USER_AVAILABLE`) |
-| Seam list for chat | `ChatService.runTurn` (`server/services/chat/ChatService.js`, the `seams` array around `questionSeam(`) | Insert the new seam **before** `questionSeam` |
+| Tool executor | `request.executeTool` in `ChatService.runTurn` (`server/services/chat/ChatService.js`, today `this.runTool(…)`), called from `AgentLoop._executeOne` (`server/services/loop/AgentLoop.js`) | Dispatch `toolDef.executor === 'client'` to `clientToolExecutor` instead of `runTool`. The call then takes the loop's **normal completion path**: `postTool`, the `tool/result` ledger entry and `channel.onToolEnd`. |
+| Why not a `preTool` seam | `AgentLoop._executeOne` (~l.957–972) | A seam that returns `handled` makes `_executeOne` write `tool/call` and return early, skipping `postTool`, `tool/result` and `onToolEnd` (~l.1091–1117). Redaction and `tool/completed` live there, so client tools must not use that path. |
+| Headless refusal pattern | `server/services/loop/seams/questionSeam.js` (`NO_USER_AVAILABLE`) | The executor refuses headless turns the same way, as an error outcome |
 | One-at-a-time tool calls | `tools: { parallel: false }` in `ChatService.runTurn` | No concurrent Office calls within a turn |
 | In-run wait | `InteractionService.waitForAnswer(id, { timeoutMs })` (`server/services/loop/InteractionService.js`) | Rejects on cancel, expiry or run deletion; resolved across workers by `_applyRemote` over `interaction:mutation` |
 | Answer endpoint | `POST /api/runs/:runId/interactions/:interactionId/answer` (`server/routes/runs.js`), client `answerInteraction()` (`client/src/api/endpoints/runs.js`) | Reused; no new route |
@@ -42,7 +43,7 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
 ### Declaring a client tool
 
 - Client tools are actions of a built-in **native integration per host**, such as `com.intrafind__outlook` (see [03](03-outlook-tools.md)). The integration lives under `server/defaults/integration-definitions/` and follows the pattern of `com.intrafind__ihub`.
-- Each action carries `executor: "client"`, `host`, `mode` (`read` | `compose` | `document`), `sideEffect` and `approval` (`never` | `always`).
+- Each action carries `executor: "client"`, `host`, `mode` (`read` | `compose` | `document`), `sideEffect` and `approval` (`never` | `always` | `untracked`; the last asks unless the host reports tracked edits, see [05](05-word.md)).
 - **Schemas, titles and descriptions live on the server only.** The client never sends a schema.
 - Add `executor`, `host`, `mode` and `approval` to `CARRIED_FLAGS` in `server/services/integrations/protocols/native/connectors/ihub/index.js`, or to the equivalent in a new host connector. They reach the resolved tool through `toolFromAction()` (`server/services/integrations/integrationTools.js`).
 - `server/utils/toolDisplay.js` `toolDisplayOf` already takes `title` and `integration` from `_integration`. A client tool is `activityKind: 'tool'`.
@@ -51,19 +52,20 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
 
 1. With each chat POST the pane sends a declaration of what it can execute right now:
    ```json
-   "clientTools": { "host": "outlook", "target": { "itemId": "AAMk…" }, "mode": "compose", "tools": ["getDraftBody", "setDraftSubject"] }
+   "clientTools": { "host": "outlook", "target": { "itemId": "AAMk…" }, "mode": "compose", "state": {}, "tools": ["getDraftBody", "setDraftSubject"] }
    ```
    - `tools` comes from the host's registry filtered by `isRequirementSetSupported` (`client/src/features/office/utilities/officeCapabilities.js`) and by the current mode.
    - The server validates the object in `chatPostSchema` (`server/validators/index.js`): a known host, at most 100 names, each name matching `^[A-Za-z][A-Za-z0-9_]{0,63}$`.
+   - `state` carries host facts that decide approval, validated per host. Today that is only Word's `trackChanges: 'tracked' | 'untracked'` ([05](05-word.md)). An unknown key is stripped, and a missing value is treated as the safe one.
 2. `getToolsForApp` (`server/toolLoader.js`) offers the **intersection** of three sets: the app's granted tools, the admin allowlist (`officeIntegration.hosts.<host>.tools`), and the names the client advertised.
    - A client tool survives `enabledTools` narrowing only while it is advertised. Extend `isInteractiveTool` (`server/utils/toolSelection.js`) or add a sibling check.
-3. **Headless turns never get client tools.** These are `server/services/inference/appTurn.js`, `server/services/chat/appToolsGateway.js` and `ChatService.invokeAppInternal`. If a model calls one anyway, the seam returns an error result, mirroring `questionSeam`.
+3. **Headless turns never get client tools.** These are `server/services/inference/appTurn.js`, `server/services/chat/appToolsGateway.js` and `ChatService.invokeAppInternal`. If a model calls one anyway, the executor returns an error outcome, mirroring `questionSeam`.
 
 ### The round trip
 
-`clientToolSeam.preTool(ctx, info)` handles a call when `toolDef.executor === 'client'`. Ordering inside the seam matters: the `interaction/raised` frame must reach the client before the wait starts, or a fast client could answer an interaction it has not been told about.
+`clientToolExecutor.run(call, { toolDef, args, ctx, signal })` is what `executeTool` calls for `toolDef.executor === 'client'`. It runs after every `preTool` seam, so it always sees the **final** arguments, after the approval gate in [02](02-chat-approval-gate.md) and any **Allow and edit**. Ordering inside it matters: the `interaction/raised` frame must reach the client before the wait starts, or a fast client could answer an interaction it has not been told about.
 
-1. Refuse the call (return an error result) when the turn is headless or the tool was not advertised.
+1. Refuse the call (return an error outcome) when the turn is headless, the tool was not advertised, or a host policy check fails on the final arguments (for example the Outlook recipient allowlist, [03](03-outlook-tools.md)).
 2. Raise the interaction with the **stored** prompt, in which content-marked arguments are already redacted:
    ```js
    const interaction = await interactionService.raise({
@@ -74,14 +76,14 @@ pane  ──POST /api/runs/:runId/interactions/:id/answer──▶ InteractionSe
    })
    ```
    `raise()` persists the prompt and appends the `interaction/raised` ledger entry, so it must never see raw content.
-3. Emit the live `interaction/raised` SSE frame and `tool/started` with `execution: 'client'`. The live frame carries the stored prompt plus `liveArgs`, the full arguments the pane needs to execute. `liveArgs` exists only in that frame and in the waiting seam's memory. It is not written to the ledger, the interaction store or the replay buffer. A pane that reconnects after the frame was sent cannot recover `liveArgs`, so the call ends with `ClientTimeout` and the model may call the tool again.
+3. Emit the live `interaction/raised` SSE frame and `tool/started` with `execution: 'client'`. The live frame carries the stored prompt plus `liveArgs`, the full arguments the pane needs to execute. `liveArgs` exists only in that frame and in the waiting executor's memory. It is not written to the ledger, the interaction store or the replay buffer. A pane that reconnects after the frame was sent cannot recover `liveArgs`, so the call ends with `ClientTimeout` and the model may call the tool again.
 4. `await` the first of three: `waitForAnswer(id, { timeoutMs })`, `ctx.signal`, or the timeout.
 5. Validate the answer: it must be `{ ok: true, result }` or `{ ok: false, error: { name, code, message } }`, and the result size is capped.
 
-   **Error envelope.** Every error, from the pane or the seam, uses the same envelope with all three keys present: `name` (string), `code` (string, number or `null`) and `message` (string). Our own errors use `code: null`. Office.js errors pass their `code` through.
-6. Return `{ handled: true, execution: 'client', message: { role: 'tool', tool_call_id, name, content } }`.
+   **Error envelope.** Every error, from the pane or the executor, uses the same envelope with all three keys present: `name` (string), `code` (string, number or `null`) and `message` (string). Our own errors use `code: null`. Office.js errors pass their `code` through.
+6. Return the outcome exactly as a server tool would (`{ ok, result }` or the error envelope as an error outcome).
 
-The loop then writes `tool/result`, runs `postTool` and continues.
+The loop then runs its normal completion path for this call: `postTool` (where `redactClientToolOutcome` replaces the stored copy), the `tool/result` ledger entry, `channel.onToolEnd` and the `tool/completed` frame, which `chatToolSeam.postTool` emits. The model receives the full result, as with any tool.
 
 ### Executing in the pane
 
@@ -141,13 +143,14 @@ Unmarked arguments are structural and kept for the audit trail: `address`, `shee
 | Ledger `interaction/answered` | full answer | `{ok, chars, sha256}` |
 | Stored chat `activity` (`server/services/chat/runActivity.js` `slim`) | title, status | unchanged (title and status only) |
 
-The seam controls `handled.message`, and `postTool` may rewrite `outcome.rawResult`. Redaction therefore lives in one helper, `redactClientToolOutcome()`, which both use. A sibling, `redactClientToolArgs()`, is applied where `AgentLoop._executeOne` writes the ledger `tool/call` entry for a handled call.
+Redaction of the result lives in one helper, `redactClientToolOutcome()`, run from a `postTool` hook for client tools. That hook is registered **before** `chatToolSeam` in the `ChatService.runTurn` seam list, because `chatToolSeam.postTool` writes `logInteraction`. The hook rewrites `outcome.rawResult` before the `tool/result` ledger entry and `logInteraction` see it, while the message to the model keeps the full content. A sibling, `redactClientToolArgs()`, is applied where `AgentLoop._executeOne` writes the ledger `tool/call` entry, and to the stored interaction prompt.
 
 The same marker drives the approval preview ([02](02-chat-approval-gate.md)). The card shows the content to the user live, and the stored `approval` interaction keeps only `{chars, sha256}`.
 
 ## Tests
 
-- **Seam unit tests:**
+- **Executor unit tests:**
+  - a client tool goes through `postTool`, writes `tool/result` and emits `tool/completed`, like a server tool
   - advertised vs not advertised
   - headless refusal
   - timeout

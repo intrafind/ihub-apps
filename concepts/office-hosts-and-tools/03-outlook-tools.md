@@ -48,7 +48,7 @@ The insert and reply runners and `officeCall` in `client/src/features/office/uti
 - **Size.** Bodies are capped at the existing `MAX_FORM_BODY_CHARS` (`outlookMailActions.js`). Attachments are capped at `MAX_ATTACHMENT_BYTES`.
 - **Recipients.**
   - The optional admin allowlist `officeIntegration.hosts.outlook.tools.recipientDomainAllowlist` is checked on the **final arguments**.
-    - Server side, the check runs in `clientToolSeam`. That seam runs after the approval seam, so it sees the arguments the user approved, **including** arguments changed with **Allow and edit**. It runs immediately before the call is handed to the pane.
+    - Server side, the check runs in `clientToolExecutor` ([01](01-client-executed-tools.md)). The executor runs after the approval seam, so it sees the arguments the user approved, **including** arguments changed with **Allow and edit**. It runs immediately before the call is handed to the pane.
     - Client side, the executor checks again right before `addAsync`.
   - An address outside the list is refused and never executed.
   - To avoid an approval card for a call that will be refused anyway, the approval seam also runs the check first on the model's original arguments. That pre-check is a convenience. The post-approval check is the one that enforces.

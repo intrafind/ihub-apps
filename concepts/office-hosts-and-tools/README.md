@@ -49,7 +49,7 @@ iHub is ahead on several points, and the design keeps all of them:
 
 | # | Decision | Reason |
 |---|---|---|
-| D1 | Tools execute in the pane and return their result to the **same run** (`clientToolSeam` + `InteractionService.waitForAnswer`). The design does not pause and resume. | Multi-step chains (read draft → rewrite → set subject) need one run. The loop's `preTool` seam and the cluster-safe `waitForAnswer` already exist. |
+| D1 | Tools execute in the pane and return their result to the **same run** (`clientToolExecutor` + `InteractionService.waitForAnswer`, on the loop's normal tool-completion path). The design does not pause and resume. | Multi-step chains (read draft → rewrite → set subject) need one run. The loop's `preTool` seam and the cluster-safe `waitForAnswer` already exist. |
 | D2 | A **generic chat approval gate** is built now and used first by the Office write tools. | No per-call approval exists in chat today. Later, #2916 and #2945 plug their policy into the same gate. |
 | D3 | **One XML manifest per host**, each with its own add-in GUID. | A MailApp and a TaskPaneApp cannot share one XML manifest. XML manifests also work on volume-licensed Office. |
 | D4 | One `taskpane.html` for all hosts; the host is detected at runtime from `Office.context.host`. | One build and one entry; host adapters plug into `EmbeddedHostContext`. |
@@ -61,7 +61,7 @@ iHub is ahead on several points, and the design keeps all of them:
 
 | Doc | Content | Phase |
 |---|---|---|
-| [01 Client-executed tools](01-client-executed-tools.md) | The loop seam, interaction kind, event protocol, redaction, failure modes | P1 |
+| [01 Client-executed tools](01-client-executed-tools.md) | The client tool executor, interaction kind, event protocol, redaction, failure modes | P1 |
 | [02 Chat approval gate](02-chat-approval-gate.md) | Per-call approval in chat, the approval card, and the Office pane fix | P1 |
 | [03 Outlook tools](03-outlook-tools.md) | The Outlook integration, tool set, client registry, admin settings | P2 |
 | [04 Host foundation](04-host-foundation.md) | Manifest per host, host adapters, ribbon handoff, `hostContext` types, admin per host | P3 |
