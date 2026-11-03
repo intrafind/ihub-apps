@@ -119,3 +119,16 @@ search was badged "Based on web search". They now show **Based on connected syst
   on iFinder documents".
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
+
+## Wide Tables in Generated PDFs Stay on the Page
+
+Tables with many columns, or with a long word such as a URL, ran off the right edge of generated
+PDFs, so the last columns were cut off. The columns are now sized from the text, and the table
+always fits the page.
+
+- Columns share the width in proportion to their text, and none is narrower than its longest word.
+- A table with too many columns for the normal cell padding uses tighter padding, then a smaller
+  font, down to 6.5 pt.
+- A word that cannot fit its column at all, such as a long URL, is broken inside the column instead
+  of shrinking the whole table.
+- Tables a model lays out with its own column widths keep them.

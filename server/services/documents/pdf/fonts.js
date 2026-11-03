@@ -114,6 +114,8 @@ export function registerTemplateFonts(fonts) {
     }
     templateFamilies.set(family, files);
     glyphCoverage.delete(family);
+    measurers.delete(`${family}:normal`);
+    measurers.delete(`${family}:bold`);
     registered.push(family);
   }
   return registered;
@@ -173,6 +175,46 @@ export function pdfmakeFontDescriptors() {
 }
 
 const glyphCoverage = new Map();
+const measurers = new Map();
+
+/**
+ * Measures text in a family's regular or bold face, so layout code can size
+ * columns before pdfmake lays the text out (pdfmake only knows a column's
+ * widest word once it is too late to choose a better table).
+ *
+ * Advances are summed per code point: no kerning or shaping, which for these
+ * fonts is well inside the safety margin callers keep.
+ *
+ * @param {string} family - Key of {@link FONT_FAMILIES} or a template font family.
+ * @param {boolean} [bold]
+ * @returns {(text: string, fontSize: number) => number} Width in points.
+ */
+export function textMeasurerFor(family, bold = false) {
+  const custom = templateFamilies.get(family);
+  const key = custom || Object.hasOwn(FONT_FAMILIES, family) ? family : DEFAULT_FONT;
+  const cacheKey = `${key}:${bold ? 'bold' : 'normal'}`;
+  if (!measurers.has(cacheKey)) {
+    const face = bold ? 'bold' : 'normal';
+    const bytes = custom
+      ? templateFontBytes.get(custom[face])
+      : loadFontBytes().get(FONT_FAMILIES[key][face]);
+    const font = fontkit.create(bytes);
+    const advances = new Map();
+    const advanceOf = codePoint => {
+      if (!advances.has(codePoint)) {
+        const glyph = font.glyphForCodePoint(codePoint);
+        advances.set(codePoint, glyph.advanceWidth / font.unitsPerEm);
+      }
+      return advances.get(codePoint);
+    };
+    measurers.set(cacheKey, (text, fontSize) => {
+      let em = 0;
+      for (const char of String(text)) em += advanceOf(char.codePointAt(0));
+      return em * fontSize;
+    });
+  }
+  return measurers.get(cacheKey);
+}
 
 /**
  * Whether a family's regular face has a glyph for a code point.
