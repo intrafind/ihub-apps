@@ -5,8 +5,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
+import AdminEditPageShell, {
+  AdminSaveCancelButtons
+} from '../../../shared/components/AdminEditPageShell';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
@@ -16,7 +18,6 @@ import {
   makeAdminApiCall,
   resetAdminUsageLimitUser
 } from '../../../api/adminApi';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
 import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
@@ -215,70 +216,102 @@ function AdminUserEditPage() {
   const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
 
-  const isNewUser = userId === 'new';
-
-  const { blocker, markSaved } = useUnsavedChanges(initialData, user);
-
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
+
+  const {
+    data: user,
+    setData: setUser,
+    loading,
+    error,
+    isNew: isNewUser,
+    save,
+    blocker
+  } = useAdminResourceEditor({
+    resourceId: userId,
+    loadResource: async id => {
+      try {
+        const response = await makeAdminApiCall('/admin/auth/users');
+        const data = response.data;
+
+        // Find the user by ID in the users object
+        const userData = Object.values(data.users || {}).find(u => u.id === id);
+        if (!userData) {
+          throw new Error('User not found');
+        }
+
+        return { ...userData, password: '' };
+      } catch (err) {
+        throw new Error(getAdminApiErrorMessage(err));
+      }
+    },
+    // Initialize new user with generated ID
+    makeDefault: () => ({
+      id: generateUserId(),
+      username: '',
+      email: null,
+      fullName: '',
+      name: '',
+      password: '',
+      internalGroups: [],
+      authMethods: ['local'],
+      enabled: true,
+      active: true
+    }),
+    saveResource: async (data, id) => {
+      const isNew = id === 'new';
+      const method = isNew ? 'POST' : 'PUT';
+      const url = isNew ? '/admin/auth/users' : `/admin/auth/users/${id}`;
+
+      // Check if this is a local auth user (needs password)
+      const isLocalAuth =
+        !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
+
+      // Prepare the data for API call
+      const apiData = {
+        username: data.username,
+        email: data.email || null,
+        name: data.fullName || data.name || '',
+        // Use internalGroups, with fallback to groups for backward compatibility
+        internalGroups: data.internalGroups || data.groups || [],
+        active: data.enabled !== false,
+        authMethods: data.authMethods || ['local']
+      };
+
+      // Personal usage limits (only the update route accepts them); `null`
+      // clears limits saved before.
+      if (!isNew) {
+        apiData.usageLimits = normalizeUsageLimits(data.usageLimits);
+      }
+
+      // Only include password if it's provided
+      if (data.password) {
+        apiData.password = data.password;
+      }
+
+      // For new local auth users, ensure password is provided
+      if (isNew && isLocalAuth && !data.password) {
+        throw new Error('Password is required for local authentication users');
+      }
+
+      await makeAdminApiCall(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: apiData
+      });
+    }
+  });
 
   useEffect(() => {
     void loadSchema();
     void loadGroups();
-
-    if (isNewUser) {
-      // Initialize new user with generated ID
-      const defaultUser = {
-        id: generateUserId(),
-        username: '',
-        email: null,
-        fullName: '',
-        name: '',
-        password: '',
-        internalGroups: [],
-        authMethods: ['local'],
-        enabled: true,
-        active: true
-      };
-      setUser(defaultUser);
-      setInitialData(defaultUser);
-      setLoading(false);
-      setError(null); // Clear any previous errors
-    } else {
-      // Call loadUser directly for existing users
-      const loadExistingUser = async () => {
-        try {
-          setLoading(true);
-          const response = await makeAdminApiCall('/admin/auth/users');
-          const data = response.data;
-
-          // Find the user by ID in the users object
-          const userData = Object.values(data.users || {}).find(u => u.id === userId);
-          if (!userData) {
-            throw new Error('User not found');
-          }
-
-          const loadedUser = { ...userData, password: '' };
-          setUser(loadedUser);
-          setInitialData(loadedUser);
-        } catch (err) {
-          setError(getAdminApiErrorMessage(err));
-        } finally {
-          setLoading(false);
-        }
-      };
-      void loadExistingUser();
-    }
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [userId]);
 
   const loadSchema = async () => {
@@ -300,10 +333,8 @@ function AdminUserEditPage() {
     }
   };
 
-  const handleSave = async data => {
-    if (!data) data = user;
-
-    if (!data.username) {
+  const handleSave = async () => {
+    if (!user.username) {
       setSaveError('Username is required');
       return;
     }
@@ -311,49 +342,7 @@ function AdminUserEditPage() {
     try {
       setSaving(true);
       setSaveError(null);
-      const method = isNewUser ? 'POST' : 'PUT';
-      const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
-
-      // Check if this is a local auth user (needs password)
-      const isLocalAuth =
-        !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
-
-      // Prepare the data for API call
-      const apiData = {
-        username: data.username,
-        email: data.email || null,
-        name: data.fullName || data.name || '',
-        // Use internalGroups, with fallback to groups for backward compatibility
-        internalGroups: data.internalGroups || data.groups || [],
-        active: data.enabled !== false,
-        authMethods: data.authMethods || ['local']
-      };
-
-      // Personal usage limits (only the update route accepts them); `null`
-      // clears limits saved before.
-      if (!isNewUser) {
-        apiData.usageLimits = normalizeUsageLimits(data.usageLimits);
-      }
-
-      // Only include password if it's provided
-      if (data.password) {
-        apiData.password = data.password;
-      }
-
-      // For new local auth users, ensure password is provided
-      if (isNewUser && isLocalAuth && !data.password) {
-        throw new Error('Password is required for local authentication users');
-      }
-
-      await makeAdminApiCall(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: apiData
-      });
-
-      markSaved();
+      await save();
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
@@ -369,175 +358,142 @@ function AdminUserEditPage() {
 
   const handleFormSubmit = async e => {
     e.preventDefault();
-    await handleSave(user);
+    await handleSave();
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  if (error) {
+  if (!loading && error) {
     return <AdminLoadError title="Error" message={error} action={null} />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminBreadcrumb
-          crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Users', href: '/admin/users' },
-            { label: isNewUser ? 'New User' : (user?.username ?? userId) }
-          ]}
-        />
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {isNewUser
-                  ? t('admin.users.edit.createTitle', 'Create New User')
-                  : t('admin.users.edit.editTitle', 'Edit User')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {isNewUser
-                  ? t(
-                      'admin.users.edit.createDesc',
-                      'Create a new user account with permissions and settings'
-                    )
-                  : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              {!isNewUser && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(user, null, 2);
-                    const dataUri =
-                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `user-${user.username}.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="download" className="h-4 w-4 mr-2" />
-                  {t('common.download')}
-                </button>
-              )}
+    <AdminEditPageShell
+      loading={loading}
+      outerClassName="min-h-screen bg-gray-50 dark:bg-gray-900"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Users', href: '/admin/users' },
+        { label: isNewUser ? 'New User' : (user?.username ?? userId) }
+      ]}
+      blocker={blocker}
+    >
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {isNewUser
+                ? t('admin.users.edit.createTitle', 'Create New User')
+                : t('admin.users.edit.editTitle', 'Edit User')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {isNewUser
+                ? t(
+                    'admin.users.edit.createDesc',
+                    'Create a new user account with permissions and settings'
+                  )
+                : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            {!isNewUser && (
               <button
-                onClick={() => navigate('/admin/users')}
+                type="button"
+                onClick={() => {
+                  const dataStr = JSON.stringify(user, null, 2);
+                  const dataUri =
+                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                  const exportFileDefaultName = `user-${user.username}.json`;
+                  const linkElement = document.createElement('a');
+                  linkElement.setAttribute('href', dataUri);
+                  linkElement.setAttribute('download', exportFileDefaultName);
+                  linkElement.click();
+                }}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('admin.users.edit.backToList', 'Back to Users')}
+                <Icon name="download" className="h-4 w-4 mr-2" />
+                {t('common.download')}
               </button>
+            )}
+            <button
+              onClick={() => navigate('/admin/users')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+              {t('admin.users.edit.backToList', 'Back to Users')}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {saveError && (
+        <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+          <div className="flex">
+            <div className="shrink-0">
+              <Icon name="warning" size="md" className="text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
             </div>
           </div>
         </div>
+      )}
 
-        {saveError && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <div className="shrink-0">
-                <Icon name="warning" size="md" className="text-red-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
-              </div>
-            </div>
-          </div>
+      <form onSubmit={handleFormSubmit} className="space-y-8">
+        <DualModeEditor
+          value={user}
+          onChange={handleDataChange}
+          formComponent={UserFormEditor}
+          formProps={{
+            isNewUser,
+            jsonSchema,
+            availableGroups
+          }}
+          jsonSchema={jsonSchema}
+          title={
+            isNewUser
+              ? t('admin.users.edit.createTitle', 'Create New User')
+              : t('admin.users.edit.editTitle', 'Edit User')
+          }
+        />
+
+        {isNewUser ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t(
+              'admin.usageLimits.newUserHint',
+              'Personal usage limits can be set once the user has been created.'
+            )}
+          </p>
+        ) : (
+          <>
+            <UserUsagePanel userId={userId} />
+            <UsageLimitsEditor
+              level="user"
+              value={user?.usageLimits}
+              modelIds={['*']}
+              onChange={usageLimits =>
+                setUser(prev => {
+                  const next = { ...prev };
+                  if (usageLimits) next.usageLimits = usageLimits;
+                  else delete next.usageLimits;
+                  return next;
+                })
+              }
+            />
+          </>
         )}
 
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={user}
-            onChange={handleDataChange}
-            formComponent={UserFormEditor}
-            formProps={{
-              isNewUser,
-              jsonSchema,
-              availableGroups
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              isNewUser
-                ? t('admin.users.edit.createTitle', 'Create New User')
-                : t('admin.users.edit.editTitle', 'Edit User')
-            }
-          />
-
-          {isNewUser ? (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t(
-                'admin.usageLimits.newUserHint',
-                'Personal usage limits can be set once the user has been created.'
-              )}
-            </p>
-          ) : (
-            <>
-              <UserUsagePanel userId={userId} />
-              <UsageLimitsEditor
-                level="user"
-                value={user?.usageLimits}
-                modelIds={['*']}
-                onChange={usageLimits =>
-                  setUser(prev => {
-                    const next = { ...prev };
-                    if (usageLimits) next.usageLimits = usageLimits;
-                    else delete next.usageLimits;
-                    return next;
-                  })
-                }
-              />
-            </>
-          )}
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/users')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.users.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.users.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
-    </div>
+        {/* Save buttons */}
+        <AdminSaveCancelButtons
+          onCancel={() => navigate('/admin/users')}
+          cancelLabel={t('admin.users.edit.cancel', 'Cancel')}
+          saving={saving}
+          saveLabel={t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')}
+          savingLabel={t('admin.users.edit.saving', 'Saving...')}
+          cancelClassName="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          saveClassName="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        />
+      </form>
+    </AdminEditPageShell>
   );
 }
 
