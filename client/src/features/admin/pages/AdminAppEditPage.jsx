@@ -11,9 +11,8 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import ContentAccessSection from '../components/ContentAccessSection';
 import AppTestPanel from '../components/AppTestPanel';
 import { buildPath } from '../../../utils/runtimeBasePath';
@@ -22,12 +21,8 @@ function AdminAppEditPage() {
   const { t } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
-  const [app, setApp] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [loading, setLoading] = useState(true);
   // Which save is running: 'stay' (Save) or 'exit' (Save & Exit); null when idle.
   const [saving, setSaving] = useState(null);
-  const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
@@ -40,8 +35,6 @@ function AdminAppEditPage() {
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
-
-  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, app);
 
   const showToast = useCallback(message => {
     clearTimeout(toastTimerRef.current);
@@ -86,93 +79,84 @@ function AdminAppEditPage() {
     void loadJsonSchema();
   }, []);
 
-  useEffect(() => {
-    if (appId === 'new') {
-      // Initialize new app
-      const defaultApp = {
-        id: '',
-        type: 'chat',
-        order: 0,
-        name: { en: '' },
-        description: { en: '' },
-        color: '#4F46E5',
-        icon: 'chat-bubbles',
-        system: { en: '' },
-        preferredModel: undefined,
-        preferredOutputFormat: 'markdown',
-        preferredStyle: 'keep',
-        enabled: true,
-        variables: [],
-        starterPrompts: [],
-        tools: [],
-        greeting: {
-          en: {
-            title: '👋 Hello!',
-            subtitle: 'How can I help you today?'
-          },
-          de: {
-            title: '👋 Hallo!',
-            subtitle: 'Wie kann ich Ihnen heute helfen?'
-          }
+  const makeDefault = () => {
+    return {
+      id: '',
+      type: 'chat',
+      order: 0,
+      name: { en: '' },
+      description: { en: '' },
+      color: '#4F46E5',
+      icon: 'chat-bubbles',
+      system: { en: '' },
+      preferredModel: undefined,
+      preferredOutputFormat: 'markdown',
+      preferredStyle: 'keep',
+      enabled: true,
+      variables: [],
+      starterPrompts: [],
+      tools: [],
+      greeting: {
+        en: {
+          title: '👋 Hello!',
+          subtitle: 'How can I help you today?'
         },
-        allowEmptyContent: false,
-        sendChatHistory: true,
-        ephemeral: false,
-        category: 'utility',
-        inputMode: {
-          type: 'singleline',
-          rows: 5,
-          microphone: {
-            enabled: true,
-            mode: 'manual',
-            showTranscript: true
-          }
-        },
-        upload: {
-          enabled: false,
-          imageUpload: {
-            enabled: false,
-            resizeImages: true,
-            maxFileSizeMB: 10,
-            supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-          },
-          fileUpload: {
-            enabled: false,
-            maxFileSizeMB: 20,
-            supportedFormats: [
-              'text/plain',
-              'text/markdown',
-              'text/csv',
-              'text/vtt',
-              'application/json',
-              'text/html',
-              'text/css',
-              'text/javascript',
-              'application/javascript',
-              'text/xml',
-              'message/rfc822',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-outlook',
-              'application/vnd.oasis.opendocument.text',
-              'application/vnd.oasis.opendocument.spreadsheet',
-              'application/vnd.oasis.opendocument.presentation'
-            ]
-          }
+        de: {
+          title: '👋 Hallo!',
+          subtitle: 'Wie kann ich Ihnen heute helfen?'
         }
-      };
-      setApp(defaultApp);
-      setInitialData(defaultApp);
-      setLoading(false);
-    } else {
-      loadApp();
-    }
-  }, [appId]); // eslint-disable-line @eslint-react/exhaustive-deps
+      },
+      allowEmptyContent: false,
+      sendChatHistory: true,
+      ephemeral: false,
+      category: 'utility',
+      inputMode: {
+        type: 'singleline',
+        rows: 5,
+        microphone: {
+          enabled: true,
+          mode: 'manual',
+          showTranscript: true
+        }
+      },
+      upload: {
+        enabled: false,
+        imageUpload: {
+          enabled: false,
+          resizeImages: true,
+          maxFileSizeMB: 10,
+          supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        },
+        fileUpload: {
+          enabled: false,
+          maxFileSizeMB: 20,
+          supportedFormats: [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'text/vtt',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml',
+            'message/rfc822',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+          ]
+        }
+      }
+    };
+  };
 
-  const loadApp = useCallback(async () => {
+  const loadResource = async id => {
     try {
-      setLoading(true);
-      const response = await makeAdminApiCall(`/admin/apps/${appId}`);
+      const response = await makeAdminApiCall(`/admin/apps/${id}`);
       const data = response.data;
 
       // Ensure all configuration sections exist with defaults
@@ -243,14 +227,36 @@ function AdminAppEditPage() {
         }
       };
 
-      setApp(appWithDefaults);
-      setInitialData(appWithDefaults);
+      return appWithDefaults;
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setLoading(false);
+      throw new Error(getAdminApiErrorMessage(err));
     }
-  }, [appId]);
+  };
+
+  const saveResource = async (data, id) => {
+    const isNew = id === 'new';
+    const method = isNew ? 'POST' : 'PUT';
+    const url = isNew ? '/admin/apps' : `/admin/apps/${id}`;
+
+    // Clean the app data before saving
+    await makeAdminApiCall(url, {
+      method,
+      body: cleanAppData(data)
+    });
+  };
+
+  const {
+    data: app,
+    setData: setApp,
+    initialData,
+    isDirty,
+    loading,
+    error,
+    setError,
+    isNew: isNewApp,
+    save,
+    blocker
+  } = useAdminResourceEditor({ resourceId: appId, loadResource, makeDefault, saveResource });
 
   const cleanAppData = appData => {
     // Clean up variables - remove empty defaultValue and predefinedValues
@@ -341,39 +347,27 @@ function AdminAppEditPage() {
 
     // The state being saved; the admin may keep editing while the request runs.
     const savedApp = app;
-    const isNew = appId === 'new';
 
     try {
       setSaving(exit ? 'exit' : 'stay');
       setSaveError(null);
-      const method = isNew ? 'POST' : 'PUT';
-      const url = isNew ? '/admin/apps' : `/admin/apps/${appId}`;
 
-      // Clean the app data before saving
-      const cleanedApp = cleanAppData(savedApp);
-
-      await makeAdminApiCall(url, {
-        method,
-        body: cleanedApp
-      });
+      // Persists the (cleaned) app and marks the editor as saved.
+      await save();
 
       if (exit) {
-        markSaved();
         navigate('/admin/apps');
         return;
       }
 
-      if (isNew) {
+      if (isNewApp) {
         // From now on this is an existing app: later saves use PUT, and
         // History, Download, Open app and Test become available.
-        markSaved();
         navigate(`/admin/apps/${encodeURIComponent(savedApp.id)}`, { replace: true });
         showToast(t('admin.apps.edit.created', 'App created'));
         return;
       }
 
-      // The saved state is the new baseline for the unsaved-changes check.
-      setInitialData(savedApp);
       setPreviewReloadKey(key => key + 1);
       showToast(t('admin.apps.edit.saved', 'App saved'));
     } catch (err) {
@@ -415,20 +409,7 @@ function AdminAppEditPage() {
     setEditingMode(mode);
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            {t('admin.apps.loading', 'Loading...')}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && !loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
@@ -461,7 +442,6 @@ function AdminAppEditPage() {
     );
   }
 
-  const isNewApp = appId === 'new';
   // Open app and Test run the saved app, so they follow the saved enabled
   // state; disabled apps aren't served to the chat UI.
   const savedEnabled = initialData?.enabled !== false;
@@ -474,14 +454,26 @@ function AdminAppEditPage() {
     // left, the app runs on the right (full screen below the lg breakpoint).
     <div className={testOpen ? 'lg:flex lg:h-full' : undefined}>
       <div className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <AdminBreadcrumb
-            crumbs={[
-              { label: 'Admin', href: '/admin' },
-              { label: 'Apps', href: '/admin/apps' },
-              { label: isNewApp ? 'New App' : appName }
-            ]}
-          />
+        <AdminEditPageShell
+          loading={loading}
+          loadingFallback={
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  {t('admin.apps.loading', 'Loading...')}
+                </p>
+              </div>
+            </div>
+          }
+          contentClassName="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+          breadcrumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Apps', href: '/admin/apps' },
+            { label: isNewApp ? 'New App' : appName }
+          ]}
+          blocker={blocker}
+        >
           {/* Wraps the actions below the title when they don't fit beside it,
               e.g. next to the test panel. */}
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -685,7 +677,7 @@ function AdminAppEditPage() {
               </button>
             </div>
           </form>
-        </div>
+        </AdminEditPageShell>
       </div>
 
       {testOpen && !isNewApp && (
@@ -713,17 +705,6 @@ function AdminAppEditPage() {
         onClose={() => setHistoryOpen(false)}
         resource="app"
         resourceId={appId}
-      />
-
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
       />
     </div>
   );

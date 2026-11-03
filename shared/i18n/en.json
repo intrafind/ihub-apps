@@ -5646,6 +5646,12 @@
         "weekShort": "Weekly",
         "monthShort": "Monthly"
       }
+    },
+    "unsavedChanges": {
+      "title": "Unsaved changes",
+      "message": "You have unsaved changes. Leave anyway?",
+      "leave": "Leave",
+      "stay": "Stay"
     }
   },
   "cloudStorage": {

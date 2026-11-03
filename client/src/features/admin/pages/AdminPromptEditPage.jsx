@@ -5,9 +5,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminEditPageShell, {
+  AdminSaveCancelButtons
+} from '../../../shared/components/AdminEditPageShell';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import ContentAccessSection from '../components/ContentAccessSection';
 import {
   createPrompt,
@@ -28,46 +29,77 @@ function AdminPromptEditPage() {
   const { promptId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const isNewPrompt = promptId === 'new';
 
-  const defaultPromptData = {
-    id: '',
-    name: { en: '' },
-    description: { en: '' },
-    prompt: { en: '' },
-    icon: 'clipboard',
-    enabled: true,
-    order: undefined,
-    appId: '',
-    variables: [],
-    category: 'creative'
-  };
-
-  const [promptData, setPromptData] = useState(defaultPromptData);
-  const [initialData, setInitialData] = useState(isNewPrompt ? defaultPromptData : null);
-
-  const [loading, setLoading] = useState(!isNewPrompt);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [apps, setApps] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, promptData);
+  const {
+    data: promptData,
+    setData: setPromptData,
+    loading,
+    error,
+    isNew: isNewPrompt,
+    save,
+    blocker
+  } = useAdminResourceEditor({
+    resourceId: promptId,
+    loadResource: async id => {
+      try {
+        const data = await fetchAdminPrompts();
+        const promptDataFromApi = data.find(p => p.id === id);
 
-  useEffect(() => {
-    if (isNewPrompt && location.state?.templatePrompt) {
-      const tpl = location.state.templatePrompt;
-      setPromptData(prev => ({
-        ...prev,
-        ...tpl,
+        if (!promptDataFromApi) {
+          throw new Error('Prompt not found');
+        }
+
+        // Ensure proper structure for editing
+        return {
+          ...promptDataFromApi,
+          name: promptDataFromApi.name || { en: '' },
+          description: promptDataFromApi.description || { en: '' },
+          prompt: promptDataFromApi.prompt || { en: '' },
+          variables: promptDataFromApi.variables || [],
+          appId: promptDataFromApi.appId || '',
+          order: promptDataFromApi.order,
+          enabled: promptDataFromApi.enabled !== false
+        };
+      } catch (err) {
+        // The hook surfaces `err.message`; keep the server-provided error detail.
+        throw new Error(getAdminApiErrorMessage(err));
+      }
+    },
+    makeDefault: () => {
+      const defaults = {
         id: '',
-        enabled: tpl.enabled !== false
-      }));
+        name: { en: '' },
+        description: { en: '' },
+        prompt: { en: '' },
+        icon: 'clipboard',
+        enabled: true,
+        order: undefined,
+        appId: '',
+        variables: [],
+        category: 'creative'
+      };
+      const tpl = location.state?.templatePrompt;
+      return tpl ? { ...defaults, ...tpl, id: '', enabled: tpl.enabled !== false } : defaults;
+    },
+    saveResource: async (data, id) => {
+      if (id === 'new') {
+        await createPrompt(data);
+      } else {
+        await updatePrompt(id, data);
+      }
+
+      // Clear cache to force refresh
+      clearApiCache('admin_prompts');
+      clearApiCache('prompts');
     }
-  }, [isNewPrompt, location.state]);
+  });
 
   useEffect(() => {
     // Load apps for the appId dropdown, UI config, and JSON schema
@@ -84,11 +116,7 @@ function AdminPromptEditPage() {
     loadApps();
     loadUIConfig();
     void loadJsonSchema();
-
-    if (!isNewPrompt) {
-      loadPrompt();
-    }
-  }, [promptId, isNewPrompt]); // eslint-disable-line @eslint-react/exhaustive-deps
+  }, [promptId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadApps = useCallback(async () => {
     try {
@@ -108,53 +136,13 @@ function AdminPromptEditPage() {
     }
   }, []);
 
-  const loadPrompt = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await fetchAdminPrompts();
-      const promptDataFromApi = data.find(p => p.id === promptId);
-
-      if (!promptDataFromApi) {
-        throw new Error('Prompt not found');
-      }
-
-      // Ensure proper structure for editing
-      const processedPrompt = {
-        ...promptDataFromApi,
-        name: promptDataFromApi.name || { en: '' },
-        description: promptDataFromApi.description || { en: '' },
-        prompt: promptDataFromApi.prompt || { en: '' },
-        variables: promptDataFromApi.variables || [],
-        appId: promptDataFromApi.appId || '',
-        order: promptDataFromApi.order,
-        enabled: promptDataFromApi.enabled !== false
-      };
-
-      setPromptData(processedPrompt);
-      setInitialData(processedPrompt);
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [promptId]);
-
-  const handleSave = async data => {
+  const handleSave = async () => {
     try {
       setSaving(true);
       setSaveError(null);
 
-      if (isNewPrompt) {
-        await createPrompt(data);
-      } else {
-        await updatePrompt(promptId, data);
-      }
+      await save();
 
-      // Clear cache to force refresh
-      clearApiCache('admin_prompts');
-      clearApiCache('prompts');
-
-      markSaved();
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
@@ -170,16 +158,8 @@ function AdminPromptEditPage() {
 
   const handleFormSubmit = async e => {
     e.preventDefault();
-    await handleSave(promptData);
+    await handleSave();
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -195,151 +175,131 @@ function AdminPromptEditPage() {
   }
 
   return (
-    <div>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminBreadcrumb
-          crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Prompts', href: '/admin/prompts' },
-            { label: isNewPrompt ? 'New Prompt' : (promptData?.name?.en ?? promptId) }
-          ]}
-        />
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {isNewPrompt
-                  ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
-                  : t('admin.prompts.edit.editTitle', 'Edit Prompt')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {isNewPrompt
-                  ? t('admin.prompts.edit.createDesc', 'Create a new prompt for your iHub Apps')
-                  : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              {!isNewPrompt && (
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen(true)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="clock" className="h-4 w-4 mr-2" />
-                  {t('admin.prompts.edit.history', 'History')}
-                </button>
-              )}
-              {!isNewPrompt && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(promptData, null, 2);
-                    const dataUri =
-                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `prompt-${promptData.id}.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="download" className="h-4 w-4 mr-2" />
-                  {t('common.download')}
-                </button>
-              )}
-              <button
-                onClick={() => navigate('/admin/prompts')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('admin.prompts.edit.backToList', 'Back to Prompts')}
-              </button>
-            </div>
-          </div>
+    <AdminEditPageShell
+      loading={loading}
+      loadingFallback={
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
         </div>
-
-        {saveError && (
-          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-4">
-            <div className="flex">
-              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                  {t('admin.prompts.errorTitle', 'Error')}
-                </h3>
-                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{saveError}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={promptData}
-            onChange={handleDataChange}
-            formComponent={PromptFormEditor}
-            formProps={{
-              isNewPrompt,
-              apps,
-              categories: uiConfig?.promptsList?.categories?.list || [],
-              jsonSchema
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              isNewPrompt
-                ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
-                : t('admin.prompts.edit.editTitle', 'Edit Prompt')
-            }
-          />
-
-          {/* Group access — which groups may use this prompt (groups.json) */}
-          <ContentAccessSection resourceType="prompts" resourceId={promptId} isNew={isNewPrompt} />
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/prompts')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.prompts.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.prompts.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.prompts.edit.save', 'Save Prompt')
-              )}
-            </button>
-          </div>
-        </form>
-
+      }
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Prompts', href: '/admin/prompts' },
+        { label: isNewPrompt ? 'New Prompt' : (promptData?.name?.en ?? promptId) }
+      ]}
+      blocker={blocker}
+      extra={
         <ChangeHistoryDrawer
           isOpen={historyOpen}
           onClose={() => setHistoryOpen(false)}
           resource="prompt"
           resourceId={promptId}
         />
+      }
+    >
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {isNewPrompt
+                ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
+                : t('admin.prompts.edit.editTitle', 'Edit Prompt')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {isNewPrompt
+                ? t('admin.prompts.edit.createDesc', 'Create a new prompt for your iHub Apps')
+                : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            {!isNewPrompt && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="clock" className="h-4 w-4 mr-2" />
+                {t('admin.prompts.edit.history', 'History')}
+              </button>
+            )}
+            {!isNewPrompt && (
+              <button
+                type="button"
+                onClick={() => {
+                  const dataStr = JSON.stringify(promptData, null, 2);
+                  const dataUri =
+                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                  const exportFileDefaultName = `prompt-${promptData.id}.json`;
+                  const linkElement = document.createElement('a');
+                  linkElement.setAttribute('href', dataUri);
+                  linkElement.setAttribute('download', exportFileDefaultName);
+                  linkElement.click();
+                }}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="download" className="h-4 w-4 mr-2" />
+                {t('common.download')}
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/admin/prompts')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+              {t('admin.prompts.edit.backToList', 'Back to Prompts')}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
-    </div>
+      {saveError && (
+        <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.prompts.errorTitle', 'Error')}
+              </h3>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{saveError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleFormSubmit} className="space-y-8">
+        <DualModeEditor
+          value={promptData}
+          onChange={handleDataChange}
+          formComponent={PromptFormEditor}
+          formProps={{
+            isNewPrompt,
+            apps,
+            categories: uiConfig?.promptsList?.categories?.list || [],
+            jsonSchema
+          }}
+          jsonSchema={jsonSchema}
+          title={
+            isNewPrompt
+              ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
+              : t('admin.prompts.edit.editTitle', 'Edit Prompt')
+          }
+        />
+
+        {/* Group access — which groups may use this prompt (groups.json) */}
+        <ContentAccessSection resourceType="prompts" resourceId={promptId} isNew={isNewPrompt} />
+
+        {/* Save buttons */}
+        <AdminSaveCancelButtons
+          onCancel={() => navigate('/admin/prompts')}
+          cancelLabel={t('admin.prompts.edit.cancel', 'Cancel')}
+          saving={saving}
+          saveLabel={t('admin.prompts.edit.save', 'Save Prompt')}
+          savingLabel={t('admin.prompts.edit.saving', 'Saving...')}
+          cancelClassName="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          saveClassName="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        />
+      </form>
+    </AdminEditPageShell>
   );
 }
 

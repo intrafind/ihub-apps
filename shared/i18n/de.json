@@ -5945,6 +5945,12 @@
         "weekShort": "Wöchentlich",
         "monthShort": "Monatlich"
       }
+    },
+    "unsavedChanges": {
+      "title": "Ungespeicherte Änderungen",
+      "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
+      "leave": "Verlassen",
+      "stay": "Bleiben"
     }
   },
   "cloudStorage": {
