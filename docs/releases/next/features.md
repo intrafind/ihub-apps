@@ -39,6 +39,12 @@ configuration moves into installations on the first start (see Breaking Changes)
   (read, read · write), where it runs (cloud, on-premises, local) and the number of actions; the
   details list each action with its effect. An item that would start a local MCP process (`stdio`)
   is left out of a registry's catalog.
+- **Marketplace integrations in the catalog:** the **Catalog** tab also lists the integrations of
+  the marketplace that are not installed yet, marked **Marketplace**; **Install** fetches the
+  definition from its registry and opens the setup form in one step. 29 hosted MCP servers —
+  among them GitHub, Linear, Stripe, Zapier, Supabase and Microsoft Learn — now come from the iHub
+  Official Marketplace this way, so they get updates without an iHub release; Context7,
+  Atlassian, draw.io, Excalidraw and a few more still ship with iHub.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
   and the files with formats and download links (file contents are not read), and query DataStore
   tables, on GovData, the German state and city portals, data.gov and internal CKAN catalogs.

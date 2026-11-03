@@ -6,7 +6,8 @@
  *
  *   - Installed (default) groups the installations, each a tile with its key
  *     facts (no secret), linking to the installation's page;
- *   - Catalog groups the definitions the same way;
+ *   - Catalog groups the definitions the same way, and lists the marketplace's
+ *     integrations: Install fetches the definition from its registry first;
  *   - Inbound lists what connects to iHub, with the status from platform.json;
  *   - `?install=<folder>` with `v.<key>=` and `label` opens the install dialog
  *     prefilled;
@@ -26,6 +27,8 @@ const mockApi = {
   fetchIntegrationCatalog: jest.fn(),
   fetchAdminApps: jest.fn(),
   fetchAdminPlatformConfig: jest.fn(),
+  installMarketplaceItem: jest.fn(),
+  refreshMarketplaceRegistry: jest.fn(),
   dialogProps: null
 };
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
@@ -42,6 +45,8 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminGroups: jest.fn().mockResolvedValue({ groups: {} }),
   fetchAdminPlatformConfig: (...args) => mockApi.fetchAdminPlatformConfig(...args),
   getAdminApiErrorMessage: err => err?.message || 'error',
+  installMarketplaceItem: (...args) => mockApi.installMarketplaceItem(...args),
+  refreshMarketplaceRegistry: (...args) => mockApi.refreshMarketplaceRegistry(...args),
   makeAdminApiCall: jest.fn()
 }));
 jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
@@ -307,6 +312,62 @@ describe('Catalog and Inbound tabs', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Install Jira' }));
     expect(screen.getByTestId('install-dialog')).toHaveTextContent('com.intrafind/jira');
+  });
+
+  test('installs a marketplace integration from its registry, then opens the setup dialog', async () => {
+    const github = {
+      id: 'mcp/github',
+      name: 'GitHub',
+      version: '1.0.0',
+      protocol: 'mcp',
+      supported: true,
+      compatible: true,
+      authModes: ['service-account'],
+      actionCount: null,
+      dynamicActions: true,
+      source: 'marketplace',
+      marketplace: { registryId: 'ihub-official', registryName: 'Official', name: 'mcp__github' },
+      installedInstances: []
+    };
+    const marketplace = {
+      enabled: true,
+      registries: [{ id: 'ihub-official', name: 'Official', fetchedAt: '2026-11-03T00:00:00Z' }]
+    };
+    mockApi.fetchIntegrationCatalog.mockResolvedValue({ items: [...CATALOG, github], marketplace });
+    mockApi.installMarketplaceItem.mockResolvedValue({});
+    renderPage('/admin/integrations?tab=catalog');
+    await screen.findByText('GitHub');
+    expect(screen.getByText('Marketplace')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Install GitHub' }));
+    expect(await screen.findByTestId('install-dialog')).toHaveTextContent('mcp/github');
+    expect(mockApi.installMarketplaceItem).toHaveBeenCalledWith(
+      'ihub-official',
+      'integration',
+      'mcp__github'
+    );
+    // The catalog is read again, so the dialog finds the installed definition.
+    expect(mockApi.fetchIntegrationCatalog.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // A registry with a cached catalog is not refreshed on the way in.
+    expect(mockApi.refreshMarketplaceRegistry).not.toHaveBeenCalled();
+  });
+
+  test('refreshes a registry that was never fetched, and says when the marketplace is off', async () => {
+    mockApi.fetchIntegrationCatalog.mockResolvedValue({
+      items: CATALOG,
+      marketplace: { enabled: true, registries: [{ id: 'r1', name: 'R1', fetchedAt: null }] }
+    });
+    mockApi.refreshMarketplaceRegistry.mockResolvedValue({});
+    const { unmount } = renderPage('/admin/integrations?tab=catalog');
+    await screen.findByText('Jira');
+    expect(mockApi.refreshMarketplaceRegistry).toHaveBeenCalledWith('r1');
+    unmount();
+
+    mockApi.fetchIntegrationCatalog.mockResolvedValue({
+      items: CATALOG,
+      marketplace: { enabled: false, registries: [] }
+    });
+    renderPage('/admin/integrations?tab=catalog');
+    expect(await screen.findByTestId('catalog-marketplace-off')).toBeInTheDocument();
   });
 
   test('inbound lists what connects to iHub with its status', async () => {

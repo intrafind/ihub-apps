@@ -3088,14 +3088,16 @@
       },
       "source": {
         "shipped": "Shipped",
-        "installed": "From registry"
+        "installed": "From registry",
+        "marketplace": "Marketplace"
       },
       "facts": {
         "protocol": "Protocol",
         "signIn": "Sign-in",
         "actions": "Actions",
         "publisher": "Publisher",
-        "compatibility": "Needs"
+        "compatibility": "Needs",
+        "actionsDynamic": "From the server"
       },
       "actions": {
         "test": "Test {{id}}",
@@ -3187,7 +3189,10 @@
         "starttls": "StartTLS",
         "plaintext": "Plain text",
         "unknown": "Transport unknown"
-      }
+      },
+      "installing": "Installing…",
+      "marketplaceInstallFailed": "{{name}} could not be installed from {{registry}}: {{error}}",
+      "marketplaceOff": "The catalog also lists the integrations of the marketplace (hosted MCP servers such as GitHub, Linear or Stripe) when the Marketplace feature is on under Admin → Features."
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",

@@ -17,6 +17,7 @@ import {
 import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSchema.js';
 import { localized } from '../../services/integrations/definitions/installedValues.js';
 import { findDefinitionUpdates } from '../../services/integrations/definitions/definitionUpdates.js';
+import { findMarketplaceDefinitions } from '../../services/integrations/definitions/marketplaceDefinitions.js';
 import { serverVersion } from '../../services/integrations/definitions/compatibility.js';
 import definitionMigrationRunner from '../../services/integrations/definitions/DefinitionMigrationRunner.js';
 import { describeStep } from '../../services/integrations/definitions/migrationPlanner.js';
@@ -47,6 +48,7 @@ const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
  * Admin API of the integrations platform (#3061):
  *
  *   GET  /api/admin/integrations/catalog                      definitions (shipped + installed from registries)
+ *                                                             and the marketplace's integrations not installed yet
  *   GET  /api/admin/integrations/catalog/:definitionId         one definition with its install fields, actions and releases
  *   GET  /api/admin/integrations/catalog/:definitionId/_file?path=  a Markdown companion file (release notes) of a definition
  *   POST /api/admin/integrations/catalog/:definitionId/_test   test an unsaved instance
@@ -323,6 +325,23 @@ async function definitionUpdates() {
 }
 
 /**
+ * The marketplace's integrations that are not on this server yet
+ * (`marketplaceDefinitions.js`); none when the catalogs cannot be read: the
+ * catalog must not fail because a registry cache is broken.
+ */
+async function marketplaceDefinitions(entries, language) {
+  try {
+    return await findMarketplaceDefinitions(entries, language);
+  } catch (error) {
+    logger.warn('Could not list the marketplace integrations for the catalog', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return { enabled: false, registries: [], items: [] };
+  }
+}
+
+/**
  * The migration view of installations (`DefinitionMigrationRunner.describe`),
  * or an empty map when it cannot be built: the list must not fail because a
  * backup folder is unreadable.
@@ -435,13 +454,17 @@ export default function registerAdminIntegrationsRoutes(app) {
       const language = languageOf(req);
       const instances = installedIntegrationService.list();
       const updates = await definitionUpdates();
-      const items = integrationRegistry
-        .list()
-        .map(entry => catalogEntryView(entry, language, instances, updates))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      const entries = integrationRegistry.list();
+      const marketplace = await marketplaceDefinitions(entries, language);
+      const items = [
+        ...entries.map(entry => catalogEntryView(entry, language, instances, updates)),
+        ...marketplace.items
+      ].sort((a, b) => a.name.localeCompare(b.name));
       res.json({
         success: true,
         items,
+        /** Whether the marketplace feeds the catalog, and which registries' catalogs are cached. */
+        marketplace: { enabled: marketplace.enabled, registries: marketplace.registries },
         supportedProtocols: supportedProtocols(),
         serverVersion: serverVersion()
       });

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -49,7 +49,9 @@ import {
   fetchAdminApps,
   fetchAdminGroups,
   fetchAdminPlatformConfig,
-  getAdminApiErrorMessage
+  getAdminApiErrorMessage,
+  installMarketplaceItem,
+  refreshMarketplaceRegistry
 } from '../../../api/adminApi';
 
 const TABS = new Set(['installed', 'catalog', 'requests', 'inbound']);
@@ -138,6 +140,10 @@ function AdminIntegrationsPage() {
 
   const [installed, setInstalled] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  // Whether the marketplace feeds the catalog, and its registries ({ id, name, fetchedAt }).
+  const [marketplace, setMarketplace] = useState(null);
+  // Registries without a cached catalog are refreshed once per visit.
+  const refreshedRegistries = useRef(false);
   const [apps, setApps] = useState([]);
   // The groups (id → group), for who grants each installation; null when unknown.
   const [groups, setGroups] = useState(null);
@@ -178,6 +184,7 @@ function AdminIntegrationsPage() {
       ]);
       setInstalled(installedRes?.items || []);
       setCatalog(catalogRes?.items || []);
+      setMarketplace(catalogRes?.marketplace || null);
       // Which apps bind each installation (for the remove and disable
       // warnings) and which groups grant it (for the tiles); the page works
       // without either list.
@@ -199,6 +206,21 @@ function AdminIntegrationsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The marketplace's integrations come from the registries' cached
+  // catalogs; a registry that was never refreshed is fetched once, so the
+  // catalog lists its integrations without a trip to the Marketplace page.
+  useEffect(() => {
+    if (refreshedRegistries.current || !marketplace?.enabled) return;
+    const missing = (marketplace.registries || []).filter(registry => !registry.fetchedAt);
+    refreshedRegistries.current = true;
+    if (missing.length === 0) return;
+    void Promise.allSettled(missing.map(registry => refreshMarketplaceRegistry(registry.id))).then(
+      results => {
+        if (results.some(result => result.status === 'fulfilled')) void load();
+      }
+    );
+  }, [marketplace, load]);
 
   // The queue is read on its own: the page works without it.
   useEffect(() => {
@@ -239,7 +261,7 @@ function AdminIntegrationsPage() {
   useEffect(() => {
     const definitionId = definitionIdFromParam(installParam);
     if (!definitionId || loading) return;
-    setDialog({ definitionId, prefill: prefillFromParams(searchParams) });
+    void startInstall(definitionId, prefillFromParams(searchParams));
     const next = new URLSearchParams(searchParams);
     next.delete('install');
     next.delete('label');
@@ -394,9 +416,52 @@ function AdminIntegrationsPage() {
     }
   };
 
+  /**
+   * Install a definition from the catalog: a marketplace entry is first
+   * installed from its registry (the marketplace's own install and checks),
+   * then the setup dialog opens for it like for any loaded definition.
+   */
+  async function startInstall(definitionId, prefill) {
+    const item = catalog.find(entry => entry.id === definitionId);
+    if (item?.source !== 'marketplace') {
+      setDialog({ definitionId, prefill });
+      return;
+    }
+    setBusy(definitionId);
+    try {
+      await installMarketplaceItem(
+        item.marketplace.registryId,
+        'integration',
+        item.marketplace.name
+      );
+      await load();
+      setDialog({ definitionId, prefill });
+    } catch (err) {
+      flash(
+        'error',
+        t(
+          'admin.integrationCatalog.marketplaceInstallFailed',
+          '{{name}} could not be installed from {{registry}}: {{error}}',
+          {
+            name: item.name,
+            registry: item.marketplace.registryName,
+            error: getAdminApiErrorMessage(err)
+          }
+        )
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const reload = async () => {
     try {
       await reloadIntegrationCatalog();
+      if (marketplace?.enabled) {
+        await Promise.allSettled(
+          (marketplace.registries || []).map(registry => refreshMarketplaceRegistry(registry.id))
+        );
+      }
       await load();
       flash('success', t('admin.integrationCatalog.reloaded', 'Catalog reloaded.'));
     } catch (err) {
@@ -610,6 +675,14 @@ function AdminIntegrationsPage() {
               {t('admin.integrationBuilder.addManually', 'Add manually')}
             </Link>
           </div>
+          {marketplace && !marketplace.enabled && (
+            <p className={`mb-6 ${CALLOUT_CLASS.info}`} data-testid="catalog-marketplace-off">
+              {t(
+                'admin.integrationCatalog.marketplaceOff',
+                'The catalog also lists the integrations of the marketplace (hosted MCP servers such as GitHub, Linear or Stripe) when the Marketplace feature is on under Admin → Features.'
+              )}
+            </p>
+          )}
           {searchBox}
           {catalogGroups.length === 0 ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -626,7 +699,8 @@ function AdminIntegrationsPage() {
                     <CatalogTile
                       key={item.id}
                       item={item}
-                      onInstall={definitionId => setDialog({ definitionId })}
+                      busy={busy === item.id}
+                      onInstall={definitionId => void startInstall(definitionId)}
                     />
                   ))}
                 </IntegrationGroupSection>
