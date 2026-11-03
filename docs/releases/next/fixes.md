@@ -1,5 +1,18 @@
 # Fixes — Unreleased
 
+## Audit Log Shows Each Person Under One Name
+
+The **Actor** column of the audit log showed a person's name for their sign-in and an internal id
+such as `user_3633d1e2_…` for everything they did afterwards, most visibly for users signed in with
+OIDC (Microsoft, Google, …). The same person also appeared twice in the **Actor** filter. Every
+entry, including ones recorded before this release, now shows the user's current display name.
+Search still finds an entry by the raw id, and hovering over the name shows it.
+
+The resource an entry is about now opens with a click: the app, model, prompt, group, user,
+project, integration or OAuth client opens its admin page, and other types open their list page.
+The actor's name links to their user page. The CSV export has a new `actorId` column next to
+`actor`.
+
 ## Skill Files Load When the Assistant Leaves Out the Skill Name
 
 When the assistant read a file bundled with a skill (for example the pattern guide of the

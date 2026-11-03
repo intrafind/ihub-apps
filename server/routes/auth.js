@@ -156,6 +156,7 @@ export default function registerAuthRoutes(app) {
           actor: {
             id: result.user?.id ?? 'unknown',
             username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+            name: result.user?.name ?? result.user?.username ?? result.user?.id ?? 'unknown',
             groups: result.user?.groups || [],
             authenticated: true
           }
@@ -378,6 +379,7 @@ export default function registerAuthRoutes(app) {
         actor: {
           id: result.user?.id ?? 'unknown',
           username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+          name: result.user?.name ?? result.user?.username ?? result.user?.id ?? 'unknown',
           groups: result.user?.groups || [],
           authenticated: true
         }
@@ -530,6 +532,7 @@ export default function registerAuthRoutes(app) {
         actor: {
           id: result.user?.id ?? 'unknown',
           username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+          name: result.user?.name ?? result.user?.username ?? result.user?.id ?? 'unknown',
           groups: result.user?.groups || [],
           authenticated: true
         }

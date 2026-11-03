@@ -5,13 +5,14 @@ import { promises as fs, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { getContentsPath } from '../utils/contentsPath.js';
+import { getContentsPath, localUsersFile } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';
 import { getContext } from '../utils/requestContext.js';
 import { anonymizeIp } from '../utils/ipAnonymizer.js';
 import { validateAuditEntry } from '../validators/auditEntrySchema.js';
 import { createJsonlAppender } from '../utils/jsonlAppender.js';
+import { loadUsers } from '../utils/userManager.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -80,11 +81,16 @@ function buildActor(req, explicitActor) {
   const src = explicitActor || req?.user || {};
   let id = src.id ?? 'unknown';
   let username = src.username ?? src.name ?? src.id ?? 'unknown';
-  // Mask email-shaped identifiers in BOTH id and username so includeEmail:false
-  // actually prevents email storage (login actors set id = the attempted email).
+  // Human-readable name, kept separately from the login identifier so the log
+  // can show one consistent label per person (see resolveActorLabel).
+  let name = src.name ?? src.displayName ?? username;
+  // Mask email-shaped identifiers in id, username and name so includeEmail:false
+  // actually prevents email storage (login actors set id = the attempted email,
+  // and OIDC names fall back to the email address).
   if (!includeEmail) {
     id = maskEmail(id);
     username = maskEmail(username);
+    name = maskEmail(name);
   }
   const authenticated =
     typeof src.authenticated === 'boolean'
@@ -93,6 +99,7 @@ function buildActor(req, explicitActor) {
   return {
     id,
     username,
+    name,
     groups: Array.isArray(src.groups) ? src.groups : [],
     authenticated
   };
@@ -231,15 +238,53 @@ const FACET_FIELDS = ['actor', 'resource', 'action', 'result', 'source'];
 const SEARCH_FIELDS = ['summary', 'resourceId', 'ip', 'requestId'];
 
 /**
+ * Map of user id -> display name from the user database, used to label actors
+ * consistently on read. Entries record the actor in different shapes depending
+ * on where they were written (a login records the display name, a later
+ * request only the persisted `user_…` id), and older entries carry no name at
+ * all, so the label is resolved against the current user record.
+ *
+ * @returns {Map<string, string>}
+ */
+function loadActorNames() {
+  const names = new Map();
+  try {
+    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+    const users = loadUsers(localUsersFile(platform?.localAuth))?.users || {};
+    for (const [key, user] of Object.entries(users)) {
+      const name = user?.name || user?.username;
+      if (!name) continue;
+      names.set(user.id || key, name);
+    }
+  } catch {
+    // No user database: fall back to what the entries themselves recorded.
+  }
+  return names;
+}
+
+/**
+ * The label an actor is shown, filtered and searched by: the user's current
+ * name when the id is a known user, else the name stored on the entry, else
+ * the username, else the legacy `admin` string.
+ */
+function resolveActorLabel(entry, actorNames, includeEmail) {
+  const actor = entry.actor;
+  const label =
+    (actor?.id && actorNames?.get(actor.id)) || actor?.name || actor?.username || entry.admin || '';
+  return includeEmail ? label : maskEmail(label);
+}
+
+/**
  * Read the facet value of a field from an entry, normalizing the two legacy
  * shapes: entries written before the actor migration carry a plain `admin`
  * string instead of an `actor` object, and `result` was optional (absent meant
- * success).
+ * success). The actor label is resolved once per entry by queryAuditLog and
+ * stored as `actor.displayName`.
  */
 function facetValue(entry, field) {
   switch (field) {
     case 'actor':
-      return entry.actor?.username ?? entry.admin ?? '';
+      return entry.actor?.displayName ?? entry.actor?.username ?? entry.admin ?? '';
     case 'result':
       return entry.result ?? 'success';
     default:
@@ -301,7 +346,12 @@ function buildTextMatcher(q) {
       if (typeof value === 'string' && value.toLowerCase().includes(needle)) return true;
     }
     const actor = facetValue(entry, 'actor');
-    return typeof actor === 'string' && actor.toLowerCase().includes(needle);
+    if (typeof actor === 'string' && actor.toLowerCase().includes(needle)) return true;
+    // Admins may still search by the raw id or username a label replaces.
+    for (const value of [entry.actor?.id, entry.actor?.username]) {
+      if (typeof value === 'string' && value.toLowerCase().includes(needle)) return true;
+    }
+    return false;
   };
 }
 
@@ -398,6 +448,8 @@ export async function queryAuditLog({
     matchers[field]
   ]);
   const matchesText = buildTextMatcher(q);
+  const actorNames = loadActorNames();
+  const includeEmail = getAuditConfig().includeEmail === true;
 
   // Facet counters are keyed by field, then by value. They are populated from
   // every entry in the date range *before* the value filters are applied, so
@@ -442,6 +494,12 @@ export async function queryAuditLog({
           continue; // Skip malformed lines
         }
         if (!entry || typeof entry !== 'object') continue;
+
+        // Resolve the actor label once; facets, filters, search and the UI all
+        // use it, so one person shows up under one name.
+        if (entry.actor && typeof entry.actor === 'object') {
+          entry.actor.displayName = resolveActorLabel(entry, actorNames, includeEmail);
+        }
 
         if (counters) {
           for (const field of FACET_FIELDS) {
