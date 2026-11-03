@@ -5,11 +5,52 @@ import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../formStyles';
 
 /**
+ * The Required checkbox of a binding: absent `required` means required, only
+ * an explicit `false` is optional. Shared by the generic binding rows and the
+ * iAssistant and iFinder panels.
+ *
+ * @param {Object} props
+ * @param {Object|undefined} props.binding - the binding (`app.integrations[key]`)
+ * @param {(binding: Object) => void} props.onBindingChange - receives the changed binding
+ * @param {string} [props.requiredHelp] - replaces the help text
+ */
+export function RequiredCheckbox({ binding, onBindingChange, requiredHelp }) {
+  const { t } = useTranslation();
+  const current = binding || {};
+  const setRequired = required => {
+    const rest = { ...current };
+    delete rest.required;
+    onBindingChange(required ? rest : { ...rest, required: false });
+  };
+  return (
+    <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+      <input
+        type="checkbox"
+        className={`${CHECKBOX_CLASS} mt-0.5`}
+        checked={current.required !== false}
+        onChange={e => setRequired(e.target.checked)}
+      />
+      <span>
+        {t('admin.apps.edit.integrations.required', 'Required')}
+        <span className={`${HELP_CLASS} block`}>
+          {requiredHelp ||
+            t(
+              'admin.apps.edit.integrations.requiredHelp',
+              'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
+            )}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
  * The settings of one bound integration in the app editor: the Required
  * switch and, when the integration has scopes, the default scope, the pinned
- * scope and the scope picker. Used by every binding row and by the panels
- * that bind an integration with a switch of their own (iAssistant, people
- * directories).
+ * scope and the scope picker. Used by every generic binding row and by the
+ * panels that bind an integration with a switch of their own (people
+ * directories). The iAssistant and iFinder panels have purpose-built scope
+ * settings and only share {@link RequiredCheckbox}.
  *
  * @param {Object} props
  * @param {string} props.idPrefix - unique prefix for the ids of the inputs
@@ -22,13 +63,6 @@ function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes,
   const { t } = useTranslation();
   const current = binding || {};
 
-  // Absent `required` means required; only an explicit `false` is optional.
-  const setRequired = required => {
-    const rest = { ...current };
-    delete rest.required;
-    onBindingChange(required ? rest : { ...rest, required: false });
-  };
-
   const setScope = patch => {
     const next = { ...current, ...patch };
     for (const key of Object.keys(patch)) {
@@ -39,24 +73,11 @@ function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes,
 
   return (
     <>
-      <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
-        <input
-          type="checkbox"
-          className={`${CHECKBOX_CLASS} mt-0.5`}
-          checked={current.required !== false}
-          onChange={e => setRequired(e.target.checked)}
-        />
-        <span>
-          {t('admin.apps.edit.integrations.required', 'Required')}
-          <span className={`${HELP_CLASS} block`}>
-            {requiredHelp ||
-              t(
-                'admin.apps.edit.integrations.requiredHelp',
-                'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
-              )}
-          </span>
-        </span>
-      </label>
+      <RequiredCheckbox
+        binding={current}
+        onBindingChange={onBindingChange}
+        requiredHelp={requiredHelp}
+      />
       {scopes && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>

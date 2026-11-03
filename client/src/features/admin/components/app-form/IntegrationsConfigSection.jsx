@@ -16,15 +16,16 @@ import {
   warningsByBindingKey
 } from '../integrations/appMigrationWarningRules';
 import IntegrationBindingRow from './IntegrationBindingRow';
-import IntegrationBindingOptions from './IntegrationBindingOptions';
 import TypeBindingCard from './TypeBindingCard';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
+import IFinderSection from './IFinderSection';
 import { STORAGE_TYPE_KEY, storageBindingRows } from './storageBindingRows';
 import { webSearchEnginesOf } from './webSearchEngines';
 
-/** The built-in installation that has its own panel instead of a row. */
+/** The built-in installations that have their own panel instead of a row. */
 const IASSISTANT_INSTANCE_ID = 'iassistant';
+const IFINDER_INSTANCE_ID = 'ifinder';
 const TYPE_PREFIX = 'type:';
 const PEOPLE_DIRECTORY_TYPE_KEY = `${TYPE_PREFIX}people-directory`;
 
@@ -45,7 +46,7 @@ const isEnabled = item => item.enabled !== false;
 
 /** Whether an installation belongs on a dedicated panel or nowhere in the editor. */
 function hasOwnPanel(item) {
-  if (item.id === IASSISTANT_INSTANCE_ID) return true;
+  if (item.id === IASSISTANT_INSTANCE_ID || item.id === IFINDER_INSTANCE_ID) return true;
   // Web search engines are picked in the web search panel; storage providers
   // have their own card (they bring files, no model actions).
   return item.type === 'web-search' || item.type === 'storage';
@@ -118,6 +119,9 @@ function Card({ title, description, children, testId }) {
  *   iAssistant is installed or the app already uses it. Its switch binds the
  *   `iassistant` installation (and keeps `app.iassistant.enabled` in step);
  *   the binding's Required and scope settings sit inside the panel.
+ * - **iFinder** has its own panel too (`IFinderSection`): its switch binds the
+ *   `ifinder` installation, with the actions and the search profile settings
+ *   (start profile, whether users may switch it) inside.
  * - **People directories** and **Storage providers** are type cards
  *   (`TypeBindingCard`): a switch, then "All …" (`type:people-directory`,
  *   `type:storage`, with its Required setting) or "Only selected …", then the
@@ -355,6 +359,12 @@ function IntegrationsConfigSection({ app, onChange }) {
     });
   };
 
+  const iFinderInstallation = installed.find(i => i.id === IFINDER_INSTANCE_ID);
+  const iFinderBinding = bindings[IFINDER_INSTANCE_ID];
+  const showIFinder =
+    Boolean(iFinderInstallation && isEnabled(iFinderInstallation)) ||
+    Object.hasOwn(bindings, IFINDER_INSTANCE_ID);
+
   // Bindings to installations that are gone: the app is hidden from users
   // until they are unbound, so they are listed with a way to do that.
   const staleIds = useMemo(() => {
@@ -438,6 +448,7 @@ function IntegrationsConfigSection({ app, onChange }) {
   );
   if (showDirectories) rowIds.add(PEOPLE_DIRECTORY_TYPE_KEY);
   if (showIAssistant) rowIds.add(IASSISTANT_INSTANCE_ID);
+  if (showIFinder) rowIds.add(IFINDER_INSTANCE_ID);
   const unplacedWarnings = [...migrationWarnings.entries()]
     .filter(([key]) => !rowIds.has(key))
     .flatMap(([, warnings]) => warnings);
@@ -459,15 +470,25 @@ function IntegrationsConfigSection({ app, onChange }) {
               {typeNotice(IASSISTANT_INSTANCE_ID)}
             </>
           }
-          bindingSettings={
-            iAssistantInstallation && (
-              <IntegrationBindingOptions
-                idPrefix="app-integration-iassistant"
-                binding={iAssistantBinding}
-                onBindingChange={binding => setBinding(IASSISTANT_INSTANCE_ID, binding)}
-                scopes={details[IASSISTANT_INSTANCE_ID]?.definition?.scopes}
-              />
-            )
+          binding={iAssistantBinding}
+          onBindingChange={
+            iAssistantInstallation ? binding => setBinding(IASSISTANT_INSTANCE_ID, binding) : null
+          }
+          bindingActions={details[IASSISTANT_INSTANCE_ID]?.actions}
+        />
+      )}
+
+      {!loading && showIFinder && (
+        <IFinderSection
+          binding={iFinderBinding}
+          onBindingChange={binding => setBinding(IFINDER_INSTANCE_ID, binding)}
+          detail={details[IFINDER_INSTANCE_ID]}
+          installed={Boolean(iFinderInstallation)}
+          notice={
+            <>
+              {!iFinderInstallation && notInstalledNotice(t('admin.apps.edit.ifinder', 'iFinder'))}
+              {typeNotice(IFINDER_INSTANCE_ID)}
+            </>
           }
         />
       )}
