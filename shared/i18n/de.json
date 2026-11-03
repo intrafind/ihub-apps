@@ -6232,6 +6232,8 @@
       "reasonCount": "{{count}} von {{max}} Zeichen",
       "send": "Anfrage senden",
       "sent": "Anfrage für {{name}} gesendet. Die Administration entscheidet.",
+      "showAll": "Alle {{count}} anzeigen",
+      "showFewer": "Weniger anzeigen",
       "alreadyRequested": "Sie haben {{name}} bereits angefragt.",
       "failed": "{{name}} konnte nicht angefragt werden: {{message}}",
       "state": {

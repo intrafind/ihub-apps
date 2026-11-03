@@ -471,7 +471,7 @@ The browser used to keep this state per app in `sessionStorage` (`ai_hub_app_set
 
 Users can ask for a catalog integration their groups cannot use yet (#2926).
 
-**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not a custom integration (`custom/<id>`, built by an admin in iHub), is not hidden, and has no enabled installation the user's groups allow. Each row shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
+**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not a custom integration (`custom/<id>`, built by an admin in iHub), is not hidden, and has no enabled installation the user's groups allow. They appear as a card grid like the marketplace: the first six cards, then **Show all** (a search covers every entry once there are six or more). Each card shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
 
 **Admin → Integrations → Requests** is the queue; the number of open requests is the tab's badge and is shown next to **Integrations** in the admin sidebar.
 
