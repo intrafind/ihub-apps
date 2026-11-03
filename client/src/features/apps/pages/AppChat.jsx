@@ -18,6 +18,10 @@ import {
   fetchChat,
   fetchChatArtifact,
   fetchChatArtifacts,
+  fetchChatFileBlob,
+  fetchChatFileText,
+  fetchChatFiles,
+  deleteChatFile,
   keepChat
 } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -41,6 +45,10 @@ import useVoiceModeAvailability from '../../voice/hooks/useVoiceModeAvailability
 import VoiceModeDock from '../../voice/components/VoiceModeDock';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import useChatFilePreUpload from '../../chat/hooks/useChatFilePreUpload';
+import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
+import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
+import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
@@ -883,6 +891,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       : sentInChatId !== chatId && !messages.some(m => m.role === 'user'));
   const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
   // Collapsed, expanded and pinned state of that panel beside the chat.
+  // Documents attached in the composer are uploaded to the chat's file store
+  // as soon as they are attached; the message then names them by id.
+  const chatFileUploads = useChatFilePreUpload({
+    chatId,
+    app,
+    selectedFile: fileUploadHandler.selectedFile,
+    setSelectedFile: fileUploadHandler.setSelectedFile,
+    setAttachmentProcessing: fileUploadHandler.setAttachmentProcessing,
+    ephemeral
+  });
   const variablesPanel = useVariablesPanel({ app, appId, chatId });
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
@@ -922,6 +940,55 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         message.generatedFiles?.length > 0 ||
         message.images?.length > 0
     );
+  // Files the user (or an add-in) uploaded to the chat: the questions name them
+  // by id. Together with the generated files they make the Files drawer.
+  const uploadedFilesAvailable =
+    Boolean(chatId) &&
+    messages.some(
+      message =>
+        message.role === 'user' &&
+        ([...(message.attachments || []), ...[message.fileData].flat().filter(Boolean)].some(
+          file => file?.id || file?.fileId
+        ) ||
+          false)
+    );
+  const filesDrawerAvailable = artifactsAvailable || uploadedFilesAvailable;
+  const uploadedSource = useMemo(
+    () => ({
+      list: () =>
+        fetchChatFiles(chatId).catch(error => {
+          if (error?.status === 404 || error?.response?.status === 404) return { items: [] };
+          throw error;
+        }),
+      fetchText: id => fetchChatFileText(chatId, id),
+      fetchBlob: id => fetchChatFileBlob(chatId, id),
+      remove: id => deleteChatFile(chatId, id)
+    }),
+    [chatId]
+  );
+  // "Attach to email": Outlook task pane, while a mail is being written. Re-read
+  // whenever the open item changes (switching from a received mail to a draft).
+  const [mailAttach, setMailAttach] = useState(() => mailAttachState());
+  useEffect(() => {
+    if (!mailAttach.supported) return undefined;
+    const refresh = () => setMailAttach(mailAttachState());
+    document.addEventListener('ihub:itemchanged', refresh);
+    return () => document.removeEventListener('ihub:itemchanged', refresh);
+  }, [mailAttach.supported]);
+  const mailAttachSource = useMemo(
+    () => (mailAttach.supported ? { ...mailAttach, attach: attachStoredFileToMail } : null),
+    [mailAttach]
+  );
+  const [filesDrawerFileId, setFilesDrawerFileId] = useState(null);
+  const filesContext = useMemo(
+    () => ({
+      openFile: fileId => {
+        setFilesDrawerFileId(fileId);
+        setShowArtifacts(true);
+      }
+    }),
+    []
+  );
   const artifactSource = useMemo(
     () => ({
       list: () =>
@@ -1337,6 +1404,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         const fileData = {
           type: 'document',
           source: documentSource,
+          [ORIGINAL_FILE]: file,
           content,
           pageImages: pageImages || [],
           fileName: file.name,
@@ -2841,7 +2909,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           : handleRecordTranscription,
       isRecordingTranscription,
       recordTranscriptionElapsed: recordElapsed,
-      onFileSelect: fileUploadHandler.handleFileSelect,
+      onFileSelect: chatFileUploads.handleFileSelect,
       // The phone and the desktop layout each mount a composer, hidden by CSS
       // only: all of them have to know that an attachment is being processed
       isAttachmentProcessing: fileUploadHandler.isAttachmentProcessing,
@@ -2970,7 +3038,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               models.find(m => m.id === selectedModel)
             )}
             selectedFile={fileUploadHandler.selectedFile}
-            onFileSelect={fileUploadHandler.handleFileSelect}
+            onFileSelect={chatFileUploads.handleFileSelect}
             isAttachmentProcessing={fileUploadHandler.isAttachmentProcessing}
             onAttachmentProcessingChange={fileUploadHandler.setAttachmentProcessing}
             onSubmit={handleStartFormSubmit}
@@ -3020,278 +3088,319 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }
 
   return (
-    <div className="flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-2 sm:pt-4 pb-2">
-      {/* Shared App Header */}
-      <SharedAppHeader
-        app={app}
-        appId={appId}
-        chatId={chatId}
-        mode="chat"
-        messages={messages}
-        variables={variables}
-        onClearChat={clearChat}
-        currentLanguage={currentLanguage}
-        models={models}
-        styles={styles}
-        selectedModel={selectedModel}
-        selectedStyle={selectedStyle}
-        selectedOutputFormat={selectedOutputFormat}
-        sendChatHistory={sendChatHistory}
-        thinkingEnabled={thinkingEnabled}
-        thinkingLevel={thinkingLevel}
-        thinkingThoughts={thinkingThoughts}
-        enabledTools={effectiveEnabledTools}
-        imageAspectRatio={imageAspectRatio}
-        imageQuality={imageQuality}
-        onModelChange={setSelectedModel}
-        onStyleChange={setSelectedStyle}
-        onOutputFormatChange={setSelectedOutputFormat}
-        onSendChatHistoryChange={setSendChatHistory}
-        onThinkingEnabledChange={setThinkingEnabled}
-        onThinkingLevelChange={setThinkingLevel}
-        onThinkingThoughtsChange={setThinkingThoughts}
-        onEnabledToolsChange={setEnabledTools}
-        onImageAspectRatioChange={setImageAspectRatio}
-        onImageQualityChange={setImageQuality}
-        showConfig={showConfig}
-        onToggleConfig={toggleConfig}
-        onToggleParameters={toggleParameters}
-        showParameters={window.innerWidth >= 768 ? !variablesPanel.collapsed : showParameters}
-        hideParametersButton={!showVariablesPanel}
-        onShare={() => setShowShare(true)}
-        showShareButton={shareEnabled || chatShareReady}
-        onOpenArtifacts={() => setShowArtifacts(true)}
-        showArtifactsButton={artifactsAvailable}
-        conversationTitle={conversationTitle}
-        showCompareModeToggle={compareModeFeatureEnabled && chatModels.length >= 2}
-        compareModeActive={compareModeActive}
-        onCompareModeChange={changeCompareMode}
-        compareModeDisabled={processing || compareIsProcessing}
-        showBackButton={!embedded}
-        showEditAppButton={!embedded}
-        onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
-      />
-
-      {chatOrigin?.createdVia === 'scheduled-task' && (
-        <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
-      )}
-
-      {showVariablesPanel && showParameters && (
-        <div
-          role="presentation"
-          className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={e => {
-            // Close modal when clicking backdrop
-            if (e.target === e.currentTarget) {
-              handleParametersCancel();
-            }
+    <ChatFilesContext.Provider value={filesContext}>
+      <div className="flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-2 sm:pt-4 pb-2">
+        {/* Shared App Header */}
+        <SharedAppHeader
+          app={app}
+          appId={appId}
+          chatId={chatId}
+          mode="chat"
+          messages={messages}
+          variables={variables}
+          onClearChat={clearChat}
+          currentLanguage={currentLanguage}
+          models={models}
+          styles={styles}
+          selectedModel={selectedModel}
+          selectedStyle={selectedStyle}
+          selectedOutputFormat={selectedOutputFormat}
+          sendChatHistory={sendChatHistory}
+          thinkingEnabled={thinkingEnabled}
+          thinkingLevel={thinkingLevel}
+          thinkingThoughts={thinkingThoughts}
+          enabledTools={effectiveEnabledTools}
+          imageAspectRatio={imageAspectRatio}
+          imageQuality={imageQuality}
+          onModelChange={setSelectedModel}
+          onStyleChange={setSelectedStyle}
+          onOutputFormatChange={setSelectedOutputFormat}
+          onSendChatHistoryChange={setSendChatHistory}
+          onThinkingEnabledChange={setThinkingEnabled}
+          onThinkingLevelChange={setThinkingLevel}
+          onThinkingThoughtsChange={setThinkingThoughts}
+          onEnabledToolsChange={setEnabledTools}
+          onImageAspectRatioChange={setImageAspectRatio}
+          onImageQualityChange={setImageQuality}
+          showConfig={showConfig}
+          onToggleConfig={toggleConfig}
+          onToggleParameters={toggleParameters}
+          showParameters={window.innerWidth >= 768 ? !variablesPanel.collapsed : showParameters}
+          hideParametersButton={!showVariablesPanel}
+          onShare={() => setShowShare(true)}
+          showShareButton={shareEnabled || chatShareReady}
+          onOpenArtifacts={() => {
+            setFilesDrawerFileId(null);
+            setShowArtifacts(true);
           }}
-        >
-          <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
-              <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                {t('pages.appChat.inputParameters')}
-              </h3>
-              <button
-                onClick={handleParametersCancel}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
-              >
-                <Icon name="close" size="lg" className="text-current" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1">
-              <InputVariables
-                variables={tempVariables}
-                setVariables={handleTempVariableChange}
-                localizedVariables={localizedVariables}
-              />
-            </div>
-            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
-              <button
-                onClick={handleParametersCancel}
-                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleParametersOk}
-                className="flex-1 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
-              >
-                {t('common.ok', 'OK')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          showArtifactsButton={filesDrawerAvailable}
+          conversationTitle={conversationTitle}
+          showCompareModeToggle={compareModeFeatureEnabled && chatModels.length >= 2}
+          compareModeActive={compareModeActive}
+          onCompareModeChange={changeCompareMode}
+          compareModeDisabled={processing || compareIsProcessing}
+          showBackButton={!embedded}
+          showEditAppButton={!embedded}
+          onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
+        />
 
-      {/* Embedded, the chat sits in a panel far narrower than the viewport its
-          breakpoints measure, so the input variables stack above it instead of
-          taking a side column. */}
-      <div
-        className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
-      >
-        {/* `data-voice-scope`: where the voice dock looks for the answer it
-            reads out, to mark the part still to be said (read-along). */}
-        <div
-          data-voice-scope
-          className={`relative flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
-        >
-          {compareModeActive ? (
-            /* Compare Mode View */
-            <>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <CompareModeView
-                  ref={compareViewRef}
-                  app={app}
-                  appId={appId}
-                  models={chatModels}
-                  currentLanguage={currentLanguage}
-                  outputFormat={selectedOutputFormat}
-                  sendChatHistory={sendChatHistory}
-                  onPanelProcessingChange={handlePanelProcessingChange}
-                  onMessageComplete={handleMessageComplete}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  onClarificationSubmit={onClarificationSubmitInChat}
-                  onClarificationSkip={onClarificationSkipInChat}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                  startForm={showStartForm ? renderStartForm() : null}
+        {chatOrigin?.createdVia === 'scheduled-task' && (
+          <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
+        )}
+
+        {showVariablesPanel && showParameters && (
+          <div
+            role="presentation"
+            className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={e => {
+              // Close modal when clicking backdrop
+              if (e.target === e.currentTarget) {
+                handleParametersCancel();
+              }
+            }}
+          >
+            <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+              <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  {t('pages.appChat.inputParameters')}
+                </h3>
+                <button
+                  onClick={handleParametersCancel}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
+                >
+                  <Icon name="close" size="lg" className="text-current" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1">
+                <InputVariables
+                  variables={tempVariables}
+                  setVariables={handleTempVariableChange}
+                  localizedVariables={localizedVariables}
                 />
               </div>
-              {!showStartForm && (
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
-                </div>
-              )}
-            </>
-          ) : showStartForm ? (
-            /* Start form, in place of the transcript and the composer */
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {projectContextOfChat?.containerProjectId && (
-                <div className="w-full max-w-4xl mx-auto px-4 pt-2">
-                  <ChatProjectChips projectContext={projectContextOfChat} />
-                </div>
-              )}
-              {renderStartForm()}
+              <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+                <button
+                  onClick={handleParametersCancel}
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  onClick={handleParametersOk}
+                  className="flex-1 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  {t('common.ok', 'OK')}
+                </button>
+              </div>
             </div>
-          ) : shouldCenterInput ? (
-            /* Centered layout for example prompts */
-            <>
-              {/* Mobile layout: content centers, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
-                  {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        scheduleIntegrationScopes={integrationScopes}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={deleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        // Editing starts a typed run voice mode knows nothing about.
-                        editable={!voiceMode.active}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={onClarificationSubmitInChat}
-                        onClarificationSkip={onClarificationSkipInChat}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full h-full overflow-y-auto">
-                      <div className="min-h-full flex items-center justify-center p-4">
-                        <div className="w-full max-w-4xl">
-                          {renderStartupState(
-                            app,
-                            welcomeMessage,
-                            handleStarterPromptClick,
-                            hydrating,
-                            chatModeResolving,
-                            t,
-                            usageGuide.available ? showUsageGuide : undefined
-                          )}
+          </div>
+        )}
+
+        {/* Embedded, the chat sits in a panel far narrower than the viewport its
+          breakpoints measure, so the input variables stack above it instead of
+          taking a side column. */}
+        <div
+          className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
+        >
+          {/* `data-voice-scope`: where the voice dock looks for the answer it
+            reads out, to mark the part still to be said (read-along). */}
+          <div
+            data-voice-scope
+            className={`relative flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
+          >
+            {compareModeActive ? (
+              /* Compare Mode View */
+              <>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <CompareModeView
+                    ref={compareViewRef}
+                    app={app}
+                    appId={appId}
+                    models={chatModels}
+                    currentLanguage={currentLanguage}
+                    outputFormat={selectedOutputFormat}
+                    sendChatHistory={sendChatHistory}
+                    onPanelProcessingChange={handlePanelProcessingChange}
+                    onMessageComplete={handleMessageComplete}
+                    onOpenInCanvas={handleOpenInCanvas}
+                    canvasEnabled={app?.features?.canvas === true}
+                    requiredIntegrations={requiredIntegrations}
+                    onConnectIntegration={connectIntegration}
+                    onClarificationSubmit={onClarificationSubmitInChat}
+                    onClarificationSkip={onClarificationSkipInChat}
+                    onOpenSourceInApp={handleOpenSourceInApp}
+                    linkPath={appPagePath}
+                    startForm={showStartForm ? renderStartForm() : null}
+                  />
+                </div>
+                {!showStartForm && (
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                  </div>
+                )}
+              </>
+            ) : showStartForm ? (
+              /* Start form, in place of the transcript and the composer */
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {projectContextOfChat?.containerProjectId && (
+                  <div className="w-full max-w-4xl mx-auto px-4 pt-2">
+                    <ChatProjectChips projectContext={projectContextOfChat} />
+                  </div>
+                )}
+                {renderStartForm()}
+              </div>
+            ) : shouldCenterInput ? (
+              /* Centered layout for example prompts */
+              <>
+                {/* Mobile layout: content centers, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    {messages.length > 0 ? (
+                      <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          scheduleIntegrationScopes={integrationScopes}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={deleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          // Editing starts a typed run voice mode knows nothing about.
+                          editable={!voiceMode.active}
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={onClarificationSubmitInChat}
+                          onClarificationSkip={onClarificationSkipInChat}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full overflow-y-auto">
+                        <div className="min-h-full flex items-center justify-center p-4">
+                          <div className="w-full max-w-4xl">
+                            {renderStartupState(
+                              app,
+                              welcomeMessage,
+                              handleStarterPromptClick,
+                              hydrating,
+                              chatModeResolving,
+                              t,
+                              usageGuide.available ? showUsageGuide : undefined
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">
+                    <div className="w-full max-w-4xl mx-auto">{renderChatInput('mobile')}</div>
+                  </div>
                 </div>
-                <div className="shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">{renderChatInput('mobile')}</div>
-                </div>
-              </div>
 
-              {/* Desktop layout: everything centered together */}
-              <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
-                <div className="w-full max-w-4xl">
-                  {messages.length > 0 ? (
-                    <div className="mb-8">
-                      <ChatMessageList
-                        scheduleEnabledTools={effectiveEnabledTools}
-                        scheduleIntegrationScopes={integrationScopes}
-                        messages={messages}
-                        mcpAppHost={mcpAppHost}
-                        outputFormat={selectedOutputFormat}
-                        onDelete={deleteMessage}
-                        onEdit={handleEditMessage}
-                        onResend={handleResendMessage}
-                        // Editing starts a typed run voice mode knows nothing about.
-                        editable={!voiceMode.active}
-                        appId={appId}
-                        chatId={chatId}
-                        modelId={selectedModel}
-                        onOpenInCanvas={handleOpenInCanvas}
-                        onSaveAsPrompt={handleSaveAsPrompt}
-                        onSaveAsSkill={handleSaveAsSkill}
-                        canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
-                        app={app}
-                        models={models}
-                        onClarificationSubmit={onClarificationSubmitInChat}
-                        onClarificationSkip={onClarificationSkipInChat}
-                        onOpenSourceInApp={handleOpenSourceInApp}
-                        linkPath={appPagePath}
-                      />
-                    </div>
-                  ) : (
-                    <div className="mb-8">
-                      {renderStartupState(
-                        app,
-                        welcomeMessage,
-                        handleStarterPromptClick,
-                        hydrating,
-                        chatModeResolving,
-                        t,
-                        usageGuide.available ? showUsageGuide : undefined
-                      )}
-                    </div>
-                  )}
-                  <div>{renderChatInput('desktop')}</div>
+                {/* Desktop layout: everything centered together */}
+                <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
+                  <div className="w-full max-w-4xl">
+                    {messages.length > 0 ? (
+                      <div className="mb-8">
+                        <ChatMessageList
+                          scheduleEnabledTools={effectiveEnabledTools}
+                          scheduleIntegrationScopes={integrationScopes}
+                          messages={messages}
+                          mcpAppHost={mcpAppHost}
+                          outputFormat={selectedOutputFormat}
+                          onDelete={deleteMessage}
+                          onEdit={handleEditMessage}
+                          onResend={handleResendMessage}
+                          // Editing starts a typed run voice mode knows nothing about.
+                          editable={!voiceMode.active}
+                          appId={appId}
+                          chatId={chatId}
+                          modelId={selectedModel}
+                          onOpenInCanvas={handleOpenInCanvas}
+                          onSaveAsPrompt={handleSaveAsPrompt}
+                          onSaveAsSkill={handleSaveAsSkill}
+                          canvasEnabled={app?.features?.canvas === true}
+                          requiredIntegrations={requiredIntegrations}
+                          onConnectIntegration={connectIntegration}
+                          app={app}
+                          models={models}
+                          onClarificationSubmit={onClarificationSubmitInChat}
+                          onClarificationSkip={onClarificationSkipInChat}
+                          onOpenSourceInApp={handleOpenSourceInApp}
+                          linkPath={appPagePath}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-8">
+                        {renderStartupState(
+                          app,
+                          welcomeMessage,
+                          handleStarterPromptClick,
+                          hydrating,
+                          chatModeResolving,
+                          t,
+                          usageGuide.available ? showUsageGuide : undefined
+                        )}
+                      </div>
+                    )}
+                    <div>{renderChatInput('desktop')}</div>
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            /* Standard layout for normal chat and starter prompts */
-            <>
-              {/* Mobile layout: content scrollable, input at bottom */}
-              <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden flex flex-col">
+              </>
+            ) : (
+              /* Standard layout for normal chat and starter prompts */
+              <>
+                {/* Mobile layout: content scrollable, input at bottom */}
+                <div className="flex flex-col h-full md:hidden">
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    <ChatMessageList
+                      scheduleEnabledTools={effectiveEnabledTools}
+                      scheduleIntegrationScopes={integrationScopes}
+                      messages={messages}
+                      mcpAppHost={mcpAppHost}
+                      outputFormat={selectedOutputFormat}
+                      onDelete={deleteMessage}
+                      onEdit={handleEditMessage}
+                      onResend={handleResendMessage}
+                      // Editing starts a typed run voice mode knows nothing about.
+                      editable={!voiceMode.active}
+                      appId={appId}
+                      chatId={chatId}
+                      modelId={selectedModel}
+                      starterPrompts={app?.starterPrompts || []}
+                      onSelectPrompt={handleStarterPromptClick}
+                      welcomeMessage={welcomeMessage}
+                      showCenteredInput={shouldCenterInput}
+                      onOpenInCanvas={handleOpenInCanvas}
+                      onSaveAsPrompt={handleSaveAsPrompt}
+                      onSaveAsSkill={handleSaveAsSkill}
+                      canvasEnabled={app?.features?.canvas === true}
+                      requiredIntegrations={requiredIntegrations}
+                      onConnectIntegration={connectIntegration}
+                      app={app}
+                      models={models}
+                      onClarificationSubmit={onClarificationSubmitInChat}
+                      onClarificationSkip={onClarificationSkipInChat}
+                      onOpenSourceInApp={handleOpenSourceInApp}
+                      linkPath={appPagePath}
+                    />
+                  </div>
+                  <div className="shrink-0 px-4 pt-2">{renderChatInput('mobile')}</div>
+                </div>
+
+                {/* Desktop layout: normal flex column */}
+                <div className="hidden md:flex md:flex-col md:h-full">
                   <ChatMessageList
                     scheduleEnabledTools={effectiveEnabledTools}
                     scheduleIntegrationScopes={integrationScopes}
@@ -3323,164 +3432,132 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
+
+                  {renderChatInput('desktop')}
                 </div>
-                <div className="shrink-0 px-4 pt-2">{renderChatInput('mobile')}</div>
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Desktop layout: normal flex column */}
-              <div className="hidden md:flex md:flex-col md:h-full">
-                <ChatMessageList
-                  scheduleEnabledTools={effectiveEnabledTools}
-                  scheduleIntegrationScopes={integrationScopes}
-                  messages={messages}
-                  mcpAppHost={mcpAppHost}
-                  outputFormat={selectedOutputFormat}
-                  onDelete={deleteMessage}
-                  onEdit={handleEditMessage}
-                  onResend={handleResendMessage}
-                  // Editing starts a typed run voice mode knows nothing about.
-                  editable={!voiceMode.active}
-                  appId={appId}
-                  chatId={chatId}
-                  modelId={selectedModel}
-                  starterPrompts={app?.starterPrompts || []}
-                  onSelectPrompt={handleStarterPromptClick}
-                  welcomeMessage={welcomeMessage}
-                  showCenteredInput={shouldCenterInput}
-                  onOpenInCanvas={handleOpenInCanvas}
-                  onSaveAsPrompt={handleSaveAsPrompt}
-                  onSaveAsSkill={handleSaveAsSkill}
-                  canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
-                  app={app}
-                  models={models}
-                  onClarificationSubmit={onClarificationSubmitInChat}
-                  onClarificationSkip={onClarificationSkipInChat}
-                  onOpenSourceInApp={handleOpenSourceInApp}
-                  linkPath={appPagePath}
-                />
-
-                {renderChatInput('desktop')}
-              </div>
-            </>
+          {showVariablesPanel && (
+            <VariablesPanel
+              variables={variables}
+              setVariables={setVariables}
+              localizedVariables={localizedVariables}
+              stacked={embedded}
+              collapsed={variablesPanel.collapsed}
+              pinned={variablesPanel.pinned}
+              onToggleCollapsed={variablesPanel.toggleCollapsed}
+              onTogglePinned={variablesPanel.togglePinned}
+            />
           )}
         </div>
-
-        {showVariablesPanel && (
-          <VariablesPanel
-            variables={variables}
-            setVariables={setVariables}
-            localizedVariables={localizedVariables}
-            stacked={embedded}
-            collapsed={variablesPanel.collapsed}
-            pinned={variablesPanel.pinned}
-            onToggleCollapsed={variablesPanel.toggleCollapsed}
-            onTogglePinned={variablesPanel.togglePinned}
+        {promptDraft && (
+          <Suspense fallback={null}>
+            <PromptEditorModal
+              initial={promptDraft}
+              onClose={() => setPromptDraft(null)}
+              onSaved={() => {
+                setPromptDraft(null);
+                setPromptSavedNotice(true);
+                setTimeout(() => setPromptSavedNotice(false), 3000);
+              }}
+            />
+          </Suspense>
+        )}
+        {promptSavedNotice && (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+          >
+            {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
+          </div>
+        )}
+        {skillDraft && (
+          <Suspense fallback={null}>
+            <SkillEditorModal
+              initial={skillDraft}
+              onClose={() => setSkillDraft(null)}
+              onSaved={saved => {
+                setSkillDraft(null);
+                setSavedSkillName(saved?.name || skillDraft.name);
+              }}
+            />
+          </Suspense>
+        )}
+        {savedSkillName && (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+          >
+            {t('skills.notices.savedFromChat', {
+              defaultValue: 'Saved to your skills. Type /{{name}} in a chat to use it.',
+              name: savedSkillName
+            })}
+          </div>
+        )}
+        {/* Mounted while the app has a guide and opened by state, like the other
+          dialogs, so its focus trap sees the open transition. */}
+        {usageGuide.available && (
+          <Suspense fallback={null}>
+            <UsageGuideDialog
+              isOpen={usageGuideViewerOpen}
+              question={usageGuide.question}
+              content={usageGuide.content}
+              onClose={() => setUsageGuideViewerOpen(false)}
+            />
+          </Suspense>
+        )}
+        {showArtifacts && filesDrawerAvailable && (
+          <ArtifactsPanel
+            isOpen
+            onClose={() => setShowArtifacts(false)}
+            source={artifactSource}
+            uploadedSource={uploadedSource}
+            initialTab={filesDrawerFileId ? 'uploaded' : null}
+            initialFileId={filesDrawerFileId}
+            mailAttach={mailAttachSource}
+            zipName={
+              conversationTitle || getLocalizedContent(app?.name, currentLanguage) || 'artifacts'
+            }
+            messages={messages}
+          />
+        )}
+        {showShare && (
+          <ShareDialog
+            isOpen={showShare}
+            onClose={() => setShowShare(false)}
+            appName={app?.name}
+            chatShare={chatShareOffered ? { chatId, ready: chatShareReady } : null}
+            appLink={
+              shareEnabled
+                ? {
+                    appId,
+                    // A link to the app points at the app, never at one stored
+                    // chat: the recipient does not own it and could only ever
+                    // get a 404 from it.
+                    path: embedded
+                      ? appPagePath
+                      : routeChatId
+                        ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+                        : window.location.pathname,
+                    params: {
+                      model: selectedModel,
+                      style: selectedStyle,
+                      outfmt: selectedOutputFormat,
+                      history: sendChatHistory,
+                      prefill: prefillMessage,
+                      ...Object.fromEntries(
+                        Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
+                      )
+                    }
+                  }
+                : null
+            }
           />
         )}
       </div>
-      {promptDraft && (
-        <Suspense fallback={null}>
-          <PromptEditorModal
-            initial={promptDraft}
-            onClose={() => setPromptDraft(null)}
-            onSaved={() => {
-              setPromptDraft(null);
-              setPromptSavedNotice(true);
-              setTimeout(() => setPromptSavedNotice(false), 3000);
-            }}
-          />
-        </Suspense>
-      )}
-      {promptSavedNotice && (
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
-        >
-          {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
-        </div>
-      )}
-      {skillDraft && (
-        <Suspense fallback={null}>
-          <SkillEditorModal
-            initial={skillDraft}
-            onClose={() => setSkillDraft(null)}
-            onSaved={saved => {
-              setSkillDraft(null);
-              setSavedSkillName(saved?.name || skillDraft.name);
-            }}
-          />
-        </Suspense>
-      )}
-      {savedSkillName && (
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
-        >
-          {t('skills.notices.savedFromChat', {
-            defaultValue: 'Saved to your skills. Type /{{name}} in a chat to use it.',
-            name: savedSkillName
-          })}
-        </div>
-      )}
-      {/* Mounted while the app has a guide and opened by state, like the other
-          dialogs, so its focus trap sees the open transition. */}
-      {usageGuide.available && (
-        <Suspense fallback={null}>
-          <UsageGuideDialog
-            isOpen={usageGuideViewerOpen}
-            question={usageGuide.question}
-            content={usageGuide.content}
-            onClose={() => setUsageGuideViewerOpen(false)}
-          />
-        </Suspense>
-      )}
-      {showArtifacts && artifactsAvailable && (
-        <ArtifactsPanel
-          isOpen
-          onClose={() => setShowArtifacts(false)}
-          source={artifactSource}
-          zipName={
-            conversationTitle || getLocalizedContent(app?.name, currentLanguage) || 'artifacts'
-          }
-          messages={messages}
-        />
-      )}
-      {showShare && (
-        <ShareDialog
-          isOpen={showShare}
-          onClose={() => setShowShare(false)}
-          appName={app?.name}
-          chatShare={chatShareOffered ? { chatId, ready: chatShareReady } : null}
-          appLink={
-            shareEnabled
-              ? {
-                  appId,
-                  // A link to the app points at the app, never at one stored
-                  // chat: the recipient does not own it and could only ever
-                  // get a 404 from it.
-                  path: embedded
-                    ? appPagePath
-                    : routeChatId
-                      ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
-                      : window.location.pathname,
-                  params: {
-                    model: selectedModel,
-                    style: selectedStyle,
-                    outfmt: selectedOutputFormat,
-                    history: sendChatHistory,
-                    prefill: prefillMessage,
-                    ...Object.fromEntries(
-                      Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
-                    )
-                  }
-                }
-              : null
-          }
-        />
-      )}
-    </div>
+    </ChatFilesContext.Provider>
   );
 }
 

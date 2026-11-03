@@ -37,7 +37,7 @@ import { scannerFor } from '../projects/scan/MalwareScanner.js';
 import { projectSettings } from '../projects/projectSettings.js';
 import { renderPagePreview } from '../documents/pdf/PdfService.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
-import { chatFilePolicy, normalizeChatFilePolicy } from './chatFilePolicy.js';
+import { normalizeChatFilePolicy } from './chatFilePolicy.js';
 import { ChatFileQuotaError, getChatFileRepository } from './ChatFileRepository.js';
 
 const COMPONENT = 'ChatFileService';
@@ -359,9 +359,15 @@ export async function prepareTurnFiles({
   const activeRepo = store || fileRepository || getChatFileRepository();
   const scope = { type: 'chat', id: chatId };
   const inlineFiles = normalizeFiles(message?.fileData);
-  const explicitIds = Array.isArray(message?.attachmentIds)
-    ? message.attachmentIds.filter(id => typeof id === 'string' && id)
-    : null;
+  // `fileIds` is what the composer sends for files it already uploaded
+  // (`POST /api/chats/:chatId/files`); `attachmentIds` is the same list under
+  // its older name.
+  const idList = Array.isArray(message?.fileIds)
+    ? message.fileIds
+    : Array.isArray(message?.attachmentIds)
+      ? message.attachmentIds
+      : null;
+  const explicitIds = idList ? idList.filter(id => typeof id === 'string' && id) : null;
 
   // When regenerating a hydrated message (`replaceFromMessageId`), the client
   // does not have `fileData` in memory after a reload. If the caller did not

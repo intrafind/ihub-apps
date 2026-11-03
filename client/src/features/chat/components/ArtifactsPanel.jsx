@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import ArtifactPreview from './ArtifactPreview';
+import UploadedFilesTab from './UploadedFilesTab';
 import {
   artifactDisplayName,
   fileLookOf,
@@ -50,6 +51,29 @@ function answerIndex(messages) {
   return { byRun, byId, producedRuns };
 }
 
+/**
+ * Ids of the files the questions of a conversation name: when this changes, the
+ * list of uploaded files is read again (a file was attached, edited away or
+ * regenerated with other files).
+ *
+ * @param {Object[]} messages
+ * @returns {string}
+ */
+function uploadedKeyOf(messages) {
+  const ids = [];
+  for (const message of messages || []) {
+    if (message?.role !== 'user') continue;
+    for (const item of [
+      ...(Array.isArray(message.attachments) ? message.attachments : []),
+      ...[message.fileData].flat().filter(Boolean)
+    ]) {
+      const id = item?.id || item?.fileId;
+      if (id) ids.push(id);
+    }
+  }
+  return ids.join(',');
+}
+
 /** How long to wait before asking once more for an answer's files the list lacks. */
 const RELIST_DELAY_MS = 1500;
 
@@ -90,13 +114,33 @@ const PRIMARY = `${BUTTON} bg-indigo-600 text-white hover:bg-indigo-700`;
  * @param {Object[]} [props.messages] - The conversation, to say which answer made a file.
  *   A change in the artifacts it names lists the files again, so a file an
  *   answer adds while the panel is open shows up.
+ * @param {Object} [props.uploadedSource] - The files uploaded to the chat. With it the
+ *   panel is the chat's Files drawer with two tabs, **Uploaded (N)** and
+ *   **Generated (M)**; without it, the Artifacts panel it always was.
+ * @param {() => Promise<{ items: Object[] }>} props.uploadedSource.list
+ * @param {(id: string) => Promise<{ file: Object }>} props.uploadedSource.fetchText
+ * @param {(id: string) => Promise<Blob>} props.uploadedSource.fetchBlob
+ * @param {(id: string) => Promise<unknown>} [props.uploadedSource.remove] - Absent on a shared chat.
+ * @param {'none'|'extracted_text'|'original'} [props.uploadedAccess] - On a shared chat: what the owner shared.
+ * @param {'uploaded'|'generated'} [props.initialTab] - Tab to open first (default: Uploaded
+ *   when there are no generated files).
+ * @param {string|null} [props.initialFileId] - Uploaded file to show first (a clicked chip).
+ * @param {{ available: boolean, attach: Function }|null} [props.mailAttach] - "Attach to email"
+ *   (Outlook task pane, composing).
+ * @param {() => void} [props.onUploadedChanged] - A file was deleted.
  */
 export default function ArtifactsPanel({
   isOpen,
   onClose,
   source,
   zipName = 'artifacts',
-  messages
+  messages,
+  uploadedSource = null,
+  uploadedAccess = null,
+  initialTab = null,
+  initialFileId = null,
+  mailAttach = null,
+  onUploadedChanged = null
 }) {
   const { t, i18n } = useTranslation();
   const headingId = useId();
@@ -110,6 +154,10 @@ export default function ArtifactsPanel({
   const [previewId, setPreviewId] = useState(null);
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [tab, setTab] = useState(initialTab);
+  const [uploaded, setUploaded] = useState({ status: 'loading', items: [] });
+  const [uploadedReload, setUploadedReload] = useState(0);
+  const uploadedKey = useMemo(() => uploadedKeyOf(messages), [messages]);
 
   // The element that opened the panel, which gets focus back when it closes.
   const openerRef = useRef(typeof document === 'undefined' ? null : document.activeElement);
@@ -178,6 +226,32 @@ export default function ArtifactsPanel({
     };
   }, [isOpen, source, listKey]);
 
+  // The uploaded files: read when the panel opens and again when the
+  // conversation names other files or one was deleted here.
+  useEffect(() => {
+    if (!isOpen || !uploadedSource) return undefined;
+    let active = true;
+    uploadedSource
+      .list()
+      .then(result => {
+        if (active) {
+          setUploaded({
+            status: 'ready',
+            items: Array.isArray(result?.items) ? result.items : []
+          });
+        }
+      })
+      .catch(error => {
+        if (!active) return;
+        // A chat the server does not have yet has no files.
+        const missing = error?.status === 404 || error?.response?.status === 404;
+        setUploaded(missing ? { status: 'ready', items: [] } : { status: 'error', items: [] });
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, uploadedSource, uploadedKey, uploadedReload]);
+
   // Escape closes the panel, wherever focus is inside it.
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -214,6 +288,14 @@ export default function ArtifactsPanel({
   }, [selected, allSelected]);
 
   if (!isOpen) return null;
+
+  // Without a source for uploaded files this is the plain Artifacts panel. With
+  // one, the tab the caller named, else Uploaded unless something was generated.
+  const hasTabs = Boolean(uploadedSource);
+  const activeTab = !hasTabs
+    ? 'generated'
+    : tab || (items.length === 0 && uploaded.items.length > 0 ? 'uploaded' : 'generated');
+  const showGenerated = activeTab === 'generated';
 
   const toggle = id =>
     setSelected(previous => {
@@ -254,6 +336,35 @@ export default function ArtifactsPanel({
         tone: 'error',
         text: t('chatArtifacts.copyFailed', 'The content could not be copied.')
       });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const attachGenerated = async artifact => {
+    setBusy('attach');
+    setNotice(null);
+    try {
+      const result = await mailAttach.attach({
+        file: { name: saveName(artifactDisplayName(artifact)), bytes: artifact.bytes },
+        fetchBlob: () => getBlob(artifact.id)
+      });
+      setNotice(
+        result.ok
+          ? {
+              tone: 'info',
+              text: t('chatFiles.attached', 'Attached {{name}} to your email.', {
+                name: result.filename
+              })
+            }
+          : {
+              tone: 'error',
+              text:
+                result.reason === 'tooLarge'
+                  ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
+                  : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
+            }
+      );
     } finally {
       setBusy(null);
     }
@@ -307,8 +418,8 @@ export default function ArtifactsPanel({
       >
         <header className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
           <h2 id={headingId} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {t('chatArtifacts.title', 'Artifacts')}
-            {status === 'ready' && (
+            {hasTabs ? t('chatFiles.title', 'Files') : t('chatArtifacts.title', 'Artifacts')}
+            {!hasTabs && status === 'ready' && (
               <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
                 {t('chatArtifacts.count', '{{count}} files', { count: items.length })}
               </span>
@@ -325,7 +436,53 @@ export default function ArtifactsPanel({
           </button>
         </header>
 
-        {status === 'ready' && items.length > 0 && (
+        {hasTabs && (
+          <div
+            role="tablist"
+            aria-label={t('chatFiles.tabsLabel', 'Kinds of files in this chat')}
+            className="flex gap-1 border-b border-gray-200 dark:border-gray-700 px-4"
+          >
+            {[
+              ['uploaded', t('chatFiles.tabUploaded', 'Uploaded'), uploaded.items.length],
+              ['generated', t('chatFiles.tabGenerated', 'Generated'), items.length]
+            ].map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`${headingId}-tab-${id}`}
+                aria-selected={activeTab === id}
+                data-testid={`files-tab-${id}`}
+                onClick={() => setTab(id)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+                  activeTab === id
+                    ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300'
+                    : 'border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                {label} ({count})
+              </button>
+            ))}
+          </div>
+        )}
+
+        {hasTabs && !showGenerated && (
+          <UploadedFilesTab
+            items={uploaded.items}
+            status={uploaded.status}
+            source={uploadedSource}
+            messages={messages}
+            mailAttach={mailAttach}
+            initialFileId={initialFileId}
+            access={uploadedAccess}
+            onChanged={() => {
+              setUploadedReload(value => value + 1);
+              onUploadedChanged?.();
+            }}
+          />
+        )}
+
+        {showGenerated && status === 'ready' && items.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
             <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 mr-auto min-h-[2.25rem]">
               <input
@@ -360,7 +517,7 @@ export default function ArtifactsPanel({
         )}
 
         <div aria-live="polite" role="status" className="px-4 empty:hidden">
-          {notice && (
+          {showGenerated && notice && (
             <p
               className={`my-2 text-sm ${notice.tone === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}
             >
@@ -369,17 +526,17 @@ export default function ArtifactsPanel({
           )}
         </div>
 
-        {status === 'loading' && (
+        {showGenerated && status === 'loading' && (
           <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
             {t('chatArtifacts.loading', 'Loading the files of this chat…')}
           </p>
         )}
-        {status === 'error' && (
+        {showGenerated && status === 'error' && (
           <p className="p-4 text-sm text-red-700 dark:text-red-400" role="alert">
             {t('chatArtifacts.loadFailed', 'The files of this chat could not be loaded.')}
           </p>
         )}
-        {status === 'ready' && items.length === 0 && (
+        {showGenerated && status === 'ready' && items.length === 0 && (
           <p className="p-4 text-sm text-gray-600 dark:text-gray-300">
             {t(
               'chatArtifacts.empty',
@@ -388,7 +545,7 @@ export default function ArtifactsPanel({
           </p>
         )}
 
-        {status === 'ready' && items.length > 0 && (
+        {showGenerated && status === 'ready' && items.length > 0 && (
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
             <ul
               className="lg:w-80 flex-none overflow-y-auto max-h-[40vh] lg:max-h-none border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 py-1"
@@ -472,6 +629,18 @@ export default function ArtifactsPanel({
                       >
                         <Icon name="copy" size="sm" />
                         {t('chatArtifacts.copy', 'Copy')}
+                      </button>
+                    )}
+                    {mailAttach?.available && (
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        disabled={busy !== null}
+                        onClick={() => attachGenerated(preview)}
+                        data-testid="generated-attach-to-email"
+                      >
+                        <Icon name="envelope" size="sm" />
+                        {t('chatFiles.attachToEmail', 'Attach to email')}
                       </button>
                     )}
                     <button

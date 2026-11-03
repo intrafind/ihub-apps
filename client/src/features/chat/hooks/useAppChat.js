@@ -21,6 +21,7 @@ import { projectMessageRuns } from '../runToMessage';
 import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
+import { splitFilesForWire } from '../utils/chatFileUpload';
 
 /**
  * Refusals of the chat request the user can do something about, by the code
@@ -621,6 +622,9 @@ function useAppChat({
         });
         addAssistantMessage(exchangeId);
 
+        // Documents the server already stores (pre-uploaded from the composer,
+        // or kept from an earlier turn) travel as ids; the rest inline.
+        const wireFiles = splitFilesForWire(apiMessage.fileData);
         const messagesForAPI = getMessagesForApi({
           role: 'user',
           content: apiMessage.content,
@@ -628,7 +632,8 @@ function useAppChat({
           variables: apiMessage.variables || {},
           messageId: exchangeId,
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData,
+          fileData: wireFiles.fileData,
+          ...(wireFiles.fileIds.length > 0 ? { fileIds: wireFiles.fileIds } : {}),
           audioData: apiMessage.audioData,
           // The host item (Outlook email/meeting, the extension's page); the
           // server renders it as tagged blocks around `content`.

@@ -15,6 +15,37 @@ import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAud
 const AUTO_COLLAPSE_THRESHOLD = 4;
 
 /**
+ * Why a file could not be saved to the chat. It is still sent with the
+ * message, so this is a hint, not a stop.
+ */
+function uploadErrorText(code, t) {
+  switch (code) {
+    case 'QUOTA_CHAT_FILES':
+    case 'QUOTA_CHAT_BYTES':
+      return t(
+        'attachedFiles.errors.chatQuota',
+        'This chat has no room for more saved files; the file is sent with the message only'
+      );
+    case 'QUOTA_USER_BYTES':
+    case 'QUOTA_SERVER_BYTES':
+      return t(
+        'attachedFiles.errors.storageQuota',
+        'Your file storage is full; the file is sent with the message only'
+      );
+    case 'QUOTA_FILE_BYTES':
+      return t(
+        'attachedFiles.errors.fileTooLarge',
+        'Too large to save; the file is sent with the message only'
+      );
+    default:
+      return t(
+        'attachedFiles.errors.notSaved',
+        'Could not be saved to the chat; the file is sent with the message only'
+      );
+  }
+}
+
+/**
  * Standalone component that displays a list of attached files
  * with source icon, file type icon, name, size, and remove buttons. Audio that
  * was extracted from a video also gets a button to save it as a .wav file.
@@ -221,7 +252,43 @@ export default function AttachedFilesList({
                     {file.loading
                       ? t('attachedFiles.loading', 'Loading document...')
                       : formatFileSize(file.fileSize)}
+                    {file.uploadState === 'done' && (
+                      <span className="ml-2" data-testid="attached-file-stored">
+                        · {t('attachedFiles.stored', 'Saved to this chat')}
+                        {file.canUseAsTemplate && (
+                          <span className="ml-1">
+                            · {t('attachedFiles.templateReady', 'can be used as a template')}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {file.uploadState === 'error' && (
+                      <span
+                        className="ml-2 text-amber-700 dark:text-amber-400"
+                        role="status"
+                        data-testid="attached-file-upload-error"
+                      >
+                        · {uploadErrorText(file.uploadError, t)}
+                      </span>
+                    )}
                   </div>
+                  {file.uploadState === 'uploading' && (
+                    <div
+                      className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(file.uploadProgress || 0)}
+                      aria-label={t('attachedFiles.uploading', 'Uploading {{name}}', {
+                        name: file.fileName
+                      })}
+                    >
+                      <div
+                        className="h-full bg-indigo-500 transition-[width]"
+                        style={{ width: `${Math.round(file.uploadProgress || 0)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Save button — only for audio extracted from a video, which the

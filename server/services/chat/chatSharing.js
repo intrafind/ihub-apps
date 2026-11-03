@@ -27,6 +27,13 @@ export const CHAT_SHARING_FEATURE = 'chatSharing';
  * - `authenticated`: anyone signed in to this installation who has the link.
  * - `public`: anyone who has the link, no sign-in.
  */
+/**
+ * What a share lets its viewers do with the files the owner uploaded to the
+ * chat: nothing (default; the transcript only names them), read their
+ * extracted text, or also download the originals.
+ */
+export const UPLOADED_FILES_ACCESS = Object.freeze(['none', 'extracted_text', 'original']);
+
 export const SHARE_MODES = Object.freeze(['users', 'authenticated', 'public']);
 
 /** Most recipients one `users` share may name. */

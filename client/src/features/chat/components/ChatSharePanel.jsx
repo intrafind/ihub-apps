@@ -6,7 +6,13 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
-import { createChatShare, fetchChatShares, lookupUsers, revokeChatShare } from '../../../api';
+import {
+  createChatShare,
+  fetchChatFiles,
+  fetchChatShares,
+  lookupUsers,
+  revokeChatShare
+} from '../../../api';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import ShareLinkResult, { CopyLinkButton, shareInputClass as inputClass } from './ShareLinkResult';
 
@@ -248,6 +254,11 @@ export default function ChatSharePanel({ chatId }) {
   );
   const [maxViews, setMaxViews] = useState('');
   const [showOwnerName, setShowOwnerName] = useState(false);
+  // The files uploaded to the chat are shared only when the owner says so: none
+  // by default, then their extracted text, or the originals too, file by file.
+  const [filesAccess, setFilesAccess] = useState('none');
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [leftOutFiles, setLeftOutFiles] = useState(() => new Set());
   const [acknowledged, setAcknowledged] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -323,6 +334,29 @@ export default function ChatSharePanel({ chatId }) {
     (mode !== 'public' || acknowledged) &&
     (expiry !== 'custom' || Boolean(expiresAt));
 
+  useEffect(() => {
+    let active = true;
+    fetchChatFiles(chatId)
+      .then(result => {
+        if (active) setUploadedFiles(Array.isArray(result?.items) ? result.items : []);
+      })
+      .catch(() => {
+        // A chat without stored files simply has none to share.
+      });
+    return () => {
+      active = false;
+    };
+  }, [chatId]);
+
+  const anyOriginal = uploadedFiles.some(file => file.hasOriginal);
+  const toggleFile = id =>
+    setLeftOutFiles(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const handleCreate = async event => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -335,7 +369,13 @@ export default function ChatSharePanel({ chatId }) {
         ...(mode === 'users' ? { recipients: recipients.map(r => r.id) } : {}),
         expiresAt,
         maxViews: Number.isInteger(parsedViews) && parsedViews > 0 ? parsedViews : null,
-        ...(mode === 'public' ? { showOwnerName } : {})
+        ...(mode === 'public' ? { showOwnerName } : {}),
+        ...(uploadedFiles.length > 0 && filesAccess !== 'none'
+          ? {
+              uploadedFilesAccess: filesAccess,
+              sharedFileIds: uploadedFiles.filter(f => !leftOutFiles.has(f.id)).map(f => f.id)
+            }
+          : {})
       });
       setCreated(result.share);
       setAcknowledged(false);
@@ -396,7 +436,7 @@ export default function ChatSharePanel({ chatId }) {
       <p className="text-sm text-gray-500 dark:text-gray-400">
         {t(
           'chatSharing.description',
-          'Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.'
+          'Recipients get a read-only copy of this conversation as it is right now. Later messages and edits are not part of it. Uploaded files are shared only if you choose so below.'
         )}
       </p>
       {allowedModes.length === 0 ? (
@@ -591,6 +631,102 @@ export default function ChatSharePanel({ chatId }) {
                   </label>
                 )}
               </div>
+            )}
+
+            {uploadedFiles.length > 0 && (
+              <fieldset data-testid="share-files-access">
+                <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('chatSharing.files.label', 'Files you uploaded to this chat')}
+                </legend>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  {t(
+                    'chatSharing.files.hint',
+                    'Recipients always see the names of the files you attached. Whether they can open them is up to you.'
+                  )}
+                </p>
+                <div className="space-y-2">
+                  {[
+                    [
+                      'none',
+                      t('chatSharing.files.none', 'Do not share the files'),
+                      t(
+                        'chatSharing.files.noneHint',
+                        'Only the file names appear in the transcript.'
+                      )
+                    ],
+                    [
+                      'extracted_text',
+                      t('chatSharing.files.text', 'Share the text of the files'),
+                      t(
+                        'chatSharing.files.textHint',
+                        'Viewers can read the text extracted from the files, not download them.'
+                      )
+                    ],
+                    [
+                      'original',
+                      t('chatSharing.files.original', 'Share the original files'),
+                      anyOriginal
+                        ? t(
+                            'chatSharing.files.originalHint',
+                            'Viewers can also download the files as you uploaded them.'
+                          )
+                        : t(
+                            'chatSharing.files.originalUnavailable',
+                            'None of the files is stored in its original form.'
+                          )
+                    ]
+                  ].map(([value, label, hint]) => (
+                    <label
+                      key={value}
+                      className={`flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 ${
+                        value === 'original' && !anyOriginal ? 'opacity-60' : ''
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="share-files-access"
+                        value={value}
+                        checked={filesAccess === value}
+                        disabled={value === 'original' && !anyOriginal}
+                        onChange={() => setFilesAccess(value)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{label}</span>
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">
+                          {hint}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {filesAccess !== 'none' && (
+                  <ul
+                    className="mt-3 space-y-1 rounded-md border border-gray-200 dark:border-gray-700 p-2"
+                    aria-label={t('chatSharing.files.pick', 'Files to share')}
+                  >
+                    {uploadedFiles.map(file => (
+                      <li key={file.id}>
+                        <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
+                          <input
+                            type="checkbox"
+                            checked={!leftOutFiles.has(file.id)}
+                            onChange={() => toggleFile(file.id)}
+                          />
+                          <span className="truncate" title={file.name}>
+                            {file.name}
+                          </span>
+                          {filesAccess === 'original' && !file.hasOriginal && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {t('chatSharing.files.textOnly', '(text only)')}
+                            </span>
+                          )}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </fieldset>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

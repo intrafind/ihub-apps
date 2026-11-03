@@ -3,6 +3,7 @@
 
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+import { createFileApi } from '../utils/fileApi';
 
 /**
  * Scheduled tasks (`/api/scheduled-tasks/*`) — the caller's own tasks, their
@@ -160,3 +161,16 @@ export const fetchScheduledTaskNotifications = () =>
 /** Mark runs seen (all of them without `runIds`). */
 export const markScheduledTaskNotificationsSeen = runIds =>
   call(() => apiClient.post(`${base}/_notifications/seen`, runIds ? { runIds } : {}));
+
+/**
+ * Files attached to a task (`/api/scheduled-tasks/:taskId/files`): reference
+ * documents and templates every run sees, kept until the task is deleted.
+ */
+const taskFiles = createFileApi(base);
+
+export const uploadScheduledTaskFile = (taskId, payload, options) =>
+  taskFiles.upload(taskId, payload, options);
+export const fetchScheduledTaskFiles = taskId => taskFiles.list(taskId);
+export const fetchScheduledTaskFileText = (taskId, fileId) => taskFiles.text(taskId, fileId);
+export const fetchScheduledTaskFileBlob = (taskId, fileId) => taskFiles.blob(taskId, fileId);
+export const deleteScheduledTaskFile = (taskId, fileId) => taskFiles.remove(taskId, fileId);
