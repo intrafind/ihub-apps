@@ -98,9 +98,9 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `JWT_PRIVATE_KEY`          | PEM-encoded RSA private key for RS256 JWT signing. Overrides the auto-generated key stored at `contents/.jwt-private-key.pem`. | – |
 | `JWT_PUBLIC_KEY`           | PEM-encoded RSA public key for RS256 JWT verification. Overrides the auto-generated key stored at `contents/.jwt-public-key.pem`. | – |
 | `BASE_PATH_HEADER`         | Header name used for automatic base path detection from the reverse proxy. The server reads this header to determine the deployment subpath (e.g., `/ihub`). Works automatically with both stripping and non-stripping reverse proxies. | `x-forwarded-prefix` |
-| `AZURE_CLIENT_ID`          | Azure app registration client ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
-| `AZURE_CLIENT_SECRET`      | Azure app registration client secret for the Office 365 / Microsoft Teams cloud storage integration. | – |
-| `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
+| `AZURE_CLIENT_ID`          | Azure app registration client ID. Fallback for the **Entra ID directory** installation (`entra`) when its client ID field is empty; see [Tool Calling → entraPeopleSearch](tool-calling.md#entrapeoplesearch). The Office 365 storage integration does not read it. | – |
+| `AZURE_CLIENT_SECRET`      | Azure app registration client secret. Fallback for the Entra ID directory installation (`entra`) when it has no client secret credential. | – |
+| `AZURE_TENANT_ID`          | Azure tenant ID. Fallback for the Entra ID directory installation (`entra`) when its tenant ID field is empty. | – |
 | `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
 | `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
 | `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |

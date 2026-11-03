@@ -13,7 +13,6 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 - **🔍 Document Search**: Search for documents using natural language queries
 - **📄 Content Retrieval**: Fetch full document content for analysis and summarization
 - **ℹ️ Metadata Access**: Get detailed document metadata (author, creation date, file type, etc.)
-- **💾 Document Download**: Save documents locally or get download information
 - **🖍️ Passage Highlighting**: Jump from a cited passage to its position in the source document and
   highlight it in the in-app PDF preview
 - **🔐 Secure Authentication**: User-based JWT authentication for all operations
@@ -142,7 +141,7 @@ The iFinder integration uses JWT tokens for authentication with the following st
 
 **Key Requirements:**
 
-- **Algorithm**: RS256 (RSA with SHA-256)
+- **Algorithm**: RS256 (RSA with SHA-256) by default; RS384, RS512, ES256, ES384 and ES512 are also available in the installation's **Signing algorithm** setting
 - **Private Key**: Must be in PEM format
 - **Scope**: `fa_index_read` for document access. The calls that list a user's smart collections
   (projects of the iFinder tier, see [Projects](projects.md#the-ifinder-tier-smart-collections))
@@ -167,7 +166,6 @@ The iFinder integration exposes these functions under the `iFinder.` namespace
 | `search` | Find documents with a Lucene query, filters, facets, sorting and paging |
 | `getContent` | Fetch a document's extracted text |
 | `getMetadata` | Fetch a document's metadata without its text |
-| `download` | Download or save a document's binary |
 | `getFields` | The index field catalog — which fields exist and which need `.keyword` |
 | `getFacetValues` | Enumerate the values of one facet |
 | `listProfiles` | The search profiles this user can reach |
@@ -394,34 +392,6 @@ iFinder.getMetadata({ documentId: 'doc123456' });
 }
 ```
 
-### iFinder.download
-
-Get download information or save documents locally.
-
-**Parameters:**
-
-- `documentId` (required): Document ID to download
-- `action` (optional): "content" for info, "save" for local save (default: "content")
-- `filename` (optional): Custom filename for downloads
-- `searchProfile` (optional): Specific search profile ID
-
-**Example Usage:**
-
-```javascript
-// Get download information
-iFinder.download({
-  documentId: 'doc123456',
-  action: 'content'
-});
-
-// Save document locally
-iFinder.download({
-  documentId: 'doc123456',
-  action: 'save',
-  filename: 'contract-proposal.pdf'
-});
-```
-
 ## Usage Examples
 
 ### Basic Document Search
@@ -619,7 +589,7 @@ the two in sync when changing either.
 - **Solution**:
   - Verify private key is in correct PEM format
   - Check that key matches iFinder's public key
-  - Ensure algorithm is RS256
+  - Ensure the installation's signing algorithm matches the key type (RS* for RSA keys, ES* for EC keys) and what iFinder expects
 
 #### "iFinder search request timed out"
 

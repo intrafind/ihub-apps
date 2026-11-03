@@ -68,8 +68,9 @@ The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassia
    reachable through the outbound proxy, and lists how many users are connected. The OAuth flow
    itself needs a browser, so each user connects from the chat or from **Settings →
    Integrations**.
-4. Enable the installation and save; no restart is needed. **Groups** on the installation limit
-   who may use Jira at all.
+4. Enable the installation and save; no restart is needed. Who may use Jira is decided by the
+   groups, not the installation: grant it under **Admin → Groups → a group → Integrations** (see
+   [Who may use an integration](integrations.md#who-may-use-an-integration)).
 
 The installation's **Connections** button lists the users who connected their Atlassian account
 (from the connection index, with each connection's status) and lets an admin disconnect one (the

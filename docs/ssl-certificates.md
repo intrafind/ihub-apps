@@ -188,7 +188,7 @@ The whitelist applies to every outbound connection to a configurable URL: HTTP(S
 
 **Admin UI Configuration:**
 
-Navigate to **Admin → System** in the iHub Apps interface to configure SSL settings:
+Navigate to **Admin → Platform → Security** in the iHub Apps interface to configure SSL settings:
 1. Toggle "Ignore Invalid SSL Certificates" to enable/disable
 2. Add domains to the whitelist using the domain input field
 3. Save configuration
