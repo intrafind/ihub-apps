@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 
 /**
  * One image an assistant turn produced.
@@ -40,6 +41,7 @@ function GeneratedImage({ image, chatId, index }) {
   // A shared chat serves its images through the share rather than the
   // owner's chat route; the page providing that route says so via context.
   const customFetch = useArtifactFetcher();
+  const viewer = useArtifactViewer();
   const { t } = useTranslation();
   const storedId = !image?.data && !image?.unavailable ? image?.id : null;
   const containerRef = useRef(null);
@@ -180,12 +182,35 @@ function GeneratedImage({ image, chatId, index }) {
   return (
     <div className="space-y-2">
       <div className="relative inline-block">
-        <img
-          src={src}
-          alt={t('chatMessage.generatedImage', `Generated image ${index + 1}`)}
-          className="max-w-full rounded-lg shadow-md"
-          style={{ maxHeight: '512px' }}
-        />
+        {viewer ? (
+          <button
+            type="button"
+            onClick={() =>
+              viewer.openArtifact({
+                kind: 'image',
+                ...image,
+                mimeType: image?.mimeType || 'image/png'
+              })
+            }
+            className="block cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            aria-label={t('chatMessage.openImage', 'Open image {{number}}', { number: index + 1 })}
+            data-testid="generated-image-open"
+          >
+            <img
+              src={src}
+              alt={t('chatMessage.generatedImage', `Generated image ${index + 1}`)}
+              className="max-w-full rounded-lg shadow-md"
+              style={{ maxHeight: '512px' }}
+            />
+          </button>
+        ) : (
+          <img
+            src={src}
+            alt={t('chatMessage.generatedImage', `Generated image ${index + 1}`)}
+            className="max-w-full rounded-lg shadow-md"
+            style={{ maxHeight: '512px' }}
+          />
+        )}
         <button
           onClick={download}
           className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
