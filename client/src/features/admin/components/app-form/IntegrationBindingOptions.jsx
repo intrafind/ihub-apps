@@ -107,6 +107,9 @@ function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes,
               <option value="menu">
                 {t('admin.apps.edit.integrations.picker.menu', 'In the menu')}
               </option>
+              <option value="inline">
+                {t('admin.apps.edit.integrations.picker.inline', 'In the chat input')}
+              </option>
               <option value="hidden">
                 {t('admin.apps.edit.integrations.picker.hidden', 'Hidden')}
               </option>

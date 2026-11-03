@@ -6,6 +6,60 @@
 
 import JiraService from '../services/integrations/JiraService.js';
 import logger from '../utils/logger.js';
+import { JIRA_INSTANCE_ID } from '../services/integrations/jiraConfig.js';
+import { getIntegrationConnectionService } from '../services/integrations/auth/IntegrationConnectionService.js';
+import {
+  INTEGRATION_AUTH_REASONS,
+  integrationAuthRequiredResult,
+  isIntegrationAuthRequired
+} from '../services/integrations/auth/integrationAuthRequired.js';
+
+/**
+ * The structured "connect first" result when the caller has no usable Jira
+ * connection, or null when they do. Resolves the caller's **own** connection
+ * (in a scheduled run: the task owner's), never anybody else's.
+ *
+ * @param {Object} user - The caller (params.user)
+ * @param {string} message - What to tell the user when they never connected
+ * @returns {Promise<Object|null>}
+ */
+async function jiraConnectionMissing(user, message) {
+  const principal = { type: 'user', id: user?.id ? String(user.id) : '' };
+  const resolved =
+    user?.id && user.id !== 'anonymous'
+      ? await getIntegrationConnectionService().resolve(principal, JIRA_INSTANCE_ID)
+      : { ok: false, error: { reason: INTEGRATION_AUTH_REASONS.NOT_CONNECTED } };
+  if (resolved.ok) return null;
+  const reason = resolved.error?.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED;
+  return integrationAuthRequiredResult({
+    integration: JIRA_INSTANCE_ID,
+    reason,
+    message:
+      reason === INTEGRATION_AUTH_REASONS.NOT_CONNECTED
+        ? message
+        : 'JIRA authentication expired. Please reconnect your account.'
+  });
+}
+
+/**
+ * The "connect first" result for an error a Jira call threw because the
+ * connection could not be used (refresh token refused, revoked), or null.
+ * @param {Error} error
+ * @returns {Object|null}
+ */
+function jiraAuthFailure(error) {
+  if (
+    !isIntegrationAuthRequired(error) &&
+    !/authentication (required|expired)/i.test(error?.message || '')
+  ) {
+    return null;
+  }
+  return integrationAuthRequiredResult({
+    integration: JIRA_INSTANCE_ID,
+    reason: error.reason || INTEGRATION_AUTH_REASONS.EXPIRED,
+    message: 'JIRA authentication expired. Please reconnect your account.'
+  });
+}
 
 /**
  * Search and list JIRA tickets using JQL queries
@@ -17,19 +71,12 @@ import logger from '../utils/logger.js';
  */
 export async function searchTickets({ jql, maxResults = 50, user }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to search tickets'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to search tickets',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     const results = await JiraService.searchTickets({ jql, maxResults, userId });
 
@@ -41,13 +88,8 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
   } catch (error) {
     logger.error('Error in searchTickets', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'SEARCH_FAILED',
@@ -66,19 +108,12 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
  */
 export async function getTicket({ issueKey, includeComments = true, user }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to view tickets'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to view tickets',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     const ticket = await JiraService.getTicket({ issueKey, includeComments, userId });
 
@@ -90,13 +125,8 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
   } catch (error) {
     logger.error('Error in getTicket', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'GET_TICKET_FAILED',
@@ -116,19 +146,12 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
  */
 export async function addComment({ issueKey, comment, requireConfirmation = true, user }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to add comments'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to add comments',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     // Note: In a real implementation, confirmation would be handled by the UI
     // For now, we'll add a warning in the response
@@ -150,13 +173,8 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
   } catch (error) {
     logger.error('Error in addComment', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'ADD_COMMENT_FAILED',
@@ -174,19 +192,12 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
  */
 export async function getTransitions({ issueKey, user }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to view transitions'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to view transitions',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     const result = await JiraService.getTransitions({ issueKey, userId });
 
@@ -198,13 +209,8 @@ export async function getTransitions({ issueKey, user }) {
   } catch (error) {
     logger.error('Error in getTransitions', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'GET_TRANSITIONS_FAILED',
@@ -231,19 +237,12 @@ export async function transitionTicket({
   user
 }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to transition tickets'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to transition tickets',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     // Note: In a real implementation, confirmation would be handled by the UI
     // For now, we'll add a warning in the response
@@ -294,13 +293,8 @@ export async function transitionTicket({
   } catch (error) {
     logger.error('Error in transitionTicket', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'TRANSITION_FAILED',
@@ -319,19 +313,12 @@ export async function transitionTicket({
  */
 export async function getAttachment({ attachmentId, returnBase64 = false, user }) {
   try {
-    if (!user?.id || user.id === 'anonymous') {
-      throw new Error('User authentication required for JIRA access');
-    }
-
+    const missing = await jiraConnectionMissing(
+      user,
+      'Please connect your JIRA account to access attachments'
+    );
+    if (missing) return missing;
     const userId = user.id;
-    const isAuthenticated = await JiraService.isUserAuthenticated(userId);
-    if (!isAuthenticated) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'Please connect your JIRA account to access attachments',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
 
     // Get attachment with base64 if requested (for image analysis)
     const attachment = await JiraService.getAttachment({
@@ -394,13 +381,8 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
   } catch (error) {
     logger.error('Error in getAttachment', { component: 'JiraTool', error });
 
-    if (error.message.includes('authentication required')) {
-      return {
-        error: 'JIRA_AUTH_REQUIRED',
-        message: 'JIRA authentication expired. Please reconnect your account.',
-        authUrl: '/api/integrations/jira/auth'
-      };
-    }
+    const authFailure = jiraAuthFailure(error);
+    if (authFailure) return authFailure;
 
     return {
       error: 'GET_ATTACHMENT_FAILED',

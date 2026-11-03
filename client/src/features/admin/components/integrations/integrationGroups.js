@@ -16,6 +16,7 @@
  * | Storage providers   | `type: "storage"`                  |
  * | MCP servers         | `protocol: "mcp"`                  |
  * | Agents              | `protocol: "a2a"`                  |
+ * | Custom              | definition `custom/<id>` (builder) |
  * | Built-in            | any other entry with `builtIn`     |
  * | From the catalog    | everything else                    |
  *
@@ -85,6 +86,16 @@ export const INTEGRATION_GROUPS = Object.freeze([
     accent: 'bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-700 dark:text-fuchsia-300'
   },
   {
+    id: 'custom',
+    titleKey: 'admin.integrations.groups.custom.title',
+    titleDefault: 'Custom',
+    descriptionKey: 'admin.integrations.groups.custom.description',
+    descriptionDefault:
+      'Integrations built here with "Add manually", and the tools migrated from the former Tools page.',
+    icon: 'wrench',
+    accent: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+  },
+  {
     id: 'built-in',
     titleKey: 'admin.integrations.groups.builtIn.title',
     titleDefault: 'Built-in',
@@ -118,6 +129,19 @@ const GROUP_BY_PROTOCOL = Object.freeze({
 });
 
 /**
+ * Whether an installation or catalog definition is a custom integration
+ * (`custom/<id>`): an installation names its definition in `definition`, a
+ * catalog entry is the definition (`id`).
+ *
+ * @param {{ id?: string, definition?: string }} entry
+ * @returns {boolean}
+ */
+export function isCustomEntry(entry) {
+  const definitionId = typeof entry?.definition === 'string' ? entry.definition : entry?.id;
+  return typeof definitionId === 'string' && definitionId.startsWith('custom/');
+}
+
+/**
  * The group an installation or catalog definition belongs to.
  *
  * @param {{ type?: string|null, protocol?: string|null, builtIn?: boolean }} entry
@@ -131,6 +155,7 @@ export function integrationGroupOf(entry) {
   if (!entry || typeof entry !== 'object') return 'catalog';
   if (entry.type && GROUP_BY_TYPE[entry.type]) return GROUP_BY_TYPE[entry.type];
   if (entry.protocol && GROUP_BY_PROTOCOL[entry.protocol]) return GROUP_BY_PROTOCOL[entry.protocol];
+  if (isCustomEntry(entry)) return 'custom';
   if (entry.builtIn === true) return 'built-in';
   return 'catalog';
 }

@@ -522,7 +522,8 @@ export function setupMiddleware(app, platformConfig = {}) {
   // No server-side sessions: requests from one browser are spread across
   // cluster workers (and pods), so every multi-request flow carries its state
   // in a signed ticket or a cookie instead — OIDC login (utils/oidcLoginState.js),
-  // integration sign-ins (utils/integrationOAuthState.js), the OAuth consent
+  // integration sign-ins (a single-use, server-side flow record, see
+  // services/integrations/auth/oauthFlowStore.js), the OAuth consent
   // screen (utils/consentTicket.js) and the NTLM choice (ntlmAuth.js).
 
   // Initialize Passport for OIDC authentication

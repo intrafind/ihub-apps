@@ -90,6 +90,7 @@ Before creating credentials, you must configure the OAuth consent screen that us
    - **Production**: `https://your-ihub-domain.com/api/integrations/googledrive/{installationId}/callback`
    - **Under a base path**: `https://your-ihub-domain.com/ihub/api/integrations/googledrive/{installationId}/callback`
    - **Development**: `http://localhost:3000/api/integrations/googledrive/{installationId}/callback`
+   - These per-installation callbacks are aliases of iHub's one integration callback `…/api/integrations/oauth/callback`; registering that one instead (and entering it as the installation's **Redirect URI**) works as well.
 
    > **Important**: `{installationId}` is the id of the installation in iHub Apps (e.g., `googledrive` or `google-drive-2`). The redirect URI must match exactly, including the base path. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
 
@@ -245,20 +246,21 @@ Google Workspace documents (Docs, Sheets, Presentations) cannot be downloaded as
 - This typically happens when the refresh token has been revoked (e.g., user changed their Google password, or revoked app access in [myaccount.google.com/permissions](https://myaccount.google.com/permissions))
 - Any other refresh failure keeps the stored tokens: a network error, a Google outage (5xx or 429), an expired or wrong client secret, or a provider that was disabled or removed. Requests then fail with *"Google Drive is temporarily unavailable. Please try again in a moment."*, and the connection status still shows the account as connected. Access returns by itself once the problem clears. For an expired client secret, update it in the provider: every user is back without reconnecting.
 
-### Connecting fails with `?googledrive_error=<code>`
+### Connecting fails with `?integration_error=<code>`
 
-When connecting fails, the user is sent back to the page they started from with `googledrive_error=<code>` added to the URL:
+When connecting fails, the user is sent back to the page they started from (the chat, the file picker or **Settings → Integrations**) with `integration_error=<code>&integration=<installation id>` added to the URL — the same result shape for every integration; the Connect card and the settings page show the matching message:
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `invalid_state` | The sign-in ticket is missing, altered, or was issued for another integration or provider. It is also refused when the callback comes from a different user, or from a browser where nobody is signed in to iHub Apps. With several instances, it appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
-| `session_expired` | The sign-in ticket is older than 15 minutes. | Start again and finish the Google consent within 15 minutes. |
+| `invalid_state` | The sign-in is unknown or was already used (the `state` is single use), or was started for another installation. | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
+| `user_mismatch` | The callback came from a different user than the one who started the sign-in, or from a browser where nobody is signed in to iHub Apps. | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
+| `state_expired` | The sign-in is older than 15 minutes. | Start again and finish the Google consent within 15 minutes. |
 | `access_denied` | The user declined the Google consent screen. | Start again and approve the access. |
 | `oauth_failed` | Google returned another error on the redirect back. | Check the server logs. |
 | `missing_code` | The callback arrived without an authorization code, for example when the URL was opened by hand. | Start again from **Settings → Integrations**. |
-| `callback_failed` | Exchanging the code for tokens failed, for example because of a redirect URI mismatch or a wrong client secret. | Check the server logs and the redirect URI in the Google Cloud project. |
+| `exchange_failed` | Exchanging the code for tokens failed, for example because of a redirect URI mismatch or a wrong client secret. | Check the server logs and the redirect URI in the Google Cloud project. |
 
-No server-side session, shared session store or sticky routing is involved, so the callback can land on any worker or instance. With several instances, every instance must be able to verify a ticket another one issued: configure the same `JWT_SECRET` (or `auth.jwtSecret`) and the same `TOKEN_ENCRYPTION_KEY` on all of them, or let them share the `contents/` directory. See [Scaling](scaling.md#sign-in-tickets-across-instances).
+The sign-in is kept in the storage provider every worker shares (`integration-oauth-flows`), so the callback can land on any worker, and no sticky routing is needed. With several instances they share the `contents/` volume (as every multi-server deployment does) and the same `TOKEN_ENCRYPTION_KEY`, which encrypts the PKCE verifier. See [Integrations → Connections](integrations.md#connections).
 
 ---
 
@@ -267,11 +269,13 @@ No server-side session, shared session store or sticky routing is involved, so t
 - **Read-only scope**: The integration requests only `drive.readonly` — it cannot create, modify, or delete files
 - **Per-user tokens**: Each user connects their own Google account; no shared service account is used
 - **Encrypted storage**: Tokens are encrypted at rest using AES-256-GCM
-- **PKCE**: OAuth flow uses Proof Key for Code Exchange to prevent authorization code interception attacks
-- **State validation**: The OAuth `state` parameter is a signed ticket (HMAC) that names the integration and provider and the signed-in user who started the flow. The callback requires the same user, so a ticket from one browser cannot complete a flow in another. No server-side session is kept.
-- **PKCE verifier protection**: The PKCE code verifier travels inside the ticket, encrypted with AES-256-GCM, never in clear text
-- **Sign-in ticket lifetime**: The ticket expires after 15 minutes. A user who does not finish the Google consent in that time has to start again (`googledrive_error=session_expired`).
-- **Rate limiting**: OAuth initiation is rate-limited (10 requests/minute); API endpoints are limited to 60 requests/minute
+- **PKCE**: OAuth flow uses Proof Key for Code Exchange (S256) to prevent authorization code interception attacks
+- **Disconnect revokes**: disconnecting revokes the tokens at Google (`https://oauth2.googleapis.com/revoke`) before deleting them
+- **State validation**: The OAuth `state` is an opaque handle of a sign-in kept server-side, bound to the installation and the signed-in user who started it, valid once and for 15 minutes. The callback requires the same user and the same installation, so a sign-in from one browser cannot complete in another and a code for one installation cannot complete another's.
+- **PKCE verifier protection**: The PKCE code verifier stays on the server, encrypted with AES-256-GCM; the browser never sees it
+- **Shared OAuth client**: the sign-in, refresh and disconnect run through iHub's one OAuth client and connection service, like every other integration (see [Integrations → Connections](integrations.md#connections)); a refresh token is only ever sent to the authorization server and client that issued it
+- **Sign-in lifetime**: A started sign-in expires after 15 minutes. A user who does not finish the Google consent in that time has to start again (`integration_error=state_expired`).
+- **Rate limiting**: starting a sign-in (`POST /api/integrations/<installation id>/connect`) is limited to 20 per user and minute; API endpoints are limited to 60 requests/minute
 
 ---
 
@@ -281,9 +285,12 @@ No server-side session, shared session store or sticky routing is involved, so t
 server/
 ├── services/integrations/GoogleDriveService.js   # Drive API calls and Google-specific OAuth endpoints
 ├── services/integrations/cloudStorageConfig.js   # The installations in the provider shape; redirect URI derivation
-├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
-├── routes/integrations/googledrive.js            # Browsing API routes + provider config for the shared OAuth routes
-└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
+├── services/integrations/OAuthIntegrationBase.js # Provider config, callback URL, 401 retry (tokens via the connection service)
+├── routes/integrations/googledrive.js            # Browsing API routes and the /callback alias
+├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered /callback aliases
+├── routes/integrations/userIntegrations.js       # GET /api/integrations, POST /api/integrations/:id/connect|reconnect|disconnect
+├── routes/integrations/oauthCallback.js        # The one integration OAuth callback
+└── services/integrations/auth/                 # Shared OAuth client and connection service
 
 client/src/features/upload/
 ├── components/CloudFileBrowserShell.jsx          # Shared file-browser UI (all providers)

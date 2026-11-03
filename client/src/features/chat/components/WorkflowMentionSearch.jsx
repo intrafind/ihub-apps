@@ -1,7 +1,15 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  forwardRef,
+  useImperativeHandle
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import Fuse from 'fuse.js';
 import { apiClient } from '../../../api/client';
@@ -9,8 +17,11 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
+const NO_INTEGRATIONS = [];
+
 /**
- * Inline suggestion dropdown for @mention workflow autocomplete.
+ * Inline suggestion dropdown for @mention autocomplete: the app's workflows
+ * and, from the integrations picker (#2923), its integrations.
  * No input field — focus stays in the parent textarea.
  * The parent passes a `query` string (text typed after '@') and
  * forwards keyboard events via the imperative ref.
@@ -22,10 +33,22 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @param {Function} props.onClose - Close the dropdown
  * @param {Function} props.onSelect - Called with workflow id when selected
  * @param {Object} props.app - Current app configuration (to filter by app.tools)
+ * @param {Array<{id: string, name: string, description?: string, on: boolean}>} [props.integrations]
+ *   The integrations of the picker; picking one switches it on in this chat
+ * @param {(id: string) => void} [props.onSelectIntegration]
  */
-const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, app }, ref) => {
-  const { i18n } = useTranslation();
-  const [workflows, setWorkflows] = useState([]);
+const WorkflowMentionSearch = forwardRef((props, ref) => {
+  const {
+    isOpen,
+    query,
+    onClose,
+    onSelect,
+    app,
+    integrations = NO_INTEGRATIONS,
+    onSelectIntegration
+  } = props;
+  const { t, i18n } = useTranslation();
+  const [workflowItems, setWorkflows] = useState([]);
   const [results, setResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const fuseRef = useRef(null);
@@ -37,7 +60,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
 
   const fetchAndFilter = useCallback(async () => {
     // Don't fetch if workflows feature is disabled
-    if (!featureFlags.isEnabled('workflows', true)) {
+    if (!featureFlags.isEnabled('workflows', true) || appWorkflowIds.length === 0) {
       setWorkflows([]);
       return;
     }
@@ -60,15 +83,34 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
         }));
 
       setWorkflows(available);
-      fuseRef.current = new Fuse(available, {
-        keys: ['localizedName', 'localizedDescription', 'id'],
-        threshold: 0.4
-      });
     } catch (err) {
       console.error('Failed to load workflows for @mention:', err);
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [i18n.language, app?.id, featureFlags]);
+
+  // The integrations come first: they are what `@` most often reaches for.
+  const workflows = useMemo(
+    () => [
+      ...integrations.map(integration => ({
+        id: integration.id,
+        kind: 'integration',
+        on: integration.on,
+        localizedName: integration.name,
+        localizedDescription: integration.description || ''
+      })),
+      ...workflowItems
+    ],
+    [integrations, workflowItems]
+  );
+  useEffect(() => {
+    fuseRef.current = new Fuse(workflows, {
+      keys: ['localizedName', 'localizedDescription', 'id'],
+      threshold: 0.4
+    });
+  }, [workflows]);
+  const pick = item =>
+    item.kind === 'integration' ? onSelectIntegration?.(item.id) : onSelect(item.id);
 
   // Fetch workflows when dropdown opens
   useEffect(() => {
@@ -127,7 +169,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
       if (e.key === 'Enter' || e.key === 'Tab') {
         if (results[selectedIndex]) {
           e.preventDefault();
-          onSelect(results[selectedIndex].id);
+          pick(results[selectedIndex]);
           return true;
         }
       }
@@ -151,30 +193,40 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
         <ul ref={listRef} className="max-h-48 overflow-y-auto">
           {results.length === 0 && (
             <li className="p-3 text-xs text-gray-500 text-center">
-              {workflows.length === 0 ? 'No workflows available' : 'No results'}
+              {workflows.length === 0
+                ? t('mentions.empty', 'Nothing to mention here')
+                : t('mentions.noResults', 'No results')}
             </li>
           )}
           {results.map((wf, idx) => (
             <li
-              key={wf.id}
+              key={`${wf.kind || 'workflow'}-${wf.id}`}
               className={`px-3 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700 ${
                 idx === selectedIndex ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
               }`}
               onMouseDown={e => {
                 e.preventDefault(); // Prevent textarea blur
-                onSelect(wf.id);
+                pick(wf);
               }}
               onMouseEnter={() => setSelectedIndex(idx)}
             >
               <div className="flex items-center gap-2">
-                <Icon name="cog" size="sm" className="text-indigo-500 shrink-0" />
+                <Icon
+                  name={wf.kind === 'integration' ? 'link' : 'cog'}
+                  size="sm"
+                  className="text-indigo-500 shrink-0"
+                />
                 <div className="min-w-0">
                   <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
                     {wf.localizedName || wf.id}
                   </div>
-                  {wf.localizedDescription && (
+                  {(wf.kind === 'integration' || wf.localizedDescription) && (
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {wf.localizedDescription}
+                      {wf.kind === 'integration'
+                        ? wf.on
+                          ? t('mentions.integrationOn', 'Integration · on in this chat')
+                          : t('mentions.integrationOff', 'Integration · switch on for this chat')
+                        : wf.localizedDescription}
                     </div>
                   )}
                 </div>

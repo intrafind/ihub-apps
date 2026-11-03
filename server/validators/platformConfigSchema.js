@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
   VOICE_THINKING_LEVELS,
@@ -872,7 +873,26 @@ export const platformConfigSchema = z
           .prefault({})
       })
       .passthrough()
-      .prefault({})
+      .prefault({}),
+    /**
+     * Tool approval defaults (#2945): whether a person approves a model's tool
+     * call before it runs. `defaults.internal` / `defaults.external` apply to
+     * tools of that data flow, `defaults.default` to the rest. Modes:
+     * `never` (run), `writes` (ask unless the call only reads), `always`.
+     * Absent means `never`: approval is opt-in. Installations, tools, actions
+     * and apps can only tighten this (`utils/toolApproval.js`).
+     */
+    toolApproval: z
+      .object({
+        defaults: z
+          .object({
+            default: z.enum(APPROVAL_MODES).optional(),
+            internal: z.enum(APPROVAL_MODES).optional(),
+            external: z.enum(APPROVAL_MODES).optional()
+          })
+          .optional()
+      })
+      .optional()
   })
   .passthrough();
 

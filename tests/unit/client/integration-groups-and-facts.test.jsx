@@ -87,6 +87,7 @@ describe('integration groups', () => {
       'storage',
       'mcp',
       'agents',
+      'custom',
       'built-in',
       'catalog'
     ]);

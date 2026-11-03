@@ -27,6 +27,7 @@ import runLog, { newRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
+import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
@@ -689,7 +690,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     getLocalizedError,
     clientLanguage,
     user,
-    persistence = null
+    persistence = null,
+    toolApproval = null,
+    canApproveTools = false
   }) {
     await logInteraction('chat_request', buildLogData(streaming));
 
@@ -704,7 +707,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       getLocalizedError,
       language: clientLanguage,
       user,
-      persistence
+      persistence,
+      toolApproval,
+      canApproveTools
     });
     if (streaming) return outcome;
 
@@ -843,6 +848,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // before it ever reaches the turn.
       const { appId, chatId } = req.params;
       let durableTurn = false;
+      // A tool approval this request answered, and how to put it back if the
+      // turn never reached its loop (see `commitApproval`).
+      let restoreApproval = null;
+      let toolApproval = null;
       try {
         const {
           messages,
@@ -867,7 +876,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
-          integrationScopes: requestedScopes
+          integrationScopes: requestedScopes,
+          toolApprovalCapable
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -1006,6 +1016,39 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // hides a kept chat nor keeps a temporary one (that is
         // `PATCH /api/chats/:id { temporary: false }`).
         const temporaryChat = access.chat ? access.chat.temporary === true : storage.temporary;
+
+        // A tool approval (#2945) is answered by the next message, like a
+        // clarification: `approvalResponse` is checked here and answered
+        // (exactly once) only after the turn is prepared (`commitApproval`
+        // below), so a request that fails first does not use it up; any other
+        // message supersedes a pending approval.
+        const approvals = await prepareChatApproval({
+          chatId,
+          user: req.user,
+          chat: access.chat || null,
+          lastMessage: messages[0],
+          repository
+        });
+        if (approvals.refusal) {
+          return res
+            .status(approvals.refusal.status)
+            .json({ error: approvals.refusal.message, code: approvals.refusal.code });
+        }
+        toolApproval = { grants: approvals.grants, resume: null };
+        /**
+         * Answer the approval once the turn can run. Returns a refusal to send
+         * instead of running the turn, or null. A turn refused after this
+         * (before its loop started) puts the approval back (`restoreApproval`).
+         */
+        const commitApproval = async () => {
+          if (!approvals.commit) return null;
+          const committed = await approvals.commit();
+          if (committed.refusal) return committed.refusal;
+          toolApproval.grants = committed.grants;
+          toolApproval.resume = committed.resume;
+          restoreApproval = committed.restore;
+          return null;
+        };
 
         let conversation = messages;
         let persistence = null;
@@ -1290,6 +1333,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               )
               .json({ error: errMsg, code: prep.error.code });
           }
+          const approvalRefusal = await commitApproval();
+          if (approvalRefusal) {
+            return res
+              .status(approvalRefusal.status)
+              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
+          }
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           ({ model, llmMessages } = prep.data);
 
@@ -1308,7 +1357,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             getLocalizedError,
             clientLanguage,
             user: req.user,
-            persistence
+            persistence,
+            // No stream, no card: a gated call is refused (APPROVAL_REQUIRED_NO_USER).
+            toolApproval,
+            canApproveTools: false
           });
         } else {
           // Note that `hasChatClient` refreshed lastActivity on the
@@ -1327,6 +1379,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             );
             emitFailedRun(chatId, { messageId, code: prep.error.code, message: errMsg });
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
+          }
+          const approvalRefusal = await commitApproval();
+          if (approvalRefusal) {
+            emitFailedRun(chatId, {
+              messageId,
+              code: approvalRefusal.code,
+              message: approvalRefusal.message
+            });
+            return res
+              .status(approvalRefusal.status)
+              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
           }
           model = prep.data.model;
           // What open MCP App views reported since the last turn; model-only.
@@ -1352,7 +1415,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             getLocalizedError,
             clientLanguage,
             user: req.user,
-            persistence
+            persistence,
+            toolApproval,
+            // Only a client that draws the approval card can answer one.
+            canApproveTools: toolApprovalCapable === true
           });
           // Refused at persistence: the chat's container changed under the
           // turn (`settleUserTurn`), and nothing of it was stored.
@@ -1371,6 +1437,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // The turn is over however it ended, so a disconnect from here on has
         // nothing to protect and should abort again.
         if (durableTurn) clearChatDurable(chatId);
+        // Answered, but the turn was refused (or failed) before its loop
+        // could run the call: put the approval back, with its answer, so the
+        // same decision can be sent again.
+        if (restoreApproval && !toolApproval?.started) await restoreApproval();
       }
     }
   );

@@ -33,6 +33,7 @@ import {
   mayUseCloudStorage
 } from '../../integrations/cloudStorageConfig.js';
 import { OAuthRefreshError } from '../../integrations/oauthRefreshError.js';
+import { isIntegrationAuthRequired } from '../../integrations/auth/integrationAuthRequired.js';
 import { ProjectError } from '../projectErrors.js';
 import { registerItemKind } from './registry.js';
 
@@ -66,7 +67,7 @@ function requireIntegrations(site) {
 }
 
 function translate(error, site) {
-  if (error instanceof OAuthRefreshError) {
+  if (error instanceof OAuthRefreshError || isIntegrationAuthRequired(error)) {
     return new ProjectError('SOURCE_FORBIDDEN', `Connect ${site} first: ${error.message}`);
   }
   const message = String(error?.message || 'download failed');

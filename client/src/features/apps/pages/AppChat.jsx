@@ -51,7 +51,7 @@ import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
-import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
+import { useConnectRetry } from '../../integrations/connect/useConnectRetry';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import useMediaQuery from '../../../shared/hooks/useMediaQuery';
@@ -660,14 +660,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     };
   }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
 
-  // Integration authentication detection
-  const {
-    monitorChatMessages,
-    connectIntegration,
-    // checkConnectionStatus is available but not currently used
-    getRequiredIntegrations
-  } = useIntegrationAuth();
-
   const inputRef = useRef(null);
   const formRef = useRef(null);
   // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
@@ -851,6 +843,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     cancelGeneration,
     addSystemMessage,
     submitClarificationResponse,
+    submitToolApproval,
     conversationTitle,
     loadServerMessages,
     reattachToRun,
@@ -877,7 +870,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     persistConversationId: !embedded,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, a new chat is created as a temporary one.
-    ephemeral
+    ephemeral,
+    // This page draws tool approval cards and answers them (#2945).
+    toolApprovals: true
   });
 
   // Form-based start (issue #2581): a new chat — or a new comparison, whose
@@ -914,7 +909,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         setInput(text);
         setTimeout(() => formRef.current?.requestSubmit(), 0);
       },
-      isProcessing: processing
+      isProcessing: processing,
+      // This page shows the approval card for a view's own call that needs
+      // approval (#2945); hosts without it get the call refused.
+      toolApprovals: true
     }),
     [processing]
   );
@@ -947,10 +945,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     messages.some(
       message =>
         message.role === 'user' &&
-        ([...(message.attachments || []), ...[message.fileData].flat().filter(Boolean)].some(
+        [...(message.attachments || []), ...[message.fileData].flat().filter(Boolean)].some(
           file => file?.id || file?.fileId
-        ) ||
-          false)
+        )
     );
   const filesDrawerAvailable = artifactsAvailable || uploadedFilesAvailable;
   const uploadedSource = useMemo(
@@ -1585,23 +1582,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   ]);
 
   // Determine which integrations this app uses
-  const appIntegrations = useMemo(() => {
-    const integrations = [];
-    // Jira signs every user in: the app binds the `jira` installation.
-    if (app?.integrations?.jira) {
-      integrations.push('jira');
-    }
-    return integrations;
-  }, [app?.integrations]);
-
-  // Monitor messages for integration authentication errors
-  useEffect(() => {
-    monitorChatMessages(messages, appIntegrations);
-  }, [messages, appIntegrations, monitorChatMessages]);
-
-  // Get required integrations for display
-  const requiredIntegrations = getRequiredIntegrations();
-
   // Set up voice commands
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
     messages,
@@ -1948,6 +1928,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       submitClarificationResponse(response, clarificationParams());
     },
     [submitClarificationResponse, clarificationParams]
+  );
+
+  /**
+   * Answer a tool approval card (#2945): the decision goes out as the next
+   * message, with the same continuation parameters a clarification answer uses.
+   *
+   * @param {{interactionId: string, decision: 'approve'|'reject', grant?: 'chat'}} answer
+   */
+  const handleToolApproval = useCallback(
+    answer => {
+      submitToolApproval(answer, clarificationParams());
+    },
+    [submitToolApproval, clarificationParams]
   );
 
   // "Open in App" on a source: a new chat of the chosen app, with the source's
@@ -2399,25 +2392,30 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * `voiceText` is a turn from voice mode: it goes out like typed text (same
    * prompt, model, tools and variables), flagged as a voice turn, and leaves
    * the files staged in the composer alone. It is marked as spoken unless it
-   * was typed into the voice dock (`typedInVoiceMode`).
+   * was typed into the voice dock (`typedInVoiceMode`). `text` is a typed
+   * message the chat sends on the user's behalf (the retry after connecting
+   * an integration): an ordinary typed turn that, like a voice turn, leaves
+   * the composer alone. Resolves true when the message was sent.
    */
   const handleSubmit = async (
     e,
     startFormMessage = null,
-    { voiceText, typedInVoiceMode = false } = {}
+    { voiceText, typedInVoiceMode = false, text } = {}
   ) => {
     e.preventDefault();
     const isVoiceTurn = typeof voiceText === 'string';
-    // A spoken turn is its own message: a file staged in the composer belongs
-    // to the typed message it was added for, so it neither goes out with an
-    // unrelated sentence nor is cleared from the composer by it.
-    const selectedFile = isVoiceTurn ? null : fileUploadHandler.selectedFile;
+    const ownText = isVoiceTurn ? voiceText : text;
+    // A spoken or automatic turn is its own message: a file staged in the
+    // composer belongs to the typed message it was added for, so it neither
+    // goes out with an unrelated sentence nor is cleared from the composer by it.
+    const leavesComposer = typeof ownText === 'string';
+    const selectedFile = leavesComposer ? null : fileUploadHandler.selectedFile;
     // An attachment is still being processed (e.g. the audio of a video is
     // extracted), in whichever composer it was added: the message would go
     // without it. Each composer holds back its own Send; this is the backstop
     // for the one that was not told.
     if (fileUploadHandler.isAttachmentProcessing) return;
-    const typed = startFormMessage ?? (isVoiceTurn ? voiceText : input);
+    const typed = startFormMessage ?? (leavesComposer ? ownText : input);
 
     // While recording, "send" means: finish the recording — sent to the
     // selected model, with anything typed when that is a chat model.
@@ -2699,7 +2697,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       voiceTurnSentRef.current = true;
     }
 
-    if (!isVoiceTurn) {
+    if (!leavesComposer) {
       setInput('');
       magicPromptHandler.resetMagicPrompt();
       fileUploadHandler.clearSelectedFile();
@@ -2709,6 +2707,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     pendingVariablesRef.current = null;
     // Unpinned, the parameters make room for the conversation once sent.
     if (showVariablesPanel) variablesPanel.collapseAfterSend();
+    return true;
   };
 
   // The first message of a form-started chat: the app's prompt, rendered with
@@ -2745,6 +2744,22 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     });
     return voiceTurnSentRef.current;
   };
+
+  // After connecting an integration from a Connect card, the browser comes
+  // back here; the answer that needed the connection is retried once (#2917).
+  // It is a typed turn (not a voice one), sent once the chat can take it.
+  useConnectRetry({
+    chatId,
+    messages,
+    ready: !hydrating,
+    busy:
+      processing ||
+      compareIsProcessing ||
+      isTranscribing ||
+      isRecordingTranscription ||
+      fileUploadHandler.isAttachmentProcessing,
+    send: async text => (await handleSubmit({ preventDefault() {} }, null, { text })) === true
+  });
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>
     submitClarificationResponse(answer, clarificationParams({ voiceMode: true }));
@@ -3224,10 +3239,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onMessageComplete={handleMessageComplete}
                     onOpenInCanvas={handleOpenInCanvas}
                     canvasEnabled={app?.features?.canvas === true}
-                    requiredIntegrations={requiredIntegrations}
-                    onConnectIntegration={connectIntegration}
                     onClarificationSubmit={onClarificationSubmitInChat}
                     onClarificationSkip={onClarificationSkipInChat}
+                    onToolApproval={handleToolApproval}
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                     startForm={showStartForm ? renderStartForm() : null}
@@ -3275,12 +3289,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           onSaveAsPrompt={handleSaveAsPrompt}
                           onSaveAsSkill={handleSaveAsSkill}
                           canvasEnabled={app?.features?.canvas === true}
-                          requiredIntegrations={requiredIntegrations}
-                          onConnectIntegration={connectIntegration}
                           app={app}
                           models={models}
                           onClarificationSubmit={onClarificationSubmitInChat}
                           onClarificationSkip={onClarificationSkipInChat}
+                          onToolApproval={handleToolApproval}
                           onOpenSourceInApp={handleOpenSourceInApp}
                           linkPath={appPagePath}
                         />
@@ -3331,12 +3344,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                           onSaveAsPrompt={handleSaveAsPrompt}
                           onSaveAsSkill={handleSaveAsSkill}
                           canvasEnabled={app?.features?.canvas === true}
-                          requiredIntegrations={requiredIntegrations}
-                          onConnectIntegration={connectIntegration}
                           app={app}
                           models={models}
                           onClarificationSubmit={onClarificationSubmitInChat}
                           onClarificationSkip={onClarificationSkipInChat}
+                          onToolApproval={handleToolApproval}
                           onOpenSourceInApp={handleOpenSourceInApp}
                           linkPath={appPagePath}
                         />
@@ -3386,12 +3398,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       onSaveAsPrompt={handleSaveAsPrompt}
                       onSaveAsSkill={handleSaveAsSkill}
                       canvasEnabled={app?.features?.canvas === true}
-                      requiredIntegrations={requiredIntegrations}
-                      onConnectIntegration={connectIntegration}
                       app={app}
                       models={models}
                       onClarificationSubmit={onClarificationSubmitInChat}
                       onClarificationSkip={onClarificationSkipInChat}
+                      onToolApproval={handleToolApproval}
                       onOpenSourceInApp={handleOpenSourceInApp}
                       linkPath={appPagePath}
                     />
@@ -3423,12 +3434,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onSaveAsPrompt={handleSaveAsPrompt}
                     onSaveAsSkill={handleSaveAsSkill}
                     canvasEnabled={app?.features?.canvas === true}
-                    requiredIntegrations={requiredIntegrations}
-                    onConnectIntegration={connectIntegration}
                     app={app}
                     models={models}
                     onClarificationSubmit={onClarificationSubmitInChat}
                     onClarificationSkip={onClarificationSkipInChat}
+                    onToolApproval={handleToolApproval}
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />

@@ -21,6 +21,22 @@ import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
+import { installedIntegrationById } from '../integrations/installedRefs.js';
+import { directCallNeedsApproval } from '../../utils/toolApproval.js';
+import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+
+/**
+ * Whether a tool exposed through the gateway needs a person's approval
+ * (#2945). The gateway has nobody to ask: such a call is refused with
+ * `APPROVAL_REQUIRED_NO_USER` instead of running.
+ *
+ * @param {Object} tool
+ * @param {Object} platform
+ * @returns {boolean}
+ */
+export function gatewayCallNeedsApproval(tool, platform) {
+  return directCallNeedsApproval(tool, platform, { getInstallation: installedIntegrationById });
+}
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -361,6 +377,12 @@ export async function buildMcpServer({ user, platform }) {
             (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id))
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
+          }
+          // A gated tool waits for a person's approval; nobody here can give it.
+          if (gatewayCallNeedsApproval(tool, configCache.getPlatform?.() || platform)) {
+            return toolErrorResult(
+              `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
+            );
           }
           try {
             // Inject the authenticated caller's identity + a tracking chatId.

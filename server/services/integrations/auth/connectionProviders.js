@@ -1,0 +1,580 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * What the connection service needs to know about one installation: which
+ * kind of connection it takes, where its secret lives, which OAuth strategy
+ * signs a user in, and how the browser is sent back.
+ *
+ *   | Installation                                  | stack           | kind            |
+ *   | --------------------------------------------- | --------------- | --------------- |
+ *   | `jira` (com.intrafind/jira)                   | `jira`          | `oauth-user`    |
+ *   | an Office 365 / Google Drive / Nextcloud one  | `cloud-storage` | `oauth-user`    |
+ *   | an MCP server with `auth.type: oauthUser`     | `mcp`           | `oauth-user`    |
+ *   | `ifinder` / `iassistant`                      | `sso`           | `sso`           |
+ *   | any other with `auth.mode: service-account`   | `shared`        | `service-account` |
+ *
+ * The services stay the owners of their provider knowledge: each declares its
+ * endpoints and scopes through `oauthStrategy(...)` and the shared client does
+ * the rest. Services are imported lazily: they import the connection service
+ * themselves, and a static import here would close that cycle.
+ *
+ * @module services/integrations/auth/connectionProviders
+ */
+import tokenStorage from '../../TokenStorageService.js';
+import configCache from '../../../configCache.js';
+import {
+  JIRA_INSTANCE_ID,
+  JIRA_TOKEN_SERVICE,
+  getJiraInstallation,
+  jiraConfigFromInstance,
+  isJiraConfigured,
+  resolveJiraRedirectUri
+} from '../jiraConfig.js';
+import {
+  CLOUD_STORAGE_PROVIDERS,
+  cloudStorageTypeOfDefinition,
+  getCloudStorageInstallation,
+  isCloudStorageProviderConfigured,
+  listCloudStorageInstallations,
+  mayUseCloudStorageProvider,
+  providerFromInstance,
+  resolveCloudStorageRedirectUri
+} from '../cloudStorageConfig.js';
+import { IASSISTANT_DEFINITION_ID, IFINDER_DEFINITION_ID } from '../ifinderConfig.js';
+import { settingsFingerprint, tokenSecretRef, tokenStorageIdFor } from './tokenSecrets.js';
+import { integrationConnectPath } from './integrationAuthRequired.js';
+
+/** The issuer of Atlassian Cloud's OAuth 2.0 (3LO) authorization server. */
+export const ATLASSIAN_ISSUER = 'https://auth.atlassian.com';
+
+/** Where scheduled-run failures send the owner to reconnect (a client route). */
+export const SETTINGS_INTEGRATIONS_PATH = '/settings/integrations';
+
+/**
+ * @typedef {Object} SecretView
+ * @property {string} accessToken
+ * @property {string} [refreshToken]
+ * @property {string} [scope]
+ * @property {Object} [binding] - What the tokens were issued for (issuer, client, fingerprint)
+ */
+
+/**
+ * @typedef {Object} ConnectionDescriptor
+ * @property {string} installationId
+ * @property {'jira'|'cloud-storage'|'mcp'|'sso'|'shared'} stack
+ * @property {'oauth-user'|'sso'|'service-account'} kind
+ * @property {string} displayName
+ * @property {boolean} enabled
+ * @property {boolean} configured
+ * @property {string|null} issuer
+ * @property {string|null} fingerprint
+ * @property {string} [service] - Token store service (oauth-user)
+ * @property {string} [connectUrl] - Same-origin path that starts the sign-in
+ * @property {string} [credentialRef] - Service account credential (shared)
+ */
+
+/**
+ * Token store access for the stacks whose files hold the camelCase payload
+ * (`{ accessToken, refreshToken, expiresIn, scope, providerId? }`): Jira and
+ * the cloud storage providers.
+ *
+ * A storage provider's tokens live in `<user>__<installation>.json`. A legacy
+ * file without the installation in its name (`<user>.json`, from before
+ * tokens were scoped per installation) is only used while it cannot belong to
+ * another installation: when `allowLegacy()` says so (exactly one installation
+ * of the service) and the file names no other installation. Otherwise a
+ * second installation would adopt the first one's tokens, send them to its own
+ * endpoint and client, and delete them when they are refused.
+ *
+ * @param {Object} params
+ * @param {string} params.service - Token store service
+ * @param {string|null} params.providerId - Installation id of scoped files (null: Jira's one slot)
+ * @param {() => boolean} [params.allowLegacy] - Whether an unscoped legacy file may be used
+ */
+export function tokenStoreSecret({ service, providerId, allowLegacy = () => false }) {
+  /**
+   * Which file holds the user's tokens: the scoped one, an admissible legacy
+   * one, or none. `providerId` is what to hand the token store.
+   */
+  async function fileOf(userId) {
+    const storageId = tokenStorageIdFor(userId);
+    if (!providerId) return { storageId, providerId: null };
+    let meta;
+    try {
+      meta = await tokenStorage.getTokenMetadata(storageId, service, providerId);
+    } catch {
+      return null;
+    }
+    if (meta?.providerId === providerId) return { storageId, providerId, meta };
+    // The token store fell back to the unscoped file.
+    if (!meta?.providerId && allowLegacy()) return { storageId, providerId: null, meta };
+    return null;
+  }
+
+  /**
+   * Delete the unscoped legacy file of a storage id when `fileOf` would adopt
+   * it: the only installation of the service, and a payload without a
+   * `providerId` (the startup migration already moved every file that names
+   * one). Without this, a legacy file left beside the scoped one is adopted
+   * again after a disconnect.
+   */
+  async function removeAdmissibleLegacy(storageId) {
+    if (!providerId || !allowLegacy()) return;
+    let legacy;
+    try {
+      legacy = await tokenStorage.getUserTokens(storageId, service, null);
+    } catch {
+      return;
+    }
+    if (!legacy || legacy.providerId) return;
+    await tokenStorage.deleteUserTokens(storageId, service, null);
+  }
+
+  return {
+    ref(userId) {
+      return tokenSecretRef({ service, storageId: tokenStorageIdFor(userId), providerId });
+    },
+    /** The file the user's tokens are read from (an admissible legacy one counts). */
+    async locate(userId) {
+      const file = await fileOf(userId);
+      if (!file) return null;
+      try {
+        const meta =
+          file.meta || (await tokenStorage.getTokenMetadata(file.storageId, service, null));
+        return {
+          secretRef: tokenSecretRef({
+            service,
+            storageId: file.storageId,
+            providerId: file.providerId
+          }),
+          createdAt: meta.createdAt || null,
+          expiresAt: meta.expiresAt || null
+        };
+      } catch {
+        return null;
+      }
+    },
+    async read(userId) {
+      const file = await fileOf(userId);
+      if (!file) return null;
+      try {
+        const stored = await tokenStorage.getUserTokens(file.storageId, service, file.providerId);
+        // A legacy payload that names another installation is not ours.
+        if (providerId && stored?.providerId && stored.providerId !== providerId) return null;
+        return stored;
+      } catch (error) {
+        if (/not authenticated/i.test(error?.message || '')) return null;
+        throw error;
+      }
+    },
+    async write(userId, payload) {
+      const storageId = tokenStorageIdFor(userId);
+      await tokenStorage.storeUserTokens(storageId, service, payload, providerId);
+      // The scoped file replaces an adopted legacy one.
+      await removeAdmissibleLegacy(storageId);
+      return payload;
+    },
+    /** Delete the file the tokens are read from — never another installation's. */
+    async remove(userId) {
+      const file = await fileOf(userId);
+      if (!file) return false;
+      const removed = await tokenStorage.deleteUserTokens(file.storageId, service, file.providerId);
+      // A legacy file left next to the scoped one would be adopted again.
+      await removeAdmissibleLegacy(file.storageId);
+      return removed;
+    },
+    async expired(userId) {
+      const file = await fileOf(userId);
+      if (!file) return true;
+      return tokenStorage.areTokensExpired(file.storageId, service, file.providerId);
+    },
+    /** @returns {SecretView|null} */
+    view(stored) {
+      if (!stored?.accessToken) return null;
+      return {
+        accessToken: stored.accessToken,
+        refreshToken: stored.refreshToken,
+        scope: stored.scope,
+        binding: stored.binding
+      };
+    },
+    /** The stored payload for freshly issued (or refreshed) tokens. */
+    payloadFor(tokens, { previous, binding, extras = {} }) {
+      return {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken || previous?.refreshToken,
+        expiresIn: tokens.expiresIn,
+        scope: tokens.scope ?? previous?.scope,
+        ...(providerId ? { providerId } : {}),
+        ...extras,
+        ...(binding ? { binding } : {})
+      };
+    }
+  };
+}
+
+function jiraDescriptor() {
+  const instance = getJiraInstallation();
+  if (!instance) return null;
+  const cfg = jiraConfigFromInstance(instance);
+  return {
+    installationId: JIRA_INSTANCE_ID,
+    stack: 'jira',
+    kind: 'oauth-user',
+    displayName: 'JIRA',
+    enabled: cfg.enabled,
+    configured: isJiraConfigured(cfg),
+    issuer: ATLASSIAN_ISSUER,
+    fingerprint: settingsFingerprint({ stack: 'jira', clientId: cfg.clientId }),
+    service: JIRA_TOKEN_SERVICE,
+    resultKey: 'jira',
+    connectUrl: integrationConnectPath(JIRA_INSTANCE_ID),
+    secret: tokenStoreSecret({ service: JIRA_TOKEN_SERVICE, providerId: null }),
+    async strategy() {
+      const { default: JiraService } = await import('../JiraService.js');
+      return JiraService.oauthStrategy();
+    },
+    redirectUri(req) {
+      return resolveJiraRedirectUri(req, cfg);
+    },
+    // The routes check the user's group grant; Jira itself adds nothing.
+    async mayConnect() {
+      return true;
+    },
+    /** "Connected as …": the Atlassian account the tokens belong to (best effort). */
+    async accountLabel(userId) {
+      const { default: JiraService } = await import('../JiraService.js');
+      const info = await JiraService.getUserInfo(userId);
+      return info?.emailAddress || info?.displayName || null;
+    },
+    async onConnected({ wasConnected }) {
+      if (wasConnected) return;
+      const { adjustJiraConnectionCount } = await import('../jiraConnectionCount.js');
+      adjustJiraConnectionCount(1);
+    },
+    async onDisconnected({ removed }) {
+      if (!removed) return;
+      const { adjustJiraConnectionCount } = await import('../jiraConnectionCount.js');
+      adjustJiraConnectionCount(-1);
+    }
+  };
+}
+
+const CLOUD_SERVICE_MODULES = {
+  office365: () => import('../Office365Service.js'),
+  googledrive: () => import('../GoogleDriveService.js'),
+  nextcloud: () => import('../NextcloudService.js')
+};
+
+/** What a cloud storage token was issued under: the endpoint and the client. */
+function cloudFingerprint(provider) {
+  const material = { stack: 'cloud-storage', type: provider.type, clientId: provider.clientId };
+  if (provider.type === 'office365') material.tenantId = provider.tenantId;
+  if (provider.type === 'nextcloud') {
+    material.serverUrl = String(provider.serverUrl || '').replace(/\/+$/, '');
+  }
+  return settingsFingerprint(material);
+}
+
+function cloudIssuer(provider) {
+  if (provider.type === 'office365') {
+    return `https://login.microsoftonline.com/${provider.tenantId}/v2.0`;
+  }
+  if (provider.type === 'googledrive') return 'https://accounts.google.com';
+  return String(provider.serverUrl || '').replace(/\/+$/, '') || null;
+}
+
+function cloudDescriptor(instance) {
+  const provider = providerFromInstance(instance);
+  if (!provider) return null;
+  const spec = CLOUD_STORAGE_PROVIDERS[provider.type];
+  const loadService = CLOUD_SERVICE_MODULES[provider.type];
+  return {
+    installationId: provider.id,
+    stack: 'cloud-storage',
+    kind: 'oauth-user',
+    type: provider.type,
+    displayName: { office365: 'Office 365', googledrive: 'Google Drive', nextcloud: 'Nextcloud' }[
+      provider.type
+    ],
+    enabled: provider.enabled,
+    configured: isCloudStorageProviderConfigured(provider),
+    issuer: cloudIssuer(provider),
+    fingerprint: cloudFingerprint(provider),
+    service: spec.service,
+    resultKey: provider.type,
+    connectUrl: integrationConnectPath(provider.id),
+    // A legacy unscoped file is this installation's only while it is the only
+    // installation of its service.
+    secret: tokenStoreSecret({
+      service: spec.service,
+      providerId: provider.id,
+      allowLegacy: () => listCloudStorageInstallations(provider.type).length === 1
+    }),
+    async strategy() {
+      const { default: service } = await loadService();
+      return service.oauthStrategy(provider.id);
+    },
+    async storedExtras(tokens, previous) {
+      const { default: service } = await loadService();
+      return service.oauthStoredExtras ? service.oauthStoredExtras(tokens, previous) : {};
+    },
+    redirectUri(req) {
+      return resolveCloudStorageRedirectUri(req, {
+        id: provider.id,
+        type: provider.type,
+        redirectUri: provider.redirectUri
+      });
+    },
+    async mayConnect(user) {
+      return mayUseCloudStorageProvider(user, provider.id, provider.type);
+    },
+    /** "Connected as …": the provider account the tokens belong to (best effort). */
+    async accountLabel(userId) {
+      const { default: service } = await loadService();
+      if (typeof service.getUserInfo !== 'function') return null;
+      const info = await service.getUserInfo(userId, provider.id);
+      return (
+        info?.mail ||
+        info?.userPrincipalName ||
+        info?.emailAddress ||
+        info?.email ||
+        info?.displayName ||
+        info?.id ||
+        null
+      );
+    },
+    async onDisconnected({ removed }) {
+      if (!removed) return;
+      const { refreshCloudStorageConnectionCount } =
+        await import('../protocols/native/connectors/cloudStorage/index.js');
+      refreshCloudStorageConnectionCount?.(provider.type, provider.id);
+    }
+  };
+}
+
+/** Token store access for per-user MCP tokens (snake_case payload with a binding). */
+function mcpSecretStore(serverConfig, tokens) {
+  const serverId = serverConfig.id;
+  return {
+    ref(userId) {
+      return tokenSecretRef({
+        service: tokens.MCP_TOKEN_SERVICE,
+        storageId: tokenStorageIdFor(userId),
+        providerId: serverId
+      });
+    },
+    async locate(userId) {
+      const storageId = tokenStorageIdFor(userId);
+      try {
+        const meta = await tokenStorage.getTokenMetadata(
+          storageId,
+          tokens.MCP_TOKEN_SERVICE,
+          serverId
+        );
+        if (!meta.providerId) return null;
+        return {
+          secretRef: tokenSecretRef({
+            service: tokens.MCP_TOKEN_SERVICE,
+            storageId,
+            providerId: serverId
+          }),
+          createdAt: meta.createdAt || null,
+          expiresAt: meta.expiresAt || null
+        };
+      } catch {
+        return null;
+      }
+    },
+    /** Only tokens issued for this server's current endpoint and auth block. */
+    read(userId) {
+      return tokens.readUserTokensFor(userId, serverConfig);
+    },
+    async write(userId, payload) {
+      const { binding, ...plain } = payload;
+      await tokens.writeUserTokens(userId, serverId, plain, binding);
+      return tokens.readUserTokens(userId, serverId);
+    },
+    remove(userId) {
+      return tokens.deleteUserTokens(userId, serverId);
+    },
+    async expired(userId, stored) {
+      return tokens.accessTokenExpired(stored);
+    },
+    view(stored) {
+      if (!stored?.access_token) return null;
+      return {
+        accessToken: stored.access_token,
+        refreshToken: stored.refresh_token,
+        scope: stored.scope,
+        binding: stored.binding
+      };
+    },
+    payloadFor(issued, { previous, binding }) {
+      return {
+        ...issued.raw,
+        access_token: issued.accessToken,
+        token_type: issued.tokenType,
+        ...(issued.refreshToken || previous?.refresh_token
+          ? { refresh_token: issued.refreshToken || previous.refresh_token }
+          : {}),
+        ...(issued.expiresIn !== undefined ? { expires_in: issued.expiresIn } : {}),
+        ...(issued.scope !== undefined ? { scope: issued.scope } : {}),
+        binding
+      };
+    }
+  };
+}
+
+async function mcpDescriptor(installationId) {
+  const [{ default: mcpClientManager }, oauth, tokens, publicUrl, clientStore] = await Promise.all([
+    import('../../mcp/McpClientManager.js'),
+    import('../../mcp/mcpOAuthService.js'),
+    import('../../mcp/mcpUserTokens.js'),
+    import('../../mcp/mcpOAuthPublicUrl.js'),
+    import('../../mcp/mcpOAuthClientStore.js')
+  ]);
+  const conn = mcpClientManager.getConnection(installationId);
+  if (!conn || !oauth.isUserOAuthServer(conn.config)) return null;
+  const serverConfig = conn.config;
+  const registration = await mcpClientManager
+    .clientRegistrations()
+    .getFor(serverConfig)
+    .catch(() => null);
+  const { createMcpDiscoveryStrategy } = await import('./strategies/mcpDiscovery.js');
+  return {
+    installationId,
+    stack: 'mcp',
+    kind: 'oauth-user',
+    displayName: oauth.serverDisplayName(serverConfig),
+    enabled: serverConfig.enabled !== false,
+    configured: true,
+    issuer:
+      registration?.discovery?.authorizationServerMetadata?.issuer ||
+      registration?.authorizationServerUrl ||
+      null,
+    fingerprint: clientStore.registrationFingerprint(serverConfig),
+    service: tokens.MCP_TOKEN_SERVICE,
+    resultKey: 'mcp',
+    connectUrl: integrationConnectPath(installationId),
+    serverConfig,
+    secret: mcpSecretStore(serverConfig, tokens),
+    async strategy() {
+      return createMcpDiscoveryStrategy({
+        serverConfig,
+        security: mcpClientManager.security,
+        clientStore: mcpClientManager.clientRegistrations()
+      });
+    },
+    redirectUri(_req, ctx = {}) {
+      return publicUrl.mcpCallbackUrl(ctx.publicBase, installationId);
+    },
+    /**
+     * What a sign-in needs from the request: iHub's public base (the
+     * callback and CIMD URLs are built on it) and whether that base may
+     * replace a client registration made for another one — only a configured
+     * Public URL or an admin's own sign-in may, never one request's Host.
+     */
+    async connectContext(req, user) {
+      const { publicBase, configured } = publicUrl.resolveMcpPublicBaseInfo(req);
+      if (!publicBase) return null;
+      const { isAdminUser } = await import('../../loop/runIdentity.js');
+      return { publicBase, trustedBase: Boolean(configured || isAdminUser(user)) };
+    },
+    async mayConnect(user) {
+      if (serverConfig.enabled === false) return false;
+      return oauth.isServerVisibleToUser(
+        user,
+        serverConfig,
+        await mcpClientManager.toolsOfServer(installationId)
+      );
+    },
+    async onConnected({ userId, user }) {
+      // The next call reconnects with the new token; listing the tools now
+      // fills the server's shared catalog (best effort, not awaited).
+      await mcpClientManager.evictUserConnection(installationId, userId);
+      if (user) mcpClientManager.refreshCatalogForUser(installationId, user).catch(() => {});
+    },
+    async onDisconnected({ userId }) {
+      await mcpClientManager.evictUserConnection(installationId, userId);
+    }
+  };
+}
+
+function installedList() {
+  try {
+    return configCache.getIntegrations?.()?.data?.installed || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The descriptor of an installation, or null when it is not installed (or
+ * takes no connection at all).
+ *
+ * @param {string} installationId
+ * @returns {Promise<ConnectionDescriptor|null>}
+ */
+export async function describeInstallation(installationId) {
+  if (typeof installationId !== 'string' || !installationId) return null;
+  if (installationId === JIRA_INSTANCE_ID) {
+    const jira = jiraDescriptor();
+    if (jira) return jira;
+  }
+  const cloud = getCloudStorageInstallation(installationId);
+  if (cloud && cloudStorageTypeOfDefinition(cloud.definition)) return cloudDescriptor(cloud);
+
+  const instance = installedList().find(entry => entry?.id === installationId) || null;
+  if (
+    instance?.definition === IFINDER_DEFINITION_ID ||
+    instance?.definition === IASSISTANT_DEFINITION_ID
+  ) {
+    // Per-request identity (JWT / token exchange from the user's own sign-in):
+    // nothing stored, nothing to connect.
+    return {
+      installationId,
+      stack: 'sso',
+      kind: 'sso',
+      displayName: installationId,
+      enabled: instance.enabled !== false,
+      configured: true,
+      issuer: null,
+      fingerprint: null
+    };
+  }
+
+  const mcp = await mcpDescriptor(installationId).catch(() => null);
+  if (mcp) return mcp;
+
+  if (instance?.auth?.mode === 'service-account' && instance.auth.credentialRef) {
+    return {
+      installationId,
+      stack: 'shared',
+      kind: 'service-account',
+      displayName: installationId,
+      enabled: instance.enabled !== false,
+      configured: true,
+      issuer: null,
+      fingerprint: settingsFingerprint({ credentialRef: instance.auth.credentialRef }),
+      credentialRef: instance.auth.credentialRef
+    };
+  }
+  return null;
+}
+
+/**
+ * The descriptors of every installation that takes a per-user OAuth
+ * connection (for the re-index and the admin views).
+ *
+ * @returns {Promise<ConnectionDescriptor[]>}
+ */
+export async function listUserOAuthDescriptors() {
+  const out = [];
+  for (const instance of installedList()) {
+    const descriptor = await describeInstallation(instance?.id);
+    if (descriptor?.kind === 'oauth-user') out.push(descriptor);
+  }
+  return out;
+}

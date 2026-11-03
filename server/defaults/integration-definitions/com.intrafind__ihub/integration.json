@@ -1,10 +1,21 @@
 {
   "id": "com.intrafind/ihub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Model guidance and example prompts for asking the user and for the scheduled task tools; the guidance is added to the system prompt while the tools are active in a chat.",
+        "de": "Modellhinweise und Beispiel-Prompts für Rückfragen an den Benutzer und für die Werkzeuge der geplanten Aufgaben; die Hinweise werden dem Systemprompt hinzugefügt, solange die Werkzeuge in einem Chat aktiv sind."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-11-01",
@@ -60,7 +71,11 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "guidance": {
+        "en": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+        "de": "Frage nur, wenn die Antwort von etwas abhängt, das nur der Benutzer weiß; stelle eine kurze Frage und biete Auswahlmöglichkeiten an, wenn es wenige gibt."
+      }
     },
     {
       "name": "schedule_task",
@@ -75,7 +90,17 @@
       },
       "sideEffect": "write",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "guidance": {
+        "en": "Confirm what the task does, when it runs and in which time zone before you create it.",
+        "de": "Bestätige, was die Aufgabe tut, wann sie läuft und in welcher Zeitzone, bevor du sie anlegst."
+      },
+      "examples": [
+        {
+          "en": "Every Monday at 8:00, summarise the news about our competitors.",
+          "de": "Fasse jeden Montag um 8:00 die Nachrichten über unsere Wettbewerber zusammen."
+        }
+      ]
     },
     {
       "name": "list_scheduled_tasks",
@@ -90,7 +115,13 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "examples": [
+        {
+          "en": "Which scheduled tasks do I have?",
+          "de": "Welche geplanten Aufgaben habe ich?"
+        }
+      ]
     },
     {
       "name": "update_scheduled_task",
@@ -105,7 +136,17 @@
       },
       "sideEffect": "write",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "guidance": {
+        "en": "List the tasks first and change only the one the user named.",
+        "de": "Liste zuerst die Aufgaben auf und ändere nur die, die der Benutzer genannt hat."
+      },
+      "examples": [
+        {
+          "en": "Run my news summary at 7:00 instead.",
+          "de": "Führe meine Nachrichtenzusammenfassung stattdessen um 7:00 aus."
+        }
+      ]
     },
     {
       "name": "delete_scheduled_task",
@@ -120,7 +161,11 @@
       },
       "sideEffect": "destructive",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "guidance": {
+        "en": "Delete only after the user named the task and confirmed; it cannot be undone.",
+        "de": "Lösche erst, nachdem der Benutzer die Aufgabe genannt und bestätigt hat; das lässt sich nicht rückgängig machen."
+      }
     },
     {
       "name": "run_scheduled_task_now",
@@ -135,7 +180,13 @@
       },
       "sideEffect": "write",
       "dataFlow": "internal",
-      "connection": "none"
+      "connection": "none",
+      "examples": [
+        {
+          "en": "Run my news summary now.",
+          "de": "Führe meine Nachrichtenzusammenfassung jetzt aus."
+        }
+      ]
     },
     {
       "name": "list_task_runs",

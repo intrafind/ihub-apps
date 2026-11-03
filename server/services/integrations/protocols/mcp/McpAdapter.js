@@ -14,8 +14,8 @@
  * the installation and the action policy apply like to any other integration.
  */
 import mcpClientManager from '../../../mcp/McpClientManager.js';
-import { isUserOAuthServer, revokeUserConnection } from '../../../mcp/mcpOAuthService.js';
-import { listServerConnections } from '../../../mcp/mcpUserTokens.js';
+import { isUserOAuthServer } from '../../../mcp/mcpOAuthService.js';
+import { getIntegrationConnectionService } from '../../auth/IntegrationConnectionService.js';
 import { actionEnabled, testResult } from '../common.js';
 import { effectiveValues, instanceLabel } from '../../definitions/installedValues.js';
 import { serverConfigFor } from './serverConfig.js';
@@ -76,6 +76,9 @@ export async function discoverActions({ definition, instance, language = 'en' })
       available: enabled,
       guidance: '',
       examples: [],
+      // The server's annotations as listed: the action detail resolves the
+      // approval exactly as the tool loader does (annotations are untrusted).
+      annotations: tool.annotations || null,
       language
     };
   });
@@ -99,6 +102,16 @@ export async function discoverTools(resolved, language = 'en') {
       definition: definition.id
     }
   }));
+}
+
+/**
+ * The model guidance the server sent in `initialize` (MCP `instructions`),
+ * or null while no shared connection is open (or the server sends none).
+ * @param {Object} instance
+ * @returns {string|null}
+ */
+export function serverInstructions(instance) {
+  return mcpClientManager.serverInstructions(instance?.id) || null;
 }
 
 /** Run one tool on the calling user's behalf; iHub's context keys stay with the manager. */
@@ -208,26 +221,21 @@ export function status(instance) {
   };
 }
 
-/** The users who connected their own account to a per-user server. */
+/** The users who connected their own account to a per-user server (the connection index). */
 export async function listConnections(instance) {
   const conn = mcpClientManager.getConnection(instance.id);
   if (!conn || !isUserOAuthServer(conn.config)) return [];
-  const connections = await listServerConnections(instance.id, conn.config);
-  return connections.map(({ storageId: _storageId, ...c }) => c);
+  return getIntegrationConnectionService().listUserConnections(instance.id);
 }
 
-/** Disconnect one user: revoke at the authorization server when possible, delete the tokens. */
-export async function disconnectUser(instance, userId) {
+/**
+ * Disconnect one user: revoke at the authorization server when possible,
+ * delete the tokens, mark the connection revoked (audit `connection.revoke`).
+ */
+export async function disconnectUser(instance, userId, { req } = {}) {
   const conn = mcpClientManager.getConnection(instance.id);
   if (!conn || !isUserOAuthServer(conn.config)) return { removed: false, unknownServer: true };
-  const result = await revokeUserConnection({
-    serverConfig: conn.config,
-    userId,
-    security: mcpClientManager.security,
-    clientStore: mcpClientManager.clientRegistrations()
-  });
-  await mcpClientManager.evictUserConnection(instance.id, userId);
-  return result;
+  return getIntegrationConnectionService().disconnect({ installationId: instance.id, userId, req });
 }
 
 /** Forget iHub's OAuth client registration at the server's authorization server. */

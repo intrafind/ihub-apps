@@ -30,7 +30,7 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Web search engines** are one integration per engine, all of `type: "web-search"`: **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`), each a singleton installed only when wanted (a fresh install ships none). Brave and Staan hold their API key as a credential reference (`apiKeyRef`, falling back to `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY`); Qwant has no settings. Each has one action, `search`, under its historical tool id (`braveSearch`, `staanSearch`, `qwantSearch`). Apps do not bind engines: they switch web search on in their own `websearch` settings and name an engine (`websearch.provider`: an installation id, or `auto` for the first engine the user may use, Brave, Staan, Qwant, then any other). Native search on Google, OpenAI and Anthropic models needs no engine; the page reader `read_url` belongs to the web search feature (a platform tool). A third party ships its own engine as a `script` or `openapi` definition of type `web-search` (see [Building an Integration → Web search engines](integration-development.md#web-search-engines)). Migration V204 replaced the former single installation `websearch` (`com.intrafind/web-search`) with the engines that worked. See [Web Tools](web-tools.md).
 
-**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through `/api/integrations/jira/auth` (from the chat prompt or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
+**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through the one connect flow (`POST /api/integrations/jira/connect`, from the chat's Connect card or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
 
 **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra`) runs with an app registration's client credentials: tenant id, client id and the client secret as a credential reference, each falling back to the `AZURE_*` environment variables when empty (its editor says per field whether the server has the variable). Its six actions are the former `entraPeopleSearch_*` tools under the same ids. It is a people directory (`type: "people-directory"`): the shipped People search app uses it next to the LDAP directories. See [Tool Calling → entraPeopleSearch](tool-calling.md#entrapeoplesearch).
 
@@ -38,10 +38,10 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Microsoft Office 365**, **Google Drive** and **Nextcloud** (`com.intrafind/office365`, `com.intrafind/google-drive`, `com.intrafind/nextcloud`) are the storage providers (`type: storage`) of the chat's file picker and the project cloud documents. Each can be installed **several times** — one installation per Azure app registration or tenant, per Google OAuth client, per Nextcloud server. An installation holds the provider's OAuth app (client id, client secret as a credential reference, optional redirect URI, the tenant, sources or server URL) and signs every user in (`auth.modes: ["oauth-user"]`); they have no model-facing actions.
 
-- **The installation id is the provider id.** It names the provider in the routes (`/api/integrations/<service>/auth?providerId=<installation id>`, every browse and download route requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
+- **The installation id is the provider id.** It names the provider in the connect flow (`POST /api/integrations/<installation id>/connect`), in the browse and download routes (`?providerId=<installation id>`, every one requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
 - **Redirect URI**: empty means derived from each request like Jira's — scheme and host as the browser sees them (`X-Forwarded-Proto` / `X-Forwarded-Host` of a trusted proxy), the base path (`X-Forwarded-Prefix`), then the callback path. The installation's **Settings** tab shows the URI to register with a **Copy** button.
 - **Apps bind them** like integrations: one installation, a provider's definition id (all its installations) or `type:storage` (all storage providers); the chat's file picker offers the bound providers the user's groups grant. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
-- Users connect under **Settings → Integrations** or from the picker; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
+- Users connect under **Settings → Integrations** or from the picker, which shows the Connect card when the provider is not connected; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
 
 See [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md), [Nextcloud](nextcloud-integration.md).
 
@@ -66,18 +66,94 @@ After an update the previous module version is dropped (actions, the test and th
 
 A shipped definition never uses `script` (it is `native`); the shipped IntraFind registry is the place to publish connectors such as Jira or Microsoft 365 that cannot be expressed as an OpenAPI document.
 
+### Custom integrations (Add manually)
+
+**Admin → Integrations → Add manually** (`/admin/integrations/builder/new`, also on the Catalog tab) opens the **integration builder**. It replaced the Tools page (**Admin → Tools** and `/api/admin/tools*` are gone, see [Tool files became custom integrations](#tool-files-became-custom-integrations)). A custom integration is an ordinary definition `custom/<id>` in `contents/integration-definitions/custom__<id>/` plus an installation `<id>`: it is listed in the **Custom** group, bound to apps, granted to groups, tested and approved like every other integration, and its page has **Edit in builder**.
+
+The builder has five steps:
+
+| Step | What you set |
+| --- | --- |
+| **Basics** | Name and description (per language), the ID (proposed from the name; tool ids are `<id>__<action>`; it cannot change later), an optional https icon URL |
+| **Sign-in** | **None**; a **service account**: a credential picked from the credential store (**Admin → Credentials**), sent as the credential's own type says (bearer, basic, API key header, OAuth2 client credentials, API key query), as a bearer token, as an API key in a named header (with an optional prefix) or as basic auth; **per-user OAuth** for an MCP server (each user connects their own account). A script integration signs in itself |
+| **Source** | Where the actions come from (below) |
+| **Actions** | Per action: name, description for the model, parameters (JSON schema), **side effect**, **data flow** and **approval**; plus an approval for every action. See [Tool Approval](tool-approval.md) |
+| **Review** | What will be saved, with the tool id of every action |
+
+| Source | Settings | Actions |
+| --- | --- | --- |
+| **OpenAPI** | The document from a URL (fetched by the server through the SSRF guard), a file or pasted JSON/YAML; base URL (default: the document's first server); static headers. The document is stored with the integration (`openapi.json`) | One per picked operation; the side effect is proposed from the method (GET/HEAD read, POST/PUT/PATCH write, DELETE destructive) |
+| **HTTP request** | Optional base URL and static headers | One request template each, see [HTTP request actions](#http-request-actions-http) |
+| **Script** | The connector module `actions/connector.js` (one bundled ES module, see [Code-based integrations](#code-based-integrations-script)); **Insert a stub for every action** writes a skeleton | Declared in the builder (description, parameters); the module implements `actions.<name>.run(args, ctx)` |
+| **MCP server** | Streamable HTTP, SSE or WebSocket URL with headers, or a local command (`stdio`) with arguments and environment | The server's `tools/list` (**List the server's tools**); per tool a description that replaces the server's, side effect, data flow (stored as installation overrides) and approval |
+| **A2A agent** | The agent card URL | The card's skills (**Read the agent's skills**) |
+
+Saving writes the definition with the next patch version (`1.0.0`, `1.0.1`, …) and saves the installation against it; when the installation is refused, the previous folder is put back. A save keeps what the installation page sets outside the builder: the action detail's overrides (guidance, example prompts, and for an action the definition declares also its description, side effect and data flow), the accepted action fingerprints and `approval.newOrChanged`. An action whose name, side effect or input schema the save changes counts as changed under [new or changed actions](tool-approval.md) until an admin marks it reviewed. A script module runs in the server process like any `script` definition; the builder writes it without the registry's trust check, because the admin wrote it.
+
+**Export.** **Export for a registry** on the builder (`POST /api/admin/integrations/builder/_export/:id`) downloads a package `{ format: "ihub-integration-package", formatVersion: 1, catalogItem, files }`. `files` is the definition folder (`integration.json` and its companions); `catalogItem` is the entry for the registry's `catalog.json` (type `integration`, name `custom__<id>`, version, `source.path` `integration-definitions/custom__<id>/integration.json`, `source.companions`, and a `source.integrity` hash for every code file). Publish the files under that path next to the catalog, add the item to `items[]`, and another iHub installs it from the [Marketplace](marketplace.md) (a script integration only from a registry trusted for code). Tool ids the integration kept from a tool file (`toolId`) belong to this server and are left out; an MCP server started as a local process cannot be exported (`409 NOT_PUBLISHABLE`).
+
+### HTTP request actions (`http`)
+
+The `http` protocol wraps REST endpoints without code. The protocol holds what every action shares; each action is one request template:
+
+```jsonc
+{
+  "protocol": { "type": "http", "baseUrl": "https://erp.example.com/api", "headers": { "Accept": "application/json" } },
+  "actions": [
+    {
+      "name": "get_order",
+      "description": { "en": "Get one order with its lines" },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "parameters": { "type": "object", "properties": { "orderId": { "type": "string" } }, "required": ["orderId"] },
+      "request": { "method": "GET", "url": "/orders/{orderId}", "query": { "expand": "{expand}" } },
+      "response": { "result": "$.data.lines", "fields": { "sku": "sku", "qty": "quantity.value" } }
+    },
+    {
+      "name": "add_note",
+      "sideEffect": "write",
+      "parameters": { "type": "object", "properties": { "orderId": { "type": "string" }, "note": { "type": "string" } } },
+      "request": { "method": "POST", "url": "/orders/{orderId}/notes", "body": "{\"text\": {note}}", "contentType": "application/json" }
+    }
+  ]
+}
+```
+
+- `{name}` is the model's argument of that name, else the install value of that name. Every substitution is escaped for where it lands: URL-encoded in the path and the query (a path value `.` or `..` is refused), JSON-encoded in a JSON body (write `{note}`, not `"{note}"`; a missing value is `null`), form-encoded in a form body; a header value with a line break is refused. A query parameter whose placeholders have no value is left out. The base URL takes install values only.
+- `response.result` is a path into the response (dotted keys, `[]` for every element of a list, `$.` optional); `response.fields` projects the result (each element of a list) onto named paths. Without a mapping the model sees the whole response. A response above `maxResponseBytes` (default 256 KB) is cut and flagged.
+- Calls go through the SSRF guard with the integrations' `security` (`blockPrivateIps`, `allowedHosts`) and `platform.ssrf.allowedHosts`: a direct call through `safeFetch` (resolved once, private addresses refused, the connection pinned to the checked address), a call the proxy settings route through the proxy through `httpFetch` after the same host check. Certificates follow `ssl.domainWhitelist`. Redirects are never followed (a 3xx is reported as an error). An HTTP error comes back as `{ error: true, status, message }` with the API's own message where it has one.
+- The test of an installation runs its first read action that needs no argument (or the declared `health` action).
+
+### Tool files became custom integrations
+
+Migration **V211** turned every tool file an admin had created in `contents/tools/` into a custom integration (shipped and platform tools, provider tools and agent tools stay where they are):
+
+| Tool file | Custom integration |
+| --- | --- |
+| Script tool (`script`, one function or several `functions`) | Protocol `script`; a generated `actions/connector.js` runs the tool's script in `server/tools/` exactly as before (`ctx.runToolScript(script, { method })`), one action per function |
+| OpenAPI tool (`type: "openapi"`) | Protocol `openapi`; an inline or file document is copied into the folder, a URL stays the document URL; `openapi.auth.credentialRef` becomes a service account that sends the credential as its type says (`serviceAccount.kind: "credential"`); `xDisplay.hideFields` → `hideFields`; the tool's `security.allowedHosts` join the integrations' allowed hosts |
+| `id`, function names | The installation id is the tool id in lower case with `-` (`pingTool` → `ping-tool`, `<id>-2` when taken); every action keeps its **tool id** (`toolId`: `myTool`, `myTool_search`), so apps, workflows, agent profiles, group tool grants, the MCP and A2A gateways and app approval overrides keep working |
+| `enabled`, `approval` / `requiresApproval`, `sideEffect`, `dataFlow` | The installation's `enabled`; `approval.default` (the tool's) and `approval.actions` (a function's own); the action's side effect and data flow (an undeclared data flow stays `internal`) |
+| App `tools` entries | `app.integrations.<id>`, narrowed to `actions` when the app named single functions |
+| Groups | Every group with an explicit `permissions.integrations` list (no `*`) gets the installation, because the tool was usable by everyone who could open an app that listed it |
+
+The tool file is deleted. `passthrough`, `concurrency` and `requestDelayMs` are not carried over (logged). A file whose id cannot be kept as a tool id, or whose functions collide as action names, is left in place with a warning. Only built-in and custom (`custom/<id>`) definitions may fix tool ids; a definition from a registry cannot.
+
+A tool file put into `contents/tools/` by hand still loads as a plain tool (developers, see [Tool Calling](tool-calling.md)); an OpenAPI tool file does not any more (logged once).
+
 ### Remote A2A agents
 
 A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a` protocol, installed from the shipped **A2A agent** definition (`com.intrafind/a2a-agent`): the Agent Card URL, a sign-in mode (none, a shared token or API key, or an OAuth client) and the call budget are its install values. The card's skills are the installation's actions, listed after **Test connection**; tool ids stay `a2a__<id>__<skill>`. Calling an agent, its conversations and the inbound side are described in [A2A Agents](a2a-agents.md). Migration V194 turned every agent of the former `config/a2aAgents.json` into an installation under the same id.
 
 ## The Integrations page
 
-**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has three tabs (`?tab=` in the URL):
+**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has four tabs (`?tab=` in the URL):
 
 | Tab                       | Contents                                                                                                                                                                                                                                       |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Installed** (default)   | every installation as a tile, grouped                                                                                                                                                                                                          |
 | **Catalog** (`catalog`)   | every definition you can install, in the same groups                                                                                                                                                                                           |
+| **Requests** (`requests`) | what users asked for from the catalog, with the open count as badge; see [Requests from users](#requests-from-users)                                                                                                                            |
 | **Inbound** (`inbound`)   | what connects _to_ iHub, each with its status and a link to its page: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway                                                                                    |
 
 **Groups.** Installed and Catalog list their entries under the same headings, in this order; a group with nothing in it is left out, and each heading shows the count and a one-line description:
@@ -121,7 +197,7 @@ The tile opens the installation's page. Its quick actions are separate buttons: 
 
 `/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test in chat** (see [Example apps and the chat test](#example-apps-and-the-chat-test)), **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
 
-- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive) and whether they are off or unavailable, the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, and the **Migration log** (the last 10 runs, newest first).
+- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive), their approval mode and whether they are off or unavailable, the installation's approval default and the mode for new or changed actions ([Tool Approval](tool-approval.md); saved on its own with **Save approval**, stored as `approval: { default, actions, newOrChanged }` keyed by action name), a **New** or **Changed** badge on every action whose name, declared side effect or input schema changed since the last review, with **Mark reviewed** per action and **Mark all reviewed** ([New and changed actions](tool-approval.md#new-and-changed-actions)), the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, **Details** of every action ([Action detail](#action-detail-what-it-does-how-to-use-it-test-it)), the editable **Instructions for the model**, and the **Migration log** (the last 10 runs, newest first).
 - **Settings** (`settings`): the installation's editor (below); read-only while a migration state refuses the save.
 - **Releases** (`releases`): the release history of its definition, when it has one.
 
@@ -138,6 +214,45 @@ An installation whose definition is missing or incompatible cannot be edited or 
   - The binding the template has for its integration (by definition id or type) moves to the installation id and keeps its settings; other bindings stay. When the template's id is taken (a second installation, or the shipped app of the same name), the id gets the installation id appended and the name the installation's label, e.g. _Open Data Assistant (GovData)_.
 
 The chat runs the **saved** installation and app and restarts after every save of the settings, so a changed setting is tested with the next message. The chat only serves enabled apps: an example app created without **Available to users now** cannot be tested until it is enabled in the app editor, and an enabled one is visible to every group whose `apps` permission holds `*`. The panel also says when the installation is disabled (an app that requires it is hidden) and when your own groups do not grant it (the chat runs without its actions).
+
+### Action detail: what it does, how to use it, test it
+
+Every action on the Overview has **Details** (`?action=<name>` opens the page with it). The panel has five sections:
+
+- **What it does**: the tool description and the parameter schema exactly as the model receives them (a table, and the raw schema). **Edit** replaces the description for the current language (`actions.overrides[<action>].description`); **Reset to default** brings back the definition's (or the MCP server's).
+- **Side effect, data flow, approval**: the resolved side effect, data flow and approval mode, each with its source: _integration definition_, _vendor annotation (not trusted)_ for an MCP server's `readOnlyHint`/`destructiveHint`, _remote system_ (MCP and A2A are always external), _admin override_, or the platform default, the integration's setting or this action's setting for the approval. An OpenAPI action whose definition says `unknown` shows what its HTTP method suggests (GET/HEAD read, POST/PUT/PATCH write, DELETE destructive), as a hint only: confirm it with an override. The **side effect** and **data flow overrides** (`actions.overrides[<action>].sideEffect` / `.dataFlow`) and the action's approval mode are saved at once; a new or changed action can be marked reviewed here.
+- **How to use**: the **model guidance** and the **example prompts** of the action, each editable per language (`actions.overrides[<action>].guidance`, `.examples`), the integration's instructions, and the apps, workflows (a node whose tools select the action) and scheduled tasks (their own tool selection, or their app's when they keep it) that use the action.
+- **Test**: see below.
+- **Usage**: calls, approved, rejected and expired approvals, errors and admin tests in the last 7 days. iHub counts them per action from this version on, in `contents/data/integration-action-usage/<day>.jsonl` (one line per event with the installation, the action and the kind; no user, no arguments; files older than 14 days are deleted). Tests are not counted as calls.
+
+**Try in chat** closes the panel and opens the installation's [chat test](#example-apps-and-the-chat-test).
+
+**Instructions** on the Overview are the integration-level guidance: the definition's `instructions`, or for an MCP server the `instructions` it sends when iHub connects. **Edit instructions** replaces them for the current language (stored as `instructions` on the installation); **Use the integration's own** removes the override.
+
+#### Guidance in the system prompt
+
+While an integration is active in a chat (the app binds it, the user's groups grant it, the turn offers its tools), iHub appends one block per installation to the system prompt: its instructions, then one line per offered action that has guidance:
+
+```text
+How to use the connected integrations:
+<integration-guidance integration="Jira (EU)" id="jira">
+Jira holds the organisation's tickets. …
+- Add a comment (tool `jira_addComment`): Comment only when the user asked for it; …
+</integration-guidance>
+```
+
+An action that is switched off, not bound by the app or not granted adds nothing. The guidance is not part of the tool description and not part of an action's fingerprint, so editing it never marks an action as changed. Chats, scheduled runs and workflow prompt nodes add the block the same way.
+
+#### Testing an action
+
+The **Test** section builds a form from the parameter schema (text, number, checkbox, a list for `enum`, JSON for arrays and objects; required fields first) and runs the action through its adapter, **without a model** and without the approval step: a test is an explicit admin action. The adapter's own rules still hold (SSRF guard, SSL whitelist, proxy, response caps, credential store).
+
+- **Run as**: _my own connection_ for an installation that signs every user in (your own token is used; connect first), _as me_ for one without sign-in, or the installation's _shared credential_ for a service account or OAuth client. Separate shared connections to choose from do not exist yet.
+- **Confirmation**: an action that is not a confirmed read (write, destructive, unknown, or a read only an MCP server claims) needs **I understand that this test can change data**. The server enforces it: without `confirm: true` the request is refused with `409 CONFIRMATION_REQUIRED` and nothing runs.
+- **Result**: status (succeeded, failed, timed out), the HTTP status, the duration, the **request as sent** (the action and its arguments, and every HTTP request the adapter made: method, URL, headers and body), the **raw response** (at most 100,000 characters) and the **Answer Sources** the result produced. Credential headers (`Authorization`, `Cookie`, API key headers), secret parameters and body fields (`password`, `token`, `apiKey`, `client_secret`, …), user info in URLs, and every secret the run resolved from the credential store are shown as `[redacted]`, wherever they appear.
+- **Audit**: every run, and every refused run, is written to the audit log (action `execute`, resource `integration`, summary `action.test: "<action>" of integration "<id>" …` with the arguments redacted).
+
+HTTP requests are recorded where the adapters send them (`httpFetch` and the SSRF-guarded fetch); an action that runs inside iHub or reaches its system another way (an MCP stdio server) shows its call and arguments only.
 
 ### Editors
 
@@ -216,7 +331,7 @@ The built-in `ifinder` and `iassistant` installations are bound the same way, an
 
 An app is offered to users only while every installation it **requires** exists and is enabled (for `iassistant`, the iFinder installation too). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools. A binding is required unless it says `"required": false`: an optional binding keeps the app available, and its actions, scopes and sources are simply not there while the installation is disabled or missing (**Required** switch per binding in the app editor). Web search works the other way round, since most apps work without it and native search needs no engine: `websearch.enabled` leaves the app available while no engine is, and only `websearch.required: true` hides it — on `auto` while no engine installation is enabled (missing: `type:web-search`), on a named engine while that one is missing or disabled.
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named _Label: Action_ (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The tools menu shows one switch per installation (the instance id is the tool reference), on by default. An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named _Label: Action_ (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The chat's integrations picker shows one row per installation (the instance id is the tool reference), on by default; see [In the chat: the integrations picker](#in-the-chat-the-integrations-picker). An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs
 
@@ -230,6 +345,160 @@ Five protocols have an adapter: `native`, for the built-in connectors (iFinder, 
 6. adds a `portalUrl` to every hit the definition's **sources** mapping lists, so each answer cites the records it used.
 
 Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `allowedHosts`) and the platform's SSRF settings.
+
+Before any of this, a call can wait for a person's approval: the installation's `approval.default`, the action's `approval.actions[<action>]`, the platform default for its data flow and the app's override resolve to one mode, the strictest wins ([Tool Approval](tool-approval.md)). A definition migration that renames or removes an action carries its approval mode along. An action that is new or changed since an admin last reviewed it (its fingerprint over name, declared side effect and input schema is not the accepted one in `actions.fingerprints`) resolves to at least `approval.newOrChanged` (default `always`) until it is marked reviewed ([New and changed actions](tool-approval.md#new-and-changed-actions)). An admin can override an action's side effect and data flow with `actions.overrides[<action>].sideEffect` / `.dataFlow`, and its description, model guidance and example prompts with `.description`, `.guidance` and `.examples` (see [Action detail](#action-detail-what-it-does-how-to-use-it-test-it)). The install form preselects the approval default of a new installation: always ask for MCP servers, A2A agents and definitions with an external action of unknown side effect, ask unless it only reads otherwise.
+
+## Connections
+
+A **connection** is how one principal signs in to one installation. Jira, the cloud storage providers (Office 365, Google Drive, Nextcloud) and MCP servers with per-user OAuth sign every user in with their own account; iFinder and iAssistant use the user's own iHub sign-in on every request (`sso`, nothing stored); an installation in _service account_ mode uses one shared credential from the credential store for everybody.
+
+All of them go through one connection service and one OAuth client (`server/services/integrations/auth/`), so connect, refresh, disconnect and the security checks are the same for every integration.
+
+### The connection index
+
+Every connection has a record in the storage namespace `integration-connections` (schema `server/validators/integrationConnectionSchema.js`), keyed by a hash of installation and principal:
+
+| Field | Meaning |
+| --- | --- |
+| `integration`, `principal` | the installation id; `{ type: "user", id }`, or `{ type: "shared" }` for a service account |
+| `kind` | `oauth-user`, `service-account`, `sso` (`api-key` is reserved) |
+| `status` | `active`, `expired` (the refresh token was refused), `revoked` (disconnected), `failed`, `needs-reconnect` (the installation was repointed) |
+| `issuer`, `scopesGranted`, `externalAccount` | the authorization server that issued the credentials, the scopes it granted, the upstream account where it is known |
+| `expiresAt`, `lastRefreshedAt`, `lastUsedAt`, `error` | access token expiry, last refresh and use, the stable code of the last failure (never upstream text) |
+| `secretRef` | where the secret lives: `tokenstore:<service>/<file>` (a `TokenStorageService` file under `contents/integrations/`), or `credential:<ref>` for a service account. The record never holds a token. |
+| `fingerprint` | a hash of the installation settings the credentials were issued under (endpoint, tenant, server URL, client) |
+
+The tokens themselves stay where they always were, encrypted per user and service: `contents/integrations/jira/<user>.json`, `contents/integrations/<office365|googledrive|nextcloud>/<user>__<installation>.json` and `contents/integrations/mcp/<user>__<server>.json`. User ids that are not file-name safe (`auth0|abc`) are filed under a stable hash.
+
+**Upgrade.** On the first start after the upgrade the token tree is re-indexed once: every existing token file gets its record, nobody reconnects and no file is moved or re-encrypted. A legacy cloud storage file without the installation in its name maps to the only installation of that service; with several installations it is skipped and logged (it keeps working for the user, as before). The re-index runs once (a marker in `runtime-imports`), under the storage lock so only one cluster worker does it, and never overwrites a record. The connection service also indexes a token file it meets without a record, so nothing waits on the re-index.
+
+**Resolve.** When a tool runs, the adapter asks the connection service for the caller's connection: the caller's **own** one, or the shared service account configured on the installation — never another user's token. A personal OAuth grant can never become a shared connection. A connection whose installation was repointed (another Nextcloud server, another Microsoft tenant, another OAuth client, another MCP endpoint or auth block) is invalidated: its tokens are deleted, its status becomes `needs-reconnect`, and the user connects again — a token issued for one endpoint is never sent to another.
+
+**Refresh.** An expired access token is refreshed once per connection and worker (concurrent calls share the refresh), at the issuer that issued it. The tokens are deleted when the authorization server refuses the refresh token: `invalid_grant`, or `unauthorized_client` / `invalid_client` whose description names the refresh token (Atlassian answers a dead refresh token with `403 unauthorized_client` "refresh_token is invalid"). Before deleting, the tokens are read once more: when another worker has just refreshed them with a rotating refresh token, its tokens are used. A network error, a 5xx, a 429 or a client problem an admin can fix (an expired client secret) keeps the tokens and the call reports the integration as temporarily unavailable. After three such failures in a row the token endpoint is left alone for a cooldown (5 minutes, doubling, at most an hour); after ten the connection is `failed` and the user connects again. A successful refresh resets the count.
+
+A record is not trusted on its own: `resolve` also checks that its token file is still there, and an `expired`, `revoked`, `failed` or `needs-reconnect` connection is never used, even while a token file is left on disk. A legacy cloud storage token file without the installation in its name is only used while there is exactly one installation of that service; with several, no installation adopts (or deletes) it.
+
+**Disconnect** revokes the tokens at the authorization server when it has a revocation endpoint (RFC 7009: Google, MCP servers that advertise one), deletes them and marks the record `revoked`. Connect and disconnect write the audit entries `connection.create` and `connection.revoke` (resource `connection`).
+
+### Signing in: one callback
+
+Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`; several instances must share the storage, as they share `contents/`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. A callback from another signed-in user, or at another installation's callback, is refused without using up the owner's flow. The browser is always sent back to a same-origin path with one result shape for every integration — `integration_connected=<installation id>`, or `integration_error=<code>&integration=<installation id>` — and never with the authorization server's text. `code` is one of `access_denied`, `oauth_failed`, `missing_code`, `invalid_state`, `state_expired`, `user_mismatch`, `integration_not_found`, `exchange_failed`, `discovery_failed`, `registration_failed`, `issuer_mismatch`, `public_url_mismatch`, `invalid_client`, `callback_failed`.
+
+The callback is `GET /api/integrations/oauth/callback`. The callback URLs registered in the vendors' OAuth apps keep working as aliases of it, with the same handler:
+
+| Alias | Integration |
+| --- | --- |
+| `/api/integrations/jira/callback` | Jira |
+| `/api/integrations/<office365\|googledrive\|nextcloud>/<installation id>/callback` | the storage provider installation in the path |
+| `/api/mcp/oauth/callback/<server id>` | the per-user MCP server in the path |
+
+The redirect URI sent to the authorization server does not change with this release: the configured **Redirect URI** of the installation, else the alias derived from the request (`<scheme>://<host><base path>` + the alias path). An admin can register `…/api/integrations/oauth/callback` instead and enter it as the installation's Redirect URI.
+
+### The connect flow for users
+
+Every integration that signs users in is connected the same way, whatever its protocol (#2917):
+
+```
+POST /api/integrations/<installation id>/connect      { "returnUrl": "/apps/assistant/c/<chat>" }
+  → 200 { "url": "https://auth.atlassian.com/authorize?…&state=…" }
+browser → vendor consent → GET /api/integrations/oauth/callback (or its alias)
+  → 302 /apps/assistant/c/<chat>?integration_connected=<installation id>
+```
+
+- **Connect** starts the sign-in and answers the vendor's authorization URL; the client sends the browser there. **Reconnect** (`POST …/reconnect`, `{ "returnUrl", "scopes"? }`) is the same for a connection that expired, was revoked or lacks a permission: `scopes` are added to what the user already granted (step-up), and the connection keeps its id. **Disconnect** (`POST …/disconnect`) revokes at the vendor where it supports revocation and deletes the caller's tokens.
+- The installation id is checked against the installed integrations and the user's groups (`permissions.integrations`): an installation the user may not use answers `404` like one that does not exist. Admins pass the group check (they configure and test integrations); the installation's own rule (an MCP server's app bindings, a storage provider's grant) still applies. Disconnect only needs the installation to exist: it removes the caller's own tokens.
+- `returnUrl` must be a path or an http(s) URL on this host; anything else is refused with `400 INVALID_RETURN_URL` before a flow starts. The callback returns to it, so the user lands back in the same chat.
+- The POST routes need a JSON body (`415` otherwise), so a cross-site form cannot start or end a connection; delegated callers (OAuth clients, agents) are refused with `403`. Starting a sign-in is limited to 20 per user and minute.
+
+**In the chat.** A tool whose caller has no usable connection returns `INTEGRATION_AUTH_REQUIRED` before it calls the vendor. The chat draws one **Connect card** for it — the same for Jira, a cloud storage provider and a per-user MCP server: the integration, why iHub needs to act as the user for this request, the permissions (its enabled actions grouped as read / write), where the user will sign in, **Connect** and **Not now**. For a connection that expired or lacks a permission, the card says why and what changes, and offers **Reconnect**. After a successful connect the browser comes back to the same chat and the request that needed the connection is retried **once**: the chat sends one follow-up message ("I connected Jira. Please try again."), only when that answer is still the last one and has not been retried before. A call that failed inside the adapter or on the transport never produced a card and is never retried automatically, because a write may already have happened. The file browsers of the storage providers show the same card when they are not connected.
+
+### In the chat: the integrations picker
+
+The "+" menu of the chat input is the integrations picker (#2923, concept 03 §7.2):
+
+```
+ Search integrations…
+ Attach            Upload file · SharePoint · Google Drive …
+ Use in this chat  Web search
+                   iFinder                     read          Search in: Contracts ▸
+                   Jira & Confluence (EU)      read · write
+                   HubSpot                     Connect →
+                   Image generation
+ Use as default for new chats
+ Manage integrations…
+```
+
+- **One row per integration, never per action.** The rows come from the server (`GET /api/integrations/picker?app=`): one per installation, MCP server or remote agent the app offers the user, and one per other tool reference of the app. Each row carries the tool references that switch it on (`refs`), the other references that keep it on (`coveredBy`, an app binding such as `type:storage` that covers several installations), the side effects of the actions the app offers (`effects`, shown as "read · write") and, for an installation, its connection status. The client never derives a row from a tool id. The ask-the-user channel (`ask_user`) is never a row.
+- **Attach** holds the upload and the storage integrations that hand over files. **Web search** and **image generation** (the aspect ratio and quality, for a model that draws images) are rows of the same list. **Search** filters the list.
+- **Scopes.** A row whose integration offers scopes (#3050) shows the scope in use with a submenu to change it ("iFinder · Search in: Contracts ▸"); an integration that only offers a scope (iAssistant) has a row of its own. An app can show the scope as a dropdown right in the chat input instead (`scopePicker: "inline"`, see [Apps → Integration scopes](apps.md)).
+- **Connect →.** A personal integration the user has not connected (or must reconnect) shows **Connect →** instead of a switch. It switches the row on in this chat and opens the vendor's consent in a **new tab**, which comes back to the same chat; the first tab reloads the rows when the user returns to it (and when the other tab says it finished), so the row shows as connected. The connect flow is the one above.
+- **Chips under the composer** show what the next turn can reach: web search (one click turns it off), and the logo, name and status of every integration switched on in this chat, with its scope.
+- **`@` in the composer** lists the integrations beside the workflows; picking one switches it on for this chat.
+- **Manage integrations…** opens [Settings → Integrations](#settings--integrations) in a new tab.
+
+**Where the state lives.** Two levels, both on the server:
+
+| Level | Stored | Read by |
+| --- | --- | --- |
+| The user's default for an app: the integrations on (`enabledTools`), web search and the scope per integration | `GET` / `PUT /api/integrations/preferences?app=`, storage namespace `integration-preferences`, one document per (user, app), owned by the user | a **new** chat of that app, in any browser |
+| The chat's own copy | the chat's `settings` (`enabledTools`, `websearchEnabled`, `integrationScopes`), written by every turn | that chat, when it is reopened |
+
+A switch, a scope or `@` changes the chat's copy only, so switching an integration on in one chat does not switch it on in another chat. The default changes only through **Use as default for new chats**, which saves what the open chat uses. A reference the app has added since the default was saved is on (the default stores the references the app offered when it was saved). Scheduled tasks and workflows keep their own set, taken when they are created (`enabledTools`, `websearchEnabled`, `integrationScopes` on the task; a workflow node's `config.integrationScopes`), and never read either level. Guests (anonymous access) start from the app's own defaults; `PUT` answers them `401`.
+
+The browser used to keep this state per app in `sessionStorage` (`ai_hub_app_settings_<appId>`: `enabledTools`, `websearchEnabled`, `integrationScopes`). The first load after the upgrade imports it once (`PUT … { "import": true }` writes only when the user has no default yet) and removes those keys from the browser.
+
+### Settings → Integrations
+
+`/settings/integrations` (user menu → **Integrations**) is the user's one place for integrations (#2922). **Available to you** lists every integration the user's groups allow (`GET /api/integrations`), whether or not it needs a sign-in, one row each: logo, name, who iHub acts as, a short summary of what it can do with its effects (read · write), and the one action the user can take.
+
+| Status line | When | Action |
+| --- | --- | --- |
+| Connected as _account_ (· expires in _N days_) | personal, connected; the expiry only when iHub cannot renew the access itself | Disconnect |
+| Not connected | personal, no connection | Connect |
+| Reconnect needed · _why_ | personal, expired or revoked, or a new permission is needed | Reconnect |
+| Signed in via SSO | iFinder, iAssistant: the user's iHub sign-in | — |
+| Runs as service account (_group_) | an account the admin configured; the group is the user's group that grants it, when one does by name | — |
+| Shared key | an API key the admin configured | — |
+| No sign-in needed | | — |
+| Unavailable · _what an admin must do_ | unreachable, the shared key refused or expired, a credential missing, the sign-in not set up — the same signal as the admin list | — |
+
+- **Search**, a **category** filter (the definitions' categories) and a **Needs attention** filter (reconnect needed, unavailable, or access that ends within seven days without renewing).
+- A row opens its **detail**: how it runs for the user (signed in as, connected since, when access ends or that it renews, last used, where the user signs in, the group that shares it), what it can do (each action with its effect badge), what the user allowed (the actions grouped by effect, the technical scopes behind a disclosure) and the apps that use it (links).
+- **Connect** and **Reconnect** use the one connect flow and come back to this page, which shows the result ("Jira connected successfully.") in a live region. **Disconnect** asks first, then reloads that one entry, so the row changes without a page reload.
+- **Sign-in for background tasks** shows the stored sign-in iFinder calls use in the OIDC token-exchange mode (authorize, revoke). **Access to iHub** (connected apps, personal API keys, the Outlook add-in) is unchanged.
+
+### Requests from users
+
+Users can ask for a catalog integration their groups cannot use yet (#2926).
+
+**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not hidden, and has no enabled installation the user's groups allow. Each row shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
+
+**Admin → Integrations → Requests** is the queue; the number of open requests is the tab's badge and is shown next to **Integrations** in the admin sidebar.
+
+| Action | Effect |
+| --- | --- |
+| **Approve** | marks the request _approved_ and opens the install wizard for the definition; an approved request keeps an **Install** button until it is installed |
+| **Decline** | closes the request with an optional note to the requester; the user may ask again |
+| **Decline and hide** | as Decline, and hides the definition from every user's list; the other open requests for it are declined too. **Hidden from users** lists the hidden definitions with **Show again** |
+
+A request **closes by itself** as _installed_ once an enabled installation of its definition exists that the requester's groups allow: after an install, an update or an enable, and whenever the queue or the user's list is read, so granting the groups access later (Admin → Groups → Integrations) closes it too. When the definition is already installed but not for the requester's groups, the queue says so and links the installation. The queue checks the groups the user had when they asked; the user's own list checks their current groups.
+
+Rules: one open (or approved) request per user and definition (`409 REQUEST_EXISTS`); only signed-in, interactive users can request (anonymous `401`, OAuth clients and agents `403`); a definition the user cannot request answers `404` like an unknown one. Requests are runtime state in the storage provider (namespaces `integration-requests`, one document per user and definition, owned by the user, and `integration-requests-hidden`), not configuration; they are deleted with the user's account. Audit: resource `integration`, action `request` for a request and `requestDecision` for an approval, a decline and a request closed by an install; showing a hidden definition again is an `update`.
+
+### Headless runs
+
+Scheduled tasks (and workflows) run as their owner: a tool that needs a connection resolves the **owner's** own connection when it is called, never anybody else's. A run is not refused up front because its app offers a tool whose integration the owner has not connected — most runs never call most of the app's tools. A tool call that finds no usable connection returns a structured result instead of throwing:
+
+```json
+{ "error": "INTEGRATION_AUTH_REQUIRED", "integration": "jira", "reason": "not_connected",
+  "message": "Please connect your JIRA account to search tickets", "connectUrl": "/api/integrations/jira/connect" }
+```
+
+`reason` is `not_connected`, `expired` or `insufficient_scope`; `connectUrl` is the connect route `/api/integrations/<id>/connect`, or `/reconnect` with `scopes` for `insufficient_scope`. In a chat the Connect card shows; a scheduled run that meets one ends as failed with the reason code `INTEGRATION_AUTH_REQUIRED`, naming the `integration` and the `reason`, with a **Reconnect** link to Settings → Integrations.
+
+### Scope step-up
+
+When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, the tool result asks the user to re-authorize with the union of the scopes they granted and the ones the server named (`reason: "insufficient_scope"`, `scopes`, `connectUrl` = the reconnect route); the Connect card shows the new permission and its **Reconnect** sends those scopes. That happens once: a refusal for scopes the user already granted is reported as an ordinary error.
 
 ## Writing a definition
 
@@ -366,8 +635,30 @@ Each step is an object with exactly one key:
 | `renameAction` | `{ "from": "<name>", "to": "<name>" }` | renames the action in `actions.enabled`, `actions.disabled`, `actions.overrides` and in the app bindings' `actions`; a destination already named there is a collision |
 | `removeAction` | `{ "name": "<name>" }` | drops the action from the policy and the app bindings; each app that named it gets a warning |
 | `renameScope` | `{ "from": "<scope>", "to": "<scope>" }` | rewrites `defaultScope` and `pinnedScope` of the app bindings |
+| `module` | `"migrations/<name>.js"` | runs the `up()` of a migration module of the definition folder (see below) |
 
-Nothing else is reachable: never `auth`, never a credential. A `module` step (a code migration) is refused by the schema in this release.
+Nothing else is reachable: never `auth`, never a credential.
+
+**Module steps.** When a change does not fit the declarative steps (a value split into two, a merge the collision rule refuses), a step can run code: `{ "module": "migrations/1.4.0.js" }` names a JavaScript file of the definition folder (`migrations/<name>.js` or `.mjs`, one bundled file that imports nothing from the folder, like a `script` connector). It exports
+
+```js
+export function up({ instance, apps, definition, from, to, log }) {
+  // instance: the installation as the steps before left it, without `auth`; its definitionVersion is `from`
+  // apps:     [{ path, id, integrations }] — per bound app only the installation's own and definition binding
+  // definition: the target definition (frozen); from/to: the bounds of this migration; log(message): a line in the migration log
+  return { ...instance, values: { ...instance.values, rows: 50 } };
+}
+```
+
+and returns the new installation; it may be `async`. iHub takes back only `values`, `actions` (`enabled`, `disabled`, `overrides`) and the binding entries of the `apps` it handed over (changed in place). A module that throws, returns no object, returns an `auth` block, changes any other field (`enabled`, `label`, …) or a binding key it was not handed fails the migration (`migrationFailed`, values untouched), and the final validation runs after it like after the declarative steps. Declarative and module steps run in one sequence: migrations in version order, steps in listed order, each module seeing what the steps before it left; the collision rules of the declarative steps are unchanged. A run that takes longer than 30 seconds fails.
+
+A module runs only when its code is trusted:
+
+- a **built-in** definition (shipped with iHub): always;
+- a **marketplace** definition: only from a registry trusted for code (`trustCode`, see [Marketplace → Registries](marketplace.md#registries)) whose catalog lists a hash for the file in `source.integrity`, the rule of the `script` protocol. The marketplace update checks the package it fetched; a later run (re-run, `_migrate`) checks the file on disk against the hash recorded at install (`codeIntegrity` in the installation manifest) and the registry's current `trustCode`;
+- a definition copied in by hand: never.
+
+Every module of a run is read, checked and imported (from the very bytes that were hashed) before the first step runs, so an untrusted or changed module fails the migration (`MIGRATION_MODULE_NOT_TRUSTED`, `MIGRATION_MODULE_INTEGRITY_REQUIRED`, `MIGRATION_MODULE_INTEGRITY_MISMATCH`, `MIGRATION_MODULE_MISSING`, `MIGRATION_MODULE_RELATIVE_IMPORT`, in the reason) before any code executed. The planned summary on the installation page and in the marketplace update dialog does not run code: it leaves a module's changes out and says so (`MODULE_STEP_NOT_PLANNED`).
 
 **App bindings.** An app binds an installation by its id, by its definition id or by its type (`type:people-directory`). The installation's own binding is rewritten. The definition binding is shared by every installation of the definition and names the definition's actions, so it is rewritten too; every installation of the definition runs the same migrations, and a step is a no-op on a binding a sibling installation already rewrote. A type binding is shared by definitions that name their actions differently (the app editor offers no action list there): it is never rewritten, and a type binding that names a renamed or removed action or scope gets a warning.
 
@@ -391,9 +682,11 @@ Installations migrate independently; one failing never blocks the others. An inc
 
 A stored `definitionVersion` that is not a semantic version does not make `integrations.json` fail to load: the installation loads as `needsReview` with the value in the reason. Config migration V207 stamped every existing installation without a valid version with the version of its definition at the time, the baseline for later migrations.
 
-**Backups.** Before a run the runner copies `config/integrations.json`, the app files that bind the installation, the marketplace manifest `config/installations.json` and, for a marketplace definition whose folder still is the installation's version, the definition folder to `contents/backups/integrations/<id>-<version>-<timestamp>/`, with `manifest.json` `{ representedVersion, instanceId, definitionId, createdAt, kind, createdBy, trigger, files }`. A run over several migrations also keeps the state at every boundary it passed (`kind: "boundary"`), so a later revert to that version has something to restore; a restore first backs up what it replaces (`pre-restore`). Backups are not removed automatically. A **restore** writes back what a migration may have changed, from the backup: the installation's entry (its migration log is kept and gets an entry), the binding keys of its apps (the rest of each app stays), the manifest entry, and the definition folder when the backup holds one of another version than the loaded one. Without a named backup it takes, for `needsReview`, the newest backup of the loaded definition's version and, for `migrationFailed`, the newest backup taken before a migration (for a marketplace update: the pre-update package and values).
+**Backups.** Before a run the runner copies `config/integrations.json`, the app files that bind the installation, the marketplace manifest `config/installations.json` and, for a marketplace definition whose folder still is the installation's version, the definition folder to `contents/backups/integrations/<id>-<version>-<timestamp>/`, with `manifest.json` `{ representedVersion, instanceId, definitionId, createdAt, kind, createdBy, trigger, files }`. A run over several migrations also keeps the state at every boundary it passed (`kind: "boundary"`), so a later revert to that version has something to restore; a restore first backs up what it replaces (`pre-restore`). For a marketplace definition the boundary backup also holds the definition folder of that version and its entry of the marketplace manifest: that version never was on disk, so the update fetches its package once from the registry, through the catalog's `versions[].ref` (see [Marketplace → Versions, channel and pins](marketplace.md#versions-channel-and-pins)), checked like an install. When the registry lists no such version, the boundary backup holds the installation and its bindings only. Backups are not removed automatically. A **restore** writes back what a migration may have changed, from the backup: the installation's entry (its migration log is kept and gets an entry), the binding keys of its apps (the rest of each app stays), the manifest entry, and the definition folder when the backup holds one of another version than the loaded one. Without a named backup it takes, for `needsReview`, the newest backup of the loaded definition's version and, for `migrationFailed`, the newest backup taken before a migration (for a marketplace update: the pre-update package and values).
 
-**Commit and lock.** A run holds the cluster-wide lock `integration-migration:<instanceId>` (`LockManager`; the lease is renewed while it works). The results are written to `staging/` in the backup, a commit marker `commit.json` with the lock's fencing token is written, the token is checked again (a holder whose lease was taken over gives up and discards its staging, `409 MIGRATION_LOCK_LOST`), the files move into place and the marker is finalised. A failure while moving rolls everything back from the backup and marks the installation `migrationFailed`; a crash leaves an unfinished marker, rolled back at the next start (and before the next run on the installation). Each run appends `{ from, to, at, by, trigger, result, migrations, steps, warnings, changes, reason, backup }` to `migrationLog` (the last 10; `result` is `migrated`, `stamped`, `failed`, `rolledBack`, `restored` or `adopted`).
+**Commit and lock.** A run holds the cluster-wide lock `integration-migration:<instanceId>` (`LockManager`; the lease is renewed while it works). The results are written to `staging/` in the backup, a commit marker `commit.json` with the lock's fencing token is written, the token is checked again (a holder whose lease was taken over gives up and discards its staging, `409 MIGRATION_LOCK_LOST`), the files move into place and the marker is finalised. A failure while moving rolls everything back from the backup and marks the installation `migrationFailed`; a crash leaves an unfinished marker, rolled back at the next start (and before the next run on the installation). Each run appends `{ from, to, at, by, trigger, result, migrations, steps, warnings, changes, reason, backup }` to `migrationLog` (the last 10; `result` is `migrated`, `stamped`, `failed`, `rolledBack`, `restored`, `adopted` or `reverted`).
+
+**Revert.** An admin can go back to any backup of an installation, in any state, also to an intermediate version of a multi-step update: `POST …/installed/:id/_revert` with `{ "backup": "<id>" }`. The runner puts back together, under the installation's lock and through the same staged commit: the definition folder of the backup's version (when it is not the loaded one), the installation's entry in `integrations.json`, the binding keys of its apps and the definition's entry of the marketplace manifest; each is merged into the file as it is now, so unrelated changes made since stay. A failure while moving the files rolls all four back. The current state is backed up first (`pre-restore`), so reverting forward again is one more revert. A backup whose version is not the loaded definition's and that holds no definition folder of it is refused (`422 REVERT_DEFINITION_MISSING`): values of one version are never put under another version's definition. A built-in definition's folder belongs to the server, so a built-in installation reverts only to backups of the loaded version. Other installations of the definition follow a changed folder like after a restore: each gets its own backup of that version restored, or needs a review.
 
 **Downgrade.** Migrations run forward only. When the loaded definition is older than an installation's version, the matching backup is restored (at the server start, and after a restore brought an older marketplace package back); without one the installation needs a review.
 
@@ -411,7 +704,9 @@ To publish a definition, put the folder in a marketplace registry as an item of 
 | `migrationFailed` | the reason, the backup **Restore backup** takes | **Re-run migration**, **Restore backup**, **Uninstall** |
 | `needsReview` | the reason (no version, or a downgrade), the backup of the loaded version if one exists | **Restore backup** (only with that backup), **Adopt current version**, **Uninstall** |
 
-**Restore backup**, **Adopt current version** and **Uninstall** ask first: the restore dialog names the backup, its version and date (and whether it holds a definition folder); adopt says that the values are checked like a migration result and nothing else changes; uninstall is the ordinary remove dialog with the apps that bind the installation. After each action the page shows the log entry the server wrote (from → to, result, changes, warnings, steps) or the error with its reason and the problems it lists (collisions, values that do not fit), and reloads. While the installation is pending with a migration between the versions, failed or needs a review, **Settings** shows the editor read-only (a disabled fieldset around every editor, dedicated or generic) with the reason, since the server refuses the save. The **Migration log** on Overview lists each run with from → to, when, by whom, how it started, the result, the changes, the reason, the warnings, the backup and the steps.
+The **Backups** card on Overview lists every backup of the installation, newest first, with the version it represents, why it was taken (before a migration, between two migrations, before a restore), whether it holds the definition, when and by whom, and **Revert to this version**. The button is disabled, with the reason, for a backup of another version than the loaded one that holds no definition. Revert asks first and says what goes back (values, action policy, app bindings, marketplace entry and, with a definition, the definition, which the other installations follow).
+
+**Restore backup**, **Adopt current version** and **Uninstall** ask first: the restore dialog names the backup, its version and date (and whether it holds a definition folder), and offers a picker of the installation's backups when there is more than one; adopt says that the values are checked like a migration result and nothing else changes; uninstall is the ordinary remove dialog with the apps that bind the installation. After each action the page shows the log entry the server wrote (from → to, result, changes, warnings, steps) or the error with its reason and the problems it lists (collisions, values that do not fit), and reloads. While the installation is pending with a migration between the versions, failed or needs a review, **Settings** shows the editor read-only (a disabled fieldset around every editor, dedicated or generic) with the reason, since the server refuses the save. The **Migration log** on Overview lists each run with from → to, when, by whom, how it started, the result, the changes, the reason, the warnings, the backup and the steps.
 
 **Admin → Apps** shows, in an app's status, the warnings a migration left on it: an action it was bound to was removed (`ACTION_REMOVED_FROM_APP`), or a type binding still names a renamed or removed action or scope (`TYPE_BINDING_NOT_REWRITTEN`). The app editor's Integrations section shows the same warning next to the binding it concerns, with a link to the installation's migration log. A warning counts from the installation's `migrated` runs since its last restore, and goes away once the app no longer has what it is about (the binding is removed, or the type binding no longer names the action or scope).
 
@@ -430,16 +725,78 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `GET` / `POST /api/admin/integrations/installed`                                                                      | list (with `definitionVersion`, `currentVersion`, `updateAvailable`, `incompatible`, the migration fields below), install |
 | `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id`                                                        | read with live actions, update (`409 MIGRATION_PENDING`, `MIGRATION_FAILED`, `NEEDS_REVIEW`, see [Migrations](#migrations)), uninstall |
 | `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable`                                             | lifecycle                                                             |
+| `PUT /api/admin/integrations/installed/:id/approval`                                                                  | set only the tool approval, body `{ "approval": { "default"?, "actions"?, "newOrChanged"? } \| null }` ([Tool Approval](tool-approval.md)) |
+| `POST /api/admin/integrations/installed/:id/actions/review`                                                           | mark actions as reviewed: their current fingerprints become the accepted ones, body `{ "actions"?: [names] }` (all when absent); audited |
+| `GET /api/admin/integrations/installed/:id/actions/:action`                                                          | action detail: description and schema as the model sees them, side effect, data flow and approval with their sources, guidance, examples, bindings, 7-day usage, test connections |
+| `PUT /api/admin/integrations/installed/:id/actions/:action`                                                          | the action's admin override, body `{ "description"?, "guidance"?, "examples"?, "sideEffect"?, "dataFlow"? }`; `null` removes a part, a key left out keeps it; audited (`action.policyChange`) |
+| `POST /api/admin/integrations/installed/:id/actions/:action/_test`                                                   | run the action without a model, body `{ "args": {…}, "connection"?: "me" \| "shared", "confirm"?: true }`; `409 CONFIRMATION_REQUIRED` for an action that is not a confirmed read without `confirm: true`, `400 INVALID_ARGUMENTS` / `INVALID_CONNECTION`, `404 ACTION_NOT_FOUND`, `409 ACTION_UNAVAILABLE` / `NOT_RUNNABLE`; answers `{ result: { status, httpStatus, durationMs, error, request, response, sources } }`; audited (`action.test`) |
+| `PUT /api/admin/integrations/installed/:id/instructions`                                                             | the installation's own model instructions, body `{ "instructions": { "en": "…" } \| "…" \| null }` |
 | `POST /api/admin/integrations/installed/:id/_migrate`                                                                 | run (or re-run) the definition migration                              |
 | `POST /api/admin/integrations/installed/:id/_restore`                                                                 | restore a backup, body `{ "backup"?: "<id>" }`                        |
+| `POST /api/admin/integrations/installed/:id/_revert`                                                                  | revert to a backup the admin picked, in any state, body `{ "backup": "<id>" }` (see [Migrations](#migrations) → Revert) |
 | `POST /api/admin/integrations/installed/:id/_adopt`                                                                   | adopt the loaded definition version for an installation that needs a review |
 | `GET /api/admin/integrations/installed/:id/example-apps`                                                              | the example apps it offers (`templates[]`: `key`, `source` `definition` or `generated`, `name`, `description`, `suggestedId`), `grantedToYou` (the calling admin's groups grant it), `enabled` |
 | `POST /api/admin/integrations/installed/:id/example-apps`                                                             | create one, body `{ "template"?: "<key>", "appId"?: "…", "enabled"?: true }` → `201 { app }`; `409` when the id is taken, `400` for an invalid id or an unknown template; audited as `create app` |
-| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it |
+| `POST /api/admin/integrations/builder`, `GET` / `PUT /api/admin/integrations/builder/:id` | create, read and save a custom integration as a builder draft (`400 INVALID_DRAFT` / `INVALID_DEFINITION` with `details[].path`, `409 DUPLICATE_ID`, `400 NOT_CUSTOM` for another definition's installation) |
+| `POST /api/admin/integrations/builder/_import` | list the actions of a source before saving: `{ kind: "openapi", source: { type: "url", url } \| { type: "inline", spec } }` → operations and the parsed document; `{ kind: "mcp" \| "a2a", source, auth? }` → the tools or skills |
+| `POST /api/admin/integrations/builder/_export/:id` | the registry package of a custom integration (see [Custom integrations](#custom-integrations-add-manually)) |
+| `GET /api/admin/integrations/tools` | every tool an app, workflow or agent can name (platform tools, remaining tool files, actions of enabled installations with `integration: { instanceId, label, action }`), for the admin pickers |
+| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
+| `GET /api/admin/integrations/requests` | the request queue: `requests` (each with `definitionName`, `definitionAvailable`, `installedInstances`, `requester`, `status` `open` \| `approved` \| `declined` \| `fulfilled`, `reason`, `note`, `decidedBy`, `fulfilledBy`), `hidden` (`definition`, `name`, `hiddenAt`, `hiddenBy`) and `openCount` |
+| `POST /api/admin/integrations/requests/:id/_approve` `{ note? }` | approve → `{ request }`; `404` for an unknown request or a definition no longer in the catalog, `409 REQUEST_CLOSED` for a closed one |
+| `POST /api/admin/integrations/requests/:id/_decline` `{ note?, hide? }` | decline, `hide: true` also hides the definition and declines its other open requests → `{ request, alsoDeclined }`; `note` at most 500 characters |
+| `DELETE /api/admin/integrations/requests/hidden/:definitionId` | show a hidden definition again (the id URL-encoded); `404` when it is not hidden |
+| `GET /api/integrations/requests` | the catalog entries the signed-in user can request, `{ items: [{ definition, name, description, icon, publisher, categories, capabilities, actionCount, effects, request }] }`; `request` is the user's own (`id`, `status`, `reason`, `createdAt`, `decidedAt`, `note`) or null |
+| `POST /api/integrations/requests` `{ definition, reason? }` | request one → `201 { request }`; `400` for an invalid id or a reason over 500 characters, `401` anonymous, `403` delegated callers, `404` not requestable, `409 REQUEST_EXISTS`, `415` without a JSON body |
+| `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
+| `GET /api/integrations/:id` | one of them, `{ integration }`; `404` for an installation the user may not use |
+| `POST /api/integrations/:id/connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
+| `POST /api/integrations/:id/reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
+| `POST /api/integrations/:id/disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ success, removed, revoked }` |
+| `GET /api/integrations/picker?app=<appId>` | the chat picker's rows for an app the user may open, `{ app, rows: [{ id, kind, integration, refs, coveredBy, name, description, icon, effects, capabilities, connection }] }`; see [In the chat](#in-the-chat-the-integrations-picker); `?lang=` |
+| `GET` / `PUT /api/integrations/preferences?app=<appId>` | what a new chat of the app starts with for the signed-in user, `{ app, stored, available, preferences: { enabledTools, websearchEnabled, integrationScopes } }`; `PUT` takes the same three keys and `import: true` (write only when none is stored); `401` for guests, `403` for delegated callers, `415` without a JSON body, `404` for an app the user may not open |
+| `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it, `409 INTEGRATION_AUTH_REQUIRED` (with `integration`, `reason`, `connectUrl`) when the user has no usable connection |
 
-Every write is audited with resource `integration`.
+Every write is audited with resource `integration`; connects and disconnects with resource `connection` (`create`, `revoke`).
+
+**`GET /api/integrations`** answers `{ "integrations": [ … ] }`, sorted by name, one entry per installation:
+
+```jsonc
+{
+  "id": "jira",                              // installation id
+  "definition": "com.intrafind/jira",
+  "type": null,                              // the definition's type: "storage", "web-search", "people-directory", or null
+  "protocol": "native",                      // native | mcp | openapi | a2a | script
+  "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
+  "description": "…",
+  "icon": null,                              // an http(s) icon URL of the definition, else null
+  "categories": ["ticketing"],              // the definition's categories (Settings → Integrations filters by them)
+  "capabilities": ["tools"],                 // from the definition: tools, files, scopes, sources, search, views, model
+  "actions": [                               // the enabled actions the models are offered
+    { "name": "searchTickets", "title": "Search issues", "description": "…", "sideEffect": "read" }
+  ],
+  "effects": ["read", "write"],              // the distinct side effects of the actions (read, write, destructive, unknown)
+  "apps": [{ "id": "tickets", "name": "Ticket helper" }], // the apps the user may open that use it
+  "connection": {
+    "mode": "personal",                      // personal | sso | service_account | shared_key | none
+    "status": "connected",                   // connected | not_connected | needs_reconnect (personal), else = mode; or unavailable
+    "reason": null,                          // needs_reconnect / not_connected: not_connected | expired | insufficient_scope;
+                                             // unavailable: unreachable | credential_rejected | credential_missing | not_configured
+    "account": "daniel@example.com",         // "connected as …", once known (read once from the vendor, then kept)
+    "scopes": ["read:jira-work"],            // granted scopes
+    "connectedAt": "…", "expiresAt": "…", "lastUsedAt": "…",
+    "signInHost": "auth.atlassian.com",      // where the user signs in
+    "connectable": true,                     // personal and configured: Connect / Reconnect can start
+    "renewable": true,                       // connected: iHub renews the access without the user (null: unknown)
+    "sharedWith": []                         // service_account / shared_key: the user's groups that grant it by name
+  }
+}
+```
+
+`mode` says who the integration acts as: `personal` (the user's own account, OAuth), `sso` (the user's iHub sign-in on every request: iFinder, iAssistant), `service_account` (an account the admin configured: `auth.mode` `service-account` or `oauth-client`, or a password-type secret), `shared_key` (an API key the admin configured), `none` (no sign-in). The listing reads the connection index only; it never sends a token anywhere.
+
+`status: "unavailable"` means the user cannot use the integration until an admin acts; `reason` says why. It comes from the same sources as the admin list: the adapter's live status (the admin's **Unreachable**) gives `unreachable`, or `credential_rejected` when the last error says the shared key or token was refused or expired (the error text itself is never sent); a credential reference the credential store does not hold gives `credential_missing`; a per-user sign-in that is switched off or has no OAuth client gives `not_configured`. `sharedWith` names the user's groups that grant the installation by its id, definition or type (empty when only `*` grants it). `apps` lists the enabled apps the user may open that bind the installation (`app.integrations`), name one of its tools in `app.tools`, or use it as their web search engine (`websearch.provider`; `auto` is the first engine the user may use). Disabled installations, ones whose definition cannot run or whose migration withholds them, and ones the user's groups do not grant are left out.
 
 **Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
 
@@ -459,17 +816,19 @@ Every write is audited with resource `integration`.
     "warnings": [ { "code": "ACTION_REMOVED_FROM_APP", "message": "…", "appId": "…", "action": "…" } ],
     "collisions": [ { "migration": "1.3.0", "step": "renameValue", "kind": "value", "key": "defaultFilter", "message": "…" } ],
     "errors": [ { "kind": "action", "key": "…", "message": "…" } ],   // final validation of the plan
-    "backups": [ { "id": "govdata-1.2.0-20261102T100000000Z", "representedVersion": "1.2.0", "createdAt": "…", "kind": "pre-migration", "hasDefinition": false } ],
+    "backups": [ { "id": "govdata-1.2.0-20261102T100000000Z", "representedVersion": "1.2.0", "createdAt": "…",
+                   "kind": "pre-migration", "hasDefinition": false, "createdBy": "admin", "trigger": "manual" } ],
     "defaultBackup": "govdata-1.2.0-20261102T100000000Z"   // what _restore takes without a body, or null
   },
   "liveStatus": { "connected": true, "toolCount": 3 }       // the adapter's live connection status (MCP, directories, storage), or null
 }
 ```
 
-The three actions answer `{ success, logEntry, instance }` (the installation as above; `_migrate` adds `result`: `migrated`, `stamped` or `current`; `_restore` adds `backup`). Errors carry `code` and `reason`:
+The actions answer `{ success, logEntry, instance }` (the installation as above; `_migrate` adds `result`: `migrated`, `stamped` or `current`; `_restore` and `_revert` add `backup`). Errors carry `code` and `reason`:
 
 | Status | `code` | When |
 | --- | --- | --- |
+| 400 | `BACKUP_REQUIRED` | `_revert` without a backup |
 | 404 | `NOT_FOUND`, `BACKUP_NOT_FOUND` | unknown installation; no backup for the state, or the named one is not this installation's |
 | 409 | `MIGRATION_LOCKED` | another migration of the installation holds the lock |
 | 409 | `MIGRATION_NOT_APPLICABLE` | `_migrate` on an installation that needs a review, or whose definition is older |
@@ -478,6 +837,7 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | 422 | `MIGRATION_FAILED` | the migration failed; the body adds `logEntry`, `details` (`collisions`, `errors`, `backup`) and the installation, now `migrationFailed` |
 | 422 | `ADOPT_INVALID` | the stored values do not fit the loaded definition; `details` lists the problems |
 | 422 | `DEFINITION_MISSING`, `INCOMPATIBLE_DEFINITION`, `BACKUP_INVALID` | no definition to migrate to; an incompatible definition never migrates; a damaged backup |
+| 422 | `REVERT_DEFINITION_MISSING` | `_revert` to a backup of another version than the loaded one that holds no definition of it |
 
 ## Code map
 
@@ -487,7 +847,8 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/definitions/IntegrationRegistry.js`                                                                                                                                                                                                                                      | loads shipped and installed definition folders and their OpenAPI documents; the `incompatible` status, release-note checks, companion files                                                                                                                          |
 | `server/services/integrations/definitions/compatibility.js`, `definitionUpdates.js` | the compatibility check against the server version; newer catalog versions of installed definitions |
 | `server/services/integrations/definitions/migrationPlanner.js` | definition migrations, pure: which migrations run, the steps, collisions, the final validation, an installation's migration state |
-| `server/services/integrations/definitions/DefinitionMigrationRunner.js`, `migrationBackups.js` | runs migrations under the lock: backups, the staged commit with its marker and fencing token, recovery, restore, adopt, the startup run and the marketplace update |
+| `server/services/integrations/definitions/DefinitionMigrationRunner.js`, `migrationBackups.js` | runs migrations under the lock: backups (a boundary backup with the definition of its version), the staged commit with its marker and fencing token, recovery, restore, revert, adopt, the startup run and the marketplace update |
+| `server/services/integrations/definitions/migrationModules.js`, `scriptModule.js` | migration modules: the code trust (built-in, `trustCode` and the hash), the hashed bytes imported, the time limit; the code files a definition may carry |
 | `server/services/integrations/definitions/migrationPreview.js` | the update preview of a marketplace item, planned from the catalog |
 | `server/migrations/V207__integration_definition_version_baseline.js` | stamps the definition version baseline on installations without one |
 | `server/services/integrations/InstalledIntegrationService.js`                                                                                                                                                                                                                                          | `integrations.json` CRUD, managed secrets, tests                                                                                                                                                    |
@@ -495,13 +856,28 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js`                                                                                                                                                                                                      | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them                         |
 | `server/services/integrations/protocols/mcp/`                                                                                                                                                                                                                                                          | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations                                    |
 | `server/services/integrations/protocols/a2a/`                                                                                                                                                                                                                                                          | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager                                                                                                         |
+| `server/services/integrations/actionGuidance.js` | the admin's text overrides of an action, the integration instructions, the guidance block of the system prompt (`appendIntegrationGuidance`, used by `RequestBuilder` and `PromptNodeExecutor`) |
+| `server/services/integrations/actionDetail.js`, `tester/ActionTester.js` | the action detail (approval and its sources, bindings, test connections) and the test runner |
+| `server/services/integrations/actionUsage.js` | per-action usage counter (calls, errors, approval answers, tests) |
+| `server/utils/outboundRecorder.js`, `server/utils/secretRedaction.js` | the requests a test sent, as `httpFetch` and `safeFetch` report them; redaction of headers, URLs, bodies and known secrets |
 | `server/services/integrations/integrationTools.js`                                                                                                                                                                                                                                                     | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                                                 |
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
+| `server/services/integrations/IntegrationRequestService.js`, `integrationRequestCatalog.js`, `server/routes/integrations/integrationRequests.js`, `server/routes/admin/integrationRequests.js` | requests from users: storage, what a user can request, the user and admin routes |
+| `server/services/integrations/auth/OAuthUserClient.js`, `strategies/fixedEndpoint.js`, `strategies/mcpDiscovery.js` | the one per-user OAuth client (PKCE, code exchange, refresh, revocation, RFC 9207 `iss`, scope step-up); fixed endpoints (Jira, the storage providers) and MCP discovery (RFC 9728/8414, CIMD, DCR, pre-registered client) as strategies |
+| `server/services/integrations/auth/IntegrationConnectionService.js`, `connectionProviders.js`, `tokenSecrets.js`, `oauthFlowStore.js`, `integrationAuthRequired.js` | the connection index, connect / callback / refresh / disconnect / resolve, what each installation's connection is, where the secrets live, the server-side sign-in flows, `INTEGRATION_AUTH_REQUIRED` |
+| `server/services/integrations/auth/connectionReindex.js` | the one-time re-index of the token tree into the connection index |
+| `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
+| `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and the vendor-registered aliases of Jira and the storage providers |
+| `server/routes/integrations/userIntegrations.js`, `server/services/integrations/userIntegrations.js` | `GET /api/integrations`, `POST /api/integrations/:id/connect`, `…/reconnect`, `…/disconnect`: the user's integrations and the one connect flow |
+| `server/services/integrations/integrationPicker.js`, `server/services/integrations/IntegrationPreferencesRepository.js` | the picker rows of an app, the per-user default for new chats |
+| `client/src/features/integrations/picker/` | the chat's integrations picker (`IntegrationPicker.jsx`), the chips under the composer (`IntegrationChips.jsx`), the rows (`useIntegrationPicker.js`), the default and its one-time import (`useIntegrationDefaults.js`) |
+| `client/src/features/integrations/connect/` | the chat's Connect card (`ConnectCard.jsx`), the sign-in result (`connectResult.js`), the retry once after connecting (`connectRetry.js`, `useConnectRetry.js`); `client/src/api/userIntegrationsApi.js` |
+| `server/validators/integrationConnectionSchema.js` | the connection record |
 | `server/routes/admin/integrationExampleApps.js`, `server/services/integrations/exampleApps.js` | example apps of an installation: the templates (shipped or generated), the binding moved to the installation, the free app id |
 | `client/src/features/admin/components/integrations/IntegrationTestPanel.jsx` | **Test in chat** on the installation page: app picker, example app form, the chat of `AppTestPanel` |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |
-| `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`)                |
-| `client/src/features/admin/components/integrations/migrationState.js`, `useMigrationActions.js`, `MigrationParts.jsx`, `InstallationMigrationPanel.jsx`, `appMigrationWarningRules.js`, `AppMigrationWarnings.jsx`; `components/marketplace/updateMigrationRows.js`, `IntegrationUpdateMigrations.jsx` | the admin UI of definition migrations: which actions a state offers and when Settings is read-only (pure), the actions with their confirmations, the panel, the log, the outcome; the Apps warnings; the marketplace update preview and report |
+| `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`), the action detail (`IntegrationActionDrawer.jsx`, `ActionTestPanel.jsx`, `actionTestForm.js`) and the instructions card (`IntegrationInstructionsCard.jsx`)                |
+| `client/src/features/admin/components/integrations/migrationState.js`, `useMigrationActions.js`, `MigrationParts.jsx`, `InstallationMigrationPanel.jsx`, `appMigrationWarningRules.js`, `AppMigrationWarnings.jsx`; `components/marketplace/updateMigrationRows.js`, `IntegrationUpdateMigrations.jsx` | the admin UI of definition migrations: which actions a state offers and when Settings is read-only (pure), the actions with their confirmations and backup picker, the panel, the log, the outcome, the Backups card with Revert (`InstallationBackups.jsx`); the Apps warnings; the marketplace update preview and report |
 | `client/src/features/admin/components/integrations/editors/` | the dedicated editors and their registry (iFinder, iAssistant, the storage providers: `StorageProviderEditor.jsx`, `storageEditorModel.js`; the web search engines: `WebSearchEngineEditor.jsx`) |
 | `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx`, `storageBindingRows.js`, `WebSearchSection.jsx`, `webSearchEngines.js` | app editor binding: the Storage providers card; the web search panel with its engine list (Auto and the installed engines) |
 | `shared/storageBindings.js`, `client/src/shared/hooks/useFileUploadHandler.js` | which storage providers an app binds; the chat's picker offers those among the granted ones |

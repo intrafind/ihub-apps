@@ -284,6 +284,18 @@ export const nodeConfigSchema = z.object({
        */
       integrationScopes: z
         .record(z.string().regex(/^[\w.:-]{1,100}$/), z.string().min(1).max(256))
+        .optional(),
+      /**
+       * Tool approval in prompt / agent nodes (#2945). A node has no person in
+       * the loop, so a tool call that needs approval is refused
+       * (`APPROVAL_REQUIRED_NO_USER`) — unless the node names approver groups:
+       * then the run parks the approval for them (Admin → Approvals) and the
+       * node continues with the approved call once a member answers.
+       */
+      toolApproval: z
+        .object({
+          approverGroups: z.array(z.string().min(1).max(128)).max(20).optional()
+        })
         .optional()
     })
     .passthrough()

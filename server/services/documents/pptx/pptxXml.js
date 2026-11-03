@@ -424,9 +424,11 @@ export function tableFrame({ id, rect, table, lang, accent, fontSize, columnWidt
  * @param {{ x: number, y: number, cx: number, cy: number }} params.rect
  * @param {Array<{ value: string, label: string, note?: string }>} params.metrics
  * @param {string} params.lang
+ * @param {string} [params.accent] - Hex of the template's `accent1`; when it is too
+ *   light to read on the card's light tint (4.5:1), the value is set in `tx1` instead.
  * @returns {string[]}
  */
-export function metricCards({ nextId, rect, metrics, lang }) {
+export function metricCards({ nextId, rect, metrics, lang, accent }) {
   const count = metrics.length;
   if (!count) return [];
   const gap = Math.round((rect.cx < 5 * EMU_PER_INCH ? 0.16 : 0.22) * EMU_PER_INCH);
@@ -444,11 +446,15 @@ export function metricCards({ nextId, rect, metrics, lang }) {
   const labelSz = compact ? 1200 : 1400;
   const noteSz = 1100;
   const safeLang = xmlEscape(lang);
+  // The card fill is accent1 at 10 % over white (relative luminance ≈ 0.9 or lighter).
+  const CARD_FILL_LUMINANCE = 0.9;
+  const valueScheme =
+    accent && (CARD_FILL_LUMINANCE + 0.05) / (luminance(accent) + 0.05) < 4.5 ? 'tx1' : 'accent1';
 
   return metrics.map((metric, idx) => {
     const id = nextId();
     const x = rect.x + idx * (cardWidth + gap);
-    const valPara = `<a:p><a:pPr algn="ctr"><a:spcAft><a:spcPts val="300"/></a:spcAft><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${valSz}" b="1" dirty="0"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.value)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
+    const valPara = `<a:p><a:pPr algn="ctr"><a:spcAft><a:spcPts val="300"/></a:spcAft><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${valSz}" b="1" dirty="0"><a:solidFill><a:schemeClr val="${valueScheme}"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.value)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
     const labelPara = `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${labelSz}" b="1" dirty="0"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.label)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
     const notePara = metric.note
       ? `<a:p><a:pPr algn="ctr"><a:spcBef><a:spcPts val="200"/></a:spcBef><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${noteSz}" dirty="0"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill></a:rPr><a:t>${xmlEscape(metric.note)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`

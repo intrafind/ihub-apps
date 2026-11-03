@@ -170,11 +170,18 @@ export const toolCompletedData = z.object({
   /** MCP App view drawn from this call's full result. */
   mcpApp: mcpAppViewSchema.optional(),
   /**
-   * A per-user OAuth MCP server the caller has not connected: the chat shows
-   * a Connect card for it (`connectUrl` is a same-origin path).
+   * The call's integration needs the caller to connect (or reconnect) first
+   * (`INTEGRATION_AUTH_REQUIRED`, returned before the call ran): the chat
+   * shows the Connect card for it and retries the call once after a connect.
    */
   authRequired: z
-    .object({ serverId: z.string(), serverName: z.string(), connectUrl: z.string() })
+    .object({
+      integration: z.string(),
+      name: z.string(),
+      reason: z.enum(['not_connected', 'expired', 'insufficient_scope']),
+      action: z.string().optional(),
+      scopes: z.array(z.string()).optional()
+    })
     .optional(),
   /**
    * A scheduled task a scheduling tool proposed: the chat shows a confirmation

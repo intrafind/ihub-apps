@@ -38,7 +38,7 @@ export const CREATE_DOCX_TOOL = {
       showTitle: {
         type: 'boolean',
         description:
-          'Print the title block at the top of page 1 when there is no cover page or TOC (default true). Set to false for letters where the recipient block and subject line open the document.'
+          'Print the title block at the top of page 1 when there is no cover page (default true; with a table of contents it appears above the contents). Set to false for letters where the recipient block and subject line open the document.'
       },
       language: {
         type: 'string',

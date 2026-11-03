@@ -5,7 +5,7 @@
  * Built-in connector of the `jira` installation (`com.intrafind/jira`): the
  * six Jira Cloud tools of `tools/jira.js` under their old ids
  * (`jira_searchTickets`, …), every call as the signed-in user with the
- * Atlassian account they connected through `/api/integrations/jira/auth`.
+ * Atlassian account they connected through `POST /api/integrations/jira/connect`.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ import {
   refreshJiraConnectionCount,
   setJiraConnectionCount
 } from '../../../../jiraConnectionCount.js';
+import { getIntegrationConnectionService } from '../../../../auth/IntegrationConnectionService.js';
 
 const PARAMETERS = JSON.parse(
   readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'parameters.json'), 'utf8')
@@ -172,13 +173,21 @@ const connector = {
       userConnections: getJiraConnectionCount()
     };
   },
-  async listConnections() {
-    const connections = await listJiraConnections();
-    setJiraConnectionCount(connections.length);
+  /** The users connected to Jira, from the connection index. */
+  async listConnections(instance) {
+    const connections = await getIntegrationConnectionService().listUserConnections(
+      instance?.id || 'jira'
+    );
+    setJiraConnectionCount(connections.filter(c => !c.expired).length);
     return connections;
   },
-  async disconnectUser(_instance, userId) {
-    const removed = await JiraService.deleteUserTokens(userId);
+  /** Disconnect one user (audit `connection.revoke`). */
+  async disconnectUser(instance, userId, { req } = {}) {
+    const { removed } = await getIntegrationConnectionService().disconnect({
+      installationId: instance?.id || 'jira',
+      userId,
+      req
+    });
     return { removed: Boolean(removed) };
   },
   invalidate() {},

@@ -62,11 +62,25 @@ export function formatFormAnnotations(annotations) {
     let suffix = '';
     if (a.checkBox) {
       kind = 'checkbox';
-      value = a.fieldValue && a.fieldValue !== 'Off' ? 'checked' : 'unchecked';
+      // A checkbox is on when the field value is its export value (several
+      // checkboxes can share one field); without an export value, any value but Off.
+      const exportValue = typeof a.exportValue === 'string' ? a.exportValue : '';
+      const fieldValues = Array.isArray(a.fieldValue) ? a.fieldValue : [a.fieldValue];
+      const on =
+        exportValue && exportValue !== 'Off'
+          ? fieldValues.some(v => String(v ?? '') === exportValue)
+          : fieldValues.some(v => v && v !== 'Off');
+      value = on ? 'checked' : 'unchecked';
     } else if (a.radioButton) {
       kind = 'radio';
+      // Every widget of a radio group carries the group's value; this option is the
+      // selected one only when that value is its own button value.
       const opt = a.buttonValue || a.fieldValue || '';
-      value = a.fieldValue && a.fieldValue !== 'Off' ? `selected (${opt})` : `unselected (${opt})`;
+      const selected =
+        Boolean(a.fieldValue) &&
+        a.fieldValue !== 'Off' &&
+        (a.buttonValue ? String(a.fieldValue) === String(a.buttonValue) : true);
+      value = selected ? `selected (${opt})` : `unselected (${opt})`;
     } else if (a.fieldType === 'Ch') {
       kind = 'choice';
       value = Array.isArray(a.fieldValue)

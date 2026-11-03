@@ -32,7 +32,8 @@ export function docxSpecFromToolArgs(args) {
     title: optionalString(args.title, 300),
     subtitle: optionalString(args.subtitle, 300),
     author: optionalString(args.author, 200),
-    date: optionalString(args.date, 100),
+    // The cover page and the {date} placeholders share one date, today by default.
+    date: optionalString(args.date, 100) || new Date().toISOString().slice(0, 10),
     showTitle: args.showTitle !== false,
     language: optionalString(args.language, 20),
     markdown: typeof args.markdown === 'string' ? args.markdown : '',

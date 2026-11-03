@@ -342,9 +342,10 @@ const CLEAN_PAGES = [
   '/tasks',
   '/workflows',
   '/start',
+  // Settings → Integrations: the user's integrations with their identity state.
+  '/settings/integrations',
   '/admin/providers',
   '/admin/prompts',
-  '/admin/tools',
   '/admin/skills',
   '/admin/workflows',
   '/admin/agents',
@@ -355,6 +356,8 @@ const CLEAN_PAGES = [
   '/admin/mcp/gateway',
   '/admin/credentials',
   '/admin/integrations',
+  // The integration builder (Add manually), which replaced the Tools page.
+  '/admin/integrations/builder/new',
   // A built-in installation a fresh contents/ ships: its own page.
   '/admin/integrations/websearch',
   '/admin/integrations/jira',
@@ -455,6 +458,25 @@ test.describe('Accessibility — a user project page', () => {
         await page.request.put('/api/admin/features', { data: { userProjects: false } });
       }
     }
+  });
+});
+
+// The action detail of an installed integration (#2974): the drawer over the
+// installation page, opened by its `?action=` link on a built-in installation
+// a fresh contents/ ships, with every section (schema table, overrides, the
+// generated test form) rendered.
+test.describe('Accessibility — the integration action detail', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+  });
+
+  test('has no critical or serious violations when open', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/integrations/ihub?action=list_scheduled_tasks');
+    const drawer = page.getByTestId('integration-action-drawer');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId('action-test-panel')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Integration action detail');
   });
 });
 

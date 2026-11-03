@@ -63,8 +63,6 @@ const AdminPromptsPage = lazyWithRetry(() => import('./features/admin/pages/Admi
 const AdminPromptEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminPromptEditPage')
 );
-const AdminToolsPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolsPage'));
-const AdminToolEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolEditPage'));
 const AdminSkillsPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillsPage'));
 const AdminSkillEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillEditPage'));
 const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/AdminWorkflowsPage'));
@@ -159,6 +157,9 @@ const AdminNextcloudEmbedPage = lazyWithRetry(
 );
 const AdminInstallationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminInstallationPage')
+);
+const AdminIntegrationBuilderPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationBuilderPage')
 );
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
@@ -572,15 +573,6 @@ function App() {
                 element={<LazyAdminRoute component={AdminPromptEditPage} />}
               />
             )}
-            {showAdminPage('tools') && (
-              <Route path="tools" element={<LazyAdminRoute component={AdminToolsPage} />} />
-            )}
-            {showAdminPage('tools') && (
-              <Route
-                path="tools/:toolId"
-                element={<LazyAdminRoute component={AdminToolEditPage} />}
-              />
-            )}
             {showAdminPage('skills') && (
               <Route path="skills" element={<LazyAdminRoute component={AdminSkillsPage} />} />
             )}
@@ -745,6 +737,12 @@ function App() {
             <Route
               path="integrations"
               element={<LazyAdminRoute component={AdminIntegrationsPage} />}
+            />
+            {/* The integration builder: "Add manually" (new) and "Edit in
+                builder" of a custom integration (by installation id). */}
+            <Route
+              path="integrations/builder/:instanceId"
+              element={<LazyAdminRoute component={AdminIntegrationBuilderPage} />}
             />
             {/* One installation: overview, settings (dedicated editor or the
                 generic form), releases. */}

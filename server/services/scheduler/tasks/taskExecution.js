@@ -28,6 +28,11 @@
  *
  * @module services/scheduler/tasks/taskExecution
  */
+import {
+  INTEGRATION_AUTH_REASONS,
+  INTEGRATION_AUTH_REQUIRED
+} from '../../integrations/auth/integrationAuthRequired.js';
+import { SETTINGS_INTEGRATIONS_PATH } from '../../integrations/auth/connectionProviders.js';
 import crypto from 'node:crypto';
 import configCache from '../../../configCache.js';
 import { canUserAccessResource } from '../../../utils/authorization.js';
@@ -64,6 +69,8 @@ import {
 import { resolveOwnerPrincipal } from './ownerPrincipal.js';
 import { checkTaskPrincipal, SCHEDULED_TASK_ORIGIN, SCHEDULED_TASK_SOURCE } from './taskPolicy.js';
 import { scheduledRunSeams } from './runSeams.js';
+import { approvalDisplayData } from '../../loop/seams/approvalSeam.js';
+import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { WITHHELD_IN_SCHEDULED_RUNS } from './toolGate.js';
 import { isMemoryOn } from './taskMemory.js';
 import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
@@ -92,21 +99,6 @@ function defaultChatService() {
   if (!chatService) chatService = new ChatService();
   return chatService;
 }
-
-/**
- * Tools that belong to an integration the owner has to be connected to,
- * checked before the run starts. Keyed by the tool's script.
- */
-const INTEGRATION_CHECKS = {
-  'jira.js': {
-    label: 'Jira',
-    connectPath: '/settings/integrations',
-    async check(userId) {
-      const { default: JiraService } = await import('../../integrations/JiraService.js');
-      await JiraService.getUserTokens(userId);
-    }
-  }
-};
 
 /** The failure a run ends with. */
 class RunFailure extends Error {
@@ -186,30 +178,6 @@ async function authorizeRun(task, user, language) {
     });
   }
   return { app, integrationScopes: scopes.scopes };
-}
-
-/**
- * Check the integrations the run's tools need, before spending a model call.
- *
- * @throws {RunFailure}
- */
-async function checkIntegrations(tools, user) {
-  const seen = new Set();
-  for (const tool of tools) {
-    const check = INTEGRATION_CHECKS[tool?.script];
-    if (!check || seen.has(tool.script)) continue;
-    seen.add(tool.script);
-    try {
-      await check.check(user.id);
-    } catch {
-      throw new RunFailure(
-        'failed',
-        'INTEGRATION_RECONNECT_REQUIRED',
-        `Reconnect ${check.label}: the connection is missing or has expired`,
-        { extra: { integration: check.label, connectUrl: check.connectPath } }
-      );
-    }
-  }
 }
 
 /**
@@ -525,14 +493,18 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       memory = prepareMemory.marker;
       memoryBefore = prepareMemory.before;
     }
-    await checkIntegrations(prepared.tools, user);
+    // No up-front connection check: a run offers every tool of its app, and
+    // most runs never call most of them. A tool that needs the owner's
+    // connection resolves it when it is called (never anybody else's) and,
+    // without one, returns INTEGRATION_AUTH_REQUIRED, which ends the run
+    // with that code (see `integrationIssues` below).
 
     const allowedTools = new Set((task.allowedTools || []).map(entry => entry.toolId));
     if (continuation?.approvedToolId) allowedTools.add(continuation.approvedToolId);
     for (const id of run.approvedTools || []) allowedTools.add(id);
     const integrationIssues = [];
     const ledgerRunId = newLedgerRunId('chat');
-    const seams = scheduledRunSeams({
+    const { approvalGate, seams } = scheduledRunSeams({
       allowedTools,
       onIntegrationIssue: issue => integrationIssues.push(issue),
       raiseApproval: async (info, ctx) => {
@@ -548,7 +520,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
               `The scheduled task "${task.name}" wants to run ${info.name || info.toolId}. ` +
               'Approve it to let the run continue.',
             inputType: 'text',
-            displayData: { toolId: String(info.toolId), args: info.args || {} }
+            // The exact arguments, the tool and its installation, side effect
+            // and data flow, as on the chat's approval card.
+            displayData: approvalDisplayData(info, resolveToolApproval(info.toolDef, null, null))
           },
           policy: { expiresAt, onTimeout: 'fail', fallback: 'park' },
           source: {
@@ -624,6 +598,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         user,
         runId: ledgerRunId,
         persistence,
+        approvalGate,
         extraSeams: seams,
         trigger: { type: 'schedule', source: SCHEDULED_TASK_SOURCE },
         maxWallClockMs: settings.maxRunMinutes * 60_000,
@@ -711,9 +686,13 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       const issue = integrationIssues[0];
       return finish(
         'failed',
-        reasonOf('INTEGRATION_RECONNECT_REQUIRED', issue.message, now(), {
+        reasonOf(INTEGRATION_AUTH_REQUIRED, issue.message, now(), {
           toolId: issue.toolId,
-          ...(issue.connectUrl ? { connectUrl: issue.connectUrl } : {})
+          ...(issue.integration ? { integration: issue.integration } : {}),
+          reason: issue.reason || INTEGRATION_AUTH_REASONS.EXPIRED,
+          // The owner reconnects in Settings → Integrations (a page, not the
+          // connect API route a tool result names).
+          connectUrl: SETTINGS_INTEGRATIONS_PATH
         }),
         { ledgerRunIds, usage: addUsage(run.usage), watched }
       );

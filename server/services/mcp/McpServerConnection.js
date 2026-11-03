@@ -6,7 +6,6 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { URL } from 'node:url';
-import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
 import {
   appsEnabledFor,
@@ -24,6 +23,12 @@ import {
   withoutRedirects
 } from './McpUserOAuthProvider.js';
 import logger from '../../utils/logger.js';
+import {
+  ClientCredentialsTokenCache,
+  clientCredentialsBody,
+  resolveSecretRefs,
+  staticAuthHeaders
+} from '../integrations/auth/ServiceAccountAuth.js';
 import { reportToolCallSources } from '../sources/toolCallScope.js';
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
@@ -92,6 +97,8 @@ export class McpServerConnection {
     // skips unhealthy connections in `listAllTools` so a broken server doesn't
     // poison aggregate tool discovery.
     this.unhealthy = false;
+    /** Client-credentials tokens of `auth.type: "oauth"` (ServiceAccountAuth). */
+    this._oauthTokens = new ClientCredentialsTokenCache();
   }
 
   /**
@@ -108,31 +115,25 @@ export class McpServerConnection {
     // pre-registered client's secret is resolved by that provider when a
     // token request needs it, never here.
     if (auth.type === 'oauthUser') return { type: 'oauthUser' };
-    const out = { ...auth };
-    const refFields = {
-      tokenRef: 'token',
-      passwordRef: 'password',
-      clientSecretRef: 'clientSecret',
-      valueRef: 'value'
-    };
-    for (const [refField, plainField] of Object.entries(refFields)) {
-      if (typeof out[refField] === 'string' && out[refField]) {
-        try {
-          out[plainField] = this.resolveSecret
-            ? this.resolveSecret(out[refField])
-            : credentialService.resolveSecret(out[refField]);
-        } catch (err) {
+    return resolveSecretRefs(
+      auth,
+      {
+        tokenRef: 'token',
+        passwordRef: 'password',
+        clientSecretRef: 'clientSecret',
+        valueRef: 'value'
+      },
+      {
+        ...(this.resolveSecret ? { resolveSecret: this.resolveSecret } : {}),
+        onError: (refField, err) =>
           logger.error('Failed to resolve MCP server auth secret from credential store', {
             component: 'McpServerConnection',
             serverId: this.config.id,
             field: refField,
             error: err.message
-          });
-          throw err;
-        }
+          })
       }
-    }
-    return out;
+    );
   }
 
   /**
@@ -141,16 +142,8 @@ export class McpServerConnection {
    * works without rebuilding the transport.
    */
   _buildAuthHeaders(auth) {
-    if (!auth || auth.type === 'none') return {};
-    if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
-    if (auth.type === 'basic') {
-      const creds = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
-      return { Authorization: `Basic ${creds}` };
-    }
-    if (auth.type === 'header') {
-      return { [auth.headerName]: `${auth.valuePrefix || ''}${auth.value}` };
-    }
-    return {};
+    if (auth?.type === 'oauth' || auth?.type === 'oauthUser') return {};
+    return staticAuthHeaders(auth);
   }
 
   /**
@@ -162,40 +155,29 @@ export class McpServerConnection {
   async _getAuthHeaders(auth) {
     if (auth?.type !== 'oauth') return this._buildAuthHeaders(auth);
 
-    const now = Date.now();
-    if (this._oauthToken && this._oauthTokenExpiry > now + 5000) {
-      return { Authorization: `Bearer ${this._oauthToken}` };
-    }
-
-    const body = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: auth.clientId,
-      client_secret: auth.clientSecret
-    });
-    if (auth.scope) body.set('scope', auth.scope);
-
-    const resp = await safeFetch(
-      auth.tokenUrl,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString()
-      },
-      {
-        allowHosts: this.security.allowedHosts,
-        blockPrivateIps: this.security.blockPrivateIps !== false
+    const token = await this._oauthTokens.getToken('client-credentials', async () => {
+      const resp = await safeFetch(
+        auth.tokenUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: clientCredentialsBody({
+            clientId: auth.clientId,
+            clientSecret: auth.clientSecret,
+            scope: auth.scope
+          }).toString()
+        },
+        {
+          allowHosts: this.security.allowedHosts,
+          blockPrivateIps: this.security.blockPrivateIps !== false
+        }
+      );
+      if (!resp.ok) {
+        throw new Error(`OAuth token request to ${auth.tokenUrl} failed: ${resp.status}`);
       }
-    );
-    if (!resp.ok) {
-      throw new Error(`OAuth token request to ${auth.tokenUrl} failed: ${resp.status}`);
-    }
-    const data = await resp.json();
-    if (!data.access_token) {
-      throw new Error('OAuth token response missing access_token');
-    }
-    this._oauthToken = data.access_token;
-    this._oauthTokenExpiry = now + (data.expires_in ? data.expires_in * 1000 : 3600 * 1000);
-    return { Authorization: `Bearer ${this._oauthToken}` };
+      return resp.json();
+    });
+    return { Authorization: `Bearer ${token}` };
   }
 
   async _buildTransport() {
@@ -228,7 +210,7 @@ export class McpServerConnection {
         for (const [name, value] of Object.entries(await this._getAuthHeaders(auth))) {
           headers.set(name, value);
         }
-        return safeFetch(
+        const response = await safeFetch(
           input,
           { ...init, headers: toPlainHeaders(headers) },
           {
@@ -236,6 +218,17 @@ export class McpServerConnection {
             blockPrivateIps
           }
         );
+        // Per-user OAuth: a 403 `insufficient_scope` challenge is remembered
+        // on the provider, so the manager can ask the user to re-authorize
+        // once with the union of the granted and the challenged scopes
+        // instead of refreshing a token that cannot get more scopes.
+        if (this.authProvider && response?.status === 403) {
+          const challenge = response.headers?.get?.('www-authenticate');
+          if (typeof challenge === 'string' && /insufficient_scope/i.test(challenge)) {
+            this.authProvider.scopeChallenge = challenge;
+          }
+        }
+        return response;
       };
       // Per-user OAuth: on a 401 the SDK's auth() runs OAuth discovery through
       // this same fetch. Those requests go to URLs the MCP server (or its
@@ -324,6 +317,12 @@ export class McpServerConnection {
         );
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
+        // The server's own model guidance from `initialize` (MCP
+        // `instructions`), shown and editable on the installation page and
+        // added to the system prompt while the integration is active (#2974).
+        const instructions = this.client.getInstructions?.();
+        this.instructions =
+          typeof instructions === 'string' && instructions.trim() ? instructions : null;
         this.connected = true;
         this.consecutiveFailures = 0;
         this.unhealthy = false;
@@ -525,7 +524,13 @@ export class McpServerConnection {
             ? { title: t.title || t.annotations.title }
             : {}),
           ...(this.config.name ? { serverName: this.config.name } : {}),
-          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
+          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {}),
+          // What the server says about its own tool (`readOnlyHint`, …). Read
+          // by the approval resolver as an untrusted side effect: shown, but
+          // never allowed to relax a gate (#2945).
+          ...(t.annotations && typeof t.annotations === 'object'
+            ? { annotations: t.annotations }
+            : {})
         }
       });
     }

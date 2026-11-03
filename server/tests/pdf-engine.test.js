@@ -500,6 +500,46 @@ describe('rendering', () => {
     assert.match(serialized, /Release verification/);
   });
 
+  it('gives a form field that spans every column a row of its own and labels signatures by language', () => {
+    const fields = [
+      { label: 'First', value: 'a' },
+      { label: 'Wide one', span: 2, value: 'b' },
+      { label: 'Wide two', span: 2, value: 'c' },
+      { label: 'Left', value: 'd' },
+      { label: 'Right', value: 'e' },
+      { label: 'Odd one out', value: 'f' },
+      { type: 'signature' }
+    ];
+    const build = language =>
+      buildDocument({ title: 'F', language, blocks: [{ form: { columns: 2, fields } }] })
+        .docDefinition.content;
+    const findStacks = (node, found = []) => {
+      if (Array.isArray(node)) node.forEach(child => findStacks(child, found));
+      else if (node && typeof node === 'object') {
+        if (Array.isArray(node.stack) && node.stack.some(child => child?.columns)) {
+          found.push(node.stack);
+        }
+        Object.values(node).forEach(child => findStacks(child, found));
+      }
+      return found;
+    };
+    const [formStack] = findStacks(build('en'));
+    // [First] alone (the next field spans), Wide one, Wide two, [Left, Right], [Odd one out, signature].
+    assert.equal(formStack.length, 5);
+    assert.deepEqual(
+      formStack.map(entry => (entry.columns ? entry.columns.length : 'full')),
+      [2, 'full', 'full', 2, 2]
+    );
+    assert.match(JSON.stringify(build('en')), /"Signature"/);
+    assert.match(JSON.stringify(build('de')), /"Unterschrift"/);
+  });
+
+  it('gives the cover page and the {date} placeholders one date, today by default', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    assert.equal(specFromToolArgs({ title: 't', coverPage: true }).date, today);
+    assert.equal(specFromToolArgs({ title: 't', date: '2026-10-15' }).date, '2026-10-15');
+  });
+
   it('declares blocks, styles and images as JSON text', () => {
     // Blocks are alternatives (one content key each); a schema'd array would
     // become "every key required" under a provider's strict schema mode.

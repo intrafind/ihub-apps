@@ -79,8 +79,8 @@ export function transformStoredMessage(msg) {
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
   // Connect cards for MCP servers with per-user sign-in.
-  if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
-    message.mcpAuthRequired = msg.mcpAuthRequired;
+  if (Array.isArray(msg.integrationAuthRequired) && msg.integrationAuthRequired.length > 0) {
+    message.integrationAuthRequired = msg.integrationAuthRequired;
   }
   // Confirmation cards for scheduled tasks a scheduling tool proposed.
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
@@ -510,7 +510,7 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
     const {
       rawContent,
       mcpApps: _mcpApps,
-      mcpAuthRequired: _mcpAuthRequired,
+      integrationAuthRequired: _integrationAuthRequired,
       scheduledTaskProposals: _scheduledTaskProposals,
       generatedFiles: _generatedFiles,
       ...apiMsg

@@ -27,8 +27,8 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null
 }));
-jest.mock('../../../client/src/api/endpoints/admin', () => ({
-  fetchTools: jest.fn().mockResolvedValue([])
+jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
+  fetchAdminToolCatalog: jest.fn().mockResolvedValue([])
 }));
 
 jest.mock('react-i18next', () => {

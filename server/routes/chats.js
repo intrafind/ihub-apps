@@ -87,6 +87,7 @@ import {
 } from '../services/chat/chatRecovery.js';
 import { SCHEDULED_TASK_ORIGIN } from '../services/scheduler/tasks/taskPolicy.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
+import { publicChatView } from '../services/chat/chatToolApproval.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -341,7 +342,11 @@ export default function registerChatRoutes(app) {
       });
       // A chat still marked running whose run died with its process is
       // closed out here, so the list does not show it running forever.
-      res.json({ items: await settleInterruptedChats(items, { repository, runLog }), nextCursor });
+      // A paused turn's stored tool transcript stays on the server (#2945).
+      res.json({
+        items: (await settleInterruptedChats(items, { repository, runLog })).map(publicChatView),
+        nextCursor
+      });
     } catch (error) {
       sendChatStorageError(res, error, 'list chats');
     }
@@ -380,7 +385,11 @@ export default function registerChatRoutes(app) {
       // `messages` is the array, not the stored envelope — a hydrating client
       // should not have to reach through `messages.messages`. The document's
       // schema version rides alongside it so a future migration is visible.
-      res.json({ chat: seen || chat, messages: stored.messages, version: stored.version });
+      res.json({
+        chat: publicChatView(seen || chat),
+        messages: stored.messages,
+        version: stored.version
+      });
     } catch (error) {
       sendChatStorageError(res, error, 'get chat');
     }
@@ -717,7 +726,7 @@ export default function registerChatRoutes(app) {
         chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
         if (!chat) return sendNotFound(res, 'Chat');
       }
-      res.json({ chat });
+      res.json({ chat: publicChatView(chat) });
     } catch (error) {
       sendChatStorageError(res, error, 'rename chat');
     }

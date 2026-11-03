@@ -38,8 +38,16 @@ const {
   fileLookOf,
   previewTypeOf,
   saveName,
+  withPreviewCsp,
   zipErrorCode
 } = require('../../../client/src/features/chat/utils/artifactFiles');
+
+if (typeof URL.createObjectURL !== 'function') {
+  URL.createObjectURL = jest.fn(() => 'blob:mock');
+}
+if (typeof URL.revokeObjectURL !== 'function') {
+  URL.revokeObjectURL = jest.fn();
+}
 
 const ITEMS = [
   {
@@ -81,6 +89,8 @@ describe('artifact helpers', () => {
     expect(saveName('src/utils/date.ts')).toBe('date.ts');
     expect(previewTypeOf({ kind: 'image', mimeType: 'image/png' })).toBe('image');
     expect(previewTypeOf({ mimeType: 'text/markdown' })).toBe('markdown');
+    expect(previewTypeOf({ mimeType: 'text/tab-separated-values' })).toBe('csv');
+    expect(previewTypeOf({ name: 'table.tsv' })).toBe('csv');
     expect(previewTypeOf({ mimeType: 'application/json' })).toBe('json');
     expect(previewTypeOf({ mimeType: 'text/x-python' })).toBe('code');
     expect(previewTypeOf({ mimeType: 'application/zip' })).toBe('none');
@@ -99,6 +109,15 @@ describe('artifact helpers', () => {
       'too-many-files'
     );
     expect(await zipErrorCode(new Error('network'))).toBeNull();
+  });
+
+  it('prepends a Content Security Policy to HTML previews without breaking doctype', () => {
+    expect(withPreviewCsp('<h1>Hello</h1>')).toMatch(
+      /<meta http-equiv="Content-Security-Policy"[^>]*><h1>Hello<\/h1>/
+    );
+    expect(withPreviewCsp('<!DOCTYPE html><html><body>Hi</body></html>')).toMatch(
+      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><html>/i
+    );
   });
 });
 
@@ -124,13 +143,46 @@ describe('ArtifactsPanel', () => {
     );
   });
 
-  it('pretty-prints JSON and offers no preview for a PDF', async () => {
+  it('pretty-prints JSON and previews a PDF in a frame', async () => {
+    jest.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report-pdf');
     render(<ArtifactsPanel isOpen onClose={() => {}} source={makeSource()} />);
     fireEvent.click(await screen.findByRole('button', { name: /data\.json/ }));
     const code = await screen.findByLabelText('Content of data.json');
     expect(code.textContent).toContain('"a": 1');
 
     fireEvent.click(screen.getByRole('button', { name: /report\.pdf/ }));
+    await waitFor(() => {
+      const frame = document.querySelector('iframe');
+      expect(frame).toBeInTheDocument();
+      expect(frame).toHaveAttribute('src', 'blob:report-pdf');
+    });
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+  });
+
+  it('previews CSV tables even when headers contain quoted delimiters', async () => {
+    const csvContent = '"Last, First";Amount\n"Smith, John";100';
+    const source = makeSource({
+      list: jest.fn(async () => ({
+        items: [{ id: 'c1', kind: 'code', mimeType: 'text/csv', name: 'data.csv', bytes: 40 }]
+      })),
+      fetchBlob: jest.fn(async () => textBlob(csvContent, 'text/csv'))
+    });
+    render(<ArtifactsPanel isOpen onClose={() => {}} source={source} />);
+    expect(await screen.findByRole('columnheader', { name: 'Last, First' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Amount' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Smith, John' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '100' })).toBeInTheDocument();
+  });
+
+  it('offers no preview for an archive', async () => {
+    const source = makeSource({
+      list: jest.fn(async () => ({
+        items: [
+          { id: 'z1', kind: 'archive', mimeType: 'application/zip', name: 'bundle.zip', bytes: 64 }
+        ]
+      }))
+    });
+    render(<ArtifactsPanel isOpen onClose={() => {}} source={source} />);
     expect(await screen.findByText(/There is no preview for this file type/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
   });

@@ -427,6 +427,66 @@ describe('POST _restore and _adopt', () => {
   });
 });
 
+describe('POST _revert', () => {
+  it('reverts to a backup the admin picked, in any state', async () => {
+    const backups = await import('../../services/integrations/definitions/migrationBackups.js');
+    const kept = structuredClone(files.get('config/integrations.json'));
+    kept.installed.find(i => i.id === 'current').values.rows = 7;
+    const snapshot = await backups.createSnapshot({
+      instanceId: 'current',
+      definitionId: 'org.example/portal',
+      representedVersion: '1.4.0',
+      integrations: kept
+    });
+    const res = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/current/_revert')
+        .send({ backup: snapshot.id })
+    ).expect(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      backup: { id: snapshot.id, representedVersion: '1.4.0', hasDefinition: false },
+      logEntry: { result: 'reverted', trigger: 'revert' },
+      instance: { id: 'current', status: null, definitionVersion: '1.4.0' }
+    });
+    const current = files.get('config/integrations.json').installed.find(i => i.id === 'current');
+    expect(current.values.rows).toBe(7);
+    expect(audits.at(-1).summary).toMatch(/Reverted integration "current"/);
+  });
+
+  it('needs a backup, refuses an unknown one and one without the definition of its version', async () => {
+    const none = await admin(
+      request(app).post('/api/admin/integrations/installed/current/_revert').send({})
+    ).expect(400);
+    expect(none.body.code).toBe('BACKUP_REQUIRED');
+    await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/current/_revert')
+        .send({ backup: '../x' })
+    ).expect(400);
+    const unknown = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/current/_revert')
+        .send({ backup: 'nope' })
+    ).expect(404);
+    expect(unknown.body.code).toBe('BACKUP_NOT_FOUND');
+    await admin(request(app).post('/api/admin/integrations/installed/pending/_migrate')).expect(
+      200
+    );
+    const detail = await admin(
+      request(app).get('/api/admin/integrations/installed/pending')
+    ).expect(200);
+    const boundary = detail.body.instance.migration.backups.find(b => b.kind === 'boundary');
+    const res = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed/pending/_revert')
+        .send({ backup: boundary.id })
+    ).expect(422);
+    expect(res.body.code).toBe('REVERT_DEFINITION_MISSING');
+    await request(app).post('/api/admin/integrations/installed/current/_revert').expect(401);
+  });
+});
+
 describe('an ordinary save', () => {
   const save = (id, body) =>
     admin(request(app).put(`/api/admin/integrations/installed/${id}`).send(body));

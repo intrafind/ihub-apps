@@ -1,10 +1,21 @@
 {
   "id": "com.intrafind/jira",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Model guidance and example prompts for every action; the guidance is added to the system prompt while Jira is active in a chat.",
+        "de": "Modellhinweise und Beispiel-Prompts für jede Aktion; die Hinweise werden dem Systemprompt hinzugefügt, solange Jira in einem Chat aktiv ist."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-10-31",
@@ -43,10 +54,7 @@
   "auth": {
     "modes": ["oauth-user"],
     "oauthUser": {
-      "field": "clientSecretRef",
-      "connectPath": "/api/integrations/jira/auth",
-      "statusPath": "/api/integrations/jira/status",
-      "disconnectPath": "/api/integrations/jira/disconnect"
+      "field": "clientSecretRef"
     }
   },
   "install": [
@@ -131,7 +139,11 @@
           "de": "Zeige die diese Woche geänderten Vorgänge in Projekt DEMO"
         }
       ],
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "Write JQL with explicit fields (project, status, assignee = currentUser()) and an ORDER BY; name the issue keys you found.",
+        "de": "Schreibe JQL mit ausdrücklichen Feldern (project, status, assignee = currentUser()) und einem ORDER BY; nenne die gefundenen Vorgangsschlüssel."
+      }
     },
     {
       "name": "getTicket",
@@ -146,7 +158,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "Read the issue before you summarise, comment on or transition it.",
+        "de": "Lies den Vorgang, bevor du ihn zusammenfasst, kommentierst oder seinen Status änderst."
+      },
+      "examples": [
+        {
+          "en": "Summarise DEMO-42 and its comments.",
+          "de": "Fasse DEMO-42 und seine Kommentare zusammen."
+        }
+      ]
     },
     {
       "name": "addComment",
@@ -161,7 +183,17 @@
       },
       "sideEffect": "write",
       "dataFlow": "external",
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "Comment only when the user asked for it; show the text you will post and quote the issue key.",
+        "de": "Kommentiere nur, wenn der Benutzer darum gebeten hat; zeige den Text, den du posten wirst, und nenne den Vorgangsschlüssel."
+      },
+      "examples": [
+        {
+          "en": "Add a comment to DEMO-42 that staging passed.",
+          "de": "Füge DEMO-42 einen Kommentar hinzu, dass Staging bestanden ist."
+        }
+      ]
     },
     {
       "name": "getTransitions",
@@ -176,7 +208,11 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "List the transitions before changing a status; use only a transition the issue offers.",
+        "de": "Liste die Übergänge auf, bevor du einen Status änderst; verwende nur einen Übergang, den der Vorgang anbietet."
+      }
     },
     {
       "name": "transitionTicket",
@@ -191,7 +227,17 @@
       },
       "sideEffect": "write",
       "dataFlow": "external",
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "Change a status only when the user asked for it, with a transition id from getTransitions.",
+        "de": "Ändere einen Status nur, wenn der Benutzer darum gebeten hat, mit einer Übergangs-ID aus getTransitions."
+      },
+      "examples": [
+        {
+          "en": "Move DEMO-42 to Done.",
+          "de": "Setze DEMO-42 auf Erledigt."
+        }
+      ]
     },
     {
       "name": "getAttachment",
@@ -206,7 +252,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "user"
+      "connection": "user",
+      "guidance": {
+        "en": "Download an attachment only when the question is about its content.",
+        "de": "Lade einen Anhang nur herunter, wenn sich die Frage auf seinen Inhalt bezieht."
+      },
+      "examples": [
+        {
+          "en": "What does the screenshot on DEMO-42 show?",
+          "de": "Was zeigt der Screenshot an DEMO-42?"
+        }
+      ]
     }
   ]
 }

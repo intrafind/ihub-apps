@@ -11,7 +11,8 @@ import {
   artifactDisplayName,
   codeLanguageOf,
   formatBytes,
-  previewTypeOf
+  previewTypeOf,
+  withPreviewCsp
 } from '../utils/artifactFiles';
 
 /**
@@ -26,18 +27,36 @@ async function loadPreview(type, blob) {
 }
 
 /**
+ * Pick the delimiter of a CSV/TSV text from its first record. Only delimiters
+ * outside quoted fields count, so `"Last, First";Amount` is a semicolon file.
+ */
+function detectDelimiter(source) {
+  const counts = { ',': 0, ';': 0, '\t': 0 };
+  let inQuotes = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (inQuotes) {
+      if (ch === '"' && source[i + 1] === '"') i += 1;
+      else if (ch === '"') inQuotes = false;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === '\r' || ch === '\n') {
+      break;
+    } else if (ch in counts) {
+      counts[ch] += 1;
+    }
+  }
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best[1] > 0 ? best[0] : ',';
+}
+
+/**
  * Parse a CSV/TSV string into rows for the table preview. Auto-detects comma,
- * semicolon or tab delimiter from the header line and handles RFC 4180 quotes.
+ * semicolon or tab delimiter from the header record and handles RFC 4180 quotes.
  */
 function parseCsvPreview(text, maxRows = 200) {
   const source = String(text ?? '').replace(/^\uFEFF/, '');
-  const firstLine = source.split(/\r?\n/, 1)[0] || '';
-  const counts = [
-    [',', (firstLine.match(/,/g) || []).length],
-    [';', (firstLine.match(/;/g) || []).length],
-    ['\t', (firstLine.match(/\t/g) || []).length]
-  ].sort((a, b) => b[1] - a[1]);
-  const delimiter = counts[0][1] > 0 ? counts[0][0] : ',';
+  const delimiter = detectDelimiter(source);
 
   const allRows = [];
   let row = [];
@@ -278,7 +297,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
           <iframe
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={state.text}
+            srcDoc={withPreviewCsp(state.text)}
             title={name}
             className="w-full h-[65vh] rounded-md border border-gray-200 dark:border-gray-700 bg-white"
           />

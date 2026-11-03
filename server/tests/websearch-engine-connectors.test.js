@@ -83,8 +83,9 @@ describe('definitions and connectors', () => {
       assert.equal(def.type, 'web-search');
       assert.equal(def.builtIn, true);
       assert.equal(def.singleton.instanceId, id);
-      assert.equal(def.version, '1.0.0');
-      assert.equal(def.releases[0].version, '1.0.0');
+      // 1.1.0: model guidance and example prompts (#2974).
+      assert.equal(def.version, '1.1.0');
+      assert.equal(def.releases[0].version, '1.1.0');
       assert.deepEqual(
         def.actions.map(action => [action.name, action.toolId]),
         [['search', toolId]]
