@@ -16,8 +16,7 @@ import {
   validateIntegrationDefinition,
   migrationStepSchema,
   validateDefinitionMigrations,
-  isStrictSemver,
-  MODULE_STEP_MESSAGE
+  isStrictSemver
 } from '../../validators/integrationDefinitionSchema.js';
 import {
   validateIntegrationsConfig,
@@ -144,18 +143,29 @@ describe('definition schema: migrations', () => {
     });
   });
 
-  it('refuses a module step with a clear message instead of dropping it', () => {
-    const result = migrationStepSchema.safeParse({ module: 'migrations/1.4.0.js' });
-    assert.equal(result.success, false);
-    assert.equal(result.error.issues[0].message, MODULE_STEP_MESSAGE);
+  it('accepts a module step naming a file below migrations/, and refuses any other path', () => {
+    assert.deepEqual(migrationStepSchema.parse({ module: 'migrations/1.4.0.js' }), {
+      module: 'migrations/1.4.0.js'
+    });
+    assert.ok(migrationStepSchema.safeParse({ module: 'migrations/rename-filter.mjs' }).success);
+    for (const bad of [
+      'connector.js',
+      'migrations/../connector.js',
+      'migrations/sub/x.js',
+      'migrations/.hidden.js',
+      'migrations/1.4.0.cjs',
+      '/migrations/1.4.0.js',
+      { file: 'migrations/1.4.0.js' }
+    ]) {
+      assert.equal(migrationStepSchema.safeParse({ module: bad }).success, false, String(bad));
+    }
     const def = validateIntegrationDefinition(
       definition({
         migrations: [{ id: '1.4.0', steps: [{ module: 'migrations/1.4.0.js' }] }],
         releases: [{ version: '1.4.0', date: '2026-11-12', summary: 'x', migration: '1.4.0' }]
       })
     );
-    assert.equal(def.success, false);
-    assert.match(messages(def), /migrations\.0\.steps\.0\.module: a "module" step/);
+    assert.ok(def.success, def.success ? '' : messages(def));
   });
 
   it('refuses unknown steps, two keys in one step, bad shapes and empty step lists', () => {
@@ -810,7 +820,7 @@ describe('planner: step edge cases', () => {
 
   it('refuses a step it does not know (an unvalidated source) and runs the others', () => {
     const result = plan(instance(), [
-      { module: { file: 'x.js' } },
+      { runScript: { file: 'x.js' } },
       {},
       { removeValue: { key: 'fq' } }
     ]);
@@ -818,10 +828,10 @@ describe('planner: step edge cases', () => {
     assert.deepEqual(result.collisions, [
       {
         migration: '2.0.0',
-        step: 'module',
+        step: 'runScript',
         kind: 'step',
-        key: 'module',
-        message: 'unknown migration step "module"'
+        key: 'runScript',
+        message: 'unknown migration step "runScript"'
       },
       {
         migration: '2.0.0',

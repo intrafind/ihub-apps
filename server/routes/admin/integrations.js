@@ -39,6 +39,7 @@ import logger from '../../utils/logger.js';
  *   POST /api/admin/integrations/installed/:id/_enable|_disable
  *   POST /api/admin/integrations/installed/:id/_migrate        run (or re-run) the definition migration
  *   POST /api/admin/integrations/installed/:id/_restore        restore a backup (body `{ backup? }`)
+ *   POST /api/admin/integrations/installed/:id/_revert         revert to a backup the admin picked (body `{ backup }`)
  *   POST /api/admin/integrations/installed/:id/_adopt          adopt the loaded definition version (needsReview)
  *
  * The `catalog` and `installed` segments keep these routes apart from the
@@ -813,6 +814,94 @@ export default function registerAdminIntegrationsRoutes(app) {
         });
       } catch (error) {
         await sendMigrationError(res, req, id, error, 'restore installed integration');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/_revert:
+   *   post:
+   *     summary: Revert an installation to a backup the admin picked
+   *     description: |
+   *       Offered in every state, to any backup of the installation listed in
+   *       `migration.backups` (including the ones kept at each migration boundary of a
+   *       multi-step update). Puts back, together and under the installation's lock,
+   *       the definition folder of the backup's version (when it is not the loaded
+   *       one), the installation's entry, the binding keys of its apps and the
+   *       definition's marketplace manifest entry; the files are merged, so unrelated
+   *       changes made since stay. The current state is backed up first (`pre-restore`).
+   *       Other installations of the definition follow a changed folder like after a
+   *       restore. Credentials are never touched.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [backup]
+   *             properties:
+   *               backup:
+   *                 type: string
+   *                 description: A backup id from `migration.backups`
+   *     responses:
+   *       200:
+   *         description: 'Reverted; `backup` names the backup, `logEntry` the log entry (`result: reverted`)'
+   *       400:
+   *         description: "Invalid id, or no backup named (`BACKUP_REQUIRED`)"
+   *       404:
+   *         description: "`NOT_FOUND` or `BACKUP_NOT_FOUND`"
+   *       409:
+   *         description: "`MIGRATION_LOCKED`, `MIGRATION_LOCK_LOST` or `MIGRATION_CONFLICT`"
+   *       422:
+   *         description: "`REVERT_DEFINITION_MISSING` (the backup holds no definition of its version and another version is loaded), `BACKUP_INVALID` or `DEFINITION_MISSING`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/_revert'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const backup = req.body?.backup;
+      if (backup === undefined || backup === null || backup === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'A revert names the backup to go back to',
+          code: 'BACKUP_REQUIRED'
+        });
+      }
+      if (!validateIdForPath(backup, 'backup', res)) return;
+      try {
+        const outcome = await definitionMigrationRunner.revert(id, {
+          backup,
+          by: adminName(req)
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Reverted integration "${id}" to backup ${outcome.backup.id} (v${outcome.backup.representedVersion})`
+        });
+        res.json({
+          success: true,
+          backup: outcome.backup,
+          logEntry: outcome.logEntry,
+          instance: await migratedView(id, req)
+        });
+      } catch (error) {
+        await sendMigrationError(res, req, id, error, 'revert installed integration');
       }
     }
   );
