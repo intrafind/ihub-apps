@@ -66,6 +66,7 @@ The model then sees the skill in `<available_skills>`, can load its instructions
 `create_pdf` renders a document from **Markdown**, optionally followed by **layout blocks** for layouts Markdown cannot express. It also sets the document up:
 
 - **Content:** headings, paragraphs, bold/italic/strikethrough, links, nested and task lists, GFM tables with column alignment, code blocks, quotes, horizontal rules, `<sub>`/`<sup>`, page breaks (`\pagebreak`), and images as `data:` URIs.
+- **Tables stay on the page:** column widths are sized from the text, so a table with many columns or a long URL never runs off the page. When the longest words do not fit at the normal size, the cell padding is tightened, then the font shrinks (down to 6.5 pt), and a word that still does not fit is broken inside its column. Widths given in a layout block are kept.
 - **Layout blocks:** columns, callouts (info/success/warning/danger/note), boxes, tables with merged cells and custom widths, SVG charts and diagrams, canvas shapes, QR codes, named styles. The tool takes `blocks`, `styles` and `images` as JSON text, so the schema works with providers that enforce strict tool schemas.
 - **Document settings:**
   - title, subtitle, author, language

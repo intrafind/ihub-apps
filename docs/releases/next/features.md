@@ -840,3 +840,16 @@ existing document skills, by adding `xlsx` and `web-artifacts` to the app's `ski
   text the model reads.
 
 See [Apps → Skill Settings](../../apps.md#skill-settings).
+
+## Tables in Uploaded PDFs Are Recognised Without Tags
+
+Tables in uploaded PDFs reached the model as scrambled lines unless the PDF was "tagged" (accessible
+PDF): the lines of a wrapped cell were mixed in with the other cells of the row. iHub now reads a
+table from where its text sits on the page and passes it on as a Markdown table, for PDFs exported
+from browsers, report generators and iHub itself.
+
+- The header row, wrapped cells and tables that continue on the next page come out as rows and
+  columns, with the header marked when it is set in another font or size.
+- Detection is conservative: bulleted lists, tables of contents, code, justified text, two columns of
+  prose and anything with fewer than three rows or two columns stay ordinary lines.
+- PDFs with tags still use their structure tree.

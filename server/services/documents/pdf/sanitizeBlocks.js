@@ -4,6 +4,7 @@
 import { resolveFontFamily } from './fonts.js';
 import { isColor } from './themes.js';
 import { acceptImage, markdownToContent, naturalImageSize, warn } from './markdownToPdfmake.js';
+import { applyFitToBody, fitCellFromNode, fitTable, tableLineWidth } from './tableFit.js';
 import {
   LIMITS,
   clampNumber,
@@ -345,7 +346,12 @@ function sanitizeTable(source, ctx, depth) {
     return cells;
   });
   const out = { body };
-  if (Array.isArray(table.widths) && table.widths.length === columns) {
+  // Widths the author left to pdfmake (none, `auto`, `*`) are chosen from the
+  // text so the table stays on the page; widths with a number in them are
+  // the author's and stay as they are.
+  const authored = Array.isArray(table.widths) && table.widths.length === columns;
+  const leftToLayout = !authored || table.widths.every(w => w === '*' || w === 'auto');
+  if (authored) {
     out.widths = table.widths.map(w =>
       w === '*' || w === 'auto' ? w : (pct(w) ?? num(1, 5000)(w) ?? '*')
     );
@@ -364,7 +370,20 @@ function sanitizeTable(source, ctx, depth) {
   if (keep !== undefined) out.keepWithHeaderRows = Math.floor(keep);
   const node = applyCommon(source, { table: out }, ctx, 'table');
   node.layout = sanitizeTableLayout(source.layout, ctx);
+  if (leftToLayout && node.layout === 'ihubTable') fitBlockTable(node, headerCount, ctx, depth);
   return node;
+}
+
+/** Choose the widths of a table whose author left them to the layout. */
+function fitBlockTable(node, headerCount, ctx, depth) {
+  const rows = node.table.body.map((row, rowIndex) =>
+    row.map(cell => fitCellFromNode(cell, rowIndex < headerCount))
+  );
+  if (rows.some(row => row.some(cell => cell === null))) return;
+  const fit = fitTable({ rows, theme: ctx.theme, available: tableLineWidth(ctx, depth) });
+  node.table.widths = fit.widths;
+  node.layout = fit.layout;
+  applyFitToBody(node.table.body, fit, ctx.theme);
 }
 
 function sanitizeCell(cell, ctx, depth) {

@@ -13,10 +13,15 @@
  *
  * Wrong is worse than missing: a line is only turned into a heading or a table row when the
  * source is unambiguous, otherwise it stays the plain line it was before. Text is never
- * dropped or reordered — the structure only adds `#` prefixes and `|` cell separators.
+ * dropped or reordered — the structure only adds `#` prefixes and `|` cell separators. The one
+ * exception is a table of an untagged PDF, read from where its text sits on the page (see
+ * {@link module:shared/documentExtraction/pdfTables}): the cells of a wrapped row come out in
+ * reading order instead of the interleaved order they were drawn in.
  *
  * @module shared/documentExtraction/pdfStructure
  */
+
+import { detectTables } from './pdfTables.js';
 
 /** Upper bound of struct tree nodes read per page, content ids included (hostile or broken trees). */
 const MAX_TREE_NODES = 200000;
@@ -208,7 +213,9 @@ function readLines(items, index, styles) {
     }
     return null;
   };
-  for (const item of Array.isArray(items) ? items : []) {
+  const list = Array.isArray(items) ? items : [];
+  for (let position = 0; position < list.length; position += 1) {
+    const item = list[position];
     if (!item) continue;
     if (typeof item.str !== 'string') {
       if (item.type === 'beginMarkedContentProps' || item.type === 'beginMarkedContent') {
@@ -219,6 +226,7 @@ function readLines(items, index, styles) {
       continue;
     }
     parts.push({
+      position,
       str: item.str,
       height: item.height,
       mono: isMonospace(styles, item.fontName),
@@ -250,10 +258,45 @@ function classify(parts) {
   return { kind: 'line' };
 }
 
+/**
+ * The tables the page's geometry shows, where the PDF tags none: those whose text the stream
+ * delivers in lines of their own. A table that shares a line with other text is dropped — the
+ * stream and the geometry disagree about it, so it stays the plain lines it was.
+ *
+ * @returns {Map<number, {rows: Array, emitted: boolean}>} By position of each item in the table
+ */
+function untaggedTables(items, index, lines, styles) {
+  const owners = new Map();
+  if (index && index.tables > 0) return owners;
+  let found;
+  try {
+    found = detectTables(items, styles);
+  } catch {
+    return owners;
+  }
+  if (found.length === 0) return owners;
+  const tables = found.map(table => ({ rows: table.rows, emitted: false, members: table.members }));
+  const byPosition = new Map();
+  for (const table of tables) for (const position of table.members) byPosition.set(position, table);
+  const broken = new Set();
+  for (const parts of lines) {
+    const real = parts.filter(part => part.str.trim() !== '');
+    const owned = new Set(real.map(part => byPosition.get(part.position) || null));
+    if (owned.size === 1 && !owned.has(null)) continue;
+    for (const table of owned) if (table) broken.add(table);
+  }
+  for (const table of tables) {
+    if (broken.has(table)) continue;
+    for (const position of table.members) owners.set(position, table);
+  }
+  return owners;
+}
+
 /** Blocks of one page: plain lines, tagged headings and tables, in reading (stream) order. */
 export function pageBlocks(items, tree, styles) {
   const index = indexStructTree(tree);
   const lines = readLines(items, index, styles);
+  const geometric = untaggedTables(items, index, lines, styles);
   const blocks = [];
 
   let table = null;
@@ -288,6 +331,18 @@ export function pageBlocks(items, tree, styles) {
   for (const parts of lines) {
     const text = collapse(parts.map(part => part.str).join(''));
     if (text === '') continue;
+
+    const ownerOfLine = geometric.get(parts.find(part => part.str.trim() !== '')?.position);
+    if (ownerOfLine) {
+      // The table is emitted where its first line is; its other lines are already in it.
+      if (!ownerOfLine.emitted) {
+        flushTable();
+        flushHeading();
+        blocks.push({ type: 'table', rows: ownerOfLine.rows });
+        ownerOfLine.emitted = true;
+      }
+      continue;
+    }
     const kind = classify(parts) || { kind: 'line' };
 
     if (kind.kind === 'row') {

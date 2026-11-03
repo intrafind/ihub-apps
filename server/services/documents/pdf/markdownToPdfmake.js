@@ -3,6 +3,7 @@
 
 import { Lexer } from 'marked';
 import { checkImageDataUri, fitWithin, imagePixelSize, safeLink, LIMITS } from './validators.js';
+import { applyFitToBody, fitTable, tableLineWidth } from './tableFit.js';
 
 /**
  * Convert Markdown to pdfmake content.
@@ -272,26 +273,7 @@ function codeBlock(ctx, token) {
   };
 }
 
-function tableWidths(token) {
-  const columns = token.header.length;
-  const lengths = new Array(columns).fill(0);
-  const measure = cell => String(cell?.text || '').length;
-  token.header.forEach((cell, i) => {
-    lengths[i] = Math.max(lengths[i], Math.min(measure(cell), 60));
-  });
-  for (const row of token.rows) {
-    row.forEach((cell, i) => {
-      if (i < columns) lengths[i] = Math.max(lengths[i], Math.min(measure(cell), 60));
-    });
-  }
-  const total = lengths.reduce((a, b) => a + b, 0);
-  // Narrow tables size to their content; anything that could overflow the
-  // line shares the width, short columns keep their natural size.
-  if (total <= 60) return lengths.map(() => 'auto');
-  return lengths.map(len => (len <= 12 ? 'auto' : '*'));
-}
-
-function tableNode(ctx, token) {
+function tableNode(ctx, token, depth = 0) {
   if (token.rows.length > LIMITS.maxTableRows) {
     warn(ctx, `Table truncated to ${LIMITS.maxTableRows} rows.`);
   }
@@ -312,9 +294,25 @@ function tableNode(ctx, token) {
     while (cells.length < columns) cells.push({ text: '' });
     body.push(cells);
   }
+  // How much room each column needs depends on its text, so measure that
+  // rather than guess from the number of characters.
+  const measured = (c, header) => ({
+    text: plainText(c?.tokens),
+    bold: header || Boolean(c?.tokens?.some(t => t.type === 'strong')),
+    mono: !header && Boolean(c?.tokens?.some(t => t.type === 'codespan'))
+  });
+  const fit = fitTable({
+    rows: [
+      token.header.map(c => measured(c, true)),
+      ...token.rows.slice(0, LIMITS.maxTableRows).map(row => row.map(c => measured(c, false)))
+    ],
+    theme: ctx.theme,
+    available: tableLineWidth(ctx, depth)
+  });
+  applyFitToBody(body, fit, ctx.theme);
   return {
-    table: { headerRows: 1, widths: tableWidths(token), body, dontBreakRows: true },
-    layout: 'ihubTable',
+    table: { headerRows: 1, widths: fit.widths, body, dontBreakRows: true },
+    layout: fit.layout,
     margin: [0, 2, 0, 10]
   };
 }
@@ -521,7 +519,7 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
         nodes.push(listNode(ctx, token, depth));
         break;
       case 'table':
-        nodes.push(tableNode(ctx, token));
+        nodes.push(tableNode(ctx, token, depth));
         break;
       case 'code':
         nodes.push(codeBlock(ctx, token));
