@@ -25,6 +25,9 @@
       "chatQuota": "In diesem Chat ist kein Platz mehr für gespeicherte Dateien; die Datei wird nur mit der Nachricht gesendet",
       "storageQuota": "Ihr Dateispeicher ist voll; die Datei wird nur mit der Nachricht gesendet",
       "fileTooLarge": "Zu groß zum Speichern; die Datei wird nur mit der Nachricht gesendet",
+      "unsupportedType": "Dieser Dateityp kann nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet",
+      "unreadable": "Der Server konnte diese Datei nicht lesen und hat sie daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
+      "scanRejected": "Vom Sicherheitsscan abgelehnt und daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet"
     },
     "stored": "Im Chat gespeichert",
