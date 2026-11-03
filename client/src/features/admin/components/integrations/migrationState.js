@@ -37,6 +37,8 @@ export const MIGRATION_ACTION = Object.freeze({
   RESTORE: 'restore',
   /** `POST …/_adopt` ("Adopt current version"). */
   ADOPT: 'adopt',
+  /** `POST …/_revert` with a backup the admin picked ("Revert to this version"), in any state. */
+  REVERT: 'revert',
   /** `DELETE …/installed/:id` ("Uninstall"), the page's own remove flow. */
   UNINSTALL: 'uninstall'
 });
@@ -45,6 +47,7 @@ export const MIGRATION_ACTION = Object.freeze({
 const CONFIRMED_ACTIONS = new Set([
   MIGRATION_ACTION.RESTORE,
   MIGRATION_ACTION.ADOPT,
+  MIGRATION_ACTION.REVERT,
   MIGRATION_ACTION.UNINSTALL
 ]);
 
@@ -56,6 +59,7 @@ export const LOG_RESULTS = Object.freeze([
   'rolledBack',
   'restored',
   'adopted',
+  'reverted',
   'skipped'
 ]);
 
@@ -94,6 +98,37 @@ export function defaultBackupOf(instance) {
   if (!id) return null;
   const listed = (instance.migration.backups || []).find(backup => backup?.id === id);
   return listed || { id };
+}
+
+/**
+ * The backups of an installation the server lists (`migration.backups`),
+ * newest first: `{ id, representedVersion, createdAt, kind, hasDefinition,
+ * createdBy, trigger }`.
+ *
+ * @param {Object} instance - an installation of the admin API
+ * @returns {Array<Object>}
+ */
+export function backupsOf(instance) {
+  const list = instance?.migration?.backups;
+  return Array.isArray(list) ? list.filter(backup => backup?.id) : [];
+}
+
+/**
+ * Whether an installation can be reverted to a backup (`POST …/_revert`), and
+ * why not: a backup of another version than the loaded definition must hold
+ * that version's definition folder (`hasDefinition`), or the server refuses
+ * with `REVERT_DEFINITION_MISSING`.
+ *
+ * @param {Object} instance - an installation of the admin API
+ * @param {Object} backup - one of {@link backupsOf}
+ * @returns {{ ok: boolean, reason: 'definitionMissing'|null }}
+ */
+export function revertability(instance, backup) {
+  const loaded = instance?.currentVersion || instance?.migration?.to || null;
+  if (backup?.hasDefinition || (loaded && backup?.representedVersion === loaded)) {
+    return { ok: true, reason: null };
+  }
+  return { ok: false, reason: 'definitionMissing' };
 }
 
 /**
@@ -215,6 +250,7 @@ export function outcomeFromResponse(action, instance, data) {
   let result = data?.result || null;
   if (!result) {
     if (action === MIGRATION_ACTION.RESTORE) result = 'restored';
+    else if (action === MIGRATION_ACTION.REVERT) result = 'reverted';
     else if (action === MIGRATION_ACTION.ADOPT) result = 'adopted';
     else result = data?.logEntry?.result || 'migrated';
   }

@@ -15,10 +15,11 @@ import {
   unsupportedSchemaMessage,
   dirNameToDefinitionId,
   definitionIdToDirName,
+  migrationModuleFiles,
   EXAMPLE_APP_FILE_PATTERN
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
-import { checkScriptCodeFiles } from './scriptModule.js';
+import { checkMigrationModuleFiles, checkScriptCodeFiles } from './scriptModule.js';
 import { registryProtocolRefusal } from './registryItems.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
 import { publishDefinitionTypes } from '../integrationTypes.js';
@@ -282,6 +283,10 @@ export class IntegrationRegistry {
       if (definition.protocol.type === 'script') {
         await fs.access(path.join(staging, definition.protocol.module));
       }
+      // Sequential on purpose: the first missing migration module fails the copy.
+      for (const file of migrationModuleFiles(definition.migrations)) {
+        await fs.access(path.join(staging, file));
+      }
       const { type, document } = definition.protocol;
       if (type === 'openapi' && !isHttpUrl(document)) {
         await this._readDocument(staging, document);
@@ -399,6 +404,7 @@ export class IntegrationRegistry {
       }
       checkScriptCodeFiles(validation.data, files);
     }
+    if (files) checkMigrationModuleFiles(validation.data, files);
     // A registry may only publish remote MCP servers with a fixed transport.
     // The catalog already drops such items when it is loaded
     // (RegistryService); this is the same check again for the files that
