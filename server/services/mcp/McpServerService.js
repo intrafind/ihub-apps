@@ -654,6 +654,15 @@ async function workflowFileInput(args, user) {
  * same JSON written out as text for a client that reads only text. A run that
  * did not finish with an answer is an error.
  *
+ * Unlike an app run ({@link appToolResult}), a workflow run returns no generated
+ * files or pictures, on purpose: a workflow's result is its `output` (text or
+ * JSON) and nothing in the workflow engine collects files. The tool node stores a
+ * tool's result in the workflow state as data, the prompt node's loop has no
+ * file-lifting seam, and `workflowRunner` resolves with `{ status, output,
+ * executionId }` only. A file a workflow node produced therefore cannot be handed
+ * to the caller here; inventing a side channel for it would hide the gap. Files a
+ * caller *sends* to a workflow do work (`files`, see `workflowFileInput`).
+ *
  * @param {Object|string} result - What `workflowRunner` resolved with
  * @returns {Object} An MCP tool result
  */

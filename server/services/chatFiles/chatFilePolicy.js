@@ -54,6 +54,12 @@ export const DEFAULT_MAX_USER_BYTES = 1024 * 1024 * 1024;
 /** Most bytes stored across the entire server (`0` or negative disables cap). */
 export const DEFAULT_MAX_SERVER_BYTES = 50 * 1024 * 1024 * 1024;
 
+/** Most files one Inference API user may keep through `/v1/files` (`0` or negative disables cap). */
+export const DEFAULT_MAX_API_FILES = 200;
+
+/** Most bytes one Inference API user may keep through `/v1/files` (`0` or negative disables cap). */
+export const DEFAULT_MAX_API_BYTES = 1024 * 1024 * 1024;
+
 /**
  * MIME types whose retained original binary can be used as a template or
  * source file in system skill tools (`create_docx`, `create_pptx`,
@@ -127,7 +133,9 @@ function readNumber(value, fallback) {
  *     maxChatBytes: number,
  *     maxChatFiles: number,
  *     maxUserBytes: number,
- *     maxServerBytes: number
+ *     maxServerBytes: number,
+ *     maxApiFiles: number,
+ *     maxApiBytes: number
  *   }
  * }}
  */
@@ -145,7 +153,9 @@ export function chatFileSettings(platformConfig = {}, appConfig = null) {
     maxServerBytes: readNumber(
       quotas.maxServerBytes ?? uploads.maxServerBytes,
       DEFAULT_MAX_SERVER_BYTES
-    )
+    ),
+    maxApiFiles: readNumber(quotas.maxApiFiles ?? uploads.maxApiFiles, DEFAULT_MAX_API_FILES),
+    maxApiBytes: readNumber(quotas.maxApiBytes ?? uploads.maxApiBytes, DEFAULT_MAX_API_BYTES)
   };
 
   return {
@@ -181,7 +191,9 @@ export function normalizeChatFilePolicy(policy = null, appConfig = null) {
     maxServerBytes: readNumber(
       policy.maxServerBytes ?? q.maxServerBytes,
       base.quotas.maxServerBytes
-    )
+    ),
+    maxApiFiles: readNumber(policy.maxApiFiles ?? q.maxApiFiles, base.quotas.maxApiFiles),
+    maxApiBytes: readNumber(policy.maxApiBytes ?? q.maxApiBytes, base.quotas.maxApiBytes)
   };
   return {
     ...base,

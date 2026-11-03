@@ -291,6 +291,80 @@ describe('runs without a client (apps invoked over MCP / A2A)', () => {
   });
 });
 
+describe('early lift (before the loop serialises and bounds the result)', () => {
+  const raw = () => [
+    { type: 'text', text: 'Exported' },
+    {
+      type: 'resource',
+      resource: { uri: 'file:///s.csv', mimeType: 'text/csv', blob: CSV.toString('base64') }
+    }
+  ];
+
+  it('takes the base64 out in liftResult; postTool then reuses it without lifting twice', async () => {
+    const s = setup();
+    const info = { toolId: 'srv_export', toolDef: mcpTool, call: { id: 'c1' } };
+    const holder = { rawResult: raw() };
+    await s.seam.liftResult(s.ctx, info, holder);
+    expect(JSON.stringify(holder.rawResult)).not.toContain(CSV.toString('base64'));
+    expect(holder.lifted.files).toHaveLength(1);
+
+    const outcome = {
+      rawResult: holder.rawResult,
+      lifted: holder.lifted,
+      message: { role: 'tool', content: JSON.stringify(holder.rawResult) }
+    };
+    await s.seam.postTool(s.ctx, info, outcome);
+    expect(s.files).toHaveLength(1);
+    expect(await repo.list({ type: 'chat', id: 'chat-1' })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 's.csv' })])
+    );
+    const stored = (await repo.list({ type: 'chat', id: 'chat-1' })).filter(
+      f => f.name === 's.csv'
+    );
+    expect(stored.length).toBe(1);
+  });
+
+  it('leaves non-MCP tools and results without binary blocks to postTool', async () => {
+    const s = setup();
+    const plain = { rawResult: [{ type: 'text', text: 'hi' }] };
+    await s.seam.liftResult(
+      s.ctx,
+      { toolId: 'srv_export', toolDef: mcpTool, call: { id: 'c1' } },
+      plain
+    );
+    expect(plain.lifted).toBeUndefined();
+    const custom = { rawResult: raw() };
+    await s.seam.liftResult(
+      s.ctx,
+      { toolId: 'custom', toolDef: { id: 'custom', script: 'x.js' }, call: { id: 'c2' } },
+      custom
+    );
+    expect(custom.lifted).toBeUndefined();
+    expect(JSON.stringify(custom.rawResult)).toContain(CSV.toString('base64'));
+  });
+
+  it('is shared with the headless seam', async () => {
+    const generatedFiles = [];
+    const seam = headlessToolOutputSeam({
+      chatId: 'chat-3',
+      user: { id: 'alice' },
+      generatedFiles,
+      generatedImages: [],
+      store: repo
+    });
+    const holder = { rawResult: raw() };
+    await seam.liftResult({}, { toolId: 'srv_export', toolDef: mcpTool }, holder);
+    expect(JSON.stringify(holder.rawResult)).not.toContain(CSV.toString('base64'));
+    const outcome = {
+      rawResult: holder.rawResult,
+      lifted: holder.lifted,
+      message: { content: JSON.stringify(holder.rawResult) }
+    };
+    await seam.postTool({}, { toolId: 'srv_export', toolDef: mcpTool }, outcome);
+    expect(generatedFiles).toHaveLength(1);
+  });
+});
+
 describe('decodeBase64Capped', () => {
   it('measures before decoding and refuses what is not base64', () => {
     expect(decodeBase64Capped('aGVsbG8=')).toMatchObject({ ok: true });

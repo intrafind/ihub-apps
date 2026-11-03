@@ -29,9 +29,15 @@ Edited in **Admin → Chat history → Uploaded files**.
 | `quotas.maxChatBytes` / `maxChatFiles` | 100 MB / 25 | One chat or one task                                                                  |
 | `quotas.maxUserBytes`         | 1 GB           | One user (chats, tasks, API files)                                                       |
 | `quotas.maxServerBytes`       | 50 GB          | The whole server                                                                         |
+| `quotas.maxApiFiles` / `maxApiBytes` | 200 / 1 GB | One Inference API user's files (`/v1/files`, scope `user`); they do not use the per-chat limits |
+
+The server-wide total is a counter document in the `chat-files` storage namespace, adjusted with a
+compare-and-set on every put, delete and original discard, so several server instances sharing one
+storage enforce `maxServerBytes` together. It is recounted from the file documents when it is missing,
+older than five minutes, or when an upload comes within 10 % of the limit.
 
 Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_BYTES`,
-`QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
+`QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
 
 ## HTTP API
 
@@ -75,11 +81,16 @@ An app that pins a `documentTemplate` keeps it unless it sets `allowUserTemplate
   `/v1/chat/completions` (`file` parts). Inline files, `.xlsx` and scanned PDFs included, go through
   the same extraction as uploads. A file in a `/v1/responses` conversation turn is stored in the
   chat, so the web UI and API turns on the same chat see each other's files.
+  `POST /v1/conversations/{id}/items` (and `POST /v1/conversations` with `items`) take `input_file` /
+  `file` parts with `file_data` or `file_id` on user items the same way; the files are stored in the
+  conversation and named on the item (`attachments`).
 - **MCP client:** binary `resource` and `image` blocks a tool returns are stored in the chat and
   appear in the Files drawer; the model sees `{ fileId, name, mimeType, bytes }` instead of base64.
 - **MCP server:** `app__*` and `workflow__*` tools take optional `files` (`name`, `mimeType`,
-  `data` base64 or `text`) and return generated files and pictures as MCP `resource` and `image`
-  blocks.
+  `data` base64 or `text`). `app__*` tools return generated files and pictures as MCP `resource` and
+  `image` blocks. `workflow__*` tools return the workflow's answer only: a workflow run has no output
+  path for generated files (its result is the `output`, text or JSON; no workflow node hands files to
+  the run), so none are returned.
 - **A2A:** the server accepts inbound `FilePart`s (`bytes` or an https `uri`), advertises file types
   on the Agent Card and returns generated files as `FilePart` artifacts. The A2A tools take
   `fileIds` to forward chat files and store the files a remote agent returns.

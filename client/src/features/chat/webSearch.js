@@ -29,11 +29,9 @@ const NATIVE_WEB_SEARCH_PROVIDERS = ['google', 'openai-responses', 'anthropic'];
 export function modelSupportsWebSearch(app, model) {
   if (!app?.websearch?.enabled || !model) return null;
   const availability = app.websearchAvailability;
-  const nativeProviders = Array.isArray(availability?.native)
-    ? availability.native
-    : app.websearch.useNativeSearch === false
-      ? []
-      : NATIVE_WEB_SEARCH_PROVIDERS;
+  let nativeProviders = NATIVE_WEB_SEARCH_PROVIDERS;
+  if (Array.isArray(availability?.native)) nativeProviders = availability.native;
+  else if (app.websearch.useNativeSearch === false) nativeProviders = [];
   const native =
     nativeProviders.includes(model.provider) && model.nativeWebSearch?.enabled !== false;
   const script = availability?.script !== false && modelSupportsTools(model);

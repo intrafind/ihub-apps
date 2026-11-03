@@ -527,7 +527,10 @@ export const platformConfigSchema = z
             maxChatBytes: z.number().prefault(100 * 1024 * 1024),
             maxChatFiles: z.number().prefault(25),
             maxUserBytes: z.number().prefault(1024 * 1024 * 1024),
-            maxServerBytes: z.number().prefault(50 * 1024 * 1024 * 1024)
+            maxServerBytes: z.number().prefault(50 * 1024 * 1024 * 1024),
+            // Files an Inference API user keeps through /v1/files (scope `user`).
+            maxApiFiles: z.number().prefault(200),
+            maxApiBytes: z.number().prefault(1024 * 1024 * 1024)
           })
           .passthrough()
           .prefault({})

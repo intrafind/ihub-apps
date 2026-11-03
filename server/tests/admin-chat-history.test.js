@@ -246,9 +246,26 @@ describe('uploaded files settings (platform.uploads)', () => {
         maxChatBytes: 100 * 1024 * 1024,
         maxChatFiles: 25,
         maxUserBytes: 1024 * 1024 * 1024,
-        maxServerBytes: 50 * 1024 * 1024 * 1024
+        maxServerBytes: 50 * 1024 * 1024 * 1024,
+        maxApiFiles: 200,
+        maxApiBytes: 1024 * 1024 * 1024
       }
     });
+  });
+
+  test('writes the Inference API limits of the user scope', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ uploads: { quotas: { maxApiFiles: 50, maxApiBytes: 0 } } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual([
+      'uploads.quotas.maxApiFiles',
+      'uploads.quotas.maxApiBytes'
+    ]);
+    expect(state.stored.uploads.quotas).toEqual({ maxApiFiles: 50, maxApiBytes: 0 });
+    expect(response.body.settings.uploads.quotas.maxApiFiles).toBe(50);
+    expect(response.body.settings.uploads.quotas.maxApiBytes).toBe(0);
   });
 
   test('writes the mode, retention and quotas, changed values only', async () => {

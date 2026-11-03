@@ -703,6 +703,48 @@ test('steer: a queued human message reaches the next model call inside the trust
   await runLog.stop();
 });
 
+test('liftResult: a seam takes a payload out of the result before it is bounded or spilled', async () => {
+  const { runLog } = await captureRunLog();
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const base64 = 'QUJD'.repeat(20_000);
+  const seen = [];
+  const { loop } = makeLoop(
+    [toolTurn([{ name: 'webSearch', args: { query: 'x' } }]), textTurn('done')],
+    { runLog }
+  );
+  loop.use({
+    name: 'lift-test',
+    liftResult(_ctx, info, holder) {
+      holder.rawResult = [{ type: 'file', fileId: 'f1', bytes: 60_000 }];
+      holder.lifted = { files: [{ id: 'f1' }], images: [] };
+      seen.push(info.toolId);
+    },
+    postTool(_ctx, _info, outcome) {
+      seen.push(outcome.lifted);
+    }
+  });
+  const result = await loop.run({
+    runId,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { spillThresholdBytes: 4096 } },
+    executeTool: async () => [{ type: 'resource', resource: { blob: base64 } }]
+  });
+  assert.equal(result.status, 'completed');
+  const toolMessage = result.messages.find(m => m.role === 'tool');
+  assert.deepEqual(JSON.parse(toolMessage.content), [
+    { type: 'file', fileId: 'f1', bytes: 60_000 }
+  ]);
+  assert.equal(JSON.parse(toolMessage.content).truncated, undefined, 'never spilled');
+  assert.deepEqual(seen[1], { files: [{ id: 'f1' }], images: [] });
+  await runLog.flush();
+  const events = await runLog.readEvents(runId);
+  const toolResult = events.find(e => e.type === RUN_LOG_EVENTS.TOOL_RESULT);
+  assert.equal(toolResult.data.spillRef, undefined);
+  await runLog.stop();
+});
+
 test('spill: a tool result above the threshold is spilled and previewed, never sent in full', async () => {
   const { runLog } = await captureRunLog();
   const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });

@@ -32,8 +32,13 @@ const { registerItemKind, getItemKind } = await import('../services/projects/kin
 const { ProjectError } = await import('../services/projects/projectErrors.js');
 const { getChatFileRepository } = await import('../services/chatFiles/ChatFileRepository.js');
 const { ingestRequestFile } = await import('../services/chatFiles/fileUploadRequest.js');
-const { fetchSourceFile, ingestFromSource, refreshTaskFiles, FILE_SOURCE_KINDS } =
-  await import('../services/chatFiles/fileSources.js');
+const {
+  fetchSourceFile,
+  ingestFromSource,
+  refreshTaskFiles,
+  setIfinderProviderForTests,
+  FILE_SOURCE_KINDS
+} = await import('../services/chatFiles/fileSources.js');
 const { chatFilePolicy } = await import('../services/chatFiles/chatFilePolicy.js');
 const { openaiText } = await import('./loop/helpers/llmFixtures.js');
 
@@ -235,6 +240,166 @@ describe('server-side connector ingest', () => {
     } finally {
       registerItemKind(original);
     }
+  });
+});
+
+describe('iFinder documents', () => {
+  const IFINDER = { kind: 'ifinder-document', ref: { documentId: 'doc-1', searchProfile: 'sp' } };
+  const calls = [];
+  let responses;
+  let restoreKind;
+
+  // What the real provider returns for a download: the body as a Node stream.
+  const stream = chunks => {
+    const body = {
+      destroyed: false,
+      destroy() {
+        this.destroyed = true;
+      },
+      async *[Symbol.asyncIterator]() {
+        for (const chunk of chunks) yield chunk;
+      }
+    };
+    return { contentType: 'application/pdf', stream: body };
+  };
+
+  before(() => {
+    const original = getItemKind('ifinder-document');
+    restoreKind = () => registerItemKind(original);
+    registerItemKind({ ...original, enabled: () => true });
+    setIfinderProviderForTests({
+      async content({ ref, user, format }) {
+        calls.push({ ref, userId: user?.id, format });
+        const answer = responses[format];
+        if (answer instanceof Error) throw answer;
+        return answer;
+      }
+    });
+  });
+  after(() => {
+    setIfinderProviderForTests(null);
+    restoreKind();
+  });
+  beforeEach(() => {
+    calls.length = 0;
+    responses = {};
+  });
+
+  it('downloads the original with the reading user and the search profile', async () => {
+    const body = Buffer.from('%PDF-1.4 original');
+    const content = stream([body.subarray(0, 5), body.subarray(5)]);
+    content.contentDisposition = 'attachment; filename="Quarterly Report.pdf"';
+    responses.original = content;
+    const fetched = await fetchSourceFile({ source: IFINDER, user: ada() });
+    assert.deepEqual(calls, [
+      { ref: { id: 'doc-1', scope: 'sp' }, userId: 'user-ada', format: 'original' }
+    ]);
+    assert.ok(fetched.bytes.equals(body));
+    assert.equal(fetched.contentType, 'application/pdf');
+    assert.equal(fetched.name, 'Quarterly Report.pdf');
+  });
+
+  it('prefers the provider file name, and reads an encoded Content-Disposition name', async () => {
+    responses.original = {
+      body: Buffer.from('x'),
+      contentType: 'application/pdf',
+      fileName: 'a.pdf'
+    };
+    assert.equal((await fetchSourceFile({ source: IFINDER, user: ada() })).name, 'a.pdf');
+    responses.original = {
+      body: Buffer.from('x'),
+      contentType: 'application/pdf',
+      contentDisposition: "attachment; filename*=UTF-8''Bericht%20M%C3%A4rz.pdf"
+    };
+    assert.equal(
+      (await fetchSourceFile({ source: IFINDER, user: ada() })).name,
+      'Bericht März.pdf'
+    );
+  });
+
+  it('falls back to the text when the document has no download link', async () => {
+    responses.original = Object.assign(new Error('no link'), { code: 'SOURCE_GONE' });
+    responses.text = { body: 'Extracted text of the document', contentType: 'text/plain' };
+    const fetched = await fetchSourceFile({ source: IFINDER, user: ada() });
+    assert.deepEqual(
+      calls.map(c => c.format),
+      ['original', 'text']
+    );
+    assert.equal(fetched.bytes.toString('utf8'), 'Extracted text of the document');
+    assert.equal(fetched.contentType, 'text/plain');
+    assert.equal(fetched.name, 'doc-1.txt');
+    // Stored, it is a connector file of this system.
+    const target = { type: 'chat', id: 'chat-ifinder-text' };
+    const stored = await ingestFromSource({
+      source: IFINDER,
+      user: ada(),
+      scope: target,
+      ownerId: 'user-ada',
+      policy: chatFilePolicy(),
+      store: getChatFileRepository()
+    });
+    assert.equal(stored.origin, 'connector');
+    assert.equal(stored.source.kind, 'ifinder-document');
+    assert.equal(stored.mimeType, 'text/plain');
+    assert.equal(stored.name, 'doc-1.txt');
+  });
+
+  it('stops a download that grows past the size cap and refuses a buffered one', async () => {
+    const content = stream([Buffer.alloc(8), Buffer.alloc(8), Buffer.alloc(8)]);
+    responses.original = content;
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 }), {
+      status: 413,
+      code: 'QUOTA_FILE_BYTES'
+    });
+    assert.equal(content.stream.destroyed, true, 'the stream is closed, not read to the end');
+    responses.original = { body: Buffer.alloc(11), contentType: 'application/pdf' };
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 }), {
+      status: 413,
+      code: 'QUOTA_FILE_BYTES'
+    });
+    responses.original = { body: Buffer.alloc(10), contentType: 'application/pdf' };
+    assert.equal(
+      (await fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 })).bytes.length,
+      10
+    );
+  });
+
+  it('maps what iFinder says when the text fallback fails too', async () => {
+    responses.original = new Error('no link');
+    responses.text = new ProjectError('SOURCE_FORBIDDEN', 'No access to this document');
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+      status: 403,
+      code: 'SOURCE_FORBIDDEN'
+    });
+    responses.text = new ProjectError('SOURCE_GONE', 'The document is gone');
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+      status: 404,
+      code: 'SOURCE_GONE'
+    });
+    responses.text = new ProjectError('SOURCE_TIMEOUT', 'iFinder timed out');
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+      status: 504,
+      code: 'SOURCE_UNAVAILABLE'
+    });
+    responses.text = new Error('socket hang up');
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), error => {
+      assert.equal(error.status, 502);
+      assert.equal(error.code, 'SOURCE_FAILED');
+      assert.match(error.message, /ifinder-document/);
+      return true;
+    });
+  });
+
+  it('needs a signed-in user and a valid reference', async () => {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: { id: 'anonymous' } }), {
+      status: 403,
+      code: 'SOURCE_FORBIDDEN'
+    });
+    await assert.rejects(
+      fetchSourceFile({ source: { kind: 'ifinder-document', ref: {} }, user: ada() }),
+      { status: 400, code: 'SOURCE_INVALID' }
+    );
+    assert.deepEqual(calls, []);
   });
 });
 

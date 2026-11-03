@@ -803,10 +803,19 @@ Scheduled tasks can carry reference documents and templates of their own.
   files in the chat (once per chat), and Outlook attachments keep their original so they can be used
   as templates. The Inference API gets `/v1/files` and `file_id` references (`.xlsx` and scanned PDFs
   included), and files in MCP and A2A calls are stored in the chat and shown in the drawer.
-- **MCP and A2A:** `app__*` and `workflow__*` tools accept `files` and return generated files as
-  MCP `resource` and `image` blocks; A2A accepts and returns `FilePart`s and its tools take `fileIds`.
+- **MCP and A2A:** `app__*` and `workflow__*` tools accept `files`; `app__*` tools return generated
+  files as MCP `resource` and `image` blocks (workflow runs have no generated files to return); A2A accepts and returns `FilePart`s and its tools take `fileIds`.
   A2A skill tools gained the `fileIds` input, so an A2A skill whose approval is set to "ask when new
   or changed" asks once more before it runs after the upgrade.
+- **Limits and multi-instance:** the Inference API's `/v1/files` has its own limits per user
+  (**Admin → Chat history → Uploaded files**, `maxApiFiles` 200 and `maxApiBytes` 1 GB by default,
+  0 removes them) instead of the per-chat ones. The server-wide size limit is counted in a shared
+  counter, so several server instances enforce it together. A mail attachment sent with every turn
+  is stored once per chat.
+- **Inference API conversations:** items added to a conversation can carry `input_file` parts
+  (`file_data` or `file_id`); the files are stored in the conversation.
+- **Outlook pop-out:** a chat popped out of the task pane stores the real `.eml` of the open mail,
+  not a rebuilt one.
 
 ## Excel Workbooks and Interactive Web Artifacts from Chat, with Richer Previews
 

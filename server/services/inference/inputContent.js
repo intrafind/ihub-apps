@@ -267,10 +267,11 @@ export function imageFromInline(url, param, filename) {
 }
 
 function refuseHostedReference(kind, param, hint) {
+  const reason = hint ? `: ${hint}` : '';
   throw new InferenceApiError(
     400,
     'unsupported_file_reference',
-    `${kind} is not supported${hint ? `: ${hint}` : ''}`,
+    `${kind} is not supported${reason}`,
     { param }
   );
 }
@@ -293,7 +294,7 @@ const FILE_HINT =
  * @param {string} partParam
  * @param {{files?: {resolve: Function}}} ctx
  */
-async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam, ctx) {
+export async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam, ctx) {
   if (fileUrl) {
     refuseHostedReference(
       `${kind}.file_url`,
@@ -310,7 +311,71 @@ async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam
 
 /** An empty message under construction. */
 function newMessage(role) {
-  return { role, text: [], files: [], images: [] };
+  return { role, text: [], files: [], images: [], fileParts: [] };
+}
+
+/**
+ * Run `fn` over `items` one after the other and collect the results. The files of
+ * a request are read in order on purpose: it decides which error a request with
+ * several bad parts reports, and it keeps one extraction in memory at a time.
+ */
+function mapInOrder(items, fn) {
+  const results = [];
+  return items
+    .reduce(
+      (previous, item, index) =>
+        previous.then(async () => {
+          results.push(await fn(item, index));
+        }),
+      Promise.resolve()
+    )
+    .then(() => results);
+}
+
+/** Read the file content parts a message collected (see {@link fileFromPart}). */
+async function attachFiles(message, ctx) {
+  message.files = await mapInOrder(message.fileParts, spec =>
+    fileFromPart(spec.args, spec.kind, spec.partParam, ctx)
+  );
+  return message;
+}
+
+/**
+ * The content of an input item as a list of parts (a string is one text part).
+ *
+ * @param {unknown} content
+ * @param {{textType: string, code: string, param: string, allowEmpty?: boolean}} options
+ */
+function contentParts(content, { textType, code, param, allowEmpty = false }) {
+  if (typeof content === 'string') return [{ type: textType, text: content }];
+  if (allowEmpty && (content === null || content === undefined)) return [];
+  if (!Array.isArray(content)) {
+    throw new InferenceApiError(400, code, `${param}.content must be a string or an array`, {
+      param: `${param}.content`
+    });
+  }
+  return content;
+}
+
+/** Only user messages carry files and pictures. */
+function assertMediaFromUser(message, code, param) {
+  if (message.role !== 'user' && (message.fileParts.length > 0 || message.images.length > 0)) {
+    throw new InferenceApiError(400, code, `${param}: only user messages carry files`, { param });
+  }
+}
+
+function unsupportedPart(partParam, type) {
+  return new InferenceApiError(
+    400,
+    'unsupported_content_part',
+    `${partParam}: content parts of type ${String(type)} are not supported`,
+    { param: partParam }
+  );
+}
+
+/** Collect a file content part for {@link attachFiles}. */
+function collectFilePart(message, kind, args, partParam) {
+  message.fileParts.push({ kind, args, partParam });
 }
 
 /** The finished chat message of one collected input message. */
@@ -378,6 +443,94 @@ export function renderedWithoutFiles(rendered, message) {
   return rendered.replace(withFiles, () => message.content);
 }
 
+function readInputText(part, partParam, message) {
+  if (typeof part.text !== 'string') {
+    throw new InferenceApiError(400, 'invalid_input', `${partParam}.text must be a string`, {
+      param: partParam
+    });
+  }
+  message.text.push(part.text);
+}
+
+/** How each content part of a Responses input item is read into the message under construction. */
+const RESPONSES_PART_READERS = new Map([
+  ['input_text', readInputText],
+  ['output_text', readInputText],
+  ['text', readInputText],
+  [
+    'refusal',
+    (part, _partParam, message) => {
+      if (typeof part.refusal === 'string') message.text.push(part.refusal);
+    }
+  ],
+  [
+    'input_image',
+    (part, partParam, message) => {
+      if (part.file_id) {
+        refuseHostedReference(
+          'input_image.file_id',
+          partParam,
+          'images are not stored files; send the image inline as a data: URL'
+        );
+      }
+      message.images.push(imageFromInline(part.image_url, partParam));
+    }
+  ],
+  [
+    'input_file',
+    (part, partParam, message) =>
+      collectFilePart(
+        message,
+        'input_file',
+        {
+          fileId: part.file_id,
+          fileUrl: part.file_url,
+          data: part.file_data,
+          filename: part.filename
+        },
+        partParam
+      )
+  ]
+]);
+
+/** One item of a Responses `input` → a message under construction (files not read yet). */
+function readResponsesItem(item, index) {
+  const param = `input[${index}]`;
+  if (!item || typeof item !== 'object') {
+    throw new InferenceApiError(400, 'invalid_input', `${param} must be an object`, { param });
+  }
+  if (item.type !== undefined && item.type !== 'message') {
+    throw new InferenceApiError(
+      400,
+      'unsupported_input_item',
+      `${param}: input items of type ${String(item.type)} are not supported; send message items`,
+      { param: `${param}.type` }
+    );
+  }
+  if (!RESPONSES_ROLES.has(item.role)) {
+    throw new InferenceApiError(
+      400,
+      'invalid_input',
+      `${param}.role must be one of user, assistant, system, developer`,
+      { param: `${param}.role` }
+    );
+  }
+  const message = newMessage(item.role === 'developer' ? 'system' : item.role);
+  const parts = contentParts(item.content, {
+    textType: 'input_text',
+    code: 'invalid_input',
+    param
+  });
+  parts.forEach((part, p) => {
+    const partParam = `${param}.content[${p}]`;
+    const read = RESPONSES_PART_READERS.get(part?.type);
+    if (!read) throw unsupportedPart(partParam, part?.type);
+    read(part, partParam, message);
+  });
+  assertMediaFromUser(message, 'invalid_input', param);
+  return message;
+}
+
 const RESPONSES_ROLES = new Set(['user', 'assistant', 'system', 'developer']);
 
 /**
@@ -401,101 +554,9 @@ export async function messagesFromResponsesInput(input, ctx = {}) {
       }
     );
   }
-  const messages = [];
-  for (let index = 0; index < input.length; index += 1) {
-    const item = input[index];
-    const param = `input[${index}]`;
-    if (!item || typeof item !== 'object') {
-      throw new InferenceApiError(400, 'invalid_input', `${param} must be an object`, { param });
-    }
-    if (item.type !== undefined && item.type !== 'message') {
-      throw new InferenceApiError(
-        400,
-        'unsupported_input_item',
-        `${param}: input items of type ${String(item.type)} are not supported; send message items`,
-        { param: `${param}.type` }
-      );
-    }
-    if (!RESPONSES_ROLES.has(item.role)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_input',
-        `${param}.role must be one of user, assistant, system, developer`,
-        { param: `${param}.role` }
-      );
-    }
-    const message = newMessage(item.role === 'developer' ? 'system' : item.role);
-    const parts =
-      typeof item.content === 'string'
-        ? [{ type: 'input_text', text: item.content }]
-        : item.content;
-    if (!Array.isArray(parts)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_input',
-        `${param}.content must be a string or an array`,
-        {
-          param: `${param}.content`
-        }
-      );
-    }
-    for (let p = 0; p < parts.length; p += 1) {
-      const part = parts[p];
-      const partParam = `${param}.content[${p}]`;
-      const type = part?.type;
-      if (type === 'input_text' || type === 'output_text' || type === 'text') {
-        if (typeof part.text !== 'string') {
-          throw new InferenceApiError(400, 'invalid_input', `${partParam}.text must be a string`, {
-            param: partParam
-          });
-        }
-        message.text.push(part.text);
-      } else if (type === 'refusal') {
-        if (typeof part.refusal === 'string') message.text.push(part.refusal);
-      } else if (type === 'input_image') {
-        if (part.file_id) {
-          refuseHostedReference(
-            'input_image.file_id',
-            partParam,
-            'images are not stored files; send the image inline as a data: URL'
-          );
-        }
-        message.images.push(imageFromInline(part.image_url, partParam));
-      } else if (type === 'input_file') {
-        message.files.push(
-          await fileFromPart(
-            {
-              fileId: part.file_id,
-              fileUrl: part.file_url,
-              data: part.file_data,
-              filename: part.filename
-            },
-            'input_file',
-            partParam,
-            ctx
-          )
-        );
-      } else {
-        throw new InferenceApiError(
-          400,
-          'unsupported_content_part',
-          `${partParam}: content parts of type ${String(type)} are not supported`,
-          { param: partParam }
-        );
-      }
-    }
-    if (message.role !== 'user' && (message.files.length > 0 || message.images.length > 0)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_input',
-        `${param}: only user messages carry files`,
-        {
-          param
-        }
-      );
-    }
-    messages.push(finish(message));
-  }
+  const messages = await mapInOrder(input, async (item, index) =>
+    finish(await attachFiles(readResponsesItem(item, index), ctx))
+  );
   return messages;
 }
 
@@ -509,6 +570,39 @@ const CHAT_ROLES = new Set(['user', 'assistant', 'system', 'developer']);
  * @param {{files?: {resolve: Function}}} ctx
  */
 async function chatMessageFromCompletions(entry, index, ctx) {
+  return finish(await attachFiles(readChatMessage(entry, index), ctx));
+}
+
+/** How each content part of a Chat Completions message is read into the message under construction. */
+const CHAT_PART_READERS = new Map([
+  [
+    'text',
+    (part, _partParam, message) => {
+      if (typeof part.text === 'string') message.text.push(part.text);
+    }
+  ],
+  [
+    'image_url',
+    (part, partParam, message) => {
+      message.images.push(imageFromInline(part.image_url?.url, partParam));
+    }
+  ],
+  [
+    'file',
+    (part, partParam, message) => {
+      const file = part.file || {};
+      collectFilePart(
+        message,
+        'file',
+        { fileId: file.file_id, data: file.file_data, filename: file.filename },
+        partParam
+      );
+    }
+  ]
+]);
+
+/** One Chat Completions message → a message under construction (files not read yet). */
+function readChatMessage(entry, index) {
   const param = `messages[${index}]`;
   if (!entry || typeof entry !== 'object' || !CHAT_ROLES.has(entry.role)) {
     throw new InferenceApiError(
@@ -527,60 +621,20 @@ async function chatMessageFromCompletions(entry, index, ctx) {
     );
   }
   const message = newMessage(entry.role === 'developer' ? 'system' : entry.role);
-  const parts =
-    typeof entry.content === 'string'
-      ? [{ type: 'text', text: entry.content }]
-      : entry.content === null || entry.content === undefined
-        ? []
-        : entry.content;
-  if (!Array.isArray(parts)) {
-    throw new InferenceApiError(
-      400,
-      'invalid_messages',
-      `${param}.content must be a string or an array`,
-      {
-        param: `${param}.content`
-      }
-    );
-  }
-  for (let p = 0; p < parts.length; p += 1) {
-    const part = parts[p];
+  const parts = contentParts(entry.content, {
+    textType: 'text',
+    code: 'invalid_messages',
+    param,
+    allowEmpty: true
+  });
+  parts.forEach((part, p) => {
     const partParam = `${param}.content[${p}]`;
-    const type = part?.type;
-    if (type === 'text') {
-      if (typeof part.text === 'string') message.text.push(part.text);
-    } else if (type === 'image_url') {
-      message.images.push(imageFromInline(part.image_url?.url, partParam));
-    } else if (type === 'file') {
-      const file = part.file || {};
-      message.files.push(
-        await fileFromPart(
-          { fileId: file.file_id, data: file.file_data, filename: file.filename },
-          'file',
-          partParam,
-          ctx
-        )
-      );
-    } else {
-      throw new InferenceApiError(
-        400,
-        'unsupported_content_part',
-        `${partParam}: content parts of type ${String(type)} are not supported`,
-        { param: partParam }
-      );
-    }
-  }
-  if (message.role !== 'user' && (message.files.length > 0 || message.images.length > 0)) {
-    throw new InferenceApiError(
-      400,
-      'invalid_messages',
-      `${param}: only user messages carry files`,
-      {
-        param
-      }
-    );
-  }
-  return finish(message);
+    const read = CHAT_PART_READERS.get(part?.type);
+    if (!read) throw unsupportedPart(partParam, part?.type);
+    read(part, partParam, message);
+  });
+  assertMediaFromUser(message, 'invalid_messages', param);
+  return message;
 }
 
 /**
@@ -593,12 +647,8 @@ async function chatMessageFromCompletions(entry, index, ctx) {
  * @returns {Promise<Array>}
  * @throws {InferenceApiError}
  */
-export async function messagesFromChatCompletions(messages, ctx = {}) {
-  const out = [];
-  for (let index = 0; index < messages.length; index += 1) {
-    out.push(await chatMessageFromCompletions(messages[index], index, ctx));
-  }
-  return out;
+export function messagesFromChatCompletions(messages, ctx = {}) {
+  return mapInOrder(messages, (entry, index) => chatMessageFromCompletions(entry, index, ctx));
 }
 
 /** Whether a Chat Completions message carries a `file` content part. */
@@ -620,13 +670,7 @@ function hasFilePart(entry) {
  */
 export async function withReadFiles(messages, ctx = {}) {
   if (!messages.some(hasFilePart)) return messages;
-  const out = [];
-  for (let index = 0; index < messages.length; index += 1) {
-    out.push(
-      hasFilePart(messages[index])
-        ? toModelMessage(await chatMessageFromCompletions(messages[index], index, ctx))
-        : messages[index]
-    );
-  }
-  return out;
+  return mapInOrder(messages, async (entry, index) =>
+    hasFilePart(entry) ? toModelMessage(await chatMessageFromCompletions(entry, index, ctx)) : entry
+  );
 }

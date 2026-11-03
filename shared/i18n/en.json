@@ -729,7 +729,11 @@
         "maxUserBytes": "Per user",
         "maxUserBytesHelp": "Everything one user has in chats and tasks. 0 removes the limit.",
         "maxServerBytes": "Whole server",
-        "maxServerBytesHelp": "All uploaded files of all users together. 0 removes the limit."
+        "maxServerBytesHelp": "All uploaded files of all users together. 0 removes the limit.",
+        "maxApiFiles": "Inference API: files per user",
+        "maxApiFilesHelp": "The most files one user may keep through the Inference API (/v1/files). 0 removes the limit.",
+        "maxApiBytes": "Inference API: size per user",
+        "maxApiBytesHelp": "All files one user keeps through the Inference API together. 0 removes the limit."
       }
     },
     "voiceInput": {

@@ -154,7 +154,7 @@ export class AgentLoop {
       opts.resolveNativeWebSearchFallbackTools || defaultResolveNativeWebSearchFallbackTools;
   }
 
-  /** Register a seam `{ name, preStep, preTool, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
+  /** Register a seam `{ name, preStep, preTool, liftResult, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
   use(seam) {
     if (seam) this._seams.push(seam);
     return this;
@@ -988,6 +988,8 @@ export class AgentLoop {
     let message;
     let rawResult;
     let failure = null;
+    // Files a seam took out of the result before it was serialised (`liftResult`).
+    let lifted = null;
     // Sources the call reports beside its result (services/sources/toolCallScope).
     const reported = [];
     if (!toolDef) {
@@ -1043,6 +1045,13 @@ export class AgentLoop {
           message = rawResult;
           rawResult = undefined;
         } else {
+          // A seam may take binary payloads out of the result (an MCP tool's
+          // base64 blocks) before it is serialised and bounded, so they never
+          // reach the transcript or the run log's spill store.
+          const holder = { rawResult };
+          await runHooks(seams, 'liftResult', ctx, info, holder);
+          rawResult = holder.rawResult;
+          lifted = holder.lifted || null;
           message = {
             role: 'tool',
             tool_call_id: call.id,
@@ -1067,6 +1076,7 @@ export class AgentLoop {
       message: bound.message,
       durationMs: Date.now() - started,
       error: failure,
+      ...(lifted ? { lifted } : {}),
       // What the call found, taken from the full result: the previews that
       // reach clients are too short to hold it (see services/sources).
       sources: extractToolSources({
