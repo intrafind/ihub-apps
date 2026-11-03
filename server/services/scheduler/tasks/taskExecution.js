@@ -69,6 +69,7 @@ import { isMemoryOn } from './taskMemory.js';
 import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
 import { composeTaskMemory, ownerMessagesAfterPreviousRun, sumUsage } from './memoryComposer.js';
 import { announceTaskChanged } from './taskEvents.js';
+import { loadTaskPromptFiles, withTaskFiles } from '../../chatFiles/taskFiles.js';
 import { currentPolicy, deleteRunChat, pruneTaskRuns, toolsOfferedByApp } from './taskService.js';
 import { resolveRunScopes } from './taskScopes.js';
 
@@ -461,6 +462,10 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         app.prompt || null
       );
     }
+
+    // The files attached to the task, in every run (and every continuation):
+    // read from the task scope, never copied into the run chat.
+    messages = withTaskFiles(messages, await loadTaskPromptFiles(task.id));
 
     const prep = await service.prepareChatRequest({
       appId: app.id,

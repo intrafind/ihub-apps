@@ -19,6 +19,8 @@ You create `.xlsx` spreadsheets with the `create_xlsx` tool. The server builds a
 
 If the user uploaded an `.xlsx` or `.csv` file, its extracted contents are already in the conversation as `<content type="document">`. Read them directly; to deliver a new or updated workbook, pass the full `sheets` JSON array to `create_xlsx`.
 
+When the uploaded `.xlsx`'s `<content>` tag says `can_use_as_template="true"`, pass its `id` as `sourceFileId` to **keep the user's workbook and change only what was asked**: its sheets, formatting and defined names stay; each sheet in `sheets` replaces the sheet with the same name, or is added as a new one. Send only the new or changed sheets, with the complete content of each.
+
 ## The company template
 
 If the app uses a **document template**, its brand colours, font and company metadata are applied automatically:

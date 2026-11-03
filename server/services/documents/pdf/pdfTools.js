@@ -6,6 +6,8 @@ import { DocumentGenerationError } from '../renderService.js';
 import { heldGeneratedFile, holdGeneratedFile } from '../generatedFiles.js';
 import { assertSpecSize, parseStructured, toolFailure } from '../documentToolHelpers.js';
 import { applyTemplateToPdfSpec, templateBundleFor } from '../templates/applyTemplate.js';
+import { loadUploadedFileOriginal, PDF_FILE_MIME } from '../templateFiles.js';
+import { fillPdfFormFields } from './fillForm.js';
 
 /**
  * The tools the `pdf` system skill brings (see `server/systemSkills/pdf`).
@@ -68,6 +70,9 @@ function failure(error) {
  */
 export async function runCreatePdf(params) {
   try {
+    if (params.templateFileId && params.fillFormFields) {
+      return await runFillPdfForm(params);
+    }
     if (!params.markdown && !params.blocks) {
       throw new DocumentGenerationError(
         'Provide the document content in "markdown" and/or "blocks".',
@@ -79,7 +84,23 @@ export async function runCreatePdf(params) {
       app: params.appConfig,
       requested: params.template
     });
-    const { spec, assets } = applyTemplateToPdfSpec(specFromToolArgs(params), bundle);
+    const { spec, assets: templateAssets } = applyTemplateToPdfSpec(
+      specFromToolArgs(params),
+      bundle
+    );
+    let assets = templateAssets;
+    let letterheadName = null;
+    if (params.templateFileId) {
+      // The uploaded PDF is the stationery the new document is printed on.
+      const uploaded = await loadUploadedFileOriginal({
+        fileId: params.templateFileId,
+        mimeTypes: [PDF_FILE_MIME],
+        user: params.user,
+        chatId: params.chatId
+      });
+      letterheadName = uploaded.name;
+      assets = { ...(templateAssets || {}), letterhead: uploaded.buffer };
+    }
     const { buffer, pages, warnings } = await createPdf(spec, { assets });
     const file = holdGeneratedFile({
       user: params.user,
@@ -97,11 +118,63 @@ export async function runCreatePdf(params) {
       files: [file],
       ...(warnings.length ? { warnings } : {}),
       ...(bundle ? { template: bundle.template.id } : {}),
-      message: `Created "${file.name}" (${pages} page${pages === 1 ? '' : 's'})${bundle ? ` in the "${bundle.template.id}" document template` : ''}. The user sees a download card for it in the chat — do not add a link. Its file_id for preview_pdf is ${file.id}.`
+      ...(letterheadName ? { templateFile: letterheadName } : {}),
+      message: `Created "${file.name}" (${pages} page${pages === 1 ? '' : 's'})${bundle ? ` in the "${bundle.template.id}" document template` : ''}${letterheadName ? ` on the letterhead of the uploaded "${letterheadName}"` : ''}. The user sees a download card for it in the chat — do not add a link. Its file_id for preview_pdf is ${file.id}.`
     };
   } catch (error) {
     return failure(error);
   }
+}
+
+/**
+ * `create_pdf` with `templateFileId` and `fillFormFields`: fill the interactive
+ * form fields of the uploaded PDF in place and hand the result to the chat.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>}
+ */
+async function runFillPdfForm(params) {
+  const values = parseStructured(
+    params.fillFormFields,
+    'fillFormFields',
+    'an object of form field names and values'
+  );
+  const uploaded = await loadUploadedFileOriginal({
+    fileId: params.templateFileId,
+    mimeTypes: [PDF_FILE_MIME],
+    user: params.user,
+    chatId: params.chatId
+  });
+  const { buffer, filled, unknown, failed, fields } = await fillPdfFormFields(
+    uploaded.buffer,
+    values,
+    { flatten: params.flattenForm === true }
+  );
+  const base = (uploaded.name || 'form').replace(/\.pdf$/i, '');
+  const file = holdGeneratedFile({
+    user: params.user,
+    chatId: params.chatId,
+    data: buffer,
+    mimeType: 'application/pdf',
+    name: params.filename || `${base}-filled`
+  });
+  const warnings = [];
+  if (unknown.length) {
+    warnings.push(
+      `Unknown form fields were ignored: ${unknown.join(', ')}. Available fields: ${fields.map(f => f.name).join(', ')}.`
+    );
+  }
+  for (const entry of failed)
+    warnings.push(`Field "${entry.name}" was not filled: ${entry.reason}.`);
+  return {
+    success: true,
+    file,
+    files: [file],
+    filledFields: filled,
+    templateFile: uploaded.name,
+    ...(warnings.length ? { warnings } : {}),
+    message: `Filled ${filled.length} form field${filled.length === 1 ? '' : 's'} of "${uploaded.name}" and saved it as "${file.name}". The user sees a download card for it in the chat — do not add a link.`
+  };
 }
 
 /**

@@ -28,6 +28,10 @@
  *   POST   /api/scheduled-tasks/:taskId/runs/delete      delete `{ runIds }` or `{ all: true }` finished runs
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/cancel
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/approval   { decision, alwaysAllow }
+ *   GET    /api/scheduled-tasks/:taskId/files            files attached to the task (kept until the task is deleted)
+ *   POST   /api/scheduled-tasks/:taskId/files            attach a file (multipart `file`, or JSON `text` / `data`)
+ *   GET    /api/scheduled-tasks/:taskId/files/:fileId    one file (`?format=text` extracted text, `?download=1` original)
+ *   DELETE /api/scheduled-tasks/:taskId/files/:fileId    remove it
  *   DELETE /api/scheduled-tasks/:taskId/allowed-tools/:toolId  revoke "always allow"
  *
  * `authenticatedOnly`: tasks are owned resources, and an id that is not the
@@ -43,7 +47,18 @@ import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
-import { sendInternalError } from '../utils/responseHelpers.js';
+import { sendErrorResponse, sendInternalError, sendNotFound } from '../utils/responseHelpers.js';
+import { buildContentDisposition } from '../utils/safeContentDisposition.js';
+import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
+import {
+  ingestRequestFile,
+  isChatFileFailure,
+  isMultipartRequest,
+  parseChatFileMultipart,
+  sendChatFileFailure
+} from '../services/chatFiles/fileUploadRequest.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { canUserAccessResource } from '../utils/authorization.js';
 import configCache from '../configCache.js';
@@ -88,6 +103,16 @@ const memoryLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: userKey,
   message: { error: 'Too many memory edits, please try again later', code: 'RATE_LIMITED' }
+});
+
+/** Attaching files to a task: a person picking documents, not a script. */
+const fileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKey,
+  message: { error: 'Too many file uploads, please try again later', code: 'RATE_LIMITED' }
 });
 
 /** Starting runs by hand. */
@@ -542,6 +567,127 @@ export default function registerScheduledTaskRoutes(app) {
       res.json(result);
     } catch (error) {
       sendTaskError(res, error, 'clear task memory');
+    }
+  });
+
+  // ── attached files ─────────────────────────────────────────────────────────
+  // Files of the task definition, in the `task` scope of the chat-file store:
+  // they stay until the task (or the file) is deleted and every run sees them.
+
+  /** The file store for a request, or null once a 503 has been sent. */
+  function taskFileStore(res) {
+    const store = getChatFileRepository();
+    if (!store.isAvailable()) {
+      sendErrorResponse(res, 503, 'File storage is unavailable', {
+        details: { code: 'STORAGE_UNAVAILABLE' }
+      });
+      return null;
+    }
+    return store;
+  }
+
+  function sendTaskFileError(res, error, operation) {
+    if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
+    return sendTaskError(res, error, operation);
+  }
+
+  app.get(`${base}/:taskId/files`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+      const store = taskFileStore(res);
+      if (!store) return;
+      res.json({ items: await store.list(scope) });
+    } catch (error) {
+      sendTaskFileError(res, error, 'list task files');
+    }
+  });
+
+  app.post(`${base}/:taskId/files`, ...guard, fileLimiter, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      tasks.assertPrincipal(req.user);
+      const { task, ownerId, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+      const store = taskFileStore(res);
+      if (!store) return;
+      const taskApp = findByIdCaseInsensitive(configCache.getApps()?.data || [], task.appId);
+      const policy = chatFilePolicy(taskApp);
+      if (!policy.enabled) {
+        return sendErrorResponse(res, 503, 'File uploads are disabled', {
+          details: { code: 'UPLOADS_DISABLED' }
+        });
+      }
+      if (isMultipartRequest(req)) {
+        if (!(await parseChatFileMultipart(req, res, policy.quotas?.maxFileBytes))) return;
+      }
+      const file = await ingestRequestFile({
+        req,
+        scope,
+        ownerId,
+        appConfig: taskApp,
+        policy,
+        store
+      });
+      audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
+      res.status(201).json({ file });
+    } catch (error) {
+      sendTaskFileError(res, error, 'attach task file');
+    }
+  });
+
+  app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      if (!validateIdForPath(req.params.fileId, 'file', res)) return;
+      const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+      const store = taskFileStore(res);
+      if (!store) return;
+      const { fileId } = req.params;
+      if (req.query.format === 'text') {
+        const text = await store.getText(scope, fileId);
+        if (!text) return sendNotFound(res, 'File');
+        return res.json({ file: text });
+      }
+      const original = await store.getOriginal(scope, fileId);
+      if (!original) return sendNotFound(res, 'File');
+      if (original.discarded) {
+        return sendErrorResponse(
+          res,
+          410,
+          'The original file is not stored; its extracted text is',
+          {
+            details: { code: 'ORIGINAL_DISCARDED' }
+          }
+        );
+      }
+      const download = req.query.download === '1' || req.query.download === 'true';
+      res.setHeader('Content-Type', servedMediaType(original.mimeType));
+      res.setHeader('Content-Length', String(original.data.length));
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader(
+        'Content-Disposition',
+        download ? buildContentDisposition(original.name) : 'inline'
+      );
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(original.data);
+    } catch (error) {
+      sendTaskFileError(res, error, 'get task file');
+    }
+  });
+
+  app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+    try {
+      if (!validTaskId(req, res)) return;
+      if (!validateIdForPath(req.params.fileId, 'file', res)) return;
+      const { task, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+      const store = taskFileStore(res);
+      if (!store) return;
+      const deleted = await store.delete(scope, req.params.fileId);
+      if (!deleted) return sendNotFound(res, 'File');
+      audit(req, 'file-remove', task.id, 'Removed a file from scheduled task');
+      res.json({ deleted: true });
+    } catch (error) {
+      sendTaskFileError(res, error, 'delete task file');
     }
   });
 

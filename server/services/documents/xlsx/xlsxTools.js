@@ -11,6 +11,7 @@ import {
 import { holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToXlsxSpec, templateBundleFor } from '../templates/applyTemplate.js';
+import { loadUploadedFileOriginal, XLSX_FILE_MIME } from '../templateFiles.js';
 
 /**
  * The tool the `xlsx` system skill brings (see `server/systemSkills/xlsx`):
@@ -59,9 +60,12 @@ export function xlsxSpecFromToolArgs(args) {
  * @param {string} [options.template] - Requested template id.
  * @returns {Promise<{ buffer: Buffer, sheets: number, warnings: string[], templateId: string|null }>}
  */
-export async function createXlsx(spec, { app, template } = {}) {
+export async function createXlsx(spec, { app, template, sourceFile = null } = {}) {
   const bundle = await templateBundleFor({ format: 'xlsx', app, requested: template });
   const applied = applyTemplateToXlsxSpec(spec, bundle);
+  if (sourceFile?.buffer) {
+    applied.assets = { sourceWorkbook: sourceFile.buffer };
+  }
   const started = Date.now();
   const { buffer, meta, warnings } = await renderInWorker('xlsx', {
     spec: applied.spec,
@@ -74,7 +78,14 @@ export async function createXlsx(spec, { app, template } = {}) {
     template: applied.templateId,
     durationMs: Date.now() - started
   });
-  return { buffer, sheets: meta.sheets, warnings, templateId: applied.templateId };
+  return {
+    buffer,
+    sheets: meta.sheets,
+    added: meta.added || [],
+    replaced: meta.replaced || [],
+    warnings,
+    templateId: applied.templateId
+  };
 }
 
 /**
@@ -87,9 +98,21 @@ export async function createXlsx(spec, { app, template } = {}) {
 export async function runCreateXlsx(params) {
   try {
     const spec = xlsxSpecFromToolArgs(params);
-    const { buffer, sheets, warnings, templateId } = await createXlsx(spec, {
+    let sourceFile = null;
+    if (params.sourceFileId) {
+      const uploaded = await loadUploadedFileOriginal({
+        fileId: params.sourceFileId,
+        mimeTypes: [XLSX_FILE_MIME],
+        user: params.user,
+        chatId: params.chatId,
+        parameter: 'sourceFileId'
+      });
+      sourceFile = { buffer: uploaded.buffer, name: uploaded.name };
+    }
+    const { buffer, sheets, added, replaced, warnings, templateId } = await createXlsx(spec, {
       app: params.appConfig,
-      template: params.template
+      template: params.template,
+      sourceFile
     });
     const file = holdGeneratedFile({
       user: params.user,
@@ -104,8 +127,11 @@ export async function runCreateXlsx(params) {
       file,
       files: [file],
       ...(templateId ? { template: templateId } : {}),
+      ...(sourceFile
+        ? { sourceFile: sourceFile.name, addedSheets: added, replacedSheets: replaced }
+        : {}),
       ...(warnings.length ? { warnings } : {}),
-      message: `Created the Excel workbook "${file.name}" (${sheets} sheet${sheets === 1 ? '' : 's'})${templateId ? ` on the "${templateId}" document template` : ''}. The user sees a download card for it in the chat — do not add a link.`
+      message: `${sourceFile ? `Updated the uploaded workbook "${sourceFile.name}" (added: ${added.join(', ') || 'none'}; replaced: ${replaced.join(', ') || 'none'}) and saved it as` : 'Created the Excel workbook'} "${file.name}" (${sheets} sheet${sheets === 1 ? '' : 's'})${templateId ? ` on the "${templateId}" document template` : ''}. The user sees a download card for it in the chat — do not add a link.`
     };
   } catch (error) {
     return toolFailure(error, 'The Excel workbook could not be created.');

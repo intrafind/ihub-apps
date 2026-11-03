@@ -39,7 +39,6 @@
  *
  * @module routes/chats
  */
-import multer from 'multer';
 import { authenticatedOnly, authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
@@ -62,8 +61,13 @@ import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
-import { ChatFileQuotaError } from '../services/chatFiles/ChatFileRepository.js';
-import { ChatFileError, ingestChatFile } from '../services/chatFiles/ChatFileService.js';
+import {
+  isChatFileFailure,
+  isMultipartRequest,
+  ingestRequestFile,
+  parseChatFileMultipart,
+  sendChatFileFailure
+} from '../services/chatFiles/fileUploadRequest.js';
 import {
   canKeepChatHistory,
   isChatHistoryConfigured,
@@ -130,11 +134,7 @@ function sendPersistenceUnavailable(res) {
  * @returns {import('express').Response}
  */
 function sendChatStorageError(res, error, operation) {
-  if (error instanceof ChatFileQuotaError || error instanceof ChatFileError) {
-    return sendErrorResponse(res, error.status || 400, error.message, {
-      details: { code: error.code, ...(error.details || {}) }
-    });
-  }
+  if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
   if (error instanceof StorageError) {
     // Through the errors module rather than re-deriving the mapping here. The
     // `INVALID_CURSOR` special case this replaces was one route knowing a
@@ -147,59 +147,6 @@ function sendChatStorageError(res, error, operation) {
     }
   }
   return sendFailedOperationError(res, operation, error);
-}
-
-/**
- * Whether `req` is a `multipart/form-data` request.
- *
- * @param {import('express').Request} req
- * @returns {boolean}
- */
-function isMultipartRequest(req) {
-  return typeof req.is === 'function'
-    ? Boolean(req.is('multipart/form-data'))
-    : /^multipart\/form-data/i.test(String(req.headers?.['content-type'] || ''));
-}
-
-/**
- * Parse a single file upload from a multipart request into `req.file` and `req.body`.
- *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {number} maxFileBytes
- * @returns {Promise<boolean>} True when parsed, false when an error response was sent.
- */
-function parseChatFileMultipart(req, res, maxFileBytes) {
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    defParamCharset: 'utf8',
-    limits: {
-      fileSize: maxFileBytes > 0 ? maxFileBytes : 25 * 1024 * 1024,
-      files: 1,
-      fields: 10
-    }
-  }).single('file');
-
-  return new Promise(resolve => {
-    upload(req, res, error => {
-      if (!error) return resolve(true);
-      if (error?.code === 'LIMIT_FILE_SIZE') {
-        sendErrorResponse(
-          res,
-          413,
-          `A file may be at most ${Math.floor(maxFileBytes / (1024 * 1024)) || 1} MB`,
-          { details: { code: 'QUOTA_FILE_BYTES', limit: maxFileBytes } }
-        );
-        return resolve(false);
-      }
-      if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
-        sendBadRequest(res, 'Send at most one file in the "file" field');
-        return resolve(false);
-      }
-      sendBadRequest(res, error.message || 'Invalid multipart upload');
-      return resolve(false);
-    });
-  });
 }
 
 /**
@@ -592,43 +539,10 @@ export default function registerChatRoutes(app) {
         });
       }
 
-      const scope = repository.fileScope(chatId);
-      if (req.file) {
-        const descriptor = await ingestChatFile({
-          scope,
-          ownerId: owner.id,
-          name: req.file.originalname || req.body?.name || 'document',
-          mimeType: req.file.mimetype || req.body?.mimeType || 'application/octet-stream',
-          buffer: req.file.buffer,
-          text: typeof req.body?.text === 'string' ? req.body.text : null,
-          appConfig: chatApp,
-          policy,
-          store: fileStore
-        });
-        return res.status(201).json({ file: descriptor });
-      }
-
-      const body = req.body || {};
-      const hasText = typeof body.text === 'string' && body.text.length > 0;
-      const hasPages = Array.isArray(body.pageImages) && body.pageImages.length > 0;
-      const hasBase64 = typeof body.data === 'string' && body.data.length > 0;
-      if (!hasText && !hasPages && !hasBase64) {
-        return sendBadRequest(
-          res,
-          'Provide either a multipart "file" upload or a JSON body with "text" or "pageImages"'
-        );
-      }
-
-      const descriptor = await ingestChatFile({
-        scope,
+      const descriptor = await ingestRequestFile({
+        req,
+        scope: repository.fileScope(chatId),
         ownerId: owner.id,
-        name: body.name || body.fileName || 'document.txt',
-        mimeType: body.mimeType || body.fileType || 'text/plain',
-        buffer: hasBase64 ? Buffer.from(body.data, 'base64') : null,
-        text: typeof body.text === 'string' ? body.text : '',
-        pageImages: Array.isArray(body.pageImages) ? body.pageImages : null,
-        pages: body.pages,
-        formatLabel: body.formatLabel || null,
         appConfig: chatApp,
         policy,
         store: fileStore

@@ -699,16 +699,22 @@ function insertPresentationChild(root, element, after) {
  * @param {Object} options
  * @param {Buffer} options.template - The template package (`.pptx`/`.potx`).
  * @param {Object} [options.layouts] - Layout names by kind (admin's choice).
+ * @param {boolean} [options.keepTemplateSlides] - Keep the slides the template
+ *   file already has and add the new ones after them (`append`); by default
+ *   they are removed and only the master and layouts are used.
  * @returns {Promise<{ buffer: Buffer, slides: number, warnings: string[] }>}
  */
-export async function buildPptx(spec, { template: templateBuffer, layouts: overrides } = {}) {
+export async function buildPptx(
+  spec,
+  { template: templateBuffer, layouts: overrides, keepTemplateSlides = false } = {}
+) {
   const warnings = [];
   const slides = sanitizeSlides(spec.slides, { warnings, imageBytes: 0 });
   const template = await loadPresentationTemplate(templateBuffer);
   const { zip } = template;
   const types = await ContentTypes.read(zip);
   types.setOverride(PRESENTATION, PRESENTATION_TYPE);
-  await removeTemplateSlides(template);
+  if (!keepTemplateSlides) await removeTemplateSlides(template);
 
   const master = template.masters[0];
   const theme = master?.theme || { colors: {}, fonts: {} };
@@ -791,7 +797,12 @@ export async function buildPptx(spec, { template: templateBuffer, layouts: overr
     insertPresentationChild(presRoot, list, ['sldMasterIdLst']);
   }
 
-  const slideList = template.presentation.createElementNS(NS.p, 'p:sldIdLst');
+  const existingList = keepTemplateSlides ? firstChild(presRoot, 'sldIdLst') : null;
+  const slideList = existingList || template.presentation.createElementNS(NS.p, 'p:sldIdLst');
+  let nextSlideId = 255;
+  for (const entry of childElements(existingList, 'sldId')) {
+    nextSlideId = Math.max(nextSlideId, Number(entry.getAttribute('id')) || 0);
+  }
   builders.forEach((builder, index) => {
     const number = index + 1;
     const slidePath = uniquePath(zip, 'ppt/slides/slide{n}.xml');
@@ -829,21 +840,23 @@ export async function buildPptx(spec, { template: templateBuffer, layouts: overr
       target: relativeTarget(PRESENTATION, slidePath)
     });
     const entry = template.presentation.createElementNS(NS.p, 'p:sldId');
-    entry.setAttribute('id', String(255 + number));
+    entry.setAttribute('id', String(nextSlideId + number));
     entry.setAttributeNS(NS.r, 'r:id', relId);
     slideList.appendChild(entry);
   });
-  insertPresentationChild(presRoot, slideList, [
-    'sldMasterIdLst',
-    'notesMasterIdLst',
-    'handoutMasterIdLst'
-  ]);
+  if (!existingList) {
+    insertPresentationChild(presRoot, slideList, [
+      'sldMasterIdLst',
+      'notesMasterIdLst',
+      'handoutMasterIdLst'
+    ]);
+  }
   writeXmlPart(zip, PRESENTATION, template.presentation);
   writeRels(zip, PRESENTATION, template.presRels);
 
   zip.file(
     'docProps/app.xml',
-    `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>iHub Apps</Application><Slides>${builders.length}</Slides></Properties>`
+    `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>iHub Apps</Application><Slides>${childElements(slideList, 'sldId').length}</Slides></Properties>`
   );
   await setCoreProperties(zip, types, {
     title: spec.title,
@@ -853,5 +866,6 @@ export async function buildPptx(spec, { template: templateBuffer, layouts: overr
   });
   await removeUnreachableParts(zip, types);
   types.write(zip);
-  return { buffer: await writePackage(zip), slides: builders.length, warnings };
+  const totalSlides = childElements(slideList, 'sldId').length;
+  return { buffer: await writePackage(zip), slides: totalSlides, warnings };
 }

@@ -24,6 +24,7 @@ You create Word documents with the `create_docx` tool. You write the content as 
 
 - **Reading uploaded `.docx` files:** When the user uploads a Word document in chat, the platform has **already extracted its text and tables into `<content type="document">` in your prompt context**. Read, summarize or answer questions directly from that context.
 - **Revising an uploaded `.docx` file:** `create_docx` always generates a fresh Word document; it cannot insert Track Changes (`<w:ins>` / `<w:del>`) or comments into the original file in place. When the user asks to revise or rewrite an uploaded Word document, generate a new `.docx` from the extracted text in your context.
+- **Using an uploaded `.docx` as a template:** when its `<content>` tag says `can_use_as_template="true"`, pass its `id` as `templateFileId`. The new document then gets the upload's styles, headers/footers and page setup. `templateMode` decides what happens to the upload's own body text: `styles_only` (the default when the file has no `{{content}}` marker) drops it, `fill_placeholders` fills `{{title}}`, `{{date}}`, … and inserts your content at `{{content}}`, `append` adds your content after it. Do not claim to have used the user's template unless you passed `templateFileId`.
 
 ## The company template
 
