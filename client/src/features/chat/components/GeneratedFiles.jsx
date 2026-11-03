@@ -7,14 +7,14 @@ import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
-import { fileLookOf, formatBytes, saveName } from '../utils/artifactFiles';
-
-function blobOfBase64(data, mimeType) {
-  const binary = atob(data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mimeType });
-}
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
+import {
+  blobOfBase64,
+  fileLookOf,
+  formatBytes,
+  isOpenable,
+  saveName
+} from '../utils/artifactFiles';
 
 /**
  * One file a tool generated for the user, with a download button.
@@ -33,6 +33,10 @@ function GeneratedFileCard({ file, chatId }) {
   const customFetch = useArtifactFetcher();
   const [state, setState] = useState(file.unavailable ? 'missing' : 'idle');
   const canFetch = Boolean(file.data || (file.stored && file.id && chatId));
+  const viewer = useArtifactViewer();
+  // A file with a preview opens in the viewer; the others (Office documents,
+  // archives) keep the download button as their only action.
+  const openable = Boolean(viewer && canFetch && state !== 'missing' && isOpenable(file));
 
   const download = async () => {
     setState('loading');
@@ -62,14 +66,14 @@ function GeneratedFileCard({ file, chatId }) {
     .filter(Boolean)
     .join(' · ');
 
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 max-w-md">
+  const info = (
+    <>
       <div
         className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md ${look.className}`}
       >
         <Icon name={look.icon} size="md" />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 text-left">
         <div
           className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
           title={file.name}
@@ -86,6 +90,31 @@ function GeneratedFileCard({ file, chatId }) {
               : details}
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div
+      className={`group flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 max-w-md ${
+        openable ? 'hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs' : ''
+      }`}
+    >
+      {openable ? (
+        <button
+          type="button"
+          onClick={() => viewer.openArtifact(file)}
+          data-testid="generated-file-open"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          {info}
+          <span className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+            {t('chatMessage.generatedFiles.open', 'Open')}
+            <Icon name="chevron-right" size="xs" />
+          </span>
+        </button>
+      ) : (
+        info
+      )}
       {canFetch && state !== 'missing' && (
         <button
           type="button"

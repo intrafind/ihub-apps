@@ -97,9 +97,9 @@ const shareBody = {
   version: 1
 };
 
-function mount() {
+function mount(entry = '/share/shr_one') {
   return render(
-    <MemoryRouter initialEntries={['/share/shr_one']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/share/:shareId" element={<SharedChatPage />} />
       </Routes>
@@ -205,10 +205,35 @@ test('a single-artifact link shows the file, not a transcript', async () => {
   });
   mount();
   await waitFor(() => expect(screen.getByTestId('artifact-preview')).toHaveTextContent('art1'));
-  expect(screen.getByRole('heading', { name: 'page.html' })).toBeInTheDocument();
-  expect(screen.getByTestId('shared-artifact-download')).toBeInTheDocument();
+  // Immersive: one slim toolbar (name, download) and the artifact under it.
+  expect(screen.getByTestId('artifact-viewer-toolbar')).toBeInTheDocument();
+  expect(screen.getByTestId('artifact-viewer-name')).toHaveTextContent('page.html');
+  expect(screen.getByTestId('artifact-viewer-download')).toBeInTheDocument();
+  expect(screen.queryByTestId('artifact-viewer-close')).not.toBeInTheDocument();
   expect(screen.queryByTestId('messages')).not.toBeInTheDocument();
-  expect(screen.getByRole('note')).toHaveTextContent('This file is publicly accessible');
+  expect(screen.getByTestId('shared-artifact-notes')).toHaveTextContent(
+    'This file is publicly accessible'
+  );
   // No second request for a file list: the share already names its one file.
   expect(mockApi.fetchSharedChatArtifacts).not.toHaveBeenCalled();
+});
+
+test('?embed=1 shows the artifact without any toolbar', async () => {
+  auth.isLoading = false;
+  mockApi.fetchSharedChat.mockResolvedValueOnce({
+    share: {
+      id: 'shr_art',
+      mode: 'public',
+      target: 'artifact',
+      title: 'page.html',
+      createdAt: '2026-09-24T10:00:00.000Z',
+      artifact: { id: 'art1', name: 'page.html', kind: 'code', mimeType: 'text/plain', bytes: 12 },
+      readOnly: true
+    },
+    messages: [],
+    version: 1
+  });
+  mount('/share/shr_one?embed=1');
+  await waitFor(() => expect(screen.getByTestId('artifact-preview')).toHaveTextContent('art1'));
+  expect(screen.queryByTestId('artifact-viewer-toolbar')).not.toBeInTheDocument();
 });

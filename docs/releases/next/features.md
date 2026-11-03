@@ -356,9 +356,8 @@ Two new system skills, enabled per app by adding `xlsx` and `web-artifacts` to i
   contact other sites.
 - **Previews:** PDFs, HTML, SVG, CSV/TSV tables and Jupyter notebooks open in the panel, with a
   **Preview | Code** switch.
-- **Full screen:** the Files panel and the artifacts panel have a **Full screen** button next to
-  the close button. It widens the panel to the whole window, so a generated page or dashboard can
-  be tried at its real size; the button toggles back and Escape still closes the panel.
+- **Open:** the Files panel's preview has an **Open** button (or double-click a file) that opens the
+  file in the full-window viewer; see _Artifacts Open Full Window_.
 - **PDF, Word and PowerPoint:** `create_pdf` lays out fillable and pre-filled forms; `create_pdf`
   and `create_docx` take `showTitle`, `accentColor` and `date`; slides can show KPI metric cards.
   The fields of an uploaded PDF form are part of the text the model reads.
@@ -391,6 +390,27 @@ chat, without the conversation it came from. Open the Artifacts panel, select th
   (off by default).
 
 See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).
+
+## Artifacts Open Full Window, from a Click in the Chat
+
+A generated page, dashboard, picture or document now opens as itself: one slim toolbar and the
+artifact filling the rest of the window, edge to edge.
+
+- **Click to open:** the card of a generated file and a generated picture in a chat message open the
+  viewer. **Download** stays a separate button; Word, Excel and ZIP files, which have no preview,
+  still just download. Works in your chats and in shared chats.
+- **Toolbar:** name with a file menu, previous/next through the chat's artifacts, **Preview | Code**,
+  copy, **Share**, **Export** (HTML, Markdown, PDF), download and browser **Full screen**. On a phone
+  the actions are in the file menu. **Esc** or **×** closes it and focus returns to the card.
+- **Chat beside it:** the **Chat** button splits the window so the conversation stays usable next
+  to the artifact.
+- **Links:** the open artifact is in the address (`?artifact=…`): reload reopens it and Back closes
+  it. **Open in new tab** shows one artifact of your chat on its own page. A shared single file
+  opens in the same full-window layout; add `?embed=1` to drop the toolbar for embedding.
+- **Files panel:** the **Full screen** toggle is replaced by **Open**.
+- HTML runs in the same sandboxed frame as before and cannot reach iHub.
+
+See [Artifacts](../../artifacts.md#the-artifact-viewer).
 
 ## Marketplace: Offline Registry for Installations Without Internet Access
 
