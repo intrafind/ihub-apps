@@ -14,11 +14,9 @@ This comprehensive guide covers how to configure and customize AI applications i
 - [Property Details](#property-details)
 - [Advanced Configuration](#advanced-configuration-options)
 - [Variables and User Input](#variables)
-- [Tool Integration](#tool-integration)
-- [Structured Output](#structured-output)
-- [Upload Features](#upload-features)
-- [UI Customization](#ui-customization)
-- [Complete Examples](#complete-examples)
+- [Integrations](#integrations-binding-an-installed-integration)
+- [Upload Configuration](#upload-configuration)
+- [Settings Configuration Examples](#settings-configuration-examples)
 - [Web Search Configuration](#web-search-configuration)
 - [Troubleshooting](#troubleshooting)
   - [Common Configuration Issues](#common-configuration-issues)
@@ -333,7 +331,7 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 6. **Test the embedded app** to ensure it loads and functions correctly
 
-**Iframe Sandbox Permissions:**
+#### Iframe Sandbox Permissions
 
 The `sandbox` attribute restricts what the embedded application can do. Include only the permissions your application needs:
 
@@ -560,6 +558,7 @@ Each app is defined with the following essential properties:
 | `skills`                 | Array   | Optional. Array of skill identifiers (strings) that are available for this app. Skills extend app capabilities with reusable AI behaviors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `skillSettings`          | Object  | Optional. Controls how skills behave. See [Skill Settings](#skill-settings) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `documentTemplate`       | String  | Optional. Id of the [document template](document-templates.md) (corporate design) every PDF, Word and PowerPoint file of this app uses — documents the `pdf`, `docx` and `pptx` skills create and the chat's PDF export. Without it, the default template applies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `toolApproval`           | Object  | Optional. `{ "default": "never"\|"writes"\|"always", "tools": { "<tool or installation id>": mode } }`: ask a person before this app's tool calls run. It can only tighten what the admin set; a looser value is ignored. See [Tool Approval](tool-approval.md) |
 | `iassistant`             | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `imageGeneration`        | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `thinking`               | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -1095,6 +1094,8 @@ Every upload type has its own size limit, and a file is held to the limit of its
 | `upload.fileUpload.trackedChanges`    | String  | `"accepted"`                                                      | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view                                                                                                                                                                                            |
 | `upload.fileUpload.comments`          | String  | `"ignore"`                                                        | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to                                                                                                                                                                                                                                   |
 | `upload.fileUpload.speakerNotes`      | String  | `"ignore"`                                                        | `"include"` sends the speaker notes of PowerPoint and OpenDocument slides as `[Notes]` after the slide text                                                                                                                                                                                                            |
+| `uploads.storageMode`                 | String  | platform default (`original_and_text`)                            | Overrides `platform.uploads.storageMode` for this app: `original_and_text`, `server_text_only` or `client_text_only`. Note `uploads` (storage) versus `upload` (what users may attach). See [Chat and Task Files](chat-files.md#platform-settings-platformuploads) |
+| `allowUserTemplateUploads`            | Boolean | `false`                                                           | Let users use an uploaded Word or PowerPoint file as the template of a generated document (`templateFileId`) even when `documentTemplate` pins the corporate one. Without it, an app that pins a template keeps it. See [Chat and Task Files](chat-files.md) |
 
 ##### Files from storage providers
 
@@ -1367,7 +1368,7 @@ Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and l
 
 ### Integration scopes: where to search and whom to ask
 
-An integration can offer _scopes_ the user picks per chat: where it searches, or whom it asks. Today two integrations do:
+An integration can offer _scopes_ the user picks per chat: where it searches, or whom it asks. For example, two built-in integrations do (a definition can declare scopes too, as the CKAN publishers do):
 
 | Integration | `integrations` key | Scopes                                                                                                                                                                                                              | Offered to                                                     |
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |

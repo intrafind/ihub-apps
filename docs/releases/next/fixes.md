@@ -1,5 +1,13 @@
 # Fixes — Unreleased
 
+## Skill Files Load When the Assistant Leaves Out the Skill Name
+
+When the assistant read a file bundled with a skill (for example the pattern guide of the
+**web_artifacts** skill) and named only the file, the read failed with "skill_name and file_path
+parameters are required" and the assistant went on without the guide. The skill is now taken from
+the file's path, among the skills active in the chat and then the ones the app offers. Only when
+two skills bundle a file of that name does the assistant still have to say which one it means.
+
 ## Admin Sidebar in German
 
 With German as the interface language, the admin sidebar showed most section and page names in
@@ -13,21 +21,31 @@ route files were looked up with Windows path separators, which the file search d
 All three documents (Chat & General, Admin, OpenAI compatible) now list their endpoints on
 Windows too.
 
-## Accessibility: Admin Switches and the Change History Drawer
+## Accessibility: Keyboard and Screen Reader Fixes in the Admin and Chat
 
-The change history drawer and the on/off switches of the admin now work the same way with the
-keyboard and with a screen reader.
+Drawers, switches and a few buttons now work the same way with the keyboard and with a screen
+reader.
 
-- The change history drawer (the **History** button on the edit pages) takes keyboard focus when
-  it opens, keeps Tab inside, closes on Escape and returns focus to the **History** button. The
-  rollback confirmation on top of it can be reached with the keyboard, and Escape cancels it.
-- Every switch is one shared control that screen readers announce with its name and state. The
-  switches for **Enable PWA** and a workflow's **Enabled** had no name before. The switches on the
-  MCP gateway and OAuth pages now use the same indigo colour as the others.
-- On the OAuth page, clicking the text **Personal API Keys** or **Offer client credentials**
-  toggles its switch.
-- Workflow editor: for a workflow file without an `enabled` setting, the first click on the
+- **Drawers:** the change history drawer (the **History** button on the edit pages) and the
+  marketplace item detail take keyboard focus when they open, keep Tab inside, close on Escape and
+  return focus to the control that opened them. Screen readers announce the marketplace detail as a
+  dialog named after the item. The rollback confirmation on top of the history drawer can be reached
+  with the keyboard, and Escape cancels it.
+- **Switches:** every on/off switch is one shared control that screen readers announce with its
+  name and state. Many had no name before, among them **Enable PWA**, a workflow's **Enabled**, the
+  switches of the app editor's **Web Search** and **iAssistant** sections, the SSL and CORS
+  settings, the **Status** column of the user list and **Show technical details** of workflows.
+  Clicking the label text now toggles them, and the MCP gateway, OAuth, SSL, CORS and user switches
+  use the same indigo colour as the others.
+- **Workflow editor:** for a workflow file without an `enabled` setting, the first click on the
   **Enabled** switch did nothing. It now turns the workflow off.
+- **Chat + menu:** the message-context switches of the browser extension (**Include page**) are
+  menu entries now, reached with the arrow keys like the tools. A tool's switch is no longer an
+  extra, unnamed Tab stop inside its menu entry.
+- **Button names:** the language selector, the account menu in the sidebar and the admin search
+  button are named by the text they show (WCAG 2.5.3 Label in Name), for example "Select language:
+  EN" instead of "Select language". Speech-input users can activate them by reading the text on the
+  button.
 
 ## MCP Servers over WebSocket Honor the SSL Whitelist
 
@@ -40,27 +58,8 @@ outbound connection; hosts that are not whitelisted are still verified.
 
 Array query parameters of OpenAPI tools declared in `form` style are now sent as the document
 says (repeated by default, comma-joined for `explode: false`) instead of always comma-joined,
-which APIs such as CKAN rejected. `spaceDelimited` and `pipeDelimited` arrays are still sent
-comma-joined. A tool may also set `openapi.arrayStyle` to `json-list`.
-
-## Accessibility: Marketplace Details and the Remaining Switches
-
-The marketplace detail panel and the last checkbox-style switches now work like the other drawers
-and switches with the keyboard and with a screen reader.
-
-- **Marketplace:** the detail panel of an item takes keyboard focus when it opens, keeps Tab
-  inside, closes on Escape and returns focus to the item that opened it. Screen readers announce
-  it as a dialog named after the item.
-- The switches of the app editor's **Web Search** and **iAssistant** sections, the SSL and CORS
-  settings, the **Status** column of the user list and **Show technical details** of workflows
-  are announced as switches with their name and state. Most of the app editor switches had no
-  name before, and clicking their label text now toggles them. The SSL, CORS and user switches
-  now use the same indigo colour as the others.
-- **Chat + menu:** the message-context switches of the browser extension (**Include page**) are
-  menu entries now, reached with the arrow keys like the tools. A tool's switch is no longer an
-  extra, unnamed Tab stop inside its menu entry.
-- **Integrations:** the connection status badge of an installation shows a status dot next to
-  its text. "Disabled", "External" and "Update available" badges are amber.
+which some APIs reject. `spaceDelimited` and `pipeDelimited` arrays are still sent comma-joined.
+A tool may also set `openapi.arrayStyle` to `json-list`.
 
 ## Scheduled Tasks: "Schedule this…" Keeps the Chat's Tools
 
@@ -69,14 +68,6 @@ tools switched off, and saving the task failed with "The app does not offer: iFi
 names these tools by their integration or server (`iFinder`, an MCP server id), a task by the
 tools themselves. The form now switches on exactly the tools the chat had on and saves them; when
 the chat had every tool on, the task keeps the app's defaults.
-
-
-## Accessibility: Button Names Match Their Visible Text
-
-The language selector, the account menu in the sidebar and the admin search button are now
-named by the text they show (WCAG 2.5.3 Label in Name), for example "Select language: EN"
-instead of "Select language". Speech-input users can activate them by reading the text on the
-button, and screen readers announce the same words that are visible.
 
 ## Chat: A Skill Used Several Times Shows Once Above the Answer
 
@@ -91,11 +82,11 @@ Each skill now appears there once.
 ## Marketplace: Downloads Stay Off Internal Addresses
 
 A registry's catalog could make the iHub server fetch from any address, including internal ones
-such as the cloud metadata endpoint: an item, a skill's or an integration's companion files and
-redirects were downloaded wherever the catalog pointed. The server now fetches from the
-registry's own host (also on a private address, so registries inside the company network keep
-working), from `api.github.com` and `raw.githubusercontent.com` for a registry on GitHub, and
-from any other host only when it has a public address.
+such as the cloud metadata endpoint: an item, a skill's companion files and redirects were
+downloaded wherever the catalog pointed. The server now fetches from the registry's own host (also
+on a private address, so registries inside the company network keep working), from
+`api.github.com` and `raw.githubusercontent.com` for a registry on GitHub, and from any other host
+only when it has a public address.
 
 - Every redirect is checked again, at most 5 are followed, and a redirect to another host gets
   none of the registry's credentials (between the GitHub hosts they are kept).
@@ -111,12 +102,12 @@ See [Marketplace → Security](../../marketplace.md#security).
 
 ## Answer Badge: "Based on Connected Systems" for Integration and MCP Answers
 
-Answers built from an MCP server, a remote agent or an installed integration such as a people
-directory were badged "Based on AI knowledge", although the data came from that system; a Jira
-search was badged "Based on web search". They now show **Based on connected systems**.
+Answers built from an MCP server, a remote agent or an integration such as a people directory
+were badged "Based on AI knowledge", although the data came from that system; a Jira search was
+badged "Based on web search". They now show **Based on connected systems**.
 
-- Web search integrations (Brave, Qwant, STAAN) keep "Based on web search", iFinder keeps "Based
-  on iFinder documents".
+- Web search engines (Brave, Qwant, STAAN) keep "Based on web search", iFinder keeps "Based on
+  iFinder documents".
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
 
@@ -131,11 +122,11 @@ Responses, the imported models keep that `…/openai/responses?api-version=…` 
 
 ## Workflows Continue as Their Own User After a Person Answers
 
-A workflow or agent run that paused for a `human` step, a question or a tool approval now continues
-as the user (or agent) it started with. Before, the steps after the answer ran as the person who
-answered, with their groups and their connected accounts — although anyone in an approver group
-could be the one answering. Who answered is now documented on the answer and in the run's history:
-their id, display name, the approver groups that let them answer, and the time.
+A workflow or agent run that paused for a `human` step or a question now continues as the user (or
+agent) it started with. Before, the steps after the answer ran as the person who answered, with
+their groups and their connected accounts — although anyone in an approver group could be the one
+answering. Who answered is now documented on the answer and in the run's history: their id,
+display name, the approver groups that let them answer, and the time.
 
 **Workflows and agent runs that are paused when you upgrade must be started again.** They do not
 record who they run as, so they cannot be continued after an answer: they stop with

@@ -50,6 +50,9 @@ endpoints require authentication — there is no anonymous access to the inferen
 | `GET` / `POST` / `DELETE` | `/api/inference/v1/conversations/{id}`  | Read, update metadata, delete                                      |
 | `GET` / `POST` | `/api/inference/v1/conversations/{id}/items`   | List / add items (chat messages)                                   |
 | `GET` / `DELETE` | `/api/inference/v1/conversations/{id}/items/{itemId}` | Read / remove one item                                  |
+| `POST` / `GET` | `/api/inference/v1/files`                        | Upload a file / list the caller's files (see [Files](#files))      |
+| `GET` / `DELETE` | `/api/inference/v1/files/{id}`                 | Read a file's metadata / delete it                                 |
+| `GET`  | `/api/inference/v1/files/{id}/content`                   | Download the file's content                                        |
 
 The `base_url` you give an OpenAI client is therefore:
 
@@ -223,7 +226,7 @@ Mistral `json_schema`, vLLM):
 | Field | Notes |
 | --- | --- |
 | `model` | **Required.** Model id or app (`app:<appId>[/<modelId>]`) |
-| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`; PDF, Word (`.docx`), PowerPoint (`.pptx`), OpenDocument (`.odt`, `.ods`, `.odp`), e-mail (`.eml`, Outlook `.msg`) and text files — the text is extracted on the server, see [Documents](#documents)). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
+| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`, or a `file_id` from [`/files`](#files); PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), OpenDocument (`.odt`, `.ods`, `.odp`), e-mail (`.eml`, Outlook `.msg`) and text files — the text is extracted on the server, see [Documents](#documents)). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
 | `instructions` | System instructions — plain models only |
 | `prompt` | App variables — apps only |
 | `text.format` | `text`, `json_object` or `json_schema` — plain models only |
@@ -235,8 +238,9 @@ Mistral `json_schema`, vLLM):
 
 Not supported, answered with `400 unsupported_parameter`: `previous_response_id` (use
 `conversation`), `background`, `tools` (OpenAI-hosted tools do not exist here; an app runs its
-own) and `tool_choice` other than `auto`/`none`. Provider-hosted file references (`file_id`,
-`file_url`) and remote image URLs are refused too — send files inline.
+own) and `tool_choice` other than `auto`/`none`. Remote file and image URLs (`file_url`, image
+`file_id`, `image_url` with `http(s)`) are refused — send files inline or upload them to
+[`/files`](#files) and reference the `file_id`.
 
 The response is a standard `response` object: `output[]` holds `message` items (`output_text`
 content; for structured output the text is the validated JSON and `parsed` carries the parsed
@@ -254,7 +258,7 @@ Streaming (`stream: true`) sends `event:`/`data:` pairs with a `sequence_number`
 
 ### Documents
 
-Files travel inline (`input_file` in the Responses API, `file` content parts in Chat Completions): a `data:` URL or base64 with a `filename`. The server turns them into text the same way the chat upload does, so a file reads the same through the API as in the browser (see [File Upload → Extracted text format](file-upload-feature.md#extracted-text-format)):
+Files travel inline (`input_file` in the Responses API, `file` content parts in Chat Completions): a `data:` URL or base64 with a `filename`, or by reference: a `file_id` from [`/files`](#files). The server turns them into text the same way the chat upload does, so a file reads the same through the API as in the browser (see [File Upload → Extracted text format](file-upload-feature.md#extracted-text-format)):
 
 | File | What the model reads |
 | --- | --- |
@@ -265,11 +269,19 @@ Files travel inline (`input_file` in the Responses API, `file` content parts in 
 | E-mail (`.eml`, Outlook `.msg`) | `Subject`, `From`, `To`, `Cc` and `Date` lines, then the body (plain text, else HTML as text, else the RTF of an older Outlook). Attachments are named in an `Attachments:` line; their content is not read. A `.msg` is recognised by its file name whatever type it is sent with |
 | Text types | Read as UTF-8 |
 
-Excel files are not accepted through the API (`unsupported_file_type`): reading them needs the SheetJS library, which the server does not carry. Send the data as CSV or text.
+Excel workbooks (`.xlsx`) go through the same pipeline and are read as `[Sheet: name]` tables, like OpenDocument spreadsheets. A scanned PDF (no text layer) is rendered to page images for the model instead of being refused.
 
-Errors, all `400`: `invalid_file` (not a readable PDF, Word, PowerPoint, OpenDocument or e-mail file, empty data, or a package that is damaged or would unpack to an unreasonable size: more than 5,000 parts, 30 MB for one part or 100 MB in total), `file_has_no_text` (a scanned PDF or an empty Word, PowerPoint, OpenDocument or e-mail file — send the pages as `input_image`) and `unsupported_file_type`.
+Errors, all `400`: `invalid_file` (not a readable PDF, Word, PowerPoint, OpenDocument or e-mail file, empty data, or a package that is damaged or would unpack to an unreasonable size: more than 5,000 parts, 30 MB for one part or 100 MB in total), `file_has_no_text` (an empty Word, PowerPoint, OpenDocument or e-mail file; a PDF without text when the admin switch below is off — send the pages as `input_image`) and `unsupported_file_type`.
 
-The admin switch **Structured document extraction** (Admin → Features) applies here as well: when it is off, PDFs are read as one run of words per page without markers and Word, PowerPoint and OpenDocument files are not accepted, as before.
+The admin switch **Structured document extraction** (Admin → Features) applies here as well: when it is off, PDFs are read as one run of words per page without markers and Word, PowerPoint, Excel and OpenDocument files are not accepted, as before.
+
+### Files
+
+`POST /api/inference/v1/files` stores a file for the caller so later requests can reference it by `file_id` instead of sending the bytes again. Send a multipart `file` (with an optional `purpose`), or JSON with `base64` or `content`. The file goes through the same checks, malware scan and extraction as a chat upload in the browser ([Durable chat and task files](chat-files.md)).
+
+- Files are private to the caller (user scope). `GET /files` lists them (optionally filtered by `purpose`), `GET /files/{id}` returns the metadata, `GET /files/{id}/content` the content and `DELETE /files/{id}` removes it.
+- A `file_id` can be used as an `input_file` (Responses API) or `file` part (Chat Completions and conversation items). A file sent inline with a turn of a stored conversation is stored with that conversation, so the iHub chat shows it and later turns can reference it.
+- Limits: the per-file size and the platform's upload types apply, and the caller's files count against `quotas.maxApiFiles` / `quotas.maxApiBytes` (defaults 200 files / 1 GB), not the per-chat limits. Errors: `413` when a quota is exceeded, `507` when the server-wide storage is full, `503 files_unavailable` without file storage and `403 uploads_disabled` when uploads are off. See [Chat files → Limits](chat-files.md).
 
 ### Conversations API
 
@@ -280,7 +292,8 @@ it is the key's owner. Conversations need chat persistence (`chatPersistence` fe
 `platform.chats`); without it they answer `503 conversations_unavailable`, and anonymous callers
 get `401`.
 
-- `POST /conversations` creates one, optionally with up to 20 text `items` (user/assistant) and
+- `POST /conversations` creates one, optionally with up to 20 `items` (user/assistant; text, and
+  `input_file` / `file` parts with `file_data` or a `file_id`) and
   `metadata` (up to 16 string pairs). It is not tied to an app yet.
 - `POST /responses` with `conversation` loads the history, runs the turn and appends its input
   and output. The **first response binds the conversation** to the app part of its `model` (or
@@ -299,7 +312,7 @@ get `401`.
 - `GET /conversations/{id}/items` (`limit` 1–100, default 20; `order` `desc` by default;
   `after`) returns the messages as items: a user item holds the **raw input** (the variables it
   was rendered with in `metadata.variables`, attached files as `input_file` entries with their
-  names); an assistant item holds the answer, the **validated JSON as `parsed`** and the model
+  names and, for a stored file, its `file_id`); an assistant item holds the answer, the **validated JSON as `parsed`** and the model
   that produced it in `metadata.model`. A failed answer is `status: "incomplete"` with
   `metadata.error`.
 - `POST /conversations/{id}` updates `metadata`; `DELETE /conversations/{id}` deletes the chat
@@ -709,8 +722,9 @@ OpenAI's nested shape:
 - **Reasoning content is not forwarded.** Provider "thinking" deltas are consumed server-side and
   never appear in the OpenAI wire.
 - **Compatibility scope.** The API implements `models`, `chat/completions`, a subset of
-  `responses` and `conversations`. Other OpenAI endpoints (legacy `completions`, `embeddings`,
-  `images`, `files`) are not exposed here; responses are not stored or retrievable by id (use a
+  `responses`, `conversations` and `files` (uploads for use as input, not OpenAI's batch or
+  fine-tuning files). Other OpenAI endpoints (legacy `completions`, `embeddings`, `images`) are
+  not exposed here; responses are not stored or retrievable by id (use a
   conversation).
 - **App requests are stateless in `/chat/completions`.** Use `/responses` with a `conversation`
   for a stored, multi-turn chat.

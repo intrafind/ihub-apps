@@ -64,15 +64,24 @@ the owner creates another link.
 | User and assistant messages, as they were stored                | Messages sent after the share, edits made after it   |
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
 | The **public sources** of an answer (web pages) and its citations | Sources found with the owner's permissions: iFinder and iAssistant documents, MCP and tool results, pages only the page reader read |
-| The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
+| The name, type and size of an uploaded file                     | The uploaded file itself — unless the owner chose to share it (see below) |
 | What an answer did: searches, tool calls, public web sources, workflow steps |                                                      |
 |                                                                 | The documents the owner's searches found, in that activity |
 
 Uploads deserve the explicit note: a stored message carries an attachment
-only as `{ type, name, bytes }` (see
-[Chat Persistence](chat-persistence.md#the-data-model)), the payload stays in
-the request that carried it. The viewer therefore shows _Attachment not
-included: plan.pdf_ where the owner saw the file.
+only as a descriptor (`{ id, type, name, bytes }`, see
+[Chat Persistence](chat-persistence.md#the-data-model)); the file itself is
+stored separately as a [chat file](chat-files.md). By default a share does not
+include it, and the viewer shows _Attachment not included: plan.pdf_ where the
+owner saw the file.
+
+When creating a share, the owner can choose what viewers may open of the
+attached files (`uploadedFilesAccess`): **none** (the default), the
+**extracted text** the assistant read, or the **original** file. The owner
+ticks the files to include (`sharedFileIds`); viewers see only those, never
+where a file came from (mailbox, connector path). They are served through
+`GET /api/shares/:shareId/files[/:fileId]`, and the chat's **Files** drawer
+shows them in the shared chat.
 
 A stored message holds what the transcript holds: the text, the failure that
 cut an answer short, the attachment descriptors, the artifact descriptors, the

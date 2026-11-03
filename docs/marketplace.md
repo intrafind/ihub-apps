@@ -1,6 +1,6 @@
 # Marketplace
 
-The marketplace installs apps, models, prompts, skills and workflows from **registries** — catalogs
+The marketplace installs apps, models, prompts, skills, workflows and integrations from **registries** — catalogs
 published as a `catalog.json` file, for example in a Git repository. Admins browse the catalogs in
 **Admin → Marketplace**, read what an item does and install it with one click. iHub keeps track of
 what it installed, so an item can later be updated, uninstalled or handed over to manual
@@ -132,7 +132,7 @@ fetched from the registry and rendered when you open them, without installing an
 - **Integrations** are definition folders (an `integration.json` with its OpenAPI document, icon
   and README as companions). Installing one makes it available in the catalog under **Admin →
   Integrations**, where **Set up integration** opens the install wizard; the
-  installation itself (URL, sign-in, groups, actions) is created there, so one definition can be
+  installation itself (URL, sign-in, actions) is created there, so one definition can be
   installed several times. See [Integrations](integrations.md).
 - **Detach** keeps the files but removes the installation record. The item is then maintained by
   hand like anything an admin created, and the marketplace shows it as **Local copy**.

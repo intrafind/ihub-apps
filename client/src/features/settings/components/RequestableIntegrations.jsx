@@ -12,6 +12,8 @@ import { fetchRequestableIntegrations, requestIntegration } from '../../../api/u
 export const MAX_REASON_LENGTH = 500;
 /** From this many entries on, the list gets a search box. */
 const SEARCH_FROM = 6;
+/** Cards shown before "Show all"; a search shows every match. */
+const COLLAPSED_COUNT = 6;
 
 const FIELD =
   'block w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-indigo-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400';
@@ -68,7 +70,8 @@ function RequestState({ request }) {
 
 /**
  * "Not available yet" on Settings → Integrations (#2926): the catalog
- * integrations the user's groups cannot use yet, read-only, with **Request**.
+ * integrations the user's groups cannot use yet, read-only, with **Request**, as a compact card grid like the
+ * marketplace: the first few cards, then **Show all**.
  * Requesting asks for an optional reason; afterwards the row shows
  * _Requested_ until an admin decides (_Approved, being set up_ or _Declined_,
  * with the admin's note). A declined integration can be asked for again.
@@ -87,6 +90,7 @@ export default function RequestableIntegrations({ onMessage }) {
   const [composing, setComposing] = useState(null); // definition id with the reason form open
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +113,10 @@ export default function RequestableIntegrations({ onMessage }) {
   );
 
   if (!items || items.length === 0) return null;
+
+  // A search shows every match; otherwise the grid stays short until expanded.
+  const collapsible = !normalized && shown.length > COLLAPSED_COUNT;
+  const visible = collapsible && !expanded ? shown.slice(0, COLLAPSED_COUNT) : shown;
 
   const openForm = item => {
     setComposing(item.definition);
@@ -207,58 +215,59 @@ export default function RequestableIntegrations({ onMessage }) {
           {t('integrations.requests.noMatches', 'Nothing in the catalog matches.')}
         </p>
       ) : (
-        <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
-          {shown.map(item => {
-            const requested = isRequested(item);
-            const formOpen = composing === item.definition;
-            const reasonId = `${baseId}-${item.definition}-reason`;
-            return (
-              <li
-                key={item.definition}
-                className="px-4 py-4"
-                data-testid="requestable-row"
-                data-definition={item.definition}
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+        <>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visible.map(item => {
+              const requested = isRequested(item);
+              const formOpen = composing === item.definition;
+              const reasonId = `${baseId}-${item.definition}-reason`;
+              const declined = item.request?.status === 'declined';
+              return (
+                <li
+                  key={item.definition}
+                  className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-blue-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-600"
+                  data-testid="requestable-row"
+                  data-definition={item.definition}
+                >
+                  <div className="flex items-start gap-3">
                     <IntegrationLogo
                       entry={{ id: item.definition, name: item.name, icon: item.icon }}
                     />
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      <h3 className="break-words text-base font-semibold text-gray-900 dark:text-gray-100">
                         {item.name}
                       </h3>
                       {item.publisher && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                        <p className="break-words text-xs text-gray-600 dark:text-gray-400">
                           {t('integrations.requests.publisher', 'by {{publisher}}', {
                             publisher: item.publisher
                           })}
                         </p>
                       )}
-                      {item.description && (
-                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                          {item.description}
-                        </p>
-                      )}
-                      {item.request?.status === 'declined' && item.request.note && (
-                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                          {t('integrations.requests.adminNote', 'Administrator: {{note}}', {
-                            note: item.request.note
-                          })}
-                        </p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pl-4">
+                  {item.description && (
+                    <p className="mt-3 break-words text-sm text-gray-600 dark:text-gray-400">
+                      {item.description}
+                    </p>
+                  )}
+                  {declined && item.request.note && (
+                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('integrations.requests.adminNote', 'Administrator: {{note}}', {
+                        note: item.request.note
+                      })}
+                    </p>
+                  )}
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
                     <RequestState request={item.request} />
                     {!requested && !formOpen && (
                       <button
                         type="button"
-                        className={PRIMARY_BUTTON}
+                        className={`${PRIMARY_BUTTON} ml-auto`}
                         disabled={busy === item.definition}
                         onClick={() => openForm(item)}
                         aria-label={
-                          item.request?.status === 'declined'
+                          declined
                             ? t(
                                 'integrations.requests.requestAgainNamed',
                                 'Request {{name}} again',
@@ -271,67 +280,84 @@ export default function RequestableIntegrations({ onMessage }) {
                               })
                         }
                       >
-                        {item.request?.status === 'declined'
+                        {declined
                           ? t('integrations.requests.requestAgain', 'Request again')
                           : t('integrations.requests.request', 'Request')}
                       </button>
                     )}
                   </div>
-                </div>
-                {formOpen && (
-                  <form
-                    className="mt-3 space-y-2 sm:ml-13"
-                    onSubmit={event => {
-                      event.preventDefault();
-                      void send(item);
-                    }}
-                  >
-                    <label
-                      htmlFor={reasonId}
-                      className="block text-sm font-medium text-gray-800 dark:text-gray-200"
+                  {formOpen && (
+                    <form
+                      className="mt-3 space-y-2"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        void send(item);
+                      }}
                     >
-                      {t('integrations.requests.reasonLabel', 'Why do you need it? (optional)')}
-                    </label>
-                    <textarea
-                      id={reasonId}
-                      rows={2}
-                      maxLength={MAX_REASON_LENGTH}
-                      value={reason}
-                      onChange={event => setReason(event.target.value)}
-                      aria-describedby={`${reasonId}-count`}
-                      className={FIELD}
-                    />
-                    <p
-                      id={`${reasonId}-count`}
-                      className="text-xs text-gray-600 dark:text-gray-400"
-                    >
-                      {t('integrations.requests.reasonCount', '{{count}} of {{max}} characters', {
-                        count: reason.length,
-                        max: MAX_REASON_LENGTH
-                      })}
-                    </p>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className={SECONDARY_BUTTON}
-                        onClick={() => setComposing(null)}
+                      <label
+                        htmlFor={reasonId}
+                        className="block text-sm font-medium text-gray-800 dark:text-gray-200"
                       >
-                        {t('common.cancel', 'Cancel')}
-                      </button>
-                      <button
-                        type="submit"
-                        className={PRIMARY_BUTTON}
-                        disabled={busy === item.definition}
+                        {t('integrations.requests.reasonLabel', 'Why do you need it? (optional)')}
+                      </label>
+                      <textarea
+                        id={reasonId}
+                        rows={2}
+                        maxLength={MAX_REASON_LENGTH}
+                        value={reason}
+                        onChange={event => setReason(event.target.value)}
+                        aria-describedby={`${reasonId}-count`}
+                        className={FIELD}
+                      />
+                      <p
+                        id={`${reasonId}-count`}
+                        className="text-xs text-gray-600 dark:text-gray-400"
                       >
-                        {t('integrations.requests.send', 'Send request')}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                        {t('integrations.requests.reasonCount', '{{count}} of {{max}} characters', {
+                          count: reason.length,
+                          max: MAX_REASON_LENGTH
+                        })}
+                      </p>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className={SECONDARY_BUTTON}
+                          onClick={() => setComposing(null)}
+                        >
+                          {t('common.cancel', 'Cancel')}
+                        </button>
+                        <button
+                          type="submit"
+                          className={PRIMARY_BUTTON}
+                          disabled={busy === item.definition}
+                        >
+                          {t('integrations.requests.send', 'Send request')}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          {collapsible && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                className={SECONDARY_BUTTON}
+                aria-expanded={expanded}
+                onClick={() => setExpanded(value => !value)}
+              >
+                {expanded
+                  ? t('integrations.requests.showFewer', 'Show fewer')
+                  : t('integrations.requests.showAll', 'Show all {{count}}', {
+                      count: shown.length
+                    })}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

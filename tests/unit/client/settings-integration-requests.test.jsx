@@ -187,6 +187,23 @@ describe('Not available yet', () => {
     expect(screen.getByText('Nothing in the catalog matches.')).toBeInTheDocument();
   });
 
+  test('a long list is a short grid until Show all', async () => {
+    mockFetch.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => item(`com.example/n${index}`, `Name ${index}`))
+    );
+    render(<RequestableIntegrations onMessage={jest.fn()} />);
+    expect(await screen.findAllByTestId('requestable-row')).toHaveLength(6);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 10' }));
+    expect(screen.getAllByTestId('requestable-row')).toHaveLength(10);
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(screen.getAllByTestId('requestable-row')).toHaveLength(6);
+
+    // A search looks through every entry, not only the visible ones.
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'name 9' } });
+    expect(screen.getAllByTestId('requestable-row')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Show/ })).toBeNull();
+  });
+
   test('speaks German', async () => {
     await i18n.changeLanguage('de');
     render(<RequestableIntegrations onMessage={jest.fn()} />);

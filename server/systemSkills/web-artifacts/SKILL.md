@@ -59,7 +59,7 @@ When creating an `.svg` artifact (`format: "svg"`):
 - Use explicit `font-family="system-ui, -apple-system, sans-serif"` and explicit `fill` attributes on `<text>` elements.
 - Include a background `<rect width="100%" height="100%" rx="12" fill="…" />` so dark text remains readable in both light and dark UI themes.
 
-For ready-to-use patterns (interactive calculators, KPI dashboards, sortable tables, inline SVG charts, and seeded HTML5 `<canvas>` generative visuals), read `references/ui-and-charts.md` with `read_skill_resource`.
+For ready-to-use patterns (interactive calculators, KPI dashboards, sortable tables, inline SVG charts, and seeded HTML5 `<canvas>` generative visuals), read `references/ui-and-charts.md` with `read_skill_resource` (`skill_name` `web-artifacts`, `file_path` `references/ui-and-charts.md`).
 
 ## Answer
 

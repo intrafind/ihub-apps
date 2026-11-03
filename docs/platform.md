@@ -1112,7 +1112,7 @@ The search settings belong to iFinder search; iAssistant has its own in the [`ia
 
 ### `jwtSubjectField` supported values
 
-The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field of `integrations.json`, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
+The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field of `integrations.json`, see `ENV_VAR_SKIP_PATHS_BY_KEY` in `server/configCache.js`).
 
 Resolution is **strict**: the configured field is the only one consulted. If the authenticated user has no value for it, token generation fails with an error naming the setting and the missing field. It does not fall back to another identifier — a valid token for the wrong subject is worse than no token, because iFinder keys its user mapping on `sub` and the mismatch is invisible on both sides.
 
@@ -1229,6 +1229,38 @@ iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to
 | `consentMemoryDays`                  | Number  | `90`                                   | Days a user consent decision is remembered before re-prompting                          |
 
 For setup and client registration see [OAuth Integration Guide](oauth-integration-guide.md).
+
+## Uploaded Files Configuration
+
+### **uploads**
+
+Controls the files users attach to chats and scheduled tasks and what the server keeps of them (the
+default is to store the original and its extracted text). Edited in **Admin → Chat history →
+Uploaded files**; see [Chat and Scheduled-Task Files](chat-files.md#platform-settings-platformuploads)
+for the meaning of every setting.
+
+```json
+{
+  "uploads": {
+    "enabled": true,
+    "storageMode": "original_and_text",
+    "originalRetentionDays": 14,
+    "evictOldestOriginalsOnQuota": true,
+    "quotas": {
+      "maxFileBytes": 26214400,
+      "maxChatBytes": 104857600,
+      "maxChatFiles": 25,
+      "maxUserBytes": 1073741824,
+      "maxServerBytes": 53687091200,
+      "maxApiFiles": 200,
+      "maxApiBytes": 1073741824
+    }
+  }
+}
+```
+
+`storageMode` is `original_and_text`, `server_text_only` or `client_text_only`; an app can override it
+with `uploads.storageMode`. A quota of zero or less means no cap.
 
 ## Cloud Storage Configuration
 

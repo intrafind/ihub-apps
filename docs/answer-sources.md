@@ -96,9 +96,10 @@ sources after every call (`services/sources/index.js`). The first way that appli
 
 ### 1. Declare a mapping in the tool definition (no code)
 
-For a tool whose result does not speak the contract, for example an OpenAPI tool, add `sources`
-to its definition in `contents/tools/<id>.json`. It can go on the whole tool, or on one function
-(`functions.<name>.sources`, which wins):
+For an action whose result does not speak the contract, for example an OpenAPI or HTTP action, add
+a mapping to the integration definition's `sources` map, keyed by the action name (see
+[Integrations → Writing a definition](integrations.md#writing-a-definition)). A script tool file can carry `sources` on the whole tool or on one function
+(`functions.<name>.sources`, which wins). The mapping looks like this:
 
 ```json
 "sources": {

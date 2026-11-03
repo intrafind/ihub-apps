@@ -4,7 +4,7 @@ An **integration** connects iHub to an external system and gives the model a set
 
 The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the [built-in integrations](#built-in-integrations) **iFinder**, **iAssistant**, the web search engines **Brave Search**, **Staan** and **Qwant**, **Atlassian Jira**, **Microsoft Entra ID directory**, **People directory (LDAP)**, **LDAP browser**, **iHub** (asking the user a question and scheduled tasks), **Microsoft Office 365**, **Google Drive** and **Nextcloud**.
 
-## Three records
+## Four records
 
 | Record                    | Where                                                                                                                                                                               | What                                                                                                                                                                          |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -165,6 +165,7 @@ A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a
 | Storage providers  | `type: "storage"` (Office 365, Google Drive, Nextcloud)          |
 | MCP servers        | protocol `mcp`                                                   |
 | Agents             | protocol `a2a`                                                   |
+| Custom             | integrations built with **Add manually** (`custom/<id>`)         |
 | Built-in           | any other built-in definition (iFinder, iAssistant, Jira, iHub, LDAP browser) |
 | From the catalog   | everything else (CKAN, marketplace definitions)                  |
 
@@ -278,7 +279,7 @@ For developers: an editor is a React component registered under its definition i
 2. **Install** opens a form generated from the definition's install fields:
    - **Name**: the instance id apps refer to, and a label users see in the chat.
    - **Settings**: the definition's fields (URL, numbers, switches, choices). Advanced fields are folded away.
-   - **Sign-in**: the modes the definition offers and the protocol can run. _No sign-in_ for public APIs; _Shared service account_ stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; _OAuth client_ (client credentials) and _Each user signs in_ (per-user OAuth) are available for MCP servers, the other protocols get them in a later release. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
+   - **Sign-in**: the modes the definition offers and the protocol can run. _No sign-in_ for public APIs; _Shared service account_ stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; _OAuth client_ (client credentials) is available for MCP servers and remote A2A agents; _Each user signs in_ (per-user OAuth) for MCP servers and for the built-in connectors that sign every user in (Jira, the storage providers). An `http` integration offers _No sign-in_ and _Shared service account_ only. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
    - **Who may use it**: the groups that grant the installation, read-only, with a link to **Admin → Groups**, where grants are edited (see [Who may use an integration](#who-may-use-an-integration)). The tiles and the installation page show the same list; an installation no group grants shows **No group grants it yet**.
    - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is _none_; actions with a requirement (for example SQL on a DataStore) appear once the setting is on. For an MCP server the list is what the server reports after a test (or on edit); a tool the server adds later is on by default.
 3. **Test connection** runs the definition's health action with the values as entered and lists the actions the model would get (for an MCP server: connects and lists its tools). A definition may ask for one free-text input next to the button (`test.input`; People directory (LDAP) takes a sample name to search for). Nothing is saved until **Install**.
@@ -335,7 +336,7 @@ In the chat, every bound action appears as a tool `<instanceId>__<action>` named
 
 ## How an action runs
 
-Five protocols have an adapter: `native`, for the built-in connectors (iFinder, iAssistant, the web search engines, Jira, Entra ID, the LDAP people directories and LDAP browsers), and `script`, the same adapter with the connector module loaded from the definition folder; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
+Six protocols have an adapter: `native`, for the built-in connectors (iFinder, iAssistant, the web search engines, Jira, Entra ID, the LDAP people directories and LDAP browsers), and `script`, the same adapter with the connector module loaded from the definition folder; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); `http`, for REST requests described action by action without code (see [HTTP request actions](#http-request-actions-http)); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
 
 1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is _service account_;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
@@ -471,7 +472,7 @@ The browser used to keep this state per app in `sessionStorage` (`ai_hub_app_set
 
 Users can ask for a catalog integration their groups cannot use yet (#2926).
 
-**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not a custom integration (`custom/<id>`, built by an admin in iHub), is not hidden, and has no enabled installation the user's groups allow. Each row shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
+**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not a custom integration (`custom/<id>`, built by an admin in iHub), is not hidden, and has no enabled installation the user's groups allow. They appear as a card grid like the marketplace: the first six cards, then **Show all** (a search covers every entry once there are six or more). Each card shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
 
 **Admin → Integrations → Requests** is the queue; the number of open requests is the tab's badge and is shown next to **Integrations** in the admin sidebar.
 
@@ -767,7 +768,7 @@ Every write is audited with resource `integration`; connects and disconnects wit
   "id": "jira",                              // installation id
   "definition": "com.intrafind/jira",
   "type": null,                              // the definition's type: "storage", "web-search", "people-directory", or null
-  "protocol": "native",                      // native | mcp | openapi | a2a | script
+  "protocol": "native",                      // native | mcp | openapi | a2a | http | script
   "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
   "description": "…",
   "icon": null,                              // an http(s) icon URL of the definition, else null

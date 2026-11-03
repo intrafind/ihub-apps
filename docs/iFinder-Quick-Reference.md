@@ -59,7 +59,6 @@ step.
 | `iFinder.search`         | Find documents           | `query`         | `{query: "contracts 2024"}`                  |
 | `iFinder.getContent`     | Get document text        | `documentId`    | `{documentId: "doc123"}`                     |
 | `iFinder.getMetadata`    | Get document info        | `documentId`    | `{documentId: "doc123"}`                     |
-| `iFinder.download`       | Download/save docs       | `documentId`    | `{documentId: "doc123", action: "save"}`     |
 | `iFinder.getFields`      | Field catalog            | —               | `{filterPrefix: "cust."}`                    |
 | `iFinder.getFacetValues` | Enumerate a facet        | `facet`         | `{facet: "application.keyword"}`             |
 | `iFinder.listProfiles`   | Reachable search profiles | —              | `{}`                                         |

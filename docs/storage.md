@@ -23,6 +23,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | --------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------- |
 | `chats`, `chat-messages`    | every conversation and its transcript — temporary unless the Chat History feature keeps it | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
 | `artifacts`                 | what a run produced: a metadata document and a blob per artifact | –                        | [Artifacts](artifacts.md)                |
+| `chat-files`                | files uploaded to a chat or a scheduled task, or through the Inference API: a metadata document per file (the extracted text, page images and original are blobs beside it) and the `_meta__server-bytes` counter that enforces the server-wide quota | the owner | [Chat and Scheduled-Task Files](chat-files.md) |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |

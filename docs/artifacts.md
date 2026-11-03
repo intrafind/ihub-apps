@@ -136,7 +136,7 @@ browser something executable.
 | Kind       | Media types                                                             |
 | ---------- | ----------------------------------------------------------------------- |
 | `image`    | `png`, `jpeg`, `webp`, `gif`, `avif`, `bmp`, `heic`, `heif`              |
-| `document` | `text/markdown`, `text/plain`, `text/csv`, `application/json`, `application/pdf`, Word, PowerPoint |
+| `document` | `text/markdown`, `text/plain`, `text/csv`, `application/json`, `application/pdf`, Word, PowerPoint, Excel |
 | `code`     | Text files from `create_file`: `text/javascript`, `application/typescript`, `text/x-python`, `application/json`, `application/yaml`, `text/csv`, `text/markdown`, `application/sql`, `text/x-sh`, `text/css`, … (the list is `TEXT_FILE_TYPES` in `shared/generatedFiles.js`) |
 | `archive`  | `application/zip` |
 
@@ -234,12 +234,22 @@ travels on a request the client makes itself.
 
 The chat shows a chat's artifacts in the **Artifacts** panel (header button,
 or the actions menu on small screens), offered once an answer produced a
-picture or a file. It lists `GET /api/chats/:chatId/artifacts`, newest first,
-with the size, the answer that produced each one and its time, and:
+picture or a file. In a stored chat the panel is the chat's **Files** drawer
+with two tabs: **Uploaded**, the files the user attached (see
+[Durable chat and task files](chat-files.md)), and **Generated**, the
+artifacts. Without stored uploads (a chat that is not stored, a shared chat)
+it is the plain **Artifacts** list. The Generated tab lists
+`GET /api/chats/:chatId/artifacts`, newest first, with the size, the answer
+that produced each one and its time, and:
 
 - previews pictures, Markdown (rendered and sanitized), JSON (pretty-printed)
-  and every other `code` artifact as highlighted text; office documents and
-  archives have no preview. A text preview reads at most 512 KB.
+  and every other `code` artifact as highlighted text. PDFs open in an
+  embedded viewer. HTML, SVG, CSV/TSV and Jupyter notebooks (`.ipynb`) get a
+  **Preview | Code** toggle: HTML runs in a sandboxed frame (`allow-scripts`
+  only, under a restrictive Content-Security-Policy), SVG is sanitized and
+  drawn, CSV/TSV is a table (first 200 rows) and a notebook shows its cells.
+  Word, PowerPoint, Excel and archives have no preview. A text preview reads
+  at most 512 KB.
 - downloads one artifact (`GET …/:artifactId`), saved under the last part of
   its name, and copies a text artifact to the clipboard.
 - downloads a selection or everything as one ZIP
@@ -250,6 +260,10 @@ A shared chat offers the same panel, through the share's routes: it lists and
 packs only the artifacts the snapshot named. The panel is a modal dialog: it
 takes focus when it opens, keeps Tab inside, closes with Escape and gives
 focus back to the button that opened it.
+
+The HTML preview never touches the server's `text/plain` serving described
+under [Kinds](#kinds): the browser gets the text through the API client and
+renders it in a frame without access to the iHub origin.
 
 A selected file can be **shared** on its own: the preview has a Share button
 that opens a dialog for a read-only link to just that file, optionally

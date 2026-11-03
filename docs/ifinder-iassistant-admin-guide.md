@@ -521,10 +521,7 @@ Create `contents/apps/research-assistant.json`:
   "integrations": {
     "ifinder": { "actions": ["search", "getContent"] }
   },
-  "tools": [
-    "braveSearch",
-    "enhancedWebSearch"
-  ],
+  "websearch": { "enabled": true },
   "sendChatHistory": true,
   "enabled": true
 }
@@ -751,7 +748,6 @@ Use a JWT decoder tool to verify token structure:
    - Search for documents
    - Retrieve document content  
    - Get document metadata
-   - Test download functionality
 
 **Test iAssistant (Workspace) Integration:**
 1. Install iAssistant under **Admin → Integrations**
@@ -875,7 +871,7 @@ Cause: JWT token generation or validation failed
 Solutions:
 - Verify private key format (must be PEM format)
 - Check private key matches public key in iFinder
-- Ensure JWT algorithm is RS256
+- Ensure the installation's JWT algorithm matches the key type (RS256 by default)
 - Validate JWT claims (issuer, audience, scope)
 - Check token expiration time
 ```
@@ -897,7 +893,7 @@ Solutions:
 ```
 Cause: iAssistant adapter not properly registered
 Solutions:
-- Verify server/adapters/iassistant.js exists
+- Verify server/adapters/iassistant-conversation.js exists
 - Check server/adapters/index.js includes iAssistant adapter
 - Restart iHub Apps server
 - Check server startup logs for adapter registration
@@ -907,20 +903,20 @@ Solutions:
 ```
 Cause: iAssistant model not enabled or configured
 Solutions:
-- Check contents/models/iassistant.json exists
+- Check the model file (iassistant-conversation.json, shipped in server/defaults/models/) exists in contents/models/
 - Verify "enabled": true in model configuration
 - Restart server after model changes
 - Check model loading logs
 ```
 
-**Problem: "Tool 'iAssistant_ask' not found"**
+**Problem: "Tool 'iassistant__ask' not found"**
 ```
-Cause: iAssistant tool not properly configured
+Cause: the iAssistant installation is missing, disabled, or not bound to the app
 Solutions:
-- Verify a tool file exists under contents/tools/ for the iAssistant tool
-- Check server/tools/iAssistant.js exists
-- Verify tool script exports ask function
-- Restart server and check tool loading logs
+- Check that an iAssistant installation exists under Admin → Integrations and is enabled
+- Check that the app binds it ("integrations": { "iassistant": { ... } }) and that the user's group may use it
+- Run the installation's Test button
+- Check the integration loading logs after a restart
 ```
 
 ### 3. Authentication Debugging
@@ -1209,43 +1205,19 @@ settings.
 
 ### 1. Health Checks
 
-**Implement Health Check Endpoints:**
+**Check the integrations:**
 ```bash
 # Check iHub Apps health
 curl http://localhost:3000/api/health
 
-# Check iFinder integration health  
-curl http://localhost:3000/api/admin/health/ifinder
-
-# Check iAssistant integration health
-curl http://localhost:3000/api/admin/health/iassistant
+# Test the saved iFinder / iAssistant installations
+curl -X POST http://localhost:3000/api/admin/integrations/installed/ifinder/_test -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST http://localhost:3000/api/admin/integrations/installed/iassistant/_test -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-**Automated Health Monitoring:**
-```json
-{
-  "healthChecks": {
-    "enabled": true,
-    "interval": 60000,
-    "checks": {
-      "ifinder": {
-        "enabled": true,
-        "timeout": 10000,
-        "failureThreshold": 3
-      },
-      "iassistant": {
-        "enabled": true, 
-        "timeout": 15000,
-        "failureThreshold": 3
-      }
-    },
-    "notifications": {
-      "email": "admin@company.com",
-      "webhook": "https://monitoring.company.com/health"
-    }
-  }
-}
-```
+The same check runs from the installation's **Test** button under **Admin → Integrations**.
+There is no built-in scheduled health check or notification for these integrations; point your
+monitoring at the `_test` endpoints if you need one.
 
 ### 2. Log Management
 

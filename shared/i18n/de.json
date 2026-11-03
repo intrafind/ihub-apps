@@ -6242,6 +6242,8 @@
       "reasonCount": "{{count}} von {{max}} Zeichen",
       "send": "Anfrage senden",
       "sent": "Anfrage für {{name}} gesendet. Die Administration entscheidet.",
+      "showAll": "Alle {{count}} anzeigen",
+      "showFewer": "Weniger anzeigen",
       "alreadyRequested": "Sie haben {{name}} bereits angefragt.",
       "failed": "{{name}} konnte nicht angefragt werden: {{message}}",
       "state": {
@@ -8503,6 +8505,8 @@
     "open": "Artefakte",
     "openPanel": "Vorschau und Download als ZIP",
     "close": "Artefakte schließen",
+    "fullScreen": "Vollbild",
+    "exitFullScreen": "Vollbild beenden",
     "count_one": "{{count}} Datei",
     "count_other": "{{count}} Dateien",
     "loading": "Die Dateien dieses Chats werden geladen…",

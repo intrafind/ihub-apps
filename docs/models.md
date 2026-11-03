@@ -302,6 +302,15 @@ proxy and SSL settings; it does not follow redirects, so a key is never sent to 
 the one entered. The import fills in only what the endpoint reports — check tool support and test
 each model before enabling it for users.
 
+**Azure OpenAI.** Paste the URL copied from Azure, for example
+`https://<resource>.openai.azure.com/openai/responses?api-version=…`. Hosts under
+`.openai.azure.com`, `.cognitiveservices.azure.com` and `.services.ai.azure.com` are recognised, and
+the list is read from `/openai/v1/models` whatever path was pasted. Azure lists the models a resource
+offers, not its deployments, and calls a model by its deployment name, so the dialog shows a
+**Deployment name** field for every selected model: fill it in for each. If the pasted URL carries an
+`api-version` and the provider's API type is OpenAI Responses, the imported models keep the
+`…/openai/responses?api-version=…` URL.
+
 The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
 storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 

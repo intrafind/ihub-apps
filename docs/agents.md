@@ -16,7 +16,7 @@ leave durable artifacts behind.
 | **AgentRun** | A `WorkflowExecution` enriched with an `_agent` envelope. Lives in `contents/data/workflow-state/<execId>/`. |
 | **Memory file** | Plain markdown at `contents/agents/memory/<profileId>.md`, optionally auto-included into every agent prompt up to `memory.maxBytes`. Optimistic-version writes. |
 | **Inbox** | Markdown checklist at `contents/data/agent-inboxes/<id>.md`. Users add work; agents read/mark-done via `read_inbox`/`write_inbox`. |
-| **Service-account identity** | Agent runs execute as `agent:<profileId>` principals. Groups in `profile.serviceAccount.groups` determine what apps/tools/models the agent can use. `isAdmin` is forced false. |
+| **Service-account identity** | Agent runs execute as `agent:<profileId>` principals. Groups in `profile.serviceAccount.groups` determine what apps/tools/models/integrations (`permissions.integrations`) the agent can use. `isAdmin` is forced false. |
 | **Dynamic tasks** | Agents may call `create_task` to enqueue work onto `state.data._taskQueue`. A drain-mode loop processes the queue until empty (bounded by `dynamicTasks.maxDepth` and the existing 200-iteration cap). |
 | **App-as-tool** | When `features.appAsTool: true` and a node has `config.apps: [appId, ...]`, the LLM sees `app__<appId>` synthetic tools that call into `ChatService.invokeAppInternal` via the shared gateway (`server/services/chat/appToolsGateway.js`). Regular chat apps can use the same mechanism through their own `apps: [...]` config field (see [App Configuration](apps.md#apps-as-tools-concierge-pattern)). App→App nesting is forbidden. |
 | **HITL** | Explicit `human` nodes in the workflow pause until an operator in `profile.hitl.approverGroups` answers the run's pending interaction via `POST /api/runs/:runId/interactions/:id/answer`. |
@@ -303,8 +303,9 @@ keeping one task in progress (`update_task`), and reconsiders as it learns —
 running in a budget- and context-managed tool loop. The `verify` node is a
 **tool-enabled adversarial verifier**: it tries to break the result, and on
 `FAIL`/`PARTIAL` loops back to the agent with the specific gaps until it passes
-(bounded by `maxRetries`). Enable the profile, configure the search tools' API
-keys, and trigger it from the agents admin UI.
+(bounded by `maxRetries`). Enable the profile, install a web search engine under
+**Admin → Integrations → Web search** and grant it to the agent's service-account groups, and
+trigger it from the agents admin UI.
 
 ## Crash recovery (resume on boot)
 

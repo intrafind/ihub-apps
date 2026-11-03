@@ -6277,6 +6277,8 @@
       "reasonCount": "{{count}} of {{max}} characters",
       "send": "Send request",
       "sent": "Request for {{name}} sent. An administrator decides.",
+      "showAll": "Show all {{count}}",
+      "showFewer": "Show fewer",
       "alreadyRequested": "You have already requested {{name}}.",
       "failed": "Could not request {{name}}: {{message}}",
       "state": {
@@ -8538,6 +8540,8 @@
     "open": "Artifacts",
     "openPanel": "Preview and download as ZIP",
     "close": "Close artifacts",
+    "fullScreen": "Full screen",
+    "exitFullScreen": "Exit full screen",
     "count_one": "{{count}} file",
     "count_other": "{{count}} files",
     "loading": "Loading the files of this chat…",

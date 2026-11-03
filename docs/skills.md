@@ -30,6 +30,10 @@ There are two kinds:
   instructions, or in a message sent to the chat API, and the skill is loaded for that run. The
   chat API also accepts `requestedSkills`, a list of global skill names or user skill ids.
 
+Under an answer, each skill used shows once, however often it was activated. Open the answer's
+thought chain to see every activation as a **Used skill** row, in order with the searches and tool
+calls, with who started it (you, or the model).
+
 Skills are opt-in per app: an app offers none until it sets `skillSettings.enabled: true`
 (**Admin → Apps → Skills → Enable skills in this app**). Without it, the app sends no skill list
 and no skill tools to the model, ignores `/name`, and does not carry skills over in the chat.
