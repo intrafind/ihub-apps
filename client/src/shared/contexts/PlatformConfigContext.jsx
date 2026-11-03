@@ -102,6 +102,14 @@ export function PlatformConfigProvider({ children }) {
         // the chat's project controls — so without it the feature is hidden.
         projects: platformCfg.projects,
 
+        // Uploaded chat files: whether the server keeps them (the `enabled`
+        // flag already folds in a storage provider that came up), what it keeps
+        // (`storageMode`) and the quotas. The composer pre-uploads documents only
+        // when this is present — without it every file travels inline with the
+        // message, the server keeps its text only, and the Files drawer has no
+        // uploaded file to list.
+        uploads: platformCfg.uploads,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array
