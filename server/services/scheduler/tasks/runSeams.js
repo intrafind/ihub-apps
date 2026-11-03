@@ -15,9 +15,10 @@
  * `approvalSeam`, so it runs before the chat seams announce the call.
  *
  * **Integration check.** A tool that reports its integration needs signing
- * in again ("JIRA authentication expired. Please reconnect your account.")
- * is recorded, so the run fails with an actionable reason instead of reading
- * as a success whose answer apologises.
+ * in again (the structured `INTEGRATION_AUTH_REQUIRED` result, or a message
+ * such as "JIRA authentication expired. Please reconnect your account.") is
+ * recorded, so the run fails with an actionable reason instead of reading as
+ * a success whose answer apologises.
  *
  * @module services/scheduler/tasks/runSeams
  */
@@ -49,26 +50,39 @@ export function requiresApproval(toolDef) {
  *
  * @param {string} toolId
  * @param {unknown} raw
- * @returns {{toolId: string, message: string, connectUrl?: string}|null}
+ * @returns {{toolId: string, message: string, integration?: string, reason?: string, connectUrl?: string}|null}
  */
 export function integrationIssueOf(toolId, raw) {
   if (!raw || typeof raw !== 'object') return null;
   const code =
     typeof raw.error === 'string' ? raw.error : typeof raw.code === 'string' ? raw.code : '';
   const message = typeof raw.message === 'string' ? raw.message : '';
+  // The one structured "connect first" result (INTEGRATION_AUTH_REQUIRED).
+  const structured = {
+    ...(typeof raw.integration === 'string' ? { integration: raw.integration } : {}),
+    ...(typeof raw.reason === 'string' ? { reason: raw.reason } : {})
+  };
   const marker = raw.authRequired && typeof raw.authRequired === 'object' ? raw.authRequired : null;
   if (marker) {
     return {
       toolId,
       message: `Connect ${marker.serverName || marker.serverId || 'the integration'} again`,
+      ...structured,
       ...(typeof marker.connectUrl === 'string' ? { connectUrl: marker.connectUrl } : {})
     };
   }
   if ((code && REAUTH_ERROR.test(code)) || (raw.error && REAUTH_MESSAGE.test(message))) {
+    const connectUrl =
+      typeof raw.connectUrl === 'string'
+        ? raw.connectUrl
+        : typeof raw.authUrl === 'string'
+          ? raw.authUrl
+          : null;
     return {
       toolId,
       message: message || 'The integration needs to be connected again',
-      ...(typeof raw.authUrl === 'string' ? { connectUrl: raw.authUrl } : {})
+      ...structured,
+      ...(connectUrl ? { connectUrl } : {})
     };
   }
   return null;

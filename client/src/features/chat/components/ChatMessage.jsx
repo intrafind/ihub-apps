@@ -69,7 +69,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
-import McpConnectCards from '../mcpApps/McpConnectCard';
+import ConnectCards from '../../integrations/connect/ConnectCard';
 import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProposalCard';
 import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
@@ -992,8 +992,8 @@ function ChatMessage({
             readOnly={readOnly}
           />
         )}
-        {!isUser && message.mcpAuthRequired?.length > 0 && (
-          <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
+        {!isUser && message.integrationAuthRequired?.length > 0 && (
+          <ConnectCards prompts={message.integrationAuthRequired} readOnly={readOnly} />
         )}
         {/* Everything the answer found — web pages, documents, records —
             behind "Searched for …" / "N sources" above it, opening the

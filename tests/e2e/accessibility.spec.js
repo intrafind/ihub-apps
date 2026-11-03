@@ -342,6 +342,8 @@ const CLEAN_PAGES = [
   '/tasks',
   '/workflows',
   '/start',
+  // Settings → Integrations: the user's integrations with their identity state.
+  '/settings/integrations',
   '/admin/providers',
   '/admin/prompts',
   '/admin/skills',

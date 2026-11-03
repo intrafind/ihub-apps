@@ -13,8 +13,8 @@
  * (N-1)/N of the time for N workers.
  *
  * This store keeps nothing on the server. Everything the callback needs travels
- * in the `state` parameter, protected by an HMAC like the integration sign-in
- * state (`utils/integrationOAuthState.js`):
+ * in the `state` parameter, protected by an HMAC (the MCP and integration
+ * sign-ins used the same scheme before they moved to server-side flow records):
  *
  *   - `provider`: the OIDC provider that started the flow; a ticket for one
  *     provider cannot complete another.

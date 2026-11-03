@@ -342,12 +342,12 @@ export async function listConnections(instance) {
 }
 
 /** Disconnect one user from an installation whose connector signs users in. */
-export async function disconnectUser(instance, userId) {
+export async function disconnectUser(instance, userId, options = {}) {
   const definition = integrationRegistry.get(instance?.definition)?.definition;
   if (!definition) return { removed: false, unknownServer: true };
   const connector = await connectorFor(definition);
   if (!connector.disconnectUser) return { removed: false, unsupported: true };
-  return connector.disconnectUser(instance, userId);
+  return connector.disconnectUser(instance, userId, options);
 }
 
 export function invalidate(instanceId) {

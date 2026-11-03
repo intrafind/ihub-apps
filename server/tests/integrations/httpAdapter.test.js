@@ -349,6 +349,34 @@ describe('http protocol: calls through the SSRF guard', () => {
     assert.equal(requests[0].headers.authorization, 'Bearer token-1');
   });
 
+  it('sends a typed secret of every service-account kind like the other adapters', async () => {
+    const cases = [
+      [{ kind: 'credential', field: 'secret' }, 'authorization', 'Bearer token-1'],
+      [{ kind: 'basic', field: 'secret' }, 'authorization', `Basic ${btoa('token-1')}`],
+      [
+        { kind: 'header', header: 'X-Api-Key', valuePrefix: 'Key ', field: 'secret' },
+        'x-api-key',
+        'Key token-1'
+      ]
+    ];
+    for (const [serviceAccount, header, expected] of cases) {
+      requests.length = 0;
+      const definition = definitionFor(base, [getOrder], {
+        auth: { modes: ['service-account'], serviceAccount },
+        install: [{ key: 'secret', type: 'secret', title: { en: 'Secret' }, required: true }]
+      });
+      await adapter.run({
+        definition,
+        instance: { ...instance, auth: { mode: 'service-account', credentialRef: 'erp' } },
+        action: definition.actions[0],
+        args: { id: '7' },
+        security: { blockPrivateIps: true, allowedHosts: ['127.0.0.1'] },
+        resolveSecret: ref => (ref === 'erp' ? 'token-1' : null)
+      });
+      assert.equal(requests[0].headers[header], expected, serviceAccount.kind);
+    }
+  });
+
   it('sends a JSON body template', async () => {
     requests.length = 0;
     const definition = definitionFor(base, [

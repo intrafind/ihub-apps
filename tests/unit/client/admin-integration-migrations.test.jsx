@@ -41,6 +41,7 @@ const mockApi = {
   fetchAdminApps: jest.fn()
 };
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
+  fetchIntegrationRequests: () => Promise.resolve({ requests: [], hidden: [], openCount: 0 }),
   fetchInstalledIntegration: (...args) => mockApi.fetchInstalledIntegration(...args),
   fetchInstalledIntegrations: (...args) => mockApi.fetchInstalledIntegrations(...args),
   fetchIntegrationCatalog: (...args) => mockApi.fetchIntegrationCatalog(...args),

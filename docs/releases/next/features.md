@@ -419,6 +419,43 @@ Integrations**, and no longer three pages of their own with a shared provider ed
 See [Integrations → Built-in integrations](../../integrations.md#built-in-integrations) and
 [Apps → Files from storage providers](../../apps.md#files-from-storage-providers).
 
+## One Connection Service for Jira, Storage Providers and MCP Sign-ins
+
+Jira, Office 365, Google Drive, Nextcloud and MCP servers with per-user sign-in now connect,
+refresh and disconnect through one connection service and one OAuth client, so every integration
+gets the same security checks. Nothing changes for users who are connected: their connections are
+kept through the upgrade, nobody has to sign in again, and the callback URLs registered in the
+vendors' OAuth apps keep working.
+
+- **Connection index:** every connection has a record (status `active`, `expired`, `revoked`,
+  `failed` or `needs-reconnect`, the issuer, the granted scopes, expiry, last refresh and use).
+  The tokens stay where they always were; on the first start after the upgrade the existing token
+  files are indexed once, without moving or re-encrypting any of them. The **Connections** dialog
+  of an installation reads the index and shows each user's status.
+- **One callback:** `/api/integrations/oauth/callback` handles every sign-in. The callback URLs
+  admins registered (`/api/integrations/jira/callback`,
+  `/api/integrations/<provider>/<installation id>/callback`, `/api/mcp/oauth/callback/<server id>`)
+  are aliases of it and stay valid; nothing has to be re-registered.
+- **Same protection everywhere:** every sign-in uses PKCE — Nextcloud included — and a single-use
+  state kept on the server and bound to the user and the installation; the return URL must be on
+  the same origin. A refresh token goes back only to the authorization server and client that
+  issued it. Changing an installation's server URL, tenant or OAuth client ends its users'
+  connections, so a token is never sent to another endpoint.
+- **Disconnect revokes upstream** where the provider supports it (Google Drive, MCP servers that
+  advertise a revocation endpoint). Connect and disconnect are in the audit log as
+  `connection.create` and `connection.revoke`.
+- **Scheduled tasks use the owner's connection:** a tool in a scheduled run uses the owner's own
+  connection; when there is none, the run fails with `INTEGRATION_AUTH_REQUIRED`, naming the
+  integration and the reason (`not_connected`, `expired`, `insufficient_scope`), with a
+  **Reconnect** link.
+- **No endless retries:** a refresh token the provider refuses ends the connection (the user is
+  asked to reconnect), and after repeated temporary failures iHub backs off instead of asking the
+  provider again on every call.
+- **More scopes when a server asks:** an MCP server that refuses a call for a missing scope gets a
+  Connect card that asks the user to re-authorize once with the additional scopes.
+
+See [Integrations → Connections](../../integrations.md#connections).
+
 ## Groups Decide Which Integrations Their Members May Use
 
 Admins grant installed integrations per group, like apps: **Admin → Groups → a group →
@@ -540,6 +577,27 @@ run uses them, even after the chat moved to another profile.
 - Tasks saved before keep running as they did: without a stored profile, they search the
   default.
 
+## Users Request Catalog Integrations, Admins Approve From a Queue
+
+Users can now ask for an integration their administrator has not made available to them, and
+administrators see what people ask for.
+
+- **Not available yet:** **Settings → Integrations** lists the catalog integrations the user's
+  groups cannot use yet, read-only, with **Request**. A request takes an optional reason (up to
+  500 characters); afterwards the row shows _Requested_, _Approved, being set up_ or _Declined_
+  with the administrator's note. One open request per user and integration.
+- **Requests tab:** **Admin → Integrations → Requests** lists who asked for what, when and why,
+  with the number of open requests on the tab and next to **Integrations** in the admin sidebar.
+  **Approve** opens the install wizard for the integration; **Decline** and **Decline and hide**
+  take an optional note to the requester. A hidden integration disappears from every user's list
+  (and its other open requests are declined) until an administrator shows it again.
+- **Closes by itself:** a request closes once the integration is installed and the requester's
+  groups may use it, also when the group access is granted later.
+- **Audited:** requests and decisions are written to the audit log (resource `integration`,
+  actions `request` and `requestDecision`).
+
+See [Integrations → Requests from users](../../integrations.md#requests-from-users).
+
 ## LDAP Browser Is an Integration of Its Own
 
 The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the
@@ -600,6 +658,26 @@ The **Settings** tab of these installations is a dedicated editor instead of the
 
 See [Integrations → Editors](../../integrations.md#editors).
 
+## One Connect Card for Every Integration
+
+When a request needs an integration the user has not connected yet — Jira, a storage provider or
+an MCP server with per-user sign-in — the chat now shows one Connect card that looks and works the
+same for all of them, and the request goes on by itself once the user is connected.
+
+- The card says why iHub needs to act as the user for this request, which permissions that covers
+  in plain words (the integration's actions, grouped as read and write) and where the sign-in
+  happens, with **Connect** and **Not now**.
+- After the vendor's consent the user lands back in the same chat, and the request that needed
+  the connection is retried once. A call that failed for any other reason is never retried by
+  itself, because a change may already have been made.
+- A connection that expired or lacks a permission shows **Reconnect** and says why and what
+  changes; the connection is kept and gains the new permission.
+- The file pickers of Office 365, Google Drive and Nextcloud show the same card when the user is
+  not connected.
+- `GET /api/integrations` lists, for the signed-in user, every integration their groups allow with
+  its actions and how it runs for them: connected as their account, signed in via SSO, service
+  account, shared key, not connected, or reconnect needed.
+
 ## Sources Panel: Where Each Document Was Found
 
 The sources panel under an answer now says where each document came from. Every iFinder card
@@ -632,6 +710,26 @@ app that uses the installation.
 - The chat only runs enabled apps: an example app created with **Available to users now** is
   visible to groups that may use all apps; untick it to create the app disabled.
 - Integration definitions from the marketplace can ship example apps too (`exampleApps`).
+
+## Settings → Integrations Shows Everything You May Use, and Who iHub Acts As
+
+**Settings → Integrations** now lists every integration your groups allow, not only the ones you
+sign in to yourself, and says truthfully who iHub acts as in each: _Connected as you_, _Signed in
+via SSO_, _Runs as service account (your group)_, _Shared key_, _Not connected_, _Reconnect
+needed_ or _Unavailable_ with what an administrator has to do.
+
+- **One list, one look:** iFinder, people directories, shared-key MCP servers and web search
+  appear next to Jira, cloud storage and per-user MCP servers, with a short summary of what each
+  can do (read · write).
+- **Connect, Reconnect, Disconnect** use the same sign-in as the Connect card in the chat;
+  disconnecting asks first and updates the row in place.
+- **Details:** open a row to see its actions with read / write badges, the apps that use it,
+  when it was last used, when your access ends, and what you allowed, in plain words.
+- **Find things:** search, filter by category, or show only what **needs attention** (a
+  reconnect, an unavailable integration, access that is about to end).
+- **Unavailable means the same as for admins:** an integration the admin list shows as
+  unreachable — for example because its shared key expired — shows as unavailable here too.
+- _Access to iHub_ (connected apps, personal API keys, the Outlook add-in) is unchanged.
 
 ## Chat: Tool Calls Name the Action and the System They Asked
 

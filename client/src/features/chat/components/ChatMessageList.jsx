@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
 
 /**
  * Whether a user message carries an upload: the live payload (`fileData`,
@@ -49,9 +48,6 @@ function ChatMessageList({
   defaultInsertActionId = null,
   onInsertAction = null,
   canvasEnabled = false,
-  // Integration auth props
-  requiredIntegrations = [],
-  onConnectIntegration,
   app = null, // App configuration for custom response rendering
   models = [], // Available models to pass to ChatMessage for link generation
   // Clarification handlers
@@ -244,18 +240,6 @@ function ChatMessageList({
               />
             </div>
           </div>
-
-          {/* Show integration auth prompts after the last assistant message if auth is required */}
-          {index === displayedMessages.length - 1 &&
-            message.role === 'assistant' &&
-            requiredIntegrations.length > 0 && (
-              <div className="mt-4 ml-12">
-                <IntegrationAuthPrompts
-                  requiredIntegrations={requiredIntegrations}
-                  onConnect={onConnectIntegration}
-                />
-              </div>
-            )}
         </div>
       ))}
     </div>

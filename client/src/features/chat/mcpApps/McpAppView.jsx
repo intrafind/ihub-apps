@@ -69,7 +69,7 @@ function errorMessage(error) {
  * sign-in). It answers 409, not 401, so the iHub session is left alone.
  */
 function isMcpAuthRequired(error) {
-  return error?.response?.data?.code === 'MCP_AUTH_REQUIRED';
+  return error?.response?.data?.code === 'INTEGRATION_AUTH_REQUIRED';
 }
 
 /**

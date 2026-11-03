@@ -253,6 +253,32 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * read. The chat's own `projectId` is the authority.
    */
   projectChats: 'project-chats',
+  /**
+   * The connection index of the unified integrations (04-architecture §1.4):
+   * one record per (installation, principal) — who is connected to which
+   * installed integration, its status, issuer, granted scopes and a
+   * `secretRef` pointing at the token file `TokenStorageService` keeps. The
+   * secret itself never lands here. Keyed `conn_<hash>`, owned by the user.
+   */
+  integrationConnections: 'integration-connections',
+  /**
+   * Pending OAuth sign-ins of the integrations, keyed by a hash of the `state`
+   * parameter: the user and installation the flow is bound to, the validated
+   * return URL and the encrypted PKCE verifier. Single use (deleted by the
+   * callback that consumes it) and short-lived (15 minutes).
+   */
+  integrationOAuthFlows: 'integration-oauth-flows',
+  /**
+   * Users' requests for catalog integrations (#2926), one document per
+   * (user, definition), keyed `ireq_<hash>` and owned by the requester, so
+   * "one open request per user and definition" is a create-only write.
+   */
+  integrationRequests: 'integration-requests',
+  /**
+   * Definitions an admin declined and hid from the users' catalog view, one
+   * marker per definition, keyed `ihid_<hash>`.
+   */
+  integrationRequestsHidden: 'integration-requests-hidden',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

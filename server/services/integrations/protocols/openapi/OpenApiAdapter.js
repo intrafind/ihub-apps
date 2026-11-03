@@ -7,6 +7,7 @@ import {
   invalidateToolsWithPrefix
 } from '../../../tools/OpenApiToolRunner.js';
 import credentialService from '../../../CredentialService.js';
+import { serviceAccountHeaders } from '../../auth/ServiceAccountAuth.js';
 import logger from '../../../../utils/logger.js';
 import { effectiveValues, localized } from '../../definitions/installedValues.js';
 import { toolIdFor, actionEnabled } from '../common.js';
@@ -75,23 +76,22 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
     const ref = instance.auth?.credentialRef;
     if (!ref) throw new Error(`Integration ${instance.id}: service account without credential`);
     const account = definition.auth.serviceAccount || {};
-    const kind = account.kind || 'header';
-    if (kind === 'credential' && resolveSecret === storedSecret) {
+    if (account.kind === 'credential' && resolveSecret === storedSecret) {
       // The profile's own type decides how it is sent (the runner applies it).
       return { baseUrl, headers, credentialRef: ref };
     }
     const secret = resolveSecret(ref);
-    const prefix = account.valuePrefix || '';
-    if (kind === 'bearer' || kind === 'credential') {
-      // `credential` with a secret typed into the form (a test before
-      // saving): an opaque secret, sent as a bearer token like a `secret` profile.
-      headers.Authorization = `Bearer ${secret}`;
-    } else if (kind === 'basic') {
-      headers.Authorization = `Basic ${Buffer.from(String(secret)).toString('base64')}`;
-    } else {
-      const headerName = fillTemplate(account.header || 'Authorization', values) || 'Authorization';
-      headers[headerName] = `${prefix}${secret}`;
+    if (secret === undefined || secret === null || secret === '') {
+      throw new Error(`Integration ${instance.id}: the credential "${ref}" holds no secret`);
     }
+    Object.assign(
+      headers,
+      serviceAccountHeaders({
+        secret,
+        serviceAccount: account,
+        fillTemplate: template => fillTemplate(template, values)
+      })
+    );
   }
 
   return { baseUrl, headers };

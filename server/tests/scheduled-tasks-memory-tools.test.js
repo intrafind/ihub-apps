@@ -635,7 +635,7 @@ describe('reading the past cannot fail the run that reads it', () => {
       run: {
         status: 'failed',
         reason: {
-          code: 'INTEGRATION_RECONNECT_REQUIRED',
+          code: 'INTEGRATION_AUTH_REQUIRED',
           message: 'Reconnect Jira: the connection has expired'
         }
       }
@@ -680,7 +680,7 @@ describe('reading the past cannot fail the run that reads it', () => {
     await getScheduledTaskRepository().mutateRun(task.id, failed.id, document => ({
       ...document,
       reason: {
-        code: 'INTEGRATION_RECONNECT_REQUIRED',
+        code: 'INTEGRATION_AUTH_REQUIRED',
         message: 'Reconnect Jira: the connection is missing or has expired'
       }
     }));

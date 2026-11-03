@@ -259,6 +259,83 @@ restored from a backup after the upgrade fails validation until the block is rem
   overrides in use by the shipped configuration; an override of that path no longer applies.
 - **Validator:** `server/validators/cloudStorageSchema.js` is removed.
 
+## One Error Code When an Integration Needs Connecting
+
+Tools, the MCP App routes and scheduled runs report a missing or unusable integration connection
+with one code, `INTEGRATION_AUTH_REQUIRED`, instead of one per integration.
+
+- **Tool results:** Jira tools returned `{ "error": "JIRA_AUTH_REQUIRED", "authUrl": … }` and
+  per-user MCP tools `{ "error": "MCP_AUTH_REQUIRED", "authRequired": … }`. Both now return
+  `{ "error": "INTEGRATION_AUTH_REQUIRED", "integration": "<installation id>", "reason":
+  "not_connected" | "expired" | "insufficient_scope", "message": …, "connectUrl": … }`; MCP results
+  keep their `authRequired` marker for the chat's Connect card. `authUrl` is gone.
+- **MCP App routes:** the 409 answer's `code` is `INTEGRATION_AUTH_REQUIRED` (was
+  `MCP_AUTH_REQUIRED`) and carries `integration`.
+- **Scheduled runs:** a run that fails for a missing connection ends with the reason code
+  `INTEGRATION_AUTH_REQUIRED` (was `INTEGRATION_RECONNECT_REQUIRED`), with `integration` and
+  `reason`.
+- **Sign-in state:** the `state` of an integration sign-in is an opaque handle of a single-use
+  record kept server-side (storage namespace `integration-oauth-flows`), no longer a signed ticket.
+  A sign-in started before the upgrade and finished after it fails with `invalid_state`; the user
+  starts it again.
+- **Several instances need shared storage for sign-ins:** connecting Jira, a storage provider or a
+  per-user MCP server now needs every instance (pod, host) to use the same storage provider —
+  the shared `contents/` volume a multi-server deployment already requires. Before, matching
+  `JWT_SECRET` and `TOKEN_ENCRYPTION_KEY` were enough. Without storage, sign-ins are kept in one
+  worker's memory and the log warns in cluster mode.
+
+**Before upgrading:** scripts, workflows or clients that match on `JIRA_AUTH_REQUIRED`,
+`MCP_AUTH_REQUIRED`, `INTEGRATION_RECONNECT_REQUIRED` or the `authUrl` field have to match on
+`INTEGRATION_AUTH_REQUIRED` and read `connectUrl` instead.
+
+## One Connect Flow Replaces the Per-Integration Connect Routes
+
+Connecting, checking and disconnecting an integration that signs users in (Jira, Office 365,
+Google Drive, Nextcloud, MCP servers with per-user sign-in) now goes through one API for every
+protocol. The per-integration routes are removed; the OAuth callback URLs registered in vendor
+apps keep working unchanged.
+
+| Removed | Use instead |
+| --- | --- |
+| `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/connect` `{ "returnUrl" }` → `{ "url" }` |
+| `GET /api/integrations/jira/status` | `GET /api/integrations/jira` (`connection.status`) |
+| `POST /api/integrations/jira/disconnect` | `POST /api/integrations/jira/disconnect` is now the generic route (same path, JSON body `{}`; `415` without one) |
+| `POST /api/integrations/jira/refresh` | none: tokens refresh on use; `GET /api/integrations/jira` shows the state |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/connect` |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/status?providerId=<id>` | `GET /api/integrations/<id>` |
+| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` (`providerId` in query or body) | `POST /api/integrations/<id>/disconnect` with JSON body `{}` |
+| `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/connect`, or `…/reconnect` `{ "scopes" }` |
+| `GET /api/mcp/oauth/connections` | `GET /api/integrations` (per-user servers have `connection.mode: "personal"`) |
+| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/disconnect` with JSON body `{}` |
+
+- **Return parameters:** after a sign-in the browser comes back with
+  `integration_connected=<installation id>`, or `integration_error=<code>&integration=<installation
+  id>`, instead of `jira_connected`, `office365_error`, `mcp_connected`, `mcp_error`, `mcp_server`
+  and the like. The codes are the same for every integration; `session_expired` is now
+  `state_expired`, `server_not_found` is `integration_not_found`, a refused token exchange is
+  `exchange_failed`, a declined consent is `access_denied`.
+- **JSON body required:** `connect`, `reconnect` and `disconnect` take a JSON body
+  (`Content-Type: application/json`, `{}` when there is nothing to send); any other request is
+  refused with `415 JSON_REQUIRED`, so a cross-site form cannot start or end a connection.
+- **Return URL:** a `returnUrl` that is not a path or an http(s) URL on this host is refused with
+  `400 INVALID_RETURN_URL` instead of being replaced by the settings page.
+- **`INTEGRATION_AUTH_REQUIRED` results:** `connectUrl` is the connect route
+  (`/api/integrations/<id>/connect`, or `/reconnect` with `scopes` for a missing permission). MCP
+  results no longer carry the `authRequired` marker or the URL in `message`.
+- **Run events:** `tool/completed` carries `authRequired` as `{ "integration", "name",
+  "reason", "action"?, "scopes"? }` for any integration (was `{ "serverId", "serverName",
+  "connectUrl" }`, MCP servers only). `reason` is `not_connected`, `expired` or
+  `insufficient_scope`; no URL is sent. A client that renders a Connect card from the event starts
+  the sign-in with `POST /api/integrations/<integration>/connect` (or `/reconnect` with `scopes`).
+- **File browsers:** browsing a storage provider without a usable connection answers `409` with
+  `INTEGRATION_AUTH_REQUIRED` (was `401` or `500`).
+- **Stored chats:** Connect cards stored with answers before the upgrade (MCP servers only) are
+  not shown again; the next request that needs the connection shows the new card.
+
+**Before upgrading:** browser extensions, add-ins, portals or scripts that call any of the removed
+routes, read the old return parameters or follow `connectUrl` with a `GET` have to use the routes
+and parameters above. Admins and users need not reconnect.
+
 ## Installed Integrations No Longer Carry Groups
 
 Who may use an installed integration is now granted on the groups (`groups.json` →

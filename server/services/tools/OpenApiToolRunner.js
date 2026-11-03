@@ -9,6 +9,11 @@ import { getContentsPath } from '../../utils/contentsPath.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { throttledRun } from '../../requestThrottler.js';
 import credentialService from '../CredentialService.js';
+import {
+  ClientCredentialsTokenCache,
+  clientCredentialsBody,
+  credentialProfileAuth
+} from '../integrations/auth/ServiceAccountAuth.js';
 import logger from '../../utils/logger.js';
 
 export { parseOpenApiText };
@@ -32,7 +37,7 @@ const specCache = new Map();
 // tool.id -> { parameters, paramMap }
 const paramCache = new Map();
 // credentialRef -> { token, expiry }
-const oauthCache = new Map();
+const oauthCache = new ClientCredentialsTokenCache();
 
 function sourceKey(source) {
   if (source.type === 'url') return `url:${source.url}`;
@@ -204,7 +209,9 @@ async function getParamMap(tool) {
 }
 
 /**
- * Resolve the auth headers (and optional query param) for a tool's credential.
+ * Resolve the auth headers (and optional query param) for a tool's credential
+ * (`ServiceAccountAuth.credentialProfileAuth`; a client-credentials profile
+ * adds a cached token).
  */
 async function resolveAuth(tool) {
   const ref = tool.openapi.auth?.credentialRef;
@@ -226,61 +233,34 @@ async function resolveAuth(tool) {
  */
 export async function resolveCredentialAuth(ref, ssrfOpts = {}) {
   const profile = credentialService.resolve(ref);
-  const headers = {};
-  let queryParam = null;
-
-  switch (profile.type) {
-    case 'bearer':
-      headers.Authorization = `Bearer ${profile.token}`;
-      break;
-    case 'basic':
-      headers.Authorization = `Basic ${Buffer.from(`${profile.username}:${profile.password}`).toString('base64')}`;
-      break;
-    case 'apiKeyHeader':
-      headers[profile.headerName] = profile.key;
-      break;
-    case 'apiKeyQuery':
-      queryParam = { name: profile.paramName, value: profile.key };
-      break;
-    case 'oauth2':
-      headers.Authorization = `Bearer ${await getOAuthToken(ref, profile, ssrfOpts)}`;
-      break;
-    case 'secret':
-      // Opaque secret with no request-auth mapping; treat as a bearer token.
-      headers.Authorization = `Bearer ${profile.value}`;
-      break;
-    default:
-      break;
+  const { headers, queryParam, needsOAuthToken } = credentialProfileAuth(profile);
+  if (needsOAuthToken) {
+    headers.Authorization = `Bearer ${await getOAuthToken(ref, profile, ssrfOpts)}`;
   }
   return { headers, queryParam };
 }
 
-async function getOAuthToken(ref, profile, ssrfOpts) {
-  const cached = oauthCache.get(ref);
-  if (cached && cached.expiry > Date.now() + 5000) return cached.token;
-
-  const body = new URLSearchParams({ grant_type: profile.grantType || 'client_credentials' });
-  body.set('client_id', profile.clientId);
-  body.set('client_secret', profile.clientSecret);
-  if (profile.scope) body.set('scope', profile.scope);
-  if (profile.grantType === 'refresh_token' && profile.refreshToken) {
-    body.set('refresh_token', profile.refreshToken);
-  }
-
-  const res = await safeFetch(
-    profile.tokenUrl,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
-    },
-    ssrfOpts
-  );
-  if (!res.ok) throw new Error(`OAuth token request failed: ${res.status}`);
-  const data = await res.json();
-  const expiresInMs = data.expires_in ? data.expires_in * 1000 : 3600000;
-  oauthCache.set(ref, { token: data.access_token, expiry: Date.now() + expiresInMs });
-  return data.access_token;
+function getOAuthToken(ref, profile, ssrfOpts) {
+  return oauthCache.getToken(ref, async () => {
+    const body = clientCredentialsBody({
+      clientId: profile.clientId,
+      clientSecret: profile.clientSecret,
+      scope: profile.scope,
+      grantType: profile.grantType || 'client_credentials',
+      refreshToken: profile.refreshToken
+    });
+    const res = await safeFetch(
+      profile.tokenUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      },
+      ssrfOpts
+    );
+    if (!res.ok) throw new Error(`OAuth token request failed: ${res.status}`);
+    return res.json();
+  });
 }
 
 /**

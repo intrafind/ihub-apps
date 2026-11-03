@@ -10,7 +10,7 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, sources,
+ * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, integrationAuthRequired, sources,
  * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
@@ -27,7 +27,7 @@ import {
 import { insertSupportMarkers } from '../../../../shared/sources/index.js';
 import { generatedFilesOf } from '../../../../shared/generatedFiles.js';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
-import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
+import { buildAuthPrompts } from '../integrations/connect/authPrompts';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
@@ -206,8 +206,8 @@ export function projectRunToMessage(run, options = {}) {
   const mcpApps = buildMcpAppViews(run);
   if (mcpApps) extras.mcpApps = mcpApps;
   // MCP servers with per-user sign-in the user has to connect (one per server).
-  const mcpAuthRequired = buildMcpAuthPrompts(run);
-  if (mcpAuthRequired) extras.mcpAuthRequired = mcpAuthRequired;
+  const integrationAuthRequired = buildAuthPrompts(run);
+  if (integrationAuthRequired) extras.integrationAuthRequired = integrationAuthRequired;
   // Scheduled tasks a scheduling tool proposed: confirmation cards.
   const scheduledTaskProposals = (run.tools || [])
     .map(tool => tool.scheduledTaskProposal)

@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessing';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { ConnectCard } from '../../integrations/connect/ConnectCard';
 
 /**
  * Shared rendering shell for the cloud-storage file pickers
@@ -20,7 +20,6 @@ import { buildApiUrl } from '../../../utils/runtimeBasePath';
 const CloudFileBrowserShell = ({
   provider,
   useBrowserHook,
-  i18nKeys,
   // `{ maxFileSizeMB }`; a caller that passes none gets the 10 MB default.
   uploadConfig = {},
   onFilesProcessed,
@@ -47,6 +46,8 @@ const CloudFileBrowserShell = ({
   const { t } = useTranslation();
   const {
     authStatus,
+    authReason,
+    authScopes,
     sources,
     currentSource,
     drives,
@@ -166,14 +167,6 @@ const CloudFileBrowserShell = ({
     }
   };
 
-  const handleConnect = () => {
-    const returnUrl = window.location.pathname + window.location.search;
-    const authUrl = buildApiUrl(
-      `integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`
-    );
-    window.location.href = authUrl;
-  };
-
   const getFileIcon = item => {
     if (item.isFolder) return 'folder';
     const mimeType = item.mimeType || '';
@@ -211,31 +204,26 @@ const CloudFileBrowserShell = ({
     return null;
   };
 
-  // View A: Not Connected
+  // View A: Not Connected — the one Connect card of every integration.
   if (authStatus === 'not_connected') {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-        <div className="w-16 h-16 mb-4 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-          <Icon name="cloud" size="xl" className="text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          {t(i18nKeys.notConnected[0], i18nKeys.notConnected[1])}
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-sm">
-          {t(i18nKeys.connectPrompt[0], i18nKeys.connectPrompt[1])}
-        </p>
-        <div className="flex gap-3">
+      <div className="py-6 px-2">
+        <ConnectCard
+          prompt={{
+            integration: provider.id,
+            name: provider.displayName || provider.name || provider.id,
+            reason: authReason,
+            ...(authScopes?.length > 0 ? { scopes: authScopes } : {})
+          }}
+          context="files"
+        />
+        <div className="mt-2 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             {t('common.cancel', 'Cancel')}
-          </button>
-          <button
-            onClick={handleConnect}
-            className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-          >
-            {t(i18nKeys.connect[0], i18nKeys.connect[1])}
           </button>
         </div>
       </div>

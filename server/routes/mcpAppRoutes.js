@@ -28,7 +28,7 @@
  * never tools of another server.
  *
  * A per-user OAuth server the caller has not connected answers **409**
- * `{ error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl }` — never
+ * `{ error: 'auth_required', code: 'INTEGRATION_AUTH_REQUIRED', integration, connectUrl }` — never
  * 401, which the client reads as an expired iHub session and signs the user
  * out for. A sign-in that could not be renewed right now answers 503.
  *
@@ -37,6 +37,7 @@
 import { z } from 'zod';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
+import { INTEGRATION_AUTH_REQUIRED } from '../services/integrations/auth/integrationAuthRequired.js';
 import { installedIntegrationById } from '../services/integrations/installedRefs.js';
 import interactionService from '../services/loop/InteractionService.js';
 import { authorizeInteraction } from '../services/loop/runAccess.js';
@@ -45,11 +46,7 @@ import {
   isViewToolApproval,
   requestViewToolCall
 } from '../services/mcp/mcpViewToolApproval.js';
-import {
-  isAuthRequiredError,
-  isTokenRefreshError,
-  MCP_AUTH_REQUIRED
-} from '../services/mcp/McpUserOAuthProvider.js';
+import { isAuthRequiredError, isTokenRefreshError } from '../services/mcp/McpUserOAuthProvider.js';
 import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
 import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
@@ -219,8 +216,10 @@ export async function resolveMcpApp(req, appId, toolId, { declaredView = false }
 /** The "connect first" answer for a per-user server. */
 function authRequiredAccessError(serverId) {
   return new McpAppAccessError(MCP_APP_AUTH_REQUIRED_STATUS, 'auth_required', {
-    code: MCP_AUTH_REQUIRED,
-    ...(serverId ? { connectUrl: mcpClientManager.connectUrlFor(serverId) } : {})
+    code: INTEGRATION_AUTH_REQUIRED,
+    ...(serverId
+      ? { integration: serverId, connectUrl: mcpClientManager.connectUrlFor(serverId) }
+      : {})
   });
 }
 

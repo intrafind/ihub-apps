@@ -168,8 +168,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
   'mcpApps',
-  // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-  'mcpAuthRequired',
+  // Connect cards for integrations to connect first (see chatSeams.authRequiredOf).
+  'integrationAuthRequired',
   // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
   'scheduledTaskProposals',
   // What the run did before it answered — searches, tool calls, workflow steps

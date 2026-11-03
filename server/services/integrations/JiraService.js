@@ -1,17 +1,32 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import crypto from 'node:crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import { getJiraConfig, isJiraConfigured } from './jiraConfig.js';
-import { adjustJiraConnectionCount } from './jiraConnectionCount.js';
+import { JIRA_INSTANCE_ID, getJiraConfig, isJiraConfigured } from './jiraConfig.js';
 import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
+import { isUnavailableError } from './oauthRefreshError.js';
+import { createFixedEndpointStrategy } from './auth/strategies/fixedEndpoint.js';
+import { getIntegrationConnectionService } from './auth/IntegrationConnectionService.js';
+import { isIntegrationAuthRequired } from './auth/integrationAuthRequired.js';
+import { tokenStorageIdFor } from './auth/tokenSecrets.js';
+import { ATLASSIAN_ISSUER } from './auth/connectionProviders.js';
+
+/** What a Jira sign-in asks for; `offline_access` is required for a refresh token. */
+const JIRA_SCOPES = Object.freeze([
+  'read:jira-user',
+  'read:jira-work',
+  'write:jira-work',
+  'offline_access'
+]);
 
 /**
- * JIRA Service for comprehensive ticket management integration
- * Provides OAuth2 PKCE authentication, secure token storage, and JIRA API access
+ * JIRA Service for comprehensive ticket management integration: the Jira
+ * Cloud API as the signed-in user. The user's Atlassian connection (OAuth 2.0
+ * with PKCE, token storage, refresh, disconnect) runs through the shared
+ * OAuth client and the connection service; this service declares Atlassian's
+ * endpoints (`oauthStrategy`) and calls the API.
  */
 class JiraService {
   constructor() {
@@ -43,92 +58,31 @@ class JiraService {
   }
 
   /**
-   * Generate OAuth2 authorization URL for Atlassian Cloud
-   * Note: PKCE may not be fully supported by Atlassian Cloud, but we'll try
-   *
-   * `redirectUri` is the one the route resolved for this flow (configured, or
-   * derived from the request — see `resolveJiraRedirectUri`); the token
-   * exchange must send the same value.
+   * Atlassian Cloud's authorization server for the shared OAuth client
+   * (`auth/OAuthUserClient.js`): OAuth 2.0 (3LO) with PKCE, the Jira scopes
+   * plus `offline_access` (so a refresh token is issued), the
+   * `api.atlassian.com` audience and a consent prompt. The sign-in, the token
+   * exchange, storage, refresh and disconnect run through the connection
+   * service; this only says where and as whom.
+   * @returns {import('./auth/OAuthUserClient.js').OAuthStrategy}
+   * @throws {Error} When the installation has no client id
    */
-  generateAuthUrl(state, codeVerifier = null, redirectUri = this.getConfig().redirectUri) {
+  oauthStrategy() {
     const jiraConfig = this.getConfig();
-    const params = new URLSearchParams({
-      audience: 'api.atlassian.com', // Required for Atlassian Cloud
-      client_id: jiraConfig.clientId,
-      scope: 'read:jira-user read:jira-work write:jira-work offline_access', // offline_access is REQUIRED for refresh tokens
-      redirect_uri: redirectUri,
-      state: state,
-      response_type: 'code',
-      access_type: 'offline', // Explicitly request offline access for refresh tokens
-      prompt: 'consent' // Force consent screen to ensure offline_access is granted
+    return createFixedEndpointStrategy({
+      id: 'fixed:jira',
+      issuer: ATLASSIAN_ISSUER,
+      authorizationEndpoint: this.authUrl,
+      tokenEndpoint: this.tokenUrl,
+      clientId: jiraConfig.clientId,
+      clientSecret: () => credentialService.resolveSecret(jiraConfig.clientSecretRef),
+      scopes: JIRA_SCOPES,
+      extraAuthorizationParams: {
+        audience: 'api.atlassian.com',
+        access_type: 'offline',
+        prompt: 'consent'
+      }
     });
-
-    // Add PKCE parameters if provided (may be ignored by Atlassian Cloud)
-    if (codeVerifier) {
-      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-      params.append('code_challenge', codeChallenge);
-      params.append('code_challenge_method', 'S256');
-    }
-
-    return `${this.authUrl}?${params.toString()}`;
-  }
-
-  /**
-   * Exchange authorization code for tokens (Atlassian Cloud). `redirectUri`
-   * must be the value the authorize step sent.
-   */
-  async exchangeCodeForTokens(
-    authCode,
-    codeVerifier = null,
-    redirectUri = this.getConfig().redirectUri
-  ) {
-    try {
-      const jiraConfig = this.getConfig();
-      const tokenData = new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: jiraConfig.clientId,
-        client_secret: credentialService.resolveSecret(jiraConfig.clientSecretRef),
-        code: authCode,
-        redirect_uri: redirectUri
-      });
-
-      // Add code_verifier only if provided (PKCE may not be supported)
-      if (codeVerifier) {
-        tokenData.append('code_verifier', codeVerifier);
-      }
-
-      const response = await httpFetch(this.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error exchanging authorization code', {
-          component: 'JiraService',
-          error: errorData
-        });
-        throw new Error('Failed to exchange authorization code for tokens');
-      }
-
-      const tokens = await response.json();
-
-      if (!tokens.refresh_token) {
-        logger.warn('No refresh token received from Atlassian OAuth', { component: 'JiraService' });
-      }
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope
-      };
-    } catch (error) {
-      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('Error exchanging authorization code', { component: 'JiraService', error });
-      throw new Error('Failed to exchange authorization code for tokens');
-    }
   }
 
   /**
@@ -189,170 +143,44 @@ class JiraService {
   }
 
   /**
-   * Refresh access token using refresh token
+   * The user's Atlassian tokens, refreshed when they expired (or after a
+   * 401 with `forceRefresh`). The connection service owns the lifecycle: a
+   * refused refresh token ends the connection, a temporary failure keeps it.
+   * @param {string} userId
+   * @param {Object} [options]
+   * @param {boolean} [options.forceRefresh]
+   * @param {string} [options.usedAccessToken]
+   * @returns {Promise<{accessToken: string, refreshToken?: string, expiresIn?: number, scope?: string}>}
+   * @throws {IntegrationAuthRequiredError} `User not authenticated with JIRA` / `JIRA authentication expired. …`
    */
-  async refreshAccessToken(refreshToken) {
+  async getUserTokens(userId, options = {}) {
     try {
-      logger.info('Attempting to refresh JIRA access token', { component: 'JiraService' });
-
-      const jiraConfig = this.getConfig();
-      const tokenData = new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: jiraConfig.clientId,
-        client_secret: credentialService.resolveSecret(jiraConfig.clientSecretRef),
-        refresh_token: refreshToken
-      });
-
-      const response = await httpFetch(this.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error refreshing JIRA access token', {
-          component: 'JiraService',
-          error: errorData
-        });
-
-        if (response.status === 400) {
-          if (errorData.error === 'invalid_grant') {
-            throw new Error('Refresh token expired or invalid - user needs to reconnect');
-          }
-          throw new Error(
-            `Token refresh failed: ${errorData.error_description || errorData.error}`
-          );
-        }
-
-        throw new Error(`Failed to refresh access token: ${response.statusText}`);
-      }
-
-      const tokens = await response.json();
-      logger.info('JIRA token refresh successful', { component: 'JiraService' });
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || refreshToken, // Use new refresh token if provided
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope
-      };
-    } catch (error) {
-      if (
-        error.message.includes('Refresh token expired') ||
-        error.message.includes('Token refresh failed') ||
-        error.message.includes('Failed to refresh access token')
-      ) {
-        throw error;
-      }
-      logger.error('Error refreshing JIRA access token', { component: 'JiraService', error });
-      throw new Error(`Failed to refresh access token: ${error.message}`);
-    }
-  }
-
-  /**
-   * Store encrypted user tokens using centralized token storage
-   */
-  async storeUserTokens(userId, tokens) {
-    try {
-      if (!tokens.refreshToken) {
-        logger.warn('No refresh token - user will need to reconnect when access token expires', {
-          component: 'JiraService'
-        });
-      }
-
-      // A refresh rewrites an existing file; only a first store is a new connection.
-      const wasConnected = await this.hasStoredTokens(userId);
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      if (!wasConnected) adjustJiraConnectionCount(1);
-      logger.info('JIRA tokens stored for user', {
-        component: 'JiraService',
+      return await getIntegrationConnectionService().getUserTokens({
+        installationId: JIRA_INSTANCE_ID,
         userId,
-        hasRefreshToken: !!tokens.refreshToken
+        ...options
       });
-      return true;
     } catch (error) {
-      logger.error('Error storing user tokens', { component: 'JiraService', error });
-      throw new Error('Failed to store user tokens');
-    }
-  }
-
-  /** Whether a token file exists for the user, expired or not. */
-  async hasStoredTokens(userId) {
-    try {
-      await tokenStorage.getTokenMetadata(userId, this.serviceName);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Retrieve and decrypt user tokens using centralized token storage
-   */
-  async getUserTokens(userId) {
-    try {
-      // Check if tokens are expired
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
-
-      if (expired) {
-        logger.info('Tokens expired, attempting refresh', { component: 'JiraService', userId });
-
-        try {
-          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-
-          if (!expiredTokens.refreshToken) {
-            logger.error('No refresh token available for user, must reconnect JIRA account', {
-              component: 'JiraService',
-              userId
-            });
-            throw new Error('No refresh token available - user needs to reconnect JIRA account');
-          }
-
-          const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
-
-          // Store the refreshed tokens
-          await this.storeUserTokens(userId, refreshedTokens);
-          logger.info('Successfully refreshed and stored JIRA tokens for user', {
-            component: 'JiraService',
-            userId
-          });
-          return refreshedTokens;
-        } catch (refreshError) {
-          logger.error('Failed to refresh tokens for user', {
-            component: 'JiraService',
-            userId,
-            error: refreshError
-          });
-
-          // If refresh fails, delete the invalid tokens so user can reconnect
-          await this.deleteUserTokens(userId);
-
-          throw new Error('JIRA authentication expired. Please reconnect your account.');
-        }
-      }
-
-      return await tokenStorage.getUserTokens(userId, this.serviceName);
-    } catch (error) {
-      if (error.message.includes('not authenticated')) {
-        throw new Error('User not authenticated with JIRA');
-      }
+      if (isIntegrationAuthRequired(error) || isUnavailableError(error)) throw error;
       logger.error('Error retrieving user tokens', { component: 'JiraService', error });
       throw new Error('Failed to retrieve user tokens');
     }
   }
 
   /**
-   * Delete user tokens using centralized token storage (disconnect)
+   * Disconnect the user's Atlassian account (audit `connection.revoke`).
+   * @param {string} userId
+   * @param {import('express').Request} [req] - For the audit entry
+   * @returns {Promise<boolean>} Whether tokens were removed
    */
-  async deleteUserTokens(userId) {
+  async deleteUserTokens(userId, req) {
     try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
-      if (result) {
-        adjustJiraConnectionCount(-1);
-        logger.info('JIRA tokens deleted for user', { component: 'JiraService', userId });
-      }
-      return result;
+      const { removed } = await getIntegrationConnectionService().disconnect({
+        installationId: JIRA_INSTANCE_ID,
+        userId,
+        req
+      });
+      return removed;
     } catch (error) {
       logger.error('Error deleting user tokens', { component: 'JiraService', error });
       return false;
@@ -394,35 +222,14 @@ class JiraService {
             maxAttempts: maxRetries + 1
           });
 
-          try {
-            // Force refresh tokens by getting them directly and refreshing them
-            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-
-            if (!expiredTokens.refreshToken) {
-              throw new Error('No refresh token available');
-            }
-
-            const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
-
-            await this.storeUserTokens(userId, refreshedTokens);
-
-            logger.info('Forced token refresh successful for user', {
-              component: 'JiraService',
-              userId
-            });
-
-            // Retry the request with fresh tokens
-            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
-          } catch (refreshError) {
-            logger.error('Forced token refresh failed', {
-              component: 'JiraService',
-              error: refreshError
-            });
-
-            // Clean up invalid tokens
-            await this.deleteUserTokens(userId);
-            throw new Error('JIRA authentication expired. Please reconnect your account.');
-          }
+          // A refused refresh token ends the connection inside the service
+          // (and surfaces as "authentication expired"); a temporary failure
+          // keeps the tokens.
+          await this.getUserTokens(userId, {
+            forceRefresh: true,
+            usedAccessToken: tokens.accessToken
+          });
+          return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
         } else if (response.status === 401) {
           throw new Error('JIRA authentication required. Please reconnect your account.');
         }
@@ -437,6 +244,8 @@ class JiraService {
     } catch (error) {
       // Re-throw known errors
       if (
+        isIntegrationAuthRequired(error) ||
+        isUnavailableError(error) ||
         error.message.includes('JIRA authentication') ||
         error.message.includes('JIRA API error')
       ) {
@@ -846,7 +655,10 @@ class JiraService {
    */
   async getTokenExpirationInfo(userId) {
     try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      const metadata = await tokenStorage.getTokenMetadata(
+        tokenStorageIdFor(userId),
+        this.serviceName
+      );
       const now = new Date();
       const expiresAt = new Date(metadata.expiresAt);
       const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));

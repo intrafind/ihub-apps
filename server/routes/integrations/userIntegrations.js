@@ -1,0 +1,462 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * The integrations of the signed-in user, and the one connect flow of every
+ * protocol (#2917; concept `2026-10-20 Unified Integrations/04-architecture.md` §4):
+ *
+ *   GET  /api/integrations                    the installations the user's groups allow,
+ *                                             with capabilities, actions and connection status
+ *   GET  /api/integrations/:id                one of them
+ *   POST /api/integrations/:id/connect        { returnUrl? }           → { url }
+ *   POST /api/integrations/:id/reconnect      { returnUrl?, scopes? }  → { url }
+ *   POST /api/integrations/:id/disconnect     → { success, removed, revoked }
+ *
+ * `url` is the vendor's authorization URL: the browser goes there, the user
+ * consents, and the one callback (`GET /api/integrations/oauth/callback`, or
+ * one of its vendor-registered aliases) sends it back to `returnUrl` with
+ * `integration_connected=<id>` or `integration_error=<code>&integration=<id>`.
+ *
+ * Security:
+ * - The installation id is checked against the registry and the user's
+ *   groups (`permissions.integrations`); an installation the user may not use
+ *   answers like one that does not exist (404), so ids cannot be probed.
+ *   Disconnect only needs the installation to exist: it removes the caller's
+ *   own tokens, which a user whose group lost the installation must still be
+ *   able to do.
+ * - `returnUrl` must be a same-origin path or an http(s) URL on this host;
+ *   anything else is refused (400), never silently replaced.
+ * - `state` and the PKCE verifier stay server-side, single-use, bound to the
+ *   user and the installation (`oauthFlowStore`). The POST routes require a
+ *   JSON body, so a cross-site form cannot start a flow (it would need a CORS
+ *   preflight), and the session cookie is `SameSite=Lax`.
+ * - Delegated callers (OAuth clients, agents, API keys including personal
+ *   ones) cannot connect or disconnect, and never get the admin bypass.
+ * - `GET /:id` does not look an id up for an anonymous caller: it hands the
+ *   request on, so an installed id and an unknown one get the same answer.
+ *
+ * The routes are mounted on `/api/integrations` before the per-provider
+ * routers. `GET /:id` hands requests for ids that are not installations on
+ * (`next()`), so `/api/integrations/connections`, `/api-keys`, … keep working.
+ *
+ * @module routes/integrations/userIntegrations
+ */
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import { authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
+import logger from '../../utils/logger.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { SAFE_ID_PATTERN, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
+import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers.js';
+import configCache from '../../configCache.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
+import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
+import { isAdminUser } from '../../services/loop/runIdentity.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
+import { describeInstallation } from '../../services/integrations/auth/connectionProviders.js';
+import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
+import {
+  OAUTH_FLOW_ERROR_CODES,
+  OAuthFlowError,
+  parseScope
+} from '../../services/integrations/auth/OAuthUserClient.js';
+import {
+  getUserIntegration,
+  listUserIntegrations
+} from '../../services/integrations/userIntegrations.js';
+
+const COMPONENT = 'UserIntegrations';
+
+const router = express.Router();
+
+/** Installation ids: the safe id characters, at most 64 long. */
+const MAX_ID_LENGTH = 64;
+
+/** Scopes a reconnect may ask for: a bounded list of plain scope tokens (RFC 6749 §3.3). */
+const SCOPE_TOKEN = /^[\x21\x23-\x5B\x5D-\x7E]{1,200}$/;
+const MAX_SCOPES = 50;
+
+/**
+ * Starting a sign-in reaches the vendor's authorization server (and, for MCP,
+ * discovery and client registration); bound it per signed-in user, 20 a
+ * minute. Runs after `authRequired`, so the user is known; a shared NAT does
+ * not make colleagues share one budget. Exported for tests (`resetKey`).
+ */
+export const connectLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `user:${req.user?.id || 'anonymous'}`
+});
+
+/** HTTP status per flow error code (everything else is 400). */
+const FLOW_ERROR_STATUS = {
+  [OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND]: 404,
+  [OAUTH_FLOW_ERROR_CODES.USER_MISMATCH]: 401,
+  [OAUTH_FLOW_ERROR_CODES.DISCOVERY_FAILED]: 502,
+  [OAUTH_FLOW_ERROR_CODES.REGISTRATION_FAILED]: 502,
+  [OAUTH_FLOW_ERROR_CODES.PUBLIC_URL_MISMATCH]: 409
+};
+
+/** Whether a path segment can be an installation id at all. */
+export function isInstallationId(value) {
+  return typeof value === 'string' && value.length <= MAX_ID_LENGTH && SAFE_ID_PATTERN.test(value);
+}
+
+/** The language of the response (`?lang=`, else the request, else the platform default). */
+function languageOf(req) {
+  return sanitizeLanguageCode(
+    req.query.lang || req.headers['accept-language']?.split(',')[0]?.split(';')[0],
+    configCache.getPlatform()?.defaultLanguage || 'en'
+  );
+}
+
+function isAnonymous(user) {
+  return !user?.id || user.id === 'anonymous';
+}
+
+/**
+ * Delegated callers act on behalf of someone; they may not change that
+ * person's connections. The same principals that can never be admins: OAuth
+ * clients, agents, and the bearer-token auth modes (client credentials, static
+ * and personal API keys, authorization-code delegation).
+ */
+function isDelegated(user) {
+  return !isAdminEligiblePrincipal(user);
+}
+
+/**
+ * The scopes a reconnect asks for: an array or a space-separated string of
+ * scope tokens; invalid tokens are dropped, at most {@link MAX_SCOPES}.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+export function parseRequestedScopes(value) {
+  const raw = Array.isArray(value) ? value.join(' ') : typeof value === 'string' ? value : '';
+  return parseScope(raw)
+    .filter(scope => SCOPE_TOKEN.test(scope))
+    .slice(0, MAX_SCOPES);
+}
+
+/**
+ * Common checks of the POST routes. Answers and returns null when the request
+ * cannot go on.
+ *
+ * @returns {{installationId: string}|null}
+ */
+function checkPost(req, res) {
+  if (isAnonymous(req.user)) {
+    sendAuthRequired(res);
+    return null;
+  }
+  if (isDelegated(req.user)) {
+    res.status(403).json({
+      error: 'Only an interactive session can manage integration connections',
+      code: 'INTERACTIVE_SESSION_REQUIRED'
+    });
+    return null;
+  }
+  // A JSON body (even `{}`) is required: a cross-site HTML form cannot send
+  // one without a CORS preflight.
+  if (!req.is('application/json')) {
+    res.status(415).json({ error: 'Send a JSON body', code: 'JSON_REQUIRED' });
+    return null;
+  }
+  const installationId = req.params.id;
+  if (!isInstallationId(installationId)) {
+    res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+    return null;
+  }
+  return { installationId };
+}
+
+/**
+ * Start (or restart) the sign-in to an installation for the caller.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {{reconnect: boolean}} options
+ */
+async function startConnect(req, res, { reconnect }) {
+  const checked = checkPost(req, res);
+  if (!checked) return;
+  const { installationId } = checked;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+  if (body.returnUrl !== undefined && !isValidReturnUrl(body.returnUrl, req)) {
+    return res.status(400).json({
+      error: 'returnUrl must be a path or an http(s) URL on this site',
+      code: 'INVALID_RETURN_URL'
+    });
+  }
+
+  const instance = installedIntegrationService.get(installationId);
+  // The user's groups decide; admins may always connect (they configure and
+  // test the integrations). The installation's own rule (an MCP server's app
+  // bindings, a storage provider's grant) is checked again when the flow starts.
+  const allowed =
+    Boolean(instance) &&
+    (mayUseIntegration(instance, req.user) ||
+      (isAdminUser(req.user) && isAdminEligiblePrincipal(req.user)));
+  if (!instance || instance.enabled === false || !allowed) {
+    return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+  }
+  const descriptor = await describeInstallation(installationId).catch(() => null);
+  if (!descriptor || descriptor.kind !== 'oauth-user') {
+    return res.status(400).json({
+      error: 'This integration does not take a personal connection',
+      code: 'NOT_CONNECTABLE'
+    });
+  }
+
+  const scopes = reconnect ? parseRequestedScopes(body.scopes) : [];
+  const connections = getIntegrationConnectionService();
+  const params = {
+    installationId,
+    user: req.user,
+    req,
+    ...(body.returnUrl !== undefined ? { returnUrl: String(body.returnUrl) } : {}),
+    ...(scopes.length ? { scopes } : {})
+  };
+  try {
+    const { authorizationUrl } = reconnect
+      ? await connections.reconnect(params)
+      : await connections.beginConnect(params);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ url: authorizationUrl.href });
+  } catch (error) {
+    if (error instanceof OAuthFlowError) {
+      logger.warn('Integration sign-in could not start', {
+        component: COMPONENT,
+        integration: installationId,
+        userId: req.user.id,
+        code: error.code,
+        error: error.message
+      });
+      if (error.code === OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND) {
+        return res
+          .status(404)
+          .json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+      }
+      return res
+        .status(FLOW_ERROR_STATUS[error.code] || 400)
+        .json({ error: 'The sign-in could not be started', code: error.code });
+    }
+    return sendInternalError(res, error, 'start the integration sign-in');
+  }
+}
+
+/**
+ * @swagger
+ * /api/integrations:
+ *   get:
+ *     summary: The integrations the signed-in user may use
+ *     description: |
+ *       Every enabled installation the user's groups allow (never another
+ *       one), with capabilities, enabled actions and their side effects, and
+ *       the connection status for this user (`connected` with the account,
+ *       `sso`, `service_account`, `shared_key`, `not_connected`,
+ *       `needs_reconnect` with a reason, `none`).
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: lang
+ *         in: query
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ integrations: [...] }"
+ *       401:
+ *         description: Not signed in
+ */
+router.get('/', requireFeature('integrations'), authRequired, async (req, res) => {
+  if (isAnonymous(req.user)) return sendAuthRequired(res);
+  try {
+    const integrations = await listUserIntegrations({ user: req.user, language: languageOf(req) });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ integrations });
+  } catch (error) {
+    return sendInternalError(res, error, 'list the integrations');
+  }
+});
+
+/**
+ * @swagger
+ * /api/integrations/{id}:
+ *   get:
+ *     summary: One integration the signed-in user may use
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ integration: {...} }"
+ *       404:
+ *         description: |
+ *           Not an installation the user may use. Anonymous callers are handed
+ *           on to the other `/api/integrations/*` routes without a lookup.
+ */
+router.get('/:id', async (req, res, next) => {
+  // An anonymous caller may use none of them, and answering it 401 for an
+  // installed id but handing an unknown one on would tell which ids exist.
+  // Hand every anonymous request on, before the registry lookup: the routers
+  // after this one answer it by path alone.
+  if (isAnonymous(req.user)) return next();
+  // Not an installation id at all: one of the other `/api/integrations/*` routes.
+  if (!isInstallationId(req.params.id) || !installedIntegrationService.get(req.params.id)) {
+    return next();
+  }
+  return requireFeature('integrations')(req, res, () =>
+    authRequired(req, res, async () => {
+      if (isAnonymous(req.user)) return sendAuthRequired(res);
+      try {
+        const integration = await getUserIntegration({
+          user: req.user,
+          installationId: req.params.id,
+          language: languageOf(req)
+        });
+        if (!integration) {
+          return res
+            .status(404)
+            .json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ integration });
+      } catch (error) {
+        return sendInternalError(res, error, 'describe the integration');
+      }
+    })
+  );
+});
+
+/**
+ * @swagger
+ * /api/integrations/{id}/connect:
+ *   post:
+ *     summary: Start the sign-in to an integration
+ *     description: |
+ *       Answers the vendor's authorization URL. The browser goes there and
+ *       comes back to `returnUrl` (same origin) with
+ *       `integration_connected=<id>` or `integration_error=<code>&integration=<id>`.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ url }"
+ *       400:
+ *         description: Invalid returnUrl, or the integration takes no personal connection
+ *       404:
+ *         description: Not an installation the user may use
+ *       415:
+ *         description: No JSON body
+ */
+router.post(
+  '/:id/connect',
+  requireFeature('integrations'),
+  authRequired,
+  connectLimiter,
+  (req, res) => startConnect(req, res, { reconnect: false })
+);
+
+/**
+ * @swagger
+ * /api/integrations/{id}/reconnect:
+ *   post:
+ *     summary: Sign in to an integration again, optionally with more scopes
+ *     description: |
+ *       Like `connect`; `scopes` (step-up) are added to what the user already
+ *       granted. The connection keeps its id.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl: { type: string }
+ *               scopes: { type: array, items: { type: string } }
+ *     responses:
+ *       200:
+ *         description: "{ url }"
+ */
+router.post(
+  '/:id/reconnect',
+  requireFeature('integrations'),
+  authRequired,
+  connectLimiter,
+  (req, res) => startConnect(req, res, { reconnect: true })
+);
+
+/**
+ * @swagger
+ * /api/integrations/{id}/disconnect:
+ *   post:
+ *     summary: Disconnect the caller from an integration
+ *     description: |
+ *       Revokes the grant at the vendor where it supports revocation, deletes
+ *       the caller's tokens and records `connection.revoke` in the audit log.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: "{ success: true, removed, revoked }"
+ *       404:
+ *         description: No such installation
+ */
+router.post('/:id/disconnect', requireFeature('integrations'), authRequired, async (req, res) => {
+  const checked = checkPost(req, res);
+  if (!checked) return;
+  const { installationId } = checked;
+  const descriptor = await describeInstallation(installationId).catch(() => null);
+  if (!descriptor || descriptor.kind !== 'oauth-user') {
+    return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+  }
+  try {
+    const result = await getIntegrationConnectionService().disconnect({
+      installationId,
+      userId: String(req.user.id),
+      req
+    });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    logger.error('Integration disconnect failed', {
+      component: COMPONENT,
+      integration: installationId,
+      userId: req.user.id,
+      error: error.message
+    });
+    return sendInternalError(res, error, 'disconnect the integration');
+  }
+});
+
+export default router;

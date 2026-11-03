@@ -30,7 +30,7 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Web search engines** are one integration per engine, all of `type: "web-search"`: **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`), each a singleton installed only when wanted (a fresh install ships none). Brave and Staan hold their API key as a credential reference (`apiKeyRef`, falling back to `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY`); Qwant has no settings. Each has one action, `search`, under its historical tool id (`braveSearch`, `staanSearch`, `qwantSearch`). Apps do not bind engines: they switch web search on in their own `websearch` settings and name an engine (`websearch.provider`: an installation id, or `auto` for the first engine the user may use, Brave, Staan, Qwant, then any other). Native search on Google, OpenAI and Anthropic models needs no engine; the page reader `read_url` belongs to the web search feature (a platform tool). A third party ships its own engine as a `script` or `openapi` definition of type `web-search` (see [Building an Integration → Web search engines](integration-development.md#web-search-engines)). Migration V204 replaced the former single installation `websearch` (`com.intrafind/web-search`) with the engines that worked. See [Web Tools](web-tools.md).
 
-**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through `/api/integrations/jira/auth` (from the chat prompt or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
+**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through the one connect flow (`POST /api/integrations/jira/connect`, from the chat's Connect card or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
 
 **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra`) runs with an app registration's client credentials: tenant id, client id and the client secret as a credential reference, each falling back to the `AZURE_*` environment variables when empty (its editor says per field whether the server has the variable). Its six actions are the former `entraPeopleSearch_*` tools under the same ids. It is a people directory (`type: "people-directory"`): the shipped People search app uses it next to the LDAP directories. See [Tool Calling → entraPeopleSearch](tool-calling.md#entrapeoplesearch).
 
@@ -38,10 +38,10 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Microsoft Office 365**, **Google Drive** and **Nextcloud** (`com.intrafind/office365`, `com.intrafind/google-drive`, `com.intrafind/nextcloud`) are the storage providers (`type: storage`) of the chat's file picker and the project cloud documents. Each can be installed **several times** — one installation per Azure app registration or tenant, per Google OAuth client, per Nextcloud server. An installation holds the provider's OAuth app (client id, client secret as a credential reference, optional redirect URI, the tenant, sources or server URL) and signs every user in (`auth.modes: ["oauth-user"]`); they have no model-facing actions.
 
-- **The installation id is the provider id.** It names the provider in the routes (`/api/integrations/<service>/auth?providerId=<installation id>`, every browse and download route requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
+- **The installation id is the provider id.** It names the provider in the connect flow (`POST /api/integrations/<installation id>/connect`), in the browse and download routes (`?providerId=<installation id>`, every one requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
 - **Redirect URI**: empty means derived from each request like Jira's — scheme and host as the browser sees them (`X-Forwarded-Proto` / `X-Forwarded-Host` of a trusted proxy), the base path (`X-Forwarded-Prefix`), then the callback path. The installation's **Settings** tab shows the URI to register with a **Copy** button.
 - **Apps bind them** like integrations: one installation, a provider's definition id (all its installations) or `type:storage` (all storage providers); the chat's file picker offers the bound providers the user's groups grant. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
-- Users connect under **Settings → Integrations** or from the picker; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
+- Users connect under **Settings → Integrations** or from the picker, which shows the Connect card when the provider is not connected; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
 
 See [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md), [Nextcloud](nextcloud-integration.md).
 
@@ -147,12 +147,13 @@ A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a
 
 ## The Integrations page
 
-**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has three tabs (`?tab=` in the URL):
+**Admin → Integrations** (`/admin/integrations`) is the one admin page for integrations. It has four tabs (`?tab=` in the URL):
 
 | Tab                       | Contents                                                                                                                                                                                                                                       |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Installed** (default)   | every installation as a tile, grouped                                                                                                                                                                                                          |
 | **Catalog** (`catalog`)   | every definition you can install, in the same groups                                                                                                                                                                                           |
+| **Requests** (`requests`) | what users asked for from the catalog, with the open count as badge; see [Requests from users](#requests-from-users)                                                                                                                            |
 | **Inbound** (`inbound`)   | what connects _to_ iHub, each with its status and a link to its page: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway                                                                                    |
 
 **Groups.** Installed and Catalog list their entries under the same headings, in this order; a group with nothing in it is left out, and each heading shows the count and a one-line description:
@@ -346,6 +347,123 @@ Five protocols have an adapter: `native`, for the built-in connectors (iFinder, 
 Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `allowedHosts`) and the platform's SSRF settings.
 
 Before any of this, a call can wait for a person's approval: the installation's `approval.default`, the action's `approval.actions[<action>]`, the platform default for its data flow and the app's override resolve to one mode, the strictest wins ([Tool Approval](tool-approval.md)). A definition migration that renames or removes an action carries its approval mode along. An action that is new or changed since an admin last reviewed it (its fingerprint over name, declared side effect and input schema is not the accepted one in `actions.fingerprints`) resolves to at least `approval.newOrChanged` (default `always`) until it is marked reviewed ([New and changed actions](tool-approval.md#new-and-changed-actions)). An admin can override an action's side effect and data flow with `actions.overrides[<action>].sideEffect` / `.dataFlow`, and its description, model guidance and example prompts with `.description`, `.guidance` and `.examples` (see [Action detail](#action-detail-what-it-does-how-to-use-it-test-it)). The install form preselects the approval default of a new installation: always ask for MCP servers, A2A agents and definitions with an external action of unknown side effect, ask unless it only reads otherwise.
+
+## Connections
+
+A **connection** is how one principal signs in to one installation. Jira, the cloud storage providers (Office 365, Google Drive, Nextcloud) and MCP servers with per-user OAuth sign every user in with their own account; iFinder and iAssistant use the user's own iHub sign-in on every request (`sso`, nothing stored); an installation in _service account_ mode uses one shared credential from the credential store for everybody.
+
+All of them go through one connection service and one OAuth client (`server/services/integrations/auth/`), so connect, refresh, disconnect and the security checks are the same for every integration.
+
+### The connection index
+
+Every connection has a record in the storage namespace `integration-connections` (schema `server/validators/integrationConnectionSchema.js`), keyed by a hash of installation and principal:
+
+| Field | Meaning |
+| --- | --- |
+| `integration`, `principal` | the installation id; `{ type: "user", id }`, or `{ type: "shared" }` for a service account |
+| `kind` | `oauth-user`, `service-account`, `sso` (`api-key` is reserved) |
+| `status` | `active`, `expired` (the refresh token was refused), `revoked` (disconnected), `failed`, `needs-reconnect` (the installation was repointed) |
+| `issuer`, `scopesGranted`, `externalAccount` | the authorization server that issued the credentials, the scopes it granted, the upstream account where it is known |
+| `expiresAt`, `lastRefreshedAt`, `lastUsedAt`, `error` | access token expiry, last refresh and use, the stable code of the last failure (never upstream text) |
+| `secretRef` | where the secret lives: `tokenstore:<service>/<file>` (a `TokenStorageService` file under `contents/integrations/`), or `credential:<ref>` for a service account. The record never holds a token. |
+| `fingerprint` | a hash of the installation settings the credentials were issued under (endpoint, tenant, server URL, client) |
+
+The tokens themselves stay where they always were, encrypted per user and service: `contents/integrations/jira/<user>.json`, `contents/integrations/<office365|googledrive|nextcloud>/<user>__<installation>.json` and `contents/integrations/mcp/<user>__<server>.json`. User ids that are not file-name safe (`auth0|abc`) are filed under a stable hash.
+
+**Upgrade.** On the first start after the upgrade the token tree is re-indexed once: every existing token file gets its record, nobody reconnects and no file is moved or re-encrypted. A legacy cloud storage file without the installation in its name maps to the only installation of that service; with several installations it is skipped and logged (it keeps working for the user, as before). The re-index runs once (a marker in `runtime-imports`), under the storage lock so only one cluster worker does it, and never overwrites a record. The connection service also indexes a token file it meets without a record, so nothing waits on the re-index.
+
+**Resolve.** When a tool runs, the adapter asks the connection service for the caller's connection: the caller's **own** one, or the shared service account configured on the installation — never another user's token. A personal OAuth grant can never become a shared connection. A connection whose installation was repointed (another Nextcloud server, another Microsoft tenant, another OAuth client, another MCP endpoint or auth block) is invalidated: its tokens are deleted, its status becomes `needs-reconnect`, and the user connects again — a token issued for one endpoint is never sent to another.
+
+**Refresh.** An expired access token is refreshed once per connection and worker (concurrent calls share the refresh), at the issuer that issued it. The tokens are deleted when the authorization server refuses the refresh token: `invalid_grant`, or `unauthorized_client` / `invalid_client` whose description names the refresh token (Atlassian answers a dead refresh token with `403 unauthorized_client` "refresh_token is invalid"). Before deleting, the tokens are read once more: when another worker has just refreshed them with a rotating refresh token, its tokens are used. A network error, a 5xx, a 429 or a client problem an admin can fix (an expired client secret) keeps the tokens and the call reports the integration as temporarily unavailable. After three such failures in a row the token endpoint is left alone for a cooldown (5 minutes, doubling, at most an hour); after ten the connection is `failed` and the user connects again. A successful refresh resets the count.
+
+A record is not trusted on its own: `resolve` also checks that its token file is still there, and an `expired`, `revoked`, `failed` or `needs-reconnect` connection is never used, even while a token file is left on disk. A legacy cloud storage token file without the installation in its name is only used while there is exactly one installation of that service; with several, no installation adopts (or deletes) it.
+
+**Disconnect** revokes the tokens at the authorization server when it has a revocation endpoint (RFC 7009: Google, MCP servers that advertise one), deletes them and marks the record `revoked`. Connect and disconnect write the audit entries `connection.create` and `connection.revoke` (resource `connection`).
+
+### Signing in: one callback
+
+Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`; several instances must share the storage, as they share `contents/`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. A callback from another signed-in user, or at another installation's callback, is refused without using up the owner's flow. The browser is always sent back to a same-origin path with one result shape for every integration — `integration_connected=<installation id>`, or `integration_error=<code>&integration=<installation id>` — and never with the authorization server's text. `code` is one of `access_denied`, `oauth_failed`, `missing_code`, `invalid_state`, `state_expired`, `user_mismatch`, `integration_not_found`, `exchange_failed`, `discovery_failed`, `registration_failed`, `issuer_mismatch`, `public_url_mismatch`, `invalid_client`, `callback_failed`.
+
+The callback is `GET /api/integrations/oauth/callback`. The callback URLs registered in the vendors' OAuth apps keep working as aliases of it, with the same handler:
+
+| Alias | Integration |
+| --- | --- |
+| `/api/integrations/jira/callback` | Jira |
+| `/api/integrations/<office365\|googledrive\|nextcloud>/<installation id>/callback` | the storage provider installation in the path |
+| `/api/mcp/oauth/callback/<server id>` | the per-user MCP server in the path |
+
+The redirect URI sent to the authorization server does not change with this release: the configured **Redirect URI** of the installation, else the alias derived from the request (`<scheme>://<host><base path>` + the alias path). An admin can register `…/api/integrations/oauth/callback` instead and enter it as the installation's Redirect URI.
+
+### The connect flow for users
+
+Every integration that signs users in is connected the same way, whatever its protocol (#2917):
+
+```
+POST /api/integrations/<installation id>/connect      { "returnUrl": "/apps/assistant/c/<chat>" }
+  → 200 { "url": "https://auth.atlassian.com/authorize?…&state=…" }
+browser → vendor consent → GET /api/integrations/oauth/callback (or its alias)
+  → 302 /apps/assistant/c/<chat>?integration_connected=<installation id>
+```
+
+- **Connect** starts the sign-in and answers the vendor's authorization URL; the client sends the browser there. **Reconnect** (`POST …/reconnect`, `{ "returnUrl", "scopes"? }`) is the same for a connection that expired, was revoked or lacks a permission: `scopes` are added to what the user already granted (step-up), and the connection keeps its id. **Disconnect** (`POST …/disconnect`) revokes at the vendor where it supports revocation and deletes the caller's tokens.
+- The installation id is checked against the installed integrations and the user's groups (`permissions.integrations`): an installation the user may not use answers `404` like one that does not exist. Admins pass the group check (they configure and test integrations); the installation's own rule (an MCP server's app bindings, a storage provider's grant) still applies. Disconnect only needs the installation to exist: it removes the caller's own tokens.
+- `returnUrl` must be a path or an http(s) URL on this host; anything else is refused with `400 INVALID_RETURN_URL` before a flow starts. The callback returns to it, so the user lands back in the same chat.
+- The POST routes need a JSON body (`415` otherwise), so a cross-site form cannot start or end a connection; delegated callers (OAuth clients, agents) are refused with `403`. Starting a sign-in is limited to 20 per user and minute.
+
+**In the chat.** A tool whose caller has no usable connection returns `INTEGRATION_AUTH_REQUIRED` before it calls the vendor. The chat draws one **Connect card** for it — the same for Jira, a cloud storage provider and a per-user MCP server: the integration, why iHub needs to act as the user for this request, the permissions (its enabled actions grouped as read / write), where the user will sign in, **Connect** and **Not now**. For a connection that expired or lacks a permission, the card says why and what changes, and offers **Reconnect**. After a successful connect the browser comes back to the same chat and the request that needed the connection is retried **once**: the chat sends one follow-up message ("I connected Jira. Please try again."), only when that answer is still the last one and has not been retried before. A call that failed inside the adapter or on the transport never produced a card and is never retried automatically, because a write may already have happened. The file browsers of the storage providers show the same card when they are not connected.
+
+### Settings → Integrations
+
+`/settings/integrations` (user menu → **Integrations**) is the user's one place for integrations (#2922). **Available to you** lists every integration the user's groups allow (`GET /api/integrations`), whether or not it needs a sign-in, one row each: logo, name, who iHub acts as, a short summary of what it can do with its effects (read · write), and the one action the user can take.
+
+| Status line | When | Action |
+| --- | --- | --- |
+| Connected as _account_ (· expires in _N days_) | personal, connected; the expiry only when iHub cannot renew the access itself | Disconnect |
+| Not connected | personal, no connection | Connect |
+| Reconnect needed · _why_ | personal, expired or revoked, or a new permission is needed | Reconnect |
+| Signed in via SSO | iFinder, iAssistant: the user's iHub sign-in | — |
+| Runs as service account (_group_) | an account the admin configured; the group is the user's group that grants it, when one does by name | — |
+| Shared key | an API key the admin configured | — |
+| No sign-in needed | | — |
+| Unavailable · _what an admin must do_ | unreachable, the shared key refused or expired, a credential missing, the sign-in not set up — the same signal as the admin list | — |
+
+- **Search**, a **category** filter (the definitions' categories) and a **Needs attention** filter (reconnect needed, unavailable, or access that ends within seven days without renewing).
+- A row opens its **detail**: how it runs for the user (signed in as, connected since, when access ends or that it renews, last used, where the user signs in, the group that shares it), what it can do (each action with its effect badge), what the user allowed (the actions grouped by effect, the technical scopes behind a disclosure) and the apps that use it (links).
+- **Connect** and **Reconnect** use the one connect flow and come back to this page, which shows the result ("Jira connected successfully.") in a live region. **Disconnect** asks first, then reloads that one entry, so the row changes without a page reload.
+- **Sign-in for background tasks** shows the stored sign-in iFinder calls use in the OIDC token-exchange mode (authorize, revoke). **Access to iHub** (connected apps, personal API keys, the Outlook add-in) is unchanged.
+
+### Requests from users
+
+Users can ask for a catalog integration their groups cannot use yet (#2926).
+
+**Not available yet** on Settings → Integrations (`GET /api/integrations/requests`) lists, read-only, every catalog definition that is loaded and compatible, is not always installed, is not hidden, and has no enabled installation the user's groups allow. Each row shows the name, publisher and description and either **Request** or the state of the user's request: _Requested_, _Approved, being set up_ or _Declined_ with the administrator's note (and **Request again**). Request asks for an optional reason of up to 500 characters.
+
+**Admin → Integrations → Requests** is the queue; the number of open requests is the tab's badge and is shown next to **Integrations** in the admin sidebar.
+
+| Action | Effect |
+| --- | --- |
+| **Approve** | marks the request _approved_ and opens the install wizard for the definition; an approved request keeps an **Install** button until it is installed |
+| **Decline** | closes the request with an optional note to the requester; the user may ask again |
+| **Decline and hide** | as Decline, and hides the definition from every user's list; the other open requests for it are declined too. **Hidden from users** lists the hidden definitions with **Show again** |
+
+A request **closes by itself** as _installed_ once an enabled installation of its definition exists that the requester's groups allow: after an install, an update or an enable, and whenever the queue or the user's list is read, so granting the groups access later (Admin → Groups → Integrations) closes it too. When the definition is already installed but not for the requester's groups, the queue says so and links the installation. The queue checks the groups the user had when they asked; the user's own list checks their current groups.
+
+Rules: one open (or approved) request per user and definition (`409 REQUEST_EXISTS`); only signed-in, interactive users can request (anonymous `401`, OAuth clients and agents `403`); a definition the user cannot request answers `404` like an unknown one. Requests are runtime state in the storage provider (namespaces `integration-requests`, one document per user and definition, owned by the user, and `integration-requests-hidden`), not configuration; they are deleted with the user's account. Audit: resource `integration`, action `request` for a request and `requestDecision` for an approval, a decline and a request closed by an install; showing a hidden definition again is an `update`.
+
+### Headless runs
+
+Scheduled tasks (and workflows) run as their owner: a tool that needs a connection resolves the **owner's** own connection when it is called, never anybody else's. A run is not refused up front because its app offers a tool whose integration the owner has not connected — most runs never call most of the app's tools. A tool call that finds no usable connection returns a structured result instead of throwing:
+
+```json
+{ "error": "INTEGRATION_AUTH_REQUIRED", "integration": "jira", "reason": "not_connected",
+  "message": "Please connect your JIRA account to search tickets", "connectUrl": "/api/integrations/jira/connect" }
+```
+
+`reason` is `not_connected`, `expired` or `insufficient_scope`; `connectUrl` is the connect route `/api/integrations/<id>/connect`, or `/reconnect` with `scopes` for `insufficient_scope`. In a chat the Connect card shows; a scheduled run that meets one ends as failed with the reason code `INTEGRATION_AUTH_REQUIRED`, naming the `integration` and the `reason`, with a **Reconnect** link to Settings → Integrations.
+
+### Scope step-up
+
+When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, the tool result asks the user to re-authorize with the union of the scopes they granted and the ones the server named (`reason: "insufficient_scope"`, `scopes`, `connectUrl` = the reconnect route); the Connect card shows the new permission and its **Reconnect** sends those scopes. That happens once: a refusal for scopes the user already granted is reported as an ordinary error.
 
 ## Writing a definition
 
@@ -588,11 +706,60 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/admin/integrations/builder/_import` | list the actions of a source before saving: `{ kind: "openapi", source: { type: "url", url } \| { type: "inline", spec } }` → operations and the parsed document; `{ kind: "mcp" \| "a2a", source, auth? }` → the tools or skills |
 | `POST /api/admin/integrations/builder/_export/:id` | the registry package of a custom integration (see [Custom integrations](#custom-integrations-add-manually)) |
 | `GET /api/admin/integrations/tools` | every tool an app, workflow or agent can name (platform tools, remaining tool files, actions of enabled installations with `integration: { instanceId, label, action }`), for the admin pickers |
-| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it |
+| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
+| `GET /api/admin/integrations/requests` | the request queue: `requests` (each with `definitionName`, `definitionAvailable`, `installedInstances`, `requester`, `status` `open` \| `approved` \| `declined` \| `fulfilled`, `reason`, `note`, `decidedBy`, `fulfilledBy`), `hidden` (`definition`, `name`, `hiddenAt`, `hiddenBy`) and `openCount` |
+| `POST /api/admin/integrations/requests/:id/_approve` `{ note? }` | approve → `{ request }`; `404` for an unknown request or a definition no longer in the catalog, `409 REQUEST_CLOSED` for a closed one |
+| `POST /api/admin/integrations/requests/:id/_decline` `{ note?, hide? }` | decline, `hide: true` also hides the definition and declines its other open requests → `{ request, alsoDeclined }`; `note` at most 500 characters |
+| `DELETE /api/admin/integrations/requests/hidden/:definitionId` | show a hidden definition again (the id URL-encoded); `404` when it is not hidden |
+| `GET /api/integrations/requests` | the catalog entries the signed-in user can request, `{ items: [{ definition, name, description, icon, publisher, categories, capabilities, actionCount, effects, request }] }`; `request` is the user's own (`id`, `status`, `reason`, `createdAt`, `decidedAt`, `note`) or null |
+| `POST /api/integrations/requests` `{ definition, reason? }` | request one → `201 { request }`; `400` for an invalid id or a reason over 500 characters, `401` anonymous, `403` delegated callers, `404` not requestable, `409 REQUEST_EXISTS`, `415` without a JSON body |
+| `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
+| `GET /api/integrations/:id` | one of them, `{ integration }`; `404` for an installation the user may not use |
+| `POST /api/integrations/:id/connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
+| `POST /api/integrations/:id/reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
+| `POST /api/integrations/:id/disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ success, removed, revoked }` |
+| `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it, `409 INTEGRATION_AUTH_REQUIRED` (with `integration`, `reason`, `connectUrl`) when the user has no usable connection |
 
-Every write is audited with resource `integration`.
+Every write is audited with resource `integration`; connects and disconnects with resource `connection` (`create`, `revoke`).
+
+**`GET /api/integrations`** answers `{ "integrations": [ … ] }`, sorted by name, one entry per installation:
+
+```jsonc
+{
+  "id": "jira",                              // installation id
+  "definition": "com.intrafind/jira",
+  "type": null,                              // the definition's type: "storage", "web-search", "people-directory", or null
+  "protocol": "native",                      // native | mcp | openapi | a2a | script
+  "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
+  "description": "…",
+  "icon": null,                              // an http(s) icon URL of the definition, else null
+  "categories": ["ticketing"],              // the definition's categories (Settings → Integrations filters by them)
+  "capabilities": ["tools"],                 // from the definition: tools, files, scopes, sources, search, views, model
+  "actions": [                               // the enabled actions the models are offered
+    { "name": "searchTickets", "title": "Search issues", "description": "…", "sideEffect": "read" }
+  ],
+  "effects": ["read", "write"],              // the distinct side effects of the actions (read, write, destructive, unknown)
+  "apps": [{ "id": "tickets", "name": "Ticket helper" }], // the apps the user may open that use it
+  "connection": {
+    "mode": "personal",                      // personal | sso | service_account | shared_key | none
+    "status": "connected",                   // connected | not_connected | needs_reconnect (personal), else = mode; or unavailable
+    "reason": null,                          // needs_reconnect / not_connected: not_connected | expired | insufficient_scope;
+                                             // unavailable: unreachable | credential_rejected | credential_missing | not_configured
+    "account": "daniel@example.com",         // "connected as …", once known (read once from the vendor, then kept)
+    "scopes": ["read:jira-work"],            // granted scopes
+    "connectedAt": "…", "expiresAt": "…", "lastUsedAt": "…",
+    "signInHost": "auth.atlassian.com",      // where the user signs in
+    "connectable": true,                     // personal and configured: Connect / Reconnect can start
+    "renewable": true,                       // connected: iHub renews the access without the user (null: unknown)
+    "sharedWith": []                         // service_account / shared_key: the user's groups that grant it by name
+  }
+}
+```
+
+`mode` says who the integration acts as: `personal` (the user's own account, OAuth), `sso` (the user's iHub sign-in on every request: iFinder, iAssistant), `service_account` (an account the admin configured: `auth.mode` `service-account` or `oauth-client`, or a password-type secret), `shared_key` (an API key the admin configured), `none` (no sign-in). The listing reads the connection index only; it never sends a token anywhere.
+
+`status: "unavailable"` means the user cannot use the integration until an admin acts; `reason` says why. It comes from the same sources as the admin list: the adapter's live status (the admin's **Unreachable**) gives `unreachable`, or `credential_rejected` when the last error says the shared key or token was refused or expired (the error text itself is never sent); a credential reference the credential store does not hold gives `credential_missing`; a per-user sign-in that is switched off or has no OAuth client gives `not_configured`. `sharedWith` names the user's groups that grant the installation by its id, definition or type (empty when only `*` grants it). `apps` lists the enabled apps the user may open that bind the installation (`app.integrations`), name one of its tools in `app.tools`, or use it as their web search engine (`websearch.provider`; `auto` is the first engine the user may use). Disabled installations, ones whose definition cannot run or whose migration withholds them, and ones the user's groups do not grant are left out.
 
 **Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
 
@@ -658,6 +825,15 @@ The actions answer `{ success, logEntry, instance }` (the installation as above;
 | `server/utils/outboundRecorder.js`, `server/utils/secretRedaction.js` | the requests a test sent, as `httpFetch` and `safeFetch` report them; redaction of headers, URLs, bodies and known secrets |
 | `server/services/integrations/integrationTools.js`                                                                                                                                                                                                                                                     | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                                                 |
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
+| `server/services/integrations/IntegrationRequestService.js`, `integrationRequestCatalog.js`, `server/routes/integrations/integrationRequests.js`, `server/routes/admin/integrationRequests.js` | requests from users: storage, what a user can request, the user and admin routes |
+| `server/services/integrations/auth/OAuthUserClient.js`, `strategies/fixedEndpoint.js`, `strategies/mcpDiscovery.js` | the one per-user OAuth client (PKCE, code exchange, refresh, revocation, RFC 9207 `iss`, scope step-up); fixed endpoints (Jira, the storage providers) and MCP discovery (RFC 9728/8414, CIMD, DCR, pre-registered client) as strategies |
+| `server/services/integrations/auth/IntegrationConnectionService.js`, `connectionProviders.js`, `tokenSecrets.js`, `oauthFlowStore.js`, `integrationAuthRequired.js` | the connection index, connect / callback / refresh / disconnect / resolve, what each installation's connection is, where the secrets live, the server-side sign-in flows, `INTEGRATION_AUTH_REQUIRED` |
+| `server/services/integrations/auth/connectionReindex.js` | the one-time re-index of the token tree into the connection index |
+| `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
+| `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and the vendor-registered aliases of Jira and the storage providers |
+| `server/routes/integrations/userIntegrations.js`, `server/services/integrations/userIntegrations.js` | `GET /api/integrations`, `POST /api/integrations/:id/connect`, `…/reconnect`, `…/disconnect`: the user's integrations and the one connect flow |
+| `client/src/features/integrations/connect/` | the chat's Connect card (`ConnectCard.jsx`), the sign-in result (`connectResult.js`), the retry once after connecting (`connectRetry.js`, `useConnectRetry.js`); `client/src/api/userIntegrationsApi.js` |
+| `server/validators/integrationConnectionSchema.js` | the connection record |
 | `server/routes/admin/integrationExampleApps.js`, `server/services/integrations/exampleApps.js` | example apps of an installation: the templates (shipped or generated), the binding moved to the installation, the free app id |
 | `client/src/features/admin/components/integrations/IntegrationTestPanel.jsx` | **Test in chat** on the installation page: app picker, example app form, the chat of `AppTestPanel` |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |

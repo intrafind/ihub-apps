@@ -240,34 +240,74 @@ function embeddedMcpAppViewFor(info) {
   });
 }
 
-/** Longest string kept from an auth-required marker (ids, names, paths). */
+/** Longest string kept from an auth-required result (ids, names, scopes). */
 const AUTH_REQUIRED_FIELD_CHARS = 512;
 
+/** Most scopes kept from an auth-required result. */
+const AUTH_REQUIRED_MAX_SCOPES = 20;
+
+const AUTH_REQUIRED_REASONS = new Set(['not_connected', 'expired', 'insufficient_scope']);
+
 /**
- * The "connect first" marker of a per-user OAuth MCP tool result
- * (`{ error: 'MCP_AUTH_REQUIRED', authRequired: { serverId, serverName,
- * connectUrl } }`, see services/mcp/mcpOAuthService.js), or null.
+ * The installation a tool belongs to: an installed integration's
+ * (`_integration.instanceId`, which every MCP, native and OpenAPI action
+ * carries) or, for an MCP tool listed without it, its server's.
+ *
+ * @param {Object|null|undefined} toolDef
+ * @returns {string|null}
+ */
+function installationOfTool(toolDef) {
+  const id = toolDef?._integration?.instanceId || toolDef?._mcp?.serverId;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/**
+ * The Connect card of a tool result that says "connect first"
+ * (`{ error: 'INTEGRATION_AUTH_REQUIRED', integration, reason, connectUrl,
+ * scopes? }`, see services/integrations/auth/integrationAuthRequired.js), or
+ * null.
+ *
+ * Only a result about the tool's **own** installation counts, so an unrelated
+ * tool's result cannot spoof a card for an integration it has no relation to.
+ * Results of calls that failed inside the adapter or on the transport are
+ * not this shape and never produce a card (and so are never retried after a
+ * connect).
  *
  * @param {*} rawResult - The tool's result as the loop saw it
- * @returns {{serverId: string, serverName: string, connectUrl: string}|null}
+ * @param {Object} toolDef - The tool's definition
+ * @returns {{integration: string, name: string, reason: string, action?: string, scopes?: string[]}|null}
+ *
+ * @example
+ * authRequiredOf(
+ *   { error: 'INTEGRATION_AUTH_REQUIRED', integration: 'jira', reason: 'not_connected' },
+ *   { _integration: { instanceId: 'jira', instanceLabel: 'Jira', actionTitle: 'Search issues' } }
+ * ); // → { integration: 'jira', name: 'Jira', reason: 'not_connected', action: 'Search issues' }
  */
-export function authRequiredOf(rawResult) {
-  const marker = rawResult && typeof rawResult === 'object' ? rawResult.authRequired : null;
-  if (!marker || typeof marker !== 'object') return null;
-  const { serverId, serverName, connectUrl } = marker;
-  if (typeof serverId !== 'string' || !serverId) return null;
-  if (
-    typeof connectUrl !== 'string' ||
-    !connectUrl.startsWith('/') ||
-    connectUrl.startsWith('//') ||
-    connectUrl.startsWith('/\\')
-  ) {
-    return null;
-  }
+export function authRequiredOf(rawResult, toolDef) {
+  if (!rawResult || typeof rawResult !== 'object') return null;
+  if (rawResult.error !== 'INTEGRATION_AUTH_REQUIRED') return null;
+  const own = installationOfTool(toolDef);
+  if (!own || rawResult.integration !== own) return null;
+  const reason = AUTH_REQUIRED_REASONS.has(rawResult.reason) ? rawResult.reason : 'not_connected';
+  const name = String(toolDef?._integration?.instanceLabel || own).slice(
+    0,
+    AUTH_REQUIRED_FIELD_CHARS
+  );
+  const action = toolDef?._integration?.actionTitle;
+  const scopes = Array.isArray(rawResult.scopes)
+    ? rawResult.scopes
+        .filter(scope => typeof scope === 'string' && scope)
+        .slice(0, AUTH_REQUIRED_MAX_SCOPES)
+        .map(scope => scope.slice(0, AUTH_REQUIRED_FIELD_CHARS))
+    : [];
   return {
-    serverId: serverId.slice(0, AUTH_REQUIRED_FIELD_CHARS),
-    serverName: String(serverName || serverId).slice(0, AUTH_REQUIRED_FIELD_CHARS),
-    connectUrl: connectUrl.slice(0, AUTH_REQUIRED_FIELD_CHARS)
+    integration: own.slice(0, AUTH_REQUIRED_FIELD_CHARS),
+    name,
+    reason,
+    ...(typeof action === 'string' && action
+      ? { action: action.slice(0, AUTH_REQUIRED_FIELD_CHARS) }
+      : {}),
+    ...(scopes.length > 0 ? { scopes } : {})
   };
 }
 
@@ -282,17 +322,17 @@ export function authRequiredOf(rawResult) {
  * declares no view but returns an embedded view page gets its view on
  * `tool/completed` only (`mcpApp.embedded`).
  *
- * A per-user OAuth MCP tool whose caller has not connected the server returns
- * an auth-required marker; it rides on `tool/completed` as `authRequired` so
- * the chat renders a Connect card, and is collected on `mcpAuthPrompts`
- * (one per server) for the stored answer.
+ * A tool whose caller has no usable connection to its integration returns
+ * `INTEGRATION_AUTH_REQUIRED` before it runs; the Connect card for it rides on
+ * `tool/completed` as `authRequired` and is collected on `authPrompts` (one
+ * per integration) for the stored answer.
  */
 export function chatToolSeam({
   chatId,
   buildLogData,
   logInteraction,
   mcpAppViews = null,
-  mcpAuthPrompts = null,
+  authPrompts = null,
   scheduledTaskProposals = null,
   generatedFiles = null
 }) {
@@ -302,10 +342,10 @@ export function chatToolSeam({
   };
   const recordAuthPrompt = prompt => {
     if (
-      Array.isArray(mcpAuthPrompts) &&
-      !mcpAuthPrompts.some(p => p.serverId === prompt.serverId)
+      Array.isArray(authPrompts) &&
+      !authPrompts.some(p => p.integration === prompt.integration)
     ) {
-      mcpAuthPrompts.push(prompt);
+      authPrompts.push(prompt);
     }
     return prompt;
   };
@@ -348,20 +388,10 @@ export function chatToolSeam({
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
       const mcp = mcpAppOf(info);
-      // The auth-required marker is only ever produced by an MCP tool call
-      // (McpClientManager._callUserTool); gate on the tool's own declared
-      // server so an unrelated tool's result object cannot spoof a Connect
-      // card for a server it has no relation to.
-      const mcpServerId = info.toolDef?._mcp?.serverId;
-      const gatedAuthRequiredOf = raw => {
-        if (!mcpServerId) return null;
-        const marker = authRequiredOf(raw);
-        return marker?.serverId === mcpServerId ? marker : null;
-      };
-      // A call that never reached its per-user OAuth server ("connect first")
-      // has no view to show: the Connect card stands in for it.
+      // A call that never reached its integration ("connect first") has no
+      // view to show: the Connect card stands in for it.
       let mcpApp =
-        mcp && !(!outcome.error && gatedAuthRequiredOf(outcome.rawResult))
+        mcp && !(!outcome.error && authRequiredOf(outcome.rawResult, info.toolDef))
           ? recordView(mcpAppViewFor(info, mcp))
           : null;
       if (!mcp && !outcome.error) {
@@ -402,7 +432,7 @@ export function chatToolSeam({
         );
         return;
       }
-      const authRequired = gatedAuthRequiredOf(outcome.rawResult);
+      const authRequired = authRequiredOf(outcome.rawResult, info.toolDef);
       if (authRequired) recordAuthPrompt(authRequired);
       // Only the scheduling tools may draw a confirmation card; any other
       // tool's result carrying the same field is ignored.

@@ -17,7 +17,7 @@ const findTool = jest.fn();
 const hasServer = jest.fn(() => false);
 const connectionForUser = jest.fn();
 const withUserConnection = jest.fn();
-const connectUrlFor = jest.fn(id => `/api/mcp/oauth/authorize?serverId=${id}`);
+const connectUrlFor = jest.fn(id => `/api/integrations/${id}/connect`);
 
 let platform = { anonymousAuth: { enabled: false }, auth: {} };
 jest.unstable_mockModule('../../configCache.js', () => ({
@@ -235,7 +235,7 @@ describe('per-user OAuth servers', () => {
   const oauthConn = () => ({ ...conn, config: { id: 'excalidraw', auth: { type: 'oauthUser' } } });
   const authRequired = () =>
     Object.assign(new Error('Sign-in required'), {
-      code: 'MCP_AUTH_REQUIRED',
+      code: 'INTEGRATION_AUTH_REQUIRED',
       serverId: 'excalidraw'
     });
 
@@ -254,8 +254,9 @@ describe('per-user OAuth servers', () => {
     expect(res.status).toBe(409);
     expect(res.body).toEqual({
       error: 'auth_required',
-      code: 'MCP_AUTH_REQUIRED',
-      connectUrl: '/api/mcp/oauth/authorize?serverId=excalidraw'
+      code: 'INTEGRATION_AUTH_REQUIRED',
+      integration: 'excalidraw',
+      connectUrl: '/api/integrations/excalidraw/connect'
     });
   });
 
@@ -281,7 +282,7 @@ describe('per-user OAuth servers', () => {
         .send({ ...ref, uri: 'ui://excalidraw/data' })
     );
     expect(lost.status).toBe(409);
-    expect(lost.body.code).toBe('MCP_AUTH_REQUIRED');
+    expect(lost.body.code).toBe('INTEGRATION_AUTH_REQUIRED');
   });
 
   it('answers a refresh that failed for a transient reason with 503', async () => {

@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../services/chat/ChatRepository.js';
 import {
+  boundStoredAuthPrompts,
   materializeAssistantTurn,
   materializeUserTurn,
   settleUserTurn
@@ -914,5 +915,34 @@ describe('chatMaterializer: projects written under the chat lock', () => {
       assert.equal(capped.length, 10);
       assert.deepEqual(capped.slice(0, 3), attached, 'the stored ones are kept first');
     });
+  });
+});
+
+describe('boundStoredAuthPrompts', () => {
+  it('keeps well-formed cards, one per integration, scopes only when some remain', () => {
+    assert.deepEqual(
+      boundStoredAuthPrompts([
+        null,
+        { name: 'no integration' },
+        { integration: 'okta', reason: 'insufficient_scope', scopes: ['', 7, 'tickets:write'] },
+        { integration: 'okta', reason: 'expired' },
+        { integration: 'jira', scopes: ['', null] }
+      ]),
+      [
+        {
+          integration: 'okta',
+          name: 'okta',
+          reason: 'insufficient_scope',
+          scopes: ['tickets:write']
+        },
+        { integration: 'jira', name: 'jira', reason: 'not_connected' }
+      ]
+    );
+    assert.deepEqual(boundStoredAuthPrompts('nope'), []);
+  });
+
+  it('keeps at most ten', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ integration: `i${i}` }));
+    assert.equal(boundStoredAuthPrompts(many).length, 10);
   });
 });

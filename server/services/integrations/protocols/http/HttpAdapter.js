@@ -27,6 +27,7 @@
  * Template escaping and the response mapping live in `httpTemplates.js`.
  */
 import credentialService from '../../../CredentialService.js';
+import { serviceAccountHeaders } from '../../auth/ServiceAccountAuth.js';
 import { safeFetch, assertSafeHost } from '../../../mcp/safeFetch.js';
 import { httpFetch, describeProxyRouting } from '../../../../utils/httpConfig.js';
 import logger from '../../../../utils/logger.js';
@@ -83,17 +84,14 @@ async function authFor(definition, instance, values, resolveSecret, ssrfOpts) {
   if (secret === undefined || secret === null || secret === '') {
     throw new Error(`Integration ${instance.id}: the credential "${ref}" holds no secret`);
   }
-  if (kind === 'bearer' || kind === 'credential') {
-    return { headers: { Authorization: `Bearer ${secret}` }, queryParam: null };
-  }
-  if (kind === 'basic') {
-    return {
-      headers: { Authorization: `Basic ${Buffer.from(String(secret)).toString('base64')}` },
-      queryParam: null
-    };
-  }
-  const header = fillTemplate(account.header || 'Authorization', values) || 'Authorization';
-  return { headers: { [header]: `${account.valuePrefix || ''}${secret}` }, queryParam: null };
+  return {
+    headers: serviceAccountHeaders({
+      secret,
+      serviceAccount: account,
+      fillTemplate: template => fillTemplate(template, values)
+    }),
+    queryParam: null
+  };
 }
 
 /** SSRF options from the integrations file's `security` block. */

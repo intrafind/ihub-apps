@@ -358,17 +358,11 @@ describe('storage providers', () => {
     assert.equal(refused.status, 403);
     assert.equal(refused.body.code, 'INTEGRATION_NOT_GRANTED');
     assert.equal(refused.passed, false);
-    // Connecting is refused the same way.
-    assert.equal(
-      run('nextcloud', { path: '/auth', query: { providerId: 'nextcloud-main' }, user: member })
-        .status,
-      403
-    );
     // No installation named: 400; an unknown one, or one of another provider: 404.
     const unnamed = run('nextcloud', { path: '/items', query: {}, user: member });
     assert.equal(unnamed.status, 400);
     assert.equal(unnamed.body.code, 'STORAGE_PROVIDER_REQUIRED');
-    assert.equal(run('nextcloud', { path: '/status', query: {}, user: member }).status, 400);
+    assert.equal(run('nextcloud', { path: '/sources', query: {}, user: member }).status, 400);
     for (const req of [
       { path: '/items', query: { providerId: 'gone' } },
       { path: '/download', query: { providerId: 'office365' } }
@@ -377,14 +371,12 @@ describe('storage providers', () => {
       assert.equal(result.status, 404, JSON.stringify(req));
       assert.equal(result.body.code, 'STORAGE_PROVIDER_NOT_FOUND');
     }
-    // Granted, the callback (id in the path), and status / disconnect of any installation pass.
+    // Granted, and the callback (id in the path), pass. Connecting, the status
+    // and disconnecting are the one connect flow (`/api/integrations/:id/…`,
+    // see user-integrations-routes.test.js).
     for (const req of [
       { path: '/items', query: { providerId: 'nextcloud-branch' }, type: 'nextcloud' },
-      { path: '/auth', query: { providerId: 'nextcloud-branch' }, type: 'nextcloud' },
-      { path: '/nextcloud-main/callback', query: { code: 'x', state: 'y' }, type: 'nextcloud' },
-      { path: '/status', query: { providerId: 'nextcloud-main' }, type: 'nextcloud' },
-      { path: '/status', query: { providerId: 'gone' }, type: 'nextcloud' },
-      { path: '/disconnect', query: {}, body: { providerId: 'nextcloud-main' }, type: 'nextcloud' }
+      { path: '/nextcloud-main/callback', query: { code: 'x', state: 'y' }, type: 'nextcloud' }
     ]) {
       assert.equal(run(req.type, { ...req, user: member }).passed, true, JSON.stringify(req));
     }

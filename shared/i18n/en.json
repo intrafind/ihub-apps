@@ -3979,6 +3979,45 @@
         "none": "No instructions.",
         "edit": "Edit instructions",
         "reset": "Use the integration’s own"
+      },
+      "requests": {
+        "tab": "Requests",
+        "sidebarBadge": "{{count}} open integration requests",
+        "loadFailed": "The requests could not be loaded.",
+        "openTitle": "Open requests ({{count}})",
+        "description": "Users asked for these catalog integrations. Approve opens the install wizard; a request closes by itself once the integration is installed and the requester’s groups may use it.",
+        "none": "No open requests.",
+        "requestedBy": "Requested by {{name}} on {{date}}",
+        "alreadyInstalled": "Already installed, but not for this user’s groups. Granting their groups access closes the request:",
+        "definitionGone": "This integration is no longer in the catalog.",
+        "approve": "Approve",
+        "approveNamed": "Approve the request of {{user}} for {{name}}",
+        "install": "Install",
+        "installNamed": "Install {{name}}",
+        "decline": "Decline",
+        "declineNamed": "Decline the request of {{user}} for {{name}}",
+        "declineHide": "Decline and hide",
+        "declineHideNamed": "Decline the request of {{user}} for {{name}} and hide it",
+        "declineTitle": "Decline the request for {{name}}?",
+        "declineMessage": "{{user}} sees the request as declined and may ask again.",
+        "declineHideTitle": "Decline and hide {{name}}?",
+        "declineHideMessage": "No user sees {{name}} in “Not available yet” any more, and the other open requests for it are declined too. You can show it again later.",
+        "noteLabel": "Note to the requester (optional)",
+        "noteHelp": "Shown to the user next to the declined request.",
+        "declined": "Request for {{name}} declined.",
+        "declinedHidden": "Request declined; {{name}} is hidden from users.",
+        "closedTitle": "Closed requests ({{count}})",
+        "hiddenTitle": "Hidden from users ({{count}})",
+        "hiddenDescription": "Users do not see these in “Not available yet” and cannot request them.",
+        "hiddenBy": "Hidden by {{name}} on {{date}}",
+        "show": "Show again",
+        "showNamed": "Show {{name}} again",
+        "status": {
+          "open": "Open",
+          "approved": "Approved, not installed yet",
+          "declined": "Declined",
+          "fulfilled": "Installed"
+        }
       }
     },
     "sidebar": {
@@ -5396,19 +5435,8 @@
     "name": "Name",
     "size": "Size",
     "modified": "Modified",
-    "notConnected": "Office 365 Not Connected",
-    "connect": "Connect to Office 365",
-    "connectPrompt": "Connect your Microsoft account to browse files from OneDrive, SharePoint, and Teams",
-    "googleDrive": {
-      "notConnected": "Google Drive Not Connected",
-      "connect": "Connect to Google Drive",
-      "connectPrompt": "Connect your Google account to browse files from Google Drive, Shared Drives, and files shared with you"
-    },
-    "nextcloud": {
-      "notConnected": "Nextcloud Not Connected",
-      "connectPrompt": "Connect your Nextcloud account to browse and attach files from your Nextcloud instance.",
-      "connect": "Connect to Nextcloud"
-    }
+    "googleDrive": {},
+    "nextcloud": {}
   },
   "components": {
     "uploader": {
@@ -5920,58 +5948,10 @@
     },
     "page": {
       "title": "Integrations",
-      "subtitle": "Connect your external accounts to enhance your AI applications",
+      "subtitle": "The systems iHub can work with for you, and the tools that use iHub as you.",
       "loading": "Loading integrations...",
       "authRequiredTitle": "Authentication Required",
       "authRequiredBody": "Please log in to manage your integrations.",
-      "card": {
-        "connected": "Connected",
-        "notConnected": "Not Connected",
-        "availableFeatures": "Available Features:",
-        "connectAccount": "Connect {{name}} Account",
-        "disconnect": "Disconnect",
-        "tokenExpiring": "Token expires soon - consider reconnecting"
-      },
-      "jira": {
-        "description": "Atlassian JIRA integration for ticket management and project insights",
-        "features": {
-          "search": "Search and retrieve JIRA tickets",
-          "create": "Create new tickets and issues",
-          "update": "Update existing tickets",
-          "info": "Get project and user information"
-        },
-        "connected": "JIRA account connected successfully! You can now use JIRA features in your apps.",
-        "connectionFailed": "Connection failed: {{message}}",
-        "disconnected": "JIRA account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect JIRA: {{message}}",
-        "testSuccess": "JIRA connection test successful! Found {{count}} accessible tickets.",
-        "testFailed": "JIRA connection test failed: {{message}}"
-      },
-      "cloud": {
-        "description": {
-          "office365": "Microsoft Office 365 integration for cloud file access",
-          "googleDrive": "Google Drive integration for cloud file access"
-        },
-        "features": {
-          "browseOffice365": "Browse OneDrive and SharePoint files",
-          "browseGoogleDrive": "Browse Google Drive files",
-          "upload": "Upload cloud files to chats",
-          "oauth": "Secure OAuth 2.0 with PKCE"
-        },
-        "connected": "{{name}} account connected successfully! You can now select files from {{name}}.",
-        "connectionFailed": "{{name}} connection failed: {{message}}",
-        "disconnected": "{{name}} account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
-          "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
-          "invalid_state": "{{name}} sign-in could not be verified. Please try connecting again.",
-          "session_expired": "{{name}} sign-in took too long and expired. Please try connecting again.",
-          "oauth_failed": "{{name}} sign-in failed at the provider. Please try again or contact your administrator if the problem persists.",
-          "missing_code": "{{name}} sign-in did not complete. Please try connecting again.",
-          "callback_failed": "{{name}} could not be connected. Please try again or contact your administrator if the problem persists."
-        }
-      },
       "office": {
         "available": "Available",
         "deployHint": "Deploy this manifest in Microsoft 365 Admin Center to make the add-in available to your organization.",
@@ -6023,15 +6003,7 @@
         "rotateFailed": "Failed to rotate API key: {{message}}",
         "revokeFailed": "Failed to revoke API key: {{message}}"
       },
-      "empty": {
-        "title": "No Integrations Configured",
-        "body": "Contact your administrator to enable external integrations."
-      },
       "sections": {
-        "accounts": {
-          "title": "Your accounts",
-          "description": "Sign in to services so iHub can work with them on your behalf."
-        },
         "access": {
           "title": "Access to iHub",
           "description": "Tools and applications that use iHub Apps as you."
@@ -6067,36 +6039,195 @@
           "mcpResourcesRead": "Read iHub sources and skills available to you"
         }
       },
-      "mcp": {
-        "title": "MCP servers",
-        "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
-        "serverDescription": "MCP server",
-        "connect": "Connect {{name}}",
-        "connected": "{{name}} connected successfully.",
-        "connectionFailed": "Connecting {{name}} failed: {{message}}",
-        "disconnected": "{{name}} disconnected",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "oauth_failed": "the sign-in was cancelled or refused",
-          "missing_code": "the sign-in returned no authorization code",
-          "invalid_state": "the sign-in link is invalid",
-          "state_expired": "the sign-in took too long, please start again",
-          "user_mismatch": "the sign-in was started by a different user",
-          "server_not_found": "the server is not available to you",
-          "exchange_failed": "the server did not accept the sign-in",
-          "discovery_failed": "the server's sign-in could not be found",
-          "registration_failed": "iHub could not register with the server",
-          "issuer_mismatch": "the sign-in answer came from another authorization server than expected",
-          "public_url_mismatch": "iHub was reached under another address than the one registered with the server; ask your administrator to set the MCP gateway public URL"
-        }
-      },
       "iFinder": {
-        "title": "iFinder",
         "description": "iHub uses your {{provider}} sign-in to search iFinder for you, also in scheduled tasks and workflows while you are signed out.",
         "authorizedSince": "Authorized via {{provider}} on {{date}}",
         "authorize": "Sign in via {{provider}}",
         "revoked": "iFinder authorization revoked",
-        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}"
+        "revokeFailed": "Could not revoke the iFinder authorization: {{message}}",
+        "sectionTitle": "Sign-in for background tasks",
+        "notAuthorized": "Not authorized",
+        "revoke": "Revoke"
+      },
+      "dismissMessage": "Dismiss message",
+      "showDetails": "Show details",
+      "disconnect": "Disconnect",
+      "disconnectNamed": "Disconnect {{name}}",
+      "connectNamed": "Connect {{name}}",
+      "reconnectNamed": "Reconnect {{name}}",
+      "disconnectTitle": "Disconnect {{name}}",
+      "disconnectConfirm": "iHub will no longer act as you in {{name}}. Chats that need it will ask you to connect again.",
+      "disconnected": "{{name}} disconnected.",
+      "disconnectFailed": "Could not disconnect {{name}}: {{message}}",
+      "moreActions": "+{{count}} more",
+      "available": {
+        "title": "Available to you ({{count}})",
+        "description": "Everything your groups allow, and who iHub acts as in each. Connect once; chats use it afterwards.",
+        "empty": "No integration is available to you yet.",
+        "loadFailed": "Your integrations could not be loaded. Reload the page to try again."
+      },
+      "filters": {
+        "search": "Search integrations",
+        "searchPlaceholder": "Search…",
+        "category": "Category",
+        "allCategories": "All categories",
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "needsAttention": "Needs attention",
+        "noMatches": "No integration matches the filters.",
+        "count": "Showing {{shown}} of {{total}}"
+      },
+      "status": {
+        "connected": "Connected",
+        "connectedAs": "Connected as {{account}}",
+        "expires": "expires {{when}}",
+        "notConnected": "Not connected",
+        "needsReconnect": "Reconnect needed · {{reason}}",
+        "reconnectReasons": {
+          "expired": "your sign-in expired or was revoked",
+          "insufficientScope": "a new permission is needed"
+        },
+        "sso": "Signed in via SSO",
+        "serviceAccount": "Runs as service account",
+        "serviceAccountFor": "Runs as service account ({{groups}})",
+        "sharedKey": "Shared key",
+        "none": "No sign-in needed",
+        "unavailable": "Unavailable · {{reason}}",
+        "unavailableReasons": {
+          "unreachable": "the system cannot be reached; an administrator must check it",
+          "credentialRejected": "the shared key was refused or has expired; an administrator must renew it",
+          "credentialMissing": "the shared key is missing; an administrator must set it",
+          "notConfigured": "the sign-in is not set up; an administrator must finish it"
+        },
+        "unknown": "Status unknown"
+      },
+      "capabilities": {
+        "tools": "Actions in chat",
+        "files": "Files",
+        "search": "Search",
+        "views": "Interactive views",
+        "triggers": "Events",
+        "agent": "Agent"
+      },
+      "categories": {
+        "a2a": "A2A",
+        "admin": "Administration",
+        "agents": "Agents",
+        "analytics": "Analytics",
+        "assistant": "Assistant",
+        "automation": "Automation",
+        "content": "Content",
+        "customer": "Customer",
+        "data": "Data",
+        "design": "Design",
+        "development": "Development",
+        "directory": "Directory",
+        "documentation": "Documentation",
+        "documents": "Documents",
+        "files": "Files",
+        "finance": "Finance",
+        "internal": "Internal",
+        "mcp": "MCP",
+        "open-data": "Open data",
+        "people": "People",
+        "productivity": "Productivity",
+        "public-sector": "Public sector",
+        "research": "Research",
+        "search": "Search",
+        "storage": "Storage",
+        "ticketing": "Ticketing",
+        "web": "Web"
+      },
+      "detail": {
+        "identity": "How it runs for you",
+        "account": "Signed in as",
+        "connectedAt": "Connected since",
+        "access": "Access",
+        "expiresOn": "Ends {{when}} ({{date}}); then connect again",
+        "renews": "Renewed automatically until you disconnect",
+        "untilDisconnect": "Until you disconnect or it is revoked",
+        "lastUsed": "Last used",
+        "neverUsed": "Not used yet",
+        "signInHost": "You sign in at",
+        "sharedWith": "Shared with your group",
+        "actions": "What it can do",
+        "noActions": "It offers no actions in chat.",
+        "permissions": "What you allowed",
+        "permissionLine": "{{effect}}: {{actions}}",
+        "actAsYou": "iHub acts as you in {{name}}.",
+        "scopes": "Technical permissions ({{count}})",
+        "apps": "Apps that use it",
+        "noApps": "None of the apps you can open uses it yet."
+      }
+    },
+    "connect": {
+      "title": "Connect {{name}}",
+      "titleReconnect": "Reconnect {{name}}",
+      "titleScope": "{{name}} needs another permission",
+      "why": "To answer your request, iHub needs to act as you in {{name}}.",
+      "whyAction": "To run “{{action}}” for your request, iHub needs to act as you in {{name}}.",
+      "whyFiles": "To show your files, iHub needs to act as you in {{name}}.",
+      "whyExpired": "Your connection to {{name}} has expired or was revoked. Sign in again to continue; your settings stay as they are.",
+      "whyScope": "This request needs a permission you have not granted to iHub yet. Reconnecting keeps your connection and adds it.",
+      "signInAt": "You will sign in at {{host}}.",
+      "newPermission": "New permission:",
+      "permissions": "Permissions",
+      "effects": {
+        "read": "Read",
+        "write": "Write",
+        "destructive": "Delete",
+        "unknown": "Other"
+      },
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "notNow": "Not now",
+      "notNowNote": "{{name}} is not connected.",
+      "show": "Show details",
+      "connected": "{{name}} is connected.",
+      "connectedAs": "{{name}} is connected as {{account}}.",
+      "connectedMessage": "{{name}} connected successfully.",
+      "failed": "Connecting {{name}} did not succeed. Try again.",
+      "failedMessage": "Connecting {{name}} failed: {{message}}",
+      "startFailed": "The sign-in to {{name}} could not be started.",
+      "retryMessage": "I connected {{name}}. Please try again.",
+      "errors": {
+        "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
+        "oauth_failed": "The sign-in to {{name}} did not succeed.",
+        "missing_code": "The sign-in to {{name}} did not return an authorization. Try again.",
+        "invalid_state": "The sign-in to {{name}} could not be matched to your session. Try again.",
+        "state_expired": "The sign-in to {{name}} took too long. Try again.",
+        "user_mismatch": "The sign-in to {{name}} was started by another iHub user. Try again.",
+        "integration_not_found": "{{name}} is not available to you.",
+        "exchange_failed": "{{name}} did not accept the sign-in. Try again or ask your administrator.",
+        "discovery_failed": "The sign-in server of {{name}} could not be reached.",
+        "registration_failed": "iHub could not register with the sign-in server of {{name}}.",
+        "issuer_mismatch": "The sign-in answer did not come from the expected server for {{name}}.",
+        "public_url_mismatch": "The public URL of iHub changed; ask your administrator to check {{name}}.",
+        "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
+        "callback_failed": "The sign-in to {{name}} could not be completed. Try again."
+      }
+    },
+    "requests": {
+      "title": "Not available yet ({{count}})",
+      "description": "Integrations in the catalog that your administrator has not made available to you. Request one and an administrator decides.",
+      "search": "Search the catalog",
+      "noMatches": "Nothing in the catalog matches.",
+      "publisher": "by {{publisher}}",
+      "adminNote": "Administrator: {{note}}",
+      "request": "Request",
+      "requestNamed": "Request {{name}}",
+      "requestAgain": "Request again",
+      "requestAgainNamed": "Request {{name}} again",
+      "reasonLabel": "Why do you need it? (optional)",
+      "reasonCount": "{{count}} of {{max}} characters",
+      "send": "Send request",
+      "sent": "Request for {{name}} sent. An administrator decides.",
+      "alreadyRequested": "You have already requested {{name}}.",
+      "failed": "Could not request {{name}}: {{message}}",
+      "state": {
+        "requested": "Requested",
+        "approved": "Approved, being set up",
+        "declined": "Declined"
       }
     }
   },
@@ -7060,13 +7191,6 @@
       "attachmentNotIncluded": "Attachment not included: {{name}}",
       "attachmentUnnamed": "file"
     }
-  },
-  "mcpConnect": {
-    "title": "Connect {{name}}",
-    "explanation": "{{name}} needs you to sign in with your own account before its tools can be used.",
-    "connect": "Connect",
-    "connected": "{{name}} is connected. Send your request again to use it.",
-    "failed": "Connecting {{name}} did not succeed. Try again."
   },
   "sources": {
     "title": "Sources",

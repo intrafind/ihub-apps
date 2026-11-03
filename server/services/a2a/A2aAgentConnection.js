@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { randomUUID } from 'node:crypto';
-import credentialService from '../CredentialService.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { A2A_DEFAULT_API_KEY_HEADER } from '../../validators/a2aAgentConfigSchema.js';
 import {
@@ -21,6 +20,12 @@ import {
   validateAgentCard
 } from './a2aTools.js';
 import logger from '../../utils/logger.js';
+import {
+  ClientCredentialsTokenCache,
+  clientCredentialsBody,
+  resolveSecretRefs,
+  staticAuthHeaders
+} from '../integrations/auth/ServiceAccountAuth.js';
 
 /** How long a fetched Agent Card is reused before it is fetched again. */
 export const CARD_TTL_MS = 10 * 60 * 1000;
@@ -85,8 +90,8 @@ export class A2aAgentConnection {
     this.lastError = null;
     this.consecutiveFailures = 0;
     this._cardPromise = null;
-    this._oauthToken = null;
-    this._oauthTokenExpiry = 0;
+    /** Client-credentials tokens of `auth.type: "oauth"` (ServiceAccountAuth). */
+    this._oauthTokens = new ClientCredentialsTokenCache();
   }
 
   /** Drop the cached card and tools so the next use fetches them again. */
@@ -97,8 +102,7 @@ export class A2aAgentConnection {
     this.endpoint = null;
     this.toolsCache = null;
     this.skillsByToolId = new Map();
-    this._oauthToken = null;
-    this._oauthTokenExpiry = 0;
+    this._oauthTokens.clear();
   }
 
   get _fetchOptions() {
@@ -117,24 +121,19 @@ export class A2aAgentConnection {
   _resolveAuth() {
     const auth = this.config.auth;
     if (!auth || auth.type === 'none') return { type: 'none' };
-    const out = { ...auth };
-    const refFields = { valueRef: 'value', tokenRef: 'token', clientSecretRef: 'clientSecret' };
-    for (const [refField, plainField] of Object.entries(refFields)) {
-      if (typeof out[refField] === 'string' && out[refField]) {
-        try {
-          out[plainField] = credentialService.resolveSecret(out[refField]);
-        } catch (err) {
+    return resolveSecretRefs(
+      auth,
+      { valueRef: 'value', tokenRef: 'token', clientSecretRef: 'clientSecret' },
+      {
+        onError: (refField, err) =>
           logger.error('Failed to resolve A2A agent auth secret from credential store', {
             component: 'A2aAgentConnection',
             agentId: this.config.id,
             field: refField,
             error: err.message
-          });
-          throw err;
-        }
+          })
       }
-    }
-    return out;
+    );
   }
 
   /**
@@ -152,11 +151,11 @@ export class A2aAgentConnection {
    */
   async _authHeaders({ signal } = {}) {
     const auth = this._resolveAuth();
-    if (auth.type === 'apiKey') return { [this._apiKeyHeaderName(auth)]: auth.value };
-    if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
-    if (auth.type === 'oauth')
+    if (auth.type === 'oauth') {
       return { Authorization: `Bearer ${await this._oauthAccessToken(auth, { signal })}` };
-    return {};
+    }
+    if (auth.type !== 'apiKey' && auth.type !== 'bearer') return {};
+    return staticAuthHeaders(auth, { apiKeyHeader: this._apiKeyHeaderName(auth) });
   }
 
   /**
@@ -170,15 +169,21 @@ export class A2aAgentConnection {
    * @throws {Error} `A2A_AUTH_FAILED`, `A2A_REDIRECT_REFUSED`, `A2A_RESPONSE_TOO_LARGE`
    */
   async _oauthAccessToken(auth, { signal } = {}) {
-    const now = Date.now();
-    if (this._oauthToken && this._oauthTokenExpiry > now + 5000) return this._oauthToken;
+    return this._oauthTokens.getToken('client-credentials', () =>
+      this._requestOAuthToken(auth, { signal })
+    );
+  }
 
-    const body = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: auth.clientId,
-      client_secret: auth.clientSecret
+  /**
+   * One client-credentials token request, bounded and without redirects.
+   * @returns {Promise<{access_token: string, expires_in?: number}>}
+   */
+  async _requestOAuthToken(auth, { signal } = {}) {
+    const body = clientCredentialsBody({
+      clientId: auth.clientId,
+      clientSecret: auth.clientSecret,
+      scope: auth.scope
     });
-    if (auth.scope) body.set('scope', auth.scope);
     const timeout = AbortSignal.timeout(TOKEN_TIMEOUT_MS);
     let data;
     try {
@@ -223,9 +228,7 @@ export class A2aAgentConnection {
     if (!data?.access_token) {
       throw a2aError(A2A_CLIENT_ERRORS.AUTH_FAILED, 'OAuth token response missing access_token');
     }
-    this._oauthToken = data.access_token;
-    this._oauthTokenExpiry = now + (data.expires_in ? data.expires_in * 1000 : 3600 * 1000);
-    return this._oauthToken;
+    return data;
   }
 
   /**

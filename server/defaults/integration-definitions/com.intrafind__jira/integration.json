@@ -54,10 +54,7 @@
   "auth": {
     "modes": ["oauth-user"],
     "oauthUser": {
-      "field": "clientSecretRef",
-      "connectPath": "/api/integrations/jira/auth",
-      "statusPath": "/api/integrations/jira/status",
-      "disconnectPath": "/api/integrations/jira/disconnect"
+      "field": "clientSecretRef"
     }
   },
   "install": [

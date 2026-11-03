@@ -6,7 +6,13 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
-import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
+import { isUnavailableError } from './oauthRefreshError.js';
+import { createFixedEndpointStrategy } from './auth/strategies/fixedEndpoint.js';
+import { getIntegrationConnectionService } from './auth/IntegrationConnectionService.js';
+import {
+  INTEGRATION_AUTH_REASONS,
+  IntegrationAuthRequiredError
+} from './auth/integrationAuthRequired.js';
 
 /**
  * Nextcloud Service for Nextcloud file access integration.
@@ -22,11 +28,12 @@ import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshEr
  *   - Token:     {serverUrl}/apps/oauth2/api/v1/token
  *
  * Notes / known constraints:
- *   - Nextcloud's OAuth 2.0 server does NOT support PKCE, so we rely on
- *     the CSRF `state` parameter for cross-request protection (a signed,
- *     user-bound ticket, see utils/integrationOAuthState.js).
- *   - Nextcloud rotates refresh tokens on every refresh, so callers must
- *     persist the new refresh token returned by `refreshAccessToken`.
+ *   - The sign-in runs through the shared OAuth client with PKCE and a
+ *     server-side, user- and installation-bound state
+ *     (`auth/IntegrationConnectionService.js`); older Nextcloud servers
+ *     ignore the PKCE parameters.
+ *   - Nextcloud rotates refresh tokens on every refresh; the connection
+ *     service always stores the freshly issued one.
  *   - WebDAV PROPFIND / OCS calls below don't go through the shared
  *     Graph/Drive-style `makeApiRequest` wrapper (unlike Google
  *     Drive/Office 365) since the response shape (XML) and verbs
@@ -36,6 +43,22 @@ import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshEr
 // than the download budget defends against malicious or misconfigured
 // servers without affecting healthy responses.
 const MAX_PROPFIND_BYTES = 10 * 1024 * 1024; // 10 MiB
+
+/**
+ * Nextcloud refused the access token (401): "connect first" with reason
+ * `expired`, so the storage routes answer with the Connect card (409) instead
+ * of a generic failure.
+ *
+ * @param {string} [providerId] - The installation id
+ * @returns {IntegrationAuthRequiredError}
+ */
+function nextcloudAuthRequired(providerId) {
+  return new IntegrationAuthRequiredError({
+    integration: providerId,
+    reason: INTEGRATION_AUTH_REASONS.EXPIRED,
+    message: 'Nextcloud authentication required. Please reconnect your account.'
+  });
+}
 
 class NextcloudService extends OAuthIntegrationBase {
   constructor() {
@@ -65,138 +88,36 @@ class NextcloudService extends OAuthIntegrationBase {
   }
 
   /**
-   * Generate OAuth 2.0 authorization URL.
-   * Nextcloud's OAuth 2.0 implementation does not support PKCE, so we
-   * rely on the signed, user-bound `state` parameter for CSRF protection.
+   * The provider's authorization server for the shared OAuth client: the
+   * Nextcloud OAuth 2.0 app of the configured server. PKCE (S256) is sent
+   * like everywhere else; a Nextcloud without PKCE support ignores it, one
+   * with it checks it.
+   * @param {string} providerId - The installation id
+   * @returns {import('./auth/OAuthUserClient.js').OAuthStrategy}
    */
-  generateAuthUrl(providerId, state, req = null) {
+  oauthStrategy(providerId) {
     const provider = this._getProviderConfig(providerId);
-    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-
-    const params = new URLSearchParams({
-      client_id: provider.clientId,
-      response_type: 'code',
-      redirect_uri: redirectUri,
-      state
+    return createFixedEndpointStrategy({
+      id: `fixed:nextcloud:${providerId}`,
+      issuer: provider.serverUrl,
+      authorizationEndpoint: `${provider.serverUrl}/apps/oauth2/authorize`,
+      tokenEndpoint: `${provider.serverUrl}/apps/oauth2/api/v1/token`,
+      clientId: provider.clientId,
+      clientSecret: provider.clientSecret
     });
-
-    return `${provider.serverUrl}/apps/oauth2/authorize?${params.toString()}`;
-  }
-
-  async exchangeCodeForTokens(providerId, authCode, req = null) {
-    try {
-      const provider = this._getProviderConfig(providerId);
-      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-      const tokenUrl = `${provider.serverUrl}/apps/oauth2/api/v1/token`;
-
-      const tokenData = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: authCode,
-        redirect_uri: redirectUri,
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret
-      });
-
-      const response = await httpFetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error exchanging Nextcloud authorization code', {
-          component: 'NextcloudService',
-          error: errorData
-        });
-        throw new Error('Failed to exchange authorization code for tokens');
-      }
-
-      const tokens = await response.json();
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        // Nextcloud returns the user_id of the resource owner in the token
-        // response — cache it so we can build WebDAV URLs without an extra
-        // OCS round-trip on every API call.
-        nextcloudUserId: tokens.user_id,
-        providerId
-      };
-    } catch (error) {
-      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('Error exchanging Nextcloud authorization code', {
-        component: 'NextcloudService',
-        error
-      });
-      throw new Error('Failed to exchange authorization code for tokens');
-    }
-  }
-
-  async refreshAccessToken(providerId, refreshToken) {
-    try {
-      logger.info('Attempting to refresh Nextcloud access token', {
-        component: 'NextcloudService'
-      });
-
-      const provider = this._getProviderConfig(providerId);
-      const tokenUrl = `${provider.serverUrl}/apps/oauth2/api/v1/token`;
-
-      const tokenData = new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret
-      });
-
-      const response = await httpFetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error refreshing Nextcloud access token', {
-          component: 'NextcloudService',
-          error: errorData
-        });
-
-        throw refreshFailureFromResponse(response, errorData);
-      }
-
-      const tokens = await response.json();
-      logger.info('Nextcloud token refresh successful', { component: 'NextcloudService' });
-
-      return {
-        accessToken: tokens.access_token,
-        // Nextcloud rotates refresh tokens on every refresh — always
-        // persist the freshly issued value.
-        refreshToken: tokens.refresh_token || refreshToken,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        nextcloudUserId: tokens.user_id,
-        providerId
-      };
-    } catch (error) {
-      throw this._toRefreshError(error);
-    }
   }
 
   /**
-   * Preserve the cached Nextcloud username if the refresh response omitted it.
+   * Fields stored next to the tokens: Nextcloud names the resource owner in
+   * the token response (`user_id`), which is the WebDAV path segment; a
+   * refresh that omits it keeps the cached one.
+   * @param {import('./auth/OAuthUserClient.js').NormalizedTokens} tokens
+   * @param {Object|null} previous - The stored payload before a refresh
+   * @returns {{nextcloudUserId?: string}}
    */
-  _afterTokenRefresh(refreshedTokens, previousTokens) {
-    if (!refreshedTokens.nextcloudUserId && previousTokens.nextcloudUserId) {
-      refreshedTokens.nextcloudUserId = previousTokens.nextcloudUserId;
-    }
-    return refreshedTokens;
-  }
-
-  _isPassthroughTokenError(error) {
-    return super._isPassthroughTokenError(error) || error.message.includes('needs to reconnect');
+  oauthStoredExtras(tokens, previous) {
+    const nextcloudUserId = tokens?.raw?.user_id || previous?.nextcloudUserId;
+    return nextcloudUserId ? { nextcloudUserId } : {};
   }
 
   /**
@@ -229,8 +150,11 @@ class NextcloudService extends OAuthIntegrationBase {
     }
 
     // Cache it so future calls skip this round-trip
-    const updated = { ...tokens, nextcloudUserId: username };
-    await this.storeUserTokens(userId, updated);
+    await getIntegrationConnectionService().patchStoredTokens({
+      installationId: tokens.providerId,
+      userId,
+      patch: { nextcloudUserId: username }
+    });
     return username;
   }
 
@@ -439,7 +363,7 @@ class NextcloudService extends OAuthIntegrationBase {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Nextcloud authentication required. Please reconnect your account.');
+        throw nextcloudAuthRequired(tokens.providerId);
       }
       if (response.status === 404) {
         throw new Error(`Nextcloud folder not found: ${folderPath || '/'}`);
@@ -515,7 +439,7 @@ class NextcloudService extends OAuthIntegrationBase {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Nextcloud authentication required. Please reconnect your account.');
+        throw nextcloudAuthRequired(tokens.providerId);
       }
       if (response.status === 404) {
         throw new Error(`Nextcloud file not found: ${filePath}`);
