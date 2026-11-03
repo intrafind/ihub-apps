@@ -112,6 +112,24 @@ export function tokenStoreSecret({ service, providerId, allowLegacy = () => fals
     return null;
   }
 
+  /**
+   * Delete the unscoped legacy file of a storage id when it is this
+   * installation's (the only installation of the service, and the payload
+   * names no other one). Without this, a legacy file left beside the scoped
+   * one is adopted again after a disconnect.
+   */
+  async function removeAdmissibleLegacy(storageId) {
+    if (!providerId || !allowLegacy()) return;
+    let legacy;
+    try {
+      legacy = await tokenStorage.getUserTokens(storageId, service, null);
+    } catch {
+      return;
+    }
+    if (legacy?.providerId && legacy.providerId !== providerId) return;
+    await tokenStorage.deleteUserTokens(storageId, service, null);
+  }
+
   return {
     ref(userId) {
       return tokenSecretRef({ service, storageId: tokenStorageIdFor(userId), providerId });
@@ -150,14 +168,20 @@ export function tokenStoreSecret({ service, providerId, allowLegacy = () => fals
       }
     },
     async write(userId, payload) {
-      await tokenStorage.storeUserTokens(tokenStorageIdFor(userId), service, payload, providerId);
+      const storageId = tokenStorageIdFor(userId);
+      await tokenStorage.storeUserTokens(storageId, service, payload, providerId);
+      // The scoped file replaces an adopted legacy one.
+      await removeAdmissibleLegacy(storageId);
       return payload;
     },
     /** Delete the file the tokens are read from — never another installation's. */
     async remove(userId) {
       const file = await fileOf(userId);
       if (!file) return false;
-      return tokenStorage.deleteUserTokens(file.storageId, service, file.providerId);
+      const removed = await tokenStorage.deleteUserTokens(file.storageId, service, file.providerId);
+      // A legacy file left next to the scoped one would be adopted again.
+      await removeAdmissibleLegacy(file.storageId);
+      return removed;
     },
     async expired(userId) {
       const file = await fileOf(userId);

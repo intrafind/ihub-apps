@@ -450,7 +450,10 @@ export class IntegrationConnectionService {
     }
     const view = descriptor.secret.view(stored);
     if (!view) return null;
-    return this.putConnection(
+    // Create-only: `getConnection` also answers null when the read failed,
+    // and another worker may index the same file now. An existing record
+    // (a failed or expired one) is never overwritten with a fresh active one.
+    const { record } = await this.createConnection(
       recordFromStored({
         descriptor,
         userId,
@@ -459,6 +462,7 @@ export class IntegrationConnectionService {
         now: this._iso()
       })
     );
+    return record;
   }
 
   // ── Resolve ─────────────────────────────────────────────────────────────

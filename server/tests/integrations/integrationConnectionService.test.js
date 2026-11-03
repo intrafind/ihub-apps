@@ -454,6 +454,34 @@ describe('review fixes (#3140)', () => {
     rmSync(legacy, { force: true });
   });
 
+  it('retires an adopted legacy file once the tokens are written scoped, so a disconnect ends it', async () => {
+    answer(GoogleDriveService, [{}]);
+    await tokenStorage.storeUserTokens('alice', 'googledrive', {
+      accessToken: 'legacy',
+      refreshToken: 'legacy-r',
+      expiresIn: 3600
+    });
+    const legacy = path.join(tmp, 'googledrive', 'alice.json');
+    assert.equal((await service.resolve(user('alice'), 'gdrive')).ok, true, 'adopted');
+    // The refresh writes the scoped file.
+    assert.equal((await forceRefresh()).accessToken !== undefined, true);
+    assert.equal(existsSync(path.join(tmp, 'googledrive', 'alice__gdrive.json')), true);
+    assert.equal(existsSync(legacy), false, 'the legacy file is gone');
+
+    // A legacy file next to a scoped one (from before this fix) goes with the disconnect.
+    await tokenStorage.storeUserTokens('alice', 'googledrive', {
+      accessToken: 'legacy-2',
+      refreshToken: 'legacy-r2',
+      expiresIn: 3600
+    });
+    await service.disconnect({ installationId: 'gdrive', userId: 'alice' });
+    assert.equal(existsSync(legacy), false, 'no legacy file is left to adopt');
+    // Without the record (another worker, a lost index) nothing is adopted again.
+    const resolved = await newService().resolve(user('alice'), 'gdrive');
+    assert.equal(resolved.ok, false);
+    assert.equal(resolved.error.reason, 'not_connected');
+  });
+
   it('does not trust a record whose token file is gone', async () => {
     answer(GoogleDriveService, [{}]);
     await connect('gdrive', 'alice');
@@ -521,6 +549,31 @@ describe('review fixes (#3140)', () => {
     assert.equal(again.created, false);
     assert.equal(again.record.lastUsedAt, '2026-11-02T09:00:00.000Z');
     assert.equal(again.record.status, 'active');
+  });
+
+  it('a failed record read does not reactivate the connection from its token file', async () => {
+    const documents = new FilesystemDocumentStore({ baseDir: path.join(tmp, 'docs-ensure') });
+    service._documents = documents;
+    service._pinned = true;
+    answer(GoogleDriveService, [{}]);
+    await connect('gdrive', 'alice');
+    const id = connectionIdFor('gdrive', user('alice'));
+    await service.updateConnection(id, { status: 'failed', refreshFailures: 10 });
+    // A failed connection keeps its token file; the store cannot be read for a moment.
+    const get = documents.get.bind(documents);
+    documents.get = async () => {
+      throw new Error('storage unavailable');
+    };
+    let resolved;
+    try {
+      resolved = await service.resolve(user('alice'), 'gdrive');
+    } finally {
+      documents.get = get;
+    }
+    assert.equal(resolved.ok, false, 'fails closed');
+    const record = await service.getConnection(id);
+    assert.equal(record.status, 'failed', 'the stored record is not overwritten');
+    assert.equal(record.refreshFailures, 10);
   });
 });
 
