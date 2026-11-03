@@ -1,0 +1,70 @@
+{
+  "id": "chat_files",
+  "name": {
+    "en": "Chat files",
+    "de": "Chat-Dateien"
+  },
+  "description": {
+    "en": "List and read the files uploaded to this chat. Added automatically when the chat has files.",
+    "de": "Die in diesen Chat hochgeladenen Dateien auflisten und lesen. Wird automatisch hinzugefügt, wenn der Chat Dateien hat."
+  },
+  "script": "chatFiles.js",
+  "enabled": true,
+  "readOnly": true,
+  "functions": {
+    "list": {
+      "name": {
+        "en": "List chat files",
+        "de": "Chat-Dateien auflisten"
+      },
+      "description": {
+        "en": "List the files uploaded to this chat with their id, name, format, size and the turn they came with. Files of earlier turns may not be in your context any more (a <content> block with omitted=\"true\"); read them with chat_files_read.",
+        "de": "Die in diesen Chat hochgeladenen Dateien mit ID, Name, Format, Größe und der Runde, in der sie kamen, auflisten. Dateien früherer Runden sind eventuell nicht mehr im Kontext (ein <content>-Block mit omitted=\"true\"); mit chat_files_read lesen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Only files whose name contains this text",
+              "de": "Nur Dateien, deren Name diesen Text enthält"
+            }
+          }
+        }
+      }
+    },
+    "read": {
+      "name": {
+        "en": "Read chat file",
+        "de": "Chat-Datei lesen"
+      },
+      "description": {
+        "en": "Read the text of a file uploaded to this chat, by its id (the id of its <content> block or from chat_files_list). A long file comes in parts: when the result has nextOffset, call again with that offset for the rest.",
+        "de": "Den Text einer in diesen Chat hochgeladenen Datei lesen, anhand ihrer ID (die ID ihres <content>-Blocks oder aus chat_files_list). Eine lange Datei kommt in Teilen: Enthält das Ergebnis nextOffset, mit diesem Offset erneut aufrufen, um den Rest zu erhalten."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "description": {
+              "en": "The file id (file_…)",
+              "de": "Die Datei-ID (file_…)"
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "description": {
+              "en": "Character to start at (default 0)",
+              "de": "Zeichen, ab dem gelesen wird (Standard 0)"
+            },
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "required": ["fileId"]
+      }
+    }
+  }
+}

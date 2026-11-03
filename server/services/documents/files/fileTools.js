@@ -88,20 +88,30 @@ export async function runCreateFile(params) {
 const keyOf = path => path.toLowerCase();
 
 /**
- * The files of this chat `create_zip` can pack, newest per path: those still
- * held (this turn's included, before they are stored) and the stored
- * artifacts of the chat, when the chat is the caller's.
+ * The files the turns of this chat produced, newest first: those still held
+ * (this turn's included, before they are stored) and the stored artifacts of
+ * the chat, when the caller may reach the chat with `intent`.
  *
- * @returns {Promise<Array<{ id: string, name: string, kind: string, bytes: number,
- *   createdAt?: string, load: () => Promise<Buffer|null> }>>}
+ * `create_zip` packs them (`write`: the archive becomes part of the chat), the
+ * `chat_artifacts_*` tools read them (`read`).
+ *
+ * @param {Object} params
+ * @param {Object} params.user
+ * @param {string} params.chatId
+ * @param {'read'|'write'} [params.intent='write']
+ * @returns {Promise<Array<{ id: string, name: string, kind: string, mimeType?: string,
+ *   bytes: number, createdAt?: string, runId?: string, held?: boolean,
+ *   load: () => Promise<Buffer|null> }>>}
  */
-async function chatFiles({ user, chatId }) {
+export async function chatArtifactCandidates({ user, chatId, intent = 'write' }) {
   const candidates = heldGeneratedFilesFor(user, { chatId }).map(file => ({
     id: file.id,
     name: file.name,
     kind: generatedFileKind(file.mimeType),
+    mimeType: file.mimeType,
     bytes: file.bytes,
     createdAt: file.createdAt,
+    held: true,
     load: async () => file.data
   }));
   if (typeof chatId === 'string' && chatId) {
@@ -111,9 +121,8 @@ async function chatFiles({ user, chatId }) {
         import('../../chat/ChatRepository.js')
       ]);
       const chats = getChatRepository();
-      // `write`: the archive becomes part of this chat, so only its owner
-      // packs what it holds. A chat that is not stored has nothing stored.
-      const access = await authorizeChat(chatId, user, { repository: chats, intent: 'write' });
+      // A chat that is not stored has nothing stored.
+      const access = await authorizeChat(chatId, user, { repository: chats, intent });
       if (access.ok && access.chat) {
         const scope = chats.artifactScope(chatId);
         const repository = getArtifactRepository();
@@ -122,14 +131,16 @@ async function chatFiles({ user, chatId }) {
             id: artifact.id,
             name: artifact.name || '',
             kind: artifact.kind,
+            mimeType: artifact.mimeType,
             bytes: artifact.bytes,
             createdAt: artifact.createdAt,
+            ...(artifact.runId ? { runId: artifact.runId } : {}),
             load: async () => (await repository.get(scope, artifact.id))?.data || null
           });
         }
       }
     } catch (error) {
-      logger.warn('create_zip could not list the chat artifacts', {
+      logger.warn('Could not list the chat artifacts', {
         component: 'FileTools',
         chatId,
         error: error.message
@@ -144,7 +155,7 @@ async function chatFiles({ user, chatId }) {
 /**
  * Pick the existing files `create_zip` was asked for.
  *
- * @param {Array<Object>} candidates - From {@link chatFiles}, newest first.
+ * @param {Array<Object>} candidates - From {@link chatArtifactCandidates}, newest first.
  * @param {string[]} include - Names or ids.
  * @param {boolean} includeAll
  * @returns {Array<Object>}
@@ -229,7 +240,7 @@ export async function runCreateZip(params) {
     const existing =
       wanted.length || includeAll
         ? selectChatFiles(
-            await chatFiles({ user: params.user, chatId: params.chatId }),
+            await chatArtifactCandidates({ user: params.user, chatId: params.chatId }),
             wanted.map(entry => entry.trim()),
             includeAll
           )

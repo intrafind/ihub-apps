@@ -9,6 +9,7 @@
  * loading the tokenizer itself lazily / on demand.
  */
 
+import { applyHistoryFileBudget } from './historyFileBudget.js';
 import { renderUserMessage } from './promptContext.js';
 
 /**
@@ -77,13 +78,27 @@ export function messageTokenFragments(message) {
  * @param {object} [options]
  * @param {boolean} [options.includeHistory=true] - false when the app/user has
  *   history disabled (`sendChatHistory`), in which case nothing is re-sent.
+ * @param {number} [options.contextWindow] - The model's context window: files of
+ *   earlier turns beyond the server's budget count as the stub the server sends
+ *   in their place (`shared/historyFileBudget.js`). The pending message is not
+ *   in `messages`, so every message here counts as an earlier turn.
  * @returns {Array<string>} text fragments for the whole conversation
  */
-export function conversationTokenFragments(messages = [], { includeHistory = true } = {}) {
+export function conversationTokenFragments(
+  messages = [],
+  { includeHistory = true, contextWindow } = {}
+) {
   if (!includeHistory || !Array.isArray(messages)) return [];
+  const sent = messages.filter(message => message && !message.isGreeting);
+  // A placeholder for the pending turn, so every listed message is budgeted
+  // as an earlier one, like the server does once the new message is added.
+  const budgeted = contextWindow
+    ? applyHistoryFileBudget([...sent, { role: 'user', content: '' }], {
+        contextWindow
+      }).messages.slice(0, -1)
+    : sent;
   const fragments = [];
-  for (const message of messages) {
-    if (!message || message.isGreeting) continue;
+  for (const message of budgeted) {
     fragments.push(...messageTokenFragments(message));
   }
   return fragments;

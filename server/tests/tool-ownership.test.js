@@ -9,6 +9,7 @@
  *     definition, under its kept `toolId` or `<instanceId>__<action>`;
  *   - a platform tool of workflows and agents (`services/tools/platformTools.js`);
  *   - a feature: the project knowledge tools (`services/knowledge/knowledgeTools.js`),
+ *     the chat context tools (`services/chat/chatContextTools.js`),
  *     the skill tools (`toolLoader.js`, `services/systemSkillTools.js`), apps
  *     as tools (`app__<appId>`) and workflows as tools (`workflow_<id>`).
  *
@@ -28,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { expandShippedTool, shippedToolsDir } from '../services/tools/shippedToolDefinitions.js';
 import { PLATFORM_TOOL_IDS } from '../services/tools/platformTools.js';
 import { KNOWLEDGE_TOOL_IDS } from '../services/knowledge/knowledgeTools.js';
+import { CHAT_CONTEXT_TOOL_IDS } from '../services/chat/chatContextToolIds.js';
 import { SYSTEM_SKILL_TOOL_IDS } from '../services/systemSkillTools.js';
 import { SKILL_TOOL_IDS, WORKFLOW_TOOL_ID_PREFIX } from '../toolLoader.js';
 import { APP_TOOL_ID_PREFIX } from '../services/chat/appToolsGateway.js';
@@ -88,6 +90,7 @@ function toolOwners() {
   }
   owners.push({ owner: 'platform tools (workflows and agents)', ids: [...PLATFORM_TOOL_IDS] });
   owners.push({ owner: 'projects (knowledge tools)', ids: [...KNOWLEDGE_TOOL_IDS] });
+  owners.push({ owner: 'chats (chat context tools)', ids: [...CHAT_CONTEXT_TOOL_IDS] });
   owners.push({ owner: 'skills', ids: [...SKILL_TOOL_IDS] });
   owners.push({ owner: 'system skills', ids: [...SYSTEM_SKILL_TOOL_IDS] });
   owners.push({ owner: 'apps as tools', prefix: APP_TOOL_ID_PREFIX });

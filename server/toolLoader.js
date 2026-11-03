@@ -50,6 +50,7 @@ import {
   runKnowledgeTool
 } from './services/knowledge/knowledgeTools.js';
 import { platformToolDefinitions } from './services/tools/platformTools.js';
+import { isChatContextTool } from './services/chat/chatContextToolIds.js';
 import { mentionAccess } from './services/workflow/workflowAccess.js';
 import {
   isSystemSkillTool,
@@ -844,6 +845,21 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // Add the chat context tools — the sources, files and created files of
+  // earlier turns — for the kinds the stored chat has (`context.chatContext`,
+  // from `chatContextInventory`). Like the knowledge tools they belong to the
+  // chat, not to a tool list. Loaded lazily: the chat repository must not join
+  // the config cache's import graph.
+  if (context.chatContext) {
+    try {
+      const { chatContextToolsFor } = await import('./services/chat/chatContextTools.js');
+      const chatTools = chatContextToolsFor({ inventory: context.chatContext, language });
+      appTools = appTools.concat(chatTools.filter(t => !appTools.some(a => a.id === t.id)));
+    } catch (error) {
+      logger.error('Error adding the chat context tools', { component: 'ToolLoader', error });
+    }
+  }
+
   // Add workflow tools (from dedicated app.workflows array)
   if (Array.isArray(app.workflows)) {
     for (const wfId of app.workflows) {
@@ -1301,6 +1317,13 @@ export async function runTool(toolId, params = {}, options = {}) {
   // request's project scope (`params.appConfig`, `params.user`) on every call.
   if (isKnowledgeTool(toolId)) {
     return await runKnowledgeTool(toolId, params);
+  }
+
+  // The chat context tools belong to the chat and are not in the tool list;
+  // the implementation authorizes the chat with the call's own context.
+  if (isChatContextTool(toolId)) {
+    const { runChatContextTool } = await import('./services/chat/chatContextTools.js');
+    return await runChatContextTool(toolId, params);
   }
 
   // Find tool definition to determine the script file
