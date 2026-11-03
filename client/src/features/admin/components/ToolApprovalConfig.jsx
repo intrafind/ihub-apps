@@ -63,10 +63,13 @@ function ToolApprovalConfig() {
     setSaving(true);
     setMessage(null);
     try {
-      const platform = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      // Only the approval block: the save route keeps every section the body
+      // leaves out, while the GET answer it would otherwise echo back has
+      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
+      // save would erase.
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { ...platform.data, toolApproval: toolApprovalFromForm(form) }
+        body: { toolApproval: toolApprovalFromForm(form) }
       });
       setMessage({
         type: 'success',

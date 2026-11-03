@@ -31,7 +31,7 @@ import { resolvePrincipal } from '../loop/runIdentity.js';
 import { approvalDisplayData } from '../loop/seams/approvalSeam.js';
 import { actionFingerprint } from '../../utils/actionFingerprint.js';
 import {
-  directCallNeedsApproval,
+  needsApproval,
   resolveToolApproval,
   sideEffectFromAnnotations
 } from '../../utils/toolApproval.js';
@@ -43,6 +43,20 @@ export const VIEW_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Interaction states that mean "nobody will answer this any more". */
 const LAPSED = new Set(['expired', 'cancelled']);
+
+/**
+ * The iHub-facing id of a tool on the view's server: the server's tool prefix
+ * (the one the view's own tool carries) and the server's tool name — the id
+ * an app's per-tool approval override names.
+ */
+function appFacingToolId(viewTool, name) {
+  const viewId = typeof viewTool?.id === 'string' ? viewTool.id : '';
+  const viewName = viewTool?._mcp?.originalName;
+  if (typeof viewName === 'string' && viewName && viewId.endsWith(viewName)) {
+    return `${viewId.slice(0, viewId.length - viewName.length)}${name}`;
+  }
+  return name;
+}
 
 /** The tool definition a view's call is resolved as (approval, side effect, names). */
 export function viewCallToolDef({ serverId, name, target, viewTool }) {
@@ -57,7 +71,7 @@ export function viewCallToolDef({ serverId, name, target, viewTool }) {
       })
     : null;
   return {
-    id: name,
+    id: appFacingToolId(viewTool, name),
     name: target?.title || name,
     _mcp: {
       serverId,
@@ -96,6 +110,8 @@ export function isViewToolApproval(interaction) {
  * @param {Object} params
  * @param {Object} params.user - the caller
  * @param {string} params.appId
+ * @param {Object|null} [params.app] - the app's configuration: its tool approval
+ *   overrides tighten the gate as they do for a model's call
  * @param {Object} params.viewTool - the tool whose call rendered the view
  * @param {string} params.serverId
  * @param {string} params.name - the server's own tool name the view calls
@@ -112,6 +128,7 @@ export function isViewToolApproval(interaction) {
 export async function requestViewToolCall({
   user,
   appId,
+  app = null,
   viewTool,
   serverId,
   name,
@@ -124,7 +141,9 @@ export async function requestViewToolCall({
   interactionService = defaultInteractionService
 }) {
   const toolDef = viewCallToolDef({ serverId, name, target, viewTool });
-  if (!directCallNeedsApproval(toolDef, platform, { getInstallation })) return { status: 'run' };
+  const installation = getInstallation ? getInstallation(serverId) : null;
+  const policy = resolveToolApproval(toolDef, app, platform, { installation });
+  if (!needsApproval(policy)) return { status: 'run' };
   if (!chatId || !canApprove) {
     return {
       status: 'refused',
@@ -132,8 +151,6 @@ export async function requestViewToolCall({
       message: `Tool ${name} needs a person's approval, and this view's host cannot show it`
     };
   }
-  const installation = getInstallation ? getInstallation(serverId) : null;
-  const policy = resolveToolApproval(toolDef, null, platform, { installation });
   const displayData = approvalDisplayData(
     { toolDef, toolId: name, name, args: args || {} },
     policy

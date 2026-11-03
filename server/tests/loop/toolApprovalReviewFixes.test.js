@@ -179,9 +179,9 @@ test('#2 who answered is documented: the answer carries the approver, the execut
     { decision: 'approve' },
     { user: { id: 'boss', name: 'The Boss', groups: ['legal', 'users'] }, channel: 'queue' }
   );
+  // The run's identity mode is `default`: the stable id only, no display name.
   assert.deepEqual(answered.answer.approver, {
     id: 'boss',
-    name: 'The Boss',
     via: 'approverGroups',
     groups: ['legal']
   });
@@ -193,6 +193,42 @@ test('#2 who answered is documented: the answer carries the approver, the execut
   assert.equal(entry.decision, 'approve');
   assert.equal(entry.checkpointId, 'ckpt-1');
   assert.ok(entry.at);
+});
+
+test('#2 the approver display name is recorded in the full identity mode only', async t => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-approver-name-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  t.after(async () => {
+    await svc.stop?.();
+    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  });
+  const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'owner-1' } });
+  const approverIn = async identityMode => {
+    const raised = await svc.raise({
+      runId,
+      kind: 'approval',
+      origin: 'tool',
+      prompt: { message: 'Run?', inputType: 'confirm' },
+      policy: { approverGroups: ['legal'] },
+      source: {
+        checkpointId: `ckpt-${identityMode}`,
+        executionId: runId,
+        nodeId: 'n1',
+        principalId: 'owner-1',
+        identityMode
+      }
+    });
+    const answered = await svc.answer(
+      raised.id,
+      { decision: 'approve' },
+      { user: { id: 'boss', name: 'The Boss', groups: ['legal'] }, channel: 'queue' }
+    );
+    return answered.answer.approver;
+  };
+  assert.equal((await approverIn('full')).name, 'The Boss');
+  assert.equal(Object.hasOwn(await approverIn('default'), 'name'), false);
+  assert.equal(Object.hasOwn(await approverIn('pseudonymized'), 'name'), false);
 });
 
 // ── 3 ────────────────────────────────────────────────────────────────────────

@@ -266,8 +266,8 @@ started the workflow — never as the person who answered a `human` node, a
 question or a [tool approval](tool-approval.md): an approver group can hold
 many people, and none of them becomes the run's identity (their groups and
 connected accounts are not used). Who answered is documented instead: on the
-interaction's answer (`answer.approver`: id, display name unless the run
-ledger is pseudonymized, `via` = `approverGroups` | `admin` | `owner`, the
+interaction's answer (`answer.approver`: id, display name only when the run
+ledger records full identities (`identityMode: full`), `via` = `approverGroups` | `admin` | `owner`, the
 approver groups that matched) and in the execution's answer log
 (`_answerLog`: checkpoint, decision, approver, time). A run started before
 this was recorded (an older release) cannot be resumed after an answer: it
