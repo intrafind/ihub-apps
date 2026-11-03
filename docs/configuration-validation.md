@@ -222,6 +222,9 @@ Validates marketplace catalog documents fetched from a registry's `catalog.json`
 - **Metadata**: Version, author, category, tags, license, minimum iHub version
 - **License link**: `licenseUrl` (optional) points at the full license text; the admin marketplace
   detail panel shows `license` as a link to it
+- **Versions**: `versions: [{ version, ref }]` (optional) lists the versions the registry still
+  serves; `ref` locates a version descriptor, a catalog item of that version (see
+  [Marketplace → Versions, channel and pins](marketplace.md#versions-channel-and-pins))
 
 **On install:** each item's content is validated against the schema of its type (app, model,
 prompt or workflow) before anything is written, and its `id` must equal the item's `name`. An item
@@ -264,6 +267,9 @@ Validates registry entries stored in `config/registries.json`. Each registry poi
 - **Source**: URL pointing to the registry's `catalog.json`
 - **Auth**: Authentication strategy — `none`, `bearer` (token), `basic` (username/password), or `header` (custom header)
 - **Auto-Refresh**: Whether the registry catalog is periodically re-fetched (1–168 hour interval)
+- **Trust for code**: `trustCode` (default false): integrations from this registry may run code (a `script` connector, migration modules)
+- **Channel**: `channel` (`stable` or `all`, absent reads as `stable`): whether pre-release versions are offered
+- **Pins**: `pins` (optional), `{ "<type>:<name>": "<semver range>" }`: only versions inside the range are offered for that item
 
 **Example Valid Configuration:**
 ```json
@@ -275,7 +281,9 @@ Validates registry entries stored in `config/registries.json`. Each registry poi
   "auth": { "type": "none" },
   "enabled": true,
   "autoRefresh": true,
-  "refreshIntervalHours": 24
+  "refreshIntervalHours": 24,
+  "channel": "stable",
+  "pins": { "integration:org.ckan__open-data-portal": "1.3.x" }
 }
 ```
 

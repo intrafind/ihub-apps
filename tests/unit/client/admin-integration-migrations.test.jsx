@@ -16,6 +16,10 @@
  *   - while the installation is blocked, Settings (the generic form and a
  *     dedicated editor) is read-only with the reason;
  *   - the migration log lists the runs, newest first;
+ *   - (phase 3, #3091) the backups card lists every backup with Revert to
+ *     this version, disabled with the reason when the backup holds no
+ *     definition of another version; Revert asks first and sends the backup
+ *     picked; Restore offers a picker when there is more than one backup;
  *   - every string comes from shared/i18n/en.json.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -33,6 +37,7 @@ const mockApi = {
   migrateInstalledIntegration: jest.fn(),
   restoreInstalledIntegration: jest.fn(),
   adoptInstalledIntegration: jest.fn(),
+  revertInstalledIntegration: jest.fn(),
   fetchAdminApps: jest.fn()
 };
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
@@ -45,6 +50,7 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   migrateInstalledIntegration: (...args) => mockApi.migrateInstalledIntegration(...args),
   restoreInstalledIntegration: (...args) => mockApi.restoreInstalledIntegration(...args),
   adoptInstalledIntegration: (...args) => mockApi.adoptInstalledIntegration(...args),
+  revertInstalledIntegration: (...args) => mockApi.revertInstalledIntegration(...args),
   testInstalledIntegration: jest.fn().mockResolvedValue({ success: true, steps: [] }),
   setInstalledIntegrationEnabled: jest.fn(),
   reloadIntegrationCatalog: jest.fn(),
@@ -687,6 +693,122 @@ describe('installation page: needs review', () => {
       'GovData now records v1.4.0.'
     );
     await waitFor(() => expect(screen.queryByTestId('migration-panel')).not.toBeInTheDocument());
+    expectNoMissingKeys();
+  });
+});
+
+describe('installation page: backups and revert', () => {
+  const PRE = { ...BACKUP, kind: 'pre-migration', hasDefinition: true, createdBy: 'admin' };
+  const BOUNDARY = {
+    id: 'govdata-1.3.0-20261102T100000001Z',
+    representedVersion: '1.3.0',
+    createdAt: '2026-11-02T10:00:01.000Z',
+    kind: 'boundary',
+    hasDefinition: false,
+    createdBy: 'admin'
+  };
+  const PRE_RESTORE = {
+    id: 'govdata-1.4.0-20261102T110000000Z',
+    representedVersion: '1.4.0',
+    createdAt: '2026-11-02T11:00:00.000Z',
+    kind: 'pre-restore',
+    hasDefinition: true,
+    createdBy: 'admin'
+  };
+  const WITH_BACKUPS = {
+    ...MIGRATED,
+    migration: {
+      ...MIGRATION_BASE,
+      pending: false,
+      blocked: false,
+      from: '1.4.0',
+      migrations: [],
+      backups: [PRE_RESTORE, BOUNDARY, PRE],
+      defaultBackup: null
+    }
+  };
+
+  test('lists every backup; one without the definition of another version cannot be reverted to', async () => {
+    current = WITH_BACKUPS;
+    renderPage();
+    const card = await screen.findByTestId('installation-backups');
+    const rows = within(card).getAllByTestId('installation-backup');
+    expect(rows.map(row => row.getAttribute('data-backup'))).toEqual([
+      PRE_RESTORE.id,
+      BOUNDARY.id,
+      PRE.id
+    ]);
+    expect(rows[0]).toHaveTextContent('loaded version');
+    expect(rows[1]).toHaveTextContent('between two migrations');
+    expect(rows[1]).toHaveTextContent(
+      'Cannot be reverted to while v1.4.0 is loaded: this backup does not hold the definition of v1.3.0.'
+    );
+    expect(within(rows[1]).getByRole('button', { name: /Revert to v1\.3\.0/ })).toBeDisabled();
+    expect(within(rows[2]).getByRole('button', { name: /Revert to v1\.2\.0/ })).toBeEnabled();
+    expectNoMissingKeys();
+  });
+
+  test('Revert asks first, names what goes back, then reverts to exactly that backup', async () => {
+    current = WITH_BACKUPS;
+    mockApi.revertInstalledIntegration.mockImplementation(async () => {
+      current = { ...BASE_INSTANCE, currentVersion: '1.2.0' };
+      return {
+        success: true,
+        backup: PRE,
+        logEntry: {
+          from: '1.4.0',
+          to: '1.2.0',
+          at: '2026-11-02T12:00:00.000Z',
+          by: 'admin',
+          trigger: 'revert',
+          result: 'reverted',
+          backup: PRE.id
+        },
+        instance: current
+      };
+    });
+    renderPage();
+    const card = await screen.findByTestId('installation-backups');
+    const row = within(card)
+      .getAllByTestId('installation-backup')
+      .find(item => item.getAttribute('data-backup') === PRE.id);
+    fireEvent.click(within(row).getByRole('button', { name: /Revert to v1\.2\.0/ }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Revert GovData to v1.2.0?' });
+    expect(dialog).toHaveTextContent(`go back to the backup ${PRE.id} (v1.2.0, taken`);
+    expect(dialog).toHaveTextContent('The definition goes back to v1.2.0 too.');
+    expect(mockApi.revertInstalledIntegration).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Revert to this version' }));
+    await waitFor(() =>
+      expect(mockApi.revertInstalledIntegration).toHaveBeenCalledWith('govdata', PRE.id)
+    );
+    expect(await screen.findByTestId('migration-outcome')).toHaveTextContent(
+      `GovData was reverted to the backup ${PRE.id}; it is at v1.2.0 now.`
+    );
+    expectNoMissingKeys();
+  });
+
+  test('Restore offers a picker of the backups and restores the one picked', async () => {
+    current = {
+      ...FAILED,
+      migration: { ...FAILED.migration, backups: [PRE_RESTORE, PRE], defaultBackup: PRE.id }
+    };
+    mockApi.restoreInstalledIntegration.mockResolvedValue({
+      success: true,
+      backup: PRE_RESTORE,
+      logEntry: null,
+      instance: BASE_INSTANCE
+    });
+    renderPage();
+    const panel = await screen.findByTestId('migration-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Restore backup' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Restore a backup of GovData?' });
+    const picker = within(dialog).getByLabelText('Backup');
+    expect(picker).toHaveValue(PRE.id);
+    fireEvent.change(picker, { target: { value: PRE_RESTORE.id } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
+    await waitFor(() =>
+      expect(mockApi.restoreInstalledIntegration).toHaveBeenCalledWith('govdata', PRE_RESTORE.id)
+    );
     expectNoMissingKeys();
   });
 });
