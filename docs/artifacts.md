@@ -270,9 +270,47 @@ that opens a dialog for a read-only link to just that file, optionally
 embeddable on allowlisted websites. See
 [Chat Sharing → Sharing a single file](chat-sharing.md#sharing-a-single-file).
 
+The panel is for managing files (list, selection, ZIP). Its preview is a quick
+look; **Open** (or a double-click on a list entry) opens the file in the
+[viewer](#the-artifact-viewer).
+
 Code: `client/src/features/chat/components/ArtifactsPanel.jsx`,
 `ArtifactPreview.jsx`, `ArtifactShareDialog.jsx`,
 `client/src/features/chat/utils/artifactFiles.js`.
+
+## The artifact viewer
+
+`ArtifactViewer` shows one artifact immersively: a fixed full-window dialog with a single
+48 px toolbar, and `ArtifactPreview` in `fill` mode below it (no frame, padding or fixed
+height; the parent decides the size, whereas the panel uses `panel` mode).
+
+- **Opening.** `ArtifactViewerHost` (provided by `AppChat` and `SharedChatPage`) offers
+  `openArtifact(descriptor, siblings?)` through `ArtifactViewerContext`. The cards of
+  previewable generated files, generated images and the panel's **Open** use it. A
+  descriptor either names a stored artifact (fetched by id, through the share in a shared
+  chat) or carries a live turn's bytes inline as base64 `data`.
+- **Toolbar.** Name and file menu (copy, share, export, download, show in files, open in
+  new tab, full screen, prev/next), "n of m" with prev/next (also ←/→ in the toolbar),
+  Preview/Code for HTML, SVG, CSV and notebooks, copy, **Chat**, share, **Export**
+  (Markdown, HTML, PDF through `shared/utils/markdownExports.js`; an HTML artifact
+  exports as its own file), download, browser full screen, close. Esc closes a menu first,
+  then the viewer.
+- **Chat beside it.** **Chat** turns the viewer into the right 60 % of the window, not modal,
+  with the page behind it usable.
+- **URL.** A stored artifact is recorded as `?artifact=<id>`: reload reopens, Back closes.
+  Live files have no URL. **Open in new tab** opens `/artifacts/:chatId/:artifactId`
+  (`ArtifactPage`, owner only; the route is in `KNOWN_ROUTES` and `client/index.html`).
+  A single-file share (`/share/:shareId`) renders as the same viewer in page mode;
+  `?embed=1` hides the toolbar.
+- **Not included.** Rename, duplicate, delete and versions of an artifact.
+
+Security is unchanged: HTML stays in `<iframe sandbox="allow-scripts">` under the preview
+CSP, in the viewer and on the standalone pages. A `blob:` URL of an HTML artifact is never
+navigated to. Full screen is requested on the viewer's container, never inside the frame, so
+the frame has no `allow-same-origin`, `allow-popups` or `allow="fullscreen"`.
+
+Code: `ArtifactViewer.jsx`, `ArtifactViewerHost.jsx`,
+`contexts/ArtifactViewerContext.jsx`, `pages/ArtifactPage.jsx`, `SharedArtifactView.jsx`.
 
 ## Lifetime
 

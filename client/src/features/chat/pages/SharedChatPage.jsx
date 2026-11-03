@@ -19,9 +19,11 @@ import {
   fetchSharedChatFiles
 } from '../../../api';
 import ArtifactsPanel from '../components/ArtifactsPanel';
+import ArtifactViewerHost from '../components/ArtifactViewerHost';
 import SharedArtifactView from '../components/SharedArtifactView';
 import { previewTypeOf } from '../utils/artifactFiles';
 import ChatFilesContext from '../contexts/ChatFilesContext';
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -126,14 +128,17 @@ function ArtifactRow({ artifact, fetchBlob, onPreview }) {
     [artifact.id, fetchBlob]
   );
 
+  const viewer = useArtifactViewer();
   const rendered = ['html', 'svg'].includes(previewTypeOf(artifact));
   const handleView = () =>
-    rendered && onPreview
-      ? onPreview(artifact)
-      : withBlob('view', url => {
-          window.open(url, '_blank', 'noopener');
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        });
+    viewer && previewTypeOf(artifact) !== 'none'
+      ? viewer.openArtifact(artifact)
+      : rendered && onPreview
+        ? onPreview(artifact)
+        : withBlob('view', url => {
+            window.open(url, '_blank', 'noopener');
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          });
 
   const handleDownload = () =>
     withBlob('download', url => {
@@ -416,152 +421,166 @@ export default function SharedChatPage() {
   const icon = share.app?.icon || DEFAULT_APP_ICON;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-      {share.mode === 'public' && (
-        <div
-          role="note"
-          className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border-b border-amber-200 dark:border-amber-800"
-        >
-          <Icon name="globe-alt" size="sm" />
-          <span>
-            {t(
-              'chatSharing.viewer.publicBanner',
-              'This conversation is publicly accessible. Anyone with the link can read it.'
-            )}
-          </span>
-        </div>
-      )}
-
-      <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <span
-            className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
-            style={{ backgroundColor: color }}
+    <ArtifactViewerHost
+      messages={messages}
+      chatId={share.id}
+      fetchBlob={artifact => fetchArtifactBlob(artifact.id)}
+      splitAvailable
+      onShowInFiles={artifact => {
+        setPanelArtifactId(artifact.id);
+        setShowArtifacts(true);
+      }}
+      newTabUrl={artifact =>
+        `/share/${encodeURIComponent(shareId)}?artifact=${encodeURIComponent(artifact.id)}`
+      }
+    >
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+        {share.mode === 'public' && (
+          <div
+            role="note"
+            className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border-b border-amber-200 dark:border-amber-800"
           >
-            <Icon name={icon} size="md" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
-                {title}
-              </h1>
-              <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                <Icon name="eye" size="xs" />
-                {t('chatSharing.viewer.readOnly', 'Read-only')}
-              </span>
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-              {[
-                appName,
-                share.sharedBy
-                  ? t('chatSharing.viewer.sharedBy', {
-                      name: share.sharedBy,
-                      defaultValue: 'Shared by {{name}}'
-                    })
-                  : t('chatSharing.viewer.sharedAnonymously', 'Shared with you'),
-                formatDate(share.createdAt, i18n.language)
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </div>
-          <Link
-            to="/"
-            className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap"
-          >
-            {t('chatSharing.viewer.openApp', 'Open iHub Apps')}
-            <Icon name="arrow-right" size="sm" />
-          </Link>
-        </div>
-      </header>
-
-      <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-2 sm:px-6 py-4">
-        <ChatFilesContext.Provider value={filesContext}>
-          <ArtifactFetchContext.Provider value={fetchArtifact}>
-            <div className="flex-1 flex flex-col min-h-0">
-              <ChatMessageList
-                messages={messages}
-                editable={false}
-                readOnly
-                appId={share.appId || undefined}
-                chatId={share.id}
-                app={null}
-                models={[]}
-              />
-            </div>
-          </ArtifactFetchContext.Provider>
-        </ChatFilesContext.Provider>
-
-        {(artifacts.length > 0 || hasSharedFiles) && (
-          <section className="mt-4 mb-8" aria-labelledby="shared-artifacts-heading">
-            <div className="flex items-center justify-between gap-2 mb-2.5 px-1">
-              <h2
-                id="shared-artifacts-heading"
-                className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400"
-              >
-                {t('chatSharing.viewer.artifacts', 'Files in this chat')}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowArtifacts(true)}
-                data-testid="open-artifacts"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <Icon name="archive-box" size="sm" />
-                {t('chatArtifacts.openPanel', 'Preview and download as ZIP')}
-              </button>
-            </div>
-            <ul className="flex flex-col gap-2">
-              {hasSharedFiles && artifacts.length === 0 && (
-                <li className="text-sm text-gray-600 dark:text-gray-300">
-                  {t(
-                    'chatSharing.viewer.sharedFiles',
-                    'The owner shared the files uploaded to this chat.'
-                  )}
-                </li>
+            <Icon name="globe-alt" size="sm" />
+            <span>
+              {t(
+                'chatSharing.viewer.publicBanner',
+                'This conversation is publicly accessible. Anyone with the link can read it.'
               )}
-              {artifacts.map(artifact => (
-                <ArtifactRow
-                  key={artifact.id}
-                  artifact={artifact}
-                  fetchBlob={fetchArtifactBlob}
-                  onPreview={item => {
-                    setPanelArtifactId(item.id);
-                    setShowArtifacts(true);
-                  }}
+            </span>
+          </div>
+        )}
+
+        <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+            <span
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
+              style={{ backgroundColor: color }}
+            >
+              <Icon name={icon} size="md" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                  {title}
+                </h1>
+                <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  <Icon name="eye" size="xs" />
+                  {t('chatSharing.viewer.readOnly', 'Read-only')}
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                {[
+                  appName,
+                  share.sharedBy
+                    ? t('chatSharing.viewer.sharedBy', {
+                        name: share.sharedBy,
+                        defaultValue: 'Shared by {{name}}'
+                      })
+                    : t('chatSharing.viewer.sharedAnonymously', 'Shared with you'),
+                  formatDate(share.createdAt, i18n.language)
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            <Link
+              to="/"
+              className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap"
+            >
+              {t('chatSharing.viewer.openApp', 'Open iHub Apps')}
+              <Icon name="arrow-right" size="sm" />
+            </Link>
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-2 sm:px-6 py-4">
+          <ChatFilesContext.Provider value={filesContext}>
+            <ArtifactFetchContext.Provider value={fetchArtifact}>
+              <div className="flex-1 flex flex-col min-h-0">
+                <ChatMessageList
+                  messages={messages}
+                  editable={false}
+                  readOnly
+                  appId={share.appId || undefined}
+                  chatId={share.id}
+                  app={null}
+                  models={[]}
                 />
-              ))}
-            </ul>
-          </section>
-        )}
+              </div>
+            </ArtifactFetchContext.Provider>
+          </ChatFilesContext.Provider>
 
-        {showArtifacts && (
-          <ArtifactsPanel
-            isOpen
-            onClose={() => {
-              setShowArtifacts(false);
-              setPanelArtifactId(null);
-            }}
-            source={artifactSource}
-            initialArtifactId={panelArtifactId}
-            zipName={title || 'shared-chat'}
-            messages={messages}
-            uploadedSource={uploadedSource}
-            uploadedAccess={uploadedAccess}
-            initialTab={filesDrawerFileId ? 'uploaded' : null}
-            initialFileId={filesDrawerFileId}
-          />
-        )}
+          {(artifacts.length > 0 || hasSharedFiles) && (
+            <section className="mt-4 mb-8" aria-labelledby="shared-artifacts-heading">
+              <div className="flex items-center justify-between gap-2 mb-2.5 px-1">
+                <h2
+                  id="shared-artifacts-heading"
+                  className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400"
+                >
+                  {t('chatSharing.viewer.artifacts', 'Files in this chat')}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowArtifacts(true)}
+                  data-testid="open-artifacts"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <Icon name="archive-box" size="sm" />
+                  {t('chatArtifacts.openPanel', 'Preview and download as ZIP')}
+                </button>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {hasSharedFiles && artifacts.length === 0 && (
+                  <li className="text-sm text-gray-600 dark:text-gray-300">
+                    {t(
+                      'chatSharing.viewer.sharedFiles',
+                      'The owner shared the files uploaded to this chat.'
+                    )}
+                  </li>
+                )}
+                {artifacts.map(artifact => (
+                  <ArtifactRow
+                    key={artifact.id}
+                    artifact={artifact}
+                    fetchBlob={fetchArtifactBlob}
+                    onPreview={item => {
+                      setPanelArtifactId(item.id);
+                      setShowArtifacts(true);
+                    }}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
 
-        {share.expiresAt && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
-            {t('chatSharing.viewer.expires', {
-              date: formatDate(share.expiresAt, i18n.language),
-              defaultValue: 'This link expires on {{date}}.'
-            })}
-          </p>
-        )}
-      </main>
-    </div>
+          {showArtifacts && (
+            <ArtifactsPanel
+              isOpen
+              onClose={() => {
+                setShowArtifacts(false);
+                setPanelArtifactId(null);
+              }}
+              source={artifactSource}
+              initialArtifactId={panelArtifactId}
+              zipName={title || 'shared-chat'}
+              messages={messages}
+              uploadedSource={uploadedSource}
+              uploadedAccess={uploadedAccess}
+              initialTab={filesDrawerFileId ? 'uploaded' : null}
+              initialFileId={filesDrawerFileId}
+            />
+          )}
+
+          {share.expiresAt && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
+              {t('chatSharing.viewer.expires', {
+                date: formatDate(share.expiresAt, i18n.language),
+                defaultValue: 'This link expires on {{date}}.'
+              })}
+            </p>
+          )}
+        </main>
+      </div>
+    </ArtifactViewerHost>
   );
 }
