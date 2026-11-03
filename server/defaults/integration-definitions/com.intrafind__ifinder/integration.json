@@ -1,11 +1,22 @@
 {
   "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
   "id": "com.intrafind/ifinder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Model guidance and example prompts for the search, read and discovery actions; the guidance is added to the system prompt while iFinder is active in a chat.",
+        "de": "Modellhinweise und Beispiel-Prompts für die Such-, Lese- und Erkundungsaktionen; die Hinweise werden dem Systemprompt hinzugefügt, solange iFinder in einem Chat aktiv ist."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-10-31",
@@ -456,7 +467,21 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Start broad with a few key terms and narrow with filters only when there are too many hits. Use the hit ids for getContent or getMetadata; never pass a title or link.",
+        "de": "Beginne breit mit wenigen Schlüsselbegriffen und grenze erst mit Filtern ein, wenn es zu viele Treffer gibt. Verwende die IDs der Treffer für getContent oder getMetadata; übergib nie einen Titel oder Link."
+      },
+      "examples": [
+        {
+          "en": "Find our travel expense policy.",
+          "de": "Finde unsere Reisekostenrichtlinie."
+        },
+        {
+          "en": "Which documents mention the 2026 budget for project Atlas?",
+          "de": "Welche Dokumente erwähnen das Budget 2026 für Projekt Atlas?"
+        }
+      ]
     },
     {
       "name": "getContent",
@@ -471,7 +496,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Read a document only when its search snippet does not answer the question; quote the passages you rely on.",
+        "de": "Lies ein Dokument nur, wenn sein Suchausschnitt die Frage nicht beantwortet; zitiere die Passagen, auf die du dich stützt."
+      },
+      "examples": [
+        {
+          "en": "Summarise the latest works council agreement.",
+          "de": "Fasse die neueste Betriebsvereinbarung zusammen."
+        }
+      ]
     },
     {
       "name": "getMetadata",
@@ -486,7 +521,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Use it for who wrote a document, when it changed or where it is stored, without reading its text.",
+        "de": "Nutze es für die Frage, wer ein Dokument geschrieben hat, wann es geändert wurde oder wo es liegt, ohne seinen Text zu lesen."
+      },
+      "examples": [
+        {
+          "en": "Who last changed the onboarding checklist?",
+          "de": "Wer hat die Onboarding-Checkliste zuletzt geändert?"
+        }
+      ]
     },
     {
       "name": "discover",
@@ -501,7 +546,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Run it once before the first search in an unfamiliar search profile, not before every search.",
+        "de": "Führe es einmal vor der ersten Suche in einem unbekannten Suchprofil aus, nicht vor jeder Suche."
+      },
+      "examples": [
+        {
+          "en": "What kind of documents are in the legal profile?",
+          "de": "Welche Art Dokumente enthält das Rechtsprofil?"
+        }
+      ]
     },
     {
       "name": "getFields",
@@ -516,7 +571,11 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Look up field names here before filtering or sorting on a field you have not used yet.",
+        "de": "Schlage hier Feldnamen nach, bevor du nach einem Feld filterst oder sortierst, das du noch nicht verwendet hast."
+      }
     },
     {
       "name": "getFacetValues",
@@ -531,7 +590,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Use it to learn the exact values of a field (sources, authors, languages) before filtering on them.",
+        "de": "Nutze es, um die genauen Werte eines Felds (Quellen, Autoren, Sprachen) zu erfahren, bevor du danach filterst."
+      },
+      "examples": [
+        {
+          "en": "Which sources does the search cover?",
+          "de": "Welche Quellen deckt die Suche ab?"
+        }
+      ]
     },
     {
       "name": "listProfiles",
@@ -546,7 +615,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "internal",
-      "enabledByDefault": true
+      "enabledByDefault": true,
+      "guidance": {
+        "en": "Use it when the user names a collection instead of a profile, or when a search in the default profile finds nothing.",
+        "de": "Nutze es, wenn der Benutzer eine Sammlung statt eines Profils nennt oder wenn eine Suche im Standardprofil nichts findet."
+      },
+      "examples": [
+        {
+          "en": "Which document collections can I search?",
+          "de": "Welche Dokumentsammlungen kann ich durchsuchen?"
+        }
+      ]
     }
   ],
   "instructions": {

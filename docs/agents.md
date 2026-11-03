@@ -260,6 +260,19 @@ continues the same step with the answer as the tool result. A `steer` human
 event delivers an operator's instruction into the running loop at its next
 step boundary (see [Run Ledger](run-ledger.md#human-events)).
 
+**Who the run acts as after an answer.** A run always continues as the
+principal it started with — the agent's service account, or the user who
+started the workflow — never as the person who answered a `human` node, a
+question or a [tool approval](tool-approval.md): an approver group can hold
+many people, and none of them becomes the run's identity (their groups and
+connected accounts are not used). Who answered is documented instead: on the
+interaction's answer (`answer.approver`: id, display name only when the run
+ledger records full identities (`identityMode: full`), `via` = `approverGroups` | `admin` | `owner`, the
+approver groups that matched) and in the execution's answer log
+(`_answerLog`: checkpoint, decision, approver, time). A run started before
+this was recorded (an older release) cannot be resumed after an answer: it
+fails with `EXECUTION_PRINCIPAL_UNKNOWN` and has to be started again.
+
 The server enforces the approver groups, validates the option, routes the
 workflow on the chosen branch and resumes the run (`interaction/answered`,
 `run/resumed`); a rejected answer leaves the interaction pending. The run id of

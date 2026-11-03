@@ -57,6 +57,9 @@ function ChatMessageList({
   // Clarification handlers
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
+  // Tool approval (#2945): `({ interactionId, decision, grant }) => void`. Without it a
+  // card is shown read-only (the surface cannot answer it).
+  onToolApproval = null,
   // Citation document action handlers
   onOpenSourceInApp = null,
   // Page a message's copy-link action points at — see ChatMessage.
@@ -230,6 +233,7 @@ function ChatMessageList({
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}
                 onClarificationSkip={onClarificationSkip}
+                onToolApproval={onToolApproval}
                 onOpenSourceInApp={onOpenSourceInApp}
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}

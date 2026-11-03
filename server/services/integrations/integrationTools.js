@@ -13,6 +13,9 @@ import {
 } from './integrationAccess.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
+import { fingerprintOfTool, fingerprintsOfActions, observeInBackground } from './actionReview.js';
+import { integrationInstructionsOf, withActionOverrides } from './actionGuidance.js';
+import { recordActionEvent } from './actionUsage.js';
 import {
   registerScopeProvider,
   unregisterScopeProvider,
@@ -60,14 +63,20 @@ export function isIntegrationTool(tool) {
   return Boolean(tool && tool._integration);
 }
 
-function toolFromAction(resolved, action, language) {
+/**
+ * A tool from an action of an installation. The description is the admin's
+ * override or the definition's; the action's guidance travels on the marker
+ * (`_integration.guidance`) and reaches the system prompt through
+ * `actionGuidance.appendIntegrationGuidance`, not the tool description (#2974).
+ */
+export function toolFromAction(resolved, rawAction, language, fingerprint = null) {
   const { instance, definition, label } = resolved;
+  const action = withActionOverrides(rawAction, instance, language);
   const title = action.title || action.name;
-  const guidance = action.guidance ? `\n\n${action.guidance}` : '';
   return {
     id: action.toolId,
     name: `${label}: ${title}`,
-    description: `${action.description || title}${guidance}`,
+    description: action.description || title,
     parameters: action.parameters,
     type: 'integration',
     _integration: {
@@ -80,14 +89,19 @@ function toolFromAction(resolved, action, language) {
       // A built-in that kept the tool id it had before (`iFinder_search`).
       fixedToolId: action.toolId !== `${instance.id}__${action.name}`,
       // Bound only when a binding names the action (`bindExplicitly` in the definition).
-      ...(action.bindExplicitly ? { bindExplicitly: true } : {})
+      ...(action.bindExplicitly ? { bindExplicitly: true } : {}),
+      // Model guidance for the system prompt while the integration is active (#2974).
+      ...(action.guidance ? { guidance: action.guidance } : {}),
+      // Name, declared side effect and input schema (#2916): compared by the
+      // approval resolver with the fingerprint an admin accepted.
+      ...(fingerprint ? { fingerprint } : {})
     },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
     readOnly: action.sideEffect === 'read',
     examples: action.examples,
     sources: action.sources,
-    instructions: localized(definition.instructions, language) || undefined,
+    instructions: integrationInstructionsOf(definition, instance, language).text || undefined,
     // A connector may add fields of its own (a people directory's or an LDAP browser's marker).
     ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
   };
@@ -149,6 +163,40 @@ export function isBoundToolEnabled(app, tool, enabledTools) {
 }
 
 /**
+ * A ready-made tool of an MCP or A2A installation with the admin's text
+ * overrides (#2974): description, guidance on the marker, the installation's
+ * instructions; plus its fingerprint (#2916). The fingerprint is taken before
+ * and never covers the description.
+ * @param {Object} tool - an adapter's `discoverTools` result
+ * @param {Object} instance
+ * @param {string} language
+ * @param {string|null} fingerprint
+ * @param {string} instructions - the installation's model guidance
+ * @returns {Object}
+ */
+function withToolOverrides(tool, instance, language, fingerprint, instructions) {
+  const actionName = tool._integration?.action;
+  const shaped = actionName
+    ? withActionOverrides(
+        { name: actionName, description: tool.description || '', guidance: '', examples: [] },
+        instance,
+        language
+      )
+    : null;
+  return {
+    ...tool,
+    ...(shaped?.overridden.description ? { description: shaped.description } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...(shaped?.examples.length ? { examples: shaped.examples } : {}),
+    _integration: {
+      ...tool._integration,
+      ...(fingerprint ? { fingerprint } : {}),
+      ...(shaped?.guidance ? { guidance: shaped.guidance } : {})
+    }
+  };
+}
+
+/**
  * Tools of every enabled installation (for `loadTools`).
  * @param {string|null} language
  */
@@ -168,19 +216,39 @@ export async function discoverIntegrationTools(language = null) {
       // An adapter over a system that already shapes tools (MCP) hands them
       // over as they are, with the integration marker added.
       if (typeof adapter.discoverTools === 'function') {
-        tools.push(...(await adapter.discoverTools(resolved, lang)));
+        const fingerprints = {};
+        const instructions = integrationInstructionsOf(
+          resolved.definition,
+          resolved.instance,
+          lang,
+          adapter.serverInstructions?.(resolved.instance) || null
+        ).text;
+        for (const tool of await adapter.discoverTools(resolved, lang)) {
+          const fingerprint = fingerprintOfTool(tool);
+          if (fingerprint && tool._integration?.action) {
+            fingerprints[tool._integration.action] = fingerprint;
+          }
+          tools.push(withToolOverrides(tool, resolved.instance, lang, fingerprint, instructions));
+        }
+        // Only the actions switched on are listed here: compared, never a baseline.
+        observeInBackground(resolved.instance.id, fingerprints, { complete: false });
         continue;
       }
+      // Every action, the unavailable ones included, so the fingerprints are
+      // complete; only the available ones become tools.
       const actions = await adapter.discoverActions({
         definition: resolved.definition,
         instance: resolved.instance,
         document: resolved.document,
         security: resolved.security,
-        language: lang
+        language: lang,
+        includeUnavailable: true
       });
+      const fingerprints = fingerprintsOfActions(actions, resolved.definition);
+      observeInBackground(resolved.instance.id, fingerprints, { complete: true });
       for (const action of actions) {
         if (!action.available) continue;
-        tools.push(toolFromAction(resolved, action, lang));
+        tools.push(toolFromAction(resolved, action, lang, fingerprints[action.name] || null));
       }
     } catch (error) {
       logger.error('Could not discover the actions of an installed integration', {
@@ -324,15 +392,26 @@ export async function runIntegrationTool(tool, params = {}, options = {}) {
     scope = { id: picked, name: scopeNames.get(`${instanceId}:${picked}`) || picked };
   }
 
-  return adapter.run({
-    definition: resolved.definition,
-    instance: resolved.instance,
-    document: resolved.document,
-    security: resolved.security,
-    action,
-    args,
-    context: { scope, user: params.user, chatId: params.chatId, params, tool, options }
-  });
+  // Calls and errors per action for the action detail's Usage (#2974).
+  recordActionEvent(instanceId, actionName, 'call');
+  try {
+    const result = await adapter.run({
+      definition: resolved.definition,
+      instance: resolved.instance,
+      document: resolved.document,
+      security: resolved.security,
+      action,
+      args,
+      context: { scope, user: params.user, chatId: params.chatId, params, tool, options }
+    });
+    if (result && typeof result === 'object' && result.error === true) {
+      recordActionEvent(instanceId, actionName, 'error');
+    }
+    return result;
+  } catch (error) {
+    recordActionEvent(instanceId, actionName, 'error');
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------

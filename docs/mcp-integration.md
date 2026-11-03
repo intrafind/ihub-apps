@@ -387,6 +387,26 @@ To intentionally point at a private host, list its hostname in
 `security.allowedHosts` of `contents/config/integrations.json`
 (`blockPrivateIps` lives there as well; both apply to every integration).
 
+### Approval before a tool runs
+
+An MCP server's tools can need a person's approval before the model's call
+runs ([Tool Approval](tool-approval.md)). Set it on the installation's
+**Overview** (**Admin → Integrations → the server**): a default for every tool
+and a mode per tool, stored as `approval: { default, actions: { <tool name>: mode } }`
+on the installation and keyed by the server's own tool name, so a changed
+tool prefix keeps it. Remote MCP servers count as `external`, so the
+platform's external default applies to them.
+
+The server's tool annotations (`readOnlyHint`, `destructiveHint`) are shown as
+the tool's side effect, but they are the server's own claim: a tool that says
+it only reads is still asked for under **Ask unless it only reads** until an
+admin confirms it as a read (an action override with `sideEffect: "read"`).
+Through the inbound MCP gateway nobody can approve: a gated tool answers
+`APPROVAL_REQUIRED_NO_USER` instead of running. An MCP App view's own call to
+a gated tool waits for the user's approval in the chat (the card appears below
+the view, the view gets the result once approved); see
+[Tool Approval → MCP App views](tool-approval.md#mcp-app-views).
+
 ### How tools surface
 
 The server's tools are the installation's **actions**. The wizard lists them

@@ -8,6 +8,9 @@ import logger from '../../utils/logger.js';
 import integrationRegistry from './definitions/IntegrationRegistry.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import {
+  actionOverrideSchema,
+  boundedLocalizedSchema,
+  installedApprovalSchema,
   validateIntegrationsConfig,
   validateInstalledIntegration
 } from '../../validators/integrationsConfigSchema.js';
@@ -17,6 +20,7 @@ import {
 } from '../../validators/integrationDefinitionSchema.js';
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
 import { installationMigrationState } from './definitions/migrationPlanner.js';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 
 /**
  * Installed integrations (04-architecture §1.3): the admin's instances of
@@ -98,6 +102,70 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** A copy of a string record with its keys sorted (stable diffs of integrations.json). */
+function sortedRecord(record) {
+  const out = {};
+  for (const key of Object.keys(record || {}).sort(compareCodeUnits)) out[key] = record[key];
+  return out;
+}
+
+/**
+ * Carry the accepted action fingerprints and the last review time (#2916)
+ * from the stored installation over to a saved one: they are written by the
+ * server only, never by a save.
+ * @param {object} instance - the installation about to be stored
+ * @param {object|undefined} stored - the installation as stored
+ */
+/**
+ * A localized text without its empty languages: `{ en: 'x', de: '' }` →
+ * `{ en: 'x' }`; null when nothing is left. Anything else is returned as is
+ * (the schema rejects it).
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function withoutEmptyTexts(value) {
+  if (typeof value === 'string') return value.trim() ? value : null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const kept = Object.fromEntries(
+    Object.entries(value).filter(([, text]) => typeof text !== 'string' || text.trim())
+  );
+  return Object.keys(kept).length ? kept : null;
+}
+
+/**
+ * Keep what the dedicated editors of the action detail write (#2974) when an
+ * update's payload does not carry it: the installation's `instructions` and
+ * the per-action `overrides`. The settings editors do not know these fields;
+ * a save there must not drop them.
+ *
+ * @param {Object} instance - the prepared installation (mutated)
+ * @param {Object} stored - the stored installation
+ * @param {Object} payload - the raw update payload
+ */
+function keepGuidance(instance, stored, payload) {
+  if (!Object.hasOwn(payload || {}, 'instructions') && stored?.instructions !== undefined) {
+    instance.instructions = stored.instructions;
+  }
+  const sentActions =
+    payload?.actions && typeof payload.actions === 'object' ? payload.actions : null;
+  if (!sentActions || !Object.hasOwn(sentActions, 'overrides')) {
+    const overrides = stored?.actions?.overrides;
+    if (overrides && Object.keys(overrides).length) {
+      instance.actions = { ...instance.actions, overrides };
+    }
+  }
+}
+
+function keepActionReview(instance, stored) {
+  const { fingerprints, reviewedAt } = stored?.actions || {};
+  if (!fingerprints && !reviewedAt) return;
+  instance.actions = {
+    ...instance.actions,
+    ...(fingerprints ? { fingerprints } : {}),
+    ...(reviewedAt ? { reviewedAt } : {})
+  };
+}
+
 /**
  * The instance an admin payload (without its `secrets`) describes, validated.
  * The migration state and log are the runner's (`DefinitionMigrationRunner`):
@@ -113,11 +181,24 @@ function parseInstancePayload(fields, existing) {
   delete fields.status;
   delete fields.statusReason;
   delete fields.migrationLog;
+  // The tool approval (#2945) is edited on its own (`setApproval`): a save
+  // that does not name it keeps the stored one, so an editor that knows
+  // nothing about approval cannot drop an admin's gate. `approval: null`
+  // removes it explicitly.
+  const keepsApproval = !Object.hasOwn(fields, 'approval') && existing?.approval;
+  if (fields.approval === null) delete fields.approval;
+  // The accepted action fingerprints (#2916) are the server's: a baseline
+  // or "Mark reviewed" writes them, a save keeps the stored ones (`update`).
+  if (fields.actions && typeof fields.actions === 'object') {
+    const { fingerprints: _fingerprints, reviewedAt: _reviewedAt, ...actions } = fields.actions;
+    fields.actions = actions;
+  }
   const parsed = validateInstalledIntegration({
     ...fields,
     installedAt: existing?.installedAt,
     health: existing?.health,
-    ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {})
+    ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
+    ...(keepsApproval ? { approval: existing.approval } : {})
   });
   if (!parsed.success) {
     throw new IntegrationError('Invalid installed integration', {
@@ -624,6 +705,8 @@ export class InstalledIntegrationService {
       const index = config.installed.findIndex(inst => inst.id === id);
       if (index < 0)
         throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      keepActionReview(instance, config.installed[index]);
+      keepGuidance(instance, config.installed[index], payload);
       config.installed[index] = instance;
       await this.writeConfig(config);
       // Only once the file points elsewhere: a failed write must leave the
@@ -636,6 +719,206 @@ export class InstalledIntegrationService {
       }
       await this._afterChange(instance.id, { before: existing, after: instance });
       return instance;
+    });
+  }
+
+  /**
+   * Set the tool approval of an installation (#2945): `{ default?, actions? }`,
+   * or null to remove it. Only this field changes, so the Overview's approval
+   * controls cannot touch the values or the secret.
+   *
+   * @param {string} id
+   * @param {{default?: string, actions?: Object<string,string>, newOrChanged?: string}|null} approval
+   * @returns {Promise<Object>} the stored installation
+   */
+  setApproval(id, approval = null) {
+    return this._serialize(async () => {
+      let cleaned = null;
+      if (approval !== null) {
+        const parsed = installedApprovalSchema.safeParse(approval);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid approval settings', {
+            code: 'INVALID_APPROVAL',
+            details: parsed.error.issues
+          });
+        }
+        cleaned = parsed.data;
+        if (cleaned.actions && Object.keys(cleaned.actions).length === 0) delete cleaned.actions;
+        if (!cleaned.default && !cleaned.actions && !cleaned.newOrChanged) cleaned = null;
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const before = { ...instance };
+      if (cleaned) instance.approval = cleaned;
+      else delete instance.approval;
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
+      return instance;
+    });
+  }
+
+  /**
+   * Change the admin override of one action (#2974): any of `description`,
+   * `guidance`, `examples` (texts, `{ en, de }` or a string), `sideEffect`
+   * and `dataFlow`. A key set to null removes that part of the override; a
+   * key left out keeps it. Only this action's override changes.
+   *
+   * @param {string} id
+   * @param {string} actionName
+   * @param {Object} patch
+   * @returns {Promise<{instance: Object, override: Object|null}>}
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `INVALID_OVERRIDE`
+   */
+  setActionOverride(id, actionName, patch) {
+    return this._serialize(async () => {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        throw new IntegrationError('The override must be an object', { code: 'INVALID_OVERRIDE' });
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const merged = { ...(instance.actions?.overrides?.[actionName] || {}) };
+      for (const key of ['description', 'guidance', 'examples', 'sideEffect', 'dataFlow']) {
+        if (!Object.hasOwn(patch, key)) continue;
+        const value =
+          key === 'examples' && Array.isArray(patch[key])
+            ? patch[key].map(withoutEmptyTexts).filter(Boolean)
+            : key === 'description' || key === 'guidance'
+              ? withoutEmptyTexts(patch[key])
+              : patch[key];
+        const empty =
+          value === null ||
+          value === '' ||
+          (Array.isArray(value) && value.length === 0 && key !== 'examples');
+        if (empty) delete merged[key];
+        else merged[key] = value;
+      }
+      const parsed = actionOverrideSchema.strict().safeParse(merged);
+      if (!parsed.success) {
+        throw new IntegrationError('Invalid action override', {
+          code: 'INVALID_OVERRIDE',
+          details: parsed.error.issues
+        });
+      }
+      const before = structuredClone(instance);
+      const overrides = { ...(instance.actions?.overrides || {}) };
+      if (Object.keys(parsed.data).length) overrides[actionName] = parsed.data;
+      else delete overrides[actionName];
+      instance.actions = { ...instance.actions, overrides };
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
+      return { instance, override: overrides[actionName] || null };
+    });
+  }
+
+  /**
+   * Set the installation's own model guidance (#2974), replacing the
+   * definition's `instructions` (or an MCP server's) in the system prompt;
+   * null or '' removes it.
+   *
+   * @param {string} id
+   * @param {Object|string|null} instructions - `{ en, de }` or a string
+   * @returns {Promise<Object>} the stored installation
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `INVALID_INSTRUCTIONS`
+   */
+  setInstructions(id, instructions) {
+    return this._serialize(async () => {
+      let cleaned = null;
+      if ((instructions ?? '') !== '') {
+        const parsed = boundedLocalizedSchema.safeParse(instructions);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid instructions', {
+            code: 'INVALID_INSTRUCTIONS',
+            details: parsed.error.issues
+          });
+        }
+        cleaned =
+          typeof parsed.data === 'string'
+            ? parsed.data
+            : Object.fromEntries(Object.entries(parsed.data).filter(([, text]) => text.trim()));
+        if (typeof cleaned === 'object' && Object.keys(cleaned).length === 0) cleaned = null;
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const before = structuredClone(instance);
+      if (cleaned) instance.instructions = cleaned;
+      else delete instance.instructions;
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
+      return instance;
+    });
+  }
+
+  /**
+   * Take the action fingerprint baseline of an installation (#2916): the
+   * current fingerprints become the accepted ones, but only while the
+   * installation has none (a baseline is never overwritten; "Mark reviewed"
+   * is {@link markActionsReviewed}). Nothing else changes, `updatedAt`
+   * included: the baseline is the server's, not an admin edit.
+   *
+   * @param {string} id
+   * @param {Object<string,string>} fingerprints - current fingerprints by action name
+   * @returns {Promise<Object|null>} the stored installation, or null when nothing was written
+   */
+  recordActionBaseline(id, fingerprints) {
+    return this._serialize(async () => {
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance || instance.actions?.fingerprints) return null;
+      instance.actions = { ...instance.actions, fingerprints: sortedRecord(fingerprints) };
+      await this.writeConfig(config);
+      return instance;
+    });
+  }
+
+  /**
+   * Mark actions of an installation as reviewed (#2916): their current
+   * fingerprints become the accepted ones, so they are no longer new or
+   * changed. `names` null marks every current action; accepted fingerprints of
+   * actions the system no longer lists are kept (an action that comes back
+   * unchanged is not new again).
+   *
+   * @param {string} id
+   * @param {Object<string,string>} fingerprints - current fingerprints by action name
+   * @param {string[]|null} [names] - the actions to mark; null for all
+   * @returns {Promise<{instance: Object, reviewed: string[]}>}
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `UNKNOWN_ACTION` when no named action is listed
+   */
+  markActionsReviewed(id, fingerprints, names = null) {
+    return this._serialize(async () => {
+      const current = fingerprints && typeof fingerprints === 'object' ? fingerprints : {};
+      const reviewed = Array.isArray(names)
+        ? [...new Set(names)].filter(name => Object.hasOwn(current, name))
+        : Object.keys(current);
+      if (Array.isArray(names) && reviewed.length === 0) {
+        throw new IntegrationError('None of these actions is listed by the integration', {
+          code: 'UNKNOWN_ACTION',
+          details: { actions: names }
+        });
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const accepted = { ...(instance.actions?.fingerprints || {}) };
+      for (const name of reviewed) accepted[name] = current[name];
+      const reviewedAt = nowIso();
+      instance.actions = {
+        ...instance.actions,
+        fingerprints: sortedRecord(accepted),
+        reviewedAt
+      };
+      instance.updatedAt = reviewedAt;
+      await this.writeConfig(config);
+      return { instance, reviewed: reviewed.sort(compareCodeUnits) };
     });
   }
 
