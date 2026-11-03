@@ -50,7 +50,7 @@ A `.ipynb` file is strict JSON following `nbformat` v4. Each cell's `source` is 
 
 ## 2. Diagrams (`.drawio`, `.excalidraw`, `.mmd`, `.dot`, `.puml`)
 
-- **Inline chat diagrams**: when the user asks to see a flowchart, sequence diagram, class diagram, state diagram or ER diagram in chat, write a fenced ```` ```mermaid ```` block directly in your message — iHub renders it interactively.
+- **Inline chat diagrams**: when the user asks to see a flowchart, sequence diagram, class diagram, state diagram or ER diagram in chat, write a fenced ` ```mermaid ` block directly in your message — iHub renders it interactively.
 - **`.drawio` (diagrams.net / draw.io XML)**:
   ```xml
   <mxfile host="app.diagrams.net" version="24.0.0">

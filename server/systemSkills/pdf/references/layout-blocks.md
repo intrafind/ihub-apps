@@ -155,6 +155,7 @@ Use `form` to render clean printable or pre-filled forms without hand-building n
 ```
 
 Field properties:
+
 - `label`: field label printed above the input box (or beside a single checkbox).
 - `type`: `"text"` (default), `"textarea"` (multi-line box; `rows` sets height from `2` to `12`), `"checkbox"` (single checkbox via `checked: true|false`, or multiple via `options: [{ label, checked }]`), or `"signature"` (taller signature box).
 - `value`: pre-filled text value (or `placeholder` for muted hint text in blank forms).

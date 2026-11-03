@@ -178,7 +178,10 @@ export function normalizeChatFilePolicy(policy = null, appConfig = null) {
     maxChatBytes: readNumber(policy.maxChatBytes ?? q.maxChatBytes, base.quotas.maxChatBytes),
     maxChatFiles: readNumber(policy.maxChatFiles ?? q.maxChatFiles, base.quotas.maxChatFiles),
     maxUserBytes: readNumber(policy.maxUserBytes ?? q.maxUserBytes, base.quotas.maxUserBytes),
-    maxServerBytes: readNumber(policy.maxServerBytes ?? q.maxServerBytes, base.quotas.maxServerBytes)
+    maxServerBytes: readNumber(
+      policy.maxServerBytes ?? q.maxServerBytes,
+      base.quotas.maxServerBytes
+    )
   };
   return {
     ...base,

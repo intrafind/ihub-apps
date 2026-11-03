@@ -18,8 +18,7 @@ import { applyTemplateToXlsxSpec, templateBundleFor } from '../templates/applyTe
  * design and hands it to the chat as a generated file.
  */
 
-export const XLSX_MIME =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
  * Turn `create_xlsx` arguments into a workbook spec.

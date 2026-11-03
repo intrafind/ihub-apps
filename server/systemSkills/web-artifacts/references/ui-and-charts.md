@@ -5,63 +5,71 @@
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interactive Artifact</title>
-  <style>
-    :root {
-      --bg: #f8fafc;
-      --surface: #ffffff;
-      --border: #e2e8f0;
-      --text: var(--brand-text, #0f172a);
-      --muted: #64748b;
-      --primary: var(--brand-primary, #1e3a8a);
-      --accent: var(--brand-accent, #0f766e);
-    }
-    @media (prefers-color-scheme: dark) {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Artifact</title>
+    <style>
       :root {
-        --bg: #0b0f19;
-        --surface: #111827;
-        --border: #1e293b;
-        --text: #f1f5f9;
-        --muted: #94a3b8;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --border: #e2e8f0;
+        --text: var(--brand-text, #0f172a);
+        --muted: #64748b;
+        --primary: var(--brand-primary, #1e3a8a);
+        --accent: var(--brand-accent, #0f766e);
       }
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: var(--brand-font, system-ui, -apple-system, sans-serif);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: 24px;
-    }
-    .num { font-variant-numeric: tabular-nums; }
-  </style>
-</head>
-<body>
-  <main id="app"></main>
-  <script>
-    // Safe storage wrapper for <iframe sandbox="allow-scripts">
-    const store = (() => {
-      const mem = new Map();
-      return {
-        get(key, fallback) {
-          try {
-            const raw = window.localStorage.getItem(key);
-            return raw !== null ? JSON.parse(raw) : (mem.has(key) ? mem.get(key) : fallback);
-          } catch {
-            return mem.has(key) ? mem.get(key) : fallback;
-          }
-        },
-        set(key, value) {
-          mem.set(key, value);
-          try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0f19;
+          --surface: #111827;
+          --border: #1e293b;
+          --text: #f1f5f9;
+          --muted: #94a3b8;
         }
-      };
-    })();
-  </script>
-</body>
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--brand-font, system-ui, -apple-system, sans-serif);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        padding: 24px;
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script>
+      // Safe storage wrapper for <iframe sandbox="allow-scripts">
+      const store = (() => {
+        const mem = new Map();
+        return {
+          get(key, fallback) {
+            try {
+              const raw = window.localStorage.getItem(key);
+              return raw !== null ? JSON.parse(raw) : mem.has(key) ? mem.get(key) : fallback;
+            } catch {
+              return mem.has(key) ? mem.get(key) : fallback;
+            }
+          },
+          set(key, value) {
+            mem.set(key, value);
+            try {
+              window.localStorage.setItem(key, JSON.stringify(value));
+            } catch {}
+          }
+        };
+      })();
+    </script>
+  </body>
 </html>
 ```
 

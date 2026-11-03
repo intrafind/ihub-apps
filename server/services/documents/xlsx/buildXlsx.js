@@ -6,7 +6,7 @@ import { officeFontName } from '../officeFonts.js';
 import {
   ContentTypes,
   INVALID_XML_CHARS,
-   parseXml,
+  parseXml,
   REL_TYPES,
   setCoreProperties,
   writePackage,
@@ -29,13 +29,10 @@ const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const SML_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
-const WORKBOOK_TYPE =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
-const WORKSHEET_TYPE =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
+const WORKBOOK_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
+const WORKSHEET_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
 const STYLES_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml';
-const EXTENDED_PROPS_TYPE =
-  'application/vnd.openxmlformats-officedocument.extended-properties+xml';
+const EXTENDED_PROPS_TYPE = 'application/vnd.openxmlformats-officedocument.extended-properties+xml';
 const EXTENDED_PROPS_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties';
 
@@ -199,9 +196,7 @@ export function sanitizeSheets(sheets, warnings) {
     throw new Error('The workbook has no sheets. Provide "sheets".');
   }
   if (sheets.length > WORKBOOK_LIMITS.maxSheets) {
-    warnings.push(
-      `Only the first ${WORKBOOK_LIMITS.maxSheets} sheets were kept.`
-    );
+    warnings.push(`Only the first ${WORKBOOK_LIMITS.maxSheets} sheets were kept.`);
   }
   const usedNames = new Set();
   return sheets.slice(0, WORKBOOK_LIMITS.maxSheets).map((rawSheet, sheetIndex) => {
@@ -214,19 +209,14 @@ export function sanitizeSheets(sheets, warnings) {
         : [];
     const rawRows = Array.isArray(source.rows) ? source.rows : [];
     if (rawRows.length > WORKBOOK_LIMITS.maxRowsPerSheet) {
-      warnings.push(
-        `Sheet "${name}": truncated to ${WORKBOOK_LIMITS.maxRowsPerSheet} rows.`
-      );
+      warnings.push(`Sheet "${name}": truncated to ${WORKBOOK_LIMITS.maxRowsPerSheet} rows.`);
     }
     const cappedRows = rawRows.slice(0, WORKBOOK_LIMITS.maxRowsPerSheet);
     const maxRowWidth = cappedRows.reduce((max, row) => {
       const cells = Array.isArray(row) ? row : Array.isArray(row?.cells) ? row.cells : [];
       return Math.max(max, cells.length);
     }, 0);
-    const colCount = Math.min(
-      WORKBOOK_LIMITS.maxColumns,
-      Math.max(rawCols.length, maxRowWidth, 1)
-    );
+    const colCount = Math.min(WORKBOOK_LIMITS.maxColumns, Math.max(rawCols.length, maxRowWidth, 1));
     const hasHeader = rawCols.length > 0;
     const columns = Array.from({ length: colCount }, (_, c) =>
       sanitizeColumn(rawCols[c] ?? `Column ${c + 1}`, c)
@@ -242,7 +232,9 @@ export function sanitizeSheets(sheets, warnings) {
       const firstCellStr = String(rawCells[0]?.value ?? rawCells[0] ?? '').trim();
       const isLastRow = rIdx === cappedRows.length - 1;
       const isTotal =
-        Boolean(isObj && (rawRow.total || rawRow.style === 'total' || rawRow.style === 'subtotal')) ||
+        Boolean(
+          isObj && (rawRow.total || rawRow.style === 'total' || rawRow.style === 'subtotal')
+        ) ||
         (source.totalRow === true && isLastRow) ||
         TOTAL_LABEL_RE.test(firstCellStr);
       const isAssumption = Boolean(
@@ -292,9 +284,13 @@ class StyleRegistry {
   }
 
   numFmtIdFor(format) {
-    const key = String(format || 'general').trim().toLowerCase();
+    const key = String(format || 'general')
+      .trim()
+      .toLowerCase();
     if (Object.hasOwn(BUILTIN_FORMATS, key)) return BUILTIN_FORMATS[key];
-    const code = String(format || '').trim().slice(0, 60);
+    const code = String(format || '')
+      .trim()
+      .slice(0, 60);
     if (!code) return 0;
     if (this.customFormatByCode.has(code)) return this.customFormatByCode.get(code);
     const id = this.nextNumFmtId;
@@ -423,7 +419,8 @@ function classifyCell(rawCell, colFormat) {
     }
   }
   if (typeof val === 'number' && Number.isFinite(val)) {
-    const fmt = cellFormat === 'general' ? (Number.isInteger(val) ? 'integer' : 'decimal') : cellFormat;
+    const fmt =
+      cellFormat === 'general' ? (Number.isInteger(val) ? 'integer' : 'decimal') : cellFormat;
     return {
       kind: 'number',
       value: val,
@@ -601,9 +598,7 @@ export async function buildXlsx(spec) {
   );
   const types = new ContentTypes(typesDoc);
 
-  const workbookRels = [
-    { id: 'rId1', type: REL_TYPES.styles, target: 'styles.xml' }
-  ];
+  const workbookRels = [{ id: 'rId1', type: REL_TYPES.styles, target: 'styles.xml' }];
 
   const sheetEntriesXml = sheets
     .map((sheet, idx) => {

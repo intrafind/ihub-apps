@@ -501,7 +501,8 @@ class SlideBuilder {
       else this.textBox(textRect, paragraphs);
       visualRect = otherRect;
     } else if (paragraphs.length) {
-      if (ph) this.placeholder(ph, paragraphs, { rect: ph.rect === bodyRect ? undefined : bodyRect });
+      if (ph)
+        this.placeholder(ph, paragraphs, { rect: ph.rect === bodyRect ? undefined : bodyRect });
       else this.textBox(bodyRect, paragraphs);
       return;
     }

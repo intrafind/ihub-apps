@@ -474,7 +474,9 @@ describe('Durable Chat & Task Files (Slice 1)', () => {
       });
       assert.match(
         renderedTurn1,
-        new RegExp(`<content type="document" origin="upload" id="${fileId1}" name="agreement\\.txt"`)
+        new RegExp(
+          `<content type="document" origin="upload" id="${fileId1}" name="agreement\\.txt"`
+        )
       );
 
       // Regenerate Turn 1 (replaceFromMessageId without new fileData): inherits fileId1 and does NOT delete it

@@ -288,7 +288,8 @@ export async function ingestChatFile({
     pages: resolvedPages,
     truncated,
     origin,
-    storageMode: settings.storageMode === 'original_and_text' ? 'server_text_only' : settings.storageMode,
+    storageMode:
+      settings.storageMode === 'original_and_text' ? 'server_text_only' : settings.storageMode,
     appConfig,
     policy: settings
   });
@@ -461,12 +462,15 @@ export async function prepareTurnFiles({
           continue;
         }
       } catch (error) {
-        logger.warn('Failed to persist inline chat fileData; continuing with inline content for this turn', {
-          component: COMPONENT,
-          chatId,
-          name,
-          error: error.message
-        });
+        logger.warn(
+          'Failed to persist inline chat fileData; continuing with inline content for this turn',
+          {
+            component: COMPONENT,
+            chatId,
+            name,
+            error: error.message
+          }
+        );
       }
     }
 

@@ -135,9 +135,8 @@ export function mintChatFileId() {
  * @returns {Object}
  */
 export function toFileDescriptor(id, data) {
-  const mimeType = typeof data.mimeType === 'string' && data.mimeType
-    ? data.mimeType
-    : 'application/octet-stream';
+  const mimeType =
+    typeof data.mimeType === 'string' && data.mimeType ? data.mimeType : 'application/octet-stream';
   const hasOriginal = data.hasOriginal === true;
   const textBytes = Number.isFinite(data.textBytes) ? data.textBytes : 0;
   const originalBytes = hasOriginal && Number.isFinite(data.originalBytes) ? data.originalBytes : 0;
@@ -288,8 +287,7 @@ export class ChatFileRepository {
     const validPages = Array.isArray(pageImages)
       ? pageImages.filter(img => typeof img === 'string' && img.length > 0)
       : [];
-    const pagesBuf =
-      validPages.length > 0 ? Buffer.from(JSON.stringify(validPages), 'utf8') : null;
+    const pagesBuf = validPages.length > 0 ? Buffer.from(JSON.stringify(validPages), 'utf8') : null;
 
     const candidateOriginal = originalBuffer ?? originalData;
     const rawOriginal =
@@ -334,9 +332,7 @@ export class ChatFileRepository {
     }
 
     const cleanName =
-      typeof name === 'string' && name.trim()
-        ? name.trim().slice(0, MAX_CHAT_FILE_NAME_CHARS)
-        : id;
+      typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_CHAT_FILE_NAME_CHARS) : id;
     const cleanMime =
       typeof mimeType === 'string' && mimeType.trim()
         ? mimeType.split(';')[0].trim().toLowerCase()
@@ -510,7 +506,9 @@ export class ChatFileRepository {
         if (excludeScope && sameScope(d.scope, excludeScope)) return false;
         return true;
       })
-      .sort((a, b) => String(a.data?.createdAt || '').localeCompare(String(b.data?.createdAt || '')));
+      .sort((a, b) =>
+        String(a.data?.createdAt || '').localeCompare(String(b.data?.createdAt || ''))
+      );
 
     let freed = 0;
     for (const doc of candidates) {
@@ -639,11 +637,7 @@ export class ChatFileRepository {
    * @param {{reason?: string, now?: string}} [options]
    * @returns {Promise<Object|null>} Updated descriptor, or null if not found.
    */
-  async discardOriginal(
-    scope,
-    fileId,
-    { reason = 'manual', now = new Date().toISOString() } = {}
-  ) {
+  async discardOriginal(scope, fileId, { reason = 'manual', now = new Date().toISOString() } = {}) {
     const target = this._scope(scope, 'discardOriginal');
     if (!target || !isValidId(fileId)) return null;
     const key = chatFileKey(target, fileId);

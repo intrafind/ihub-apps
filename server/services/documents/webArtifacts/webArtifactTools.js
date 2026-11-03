@@ -127,8 +127,7 @@ export async function runCreateWebArtifact(params) {
     const brand = {
       primaryColor:
         templateBrand.primaryColor || optionalString(params.primaryColor, 20) || '#1e3a8a',
-      accentColor:
-        templateBrand.accentColor || optionalString(params.accentColor, 20) || '#0f766e',
+      accentColor: templateBrand.accentColor || optionalString(params.accentColor, 20) || '#0f766e',
       textColor: templateBrand.textColor || '#0f172a',
       font:
         templateBrand.bodyFont ||
@@ -136,9 +135,11 @@ export async function runCreateWebArtifact(params) {
         'system-ui, -apple-system, sans-serif'
     };
 
-    const finalContent =
-      format === 'html' ? injectBrandTokens(rawContent, brand) : rawContent;
-    const data = Buffer.from(finalContent.endsWith('\n') ? finalContent : `${finalContent}\n`, 'utf8');
+    const finalContent = format === 'html' ? injectBrandTokens(rawContent, brand) : rawContent;
+    const data = Buffer.from(
+      finalContent.endsWith('\n') ? finalContent : `${finalContent}\n`,
+      'utf8'
+    );
     const name = safeFileName(params.filename || params.name || params.title || 'artifact', format);
 
     const file = holdGeneratedFile({
