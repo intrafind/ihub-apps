@@ -395,6 +395,37 @@ describe('planner: module steps', () => {
     assert.equal(plan.boundaries[1].instance.values.tag, 'm');
   });
 
+  it('keeps the per-action approval through a module step, so a later rename moves it', async () => {
+    const plan = await planMigrationAsync(
+      {
+        instance: inst2(),
+        apps: apps(),
+        definition,
+        from: '1.2.0'
+      },
+      {
+        runModule: async ({ context }) => ({
+          result: {
+            ...context.instance,
+            actions: { ...context.instance.actions, disabled: ['get'] }
+          },
+          logs: []
+        })
+      }
+    );
+    assert.ok(plan.ok, JSON.stringify(plan.collisions));
+    assert.deepEqual(plan.instance.actions.disabled, ['get'], 'the module changed the actions');
+    assert.deepEqual(plan.instance.approval, {
+      default: 'auto',
+      actions: { find: 'always' }
+    });
+  });
+
+  const inst2 = () =>
+    installation('p1', 'org.example/p', {
+      approval: { default: 'auto', actions: { search: 'always' } }
+    });
+
   it('refuses what a module may not do, and keeps nothing of it', async () => {
     const cases = [
       [{ error: new Error('boom') }, /module migrations\/1\.4\.0\.js: failed: boom/],

@@ -690,7 +690,14 @@ function modulePolicy(actions, current) {
   const disabled = actions.disabled ?? current.disabled;
   const overrides = actions.overrides ?? current.overrides;
   if (!list(enabled) || !list(disabled) || !isPlainObject(overrides)) return null;
-  return { enabled: [...enabled], disabled: [...disabled], overrides: clone(overrides) };
+  // A module does not see or change the tool approval; its per-action modes
+  // carry over so later steps (a renameAction) still find them.
+  return {
+    enabled: [...enabled],
+    disabled: [...disabled],
+    overrides: clone(overrides),
+    approvalActions: clone(current.approvalActions || {})
+  };
 }
 
 /**
