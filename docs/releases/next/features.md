@@ -396,7 +396,8 @@ See [Chat Sharing](../../chat-sharing.md#sharing-a-single-file).
 
 An iHub without internet access can now use the marketplace. The **offline marketplace** is the
 official catalog, the website and every file the catalog points at as one folder of static files,
-published as a Docker image (`ghcr.io/intrafind/ihub-marketplace`) and as a `.tar.gz` bundle. Host it
+published as a Docker image (`ghcr.io/intrafind/ihub-marketplace`) and as a `.tar.gz` bundle with
+every release of the marketplace (versioned by the UTC build time, `yyyymmddhhmm`). Host it
 inside your network, add its `catalog.json` under **Admin → Marketplace → Manage Registries**, and
 install apps, models, prompts, skills, workflows and integrations as usual.
 
