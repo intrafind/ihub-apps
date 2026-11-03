@@ -1,5 +1,12 @@
 # Features — Unreleased
 
+## Full Screen for Files and Artifacts
+
+The **Files** panel of a chat (and the artifacts panel) has a **Full screen** button next to the
+close button. It widens the panel to the whole window, so a generated web page, chart or dashboard
+can be tried out at its real size instead of in the narrow side panel. The button toggles back to
+the side panel; Escape still closes the panel.
+
 ## Installed Integrations: Install from a Catalog, Configure, Bind to Apps
 
 **Admin → Integrations** is the first piece of the unified integrations platform

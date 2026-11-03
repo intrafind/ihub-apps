@@ -224,6 +224,22 @@ describe('activate_skill and read_skill_resource', () => {
     assert.equal(file, 'ALPHA NOTES');
   });
 
+  test('read a file when the call names only its path', async () => {
+    const file = await runTool('read_skill_resource', {
+      file_path: 'references/notes.md',
+      appConfig,
+      user: userWith(['*'])
+    });
+    assert.equal(file, 'ALPHA NOTES');
+  });
+
+  test('read_skill_resource still needs a path', async () => {
+    await assert.rejects(
+      runTool('read_skill_resource', { appConfig, user: userWith(['*']) }),
+      /file_path parameter is required/
+    );
+  });
+
   test('refuse an installed skill the app does not have', async () => {
     const user = userWith(['*']);
     const body = await runTool('activate_skill', { skill_name: 'beta', appConfig, user });

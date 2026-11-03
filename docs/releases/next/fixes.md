@@ -1,5 +1,13 @@
 # Fixes — Unreleased
 
+## Skill Files Load When the Assistant Leaves Out the Skill Name
+
+When the assistant read a file bundled with a skill (for example the pattern guide of the
+**web_artifacts** skill) and named only the file, the read failed with "skill_name and file_path
+parameters are required" and the assistant went on without the guide. The skill is now taken from
+the file's path, among the skills active in the chat and then the ones the app offers. Only when
+two skills bundle a file of that name does the assistant still have to say which one it means.
+
 ## Admin Sidebar in German
 
 With German as the interface language, the admin sidebar showed most section and page names in

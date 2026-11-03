@@ -8512,6 +8512,8 @@
     "open": "Artifacts",
     "openPanel": "Preview and download as ZIP",
     "close": "Close artifacts",
+    "fullScreen": "Full screen",
+    "exitFullScreen": "Exit full screen",
     "count_one": "{{count}} file",
     "count_other": "{{count}} files",
     "loading": "Loading the files of this chat…",

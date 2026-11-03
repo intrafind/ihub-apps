@@ -149,13 +149,18 @@ function parseNotebookPreview(text) {
  * @param {Object} props
  * @param {Object} props.artifact - Descriptor `{ id, kind, mimeType, bytes, name? }`.
  * @param {(id: string) => Promise<Blob>} props.getBlob - Fetches (and caches) the bytes.
+ * @param {boolean} [props.expanded] - The panel is full screen: the preview takes the height
+ *   of the window instead of a fixed share of it.
  */
-export default function ArtifactPreview({ artifact, getBlob }) {
+export default function ArtifactPreview({ artifact, getBlob, expanded = false }) {
   const { t } = useTranslation();
   const type = previewTypeOf(artifact);
   const name = artifactDisplayName(artifact);
   const [state, setState] = useState({ status: 'loading' });
   const [viewMode, setViewMode] = useState('preview');
+  // Window height left under the panel's header, tabs, toolbar and file name.
+  const tall = expanded ? 'h-[calc(100dvh-17rem)] min-h-[20rem]' : 'h-[65vh]';
+  const maxTall = expanded ? 'max-h-[calc(100dvh-17rem)]' : 'max-h-[60vh]';
 
   useEffect(() => {
     setViewMode('preview');
@@ -234,7 +239,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
       <iframe
         src={state.url}
         title={name}
-        className="w-full h-[65vh] rounded-md border border-gray-200 dark:border-gray-700 bg-white"
+        className={`w-full ${tall} rounded-md border border-gray-200 dark:border-gray-700 bg-white`}
       />
     );
   }
@@ -299,7 +304,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
             referrerPolicy="no-referrer"
             srcDoc={withPreviewCsp(state.text)}
             title={name}
-            className="w-full h-[65vh] rounded-md border border-gray-200 dark:border-gray-700 bg-white"
+            className={`w-full ${tall} rounded-md border border-gray-200 dark:border-gray-700 bg-white`}
           />
         </>
       );
@@ -310,7 +315,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
           {truncatedNote}
           {modeToggle}
           <div
-            className="flex items-center justify-center p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-auto max-h-[60vh]"
+            className={`flex items-center justify-center p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-auto ${maxTall}`}
             dangerouslySetInnerHTML={{ __html: sanitizeMermaidSvg(state.text) }}
           />
         </>
@@ -322,7 +327,9 @@ export default function ArtifactPreview({ artifact, getBlob }) {
         <>
           {truncatedNote}
           {modeToggle}
-          <div className="overflow-auto max-h-[60vh] rounded-md border border-gray-200 dark:border-gray-700">
+          <div
+            className={`overflow-auto ${maxTall} rounded-md border border-gray-200 dark:border-gray-700`}
+          >
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
               {header.length > 0 && (
                 <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
@@ -375,7 +382,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
         <>
           {truncatedNote}
           {modeToggle}
-          <div className="space-y-3 overflow-auto max-h-[65vh] pr-1">
+          <div className={`space-y-3 overflow-auto ${maxTall} pr-1`}>
             {notebook.cells.map(cell => {
               if (cell.type === 'markdown') {
                 return (
@@ -425,7 +432,7 @@ export default function ArtifactPreview({ artifact, getBlob }) {
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         aria-label={t('chatArtifacts.codeOf', 'Content of {{name}}', { name })}
-        className="bg-gray-900 text-gray-100 rounded-md p-4 overflow-auto text-xs leading-relaxed max-h-[60vh] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className={`bg-gray-900 text-gray-100 rounded-md p-4 overflow-auto text-xs leading-relaxed ${maxTall} focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
       >
         <code
           className={language ? `hljs language-${language}` : undefined}

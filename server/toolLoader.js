@@ -980,6 +980,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
             }
           },
           required: ['skill_name', 'file_path']
+          // The server still resolves a missing skill_name from the path.
         }
       });
 
@@ -1038,6 +1039,37 @@ export async function getToolsForApp(app, language = null, context = {}) {
     configCache.getPlatform?.() || null,
     { getInstallation: installedIntegrationById }
   );
+}
+
+/**
+ * The skill a `read_skill_resource` call that left out `skill_name` means: the
+ * one skill, among the active ones and then the ones the app offers, that
+ * bundles `filePath`. With no such skill, the only active skill. `null` when
+ * more than one skill fits, or none does.
+ *
+ * @param {string} filePath - Skill-relative path
+ * @param {Object} params - The tool call's parameters (`appConfig`, `user`)
+ * @returns {Promise<string|null>}
+ */
+async function inferSkillForResource(filePath, params) {
+  const active = activeSkillsOf(params.appConfig).map(entry => entry.name);
+  const offered = (await describeSkillCatalog({ app: params.appConfig, user: params.user })).entries
+    .map(entry => entry.name)
+    .filter(name => !active.includes(name));
+  for (const group of [active, offered]) {
+    const bundling = [];
+    for (const name of group) {
+      const skill = await loadUsableSkill(name, {
+        skillIds: getAssignedSkillIds(params.appConfig),
+        user: params.user,
+        app: params.appConfig
+      });
+      if (skill?.resources.includes(filePath)) bundling.push(name);
+    }
+    if (bundling.length === 1) return bundling[0];
+    if (bundling.length > 1) return null;
+  }
+  return active.length === 1 ? active[0] : null;
 }
 
 /**
@@ -1167,9 +1199,19 @@ export async function runTool(toolId, params = {}, options = {}) {
 
   // Check if this is a skill resource read tool
   if (toolId === READ_SKILL_RESOURCE_TOOL_ID) {
-    const { skill_name: skillName, file_path: filePath } = params;
-    if (!skillName || !filePath) {
-      throw new Error('skill_name and file_path parameters are required');
+    const { file_path: filePath } = params;
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error('file_path parameter is required');
+    }
+    // A model that already has a skill's instructions in front of it often
+    // sends only the path. Fill the name in from the skill that bundles that
+    // file, rather than failing the read: the active skills first, then any
+    // other skill the app offers. An ambiguous path still asks for the name.
+    const skillName = params.skill_name || (await inferSkillForResource(filePath, params));
+    if (!skillName) {
+      throw new Error(
+        `skill_name parameter is required: more than one skill could bundle '${filePath}'. Pass the name of the skill the file belongs to.`
+      );
     }
     const skill = await loadUsableSkill(skillName, {
       skillIds: getAssignedSkillIds(params.appConfig),
