@@ -263,6 +263,13 @@ ask the user to clarify using text input.
 - **Skip**: Optional skip button (when `allow_skip: true`)
 - **Other**: Free text option (when `allow_other: true`)
 
+`ask_user` itself never needs approval. A tool call that does
+([Tool Approval](tool-approval.md)) pauses the turn the same way, with an
+approval card instead of a question, and is answered the same way: with the
+next chat message (`approvalResponse` next to `clarificationResponse`). Unlike
+a clarification, an approved call is run by the server with the arguments on
+the card before the assistant continues.
+
 ## Response Format
 
 When the user responds, the LLM receives:

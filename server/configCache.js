@@ -273,7 +273,25 @@ function isListedThroughApp(tool, appIntegrationTools, appToolRefs) {
   return Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs);
 }
 
-function expandToolFunctions(tools = []) {
+/**
+ * The approval fields of one expanded tool function: the function's own value
+ * for each of `approval`, `sideEffect` and `dataFlow`, else the tool's. Keys
+ * that neither sets are left out.
+ *
+ * @param {Object} fn - the function's config (`tool.functions[name]`)
+ * @param {Object} tool - the tool file
+ * @returns {{approval?: string, sideEffect?: string, dataFlow?: string}}
+ */
+export function approvalFieldsOf(fn = {}, tool = {}) {
+  const out = {};
+  for (const key of ['approval', 'sideEffect', 'dataFlow']) {
+    const value = fn?.[key] ?? tool?.[key];
+    if (value !== undefined && value !== null) out[key] = value;
+  }
+  return out;
+}
+
+export function expandToolFunctions(tools = []) {
   const expanded = [];
   for (const tool of tools) {
     if (tool.functions && typeof tool.functions === 'object') {
@@ -295,7 +313,11 @@ function expandToolFunctions(tools = []) {
           parameters: cfg.parameters || {},
           method: fn,
           // Inherit passthrough setting from function definition or tool
-          passthrough: cfg.passthrough || tool.passthrough || false
+          passthrough: cfg.passthrough || tool.passthrough || false,
+          // Approval policy (#2945): a function's own setting, else the
+          // tool's. Without these copies a per-function `approval` would be
+          // dropped and the call would run ungated.
+          ...approvalFieldsOf(cfg, tool)
         });
       }
     } else {

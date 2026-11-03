@@ -14,6 +14,7 @@ import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
+import { toolApprovalConfigProblem } from '../../utils/toolApproval.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -341,8 +342,21 @@ export default function registerAdminConfigRoutes(app) {
         globalPromptVariables:
           newConfig.globalPromptVariables !== undefined
             ? newConfig.globalPromptVariables
-            : existingConfig.globalPromptVariables
+            : existingConfig.globalPromptVariables,
+        // Admin → Security → Tool approval (#2945).
+        toolApproval:
+          newConfig.toolApproval !== undefined
+            ? newConfig.toolApproval
+            : existingConfig.toolApproval
       };
+      if (newConfig.toolApproval === null) {
+        // `null` turns approval off: the block is removed, never stored as
+        // null (the platform schema has it as an optional object).
+        delete mergedConfig.toolApproval;
+      } else if (newConfig.toolApproval !== undefined) {
+        const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
+        if (approvalProblem) return sendBadRequest(res, approvalProblem);
+      }
 
       // Restore secrets that were redacted in the client
       // This prevents environment variable placeholders from being overwritten with ***REDACTED***

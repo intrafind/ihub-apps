@@ -84,6 +84,7 @@ import conversationStateManager from './services/integrations/ConversationStateM
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
+import { startActionUsageTracking } from './services/integrations/actionUsage.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -885,6 +886,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // A chat clarification that is settled (answered, superseded or expired)
   // ends the run its question paused.
   registerChatClarificationLifecycle();
+  // Approvals, rejections and expiries of integration actions, for the
+  // action detail's Usage (#2974).
+  startActionUsageTracking(interactionService);
   // ownsClusterSingletons computed above, before the rollup/audit schedulers.
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();

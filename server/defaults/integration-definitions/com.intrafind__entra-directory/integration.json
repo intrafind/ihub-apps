@@ -1,10 +1,21 @@
 {
   "id": "com.intrafind/entra-directory",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Model guidance and example prompts for the people directory actions; the guidance is added to the system prompt while the directory is active in a chat.",
+        "de": "Modellhinweise und Beispiel-Prompts für die Aktionen des Personenverzeichnisses; die Hinweise werden dem Systemprompt hinzugefügt, solange das Verzeichnis in einem Chat aktiv ist."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-10-31",
@@ -102,7 +113,21 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Search by name or email first; when several people match, ask which one is meant.",
+        "de": "Suche zuerst nach Name oder E-Mail; passen mehrere Personen, frage, welche gemeint ist."
+      },
+      "examples": [
+        {
+          "en": "Who is Anna Schmidt?",
+          "de": "Wer ist Anna Schmidt?"
+        },
+        {
+          "en": "What is the email address of our head of HR?",
+          "de": "Wie lautet die E-Mail-Adresse unserer Personalleitung?"
+        }
+      ]
     },
     {
       "name": "getAllUserDetails",
@@ -117,7 +142,11 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Use the id findUser returned; share only the details the question needs.",
+        "de": "Verwende die ID, die findUser geliefert hat; gib nur die Details weiter, die die Frage braucht."
+      }
     },
     {
       "name": "getUserManager",
@@ -132,7 +161,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Use the id findUser returned.",
+        "de": "Verwende die ID, die findUser geliefert hat."
+      },
+      "examples": [
+        {
+          "en": "Who is Anna Schmidt’s manager?",
+          "de": "Wer ist die vorgesetzte Person von Anna Schmidt?"
+        }
+      ]
     },
     {
       "name": "getUserGroups",
@@ -147,7 +186,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Use the id findUser returned.",
+        "de": "Verwende die ID, die findUser geliefert hat."
+      },
+      "examples": [
+        {
+          "en": "Which teams is Anna Schmidt in?",
+          "de": "In welchen Teams ist Anna Schmidt?"
+        }
+      ]
     },
     {
       "name": "getTeamMembers",
@@ -162,7 +211,17 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Use a team id from getUserGroups; never guess one.",
+        "de": "Verwende eine Team-ID aus getUserGroups; rate nie eine."
+      },
+      "examples": [
+        {
+          "en": "Who else is in Anna Schmidt’s team?",
+          "de": "Wer ist noch in Anna Schmidts Team?"
+        }
+      ]
     },
     {
       "name": "getUserPhotoBase64",
@@ -177,7 +236,11 @@
       },
       "sideEffect": "read",
       "dataFlow": "external",
-      "connection": "service"
+      "connection": "service",
+      "guidance": {
+        "en": "Fetch a photo only when the user asks to see it.",
+        "de": "Rufe ein Foto nur ab, wenn der Benutzer es sehen möchte."
+      }
     }
   ]
 }

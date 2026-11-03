@@ -73,6 +73,7 @@ import { announceTaskChanged } from './taskEvents.js';
 import { effectiveRetention, parseRetention, selectRunsToPrune } from './runRetention.js';
 import { SCHEDULING_TOOLS } from './toolGate.js';
 import { validateTaskScopes } from './taskScopes.js';
+import { requiresApproval } from './runSeams.js';
 
 const COMPONENT = 'ScheduledTaskService';
 
@@ -253,6 +254,9 @@ export async function toolsOfferedByApp(app, user, language = 'en', { select } =
     // it (`app.integrations`) or names it in `tools`.
     selectedByApp:
       Boolean(tool._integration) || isToolSelected(tool, Array.isArray(app.tools) ? app.tools : []),
+    // Whether a run pauses for the owner's approval before calling it: the
+    // policy `getToolsForApp` stamped on the tool (#2945).
+    requiresApproval: requiresApproval(tool),
     ...(selected ? { selected: selected.has(tool.id) } : {})
   }));
 }

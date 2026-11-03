@@ -23,8 +23,18 @@
  *                                        to reject the answer and let the model try again
  *                                        (honoured only when `canRetry`)
  *
+ * Order matters for `preTool`: the first seam that returns `handled` takes the
+ * call over. The `approval` seam goes first, before any seam that announces
+ * (`chat-tools` emits `tool/started`) or runs a call (`passthrough`), so a
+ * call that waits for a person's approval never shows as started.
+ *
  * @module services/loop/seams
  */
+export {
+  approvalSeam,
+  awaitingApprovalPayload,
+  noUserPayload as approvalNoUserPayload
+} from './approvalSeam.js';
 export { imageLiftSeam, extractImageData } from './imageLiftSeam.js';
 export { knowledgeSourceSeam, classifyKnowledgeSource } from './knowledgeSourceSeam.js';
 export { passthroughSeam } from './passthroughSeam.js';

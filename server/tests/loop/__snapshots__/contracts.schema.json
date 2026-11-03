@@ -1385,6 +1385,29 @@
                       "checkpointId": {
                         "type": "string"
                       },
+                      "viewCall": {
+                        "type": "object",
+                        "properties": {
+                          "appId": {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          "viewToolId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "serverId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": ["appId", "viewToolId", "serverId", "name"],
+                        "additionalProperties": false
+                      },
                       "scheduledTaskId": {
                         "type": "string"
                       },
@@ -1437,6 +1460,29 @@
                       },
                       "by": {
                         "type": "string"
+                      },
+                      "approver": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": ["approverGroups", "admin", "owner"]
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "via", "groups"],
+                        "additionalProperties": false
                       },
                       "at": {
                         "type": "string",
@@ -1549,6 +1595,29 @@
                   },
                   "by": {
                     "type": "string"
+                  },
+                  "approver": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "via": {
+                        "type": "string",
+                        "enum": ["approverGroups", "admin", "owner"]
+                      },
+                      "groups": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": ["id", "via", "groups"],
+                    "additionalProperties": false
                   },
                   "at": {
                     "type": "string",
@@ -2528,6 +2597,29 @@
           "checkpointId": {
             "type": "string"
           },
+          "viewCall": {
+            "type": "object",
+            "properties": {
+              "appId": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "viewToolId": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "serverId": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": ["appId", "viewToolId", "serverId", "name"],
+            "additionalProperties": false
+          },
           "scheduledTaskId": {
             "type": "string"
           },
@@ -2580,6 +2672,29 @@
           },
           "by": {
             "type": "string"
+          },
+          "approver": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "via": {
+                "type": "string",
+                "enum": ["approverGroups", "admin", "owner"]
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["id", "via", "groups"],
+            "additionalProperties": false
           },
           "at": {
             "type": "string",
@@ -3582,6 +3697,29 @@
               "checkpointId": {
                 "type": "string"
               },
+              "viewCall": {
+                "type": "object",
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "viewToolId": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "serverId": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": ["appId", "viewToolId", "serverId", "name"],
+                "additionalProperties": false
+              },
               "scheduledTaskId": {
                 "type": "string"
               },
@@ -3634,6 +3772,29 @@
               },
               "by": {
                 "type": "string"
+              },
+              "approver": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "via": {
+                    "type": "string",
+                    "enum": ["approverGroups", "admin", "owner"]
+                  },
+                  "groups": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["id", "via", "groups"],
+                "additionalProperties": false
               },
               "at": {
                 "type": "string",
@@ -5409,6 +5570,29 @@
                       "checkpointId": {
                         "type": "string"
                       },
+                      "viewCall": {
+                        "type": "object",
+                        "properties": {
+                          "appId": {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          "viewToolId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "serverId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": ["appId", "viewToolId", "serverId", "name"],
+                        "additionalProperties": false
+                      },
                       "scheduledTaskId": {
                         "type": "string"
                       },
@@ -5461,6 +5645,29 @@
                       },
                       "by": {
                         "type": "string"
+                      },
+                      "approver": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": ["approverGroups", "admin", "owner"]
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "via", "groups"],
+                        "additionalProperties": false
                       },
                       "at": {
                         "type": "string",
@@ -5577,6 +5784,29 @@
                   },
                   "by": {
                     "type": "string"
+                  },
+                  "approver": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "via": {
+                        "type": "string",
+                        "enum": ["approverGroups", "admin", "owner"]
+                      },
+                      "groups": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": ["id", "via", "groups"],
+                    "additionalProperties": false
                   },
                   "at": {
                     "type": "string",
