@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The iFinder iAssistants the signed-in admin can see, for the iAssistant
- * picker in the app editor.
+ * The iFinder iAssistants and search profiles the signed-in admin can see, for
+ * the iAssistant and iFinder panels of the app editor.
  *
  * iFinder lists iAssistants per user — only those whose search profile the
  * user has — and iHub can only ask as a user. So this is the admin's own view:
@@ -14,7 +14,12 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import iFinderAssistants from '../../services/integrations/iFinderAssistants.js';
-import { isIFinderConfigured } from '../../services/integrations/ifinderConfig.js';
+import iFinderSearchProfiles from '../../services/integrations/iFinderSearchProfiles.js';
+import { isAllowed } from '../../services/integrations/scopes/iFinderScopes.js';
+import {
+  getIFinderConfig,
+  isIFinderConfigured
+} from '../../services/integrations/ifinderConfig.js';
 import { sendErrorResponse } from '../../utils/responseHelpers.js';
 import logger from '../../utils/logger.js';
 
@@ -92,6 +97,80 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
           error: error.message
         });
         return sendErrorResponse(res, 502, 'iFinder could not be asked for its iAssistants', {
+          details: error.message
+        });
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/integrations/ifinder/search-profiles:
+   *   get:
+   *     summary: List the iFinder search profiles the admin can see
+   *     description: |
+   *       Reads the search profiles of the signed-in admin from iFinder, narrowed
+   *       to the installation's "Offered search profiles" allow-list. Other users
+   *       may have more or fewer profiles.
+   *     tags:
+   *       - Admin - Integrations
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: The search profiles and the installation's profile settings
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 profiles:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { type: string }
+   *                       isDefault: { type: boolean }
+   *                 defaultSearchProfile: { type: string }
+   *                 allowUserSearchProfileChange: { type: boolean }
+   *       401:
+   *         description: Admin authentication required
+   *       409:
+   *         description: The iFinder integration is not configured
+   *       502:
+   *         description: iFinder could not be asked
+   */
+  app.get(
+    buildServerPath('/api/admin/integrations/ifinder/search-profiles'),
+    adminAuth,
+    async (req, res) => {
+      if (!isIFinderConfigured()) {
+        return sendErrorResponse(res, 409, 'The iFinder integration is not configured');
+      }
+
+      const cfg = getIFinderConfig();
+      try {
+        const profiles = await iFinderSearchProfiles.getUserSearchProfiles({
+          user: req.user,
+          baseUrl: cfg.baseUrl,
+          application: cfg.searchProfileApplication,
+          timeout: cfg.timeout
+        });
+        res.json({
+          profiles: profiles
+            .filter(profile => isAllowed(cfg, profile.id))
+            .map(({ id, name, isDefault }) => ({ id, name, isDefault: Boolean(isDefault) })),
+          defaultSearchProfile: cfg.defaultSearchProfile,
+          allowUserSearchProfileChange: cfg.allowUserSearchProfileChange !== false
+        });
+      } catch (error) {
+        logger.warn('Could not list the iFinder search profiles', {
+          component: 'AdminIFinderAssistants',
+          error: error.message
+        });
+        return sendErrorResponse(res, 502, 'iFinder could not be asked for its search profiles', {
           details: error.message
         });
       }

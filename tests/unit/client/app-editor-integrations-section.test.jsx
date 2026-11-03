@@ -13,7 +13,8 @@ import '@testing-library/jest-dom';
  * the people directories and the storage providers get a card each whose
  * switch binds every installation of the type (`type:people-directory`,
  * `type:storage`); and the generic list never repeats a web search engine,
- * iAssistant or a storage provider.
+ * iAssistant, iFinder or a storage provider. iAssistant and iFinder have
+ * purpose-built scope settings instead of the generic scope boxes.
  */
 
 jest.mock('react-i18next', () => {
@@ -39,6 +40,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   getAdminApiErrorMessage: err => err?.message || 'failed'
 }));
 
+import { makeAdminApiCall } from '../../../client/src/api/adminApi';
 import IntegrationsConfigSection, {
   mergeInstallationDetails
 } from '../../../client/src/features/admin/components/app-form/IntegrationsConfigSection';
@@ -96,6 +98,7 @@ function renderSection(app, onChange = jest.fn()) {
 beforeEach(() => {
   mockFetchInstalled.mockReset();
   mockFetchOne.mockReset();
+  makeAdminApiCall.mockReset();
   mockFetchOne.mockResolvedValue({ actions: [], definition: null });
 });
 
@@ -113,7 +116,9 @@ describe('IntegrationsConfigSection', () => {
     expect(within(generic).queryByText('office365')).not.toBeInTheDocument();
     // The rest is grouped.
     expect(within(generic).getByText('MCP servers')).toBeInTheDocument();
-    expect(within(generic).getByText('Built-in')).toBeInTheDocument();
+    // iFinder was the only built-in row; it has its own panel now.
+    expect(within(generic).queryByText('Built-in')).not.toBeInTheDocument();
+    expect(screen.getByText('Enable iFinder')).toBeInTheDocument();
     expect(within(generic).getByText('From the catalog')).toBeInTheDocument();
     expect(within(generic).getByText('GovData')).toBeInTheDocument();
   });
@@ -335,23 +340,201 @@ describe('IntegrationsConfigSection', () => {
 
   it('shows the iAssistant binding settings inside the panel, and off unbinds', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
-    mockFetchOne.mockResolvedValue({
-      actions: [],
-      definition: { id: 'com.intrafind/iassistant', scopes: { label: 'iAssistant' } }
-    });
     const onChange = renderSection({
       id: 'a',
       iassistant: { enabled: true },
       integrations: { iassistant: { required: false } }
     });
-    expect(await screen.findByLabelText('Default iAssistant')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Users may switch iAssistant')).toBeInTheDocument();
+    // The generic free-text scope boxes are gone.
+    expect(screen.queryByLabelText('Default iAssistant')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pinned iAssistant')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scope picker')).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Required/)).not.toBeChecked();
-    // No empty action list for an integration without actions.
-    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Enable iAssistant' }));
     const app = onChange.mock.calls.at(-1)[0];
     expect(app.integrations).toBeUndefined();
     expect(app.iassistant).toEqual({ enabled: false });
+  });
+
+  describe('iAssistant: choosing an iAssistant in the chat', () => {
+    const lastApp = onChange => onChange.mock.calls.at(-1)[0];
+
+    it('writes the mode: menu removes the picker, inline sets it, fixed pins the app setting', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      const onChange = renderSection({
+        id: 'a',
+        iassistant: { enabled: true, assistantId: 'x' },
+        integrations: { iassistant: { scopePicker: 'inline' } }
+      });
+      const select = await screen.findByLabelText('Users may switch iAssistant');
+      expect(select).toHaveValue('inline');
+      fireEvent.change(select, { target: { value: 'menu' } });
+      expect(lastApp(onChange).integrations).toEqual({ iassistant: {} });
+      fireEvent.change(select, { target: { value: 'fixed' } });
+      expect(lastApp(onChange).integrations).toEqual({
+        iassistant: { scopePicker: 'hidden', pinnedScope: 'assistant:x' }
+      });
+    });
+
+    it('keeps the pinned scope in step with the iAssistant while fixed', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      const onChange = renderSection({
+        id: 'a',
+        iassistant: { enabled: true, assistantId: 'x' },
+        integrations: { iassistant: { scopePicker: 'hidden', pinnedScope: 'assistant:x' } }
+      });
+      fireEvent.change(await screen.findByLabelText('iFinder iAssistant'), {
+        target: { value: 'y' }
+      });
+      const app = lastApp(onChange);
+      expect(app.iassistant.assistantId).toBe('y');
+      expect(app.integrations.iassistant).toEqual({
+        scopePicker: 'hidden',
+        pinnedScope: 'assistant:y'
+      });
+    });
+
+    it('offers all search profiles, locked on when the app searches all of them', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      const onChange = renderSection({
+        id: 'a',
+        iassistant: { enabled: true },
+        integrations: { iassistant: {} }
+      });
+      fireEvent.click(await screen.findByLabelText(/Also offer "All my search profiles"/));
+      expect(lastApp(onChange).integrations).toEqual({
+        iassistant: { allowAllSearchProfiles: true }
+      });
+    });
+
+    it('shows the all-profiles checkbox ticked and disabled when allSearchProfiles is on', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      renderSection({
+        id: 'a',
+        iassistant: { enabled: true, allSearchProfiles: true },
+        integrations: { iassistant: {} }
+      });
+      const box = await screen.findByLabelText(/Also offer "All my search profiles"/);
+      expect(box).toBeChecked();
+      expect(box).toBeDisabled();
+    });
+
+    it('writes actions: ["ask"] from the ask checkbox', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue({
+        actions: [{ name: 'ask', title: 'Ask', available: true, bindExplicitly: true }]
+      });
+      const onChange = renderSection({
+        id: 'a',
+        iassistant: { enabled: true },
+        integrations: { iassistant: {} }
+      });
+      const box = await screen.findByLabelText(/Let other models ask this iAssistant/);
+      expect(box).not.toBeChecked();
+      fireEvent.click(box);
+      expect(lastApp(onChange).integrations).toEqual({ iassistant: { actions: ['ask'] } });
+    });
+
+    it('shows a legacy scope value with a Reset that removes it', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      const onChange = renderSection({
+        id: 'a',
+        iassistant: { enabled: true },
+        integrations: { iassistant: { defaultScope: 'all', required: false } }
+      });
+      expect(await screen.findByTestId('iassistant-legacy-scope')).toHaveTextContent(
+        'defaultScope: all'
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(lastApp(onChange).integrations).toEqual({ iassistant: { required: false } });
+    });
+  });
+
+  describe('iFinder panel', () => {
+    const lastApp = onChange => onChange.mock.calls.at(-1)[0];
+    const IFINDER_DETAIL = {
+      actions: [
+        { name: 'search', title: 'Search', available: true },
+        { name: 'getDocument', title: 'Get document', available: true }
+      ]
+    };
+
+    it('is a panel of its own, no generic row', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      renderSection({ id: 'a' });
+      expect(await screen.findByText('Enable iFinder')).toBeInTheDocument();
+      const generic = screen.getByTestId('app-integrations');
+      expect(within(generic).queryByText('iFinder')).not.toBeInTheDocument();
+      expect(within(generic).queryByText('ifinder')).not.toBeInTheDocument();
+    });
+
+    it('binds and unbinds the ifinder installation with its switch', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      const onChange = renderSection({ id: 'a' });
+      fireEvent.click(await screen.findByRole('switch', { name: 'Enable iFinder' }));
+      expect(lastApp(onChange).integrations).toEqual({ ifinder: {} });
+    });
+
+    it('unbinds with the switch when bound', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue(IFINDER_DETAIL);
+      const onChange = renderSection({ id: 'a', integrations: { ifinder: {} } });
+      fireEvent.click(await screen.findByRole('switch', { name: 'Enable iFinder' }));
+      expect(lastApp(onChange).integrations).toBeUndefined();
+    });
+
+    it('lists the actions and narrows them like a generic row', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue(IFINDER_DETAIL);
+      const onChange = renderSection({ id: 'a', integrations: { ifinder: {} } });
+      const box = await screen.findByLabelText(/Get document/);
+      expect(box).toBeChecked();
+      fireEvent.click(box);
+      expect(lastApp(onChange).integrations).toEqual({ ifinder: { actions: ['search'] } });
+    });
+
+    it('pins the start profile when users may not switch', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue(IFINDER_DETAIL);
+      const onChange = renderSection({
+        id: 'a',
+        integrations: { ifinder: { defaultScope: 'contracts' } }
+      });
+      fireEvent.change(await screen.findByLabelText('Users may switch search profile'), {
+        target: { value: 'fixed' }
+      });
+      expect(lastApp(onChange).integrations).toEqual({
+        ifinder: { defaultScope: 'contracts', scopePicker: 'hidden', pinnedScope: 'contracts' }
+      });
+    });
+
+    it('loads the profiles from iFinder and disables the switch when the installation forbids it', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue(IFINDER_DETAIL);
+      makeAdminApiCall.mockResolvedValue({
+        data: {
+          profiles: [{ id: 'contracts', name: 'Contracts', isDefault: false }],
+          defaultSearchProfile: 'standard',
+          allowUserSearchProfileChange: false
+        }
+      });
+      const onChange = renderSection({ id: 'a', integrations: { ifinder: {} } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Load from iFinder' }));
+      const start = await screen.findByRole('combobox', { name: 'Start in' });
+      expect(makeAdminApiCall).toHaveBeenCalledWith('/admin/integrations/ifinder/search-profiles');
+      fireEvent.change(start, { target: { value: 'contracts' } });
+      expect(lastApp(onChange).integrations).toEqual({ ifinder: { defaultScope: 'contracts' } });
+      expect(screen.getByLabelText('Users may switch search profile')).toBeDisabled();
+    });
+
+    it('writes Required from the shared checkbox', async () => {
+      mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+      mockFetchOne.mockResolvedValue(IFINDER_DETAIL);
+      const onChange = renderSection({ id: 'a', integrations: { ifinder: {} } });
+      fireEvent.click(await screen.findByLabelText(/Required/));
+      expect(lastApp(onChange).integrations).toEqual({ ifinder: { required: false } });
+    });
   });
 
   it('does not list a definition or type binding of an installed integration as not installed', async () => {

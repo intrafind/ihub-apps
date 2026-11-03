@@ -4,13 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, HELP_CLASS, LABEL_CLASS } from '../formStyles';
 import IntegrationBindingOptions from './IntegrationBindingOptions';
-
-/** A shallow copy of `object` without `key`. */
-function withoutKey(object, key) {
-  const copy = { ...object };
-  delete copy[key];
-  return copy;
-}
+import { implicitActionNames, selectedActionNames, toggleBindingAction } from './bindingActions';
 
 /**
  * One row of the app editor's integration bindings: a checkbox that binds an
@@ -51,19 +45,13 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange, notice 
     : (detail?.actions || []).filter(a =>
         item.kind === 'definition' ? a.enabledByDefault !== false || a.enabled : a.available
       );
-  const implicitNames = actions.filter(a => !a.bindExplicitly).map(a => a.name);
-  const selected = Array.isArray(current.actions) ? current.actions : implicitNames;
+  const implicitNames = implicitActionNames(actions);
+  const selected = selectedActionNames(current, implicitNames);
   const scopes = withoutActions ? null : detail?.definition?.scopes;
   const checkboxId = `app-integration-${item.id.replace(/[/:]/g, '__')}`;
 
-  const toggleAction = (actionName, checked) => {
-    const base = Array.isArray(current.actions) ? current.actions : implicitNames;
-    const next = checked ? [...new Set([...base, actionName])] : base.filter(n => n !== actionName);
-    const sameAsImplicit =
-      next.length === implicitNames.length && implicitNames.every(n => next.includes(n));
-    const rest = withoutKey(current, 'actions');
-    onBindingChange(sameAsImplicit ? rest : { ...rest, actions: next });
-  };
+  const toggleAction = (actionName, checked) =>
+    onBindingChange(toggleBindingAction(current, implicitNames, actionName, checked));
 
   return (
     <div

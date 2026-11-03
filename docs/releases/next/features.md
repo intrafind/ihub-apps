@@ -22,6 +22,10 @@ configuration moves into installations on the first start (see Breaking Changes)
   installation it binds as **Required** (the default) exists and is enabled; **Admin → Apps**
   names a missing one. Switch **Required** off and the app stays available without that
   integration's actions. Web search is optional by default.
+  **iAssistant** and **iFinder** have panels of their own instead of free-text scope boxes:
+  choose whether users may switch iAssistant or search profile (in the menu, in the chat input, or
+  not at all), pick the start search profile with **Load from iFinder**, and let other models ask
+  an iAssistant. The settings are stored in the app as before.
 - **One admin page:** the tabs **Installed**, **Catalog**, **Requests** and **Inbound** (what
   connects to iHub: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, the
   MCP gateway). Installations are grouped (people directories, web search, storage providers, MCP

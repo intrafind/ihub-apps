@@ -5,6 +5,20 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../../api/adminApi';
 import Switch from '../../../../shared/components/Switch';
+import { CHECKBOX_CLASS, HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import { RequiredCheckbox } from './IntegrationBindingOptions';
+import { implicitActionNames, selectedActionNames, toggleBindingAction } from './bindingActions';
+import {
+  applyPickerMode,
+  legacyScopeSettings,
+  pickerModeOf,
+  resetLegacyScopeSettings,
+  setAllowAllSearchProfiles,
+  syncPinnedScope
+} from './iAssistantBinding';
+
+const BINDING_KEY = 'iassistant';
+const ASK_ACTION = 'ask';
 
 const INPUT_CLASS =
   'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
@@ -17,8 +31,10 @@ const INPUT_CLASS =
  * The switch is the app's use of iAssistant: IntegrationsConfigSection binds
  * the `iassistant` installation (`app.integrations.iassistant`) with it and
  * keeps `app.iassistant.enabled` in step. While it is on, the panel shows the
- * iAssistant settings (`app.iassistant`) and the binding's settings
- * (`bindingSettings`: Required and the scope settings).
+ * iAssistant settings (`app.iassistant`) and, below them, how users choose an
+ * iAssistant in the chat and the binding's other settings (Required, the `ask`
+ * action). Those write `app.integrations.iassistant`; the mapping is in
+ * `iAssistantBinding.js`.
  *
  * @param {Object} props
  * @param {Object} props.app - the app being edited
@@ -26,7 +42,10 @@ const INPUT_CLASS =
  * @param {boolean} props.enabled - whether the app uses iAssistant
  * @param {(enabled: boolean) => void} props.onEnabledChange - turns iAssistant on or off
  * @param {React.ReactNode} [props.notice] - e.g. that iAssistant is not installed
- * @param {React.ReactNode} [props.bindingSettings] - the binding's Required and scope settings
+ * @param {Object} [props.binding] - `app.integrations.iassistant`
+ * @param {((binding: Object) => void)|null} [props.onBindingChange] - receives the changed
+ *   binding; null while iAssistant is not installed (no binding settings are shown)
+ * @param {Object[]} [props.bindingActions] - the installation's actions (`details.iassistant.actions`)
  */
 function IAssistantSection({
   app,
@@ -34,7 +53,9 @@ function IAssistantSection({
   enabled,
   onEnabledChange,
   notice = null,
-  bindingSettings = null
+  binding,
+  onBindingChange = null,
+  bindingActions = []
 }) {
   const { t, i18n } = useTranslation();
   // The iAssistants iFinder shows the signed-in admin; loaded on request,
@@ -63,15 +84,25 @@ function IAssistantSection({
     }
   };
 
+  // One change of the whole app: while the choice is fixed, the pinned scope
+  // follows the iAssistant settings, so it cannot drift.
   const handleIAssistantChange = updates => {
+    const iassistant = { ...app.iassistant, ...updates };
+    const synced = syncPinnedScope(binding, iassistant);
     onChange({
       ...app,
-      iassistant: {
-        ...app.iassistant,
-        ...updates
-      }
+      iassistant,
+      ...(synced !== binding
+        ? { integrations: { ...app.integrations, [BINDING_KEY]: synced } }
+        : {})
     });
   };
+
+  const current = binding || {};
+  const mode = pickerModeOf(current);
+  const legacy = legacyScopeSettings(binding, app.iassistant);
+  const implicitNames = implicitActionNames(bindingActions);
+  const asksOthers = selectedActionNames(current, implicitNames).includes(ASK_ACTION);
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -287,7 +318,127 @@ function IAssistantSection({
                 />
               </div>
 
-              {bindingSettings}
+              {onBindingChange && (
+                <fieldset className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <legend className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.iassistantChoosing', 'Choosing an iAssistant in the chat')}
+                  </legend>
+
+                  <div>
+                    <label
+                      htmlFor="iassistant-picker-mode"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {t('admin.apps.edit.iassistantSwitch', 'Users may switch iAssistant')}
+                    </label>
+                    <select
+                      id="iassistant-picker-mode"
+                      className={INPUT_CLASS}
+                      value={mode}
+                      onChange={e =>
+                        onBindingChange(applyPickerMode(binding, e.target.value, app.iassistant))
+                      }
+                    >
+                      <option value="menu">
+                        {t('admin.apps.edit.iassistantSwitchMenu', 'In the menu')}
+                      </option>
+                      <option value="inline">
+                        {t('admin.apps.edit.iassistantSwitchInline', 'In the chat input')}
+                      </option>
+                      <option value="fixed">
+                        {t(
+                          'admin.apps.edit.iassistantSwitchFixed',
+                          "No, always use this app's setting"
+                        )}
+                      </option>
+                    </select>
+                  </div>
+
+                  {mode !== 'fixed' && (
+                    <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                      <input
+                        id="iassistant-offer-all"
+                        type="checkbox"
+                        className={`${CHECKBOX_CLASS} mt-0.5 disabled:opacity-60`}
+                        checked={allSearchProfiles || current.allowAllSearchProfiles === true}
+                        disabled={allSearchProfiles}
+                        onChange={e =>
+                          onBindingChange(setAllowAllSearchProfiles(binding, e.target.checked))
+                        }
+                      />
+                      <span>
+                        {t(
+                          'admin.apps.edit.iassistantOfferAll',
+                          'Also offer "All my search profiles"'
+                        )}
+                        <span className={`${HELP_CLASS} block`}>
+                          {allSearchProfiles
+                            ? t(
+                                'admin.apps.edit.iassistantOfferAllOn',
+                                "Always offered, because this app searches all of the user's search profiles."
+                              )
+                            : t(
+                                'admin.apps.edit.iassistantOfferAllDesc',
+                                'Users can then ask across every search profile they have.'
+                              )}
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {legacy.length > 0 && (
+                    <div
+                      data-testid="iassistant-legacy-scope"
+                      className="rounded-md px-3 py-2 text-sm bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 flex items-start gap-3"
+                    >
+                      <p className="flex-1">
+                        {t(
+                          'admin.apps.edit.iassistantLegacyScope',
+                          'This app sets scope values the panel does not manage: {{values}}.',
+                          { values: legacy.map(item => `${item.key}: ${item.value}`).join(', ') }
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        className={SECONDARY_BUTTON_CLASS}
+                        onClick={() =>
+                          onBindingChange(resetLegacyScopeSettings(binding, app.iassistant))
+                        }
+                      >
+                        {t('admin.apps.edit.iassistantLegacyReset', 'Reset')}
+                      </button>
+                    </div>
+                  )}
+
+                  <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                    <input
+                      id="iassistant-ask-action"
+                      type="checkbox"
+                      className={`${CHECKBOX_CLASS} mt-0.5`}
+                      checked={asksOthers}
+                      onChange={e =>
+                        onBindingChange(
+                          toggleBindingAction(binding, implicitNames, ASK_ACTION, e.target.checked)
+                        )
+                      }
+                    />
+                    <span>
+                      {t(
+                        'admin.apps.edit.iassistantAskAction',
+                        'Let other models ask this iAssistant'
+                      )}
+                      <span className={`${HELP_CLASS} block`}>
+                        {t(
+                          'admin.apps.edit.iassistantAskActionDesc',
+                          'For apps whose model is not the iAssistant: the model gets a tool to put questions to it. Off unless ticked.'
+                        )}
+                      </span>
+                    </span>
+                  </label>
+
+                  <RequiredCheckbox binding={binding} onBindingChange={onBindingChange} />
+                </fieldset>
+              )}
             </div>
           )}
         </div>

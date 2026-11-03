@@ -47,7 +47,7 @@ function isSignedIn(user) {
 }
 
 /** Whether the admin allow-list lets a profile be offered. */
-function isAllowed(cfg, profileId) {
+export function isAllowed(cfg, profileId) {
   return (
     cfg.allowedSearchProfiles.length === 0 ||
     cfg.allowedSearchProfiles.includes(profileId) ||
