@@ -162,6 +162,26 @@ describe('chatFileUpload helpers', () => {
     expect(list[1].marked).toBe(true);
     expect(helpers.updateSelection(null, 'k', mark)).toBeNull();
   });
+
+  it('reads the refusal code from a raw axios error and from the wrapped API error', () => {
+    const body = { error: 'No room', details: { code: 'QUOTA_CHAT_BYTES' } };
+    // Raw axios error
+    expect(helpers.uploadErrorCode({ response: { data: body } })).toBe('QUOTA_CHAT_BYTES');
+    // What `handleApiResponse` throws: the response only sits on `originalError`
+    expect(
+      helpers.uploadErrorCode(
+        Object.assign(new Error('No room'), { originalError: { response: { data: body } } })
+      )
+    ).toBe('QUOTA_CHAT_BYTES');
+    expect(
+      helpers.uploadErrorCode(
+        Object.assign(new Error('x'), {
+          originalError: { response: { data: { error: 'x', details: { code: 'NO_TEXT' } } } }
+        })
+      )
+    ).toBe('NO_TEXT');
+    expect(helpers.uploadErrorCode(new Error('offline'))).toBe('FAILED');
+  });
 });
 
 /** A composer: selection state plus the hook. */

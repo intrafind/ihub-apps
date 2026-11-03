@@ -55,6 +55,14 @@ export function createFileApi(prefix, requestOptions = {}) {
           apiClient.post(filesOf(id), body, {
             ...requestOptions,
             signal,
+            // A FormData body must not carry the instance default
+            // `Content-Type: application/json`: axios would then serialise the
+            // form to JSON (`{}`) and the file never leaves the browser, so the
+            // server reports a missing upload. `undefined` omits the header and
+            // lets the browser set the multipart boundary.
+            ...(isBinary
+              ? { headers: { ...requestOptions.headers, 'Content-Type': undefined } }
+              : {}),
             // The server enforces its own size limit; a long upload must not
             // hit the default request timeout.
             timeout: 0,

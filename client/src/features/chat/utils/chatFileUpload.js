@@ -183,7 +183,10 @@ export function splitFilesForWire(fileData) {
  * @returns {string} A code; `'FAILED'` when the server named none.
  */
 export function uploadErrorCode(error) {
-  const data = error?.response?.data;
+  // The file API wraps axios errors (`handleApiResponse`): the response then sits
+  // on `originalError`, and the wrapper's own `code` only mirrors a top-level
+  // `data.code`, which the file endpoints do not send (they use `details.code`).
+  const data = error?.response?.data || error?.originalError?.response?.data;
   return (
     data?.details?.code ||
     data?.code ||
