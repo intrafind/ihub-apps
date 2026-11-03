@@ -20,7 +20,7 @@
  * Structured output (`response_format`, or the app's `outputSchema`) is
  * validated server-side before an answer is returned as a success.
  *
- * `/responses` and `/conversations` are registered from here too, so every
+ * `/responses`, `/conversations` and `/files` are registered from here too, so every
  * route of the API sits behind the same `authRequired` mount.
  */
 import crypto from 'node:crypto';
@@ -83,11 +83,13 @@ import {
   runPlainTurn,
   withJsonInstruction
 } from '../services/inference/plainTurn.js';
-import { messagesFromChatCompletions } from '../services/inference/inputContent.js';
+import { messagesFromChatCompletions, withReadFiles } from '../services/inference/inputContent.js';
+import { createFileContext } from '../services/inference/files.js';
 import { appTurnError, executeAppTurn, prepareAppTurn } from '../services/inference/appTurn.js';
 import { apiUser, numberField, platformLanguage, requestLanguage } from './inference/shared.js';
 import registerResponsesRoutes from './inference/responses.js';
 import registerConversationsRoutes from './inference/conversations.js';
+import registerFilesRoutes from './inference/files.js';
 
 export { inferenceErrorStatus } from '../services/inference/errors.js';
 
@@ -266,9 +268,11 @@ export default function registerOpenAIProxyRoutes(
    *                       enum: [system, user, assistant, tool]
    *                     content:
    *                       description: |
-   *                         A string, or content parts. For apps: `text`, `image_url` (data URL)
-   *                         and `file` (`file_data` as a data URL; PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp) and text files). System
-   *                         messages are refused for apps — the app's prompt applies.
+   *                         A string, or content parts: `text`, `image_url` (data URL) and `file` (`file_data` as a
+   *                         data URL with `filename`, or `file_id` of a file uploaded with
+   *                         `/inference/v1/files`; PDF — scanned ones as page images —, Word, PowerPoint,
+   *                         Excel, OpenDocument, HTML, e-mail and text files), for apps and plain models
+   *                         alike. System messages are refused for apps — the app's prompt applies.
    *               temperature:
    *                 type: number
    *                 description: Accepted for OpenAI client compatibility and ignored. Sampling parameters come from the model's `sampling` config.
@@ -401,10 +405,14 @@ export default function registerOpenAIProxyRoutes(
     }
 
     let format;
+    let readMessages;
     try {
       assertNoPromptForModel(prompt);
       format = parseResponseFormat(responseFormat);
       assertStructuredOutputSupported(model, format, modelId);
+      // `file` content parts (inline data or a `file_id`) are read like the documents of an
+      // app turn; messages without them are forwarded as they came.
+      readMessages = await withReadFiles(messages, { files: createFileContext({ user }) });
     } catch (error) {
       if (isInferenceApiError(error)) return sendFlatError(res, error);
       throw error;
@@ -412,8 +420,8 @@ export default function registerOpenAIProxyRoutes(
     const validate = Boolean(format) && validationRequested(req);
     const upstreamMessages =
       format && structuredOutputSupport(model) === 'prompted'
-        ? withJsonInstruction(messages, format)
-        : messages;
+        ? withJsonInstruction(readMessages, format)
+        : readMessages;
 
     // Convert OpenAI-format tools to the generic format the adapters consume.
     let genericTools = null;
@@ -540,7 +548,7 @@ export default function registerOpenAIProxyRoutes(
           llmClient,
           model,
           // runPlainTurn adds the JSON instruction itself.
-          messages,
+          messages: readMessages,
           options,
           format,
           validate,
@@ -748,7 +756,9 @@ export default function registerOpenAIProxyRoutes(
         language,
         fallbackLanguage: platformLanguage()
       });
-      const messages = await messagesFromChatCompletions(body.messages);
+      const messages = await messagesFromChatCompletions(body.messages, {
+        files: createFileContext({ user })
+      });
       if (messages.some(message => message.role === 'system')) {
         throw new InferenceApiError(
           400,
@@ -911,4 +921,5 @@ export default function registerOpenAIProxyRoutes(
 
   registerResponsesRoutes(app, { llmClient, chatService, getLocalizedError, DEFAULT_TIMEOUT });
   registerConversationsRoutes(app);
+  registerFilesRoutes(app);
 }

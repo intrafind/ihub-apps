@@ -73,6 +73,7 @@ import { announceTaskChanged } from './taskEvents.js';
 import { effectiveRetention, parseRetention, selectRunsToPrune } from './runRetention.js';
 import { SCHEDULING_TOOLS } from './toolGate.js';
 import { validateTaskScopes } from './taskScopes.js';
+import { copyTaskFiles, deleteTaskFiles, taskFileScope } from '../../chatFiles/taskFiles.js';
 import { requiresApproval } from './runSeams.js';
 
 const COMPONENT = 'ScheduledTaskService';
@@ -156,6 +157,20 @@ export async function ownerIdentity(user) {
   const mode = runLog.identityMode();
   const principal = await resolvePrincipal(user, { mode });
   return { id: principal.id, mode: principal.mode || mode };
+}
+
+/**
+ * The scope of a task's files, for its owner: the file routes' gate.
+ *
+ * @param {Object} user
+ * @param {string} taskId
+ * @returns {Promise<{task: Object, ownerId: string, scope: {type: 'task', id: string}}>}
+ * @throws {ScheduledTaskError} 404 for an unknown task or one that is not the caller's.
+ */
+export async function authorizeTaskFiles(user, taskId) {
+  assertAvailable();
+  const { task, ownerId } = await loadOwnedTask(user, taskId);
+  return { task, ownerId, scope: taskFileScope(task.id) };
 }
 
 async function loadOwnedTask(user, taskId) {
@@ -762,11 +777,11 @@ export async function setTaskStatus(user, taskId, status) {
  * @returns {Promise<Object>}
  */
 export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
-  const { task } = await loadOwnedTask(user, taskId);
+  const { task, ownerId } = await loadOwnedTask(user, taskId);
   const suffix = language.startsWith('de') ? ' (Kopie)' : ' (copy)';
   const schedule = { ...task.schedule };
   delete schedule.anchorAt;
-  return createTask(
+  const copy = await createTask(
     user,
     {
       name: `${task.name}`.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix,
@@ -786,6 +801,9 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
     },
     { language, createdVia: 'duplicate' }
   );
+  // The copy brings the original's attached files (its own blobs).
+  await copyTaskFiles(task.id, copy.id, { ownerId });
+  return copy;
 }
 
 /**
@@ -875,6 +893,8 @@ async function removeTask(task, { deleteChats, cause }) {
     runsError = error;
   }
   await getTaskMemoryRepository().delete(task.id);
+  // The attached files (original and extracted text) go with the task.
+  await deleteTaskFiles(task.id);
   if (runsError) throw runsError;
   let chatsDeleted = 0;
   if (deleteChats) {

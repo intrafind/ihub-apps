@@ -19,89 +19,48 @@
  *     earlier assistant turns);
  *   - Chat Completions `messages` content parts: `text`, `image_url`, `file`.
  *
- * Files and images travel inline (`data:` URLs or base64). Provider-hosted
- * references — an OpenAI `file_id`, a remote URL — are refused: iHub has no
- * files API, and fetching an arbitrary URL on the caller's behalf is not
+ * Files travel inline (`data:` URLs or base64) or by reference: a `file_id` is a
+ * file the caller uploaded with `POST /v1/files` (see ./files.js), or one that is
+ * stored in the conversation the response runs in. Images are inline only.
+ * Remote URLs are refused: fetching an arbitrary URL on the caller's behalf is not
  * something this endpoint does.
+ *
+ * An inline file is read by the shared chat-file pipeline (`ingestChatFile`, see
+ * ./files.js): the same types, the same Markdown, and a scanned PDF becomes page
+ * images instead of an error.
  *
  * @module services/inference/inputContent
  */
 import path from 'node:path';
+import { renderUserMessage } from '../../../shared/promptContext.js';
 import { InferenceApiError } from './errors.js';
 import {
   DOCX_MIME,
-  DocumentExtractionError,
   MAX_PDF_PAGES,
   ODP_MIME,
   ODS_MIME,
   ODT_MIME,
   PPTX_MIME,
-  extractDocxDocument,
-  extractOdfDocument,
-  extractPdfDocument,
-  extractPptxDocument,
   structuredExtractionEnabled
 } from '../documentExtraction.js';
-import { EML_MIME, MSG_MIME, emailText, msgText } from '../projects/extractText.js';
+import { PDF_MIME, XLSX_MIME, acceptedTypeOf } from '../projects/extractText.js';
+import { extractInlineFile, pageImagesOf, rememberOriginal } from './files.js';
 
 /** Longest document text taken from one file. */
 export const MAX_FILE_TEXT_CHARS = 500_000;
 
 /**
- * Office documents read by the structured extraction (and only while it is on): the type they
- * are sent with, what the error messages call them, and how they are read.
+ * Office and OpenDocument types, which the admin switch "Structured document
+ * extraction" gates: with it off the API reads PDFs and text only, as it did
+ * before the structured extraction existed.
  */
-const OFFICE_DOCUMENTS = new Map([
-  [DOCX_MIME, { label: 'Word', extension: '.docx', extract: extractDocxDocument }],
-  [PPTX_MIME, { label: 'PowerPoint', extension: '.pptx', extract: extractPptxDocument }],
-  [ODT_MIME, { label: 'OpenDocument text', extension: '.odt', extract: extractOdfDocument }],
-  [ODS_MIME, { label: 'OpenDocument spreadsheet', extension: '.ods', extract: extractOdfDocument }],
-  [ODP_MIME, { label: 'OpenDocument presentation', extension: '.odp', extract: extractOdfDocument }]
-]);
-const OFFICE_MIME_BY_EXTENSION = new Map(
-  [...OFFICE_DOCUMENTS].map(([mimeType, { extension }]) => [extension, mimeType])
-);
-
-/**
- * E-mails, read the way project files are: the headers that matter and the body; attachments
- * are named, not read. Browsers and HTTP clients send `.msg` as a generic binary as often as
- * with the Outlook type, so the name decides too.
- */
-const EMAIL_DOCUMENTS = new Map([
-  [EML_MIME, { label: 'e-mail', read: async bytes => emailText(bytes) }],
-  [MSG_MIME, { label: 'Outlook message', read: msgText }]
-]);
-const EMAIL_MIME_BY_EXTENSION = new Map([
-  ['.eml', EML_MIME],
-  ['.msg', MSG_MIME]
-]);
-
-/** MIME types read as UTF-8 text. */
-const TEXT_MIME_TYPES = new Set([
-  'application/json',
-  'application/xml',
-  'application/x-yaml',
-  'application/yaml',
-  'application/csv',
-  'application/x-ndjson',
-  'application/javascript',
-  'application/sql'
-]);
-
-/** File extensions read as text when no usable MIME type came along. */
-const TEXT_EXTENSIONS = new Map([
-  ['.txt', 'text/plain'],
-  ['.md', 'text/markdown'],
-  ['.markdown', 'text/markdown'],
-  ['.csv', 'text/csv'],
-  ['.tsv', 'text/tab-separated-values'],
-  ['.json', 'application/json'],
-  ['.xml', 'application/xml'],
-  ['.yaml', 'application/yaml'],
-  ['.yml', 'application/yaml'],
-  ['.html', 'text/html'],
-  ['.htm', 'text/html'],
-  ['.log', 'text/plain']
+const STRUCTURED_ONLY_TYPES = new Set([
+  DOCX_MIME,
+  PPTX_MIME,
+  XLSX_MIME,
+  ODT_MIME,
+  ODS_MIME,
+  ODP_MIME
 ]);
 
 const IMAGE_EXTENSIONS = new Map([
@@ -145,10 +104,6 @@ function mimeFromName(filename, table) {
   return table.get(ext) || null;
 }
 
-function isTextMime(mimeType) {
-  return mimeType.startsWith('text/') || TEXT_MIME_TYPES.has(mimeType);
-}
-
 /**
  * The text of a PDF as it was before the structured extraction: the words of a page joined by
  * spaces, no page markers. Used while the admin switch "Structured document extraction" is off.
@@ -175,14 +130,61 @@ async function legacyPdfText(bytes) {
 }
 
 /**
- * A document from the request as chat `fileData`.
+ * The document of a file read the way the API did before the structured extraction
+ * (admin switch off): a PDF's text in one run, no Office files. Null when the switch
+ * does not change how this file is read.
+ *
+ * @returns {Promise<{text: string, mimeType: string}|null>}
+ */
+async function readWithoutStructuredExtraction({ bytes, mimeType, fileName }, param) {
+  const accepted = acceptedTypeOf({ contentType: mimeType, name: fileName });
+  if (accepted === PDF_MIME) {
+    let text;
+    try {
+      text = await legacyPdfText(bytes);
+    } catch (error) {
+      throw new InferenceApiError(
+        400,
+        'invalid_file',
+        `${fileName}: not a readable PDF (${error.message})`,
+        { param }
+      );
+    }
+    if (!text) {
+      throw new InferenceApiError(
+        400,
+        'file_has_no_text',
+        `${fileName}: the PDF has no extractable text (scanned documents are read only with the structured extraction switched on; send the pages as input_image)`,
+        { param }
+      );
+    }
+    return { text, mimeType: PDF_MIME };
+  }
+  if (accepted && STRUCTURED_ONLY_TYPES.has(accepted)) {
+    throw new InferenceApiError(
+      400,
+      'unsupported_file_type',
+      `${fileName}: unsupported file type ${accepted}. Send PDF, e-mail (.eml, .msg) or text files, or images as input_image.`,
+      { param }
+    );
+  }
+  return null;
+}
+
+/**
+ * A document from the request as chat `fileData`, read by the shared chat-file
+ * pipeline: PDF (a scanned one becomes `pageImages`), Word, PowerPoint, Excel,
+ * OpenDocument, HTML, e-mail and text files. Nothing is stored; the bytes stay
+ * reachable through `originalBytesOf` so a persisted turn can keep the file.
  *
  * @param {Object} file
  * @param {string} file.data - `data:` URL or base64.
  * @param {string} [file.filename]
  * @param {string} param - Request field, for errors.
- * @returns {Promise<{fileName: string, fileType: string, content: string}>}
- * @throws {InferenceApiError} 400 for a type without text or an unreadable file.
+ * @returns {Promise<{fileName: string, fileType: string, content: string, bytes: number,
+ *   origin: 'api', pages?: number, pageImages?: string[], truncated?: boolean}>}
+ * @throws {InferenceApiError} 400 for a type that is not supported, a file without text
+ *   or an unreadable one; 413 for a file over the size limit.
  */
 export async function documentFromInlineFile({ data, filename }, param) {
   if (typeof data !== 'string' || !data) {
@@ -190,20 +192,6 @@ export async function documentFromInlineFile({ data, filename }, param) {
   }
   const parsed = parseInlineData(data);
   const fileName = typeof filename === 'string' && filename ? filename.slice(0, 255) : 'document';
-  const extension = path.extname(fileName).toLowerCase();
-  let mimeType = (parsed.mimeType || '').toLowerCase();
-  if (!mimeType || mimeType === 'application/octet-stream') {
-    mimeType =
-      mimeFromName(fileName, TEXT_EXTENSIONS) ||
-      (extension === '.pdf' ? 'application/pdf' : '') ||
-      OFFICE_MIME_BY_EXTENSION.get(extension) ||
-      EMAIL_MIME_BY_EXTENSION.get(extension) ||
-      '';
-  } else if (extension === '.msg' && mimeType !== MSG_MIME) {
-    // Outlook messages arrive under several types (`application/x-msg`, `application/msoutlook`,
-    // …); the extension is what identifies them.
-    mimeType = MSG_MIME;
-  }
   const bytes = Buffer.from(parsed.base64, 'base64');
   if (bytes.length === 0) {
     throw new InferenceApiError(
@@ -215,96 +203,33 @@ export async function documentFromInlineFile({ data, filename }, param) {
       }
     );
   }
+  const mimeType = (parsed.mimeType || '').toLowerCase();
 
-  // The admin switch decides between the structured extraction (shared with the browser) and
-  // the one of before: PDF text in one run, and no Word files.
-  const structured = structuredExtractionEnabled();
-
-  let text;
-  if (mimeType === 'application/pdf') {
-    try {
-      text = structured
-        ? await extractPdfDocument(bytes, {
-            maxPages: MAX_PDF_PAGES,
-            maxChars: MAX_FILE_TEXT_CHARS
-          })
-        : await legacyPdfText(bytes);
-    } catch (error) {
-      throw new InferenceApiError(
-        400,
-        'invalid_file',
-        `${fileName}: not a readable PDF (${error.message})`,
-        {
-          param
-        }
-      );
-    }
-    if (!text) {
-      throw new InferenceApiError(
-        400,
-        'file_has_no_text',
-        `${fileName}: the PDF has no extractable text (scanned documents are not supported through the API; send the pages as input_image)`,
-        { param }
-      );
-    }
-  } else if (OFFICE_DOCUMENTS.has(mimeType) && structured) {
-    const { label, extract } = OFFICE_DOCUMENTS.get(mimeType);
-    try {
-      text = (await extract(bytes)).trim();
-    } catch (error) {
-      if (!(error instanceof DocumentExtractionError)) throw error;
-      throw new InferenceApiError(400, 'invalid_file', `${fileName}: ${error.message}`, { param });
-    }
-    if (!text) {
-      throw new InferenceApiError(
-        400,
-        'file_has_no_text',
-        `${fileName}: the ${label} document has no text`,
-        { param }
-      );
-    }
-  } else if (EMAIL_DOCUMENTS.has(mimeType)) {
-    const { label, read } = EMAIL_DOCUMENTS.get(mimeType);
-    try {
-      text = (await read(bytes)).trim();
-    } catch (error) {
-      throw new InferenceApiError(
-        400,
-        'invalid_file',
-        `${fileName}: not a readable ${label} (${error.message})`,
-        { param }
-      );
-    }
-    if (!text) {
-      throw new InferenceApiError(
-        400,
-        'file_has_no_text',
-        `${fileName}: the ${label} has no text`,
-        {
-          param
-        }
-      );
-    }
-  } else if (mimeType && isTextMime(mimeType)) {
-    text = bytes.toString('utf8');
-  } else {
-    throw new InferenceApiError(
-      400,
-      'unsupported_file_type',
-      `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send ${
-        structured
-          ? 'PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp), e-mail (.eml, .msg)'
-          : 'PDF, e-mail (.eml, .msg)'
-      } or text files, or images as input_image.`,
-      { param }
-    );
-  }
-  return {
-    fileName,
-    fileType: mimeType,
-    content: text.length > MAX_FILE_TEXT_CHARS ? text.slice(0, MAX_FILE_TEXT_CHARS) : text,
-    bytes: bytes.length
-  };
+  const legacy = structuredExtractionEnabled()
+    ? null
+    : await readWithoutStructuredExtraction({ bytes, mimeType, fileName }, param);
+  const extracted =
+    legacy ||
+    // Speaker notes stay out, as they always did on this API: a presenter's notes are not
+    // what was sent to the model unless the caller put them on a slide.
+    (await extractInlineFile({ name: fileName, mimeType, bytes }, param, {
+      speakerNotes: 'ignore'
+    }));
+  const text = extracted.text;
+  const truncated = extracted.truncated === true || text.length > MAX_FILE_TEXT_CHARS;
+  return rememberOriginal(
+    {
+      fileName,
+      fileType: extracted.mimeType,
+      content: text.length > MAX_FILE_TEXT_CHARS ? text.slice(0, MAX_FILE_TEXT_CHARS) : text,
+      bytes: bytes.length,
+      origin: 'api',
+      ...(Number.isFinite(extracted.pages) ? { pages: extracted.pages } : {}),
+      ...(extracted.pageImages ? { pageImages: extracted.pageImages } : {}),
+      ...(truncated ? { truncated: true } : {})
+    },
+    bytes
+  );
 }
 
 /**
@@ -341,13 +266,46 @@ export function imageFromInline(url, param, filename) {
   return { base64: parsed.base64, fileType, ...(filename ? { fileName: String(filename) } : {}) };
 }
 
-function refuseHostedReference(kind, param) {
+function refuseHostedReference(kind, param, hint) {
   throw new InferenceApiError(
     400,
     'unsupported_file_reference',
-    `${kind} is not supported: iHub has no files API. Send the file inline (file_data / a data: URL).`,
+    `${kind} is not supported${hint ? `: ${hint}` : ''}`,
     { param }
   );
+}
+
+const FILE_HINT =
+  'upload the file with POST /api/inference/v1/files and reference its id, or send it inline (file_data / a data: URL)';
+
+/**
+ * The document of a file content part: an inline file, or a `file_id` resolved
+ * through the request's file context. Without a context (a caller that has no
+ * caller to resolve for) a reference is refused, as it was before there was a
+ * files API.
+ *
+ * @param {Object} part
+ * @param {string} [part.fileId]
+ * @param {string} [part.fileUrl]
+ * @param {string} [part.data]
+ * @param {string} [part.filename]
+ * @param {string} kind - Part type, for errors (`input_file`, `file`).
+ * @param {string} partParam
+ * @param {{files?: {resolve: Function}}} ctx
+ */
+async function fileFromPart({ fileId, fileUrl, data, filename }, kind, partParam, ctx) {
+  if (fileUrl) {
+    refuseHostedReference(
+      `${kind}.file_url`,
+      partParam,
+      `fetching a URL is not supported; ${FILE_HINT}`
+    );
+  }
+  if (fileId) {
+    if (!ctx?.files) refuseHostedReference(`${kind}.file_id`, partParam, FILE_HINT);
+    return ctx.files.resolve(fileId, partParam);
+  }
+  return documentFromInlineFile({ data, filename }, partParam);
 }
 
 /** An empty message under construction. */
@@ -367,20 +325,57 @@ function finish(message) {
  * The upload descriptors of a message, for the stored transcript.
  *
  * @param {Object} message - Chat message.
- * @returns {Array<{type: string, name?: string, bytes?: number}>}
+ * @param {Array<Object>|null} [fileDescriptors] - The descriptors of the message's files as
+ *   stored (`persistTurnFiles`, with their ids); without them the files are described as sent.
+ * @returns {Array<{id?: string, type: string, name?: string, bytes?: number}>}
  */
-export function attachmentsOf(message) {
+export function attachmentsOf(message, fileDescriptors = null) {
   return [
-    ...(message.fileData || []).map(file => ({
-      type: file.fileType,
-      name: file.fileName,
-      ...(Number.isFinite(file.bytes) ? { bytes: file.bytes } : {})
-    })),
+    ...(fileDescriptors ||
+      (message.fileData || []).map(file => ({
+        type: file.fileType,
+        name: file.fileName,
+        ...(Number.isFinite(file.bytes) ? { bytes: file.bytes } : {})
+      }))),
     ...(message.imageData || []).map(image => ({
       type: image.fileType,
       ...(image.fileName ? { name: image.fileName } : {})
     }))
   ];
+}
+
+/**
+ * A message as a plain model receives it: documents rendered as `<content>` blocks
+ * in the text, the pages of scanned documents attached as images.
+ *
+ * @param {{role: string, content: string, fileData?: Array, imageData?: Array}} message
+ * @returns {{role: string, content: string, imageData?: Array}}
+ */
+export function toModelMessage(message) {
+  if (message.role !== 'user') return { role: message.role, content: message.content };
+  const images = [...(message.imageData || []), ...pageImagesOf(message.fileData)];
+  return {
+    role: 'user',
+    content: renderUserMessage({ content: message.content, files: message.fileData }),
+    ...(images.length > 0 ? { imageData: images } : {})
+  };
+}
+
+/**
+ * The stored `renderedContent` of a turn whose files are stored with it: the
+ * rendered message without the file blocks (they come back from the file
+ * repository when the turn is replayed, see `hydratedHistoryForModel`).
+ *
+ * @param {string} rendered - The message as the model saw it, file blocks included.
+ * @param {{content: string, fileData?: Array}} message
+ * @returns {string|undefined} Undefined when the blocks cannot be told apart — the stored
+ *   `content` is replayed then.
+ */
+export function renderedWithoutFiles(rendered, message) {
+  const withFiles = renderUserMessage({ content: message.content, files: message.fileData });
+  if (withFiles === message.content) return rendered;
+  if (typeof rendered !== 'string' || !rendered.includes(withFiles)) return undefined;
+  return rendered.replace(withFiles, () => message.content);
 }
 
 const RESPONSES_ROLES = new Set(['user', 'assistant', 'system', 'developer']);
@@ -389,10 +384,12 @@ const RESPONSES_ROLES = new Set(['user', 'assistant', 'system', 'developer']);
  * Responses `input` → chat messages, oldest first.
  *
  * @param {unknown} input
+ * @param {{files?: {resolve: Function}}} [ctx] - Resolves `file_id` references
+ *   (`createFileContext`); without it they are refused.
  * @returns {Promise<Array<{role: string, content: string, fileData?: Array, imageData?: Array}>>}
  * @throws {InferenceApiError}
  */
-export async function messagesFromResponsesInput(input) {
+export async function messagesFromResponsesInput(input, ctx = {}) {
   if (typeof input === 'string') return [{ role: 'user', content: input }];
   if (!Array.isArray(input)) {
     throw new InferenceApiError(
@@ -456,13 +453,27 @@ export async function messagesFromResponsesInput(input) {
       } else if (type === 'refusal') {
         if (typeof part.refusal === 'string') message.text.push(part.refusal);
       } else if (type === 'input_image') {
-        if (part.file_id) refuseHostedReference('input_image.file_id', partParam);
+        if (part.file_id) {
+          refuseHostedReference(
+            'input_image.file_id',
+            partParam,
+            'images are not stored files; send the image inline as a data: URL'
+          );
+        }
         message.images.push(imageFromInline(part.image_url, partParam));
       } else if (type === 'input_file') {
-        if (part.file_id) refuseHostedReference('input_file.file_id', partParam);
-        if (part.file_url) refuseHostedReference('input_file.file_url', partParam);
         message.files.push(
-          await documentFromInlineFile({ data: part.file_data, filename: part.filename }, partParam)
+          await fileFromPart(
+            {
+              fileId: part.file_id,
+              fileUrl: part.file_url,
+              data: part.file_data,
+              filename: part.filename
+            },
+            'input_file',
+            partParam,
+            ctx
+          )
         );
       } else {
         throw new InferenceApiError(
@@ -491,85 +502,131 @@ export async function messagesFromResponsesInput(input) {
 const CHAT_ROLES = new Set(['user', 'assistant', 'system', 'developer']);
 
 /**
+ * One Chat Completions message → a chat message.
+ *
+ * @param {Object} entry
+ * @param {number} index
+ * @param {{files?: {resolve: Function}}} ctx
+ */
+async function chatMessageFromCompletions(entry, index, ctx) {
+  const param = `messages[${index}]`;
+  if (!entry || typeof entry !== 'object' || !CHAT_ROLES.has(entry.role)) {
+    throw new InferenceApiError(
+      400,
+      'invalid_messages',
+      `${param}.role must be one of user, assistant, system, developer (tool messages need a model that runs your own tools; apps run theirs)`,
+      { param: `${param}.role` }
+    );
+  }
+  if (Array.isArray(entry.tool_calls) && entry.tool_calls.length > 0) {
+    throw new InferenceApiError(
+      400,
+      'invalid_messages',
+      `${param}: tool calls cannot be replayed to an app; apps run their own tools`,
+      { param }
+    );
+  }
+  const message = newMessage(entry.role === 'developer' ? 'system' : entry.role);
+  const parts =
+    typeof entry.content === 'string'
+      ? [{ type: 'text', text: entry.content }]
+      : entry.content === null || entry.content === undefined
+        ? []
+        : entry.content;
+  if (!Array.isArray(parts)) {
+    throw new InferenceApiError(
+      400,
+      'invalid_messages',
+      `${param}.content must be a string or an array`,
+      {
+        param: `${param}.content`
+      }
+    );
+  }
+  for (let p = 0; p < parts.length; p += 1) {
+    const part = parts[p];
+    const partParam = `${param}.content[${p}]`;
+    const type = part?.type;
+    if (type === 'text') {
+      if (typeof part.text === 'string') message.text.push(part.text);
+    } else if (type === 'image_url') {
+      message.images.push(imageFromInline(part.image_url?.url, partParam));
+    } else if (type === 'file') {
+      const file = part.file || {};
+      message.files.push(
+        await fileFromPart(
+          { fileId: file.file_id, data: file.file_data, filename: file.filename },
+          'file',
+          partParam,
+          ctx
+        )
+      );
+    } else {
+      throw new InferenceApiError(
+        400,
+        'unsupported_content_part',
+        `${partParam}: content parts of type ${String(type)} are not supported`,
+        { param: partParam }
+      );
+    }
+  }
+  if (message.role !== 'user' && (message.files.length > 0 || message.images.length > 0)) {
+    throw new InferenceApiError(
+      400,
+      'invalid_messages',
+      `${param}: only user messages carry files`,
+      {
+        param
+      }
+    );
+  }
+  return finish(message);
+}
+
+/**
  * Chat Completions `messages` → chat messages, for the app path (the model
- * path forwards messages as they came).
+ * path forwards messages as they came, see {@link withReadFiles}).
  *
  * @param {Array} messages
+ * @param {{files?: {resolve: Function}}} [ctx] - Resolves `file_id` references
+ *   (`createFileContext`); without it they are refused.
  * @returns {Promise<Array>}
  * @throws {InferenceApiError}
  */
-export async function messagesFromChatCompletions(messages) {
+export async function messagesFromChatCompletions(messages, ctx = {}) {
   const out = [];
   for (let index = 0; index < messages.length; index += 1) {
-    const entry = messages[index];
-    const param = `messages[${index}]`;
-    if (!entry || typeof entry !== 'object' || !CHAT_ROLES.has(entry.role)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_messages',
-        `${param}.role must be one of user, assistant, system, developer (tool messages need a model that runs your own tools; apps run theirs)`,
-        { param: `${param}.role` }
-      );
-    }
-    if (Array.isArray(entry.tool_calls) && entry.tool_calls.length > 0) {
-      throw new InferenceApiError(
-        400,
-        'invalid_messages',
-        `${param}: tool calls cannot be replayed to an app; apps run their own tools`,
-        { param }
-      );
-    }
-    const message = newMessage(entry.role === 'developer' ? 'system' : entry.role);
-    const parts =
-      typeof entry.content === 'string'
-        ? [{ type: 'text', text: entry.content }]
-        : entry.content === null || entry.content === undefined
-          ? []
-          : entry.content;
-    if (!Array.isArray(parts)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_messages',
-        `${param}.content must be a string or an array`,
-        {
-          param: `${param}.content`
-        }
-      );
-    }
-    for (let p = 0; p < parts.length; p += 1) {
-      const part = parts[p];
-      const partParam = `${param}.content[${p}]`;
-      const type = part?.type;
-      if (type === 'text') {
-        if (typeof part.text === 'string') message.text.push(part.text);
-      } else if (type === 'image_url') {
-        message.images.push(imageFromInline(part.image_url?.url, partParam));
-      } else if (type === 'file') {
-        const file = part.file || {};
-        if (file.file_id) refuseHostedReference('file.file_id', partParam);
-        message.files.push(
-          await documentFromInlineFile({ data: file.file_data, filename: file.filename }, partParam)
-        );
-      } else {
-        throw new InferenceApiError(
-          400,
-          'unsupported_content_part',
-          `${partParam}: content parts of type ${String(type)} are not supported`,
-          { param: partParam }
-        );
-      }
-    }
-    if (message.role !== 'user' && (message.files.length > 0 || message.images.length > 0)) {
-      throw new InferenceApiError(
-        400,
-        'invalid_messages',
-        `${param}: only user messages carry files`,
-        {
-          param
-        }
-      );
-    }
-    out.push(finish(message));
+    out.push(await chatMessageFromCompletions(messages[index], index, ctx));
+  }
+  return out;
+}
+
+/** Whether a Chat Completions message carries a `file` content part. */
+function hasFilePart(entry) {
+  return Array.isArray(entry?.content) && entry.content.some(part => part?.type === 'file');
+}
+
+/**
+ * Chat Completions `messages` for a plain model: a message with `file` content parts is
+ * read (the files extracted, or fetched by `file_id`) and rendered as the model receives a
+ * document — `<content>` blocks in the text, the pages of a scanned PDF as images. Every
+ * other message, tool calls and tool results included, goes through untouched, and so does
+ * the whole list when no message carries a file.
+ *
+ * @param {Array} messages
+ * @param {{files?: {resolve: Function}}} [ctx]
+ * @returns {Promise<Array>} The same array when there was nothing to read.
+ * @throws {InferenceApiError}
+ */
+export async function withReadFiles(messages, ctx = {}) {
+  if (!messages.some(hasFilePart)) return messages;
+  const out = [];
+  for (let index = 0; index < messages.length; index += 1) {
+    out.push(
+      hasFilePart(messages[index])
+        ? toModelMessage(await chatMessageFromCompletions(messages[index], index, ctx))
+        : messages[index]
+    );
   }
   return out;
 }

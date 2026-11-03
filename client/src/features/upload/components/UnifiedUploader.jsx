@@ -25,6 +25,7 @@ import {
 } from '../utils/fileProcessing';
 import { extractionOptionsOf } from '../utils/extractionOptions';
 import { isAbortError } from '../../../utils/abortable';
+import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -383,6 +384,8 @@ const UnifiedUploader = ({
       data: {
         type: 'document',
         source: 'local',
+        // The file itself, for the pre-upload to the chat's file store
+        [ORIGINAL_FILE]: file,
         content: processedContent,
         pageImages,
         fileName: file.name,

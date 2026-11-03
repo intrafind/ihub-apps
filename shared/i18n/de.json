@@ -20,7 +20,16 @@
     "hideList": "Dateiliste ausblenden",
     "regionLabel": "Angehängte Dateien",
     "saveAudio": "Audio speichern",
-    "saveAudioNamed": "Audio als {{name}} speichern"
+    "saveAudioNamed": "Audio als {{name}} speichern",
+    "errors": {
+      "chatQuota": "In diesem Chat ist kein Platz mehr für gespeicherte Dateien; die Datei wird nur mit der Nachricht gesendet",
+      "storageQuota": "Ihr Dateispeicher ist voll; die Datei wird nur mit der Nachricht gesendet",
+      "fileTooLarge": "Zu groß zum Speichern; die Datei wird nur mit der Nachricht gesendet",
+      "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet"
+    },
+    "stored": "Im Chat gespeichert",
+    "templateReady": "als Vorlage verwendbar",
+    "uploading": "{{name}} wird hochgeladen"
   },
   "app": {
     "title": "iHub Apps",
@@ -912,7 +921,7 @@
       "title": "Chatverlauf",
       "sharing": {
         "title": "Chats teilen",
-        "description": "Schreibgeschützte Links auf gespeicherte Chats. Erfordert zusätzlich das Feature „Chats teilen“. Ein Link ist eine Kopie des Chats im Stand zum Zeitpunkt des Teilens; hochgeladene Dateien sind nie enthalten.",
+        "description": "Schreibgeschützte Links auf gespeicherte Chats. Erfordert zusätzlich das Feature „Chats teilen“. Ein Link ist eine Kopie des Chats im Stand zum Zeitpunkt des Teilens; ob die hochgeladenen Dateien mitgeteilt werden, entscheidet der Eigentümer (standardmäßig nicht).",
         "enabled": "Teilen von Chats erlauben",
         "enabledHelp": "Beim Ausschalten werden keine neuen Links mehr erstellt und bestehende sind geschlossen, bis es wieder eingeschaltet wird.",
         "allowUsers": "Links für bestimmte Nutzer",
@@ -961,6 +970,33 @@
           "expired": "Abgelaufen",
           "exhausted": "Aufruflimit erreicht"
         }
+      },
+      "uploads": {
+        "title": "Hochgeladene Dateien",
+        "description": "Dateien, die Benutzer an Chats und geplante Aufgaben anhängen. Der Text, den der Assistent liest, bleibt beim Chat gespeichert, damit Folgefragen, Neuladen und andere Geräte weiter funktionieren.",
+        "enabled": "Hochgeladene Dateien auf dem Server speichern",
+        "enabledHelp": "Ausgeschaltet werden keine Dateien mehr im Dateispeicher abgelegt; Anhänge werden dann nur mit der Nachricht gesendet.",
+        "storageMode": "Was der Server speichert",
+        "mode": {
+          "originalAndText": "Die Datei und ihren Text (Originale können heruntergeladen, geteilt und als Vorlage verwendet werden)",
+          "serverTextOnly": "Nur den Text (der Server extrahiert ihn und verwirft die Datei)",
+          "clientTextOnly": "Nur den Text, im Browser extrahiert (Dateien verlassen das Gerät nie)"
+        },
+        "storageModeHelp": "Eine App kann dies in ihren Einstellungen überschreiben. Word-, PowerPoint-, Excel- und PDF-Dateien lassen sich nur als Vorlage verwenden oder ausfüllen, solange das Original gespeichert ist.",
+        "originalRetentionDays": "Originaldateien aufbewahren (Tage)",
+        "originalRetentionDaysHelp": "Nach so vielen Tagen bleibt von einer Chat-Datei nur der Text, bis der Chat selbst gelöscht wird. An geplante Aufgaben angehängte Dateien bleiben, solange die Aufgabe existiert. 0 behält Originale, solange der Chat existiert.",
+        "evict": "Platz schaffen durch Entfernen der ältesten Originale",
+        "evictHelp": "Erreicht ein Benutzer oder der Server sein Limit, werden zuerst die ältesten Chat-Originale entfernt (ihr Text bleibt), bevor ein Upload abgelehnt wird.",
+        "maxFileBytes": "Größte Datei",
+        "maxFileBytesHelp": "Ein größerer Upload wird abgelehnt. 0 hebt die Grenze auf.",
+        "maxChatBytes": "Pro Chat oder Aufgabe",
+        "maxChatBytesHelp": "Alle Dateien eines Chats oder einer geplanten Aufgabe zusammen. 0 hebt die Grenze auf.",
+        "maxChatFiles": "Dateien pro Chat oder Aufgabe",
+        "maxChatFilesHelp": "Die meisten Dateien, die ein Chat oder eine Aufgabe enthalten darf. 0 hebt die Grenze auf.",
+        "maxUserBytes": "Pro Benutzer",
+        "maxUserBytesHelp": "Alles, was ein Benutzer in Chats und Aufgaben hat. 0 hebt die Grenze auf.",
+        "maxServerBytes": "Gesamter Server",
+        "maxServerBytesHelp": "Alle hochgeladenen Dateien aller Benutzer zusammen. 0 hebt die Grenze auf."
       }
     },
     "voiceInput": {
@@ -7062,7 +7098,7 @@
   },
   "chatSharing": {
     "title": "Chat teilen",
-    "description": "Empfänger erhalten eine schreibgeschützte Kopie dieser Unterhaltung im jetzigen Stand. Spätere Nachrichten, Bearbeitungen und hochgeladene Dateien sind nicht enthalten.",
+    "description": "Empfänger erhalten eine schreibgeschützte Kopie dieser Unterhaltung im jetzigen Stand. Spätere Nachrichten und Bearbeitungen sind nicht enthalten. Hochgeladene Dateien werden nur geteilt, wenn Sie das unten festlegen.",
     "noModes": "Chats können hier nicht geteilt werden.",
     "modeLabel": "Wer den Link öffnen kann",
     "modes": {
@@ -7156,7 +7192,21 @@
       "expires": "Dieser Link läuft am {{date}} ab.",
       "attachmentsLabel": "Anhänge",
       "attachmentNotIncluded": "Anhang nicht enthalten: {{name}}",
-      "attachmentUnnamed": "Datei"
+      "attachmentUnnamed": "Datei",
+      "sharedFiles": "Der Eigentümer hat die in diesen Chat hochgeladenen Dateien geteilt."
+    },
+    "files": {
+      "label": "Dateien, die Sie in diesen Chat hochgeladen haben",
+      "hint": "Empfänger sehen immer die Namen der angehängten Dateien. Ob sie diese öffnen können, entscheiden Sie.",
+      "none": "Dateien nicht teilen",
+      "noneHint": "Nur die Dateinamen erscheinen im Verlauf.",
+      "text": "Text der Dateien teilen",
+      "textHint": "Betrachter können den aus den Dateien extrahierten Text lesen, aber nicht herunterladen.",
+      "original": "Originaldateien teilen",
+      "originalHint": "Betrachter können die Dateien auch so herunterladen, wie Sie sie hochgeladen haben.",
+      "originalUnavailable": "Keine der Dateien ist im Original gespeichert.",
+      "pick": "Zu teilende Dateien",
+      "textOnly": "(nur Text)"
     }
   },
   "sources": {
@@ -7813,6 +7863,32 @@
       "platformMax": "Standard: {{count}} (vom Administrator festgelegt; ein höherer Wert hat keine Wirkung)",
       "platformDays": "Standard: {{count}} (vom Administrator festgelegt; ein höherer Wert hat keine Wirkung)",
       "help": "Ältere Läufe und ihre Chats werden automatisch gelöscht. Ein leeres Feld verwendet den Standard. Laufende Läufe werden nie gelöscht."
+    },
+    "files": {
+      "someFailed": "Die Aufgabe wurde gespeichert, aber einige Dateien konnten nicht angehängt werden:",
+      "errors": {
+        "fileTooLarge": "Die Datei ist zu groß.",
+        "taskQuota": "Diese Aufgabe hat ihr Limit für angehängte Dateien erreicht. Entfernen Sie zuerst eine Datei.",
+        "storageFull": "Der Dateispeicher ist voll.",
+        "unsupported": "Dieser Dateityp wird nicht unterstützt.",
+        "noText": "Die Datei enthält keinen lesbaren Text.",
+        "rejected": "Die Datei wurde von der Sicherheitsprüfung abgelehnt.",
+        "disabled": "Datei-Uploads sind ausgeschaltet.",
+        "textOnly": "Diese Installation speichert nur Text: Dateien werden zuerst im Browser gelesen.",
+        "failed": "Die Datei konnte nicht angehängt werden."
+      },
+      "deleteFailed": "Die Datei konnte nicht entfernt werden.",
+      "original": "Original gespeichert",
+      "textOnly": "Nur Text",
+      "template": "als Vorlage verwendbar",
+      "title": "Angehängte Dateien",
+      "help": "Referenzdokumente oder Vorlagen, die jeder Lauf lesen kann, zum Beispiel ein Styleguide, eine Berichtsvorlage oder eine Preisliste. Sie bleiben, bis Sie sie entfernen oder die Aufgabe löschen.",
+      "add": "Dateien anhängen",
+      "textOnlyMode": "Diese Installation speichert nur extrahierten Text, daher können hier keine Dateien an Aufgaben angehängt werden.",
+      "loadFailed": "Die angehängten Dateien konnten nicht geladen werden.",
+      "uploading": "{{name}} wird hochgeladen…",
+      "remove": "{{name}} entfernen",
+      "stagedHint": "Die Dateien werden angehängt, wenn Sie die Aufgabe speichern."
     }
   },
   "memoryEditor": {
@@ -8423,5 +8499,36 @@
     "previewTab": "Vorschau",
     "codeTab": "Code",
     "csvRowsShown": "{{shown}} von {{total}} Zeilen werden angezeigt."
+  },
+  "chatFiles": {
+    "attached": "{{name}} wurde an Ihre E-Mail angehängt.",
+    "attachTooLarge": "Die Datei ist zu groß, um an eine E-Mail angehängt zu werden.",
+    "attachFailed": "Die Datei konnte nicht an Ihre E-Mail angehängt werden.",
+    "title": "Dateien",
+    "tabsLabel": "Arten von Dateien in diesem Chat",
+    "tabUploaded": "Hochgeladen",
+    "tabGenerated": "Erstellt",
+    "attachToEmail": "An E-Mail anhängen",
+    "openInDrawer": "{{name}} im Dateien-Bereich öffnen",
+    "emptyBody": "(kein Text)",
+    "textPreviewNote": "Angezeigt wird der Text, den der Assistent aus dieser Datei liest.",
+    "originalDiscarded": "Die Originaldatei ist nicht mehr gespeichert; nur ihr Text wird aufbewahrt. Sie können stattdessen den Text herunterladen.",
+    "deleteFailed": "Die Datei konnte nicht gelöscht werden. Bitte versuchen Sie es erneut.",
+    "loading": "Hochgeladene Dateien werden geladen…",
+    "loadFailed": "Die hochgeladenen Dateien konnten nicht geladen werden.",
+    "notShared": "Der Eigentümer hat die an diesen Chat angehängten Dateien nicht geteilt.",
+    "empty": "In diesen Chat wurden noch keine Dateien hochgeladen. Dokumente, E-Mails und Seiten, die Sie anhängen, erscheinen hier.",
+    "listLabel": "In diesen Chat hochgeladene Dateien",
+    "pages": "{{count}} Seiten",
+    "stateOriginal": "Original gespeichert",
+    "stateExpired": "Original entfernt",
+    "stateTextOnly": "Nur Text",
+    "question": "Frage {{number}}",
+    "downloadOriginal": "Original herunterladen",
+    "downloadText": "Text herunterladen",
+    "deleteConfirm": "{{name}} löschen?",
+    "delete": "Datei löschen",
+    "templateHint": "Der Assistent kann diese Datei als Vorlage verwenden.",
+    "truncated": "Sehr lang: Der Assistent liest den Anfang."
   }
 }

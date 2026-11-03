@@ -772,6 +772,42 @@ the action ("Search people") and the integration, MCP server or remote agent it 
 - A search in a connected system — a Jira ticket search, an MCP server's search — is listed as a
   call to that system, with its query among the arguments, no longer as a web search with a globe.
 
+## Chat and Scheduled-Task Files: Durable, Reusable and Connected
+
+Files attached to a chat now stay with it. The assistant keeps reading them on follow-up questions,
+after a page reload and on another device, and **Regenerate** and **Edit** no longer lose them.
+Scheduled tasks can carry reference documents and templates of their own.
+
+- **Files drawer:** the chat's side panel has **Uploaded** and **Generated** tabs. Uploaded files
+  show a type badge, size, pages and whether the original is still stored; they open as a preview
+  (PDF, picture, CSV, notebook, text, e-mail, meeting or web page). **Download original**,
+  **Download text** and **Delete file** are there, and in the Outlook task pane while writing a mail
+  **Attach to email**. Clicking an attachment chip in the conversation opens the file.
+- **What the server keeps** (**Admin → Chat history → Uploaded files**, per app `uploads.storageMode`):
+  the file and its text, only the text (the file is dropped after extraction), or only text
+  extracted in the browser. Originals older than the retention period (14 days by default) are
+  removed, their text stays with the chat. Limits per file, chat or task, user and server; when a
+  user or the server is full the oldest chat originals go first.
+- **Templates and forms:** an uploaded Word, PowerPoint, Excel or PDF file can be used by the
+  document skills. `create_docx` and `create_pptx` take the file's styles, master and layouts
+  (`templateFileId`, `templateMode`), `create_pdf` fills its form fields in place or prints on it as
+  letterhead, `create_xlsx` adds and replaces sheets in the uploaded workbook (`sourceFileId`).
+  An app with a fixed corporate document template keeps it unless it sets `allowUserTemplateUploads`.
+- **Scheduled tasks:** attach files in the task editor. Every run reads them, they are kept until
+  the file or task is deleted, and a copied task copies them. Files from Nextcloud, OneDrive and
+  SharePoint, Google Drive or iFinder can be fetched by the server and refreshed at the start of
+  every run (`refreshOnRun`); if a refresh fails the run uses the last version and says so.
+- **Sharing:** a shared chat includes the names of attached files but not the files. The owner can
+  share their text or the originals, file by file; viewers see only what was ticked.
+- **Outlook and integrations:** e-mails, meetings and web pages sent to the assistant are stored as
+  files in the chat (once per chat), and Outlook attachments keep their original so they can be used
+  as templates. The Inference API gets `/v1/files` and `file_id` references (`.xlsx` and scanned PDFs
+  included), and files in MCP and A2A calls are stored in the chat and shown in the drawer.
+- **MCP and A2A:** `app__*` and `workflow__*` tools accept `files` and return generated files as
+  MCP `resource` and `image` blocks; A2A accepts and returns `FilePart`s and its tools take `fileIds`.
+  A2A skill tools gained the `fileIds` input, so an A2A skill whose approval is set to "ask when new
+  or changed" asks once more before it runs after the upgrade.
+
 ## Excel Workbooks and Interactive Web Artifacts from Chat, with Richer Previews
 
 Two new system skills let a chat produce more than documents. Admins enable them per app like the

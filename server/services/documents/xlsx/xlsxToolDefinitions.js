@@ -40,6 +40,11 @@ export const CREATE_XLSX_TOOL = {
         description:
           'JSON array of worksheets (1–20). Each sheet: {"name":"Summary","columns":[{"header":"Region","align":"left"},{"header":"Q1 (€)","format":"currency"},{"header":"Q2 (€)","format":"currency"},{"header":"Growth","format":"percent"}],"rows":[["EMEA",120000,138000,"=(C2-B2)/B2"],["APAC",85000,102000,"=(C3-B3)/B3"],{"cells":["Total","=SUM(B2:B3)","=SUM(C2:C3)","=(C4-B4)/B4"],"total":true}],"freezeHeader":true,"autoFilter":true}. Row 1 is always the column header row; rows[0] is Row 2. Use English formula names (=SUM, =AVERAGE, =IF, =INDEX, =MATCH, =XLOOKUP).'
       },
+      sourceFileId: {
+        type: 'string',
+        description:
+          'Optional id of an .xlsx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). Its sheets, styles and defined names are kept; each sheet in "sheets" replaces the sheet of the same name or is appended as a new one. Give the new or changed sheets only.'
+      },
       primaryColor: {
         type: 'string',
         description: 'Hex primary brand colour when no company template is used, e.g. "#1e3a8a".'

@@ -1147,8 +1147,15 @@ describe('conversations', () => {
     );
     const [earlier] = (await getChatRepository().getMessages(conv.id)).messages;
     assert.equal(earlier.content, 'Here is the contract.');
-    assert.match(earlier.renderedContent, /liability capped/);
+    // The document is stored with the conversation (chat-file repository), not baked into the
+    // transcript: the message names it by id, and replay puts it back.
+    assert.equal(earlier.renderedContent, undefined);
     assert.equal(earlier.attachments[0].name, 'c.txt');
+    const stored = await getChatRepository()
+      .fileStore()
+      .getText({ type: 'chat', id: conv.id }, earlier.attachments[0].id);
+    assert.equal(stored.text, 'Clause 7: liability capped');
+    assert.equal(stored.origin, 'api');
   });
 
   it('refuses a turn whose conversation changed while it was prepared', async () => {

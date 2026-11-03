@@ -64,6 +64,21 @@ export const CREATE_PDF_TOOL = {
         description:
           'Optional JSON array of layout blocks, rendered after top-level markdown. Each block has one content key: markdown, text, stack, columns, table, ul, ol, image, svg, canvas, qr, toc, pageBreak, callout or box. Example: [{"callout": {"tone": "warning", "title": "Action required", "markdown": "Renew by **31 March**."}}, {"qr": "https://example.com", "fit": 90}]. The full grammar is in the pdf skill reference "references/layout-blocks.md".'
       },
+      templateFileId: {
+        type: 'string',
+        description:
+          'Optional id of a PDF the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). With "fillFormFields" its interactive form fields are filled in place (markdown and blocks are not needed then; "title" can be the form name). Without "fillFormFields" the new document is printed on that PDF as letterhead.'
+      },
+      fillFormFields: {
+        type: 'string',
+        description:
+          'JSON object of form field name → value for the PDF named by templateFileId, e.g. {"FullName":"Jane Doe","Newsletter":true,"Country":"Germany"}. Text fields take text, check boxes true/false, radio groups and drop-downs one of their option names. Unknown names are reported back with the names the form has.'
+      },
+      flattenForm: {
+        type: 'boolean',
+        description:
+          'With fillFormFields: turn the filled form into fixed page content so it can no longer be edited (default false).'
+      },
       theme: {
         type: 'string',
         enum: ['default', 'professional', 'minimal'],

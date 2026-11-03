@@ -506,6 +506,34 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Uploaded files of chats and scheduled tasks (`services/chatFiles`).
+    // `storageMode` decides what the server keeps: `original_and_text` (the
+    // file and its text), `server_text_only` (the text; the file is dropped
+    // after extraction) or `client_text_only` (the browser extracts, only text
+    // is uploaded). Originals older than `originalRetentionDays` are removed
+    // (the text stays with the chat); zero or less keeps them as long as the
+    // chat. Quotas of zero or less mean "no cap".
+    uploads: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        storageMode: z
+          .enum(['original_and_text', 'server_text_only', 'client_text_only'])
+          .prefault('original_and_text'),
+        originalRetentionDays: z.number().prefault(14),
+        evictOldestOriginalsOnQuota: z.boolean().prefault(true),
+        quotas: z
+          .object({
+            maxFileBytes: z.number().prefault(25 * 1024 * 1024),
+            maxChatBytes: z.number().prefault(100 * 1024 * 1024),
+            maxChatFiles: z.number().prefault(25),
+            maxUserBytes: z.number().prefault(1024 * 1024 * 1024),
+            maxServerBytes: z.number().prefault(50 * 1024 * 1024 * 1024)
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // User prompts: prompts signed-in users keep in the prompt library and
     // share with users, groups or everyone. Stored through the storage
     // abstraction; `maxPromptsPerUser` of zero or less means no limit. When

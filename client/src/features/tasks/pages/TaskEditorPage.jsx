@@ -11,11 +11,14 @@ import {
   fetchModels,
   fetchScheduledTask,
   fetchScheduledTaskAppTools,
-  updateScheduledTask
+  updateScheduledTask,
+  uploadScheduledTaskFile
 } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import ScheduleBuilder from '../components/ScheduleBuilder';
 import TaskScopesSection from '../components/TaskScopesSection';
+import TaskFilesSection, { taskFileErrorText } from '../components/TaskFilesSection';
+import { uploadErrorCode } from '../../chat/utils/chatFileUpload';
 import useIntegrationScopes from '../../chat/hooks/useIntegrationScopes';
 import { useScheduledTaskLimits } from '../hooks/useScheduledTasksConfig';
 import { errorMessage, fieldErrors, formToSchedule, scheduleToForm } from '../utils/taskFormat';
@@ -90,8 +93,17 @@ export default function TaskEditorPage() {
     scheduleToForm(incoming.draft?.schedule || emptyDraft().schedule, browserTimezone())
   );
   const [loading, setLoading] = useState(editing);
+  // Files chosen while the task is created; they are attached once it exists.
+  const [stagedFiles, setStagedFiles] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(() =>
+    incoming.fileErrors?.length
+      ? `${t(
+          'scheduledTasks.files.someFailed',
+          'The task was saved, but some files could not be attached:'
+        )} ${incoming.fileErrors.join('; ')}`
+      : null
+  );
   const [errors, setErrors] = useState({});
   const [tools, setTools] = useState([]);
   const [models, setModels] = useState([]);
@@ -243,6 +255,23 @@ export default function TaskEditorPage() {
             ...(incoming.proposalId ? { proposalId: incoming.proposalId } : {}),
             ...(incoming.sourceChatId ? { sourceChatId: incoming.sourceChatId } : {})
           });
+      // The files chosen for a new task go up now that it has an id. A file the
+      // server refuses leaves the task saved: the editor opens on it so the
+      // file can be attached again (or dropped).
+      const failed = [];
+      if (!editing) {
+        for (const file of stagedFiles) {
+          try {
+            await uploadScheduledTaskFile(saved.id, file);
+          } catch (uploadError) {
+            failed.push(`${file.name}: ${taskFileErrorText(uploadErrorCode(uploadError), t)}`);
+          }
+        }
+      }
+      if (failed.length > 0) {
+        navigate(`/tasks/${saved.id}/edit`, { replace: true, state: { fileErrors: failed } });
+        return;
+      }
       navigate(`/tasks/${saved.id}`, { replace: true });
     } catch (err) {
       setErrors(fieldErrors(err));
@@ -560,6 +589,13 @@ export default function TaskEditorPage() {
           className={section}
           labelClassName={label}
           inputClassName={input}
+        />
+
+        <TaskFilesSection
+          taskId={editing ? taskId : null}
+          staged={stagedFiles}
+          onStagedChange={setStagedFiles}
+          className={section}
         />
 
         <section className={section}>

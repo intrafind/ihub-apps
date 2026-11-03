@@ -152,6 +152,58 @@ export async function fetchCurrentOutlookItemContext() {
   return { ...ctx, itemKind: 'message' };
 }
 
+// Reading the whole message is a download (the attachments are in it), and a
+// chat resends the open email with every turn — so the last one is kept.
+let lastEml = null;
+
+function getItemAsFileAsync(item) {
+  return new Promise(resolve => {
+    if (!item || typeof item.getAsFileAsync !== 'function') {
+      resolve(null);
+      return;
+    }
+    try {
+      item.getAsFileAsync(result => {
+        resolve(
+          result?.status === Office.AsyncResultStatus.Succeeded && typeof result.value === 'string'
+            ? result.value
+            : null
+        );
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * The open email as the RFC 5322 message Outlook has (`item.getAsFileAsync`, Mailbox
+ * 1.14+, read mode), base64 — the original a chat stores as the email's `.eml`.
+ *
+ * Returns null — and the caller falls back to a synthesized message — when the API
+ * is missing (older Outlook, compose mode), the item is not `expectedItemId` (the
+ * user moved on while the chat was sent), the chat runs in a pop-out (no mailbox
+ * there), or the message holds an attachment the user removed from the context: the
+ * original carries all of them, and what the user took out must not be stored.
+ *
+ * @param {string|null} expectedItemId - `itemId` of the snapshot the message is built from.
+ * @param {Array<string>} [keptAttachmentIds] - Ids of the attachments the user kept.
+ * @returns {Promise<string|null>}
+ */
+export async function fetchCurrentMailEml(expectedItemId, keptAttachmentIds = []) {
+  if (!expectedItemId || getOfficeRemote()) return null;
+  const item = getLiveItem();
+  if (!item || item.itemId !== expectedItemId) return null;
+  const kept = new Set(keptAttachmentIds);
+  const live = Array.isArray(item.attachments) ? item.attachments : [];
+  if (live.some(a => !kept.has(a?.id))) return null;
+  if (lastEml?.itemId === expectedItemId && lastEml.base64) return lastEml.base64;
+  const base64 = await getItemAsFileAsync(item);
+  if (!base64 || getLiveItemId() !== expectedItemId) return null;
+  lastEml = { itemId: expectedItemId, base64 };
+  return base64;
+}
+
 // How often a snapshot read restarts against the new item before giving up
 // when the user keeps switching emails mid-read. Every switch also fires
 // ItemChanged, which triggers a fresh fetch anyway — this just bounds one

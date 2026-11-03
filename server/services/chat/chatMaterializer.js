@@ -97,12 +97,18 @@ export function normalizeAttachments(attachments) {
   return attachments
     .filter(entry => entry && typeof entry === 'object' && !Array.isArray(entry))
     .map(entry => {
+      const id = entry.id || entry.fileId;
       const name = entry.name || entry.fileName;
       const bytes = Number(entry.bytes ?? entry.size ?? entry.fileSize);
       return {
+        ...(typeof id === 'string' && id ? { id } : {}),
         type: String(entry.fileType || entry.mimeType || entry.type || 'file'),
         ...(name ? { name: String(name) } : {}),
-        ...(Number.isFinite(bytes) ? { bytes } : {})
+        ...(Number.isFinite(bytes) ? { bytes } : {}),
+        ...(typeof entry.hasOriginal === 'boolean' ? { hasOriginal: entry.hasOriginal } : {}),
+        ...(typeof entry.canUseAsTemplate === 'boolean'
+          ? { canUseAsTemplate: entry.canUseAsTemplate }
+          : {})
       };
     });
 }

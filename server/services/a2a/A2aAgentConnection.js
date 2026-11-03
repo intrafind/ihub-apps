@@ -5,20 +5,31 @@ import { randomUUID } from 'node:crypto';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { A2A_DEFAULT_API_KEY_HEADER } from '../../validators/a2aAgentConfigSchema.js';
 import {
+  A2A_ACCEPTED_OUTPUT_MODES,
   A2A_CLIENT_ERRORS,
   A2A_RESPONSE_LIMITS,
   RUNNING_TASK_STATES,
   StreamCollector,
   a2aError,
+  artifactsFiles,
   artifactsText,
   buildSkillTools,
   cardApiKeyHeader,
   parseSseStream,
+  partsFiles,
   partsText,
   resolveRpcEndpoint,
+  statusMessageFiles,
   statusMessageText,
   validateAgentCard
 } from './a2aTools.js';
+import { isAllowedAgentUrl } from '../../validators/a2aAgentConfigSchema.js';
+import {
+  decodeBase64Capped,
+  normalizeMediaType,
+  plainFileName,
+  storeToolOutputFile
+} from '../chat/toolOutputFiles.js';
 import logger from '../../utils/logger.js';
 import {
   ClientCredentialsTokenCache,
@@ -52,8 +63,8 @@ export const TOKEN_TIMEOUT_MS = 10 * 1000;
 /** JSON-RPC error code of A2A's `TaskNotFoundError`. */
 export const TASK_NOT_FOUND_RPC_CODE = -32001;
 
-/** Output modes iHub can turn into a tool result. */
-const ACCEPTED_OUTPUT_MODES = ['text/plain', 'application/json'];
+/** Output modes iHub can turn into a tool result: text, JSON, files and pictures. */
+const ACCEPTED_OUTPUT_MODES = A2A_ACCEPTED_OUTPUT_MODES;
 
 /**
  * One A2aAgentConnection talks to a single remote A2A agent over JSON-RPC 2.0:
@@ -440,7 +451,7 @@ export class A2aAgentConnection {
       { signal }
     );
     const body = parseJsonOrNull(
-      await readTextLimited(resp, A2A_RESPONSE_LIMITS.jsonBytes, `The ${method} response`)
+      await readTextLimited(resp, A2A_RESPONSE_LIMITS.rpcBytes, `The ${method} response`)
     );
     if (body?.error) throw rpcErrorOf(body.error, method);
     if (!resp.ok) {
@@ -480,7 +491,7 @@ export class A2aAgentConnection {
     const contentType = String(resp.headers?.get?.('content-type') || '');
     if (!resp.ok || !contentType.startsWith('text/event-stream')) {
       const body = parseJsonOrNull(
-        await readTextLimited(resp, A2A_RESPONSE_LIMITS.jsonBytes, 'The message/stream response')
+        await readTextLimited(resp, A2A_RESPONSE_LIMITS.rpcBytes, 'The message/stream response')
       );
       if (body?.error) throw rpcErrorOf(body.error, 'message/stream');
       if (body && typeof body === 'object' && 'result' in body) {
@@ -521,16 +532,20 @@ export class A2aAgentConnection {
    * @param {string} params.skillId - The card's skill id (sent as `metadata.skillId`)
    * @param {string} params.text - The message text
    * @param {Object} [params.data] - Structured input, sent as a data part
+   * @param {Array<{name: string, mimeType?: string, bytes: Buffer}>} [params.files] - Files to send
+   *   along, as file parts (`bytes` base64 on the wire)
    * @param {string} [params.contextId] - Conversation to continue
    * @param {string} [params.taskId] - Task waiting for input (`input-required`) to continue
    * @param {(progress: {state?: string, message?: string}) => void} [params.onProgress]
    * @param {AbortSignal} [params.signal] - Aborts the call (user stop)
-   * @returns {Promise<{text: string, contextId: string|null, taskId: string|null, state: string}>}
+   * @returns {Promise<{text: string, contextId: string|null, taskId: string|null, state: string,
+   *   files?: Array<Object>}>} `files` are the file parts the agent returned (see `receiveFiles`)
    */
   async sendMessage({
     skillId,
     text,
     data,
+    files,
     contextId,
     taskId: continueTaskId,
     onProgress,
@@ -554,6 +569,17 @@ export class A2aAgentConnection {
     const parts = [{ kind: 'text', text }];
     if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
       parts.push({ kind: 'data', data });
+    }
+    for (const file of Array.isArray(files) ? files : []) {
+      if (!file?.bytes?.length) continue;
+      parts.push({
+        kind: 'file',
+        file: {
+          name: file.name,
+          ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+          bytes: Buffer.from(file.bytes).toString('base64')
+        }
+      });
     }
     const params = {
       message: {
@@ -668,6 +694,7 @@ export class A2aAgentConnection {
       state: task.status?.state,
       statusText: statusMessageText(task),
       answerText: artifactsText(task.artifacts),
+      files: [...artifactsFiles(task.artifacts), ...statusMessageFiles(task)],
       taskId: task.id,
       contextId: task.contextId || null
     });
@@ -684,15 +711,20 @@ export class A2aAgentConnection {
    * @param {string|undefined} outcome.state
    * @param {string} outcome.statusText - Text of the status message
    * @param {string} outcome.answerText - Text of the artifacts
+   * @param {Array<Object>} [outcome.files] - File parts of the artifacts and the status message
    * @param {string|null} outcome.taskId
    * @param {string|null} outcome.contextId
-   * @returns {{text: string, contextId: string|null, taskId: string|null, state: string}}
+   * @returns {{text: string, contextId: string|null, taskId: string|null, state: string, files?: Array<Object>}}
    */
-  _outcome({ state, statusText, answerText, taskId, contextId }) {
+  _outcome({ state, statusText, answerText, files = [], taskId, contextId }) {
+    const withFiles = dedupeFiles(files);
+    const filesOf = withFiles.length > 0 ? { files: withFiles } : {};
     if (state === 'completed') {
-      return { text: answerText || statusText, contextId, taskId, state };
+      return { text: answerText || statusText, contextId, taskId, state, ...filesOf };
     }
-    if (state === 'input-required') return { text: statusText, contextId, taskId, state };
+    if (state === 'input-required') {
+      return { text: statusText, contextId, taskId, state, ...filesOf };
+    }
     if (state === 'failed' || state === 'rejected' || state === 'canceled') {
       throw a2aError(
         A2A_CLIENT_ERRORS.TASK_FAILED,
@@ -751,6 +783,7 @@ export class A2aAgentConnection {
         answerText:
           collector.artifactsText() ||
           (collector.message ? partsText(collector.message.parts, { separator: '\n' }) : ''),
+        files: collector.files(),
         taskId: collector.taskId,
         contextId: collector.contextId
       });
@@ -764,6 +797,146 @@ export class A2aAgentConnection {
       A2A_CLIENT_ERRORS.RPC_ERROR,
       `Agent ${this.config.id} closed the stream without an answer`
     );
+  }
+
+  /**
+   * Take the files an agent returned into the chat: decode `file.bytes`, or
+   * fetch `file.uri` (HTTPS; the agent's own origin with its credential, any
+   * other host without it, always through the SSRF-guarded fetch and never
+   * redirected), then store each (`toolOutputFiles.storeToolOutputFile`, origin
+   * `a2a`) so it shows in the chat's Files drawer.
+   *
+   * Never throws: a file that is too large, cannot be fetched or is of a type
+   * that cannot be kept comes back with an `error` in its descriptor.
+   *
+   * @param {Array<Object>} refs - `file` objects of the agent's file parts (`bytes` or `uri`)
+   * @param {Object} params
+   * @param {string} params.chatId - The chat the call was made in
+   * @param {string|null} [params.ownerId]
+   * @param {AbortSignal} [params.signal]
+   * @param {Object|null} [params.store] - A `ChatFileRepository` (tests)
+   * @returns {Promise<{files: Array<Object>, images: Array<Object>}>} What the model sees:
+   *   `{ fileId, name, mimeType, bytes, id? }` — `id` names the held download card
+   */
+  async receiveFiles(refs, { chatId, ownerId = null, signal, store = null } = {}) {
+    const files = [];
+    const images = [];
+    const list = Array.isArray(refs) ? refs : [];
+    for (const [index, ref] of list.entries()) {
+      if (index >= A2A_RESPONSE_LIMITS.files) {
+        files.push({
+          name: plainFileName(ref.name, `file-${index + 1}`),
+          error: `More than ${A2A_RESPONSE_LIMITS.files} files in one answer; this one was not stored.`
+        });
+        continue;
+      }
+      const name = plainFileName(ref.name, `file-${index + 1}`);
+      let bytes = null;
+      let mimeType = ref.mimeType;
+      let failure = null;
+      if (typeof ref.bytes === 'string') {
+        const decoded = decodeBase64Capped(ref.bytes, A2A_RESPONSE_LIMITS.fileBytes);
+        if (decoded.ok) bytes = decoded.buffer;
+        else failure = decoded.reason;
+      } else {
+        try {
+          const fetched = await this._fetchFileUri(ref.uri, { signal });
+          bytes = fetched.bytes;
+          mimeType = mimeType || fetched.mimeType;
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          failure = error?.message || 'fetch failed';
+        }
+      }
+      if (!bytes) {
+        files.push({
+          name,
+          ...(mimeType ? { mimeType } : {}),
+          error:
+            failure === 'too-large'
+              ? `The file is larger than ${A2A_RESPONSE_LIMITS.fileBytes / 1024 / 1024} MB and was not stored.`
+              : `The file could not be read (${String(failure || 'empty').slice(0, 120)}).`
+        });
+        continue;
+      }
+      const stored = await storeToolOutputFile({
+        chatId,
+        ownerId,
+        bytes,
+        name,
+        mimeType: normalizeMediaType(mimeType, name) || mimeType,
+        uri: ref.uri,
+        index,
+        origin: 'a2a',
+        meta: { agentId: this.config.id },
+        store
+      });
+      const held = stored.images[0] || stored.files[0];
+      const descriptor = { ...stored.descriptor };
+      delete descriptor.type;
+      if (held) descriptor.id = held.id;
+      (stored.images.length > 0 ? images : files).push(descriptor);
+    }
+    return { files, images };
+  }
+
+  /**
+   * Fetch the content behind a file part's `uri`, bounded in size.
+   * @private
+   */
+  async _fetchFileUri(uri, { signal } = {}) {
+    let url;
+    try {
+      url = new URL(uri);
+    } catch {
+      throw new Error('invalid uri');
+    }
+    if (!isAllowedAgentUrl(url.toString()) || url.username || url.password) {
+      throw new Error('uri must be https (http for localhost only) without credentials');
+    }
+    const sameOrigin = this.endpoint && new URL(this.endpoint).origin === url.origin;
+    const resp = sameOrigin
+      ? await this._request(url.toString(), { method: 'GET' }, { signal })
+      : await safeFetch(
+          url,
+          { method: 'GET', redirect: 'manual', ...(signal ? { signal } : {}) },
+          this._fetchOptions
+        );
+    refuseRedirect(resp, `File host ${url.host}`);
+    if (!resp.ok) {
+      await discardBody(resp);
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const max = A2A_RESPONSE_LIMITS.fileBytes;
+    const declared = Number(resp.headers?.get?.('content-length'));
+    if (Number.isFinite(declared) && declared > max) {
+      await discardBody(resp);
+      throw new Error('too-large');
+    }
+    const chunks = [];
+    let size = 0;
+    if (resp.body && typeof resp.body.getReader === 'function') {
+      const reader = resp.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > max) {
+          await reader.cancel().catch(() => {});
+          throw new Error('too-large');
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } else {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      if (buf.length > max) throw new Error('too-large');
+      chunks.push(buf);
+    }
+    const bytes = Buffer.concat(chunks);
+    return {
+      bytes,
+      mimeType: resp.headers?.get?.('content-type')?.split(';')[0].trim() || undefined
+    };
   }
 
   /** Snapshot for the admin page. */
@@ -786,12 +959,29 @@ export class A2aAgentConnection {
 
 /** The answer held by a `Message` reply (how the cookbook agents answer). */
 function messageResult(message) {
+  const files = dedupeFiles(partsFiles(message.parts));
   return {
     text: partsText(message.parts, { separator: '\n' }),
     contextId: message.contextId || null,
     taskId: message.taskId || null,
-    state: 'completed'
+    state: 'completed',
+    ...(files.length > 0 ? { files } : {})
   };
+}
+
+/** The same file listed twice (an artifact and the status message) once. */
+function dedupeFiles(files) {
+  const seen = new Set();
+  const out = [];
+  for (const file of Array.isArray(files) ? files : []) {
+    const key = `${file.name || ''}|${file.mimeType || ''}|${file.uri || ''}|${
+      file.bytes ? `${file.bytes.length}:${file.bytes.slice(0, 64)}:${file.bytes.slice(-64)}` : ''
+    }`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
 }
 
 /**

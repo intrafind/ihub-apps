@@ -54,6 +54,7 @@ import {
 import { createChatChannel } from './chatChannel.js';
 import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
+import { headlessToolOutputSeam } from './toolOutputFiles.js';
 import {
   admitTurnProjects,
   materializeAssistantTurn,
@@ -708,6 +709,9 @@ class ChatService {
     // bytes, stored with the answer as `document` artifacts of the chat so the
     // download card is still there when the chat reopens.
     const generatedFiles = [];
+    // Pictures the turn's tools returned (an MCP server's `image` block); they
+    // join the pictures the model generated.
+    const generatedImages = [];
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
@@ -762,7 +766,8 @@ class ChatService {
         mcpAppViews,
         authPrompts,
         scheduledTaskProposals,
-        generatedFiles
+        generatedFiles,
+        generatedImages
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(
@@ -971,6 +976,7 @@ class ChatService {
         authPrompts,
         scheduledTaskProposals,
         generatedFiles,
+        generatedImages,
         promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
         signal: controller.signal,
@@ -1145,6 +1151,7 @@ class ChatService {
     authPrompts = [],
     scheduledTaskProposals = [],
     generatedFiles = [],
+    generatedImages = [],
     promptSources = [],
     takePendingCall = () => null,
     structured = null,
@@ -1165,7 +1172,7 @@ class ChatService {
       // the transcript so reopening the chat still shows it. Every terminal
       // branch below spreads this object, so an aborted turn keeps the
       // pictures it had already emitted.
-      images: result.images || [],
+      images: [...(result.images || []), ...generatedImages],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
       integrationAuthRequired: authPrompts,
@@ -1492,10 +1499,15 @@ class ChatService {
    * @param {string} [opts.language='en']
    * @param {number} [opts.timeoutMs=120000] - hard timeout per model call
    * @param {number} [opts.maxWallClockMs=180000] - deadline for the whole invocation
+   * @param {string} [opts.chatId] - chat id of the invocation, when the caller already stored
+   *   files under it (the MCP and A2A gateways); defaults to a synthetic `agent:` id
    * @param {(text: string, info: {step: number}) => void} [opts.onTextDelta] - called with
    *   each streamed text fragment of the model's answer (every step; the final
    *   answer is `finalMessage.content`)
-   * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, sources, usage, finishReason, error? }`
+   * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, sources, usage,
+   *   finishReason, generatedFiles, images, error? }` — `generatedFiles` are the files the app's tools
+   *   produced (`{ id, name, mimeType, bytes, data }`, `data` base64) and `images` the pictures
+   *   (`{ mimeType, data, name? }`)
    */
   async invokeAppInternal({
     appId,
@@ -1508,10 +1520,14 @@ class ChatService {
     language = 'en',
     timeoutMs = 120_000,
     maxWallClockMs = 180_000,
-    onTextDelta = null
+    onTextDelta = null,
+    chatId: callerChatId = null
   }) {
     if (!appId) throw new Error('appId is required');
-    const chatId = `agent:${parentRunId || 'no-run'}:${uuidv4().slice(0, 8)}`;
+    const chatId =
+      typeof callerChatId === 'string' && callerChatId
+        ? callerChatId
+        : `agent:${parentRunId || 'no-run'}:${uuidv4().slice(0, 8)}`;
     const runId = newRunId('subagent');
     const startedAt = Date.now();
     const buildLogData = (streaming, extra = {}) => ({
@@ -1522,6 +1538,9 @@ class ChatService {
       ...extra
     });
     const collected = { toolCalls: [] };
+    // Files and pictures the app's tools produced, handed back to the caller.
+    const generatedFiles = [];
+    const generatedImages = [];
 
     try {
       const { data: knownApps = [] } = configCache.getApps();
@@ -1652,6 +1671,7 @@ class ChatService {
             })
           ),
           imageLiftSeam,
+          headlessToolOutputSeam({ chatId, user, generatedFiles, generatedImages }),
           collector
         ],
         executeTool: (call, { toolId, args, signal }) =>
@@ -1698,7 +1718,9 @@ class ChatService {
         sources: storedSourceSet(result.sources),
         usage: result.usage,
         finishReason: result.finishReason,
-        model: model.id
+        model: model.id,
+        generatedFiles,
+        images: [...(result.images || []), ...generatedImages]
       };
     } catch (error) {
       logger.error('invokeAppInternal failed', {

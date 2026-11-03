@@ -23,6 +23,8 @@ import { userSkillsClientConfig } from '../../services/skills/userSkillSettings.
 import { hasSyncedRegistry } from '../../services/skills/marketplaceSkills.js';
 import { projectsClientConfig } from '../../services/projects/projectSettings.js';
 import { getProjectRepository } from '../../services/projects/ProjectRepository.js';
+import { uploadsClientConfig } from '../../services/chatFiles/chatFilePolicy.js';
+import { getChatFileRepository } from '../../services/chatFiles/ChatFileRepository.js';
 import crypto from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -879,6 +881,9 @@ export default function registerDataRoutes(app) {
         // Whether this user may create or share one is on /api/projects/_config.
         projects: projectsClientConfig(configCache.getFeatures(), platform, {
           storageAvailable: getProjectRepository().isAvailable()
+        }),
+        uploads: uploadsClientConfig(platform, {
+          storageAvailable: getChatFileRepository().isAvailable()
         }),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger

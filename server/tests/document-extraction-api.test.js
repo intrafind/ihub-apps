@@ -445,11 +445,17 @@ describe('PDF through the API', () => {
     );
   });
 
-  it('a PDF without a text layer still is "file_has_no_text"', async () => {
+  it('a PDF without a text layer is rendered to page images (shared chat-file pipeline), not refused', async () => {
     const bytes = await buildPdfBytes([[], []]);
-    await rejects(documentFromInlineFile({ data: dataUrl(bytes, PDF), filename: 's.pdf' }, 'x'), {
-      code: 'file_has_no_text'
-    });
+    const file = await documentFromInlineFile(
+      { data: dataUrl(bytes, PDF), filename: 's.pdf' },
+      'x'
+    );
+    assert.equal(file.content, '');
+    assert.equal(file.fileType, PDF);
+    assert.equal(file.pages, 2);
+    assert.equal(file.pageImages.length, 2);
+    assert.equal(Buffer.from(file.pageImages[0], 'base64').subarray(1, 4).toString(), 'PNG');
   });
 
   it('a file that is no PDF is an invalid file', async () => {
@@ -476,6 +482,14 @@ describe('PDF through the API', () => {
 });
 
 describe('the admin switch', () => {
+  it('with the switch off a PDF without a text layer is still "file_has_no_text", as before', async () => {
+    setSwitch(false);
+    const bytes = await buildPdfBytes([[], []]);
+    await rejects(documentFromInlineFile({ data: dataUrl(bytes, PDF), filename: 's.pdf' }, 'x'), {
+      code: 'file_has_no_text'
+    });
+  });
+
   it('T-API-03: off restores the previous behaviour — PDF text in one run, Word files not accepted', async () => {
     setSwitch(false);
     const pdf = await buildPdfBytes([

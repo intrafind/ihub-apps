@@ -20,7 +20,16 @@
     "hideList": "Hide file list",
     "regionLabel": "Attached files",
     "saveAudio": "Save audio",
-    "saveAudioNamed": "Save audio as {{name}}"
+    "saveAudioNamed": "Save audio as {{name}}",
+    "errors": {
+      "chatQuota": "This chat has no room for more saved files; the file is sent with the message only",
+      "storageQuota": "Your file storage is full; the file is sent with the message only",
+      "fileTooLarge": "Too large to save; the file is sent with the message only",
+      "notSaved": "Could not be saved to the chat; the file is sent with the message only"
+    },
+    "stored": "Saved to this chat",
+    "templateReady": "can be used as a template",
+    "uploading": "Uploading {{name}}"
   },
   "app": {
     "title": "iHub Apps",
@@ -645,7 +654,7 @@
       "title": "Chat History",
       "sharing": {
         "title": "Chat sharing",
-        "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; uploaded files are never part of it.",
+        "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; the owner decides whether the files uploaded to it are shared too (by default they are not).",
         "enabled": "Allow sharing chats",
         "enabledHelp": "Turning it off stops new links and closes existing ones until it is turned on again.",
         "allowUsers": "Links for specific users",
@@ -694,6 +703,33 @@
           "expired": "Expired",
           "exhausted": "View limit reached"
         }
+      },
+      "uploads": {
+        "title": "Uploaded files",
+        "description": "Files users attach to chats and to scheduled tasks. The text the assistant reads is kept with the chat so follow-up questions, reloads and other devices keep working.",
+        "enabled": "Store uploaded files on the server",
+        "enabledHelp": "Turning it off stops uploads to the file store; attachments are then only sent with the message.",
+        "storageMode": "What the server keeps",
+        "mode": {
+          "originalAndText": "The file and its text (originals can be downloaded, shared and used as templates)",
+          "serverTextOnly": "Only the text (the server extracts it and discards the file)",
+          "clientTextOnly": "Only the text, extracted in the browser (files never leave the device)"
+        },
+        "storageModeHelp": "An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
+        "originalRetentionDays": "Keep original files (days)",
+        "originalRetentionDaysHelp": "After this many days only the text of a chat file stays, until the chat itself is deleted. Files attached to scheduled tasks are kept as long as the task exists. 0 keeps originals as long as the chat.",
+        "evict": "Make room by removing the oldest originals",
+        "evictHelp": "When a user or the server reaches its limit, the oldest chat originals are removed first (their text stays) before an upload is refused.",
+        "maxFileBytes": "Largest file",
+        "maxFileBytesHelp": "A larger upload is refused. 0 removes the limit.",
+        "maxChatBytes": "Per chat or task",
+        "maxChatBytesHelp": "All files of one chat or one scheduled task together. 0 removes the limit.",
+        "maxChatFiles": "Files per chat or task",
+        "maxChatFilesHelp": "The most files one chat or task may hold. 0 removes the limit.",
+        "maxUserBytes": "Per user",
+        "maxUserBytesHelp": "Everything one user has in chats and tasks. 0 removes the limit.",
+        "maxServerBytes": "Whole server",
+        "maxServerBytesHelp": "All uploaded files of all users together. 0 removes the limit."
       }
     },
     "voiceInput": {
@@ -7097,7 +7133,7 @@
   },
   "chatSharing": {
     "title": "Share chat",
-    "description": "Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.",
+    "description": "Recipients get a read-only copy of this conversation as it is right now. Later messages and edits are not part of it. Uploaded files are shared only if you choose so below.",
     "noModes": "Sharing chats is not available here.",
     "modeLabel": "Who can open the link",
     "modes": {
@@ -7191,7 +7227,21 @@
       "expires": "This link expires on {{date}}.",
       "attachmentsLabel": "Attachments",
       "attachmentNotIncluded": "Attachment not included: {{name}}",
-      "attachmentUnnamed": "file"
+      "attachmentUnnamed": "file",
+      "sharedFiles": "The owner shared the files uploaded to this chat."
+    },
+    "files": {
+      "label": "Files you uploaded to this chat",
+      "hint": "Recipients always see the names of the files you attached. Whether they can open them is up to you.",
+      "none": "Do not share the files",
+      "noneHint": "Only the file names appear in the transcript.",
+      "text": "Share the text of the files",
+      "textHint": "Viewers can read the text extracted from the files, not download them.",
+      "original": "Share the original files",
+      "originalHint": "Viewers can also download the files as you uploaded them.",
+      "originalUnavailable": "None of the files is stored in its original form.",
+      "pick": "Files to share",
+      "textOnly": "(text only)"
     }
   },
   "sources": {
@@ -7848,6 +7898,32 @@
       "platformMax": "Default: {{count}} (set by your administrator; a higher value has no effect)",
       "platformDays": "Default: {{count}} (set by your administrator; a higher value has no effect)",
       "help": "Older runs and their chats are deleted automatically. Leave a field empty to use the default. Runs in progress are never deleted."
+    },
+    "files": {
+      "someFailed": "The task was saved, but some files could not be attached:",
+      "errors": {
+        "fileTooLarge": "The file is too large.",
+        "taskQuota": "This task has reached its limit for attached files. Remove one first.",
+        "storageFull": "The file storage is full.",
+        "unsupported": "This file type is not supported.",
+        "noText": "The file contains no readable text.",
+        "rejected": "The file was rejected by the security scan.",
+        "disabled": "File uploads are switched off.",
+        "textOnly": "This installation stores only text: files are read in the browser first.",
+        "failed": "The file could not be attached."
+      },
+      "deleteFailed": "The file could not be removed.",
+      "original": "Original saved",
+      "textOnly": "Text only",
+      "template": "usable as a template",
+      "title": "Attached files",
+      "help": "Reference documents or templates every run can read, for example a style guide, a report template or a price list. They stay until you remove them or delete the task.",
+      "add": "Attach files",
+      "textOnlyMode": "This installation keeps only extracted text, so files cannot be attached to tasks here.",
+      "loadFailed": "The attached files could not be loaded.",
+      "uploading": "Uploading {{name}}…",
+      "remove": "Remove {{name}}",
+      "stagedHint": "The files are attached when you save the task."
     }
   },
   "memoryEditor": {
@@ -8458,5 +8534,36 @@
     "previewTab": "Preview",
     "codeTab": "Code",
     "csvRowsShown": "Showing {{shown}} of {{total}} rows."
+  },
+  "chatFiles": {
+    "attached": "Attached {{name}} to your email.",
+    "attachTooLarge": "The file is too large to attach to an email.",
+    "attachFailed": "The file could not be attached to your email.",
+    "title": "Files",
+    "tabsLabel": "Kinds of files in this chat",
+    "tabUploaded": "Uploaded",
+    "tabGenerated": "Generated",
+    "attachToEmail": "Attach to email",
+    "openInDrawer": "Open {{name}} in the Files panel",
+    "emptyBody": "(no text)",
+    "textPreviewNote": "Showing the text the assistant reads from this file.",
+    "originalDiscarded": "The original file is no longer stored; only its text is kept. You can download the text instead.",
+    "deleteFailed": "The file could not be deleted. Please try again.",
+    "loading": "Loading the uploaded files…",
+    "loadFailed": "The uploaded files could not be loaded.",
+    "notShared": "The owner did not share the files attached to this chat.",
+    "empty": "No files uploaded to this chat yet. Documents, emails and pages you attach appear here.",
+    "listLabel": "Files uploaded to this chat",
+    "pages": "{{count}} pages",
+    "stateOriginal": "Original saved",
+    "stateExpired": "Original removed",
+    "stateTextOnly": "Text only",
+    "question": "Question {{number}}",
+    "downloadOriginal": "Download original",
+    "downloadText": "Download text",
+    "deleteConfirm": "Delete {{name}}?",
+    "delete": "Delete file",
+    "templateHint": "The assistant can use this file as a template.",
+    "truncated": "Very long: the assistant reads the beginning."
   }
 }

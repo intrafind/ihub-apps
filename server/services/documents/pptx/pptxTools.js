@@ -11,6 +11,13 @@ import {
 import { holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToPptxSpec, templateBundleFor } from '../templates/applyTemplate.js';
+import {
+  loadUploadedFileOriginal,
+  PPTX_FILE_MIME,
+  userTemplateUploadsAllowed
+} from '../templateFiles.js';
+
+export const PPTX_TEMPLATE_MODES = Object.freeze(['styles_only', 'append']);
 
 /**
  * The tool the `pptx` system skill brings (see `server/systemSkills/pptx`):
@@ -60,9 +67,21 @@ export function pptxSpecFromToolArgs(args) {
  * @param {string} [options.template] - Requested template id.
  * @returns {Promise<{ buffer: Buffer, slides: number, warnings: string[], templateId: string|null }>}
  */
-export async function createPptx(spec, { app, template } = {}) {
+export async function createPptx(spec, { app, template, templateFile = null } = {}) {
   const bundle = await templateBundleFor({ format: 'pptx', app, requested: template });
   const applied = applyTemplateToPptxSpec(spec, bundle);
+  if (templateFile?.buffer) {
+    // The user's own deck: its master, layouts and theme build the slides. The
+    // admin brand settings (colours, fonts, logo) only describe the built-in
+    // template, so they are left out of the way.
+    applied.assets = { powerpointTemplate: templateFile.buffer };
+    applied.spec = {
+      ...applied.spec,
+      layouts: undefined,
+      templateMode: templateFile.mode === 'append' ? 'append' : 'styles_only'
+    };
+    applied.templateId = null;
+  }
   const started = Date.now();
   const { buffer, meta, warnings } = await renderInWorker('pptx', {
     spec: applied.spec,
@@ -88,10 +107,44 @@ export async function createPptx(spec, { app, template } = {}) {
 export async function runCreatePptx(params) {
   try {
     const spec = pptxSpecFromToolArgs(params);
-    const { buffer, slides, warnings, templateId } = await createPptx(spec, {
+    const extraWarnings = [];
+    let templateFile = null;
+    if (params.templateFileId) {
+      if (params.templateMode && !PPTX_TEMPLATE_MODES.includes(params.templateMode)) {
+        throw new DocumentGenerationError(
+          `"templateMode" must be one of: ${PPTX_TEMPLATE_MODES.join(', ')}.`,
+          'invalid'
+        );
+      }
+      if (userTemplateUploadsAllowed(params.appConfig)) {
+        const uploaded = await loadUploadedFileOriginal({
+          fileId: params.templateFileId,
+          mimeTypes: [PPTX_FILE_MIME],
+          user: params.user,
+          chatId: params.chatId
+        });
+        templateFile = {
+          buffer: uploaded.buffer,
+          mode: params.templateMode || 'styles_only',
+          name: uploaded.name
+        };
+      } else {
+        extraWarnings.push(
+          'This app uses a fixed corporate document template, so the uploaded deck was not used as a template.'
+        );
+      }
+    }
+    const {
+      buffer,
+      slides,
+      warnings: renderWarnings,
+      templateId
+    } = await createPptx(spec, {
       app: params.appConfig,
-      template: params.template
+      template: params.template,
+      templateFile
     });
+    const warnings = [...extraWarnings, ...renderWarnings];
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
@@ -107,8 +160,9 @@ export async function runCreatePptx(params) {
       // chat's download card. The result itself never carries them.
       files: [file],
       ...(templateId ? { template: templateId } : {}),
+      ...(templateFile ? { templateFile: templateFile.name } : {}),
       ...(warnings.length ? { warnings } : {}),
-      message: `Created the presentation "${file.name}" (${slides} slide${slides === 1 ? '' : 's'})${templateId ? ` on the "${templateId}" document template` : ''}. The user sees a download card for it in the chat — do not add a link.`
+      message: `Created the presentation "${file.name}" (${slides} slide${slides === 1 ? '' : 's'})${templateId ? ` on the "${templateId}" document template` : ''}${templateFile ? ` on the master and layouts of the uploaded "${templateFile.name}"` : ''}. The user sees a download card for it in the chat — do not add a link.`
     };
   } catch (error) {
     return toolFailure(error, 'The presentation could not be created.');

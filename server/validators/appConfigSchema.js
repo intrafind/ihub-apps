@@ -620,6 +620,16 @@ const baseAppConfigSchema = z.object({
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
     .optional(),
+  // Uploaded files a user can use as a Word/PowerPoint template (`templateFileId`)
+  // even when `documentTemplate` pins the corporate one (default: only when the
+  // app pins none).
+  allowUserTemplateUploads: z.boolean().optional(),
+  // Per-app override of `platform.uploads` (chat and task file storage).
+  uploads: z
+    .object({
+      storageMode: z.enum(['original_and_text', 'server_text_only', 'client_text_only']).optional()
+    })
+    .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),
   rendererConfig: z.object({}).passthrough().optional(),

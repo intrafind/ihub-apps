@@ -155,7 +155,8 @@ function OfficeChatPanel({
     onMessageAccepted: handleMessageAccepted,
     ephemeral: chatTemporary,
     isFreshChat,
-    fileUploadConfig: selectedApp?.upload?.fileUpload
+    fileUploadConfig: selectedApp?.upload?.fileUpload,
+    app: selectedApp
   });
   // A stored chat is being fetched. A fresh one has nothing to wait for, so it
   // shows its greeting straight away.

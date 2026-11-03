@@ -254,6 +254,12 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   projectChats: 'project-chats',
   /**
+   * Uploaded files of a chat or a scheduled task — one metadata document per
+   * file, keyed `<scopeType>__<scopeId>__<fileId>` and filed under the owner's
+   * principal id so per-user quota checks are an owner index read.
+   */
+  chatFiles: 'chat-files',
+  /**
    * The connection index of the unified integrations (04-architecture §1.4):
    * one record per (installation, principal) — who is connected to which
    * installed integration, its status, issuer, granted scopes and a
@@ -304,7 +310,15 @@ export const BLOB_NAMESPACES = Object.freeze({
    * `<projectId>__<itemId>__<versionId>` so a project's blobs are a prefix
    * listing and a re-upload never overwrites.
    */
-  projectFiles: 'project-files'
+  projectFiles: 'project-files',
+  /**
+   * Payloads of uploaded chat and scheduled-task files: extracted text
+   * (`<key>__text`) and optional original binary (`<key>__original`), kept as
+   * separate blobs so original binaries can expire or be evicted under quota
+   * pressure without losing the extracted text needed for multi-turn chat and
+   * replay.
+   */
+  chatFiles: 'chat-files'
 });
 
 /**

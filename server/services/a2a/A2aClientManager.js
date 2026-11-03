@@ -3,6 +3,7 @@
 
 import { A2aAgentConnection, TASK_NOT_FOUND_RPC_CODE } from './A2aAgentConnection.js';
 import { buildSkillTools, A2A_CLIENT_ERRORS } from './a2aTools.js';
+import { chatFilesToSend } from './a2aFiles.js';
 import {
   a2aAgentsFileSchema,
   a2aAgentConfigSchema
@@ -304,14 +305,21 @@ class A2aClientManager {
    * so the next message — the user's reply — continues the same task instead
    * of starting a new one. Neither is ever shared across chats or users.
    * iHub's own context keys (`user`, `chatId`, `appConfig`, …) never leave
-   * iHub — only the message and data do.
+   * iHub — only the message, the data and the chat files named in `fileIds`
+   * (the original bytes, else the extracted text) do.
+   *
+   * Files the agent returns (`FilePart`s with `bytes` or a `uri`) are stored in
+   * the chat (origin `a2a`; the Files drawer and a later call can use them) and
+   * the tool answers `{ text, files, images }` with compact descriptors
+   * (`{ fileId, name, mimeType, bytes }`) instead of the bytes. An agent that
+   * returns no file is answered with the text alone, as before.
    *
    * @param {string} toolId - `a2a__<agentId>__<skillSlug>`
    * @param {Object} params - Params as handed to `runTool`
    * @param {Object} [options]
    * @param {AbortSignal} [options.signal] - The chat turn's abort signal; a
    *   user stop aborts the request and cancels a running task
-   * @returns {Promise<string>}
+   * @returns {Promise<string|{text: string, files?: Array<Object>, images?: Array<Object>}>}
    */
   async callTool(toolId, params = {}, { signal } = {}) {
     const found = await this.findTool(toolId);
@@ -324,6 +332,8 @@ class A2aClientManager {
       params.data && typeof params.data === 'object' && !Array.isArray(params.data)
         ? params.data
         : undefined;
+
+    const files = await chatFilesToSend(params);
 
     const ref = clientContextRef(params, conn.config.id);
     const remembered = ref ? await this.contexts.get(ref) : null;
@@ -347,6 +357,7 @@ class A2aClientManager {
         skillId: tool._a2a.skillId,
         text,
         data,
+        ...(files.length > 0 ? { files } : {}),
         contextId,
         taskId,
         signal,
@@ -381,6 +392,18 @@ class A2aClientManager {
         contextId: result.contextId || contextId,
         ...(result.state === 'input-required' && result.taskId ? { taskId: result.taskId } : {})
       });
+    }
+    if (Array.isArray(result.files) && result.files.length > 0) {
+      const received = await conn.receiveFiles(result.files, {
+        chatId,
+        ownerId: params.user?.id || null,
+        signal
+      });
+      return {
+        text: result.text,
+        ...(received.files.length > 0 ? { files: received.files } : {}),
+        ...(received.images.length > 0 ? { images: received.images } : {})
+      };
     }
     return result.text;
   }

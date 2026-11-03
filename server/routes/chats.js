@@ -42,6 +42,7 @@
 import { authenticatedOnly, authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
+import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import {
   sendBadRequest,
   sendErrorResponse,
@@ -54,14 +55,24 @@ import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
+import { resolveChatOwner } from '../services/chat/chatOwner.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
+import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import {
+  isChatFileFailure,
+  isMultipartRequest,
+  ingestRequestFile,
+  parseChatFileMultipart,
+  sendChatFileFailure
+} from '../services/chatFiles/fileUploadRequest.js';
 import {
   canKeepChatHistory,
   isChatHistoryConfigured,
-  isChatStorageAvailable
+  isChatStorageAvailable,
+  resolveChatStorage
 } from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
@@ -124,13 +135,16 @@ function sendPersistenceUnavailable(res) {
  * @returns {import('express').Response}
  */
 function sendChatStorageError(res, error, operation) {
+  if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
   if (error instanceof StorageError) {
     // Through the errors module rather than re-deriving the mapping here. The
     // `INVALID_CURSOR` special case this replaces was one route knowing a
     // contract code's status because the error did not carry it.
     const status = storageHttpStatus(error);
     if (status) {
-      return sendErrorResponse(res, status, error.message, { details: { code: error.code } });
+      return sendErrorResponse(res, status, error.message, {
+        details: { code: error.code, ...(error.details || {}) }
+      });
     }
   }
   return sendFailedOperationError(res, operation, error);
@@ -464,6 +478,194 @@ export default function registerChatRoutes(app) {
         return res.send(body);
       } catch (error) {
         return sendChatStorageError(res, error, 'get chat artifact');
+      }
+    }
+  );
+
+  app.post(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
+    try {
+      const { chatId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const fileStore = repository.fileStore();
+      if (!fileStore.isAvailable()) {
+        return sendPersistenceUnavailable(res);
+      }
+
+      const auth = await authorizeChat(chatId, req.user, { repository, intent: 'write' });
+      if (!auth.ok) return sendNotFound(res, 'Chat');
+
+      const owner = await resolveChatOwner(req.user, {
+        mode: auth.chat?.identityMode || runLog.identityMode()
+      });
+      if (!owner) {
+        return sendErrorResponse(res, 403, 'This chat has no owner to be stored under', {
+          details: { code: 'CHAT_OWNER_REQUIRED' }
+        });
+      }
+
+      const basePolicy = chatFilePolicy();
+      if (!basePolicy.enabled) {
+        return sendErrorResponse(res, 503, 'Chat file uploads are disabled', {
+          details: { code: 'UPLOADS_DISABLED' }
+        });
+      }
+
+      if (isMultipartRequest(req)) {
+        const parsed = await parseChatFileMultipart(req, res, basePolicy.maxFileBytes);
+        if (!parsed) return;
+      }
+
+      // A chat that exists keeps its app: the app decides the storage policy, so a
+      // request must not be able to pick a looser one for somebody's chat.
+      const requestedAppId =
+        auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
+      const chatApp = requestedAppId
+        ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
+        : null;
+      const policy = chatFilePolicy(chatApp);
+      if (!policy.enabled) {
+        return sendErrorResponse(res, 503, 'Chat file uploads are disabled', {
+          details: { code: 'UPLOADS_DISABLED' }
+        });
+      }
+
+      // Ensure the chat document exists if the user pre-uploads a file in the
+      // composer before sending the first message.
+      if (!auth.chat) {
+        const storage = resolveChatStorage({
+          features: configCache.getFeatures(),
+          platformConfig: configCache.getPlatform(),
+          user: req.user,
+          ephemeral: req.body?.ephemeral === true || req.body?.ephemeral === 'true'
+        });
+        await repository.ensureChat({
+          chatId,
+          ownerId: owner.id,
+          identityMode: owner.mode,
+          appId: requestedAppId,
+          origin: { createdVia: 'ui' },
+          temporary: storage.temporary
+        });
+      }
+
+      const descriptor = await ingestRequestFile({
+        req,
+        scope: repository.fileScope(chatId),
+        ownerId: owner.id,
+        appConfig: chatApp,
+        policy,
+        store: fileStore,
+        user: req.user
+      });
+      return res.status(201).json({ file: descriptor });
+    } catch (error) {
+      return sendChatStorageError(res, error, 'upload chat file');
+    }
+  });
+
+  app.get(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
+    try {
+      const { chatId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+      const items = await repository.fileStore().list(repository.fileScope(chatId));
+      return res.json({ items });
+    } catch (error) {
+      return sendChatStorageError(res, error, 'list chat files');
+    }
+  });
+
+  app.get(buildServerPath('/api/chats/:chatId/files/:fileId'), authRequired, async (req, res) => {
+    try {
+      const { chatId, fileId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      if (!validateIdForPath(fileId, 'file', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+
+      const scope = repository.fileScope(chatId);
+      const fileStore = repository.fileStore();
+      if (req.query.format === 'text') {
+        const textFile = await fileStore.getText(scope, fileId);
+        if (!textFile) return sendNotFound(res, 'File');
+        if (req.query.raw === '1' || req.query.raw === 'true') {
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          // Served as text/plain with nosniff: never interpreted as HTML.
+          // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
+          return res.send(textFile.text);
+        }
+        return res.json({ file: textFile });
+      }
+
+      const original = await fileStore.getOriginal(scope, fileId);
+      if (!original) return sendNotFound(res, 'File');
+      if (original.discarded) {
+        return sendErrorResponse(
+          res,
+          410,
+          'The original file is no longer available; extracted text is still stored',
+          {
+            details: {
+              code: 'ORIGINAL_DISCARDED',
+              ...(original.originalDeletedAt
+                ? { originalDeletedAt: original.originalDeletedAt }
+                : {})
+            }
+          }
+        );
+      }
+
+      const body = original.data;
+      const download = req.query.download === '1' || req.query.download === 'true';
+      res.setHeader('Content-Type', servedMediaType(original.mimeType));
+      res.setHeader('Content-Length', String(body.length));
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+      res.setHeader(
+        'Content-Disposition',
+        download ? buildContentDisposition(original.name) : 'inline'
+      );
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(body);
+    } catch (error) {
+      return sendChatStorageError(res, error, 'get chat file');
+    }
+  });
+
+  app.delete(
+    buildServerPath('/api/chats/:chatId/files/:fileId'),
+    authRequired,
+    async (req, res) => {
+      try {
+        const { chatId, fileId } = req.params;
+        if (!validateIdForPath(chatId, 'chat', res)) return;
+        if (!validateIdForPath(fileId, 'file', res)) return;
+        const repository = requireRepository(res);
+        if (!repository) return;
+        const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+        if (!access) return sendNotFound(res, 'Chat');
+
+        const scope = repository.fileScope(chatId);
+        const fileStore = repository.fileStore();
+        if (req.query.onlyOriginal === '1' || req.query.onlyOriginal === 'true') {
+          const updated = await fileStore.discardOriginal(scope, fileId, {
+            reason: 'user_deleted'
+          });
+          if (!updated) return sendNotFound(res, 'File');
+          return res.json({ file: updated });
+        }
+
+        const deleted = await fileStore.delete(scope, fileId);
+        return res.json({ deleted });
+      } catch (error) {
+        return sendChatStorageError(res, error, 'delete chat file');
       }
     }
   );

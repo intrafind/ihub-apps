@@ -65,9 +65,14 @@ import {
 } from '../../utils/responseHelpers.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
+import {
+  hydrateHistoryForPrompt,
+  prepareTurnFiles
+} from '../../services/chatFiles/ChatFileService.js';
 
 /**
- * Chat-shaped view of a persisted transcript: role and content only.
+ * Chat-shaped view of a persisted transcript: role, content, and any hydrated
+ * `fileData` payloads.
  *
  * Everything else on a stored message — ids, usage, the error of a failed turn,
  * attachment descriptors — is bookkeeping for the history UI and has no place
@@ -76,19 +81,27 @@ import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/work
  * blank message outright.
  *
  * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
- * @returns {Array<{role: string, content: string, activeSkills?: Array<Object>}>} An answer
+ * @returns {Array<{role: string, content: string, fileData?: Array<Object>, activeSkills?: Array<Object>}>} An answer
  *   keeps the skills it activated (`activity.activeSkills`), so they stay active.
  */
 export function historyForPrompt(stored) {
   return stored
-    .filter(entry => entry?.role && typeof entry.content === 'string' && entry.content.trim())
+    .filter(
+      entry =>
+        entry?.role &&
+        ((typeof entry.content === 'string' && entry.content.trim()) || Boolean(entry.fileData))
+    )
     .map(entry => {
       // The skills an answer activated stay active in the chat; the request
       // builder reads them from here and re-checks access every turn.
-      const skills = entry.role === 'assistant' ? entry.activity?.activeSkills : null;
+      // A stored answer carries them in `activity`; a history rebuilt from the file
+      // store (`hydrateHistoryForPrompt`) already has them as `activeSkills`.
+      const skills =
+        entry.role === 'assistant' ? (entry.activity?.activeSkills ?? entry.activeSkills) : null;
       return {
         role: entry.role,
-        content: entry.content,
+        content: typeof entry.content === 'string' ? entry.content : '',
+        ...(entry.fileData ? { fileData: entry.fileData } : {}),
         ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {})
       };
     });
@@ -1046,6 +1059,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const stored = await repository.getMessages(chatId);
         let history = stored.messages;
         let forkStoredId = null;
+        let replacedMessage = null;
         if (replaceFromMessageId) {
           // Either id the client can know this message by: the stored id it
           // was given on hydrate, or — for a turn made in the session that
@@ -1071,6 +1085,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // the exchange the user replaced and, for an edit, never records
           // the edited question at all. Permanent, and replayed to the model
           // every turn after.
+          replacedMessage = history[forkAt];
           forkStoredId = history[forkAt].id;
           history = history.slice(0, forkAt);
         }
@@ -1124,10 +1139,60 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           });
         }
         const integrationScopes = scopeResolution.scopes;
-        conversation =
-          chatApp?.sendChatHistory === false || sendChatHistory === false
-            ? [promptMessage]
-            : [...historyForPrompt(history), promptMessage];
+        const { message: preparedPromptMessage, attachments: turnFileAttachments } =
+          await prepareTurnFiles({
+            chatId,
+            ownerId: owner.id,
+            message: promptMessage,
+            inheritedAttachments: replacedMessage?.attachments,
+            appConfig: chatApp,
+            store: repository.fileStore?.()
+          });
+        const nonDocumentAttachments = [newMessage?.imageData, newMessage?.audioData]
+          .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
+          .filter(entry => entry && typeof entry === 'object');
+        const persistedAttachments =
+          turnFileAttachments.length > 0
+            ? [...turnFileAttachments, ...nonDocumentAttachments]
+            : messageAttachments(newMessage);
+        const includeHistory = chatApp?.sendChatHistory !== false && sendChatHistory !== false;
+        const hydratedHistory = includeHistory
+          ? await hydrateHistoryForPrompt(chatId, history, {
+              store: repository.fileStore?.()
+            })
+          : [];
+        // An e-mail, meeting or page is sent with every turn and stored once per
+        // chat: when this turn carries it again, earlier turns do not repeat it.
+        const currentItemIds = new Set(
+          [preparedPromptMessage?.fileData]
+            .flat()
+            .filter(file => file && ['email', 'meeting', 'page'].includes(file.origin))
+            .map(file => file.fileId || file.id)
+            .filter(Boolean)
+        );
+        const dedupedHistory =
+          currentItemIds.size === 0
+            ? hydratedHistory
+            : hydratedHistory
+                .map(entry =>
+                  entry.fileData
+                    ? {
+                        ...entry,
+                        fileData: entry.fileData.filter(
+                          file => !currentItemIds.has(file.fileId || file.id)
+                        )
+                      }
+                    : entry
+                )
+                .map(entry =>
+                  entry.fileData && entry.fileData.length === 0
+                    ? (({ fileData: _dropped, ...rest }) => rest)(entry)
+                    : entry
+                )
+                .filter(entry => entry.fileData || (entry.content || '').trim());
+        conversation = includeHistory
+          ? [...historyForPrompt(dedupedHistory), preparedPromptMessage]
+          : [preparedPromptMessage];
 
         persistence = {
           repository,
@@ -1138,7 +1203,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // sent necessarily is — it only exists in this request.
           content: typeof newMessage.content === 'string' ? newMessage.content : '',
           clientMessageId: messageId,
-          attachments: messageAttachments(newMessage),
+          attachments: persistedAttachments,
           variables: turnVariables,
           replaceFromMessageId: forkStoredId,
           // A message spoken in voice mode is marked, so the history can show
