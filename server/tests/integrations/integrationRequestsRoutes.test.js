@@ -74,7 +74,9 @@ const ENTRIES = [
     status: 'ok',
     source: 'shipped'
   },
-  { definition: definition('com.example/old'), status: 'incompatible', source: 'shipped' }
+  { definition: definition('com.example/old'), status: 'incompatible', source: 'shipped' },
+  // Built by an admin in iHub: never offered to users outside its groups.
+  { definition: definition('custom/crm-tools'), status: 'ok', source: 'custom' }
 ];
 
 const state = { installed: [], groups: null, platform: null };
@@ -180,7 +182,8 @@ describe('the user side', () => {
       effects: ['read', 'write'],
       request: null
     });
-    // jira-main is available to alice; ihub is always installed; old is incompatible.
+    // jira-main is available to alice; ihub is always installed; old is
+    // incompatible; custom/crm-tools is an admin's own build.
   });
 
   it('records a request, shows it as requested and refuses a second one', async () => {
@@ -252,7 +255,8 @@ describe('the user side', () => {
       'com.example/nope', // unknown
       'com.intrafind/jira', // already available to alice
       'com.intrafind/ihub', // always installed
-      'com.example/old' // incompatible
+      'com.example/old', // incompatible
+      'custom/crm-tools' // built by an admin in iHub
     ]) {
       const res = await ask('alice', { definition: id });
       assert.equal(res.status, 404, id);

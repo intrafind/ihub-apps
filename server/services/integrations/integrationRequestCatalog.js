@@ -7,7 +7,8 @@
  * Integrations shows them.
  *
  * A definition is requestable when it is loaded and compatible, is not one of
- * iHub's always-installed built-ins, is not hidden by an admin, and no enabled
+ * iHub's always-installed built-ins, is not a custom integration an admin built
+ * in iHub (`custom/<id>`), is not hidden by an admin, and no enabled
  * installation of it is allowed for the user's groups. The entry carries only
  * what a user needs to decide: name, description, publisher, categories,
  * capabilities and the effects of its declared actions; never install fields,
@@ -17,6 +18,7 @@
  *
  * @module services/integrations/integrationRequestCatalog
  */
+import { isCustomDefinitionId } from '../../validators/integrationDefinitionSchema.js';
 import { localized } from './definitions/installedValues.js';
 import { mayUseIntegration } from './integrationAccess.js';
 import { effectsOf } from './userIntegrations.js';
@@ -59,6 +61,9 @@ export function isRequestable(entry, { installations, user, hidden }) {
   if (!definition?.id) return false;
   if (entry.status === 'incompatible') return false;
   if (definition.alwaysInstalled === true) return false;
+  // A custom integration is one an admin built in iHub for their own use; it
+  // is not in the catalog users choose from, whatever groups they are in.
+  if (isCustomDefinitionId(definition.id)) return false;
   if (hidden?.has(definition.id)) return false;
   return !availableToUser(definition.id, installations, user);
 }
