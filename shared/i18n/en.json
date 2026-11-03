@@ -4056,7 +4056,17 @@
         "dataFlow": {
           "internal": "Stays in iHub",
           "external": "Leaves iHub"
-        }
+        },
+        "intro": "This is one action of the integration: a single thing the AI model can ask this system to do. Here you control what the model is told about it, how iHub treats it (read or write, where the data goes, whether a person must approve) and you can run it once to see that it works.",
+        "badgesLabel": "Current settings:",
+        "whatLead": "What the AI model is told about this action. It reads the description and the parameters to decide when to call it and what to pass.",
+        "effectLead": "How iHub treats a call to this action. These values decide whether a person has to approve it first. The vendor’s declaration is not trusted on its own; your overrides are.",
+        "overridesTitle": "Change these settings",
+        "sideEffectHelp": "What a call changes in the connected system: nothing (read), something (write) or it deletes data.",
+        "dataFlowHelp": "Whether the result stays inside iHub or is sent on to an outside service.",
+        "approvalHelp": "Whether a person has to confirm each call to this action in the chat before it runs.",
+        "howLead": "Extra help for using this action well, and where it is already in use.",
+        "usageLead": "How often this action was used, and how often approvals were granted or refused."
       },
       "instructions": {
         "sourceAdmin": "Your text",

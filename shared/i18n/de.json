@@ -4355,7 +4355,17 @@
         "dataFlow": {
           "internal": "Bleibt in iHub",
           "external": "Verlässt iHub"
-        }
+        },
+        "intro": "Das ist eine einzelne Aktion der Integration: etwas, das das KI-Modell von diesem System ausführen lassen kann. Hier legst du fest, was das Modell darüber erfährt und wie iHub sie behandelt (lesend oder schreibend, wohin die Daten gehen, ob eine Person freigeben muss). Außerdem kannst du sie einmal ausführen, um zu prüfen, ob sie funktioniert.",
+        "badgesLabel": "Aktuelle Einstellungen:",
+        "whatLead": "Was das KI-Modell über diese Aktion erfährt. Anhand von Beschreibung und Parametern entscheidet es, wann es sie aufruft und was es übergibt.",
+        "effectLead": "Wie iHub einen Aufruf dieser Aktion behandelt. Diese Werte entscheiden, ob vorher eine Person freigeben muss. Die Angabe des Herstellers gilt nicht von selbst als vertrauenswürdig, deine Überschreibungen schon.",
+        "overridesTitle": "Diese Einstellungen ändern",
+        "sideEffectHelp": "Was ein Aufruf im angebundenen System verändert: nichts (lesend), etwas (schreibend) oder er löscht Daten.",
+        "dataFlowHelp": "Ob das Ergebnis in iHub bleibt oder an einen externen Dienst weitergegeben wird.",
+        "approvalHelp": "Ob eine Person jeden Aufruf dieser Aktion im Chat bestätigen muss, bevor er läuft.",
+        "howLead": "Zusätzliche Hilfe für den guten Einsatz dieser Aktion und wo sie bereits verwendet wird.",
+        "usageLead": "Wie oft diese Aktion genutzt wurde und wie oft Freigaben erteilt oder abgelehnt wurden."
       },
       "instructions": {
         "sourceAdmin": "Dein Text",

@@ -1,5 +1,18 @@
 # Fixes — Unreleased
 
+## Integration Action Details Are Readable and Say What They Are For
+
+The details panel of an integration action (opened with **Details** on the integration's page)
+had no margin: texts, fields and buttons touched the panel's edge, and the three settings
+dropdowns were squeezed side by side so their labels were cut off. The panel now has proper
+spacing, and the settings are stacked with a one-line explanation each.
+
+The panel also says what it is for. An introduction at the top explains that an action is one
+thing the AI model can ask the connected system to do, and that here you control what the model is
+told, how iHub treats the call (read or write, where the data goes, whether a person must
+approve) and can run it once to test it. Each section has a short lead-in sentence, and field
+names are set apart from their values.
+
 ## Audit Log Shows Each Person Under One Name
 
 The **Actor** column of the audit log showed a person's name for their sign-in and an internal id
