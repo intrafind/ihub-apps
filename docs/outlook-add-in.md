@@ -120,7 +120,7 @@ Only chats whose app the pane offers are listed — a chat is continued through 
 
 - The chat opens at the web app's own chat address (`{baseUrl}/apps/{appId}/c/{chatId}`) — kept or temporary, an [`ephemeral`](apps.md) app's included, since every chat is stored. Nothing is copied: it is the same stored chat, and a message sent in either place lands in the one transcript. An answer that is still being written in the pane is followed live in the browser. The entry is greyed out in a new chat until its first message has reached the server, since until then there is nothing to open. When the host cannot confirm that the browser opened, the notice strip below the chat shows the address to open by hand.
 - The browser opens the page with the user's **web** session, not the pane's token. Signed out there, the web app signs in first and then opens the chat. Signed in as a different user, it does not open for them: a stored chat belongs to the user who started it (admins aside, who can read any stored chat).
-- A stored chat reaches the browser with its transcript and settings, not the email: the open email goes to the model per turn and is not stored (see [what a stored turn keeps](chat-persistence.md#in-the-outlook-add-in)). A follow-up in the browser that needs the email needs it pasted or attached there.
+- A stored chat reaches the browser with its transcript, settings and files. The open email, the emails the user added and the open meeting are stored with the chat as [chat files](chat-files.md) (see [Mail, meetings and pages as chat files](#mail-meetings-and-pages-as-chat-files); what a stored turn keeps is in [Chat Persistence](chat-persistence.md#in-the-outlook-add-in)), so a follow-up in the browser can still refer to them. Only an email that was never sent into the chat needs to be pasted or attached there.
 - The pane does not re-read a chat that moved on elsewhere. After continuing in the browser, reopen the chat from **Chat history** to see the new messages in the pane.
 
 Outlook opens the browser through `Office.context.ui.openBrowserWindow`, and the browser extension through a new tab. When the client cannot confirm the browser opened (a client without that API, where only a popup is left and a blocked one looks the same as an opened one), the notice strip below the chat shows the address to open by hand; one click selects it for copying.
@@ -227,6 +227,17 @@ A rejected Office call never raises a browser alert. The pane shows a notice nam
 ---
 
 ## What the model receives
+
+### Mail, meetings and pages as chat files
+
+With file storage on (`platform.uploads.enabled`, the default; see [Chat and Scheduled-Task Files](chat-files.md)), the open email, the emails the user added, the open meeting and the open web page (browser extension) are stored with the chat as files instead of being resent as one-message context on every turn:
+
+- The email becomes an `.eml`, the meeting an `.ics`, the page a `.md` file. In **Files → Uploaded** they appear like any other attachment, with the text the model reads, and they count toward the chat's file limits. The model still sees them as the `<content type="email|meeting|page">` blocks shown below.
+- One copy is kept per item. Sending the same open email in every turn does not store it again, and an earlier turn does not repeat an item the current turn sends again.
+- In `original_and_text` mode the email is stored as the **real `.eml`** Outlook has (needs Mailbox API 1.14+ and read mode; a chat popped out of the pane asks the pane for it). Without that API, in compose mode, or when the user took an attachment out of the context, a message is built from the headers and the body instead. In the `server_text_only` and `client_text_only` modes only the text is kept. With file storage off, the items travel as one-message context on every turn and are not stored.
+- Attachments keep their original: a `.docx`, `.pptx`, `.xlsx` or PDF attachment is stored as it is, so the model can use it as a template or fill it in.
+- The files follow the chat's retention, can be deleted from the drawer, and are included in a [chat share](chat-sharing.md) only if the owner chooses to share them.
+- **Attach to email** in the drawer's file actions attaches a stored file to the mail the user is writing (compose mode only), like **Add to email** for iFinder documents.
 
 The task pane sends what the user typed, the open item and its attachments separately; the server
 renders every piece of material as a `<content>` block — the same shape the web app uses for
@@ -577,7 +588,7 @@ Outlook applies the same rule to other items, such as delivery and non-delivery 
 ### Email attachments are not picked up
 
 - Reading attachments needs Mailbox API **1.8+**. Outlook on the web and current desktop Outlook satisfy this; very old Outlook 2016 builds may not.
-- Inline images are filtered out. Every other attachment is forwarded as chat context: files are read like uploads, attached emails (`.eml`) are turned into a headers-and-body text block, and meeting invites into a short summary. Cloud links (OneDrive / SharePoint) are passed as the link only, since there are no file bytes to read.
+- Inline images are filtered out. Every other attachment is forwarded as chat context: files are read like uploads (and, with the default storage mode, the original is stored so a Word, PowerPoint, Excel or PDF attachment can serve as a template), attached emails (`.eml`) are turned into a headers-and-body text block, and meeting invites into a short summary. Cloud links (OneDrive / SharePoint) are passed as the link only, since there are no file bytes to read.
 - Total attachment size is capped by iHub's normal upload limits — see [File Upload Feature](file-upload-feature.md).
 
 ### "Add to email" is greyed out, or a document will not attach

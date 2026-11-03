@@ -139,6 +139,20 @@ form names a saved scope the owner lost; saving picks another one. A task
 without `integrationScopes` runs as before: its tools search the default
 profile, or the one the model names after the usual checks.
 
+### Attached files
+
+A task can carry files: a brief, a template, a price list. The form has a **Files** section where
+the user uploads files or picks them from a connected system (Nextcloud, Microsoft 365, Google
+Drive, iFinder). Every run reads them, like files in a chat, and the document skills can use them as
+templates (see [Chat and Scheduled-Task Files](chat-files.md)).
+
+- A file picked from a connected system can be set to **refresh on each run**: the run fetches it
+  again at its start with the task owner's credentials. When that fails (access revoked, document
+  gone, system down), the run uses the last stored version and says so in its answer.
+- The task's files count toward the usual limits (`platform.uploads.quotas`), and the original of a
+  task file is kept as long as the task exists.
+- **Duplicate** copies the files too; **Delete** removes them with the task.
+
 ## Schedules
 
 | Type       | Example                                   | Fields                                   |
@@ -487,7 +501,8 @@ tasks — an id that is not theirs is a 404.
 | `POST /_notifications/seen`                    | Mark them seen                                     |
 | `GET /_apps/:appId/tools`                      | The tools a task of this app may use               |
 | `GET` · `PUT` · `PATCH` · `DELETE /:taskId`    | Read, edit, delete (`?deleteChats=1` removes the run chats too) |
-| `POST /:taskId/run` · `/pause` · `/resume` · `/duplicate` | Run now, pause, resume, copy            |
+| `POST /:taskId/run` · `/pause` · `/resume` · `/duplicate` | Run now, pause, resume, copy (with the task's files) |
+| `GET` · `POST /:taskId/files`, `GET` · `DELETE /:taskId/files/:fileId` | The task's attached files, see [Chat files](chat-files.md#http-api) |
 | `GET /:taskId/runs` · `/runs/:runId`           | Run history (cursor-paged), one run                |
 | `POST /:taskId/runs/:runId/cancel`             | Stop a queued, running or waiting run              |
 | `POST /:taskId/runs/:runId/approval`           | `{ decision: 'approve' \| 'reject', alwaysAllow }` |
@@ -517,7 +532,10 @@ at `/api/docs`.
   task, written under a lock with a version check.
 - **Run chats follow chat retention's age rule** but not `maxChatsPerUser`;
   they are capped per task instead — see [Retention](chat-persistence.md#retention).
-- **Deleting a task** keeps its run chats unless *delete chats* is ticked.
+- **Deleting a task** keeps its run chats unless *delete chats* is ticked. Its attached files are
+  always deleted with it.
+- **Task files** live in the `chat-files` namespace under the task's scope (see
+  [Chat and Scheduled-Task Files](chat-files.md)).
 - The ticker checks for due work every 15 seconds; with the default stagger a
   run starts up to five minutes after its slot.
 

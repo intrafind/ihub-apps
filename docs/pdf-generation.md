@@ -1,11 +1,11 @@
-# Document and File Generation (PDF, Word, PowerPoint, Code, ZIP) and System Skills
+# Document and File Generation (PDF, Word, PowerPoint, Excel, Web Artifacts, Code, ZIP) and System Skills
 
-iHub generates PDF files, Word documents and PowerPoint presentations on the server, without Python, Office or a browser. The engines serve two purposes:
+iHub generates PDF files, Word documents, PowerPoint presentations and Excel workbooks on the server, without Python, Office or a browser. The engines serve two purposes:
 
-1. **On demand by the model.** The **`pdf`**, **`docx`** and **`pptx` system skills** let the model create a document in a chat — a report, an invoice, a letter, a proposal, a slide deck. The user gets a download card below the answer.
+1. **On demand by the model.** The **`pdf`**, **`docx`**, **`pptx`** and **`xlsx` system skills** let the model create a document in a chat — a report, an invoice, a letter, a proposal, a slide deck, a financial model. The **`web-artifacts`** skill builds interactive HTML pages and SVG graphics. The user gets a download card below the answer.
 2. **Exports.** Chat export, the Markdown download menus (workflow output) and agent artifacts produce a real `.pdf` file. They used to open the browser's print dialog, which printed blank pages in the Outlook task pane, the browser extension and some browsers.
 
-All three formats follow the company's **[document template](document-templates.md)**: colours, fonts, logo, letterhead, and the company's own Word and PowerPoint templates.
+The office formats follow the company's **[document template](document-templates.md)**: colours, fonts, logo, letterhead, and the company's own Word and PowerPoint templates.
 
 ## System skills
 
@@ -35,13 +35,13 @@ The shipped system skills:
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
 | `docx` | `create_docx` | Create editable Word documents on request |
 | `pptx` | `create_pptx` | Create PowerPoint presentations on request |
+| `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
+| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's Artifacts panel |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
-
-A system skill for Excel workbooks is planned on the same infrastructure.
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `create_file`, `create_zip`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -83,11 +83,13 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 - `references/layout-blocks.md`: the full block grammar.
 - `references/examples.md`: complete report, invoice, letter and one-pager.
 
+- **Forms:** the `form` layout block prints a blank or pre-filled form (`text`, `textarea`, `checkbox` and `signature` fields). To fill the interactive fields of a PDF the user uploaded, the model passes its id as `templateFileId` with `fillFormFields` (field name → value) and optionally `flattenForm` to make the result fixed. Without `fillFormFields`, `templateFileId` prints the new document on that PDF as letterhead. See [Chat files → Using a file in the document skills](chat-files.md#using-a-file-in-the-document-skills).
+- **Title block:** `showTitle` turns the title block off for letters, certificates and posters that arrange their own header; `date` sets the cover-page date and the `{date}` placeholder.
 - **GitHub alerts** (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) become coloured callouts, as in Word documents.
 
 ### What it cannot do (yet)
 
-- **Edit, merge, split, fill in or extract from PDFs the user uploaded.** Uploaded documents are converted to text in the browser, so the server never has the original file. The skill tells the user so and offers to create a new document instead.
+- **Edit, merge, split or extract from PDFs the user uploaded.** The model can fill in a form's fields or print a new document on an uploaded PDF as letterhead (see above), but not rewrite the pages of an existing PDF. The skill tells the user so and offers to create a new document instead.
 - **Colour emoji and CJK text.** The bundled fonts (DejaVu Sans, Serif and Sans Mono) cover Latin, Greek, Cyrillic and a wide range of symbols (arrows, check marks, box drawing).
   - Common colour emoji are replaced by their monochrome counterparts (✅ becomes ✔).
   - Anything the fonts cannot draw is left out, and the tool reports it as a warning.
@@ -101,6 +103,8 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 - Bulleted, numbered (each list restarts at 1) and task lists, GFM tables with column alignment and a repeated header row, code blocks, quotes, GitHub alerts as shaded callouts, horizontal rules, page breaks (`\pagebreak`), links, `<sub>`/`<sup>`, and PNG/JPEG images as `data:` URIs.
 - Document settings: title, subtitle, author, language, cover page, table of contents (updated by Word when the file is opened), header, footer, page numbers, page size and orientation; without a document template also a primary colour and body font.
 - With a document template, the brand's styles, logo, header and footer — or the company's Word template, which the content is merged into (see [Document templates](document-templates.md#word)).
+
+- `showTitle`, `date` and `accentColor` work as for PDFs; with `templateFileId` the model builds on a Word file the user uploaded (`styles_only`, `fill_placeholders` or `append`, see [Document templates](document-templates.md#word)).
 
 Not supported: footnotes, comments, tracked changes and charts (the skill suggests a table, a PDF or a presentation instead).
 
@@ -119,6 +123,7 @@ Enable it like the `pdf` skill: add `docx` to the app's skills.
 | `chart` | `{ "type": "column" \| "bar" \| "line" \| "area" \| "pie" \| "doughnut", "categories": […], "series": [{ "name", "values" }], "stacked", "showValues", "numberFormat", "title" }` |
 | `image` | `{ "data": "data:image/png;base64,…", "caption" }` |
 | `left`, `right` | Two-column slides: each `{ heading, text, table, chart, image }` |
+| `metrics` | 1–4 KPI cards, `[{ "value": "+18 %", "label": "Revenue YoY", "note": "…" }]`, placed across the top (also inside `left` / `right`) |
 | `notes` | Speaker notes |
 
 - Slides are placed on the template's **layouts and placeholders** — the company's PowerPoint template, or iHub's built-in master made from the brand (see [Document templates](document-templates.md#powerpoint)).
@@ -128,6 +133,21 @@ Enable it like the `pdf` skill: add `docx` to the app's skills.
 - Limits: 60 slides, 30 table rows and 12 columns per slide, 12 chart series with 60 categories, 15 MB of images.
 
 There is no slide preview for the model: rendering slides would need Office or LibreOffice on the server.
+
+## The `xlsx` skill
+
+`create_xlsx` builds a native Excel workbook from `sheets`, passed as JSON text (1–20 worksheets):
+
+- Each sheet has a `name`, `columns` (a `header`, an optional `align` and a `format`: `currency`, `integer`, `decimal`, `percent`, `date`, `text`, or an Excel number format such as `#,##0.00 €`) and `rows` (numbers, text, ISO dates, or **live formulas** starting with `=`, which Excel recalculates on opening). A row can be `{ "cells": […], "total": true }` for a totals row.
+- Row 1 is always the header row. Sheets get a frozen header and an auto-filter (switchable per sheet) and auto-fitted column widths.
+- The workbook follows the [document template](document-templates.md): corporate colours and fonts, or the brand parameters `primaryColor`, `accentColor` and `font` when no template applies.
+- With `sourceFileId` the model builds on an `.xlsx` the user uploaded: its sheets, styles and defined names are kept, and each sheet in `sheets` replaces the sheet of the same name or is added. See [Chat files](chat-files.md#using-a-file-in-the-document-skills).
+
+Use the `files` skill for a plain `.csv` instead. Enable it like the other skills: add `xlsx` to the app's skills.
+
+## The `web-artifacts` skill
+
+`create_web_artifact` creates a single-file interactive page (`format: "html"`, the default) or a standalone vector graphic (`format: "svg"`) — a dashboard, calculator, simulator, clickable prototype, canvas visualization or diagram. The user gets a download card, and the file opens in the chat's [Artifacts panel](artifacts.md#the-artifacts-panel) with a **Preview | Code** toggle: HTML runs in a sandboxed frame, SVG renders as a picture. The server still stores and serves both as `text/plain` (see [Artifacts](artifacts.md#kinds)), so a downloaded file is never executed by iHub itself. Enable it by adding `web-artifacts` to the app's skills.
 
 ## The `files` skill
 
@@ -157,14 +177,14 @@ The archive follows the [artifact ZIP limits](artifacts.md#configuration) (`maxZ
 A file the model created takes the path a generated picture takes. There is no download route of its own:
 
 - **While the answer streams:** `create_pdf` keeps the PDF in server memory and returns only a descriptor, so the model never sees the bytes. The bytes reach the chat with the tool's `tool/completed` event, and the download card below the answer saves them.
-- **Stored with the answer:** in a stored chat (every chat is), the file is stored as an [artifact](artifacts.md) of the chat: kind `document` for PDF, Word and PowerPoint, `code` for a text file, `archive` for a ZIP. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
+- **Stored with the answer:** in a stored chat (every chat is), the file is stored as an [artifact](artifacts.md) of the chat: kind `document` for PDF, Word, PowerPoint and Excel, `code` for a text file (HTML and SVG included), `archive` for a ZIP. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
 - **Chats that are not stored:** the file lives as long as the page, like a generated picture. After a reload, the card says it is no longer available.
 - **Limits:**
   - 25 MB per file.
   - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
 - **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
 - **Artifacts panel:** every file of the chat is also listed in the chat's [Artifacts panel](artifacts.md#the-artifacts-panel), with a preview, and can be downloaded alone or together with others as one ZIP.
-- **Types:** PDF, Word (`.docx`), PowerPoint (`.pptx`), text files from `create_file` and ZIP archives from `create_zip`. The card shows the page or slide count while the answer is on screen. A text file is saved under the last part of its name (`src/index.js` → `index.js`).
+- **Types:** PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), HTML and SVG from `create_web_artifact`, text files from `create_file` and ZIP archives from `create_zip`. The card shows the page or slide count while the answer is on screen. A text file is saved under the last part of its name (`src/index.js` → `index.js`).
 - **Many files in one turn:** `maxPerBatch` (default 8) also caps how many generated files one answer stores. For a project, the `files` skill tells the model to use one `create_zip` call instead of one `create_file` call per file.
 
 ## Server-side PDF export

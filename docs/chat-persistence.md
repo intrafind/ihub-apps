@@ -304,11 +304,14 @@ apps, the pane reads a few older pages on its own to fill its lists, and past
 that leaves it to **Show older chats**.
 
 What is stored for a pane turn is what the store keeps for any turn: what the
-user typed, the names of attached files and the answer. The open email reaches
-the model as `hostContext` and is not written to the transcript — so a later
-turn in that chat, in the pane or in the browser, does not get the earlier
-email again. In the pane, the email that is open when the turn is sent goes
-with it.
+user typed, the names of attached files and the answer. With file storage on
+(`platform.uploads.enabled`, the default), the open email, the emails the user
+added and the open meeting are stored with the chat as files (`.eml`, `.ics`; see
+[Outlook add-in → Mail, meetings and pages as chat files](outlook-add-in.md#mail-meetings-and-pages-as-chat-files)),
+once per item, so a later turn in that chat, in the pane or in the browser, still
+has the earlier email. With file storage off the open email reaches the model as
+`hostContext` and is not written to the transcript; a later turn then gets only
+the email that is open when it is sent.
 
 An app marked [`ephemeral`](apps.md) starts temporary chats in the pane too, as
 in the web app: they are stored, but never reach the history.
@@ -659,9 +662,10 @@ Details that matter:
   sets it. The inference API's Conversations API keeps a conversation's
   variables in the same field, so a chat carries its values between the chat
   UI and the API.
-- **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
-  of an upload stays in the request; it is never written into a document that is
-  read back for as long as the chat lives.
+- **Attachments are descriptors** — `{ id?, type, name?, bytes? }`. The base64 payload
+  of an upload is never written into the message document. A file the server stored
+  (the default, see [Chat and Scheduled-Task Files](chat-files.md)) is referenced by
+  its `id`; the file lives in the `chat-files` namespace and is deleted with the chat.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
   payload in the shared artifact store. See [Artifacts](artifacts.md).
 - **What an answer found is stored with it** — `sources: { items, queries }`:

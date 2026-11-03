@@ -135,8 +135,11 @@ Depending on the app: **Clear** the chat, **Export** it (Markdown, PDF, Word, HT
 output format, reasoning effort, tools).
 
 Once an answer produced a picture or a file, **Artifacts** lists every file of the chat: generated
-pictures, PDF, Word and PowerPoint documents, code and data files, ZIP archives. Select one to
-preview it (pictures, rendered Markdown, formatted JSON, code), then **Download** or **Copy** it.
+pictures, PDF, Word, PowerPoint and Excel documents, code and data files, ZIP archives. In a stored
+chat the panel is the **Files** drawer with an **Uploaded** tab (what you attached) and a
+**Generated** tab. Select one to preview it (pictures, PDFs, rendered Markdown, formatted JSON,
+code, CSV tables; HTML pages and SVG graphics from the assistant run live, with a **Preview | Code**
+toggle), then **Download** or **Copy** it.
 Tick several and choose **Download selected (.zip)**, or **Download all (.zip)** for everything.
 A shared chat offers the same panel for the files it contains.
 
