@@ -69,29 +69,13 @@ export const fetchAdminApps = async (options = {}) => {
   return handleApiResponse(() => apiClient.get('/admin/apps'), cacheKey, DEFAULT_CACHE_TTL.SHORT);
 };
 
-export const fetchTools = async (options = {}) => {
-  const { skipCache = false, language = null } = options;
-  const cacheKey = skipCache ? null : 'admin_tools';
-
-  const params = {};
-  if (language) {
-    params.language = language;
-  }
-
-  return handleApiResponse(
-    () => apiClient.get('/admin/tools', { params }),
-    cacheKey,
-    DEFAULT_CACHE_TTL.SHORT
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Admin skill endpoints
 // ---------------------------------------------------------------------------
 
 /**
  * Fetch all skills for the admin panel with optional ETag caching.
- * Follows the same pattern as fetchTools.
+ * Follows the same pattern as fetchAdminApps.
  *
  * @param {Object} [options] - Request options
  * @param {boolean} [options.skipCache=false] - Whether to bypass the cache

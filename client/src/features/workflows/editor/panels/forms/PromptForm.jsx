@@ -7,7 +7,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchTools } from '../../../../../api/endpoints/admin';
+import { fetchAdminToolCatalog } from '../../../../../api/integrationsAdminApi';
 import ProjectPicker from '../../../../admin/components/ProjectPicker';
 
 function PromptForm({ config, onChange }) {
@@ -34,7 +34,7 @@ function PromptForm({ config, onChange }) {
     }
   };
 
-  const fetchToolsFn = useCallback(() => fetchTools(), []);
+  const fetchToolsFn = useCallback(() => fetchAdminToolCatalog(), []);
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   const inputClass =

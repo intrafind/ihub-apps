@@ -373,15 +373,37 @@ describe('Admin Endpoints Security - Comprehensive Audit', () => {
     });
   });
 
-  describe('Admin Tools Endpoints Protection', () => {
-    test('should require admin auth for GET /api/admin/tools', async () => {
-      const response = await request(app).get('/api/admin/tools');
+  describe('Admin Integration Builder Endpoints Protection', () => {
+    test('should require admin auth for POST /api/admin/integrations/builder', async () => {
+      const response = await request(app).post('/api/admin/integrations/builder').send({});
       expect(response.status).toBe(401);
     });
 
-    test('should require admin auth for POST /api/admin/tools', async () => {
-      const response = await request(app).post('/api/admin/tools').send({});
+    test('should require admin auth for GET /api/admin/integrations/builder/:id', async () => {
+      const response = await request(app).get('/api/admin/integrations/builder/orders');
       expect(response.status).toBe(401);
+    });
+
+    test('should require admin auth for PUT /api/admin/integrations/builder/:id', async () => {
+      const response = await request(app).put('/api/admin/integrations/builder/orders').send({});
+      expect(response.status).toBe(401);
+    });
+
+    test('should require admin auth for POST /api/admin/integrations/builder/_import', async () => {
+      const response = await request(app)
+        .post('/api/admin/integrations/builder/_import')
+        .send({ kind: 'openapi', source: { type: 'inline', spec: '{}' } });
+      expect(response.status).toBe(401);
+    });
+
+    test('should require admin auth for POST /api/admin/integrations/builder/_export/:id', async () => {
+      const response = await request(app).post('/api/admin/integrations/builder/_export/orders');
+      expect(response.status).toBe(401);
+    });
+
+    test('the removed Tools admin routes are gone', async () => {
+      const response = await request(app).get('/api/admin/tools');
+      expect([401, 404]).toContain(response.status);
     });
   });
 

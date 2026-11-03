@@ -167,9 +167,25 @@ const CONTENT_CONFIG = {
       if (!raw) return { success: false, errors: ['integration.json is missing'] };
       assertKnownDefinitionSchema(typeof raw === 'string' ? JSON.parse(raw) : raw);
       const parsed = validateIntegrationDefinition(typeof raw === 'string' ? JSON.parse(raw) : raw);
-      return parsed.success
-        ? { success: true }
-        : { success: false, errors: parsed.errors.map(e => `${e.path.join('.')}: ${e.message}`) };
+      if (!parsed.success) {
+        return {
+          success: false,
+          errors: parsed.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        };
+      }
+      // A fixed tool id (`toolId`) addresses a tool on this server: only the
+      // definitions iHub ships and the custom integrations built here may
+      // keep one. A registry's definition gets `<installation>__<action>`.
+      const fixed = (parsed.data.actions || []).filter(a => a.toolId).map(a => a.name);
+      if (fixed.length && !parsed.data.builtIn) {
+        return {
+          success: false,
+          errors: [
+            `actions: a definition from a registry cannot fix tool ids (${fixed.join(', ')})`
+          ]
+        };
+      }
+      return { success: true };
     }
   }
 };
