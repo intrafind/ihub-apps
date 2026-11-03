@@ -15,6 +15,7 @@
  *
  * @module services/loop/segmentPlanner
  */
+import { needsApproval } from '../../../shared/toolApproval.js';
 
 function targetsOf(args) {
   const out = new Set();
@@ -60,9 +61,11 @@ export function planToolBatches(items, policy = {}) {
 
   for (const item of positioned) {
     const def = item.toolDef || {};
-    const interactive = def.interactive === true || def.passthrough === true;
+    // A call that needs a person's approval (its stamped policy, #2945) may
+    // pause the turn like an interactive tool, so it never shares a batch.
+    const interactive = def.interactive === true || def.passthrough === true || needsApproval(def);
     if (interactive) {
-      // Interactive / passthrough tools terminate or pause the turn — never overlap them.
+      // Interactive / passthrough / gated tools terminate or pause the turn — never overlap them.
       flush();
       batches.push([item]);
       continue;

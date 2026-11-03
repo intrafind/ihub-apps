@@ -54,7 +54,6 @@ import {
   checkTaskPrincipal
 } from '../services/scheduler/tasks/taskPolicy.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
-import { requiresApproval } from '../services/scheduler/tasks/runSeams.js';
 
 const COMPONENT = 'ScheduledTaskRoutes';
 
@@ -330,19 +329,16 @@ export default function registerScheduledTaskRoutes(app) {
           : (Array.isArray(rawSelect) ? rawSelect : [rawSelect])
               .filter(ref => typeof ref === 'string')
               .slice(0, 200);
+      // `requiresApproval` is the resolved policy of the tool as this app
+      // offers it (platform default, tool or installation, action, app; #2945).
       const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language, { select });
-      const { data: toolDefs = [] } = configCache.getTools() || {};
       res.json({
-        items: offered.map(({ selectedByApp, ...tool }) => {
-          const def = toolDefs.find(entry => entry.id === tool.id);
-          return {
-            ...tool,
-            requiresApproval: requiresApproval(def),
-            // Tools the app lists itself can be toggled; injected ones
-            // (web search, sources, workflows, skills) always come along.
-            toggleable: selectedByApp
-          };
-        })
+        items: offered.map(({ selectedByApp, ...tool }) => ({
+          ...tool,
+          // Tools the app lists itself can be toggled; injected ones
+          // (web search, sources, workflows, skills) always come along.
+          toggleable: selectedByApp
+        }))
       });
     } catch (error) {
       sendTaskError(res, error, 'list app tools');

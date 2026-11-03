@@ -76,6 +76,9 @@ export async function discoverActions({ definition, instance, language = 'en' })
       available: enabled,
       guidance: '',
       examples: [],
+      // The server's annotations as listed: the action detail resolves the
+      // approval exactly as the tool loader does (annotations are untrusted).
+      annotations: tool.annotations || null,
       language
     };
   });
@@ -99,6 +102,16 @@ export async function discoverTools(resolved, language = 'en') {
       definition: definition.id
     }
   }));
+}
+
+/**
+ * The model guidance the server sent in `initialize` (MCP `instructions`),
+ * or null while no shared connection is open (or the server sends none).
+ * @param {Object} instance
+ * @returns {string|null}
+ */
+export function serverInstructions(instance) {
+  return mcpClientManager.serverInstructions(instance?.id) || null;
 }
 
 /** Run one tool on the calling user's behalf; iHub's context keys stay with the manager. */

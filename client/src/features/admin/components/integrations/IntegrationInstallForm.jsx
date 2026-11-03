@@ -12,6 +12,8 @@ import ConfigFieldInput, { pickText } from './ConfigFieldInput';
 import ActionToggleList from './ActionToggleList';
 import { buildActionsPolicy, initialCheckedActions } from './actionsPolicy';
 import { mergedLabel } from './installationPayload';
+import { ApprovalModeSelect } from '../ToolApprovalFields';
+import { installApprovalPreset } from '../../../../../../shared/toolApproval.js';
 import { fieldApplies, secretFieldForMode } from '../../../../shared/utils/configFieldWhen';
 import {
   CALLOUT_CLASS,
@@ -231,7 +233,12 @@ function IntegrationInstallForm({
           overrides: instance?.actions?.overrides || {},
           // The stored policy: sent back unchanged while no actions are known,
           // and it decides whether an allowlist stays one (`buildActionsPolicy`).
-          storedActions: instance?.actions || null
+          storedActions: instance?.actions || null,
+          // Tool approval (#2945) is edited on the Overview; sent back unchanged.
+          storedApproval: instance?.approval || null,
+          // A new installation starts with an approval default the admin can
+          // change before saving (#2916): the server's preset for the definition.
+          approvalDefault: isEdit ? undefined : def.approvalPreset || installApprovalPreset(def)
         });
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
@@ -289,7 +296,9 @@ function IntegrationInstallForm({
         checkedActions: form.checkedActions,
         stored: form.storedActions,
         overrides: form.overrides || {}
-      })
+      }),
+      ...(form.storedApproval ? { approval: form.storedApproval } : {}),
+      ...(!isEdit && form.approvalDefault ? { approval: { default: form.approvalDefault } } : {})
     };
     if (secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };
@@ -631,6 +640,28 @@ function IntegrationInstallForm({
             dynamicActions={Boolean(definition.dynamicActions)}
             storedPolicy={form.storedActions}
           />
+          {/* A new installation's tool approval (#2916); edited on the Overview afterwards. */}
+          {!isEdit && (
+            <div className="pt-2 sm:max-w-md" data-testid="install-approval-default">
+              <ApprovalModeSelect
+                label={t('admin.toolApproval.installationMode', 'Ask before an action runs')}
+                value={form.approvalDefault}
+                inheritLabel={t('admin.toolApproval.inheritPlatform', 'Platform default')}
+                onChange={mode => setForm(prev => ({ ...prev, approvalDefault: mode }))}
+                help={
+                  definition.approvalPreset === 'always'
+                    ? t(
+                        'admin.toolApproval.presetAlwaysHelp',
+                        'Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.'
+                      )
+                    : t(
+                        'admin.toolApproval.presetWritesHelp',
+                        'Preselected: ask unless an action only reads. You can change it now or later on the integration page.'
+                      )
+                }
+              />
+            </div>
+          )}
         </fieldset>
       )}
 

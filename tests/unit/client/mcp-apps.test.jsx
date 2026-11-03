@@ -3,7 +3,7 @@
  * of tool frames onto `message.mcpApps`, the model-context store, stored
  * messages, and the sandbox the view renders in.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   McpAppHostBridge,
@@ -63,6 +63,7 @@ jest.mock('../../../client/src/api/endpoints/mcpApps', () => ({
     serverId: 'demo'
   })),
   callMcpAppTool: jest.fn(),
+  answerMcpAppToolApproval: jest.fn(),
   readMcpAppResource: jest.fn(),
   reportMcpAppHandshake: jest.fn(async () => {}),
   buildMcpAppSandboxUrl: csp =>
@@ -458,6 +459,47 @@ describe('McpAppView handshake', () => {
     await flush();
     expect(methods(posted).filter(m => m === 'ui/notifications/tool-input')).toHaveLength(1);
     expect(methods(posted).filter(m => m === 'ui/notifications/tool-result')).toHaveLength(1);
+    unmount();
+  });
+
+  test('a second gated call while one waits for approval is refused; the first still gets its answer', async () => {
+    const { callMcpAppTool, answerMcpAppToolApproval } = jest.requireMock(
+      '../../../client/src/api/endpoints/mcpApps'
+    );
+    const awaiting = id => ({
+      awaitingApproval: true,
+      interaction: {
+        id,
+        status: 'pending',
+        prompt: { displayData: { toolId: 'save', toolName: 'Save', args: { n: id } } }
+      }
+    });
+    callMcpAppTool.mockReset();
+    callMcpAppTool
+      .mockResolvedValueOnce(awaiting('approve-1'))
+      .mockResolvedValueOnce(awaiting('approve-2'));
+    answerMcpAppToolApproval.mockReset();
+    answerMcpAppToolApproval.mockResolvedValue({ content: [{ type: 'text', text: 'saved' }] });
+
+    const { posted, fromView, unmount } = await mountView();
+    fromView({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'save' } });
+    await flush();
+    fromView({ jsonrpc: '2.0', id: 11, method: 'tools/call', params: { name: 'save' } });
+    await flush();
+
+    const second = posted.find(m => m.id === 11);
+    expect(second.error).toMatchObject({ code: RPC_ERRORS.HOST });
+    expect(second.error.message).toMatch(/waiting for approval/);
+    expect(posted.find(m => m.id === 10)).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(posted.find(m => m.id === 10)).toBeDefined());
+    expect(answerMcpAppToolApproval).toHaveBeenCalledWith(
+      expect.objectContaining({ interactionId: 'approve-1', decision: 'approve' })
+    );
+    expect(posted.find(m => m.id === 10).result).toEqual({
+      content: [{ type: 'text', text: 'saved' }]
+    });
     unmount();
   });
 

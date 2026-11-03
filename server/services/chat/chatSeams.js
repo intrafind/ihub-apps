@@ -23,6 +23,15 @@ import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
+import crypto from 'node:crypto';
+import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+import { redactApprovalArgs, resolveToolApproval } from '../../utils/toolApproval.js';
+import {
+  approvalDisplayData,
+  justificationOf,
+  oneShotGrant,
+  sameArgs
+} from '../loop/seams/approvalSeam.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
@@ -630,6 +639,157 @@ export function chatQuestionOptions({
       });
       return { ...interaction, maxClarifications };
     }
+  };
+}
+
+/** Whether two argument objects are the same JSON value (see `approvalSeam.sameArgs`). */
+export { sameArgs };
+
+/**
+ * Options for the shared `approvalSeam` in a chat turn (#2945): the
+ * resolved policy of each tool (stamped by `getToolsForApp`, else resolved
+ * for this app), the chat's grants ("allow for this chat") and the one call a
+ * person just approved, the `approval` interaction with its frames, and the
+ * refusal where nobody can approve.
+ *
+ * @param {Object} options
+ * @param {string} options.chatId
+ * @param {Object} [options.app]
+ * @param {Object} [options.platform]
+ * @param {boolean} options.headless - nobody can answer an approval card here
+ * @param {string[]} [options.grants] - tool ids the user allowed for this chat
+ * @param {{callId: string, args: Object}|null} [options.approvedCall] - the call being resumed
+ * @param {Function} options.buildLogData
+ * @param {Function} options.logInteraction
+ * @returns {Object} options for `approvalSeam`
+ */
+export function chatApprovalOptions({
+  chatId,
+  app = null,
+  platform = null,
+  headless,
+  grants = [],
+  approvedCall = null,
+  buildLogData,
+  logInteraction,
+  interactionService = defaultInteractionService,
+  runLog = defaultRunLog
+}) {
+  const granted = new Set((Array.isArray(grants) ? grants : []).map(String));
+  const approvedOnce = oneShotGrant(approvedCall);
+  return {
+    headless,
+    resolvePolicy: toolDef => resolveToolApproval(toolDef, app, platform),
+    isGranted(info) {
+      const toolId = String(info.toolId || info.toolDef?.id);
+      if (granted.has(toolId)) return true;
+      // The call a person approved runs once, with exactly those arguments.
+      return approvedOnce(info);
+    },
+    async raise(info, ctx, policy) {
+      const runId = ctx.runId || chatId;
+      const runMeta = runLog?.getRunMeta?.(runId) || null;
+      const principalId = runMeta?.principalId || null;
+      const identityMode = runMeta?.identityMode || null;
+      const displayData = approvalDisplayData(info, policy, {
+        justification: justificationOf(ctx, info.call)
+      });
+      let interaction;
+      try {
+        interaction = await interactionService.raise({
+          id: `approve-${chatId}-${crypto.randomUUID()}`,
+          runId,
+          step: Number.isInteger(ctx.iteration) ? ctx.iteration : 0,
+          kind: 'approval',
+          origin: 'tool',
+          prompt: {
+            title: `Run ${displayData.toolName}?`,
+            message:
+              `The assistant wants to run "${displayData.toolName}". ` +
+              'Nothing is sent until you choose.',
+            inputType: 'confirm',
+            displayData
+          },
+          policy: { timeoutMs: CLARIFICATION_TTL_MS, onTimeout: 'deny', fallback: 'deny' },
+          source: {
+            ...(info.call?.id ? { toolCallId: String(info.call.id) } : {}),
+            toolId: displayData.toolId,
+            chatId,
+            ...(app?.id ? { appId: app.id } : {}),
+            ...(principalId ? { principalId: String(principalId) } : {}),
+            ...(identityMode ? { identityMode } : {}),
+            ...(runMeta?.anonymous ? { anonymous: true } : {})
+          }
+        });
+      } catch (raiseErr) {
+        // An approval nobody can find again could never be answered: fail the
+        // call (the model sees the error) instead of pausing on a draft.
+        logger.error('Tool approval could not be persisted as an interaction', {
+          component: COMPONENT,
+          chatId,
+          toolId: info.toolId,
+          error: raiseErr.message
+        });
+        throw Object.assign(new Error(`Approval could not be raised: ${raiseErr.message}`), {
+          code: 'INTERACTION_RAISE_FAILED',
+          cause: raiseErr
+        });
+      }
+      logger.info('Tool approval requested', {
+        component: COMPONENT,
+        chatId,
+        toolId: displayData.toolId,
+        sideEffect: displayData.sideEffect,
+        dataFlow: displayData.dataFlow,
+        approvalSource: displayData.approvalSource
+      });
+      // `interaction/raised` is sent by the turn once the paused turn is kept
+      // with the chat (ChatService), so the card never appears before an
+      // answer to it could be accepted.
+      return interaction;
+    },
+    async onDenied(info, ctx, payload) {
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: payload,
+        error: { code: payload.code, message: payload.message }
+      });
+      await logInteraction(
+        'tool_error',
+        buildLogData(true, {
+          toolId: info.toolId,
+          // A refused call never ran: its arguments are logged redacted.
+          toolInput: redactApprovalArgs(info.args),
+          error: payload
+        })
+      );
+    }
+  };
+}
+
+/**
+ * The tool result the model gets for a gated call that did not run: the
+ * person rejected it, or the approval expired.
+ *
+ * @param {'rejected'|'expired'} outcome
+ * @param {string} toolName
+ * @returns {Object}
+ */
+export function approvalRefusalPayload(outcome, toolName) {
+  if (outcome === 'expired') {
+    return {
+      error: true,
+      code: APPROVAL_ERROR_CODES.APPROVAL_EXPIRED,
+      message: `The approval for "${toolName}" expired before anyone answered. It was not run. Continue without it, or ask the user whether to try again.`
+    };
+  }
+  return {
+    error: true,
+    code: APPROVAL_ERROR_CODES.USER_REJECTED,
+    message: `The user rejected "${toolName}". It was not run. Do not call it again with the same arguments; continue without it or ask the user how to proceed.`
   };
 }
 

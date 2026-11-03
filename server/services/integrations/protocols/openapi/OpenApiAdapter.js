@@ -186,6 +186,8 @@ export async function discoverActions({
     results.push({
       name: action.name,
       operationId: action.operationId,
+      // The operation's HTTP method; the action detail shows the side effect it suggests (#2974).
+      httpMethod: findOperationMethod(document, action.operationId),
       toolId: toolIdFor(instance.id, action.name, action),
       title: localized(action.title, language, action.name),
       description: localized(override.description, language) || description,
@@ -204,6 +206,18 @@ export async function discoverActions({
     });
   }
   return results;
+}
+
+/** The HTTP method (upper case) of an operation, or null. */
+function findOperationMethod(document, operationId) {
+  for (const pathItem of Object.values(document?.paths || {})) {
+    for (const [method, op] of Object.entries(pathItem || {})) {
+      if (op && typeof op === 'object' && op.operationId === operationId) {
+        return method.toUpperCase();
+      }
+    }
+  }
+  return null;
 }
 
 function findOperation(document, operationId) {
