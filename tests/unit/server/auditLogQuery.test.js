@@ -19,6 +19,13 @@ jest.mock('../../../server/configCache.js', () => ({
   default: { getPlatform: () => ({}) }
 }));
 
+// The actor-name lookup reads users.json through userManager, which pulls in
+// the same authorization stack. No user records here: labels come from the
+// entries themselves (covered with a user database in server/tests).
+jest.mock('../../../server/utils/userManager.js', () => ({
+  loadUsers: () => ({ users: {} })
+}));
+
 import { queryAuditLog } from '../../../server/services/AuditLogService.js';
 
 const auditDir = () => path.join(mockAuditRoot, 'contents', 'data', 'audit-log');
