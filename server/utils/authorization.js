@@ -632,6 +632,68 @@ export function isAdminEligiblePrincipal(user) {
 }
 
 /**
+ * Group names that count as admin when `groups.json` cannot be loaded.
+ * Only the fallback: with a loaded configuration admin rights come from the
+ * `adminAccess` / `contentAdmin` group permissions.
+ */
+const FALLBACK_ADMIN_GROUPS = new Set(['admin', 'admins']);
+
+/**
+ * Whether any of the user's groups grants one of `permissionNames`, read from
+ * groups.json; without it, whether the user is in a fallback admin group.
+ *
+ * @param {Object} user - Request user
+ * @param {string[]} permissionNames - Group permission flags that grant the right
+ * @param {string} component - Logger component for a failed configuration load
+ * @returns {boolean}
+ */
+function groupsGrantAdminRight(user, permissionNames, component) {
+  const userGroups = user.groups || [];
+  try {
+    const groupsConfig = loadGroupsConfiguration();
+    return userGroups.some(groupName => {
+      const permissions = groupsConfig.groups?.[groupName]?.permissions;
+      return permissionNames.some(name => permissions?.[name] === true);
+    });
+  } catch (error) {
+    logger.warn('Failed to load groups configuration for admin check', { component, error });
+    return userGroups.some(group => FALLBACK_ADMIN_GROUPS.has(group));
+  }
+}
+
+/**
+ * Whether the user is a full administrator: an interactive, non-anonymous
+ * principal in a group with `adminAccess`. The anonymous principal is never an
+ * admin, whatever groups it carries, and delegated or machine principals (API
+ * keys, OAuth clients, agents) never are either.
+ *
+ * Reads group membership, not `user.permissions`; it is what `adminAuth` gates on.
+ *
+ * @param {Object} [user] - Request user
+ * @returns {boolean}
+ */
+export function isAdmin(user) {
+  if (!user || user.id === ANONYMOUS_PRINCIPAL_ID || !isAdminEligiblePrincipal(user)) {
+    return false;
+  }
+  return groupsGrantAdminRight(user, ['adminAccess'], 'Authorization');
+}
+
+/**
+ * Whether the user may edit content (apps, prompts, sources): a full admin or a
+ * content admin (`contentAdmin`), under the same principal rules as {@link isAdmin}.
+ *
+ * @param {Object} [user] - Request user
+ * @returns {boolean}
+ */
+export function isContentAdmin(user) {
+  if (!user || user.id === ANONYMOUS_PRINCIPAL_ID || !isAdminEligiblePrincipal(user)) {
+    return false;
+  }
+  return groupsGrantAdminRight(user, ['adminAccess', 'contentAdmin'], 'Authorization');
+}
+
+/**
  * Check if user has admin access
  * @param {string[]} userGroups - User's internal group names
  * @returns {boolean} True if user has admin access

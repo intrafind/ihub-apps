@@ -13,13 +13,13 @@
  * Nothing here states what the rule SHOULD be. Where two call sites differ, the
  * test says so in a comment next to the expectation.
  *
- * Sites: adminAuth / isAdminAuthRequired, contentAdminAuth /
- * isContentAdminAuthRequired, GET /api/admin/auth/status, runIdentity.isAdminUser,
+ * Sites: adminAuth / isAdmin, contentAdminAuth /
+ * isContentAdmin, GET /api/admin/auth/status, runIdentity.isAdminUser,
  * workflowAccess.isAdmin, the agent run + artifact routes, the short link routes,
  * projectAccess (isProjectAdmin / isProjectContentAdmin), userPromptAccess
  * (isPromptAdmin) and utils/adminRescue (first-user / last-admin rescue).
  * `routes/admin/projects.js` (3 sites) and `routes/admin/contentAccess.js` call
- * `!isAdminAuthRequired(req)` and are therefore pinned by that column.
+ * `isAdmin(req.user)` and are therefore pinned by that column.
  */
 
 import { jest } from '@jest/globals';
@@ -56,9 +56,9 @@ jest.unstable_mockModule('../utils/sharedJsonFile.js', () => ({
 const { default: express } = await import('express');
 const { default: request } = await import('supertest');
 const { default: configCache } = await import('../configCache.js');
-const { adminAuth, isAdminAuthRequired } = await import('../middleware/adminAuth.js');
-const { contentAdminAuth, isContentAdminAuthRequired } =
-  await import('../middleware/contentAdminAuth.js');
+const { adminAuth } = await import('../middleware/adminAuth.js');
+const { contentAdminAuth } = await import('../middleware/contentAdminAuth.js');
+const { isAdmin, isContentAdmin } = await import('../utils/authorization.js');
 const { isAdminUser } = await import('../services/loop/runIdentity.js');
 const { isAdmin: isWorkflowAdmin } = await import('../services/workflow/workflowAccess.js');
 const { isProjectAdmin, isProjectContentAdmin } =
@@ -116,17 +116,16 @@ const PRINCIPALS = {
   }
 };
 const NAMES = Object.keys(PRINCIPALS);
-const reqOf = name => ({ user: PRINCIPALS[name] });
 
 /** Expected answers, one row per principal. `true` = treated as admin. */
 const EXPECTED = {
-  //                          adminAuth  contentAdminAuth  isContentAdminAuthRequired==false  runIdentity  workflow  project  projectContent  prompt
+  //                          adminAuth  contentAdminAuth  isContentAdmin  runIdentity  workflow  project  projectContent  prompt
   anonymous: [false, false, false, false, false, false, false, false],
   anonymousWithAdminGroups: [false, false, false, false, false, false, false, false],
-  admin: [true, true, false, true, true, true, true, true],
+  admin: [true, true, true, true, true, true, true, true],
   legacyAdminGroup: [false, false, false, true, true, false, false, false],
   flagOnly: [false, false, false, true, true, true, true, true],
-  groupOnly: [true, true, false, true, false, true, true, true],
+  groupOnly: [true, true, true, true, false, true, true, true],
   contentAdmin: [false, true, true, false, false, false, true, true],
   user: [false, false, false, false, false, false, false, false],
   personalApiKeyOfAdmin: [false, false, false, true, true, false, false, false],
@@ -135,7 +134,7 @@ const EXPECTED = {
 const COLS = [
   'adminAuth',
   'contentAdminAuth',
-  'contentAdminOnlyFlag',
+  'isContentAdmin',
   'runIdentity',
   'workflowAccess',
   'projectAdmin',
@@ -157,9 +156,9 @@ function runMiddleware(mw, user) {
 const answers = name => {
   const user = PRINCIPALS[name];
   return [
-    !isAdminAuthRequired(reqOf(name)),
+    isAdmin(user),
     runMiddleware(contentAdminAuth, user).next,
-    !isContentAdminAuthRequired(reqOf(name)),
+    isContentAdmin(user),
     isAdminUser(user),
     Boolean(isWorkflowAdmin(user)),
     isProjectAdmin(user, GROUPS),
@@ -217,24 +216,26 @@ describe('admin predicates, groups.json available', () => {
   });
 
   test('anonymous never passes adminAuth, even with admin default groups', () => {
-    expect(isAdminAuthRequired(reqOf('anonymousWithAdminGroups'))).toBe(true);
-    expect(isAdminAuthRequired(null)).toBe(true);
-    expect(isAdminAuthRequired()).toBe(true);
+    expect(isAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
+    expect(isAdmin(null)).toBe(false);
+    expect(isAdmin()).toBe(false);
     expect(runMiddleware(adminAuth, PRINCIPALS.anonymousWithAdminGroups).next).toBe(false);
   });
 
-  // isContentAdminAuthRequired documents "lacks both adminAccess and contentAdmin" but
-  // checks contentAdmin only, so a full admin is "still required" there; the status
-  // route (below) and `contentAdminAuth` compensate in different ways.
-  test('isContentAdminAuthRequired ignores adminAccess', () => {
-    expect(isContentAdminAuthRequired(reqOf('admin'))).toBe(true);
-    expect(isContentAdminAuthRequired(reqOf('contentAdmin'))).toBe(false);
+  // `isContentAdmin` replaces `isContentAdminAuthRequired`, which checked `contentAdmin` only
+  // (ignoring adminAccess, contrary to its doc) and whose only caller combined it with
+  // `isAdminAuthRequired`. The combined answer (the status route below) is unchanged.
+  test('isContentAdmin counts adminAccess as well as contentAdmin', () => {
+    expect(isContentAdmin(PRINCIPALS.admin)).toBe(true);
+    expect(isContentAdmin(PRINCIPALS.contentAdmin)).toBe(true);
+    expect(isContentAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
+    expect(isContentAdmin(null)).toBe(false);
   });
 
   // Where the sites disagree today (recorded, not endorsed):
   test('sites disagree about group-only vs flag-only vs the legacy `admin` group', () => {
     // groups only (permissions flag missing): adminAuth + runIdentity + project/prompt say admin, workflowAccess does not
-    expect(answers('groupOnly')).toEqual([true, true, false, true, false, true, true, true]);
+    expect(answers('groupOnly')).toEqual([true, true, true, true, false, true, true, true]);
     // flag only: adminAuth and contentAdminAuth ignore it, every other site honours it
     expect(answers('flagOnly')).toEqual([false, false, false, true, true, true, true, true]);
     // `admin` (singular) group absent from groups.json: only runIdentity and workflowAccess honour the name
@@ -290,13 +291,12 @@ describe('admin predicates when groups.json cannot be loaded', () => {
     agent: false
   };
   test.each(NAMES)('adminAuth and contentAdminAuth fall back to admin/admins: %s', name => {
-    expect(!isAdminAuthRequired(reqOf(name))).toBe(fallback[name]);
+    expect(isAdmin(PRINCIPALS[name])).toBe(fallback[name]);
     expect(runMiddleware(contentAdminAuth, PRINCIPALS[name]).next).toBe(fallback[name]);
   });
 
-  // isContentAdminAuthRequired has no fallback: it answers "required" for everyone.
-  test.each(NAMES)('isContentAdminAuthRequired has no fallback: %s', name => {
-    expect(isContentAdminAuthRequired(reqOf(name))).toBe(true);
+  test.each(NAMES)('isContentAdmin falls back to admin/admins like contentAdminAuth: %s', name => {
+    expect(isContentAdmin(PRINCIPALS[name])).toBe(fallback[name]);
   });
 
   test('hasAdminAccess-based sites: projectAdmin/promptAdmin fall back to runIdentity.isAdminUser', () => {
@@ -365,7 +365,7 @@ describe('GET /api/admin/auth/status (admin OR content admin enters the admin pa
   });
 });
 
-describe('short links: admin = `!isAdminAuthRequired(req)`', () => {
+describe('short links: admin = `isAdmin(req.user)`', () => {
   const app = buildApp(registerShortLinkRoutes);
   const MAY_MANAGE_FOREIGN = {
     admin: true,
