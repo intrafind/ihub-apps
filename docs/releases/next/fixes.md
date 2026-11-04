@@ -181,3 +181,9 @@ always fits the page.
 - A word that cannot fit its column at all, such as a long URL, is broken inside the column instead
   of shrinking the whole table.
 - Tables a model lays out with its own column widths keep them.
+
+## Your Messages Keep Their Line Breaks in the Chat
+
+A long, structured prompt (headings, lists, indented code, blank lines) was shown as one run-on line
+in your own message bubble. Messages now keep their line breaks and indentation, also when a file or
+image is attached. The model always received the text with its structure; only the display changed.
