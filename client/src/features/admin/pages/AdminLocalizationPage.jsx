@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
 
 /**
  * Admin → Customization → Localization.
@@ -238,6 +239,11 @@ function AdminLocalizationPage() {
           </button>
         </div>
       </div>
+
+      <TranslationOverridesEditor
+        languages={availableLanguages.filter(l => !l.untranslated).map(l => l.code)}
+        initialLanguage={defaultLanguage}
+      />
     </div>
   );
 }
