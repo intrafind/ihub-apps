@@ -585,35 +585,24 @@ export async function acquireLock(contentsDir) {
     }
 
     let existing = null;
-    let age = Infinity;
     try {
       existing = JSON.parse(await fs.readFile(lockPath, 'utf8'));
-      age = Date.now() - new Date(existing.startedAt).getTime();
     } catch (error) {
       if (error.code === 'ENOENT') continue; // released between our create and this read — retry
-      // The file exists but has no readable content. The winner creates the file
-      // (O_EXCL) and then writes it, so a loser can read it empty in between.
-      // Judge such a file by its mtime: a fresh one is a lock being written, not a
-      // stale one to steal.
-      try {
-        age = Date.now() - (await fs.stat(lockPath)).mtimeMs;
-      } catch (statError) {
-        if (statError.code === 'ENOENT') continue;
-      }
+      // Corrupt/unreadable lock file: treat as stale rather than blocking forever.
     }
 
-    if (age < LOCK_STALE_MS) {
+    const age = existing ? Date.now() - new Date(existing.startedAt).getTime() : Infinity;
+    if (existing && age < LOCK_STALE_MS) {
       throw new Error(
-        existing
-          ? `Migration lock held by PID ${existing.pid} since ${existing.startedAt}. ` +
-              `If the process is no longer running, delete ${lockPath}`
-          : `Migration lock held (being written). If the process is no longer running, delete ${lockPath}`
+        `Migration lock held by PID ${existing.pid} since ${existing.startedAt}. ` +
+          `If the process is no longer running, delete ${lockPath}`
       );
     }
 
     logger.warn('Stale migration lock detected, overriding', {
       component: 'Migration',
-      ageSeconds: Number.isFinite(age) ? Math.round(age / 1000) : undefined
+      ageSeconds: existing ? Math.round(age / 1000) : undefined
     });
 
     try {
