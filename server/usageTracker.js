@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
@@ -50,10 +49,7 @@ function createDefaultUsage() {
       averageRating: 0,
       perUser: {},
       perApp: {},
-      perModel: {},
-      // Legacy format for backward compatibility
-      good: 0,
-      bad: 0
+      perModel: {}
     },
     magicPrompt: {
       total: 0,
@@ -215,61 +211,10 @@ export function reloadConfig() {
   configLoaded = false;
 }
 
-function migrateLegacyFeedback(feedbackObj) {
-  if (!feedbackObj || typeof feedbackObj !== 'object') return false;
-
-  // Initialize structure if missing
-  if (!feedbackObj.ratings) {
-    feedbackObj.ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    feedbackObj.total = feedbackObj.total || 0;
-    feedbackObj.averageRating = feedbackObj.averageRating || 0;
-  }
-
-  const good = feedbackObj.good || 0;
-  const bad = feedbackObj.bad || 0;
-  const legacyTotal = good + bad;
-
-  // Only migrate if we have legacy data that hasn't been migrated yet
-  // Check if total is 0 but we have good/bad counts, OR if ratings are all 0 but we have good/bad
-  const hasLegacyData = good > 0 || bad > 0;
-  const hasEmptyRatings =
-    feedbackObj.ratings[1] === 0 &&
-    feedbackObj.ratings[2] === 0 &&
-    feedbackObj.ratings[3] === 0 &&
-    feedbackObj.ratings[4] === 0 &&
-    feedbackObj.ratings[5] === 0;
-  const needsMigration = hasLegacyData && (feedbackObj.total === 0 || hasEmptyRatings);
-
-  if (needsMigration) {
-    // Map legacy "good" to rating 5 and "bad" to rating 1
-    feedbackObj.ratings[5] += good;
-    feedbackObj.ratings[1] += bad;
-    feedbackObj.total = legacyTotal;
-    feedbackObj.averageRating = computeAverageRating(feedbackObj.ratings);
-  }
-
-  // Keep legacy fields for backward compatibility
-  feedbackObj.good = feedbackObj.good || 0;
-  feedbackObj.bad = feedbackObj.bad || 0;
-
-  return needsMigration;
-}
-
-/** Bring a usage object read from disk up to the current feedback format. */
+/** Fill the timestamps a usage object read from disk may lack. */
 function normalizeUsage(data) {
   data.lastUpdated = data.lastUpdated || now();
   data.lastReset = data.lastReset || now();
-  if (data.feedback) {
-    migrateLegacyFeedback(data.feedback);
-    // Migrate all nested feedback objects (perUser, perApp, perModel)
-    ['perUser', 'perApp', 'perModel'].forEach(key => {
-      if (data.feedback[key]) {
-        Object.keys(data.feedback[key]).forEach(id => {
-          migrateLegacyFeedback(data.feedback[key][id]);
-        });
-      }
-    });
-  }
 }
 
 /** The counters this worker records into; added to usage.json on flush. */
@@ -299,27 +244,14 @@ function computeAverageRating(ratings) {
 }
 
 function applyRating(bucket, rating) {
-  // Handle numeric ratings (1-5)
-  if (typeof rating === 'number') {
-    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
-    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
+  if (typeof rating !== 'number') return;
+  const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
+  const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
 
-    if (ratingKey >= 1 && ratingKey <= 5) {
-      bucket.ratings[ratingKey] += 1;
-      bucket.total += 1;
-      bucket.averageRating = computeAverageRating(bucket.ratings);
-
-      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
-      if (ratingKey >= 4) {
-        bucket.good += 1;
-      } else {
-        bucket.bad += 1;
-      }
-    }
-  } else {
-    // Handle legacy string format for backward compatibility
-    const legacyRating = rating === 'positive' ? 'good' : 'bad';
-    bucket[legacyRating] = (bucket[legacyRating] || 0) + 1;
+  if (ratingKey >= 1 && ratingKey <= 5) {
+    bucket.ratings[ratingKey] += 1;
+    bucket.total += 1;
+    bucket.averageRating = computeAverageRating(bucket.ratings);
   }
 }
 
@@ -329,10 +261,7 @@ function incFeedback(map, key, rating) {
   map[key] = map[key] || {
     total: 0,
     ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-    averageRating: 0,
-    // Legacy format for backward compatibility
-    good: 0,
-    bad: 0
+    averageRating: 0
   };
   applyRating(map[key], rating);
 }
@@ -406,7 +335,6 @@ async function recordChatMessage({
     inc(data.webSearch.perApp, appId, webSearchRequests);
     inc(data.webSearch.perModel, modelId, webSearchRequests);
   }
-  recordTokenUsage(tokens);
   logUsageEvent({
     type: direction === 'prompt' ? 'chat_request' : 'chat_response',
     userId: resolvedUser,
@@ -482,7 +410,6 @@ export async function recordMagicPrompt({
   inc(data.magicPrompt.tokensOut.perModel, modelId, outputTokens);
   inc(data.magicPrompt.tokensOut, 'total', outputTokens);
 
-  recordTokenUsage(inputTokens + outputTokens);
   recordMagicPromptUsage(appId);
   logUsageEvent({
     type: 'magic_prompt',

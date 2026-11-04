@@ -21,7 +21,6 @@ import {
 } from './telemetry/exporters.js';
 
 let sdk = null;
-let tokenUsageCounter = null;
 let genAIInstrumentation = null;
 let activeConfig = null;
 
@@ -180,11 +179,6 @@ export async function initTelemetry(rawConfig = {}) {
     // global one, so we acquire meters via the @opentelemetry/api facade.
     initializeMetrics(metricsApi);
     initializeProcessMetrics(metricsApi);
-
-    // Keep legacy token usage counter for backward compatibility
-    tokenUsageCounter = metricsApi.getMeter('ihub-apps').createCounter('token_usage_total', {
-      description: 'Total number of tokens processed (legacy)'
-    });
   }
 
   // Initialize GenAI instrumentation now that SDK is up
@@ -196,12 +190,6 @@ export async function initTelemetry(rawConfig = {}) {
     provider: config.provider,
     logsEnabled
   });
-}
-
-export function recordTokenUsage(tokens) {
-  if (tokenUsageCounter) {
-    tokenUsageCounter.add(tokens);
-  }
 }
 
 export function getGenAIInstrumentation() {

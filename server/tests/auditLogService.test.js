@@ -158,8 +158,8 @@ describe('AuditLogService.logAudit', () => {
     expect(entry.ip).toBe('203.0.113.42');
   });
 
-  test('masks IPv4 IP when audit.anonymizeIp is true', () => {
-    auditConfig.anonymizeIp = true;
+  test('masks IPv4 IP when audit.anonymizeIp is "mask"', () => {
+    auditConfig.anonymizeIp = 'mask';
     const entry = logAudit({
       req: { ip: '203.0.113.42', user: { id: 'u1', username: 'alice', authenticated: true } },
       action: 'update',

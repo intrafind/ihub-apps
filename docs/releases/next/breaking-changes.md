@@ -333,6 +333,29 @@ installation's **Settings** tab shows it) — or set the old, working URI as the
 installation's **Redirect URI**. Afterwards, check the log for V206 warnings (installations that
 kept their id, tenant ids to enter).
 
+## Legacy Config Shapes Are No Longer Read
+
+Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
+data on the first start.
+
+- **Resource arrays.** `config/apps.json`, `models.json`, `prompts.json`, `workflows.json` and
+  `agents.json` (one JSON array per resource) are no longer loaded. V220 moves every entry that has
+  no file yet into `apps/`, `models/`, `prompts/`, `workflows/` or `agents/profiles/` and deletes the
+  array; an array with an entry that has no usable `id` is kept and named in the log.
+- **Feedback counters.** The thumbs-style `good` and `bad` counters in `data/usage.json` are gone.
+  V221 folds counts that predate star ratings into the ratings and removes the counters. The
+  **Usage** CSV export has **Feedback Ratings** and **Average Rating** rows instead of **Feedback
+  Good** and **Feedback Bad**. Rating strings other than numbers (`"positive"`) are ignored.
+- **IP anonymization.** `logging.anonymizeIp` and `audit.anonymizeIp` accept `"off"`, `"mask"` and
+  `"drop"` only; V222 turns `false` into `"off"` and `true` into `"mask"`. An
+  `IHUB_PLATFORM__AUDIT__ANONYMIZE_IP=true` (or `LOGGING`) environment variable must become
+  `mask`.
+- **iFinder subject templates** accept `${user.field}` only; a bare `${username}` is rejected when
+  a token is minted instead of being resolved. The `token_usage_total` metric is removed; use
+  `gen_ai_client_token_usage`. Setting an `IHUB_PLATFORM__I_FINDER__*` or
+  `IHUB_PLATFORM__I_ASSISTANT__*` variable no longer logs a warning (it has had no effect since
+  V192).
+  
 ## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
 
 - **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback

@@ -134,10 +134,10 @@ describe('resolveJwtSubject — templates', () => {
     );
   });
 
-  it('still resolves the legacy ${field} form', () => {
-    assert.equal(
-      resolveJwtSubject(user(), { jwtSubjectField: 'ROCHUS\\${username}' }),
-      'ROCHUS\\leipolda'
+  it('rejects the bare ${field} form', () => {
+    assert.throws(
+      () => resolveJwtSubject(user(), { jwtSubjectField: 'ROCHUS\\${username}' }),
+      /write it as/
     );
   });
 
