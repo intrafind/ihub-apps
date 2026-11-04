@@ -72,7 +72,7 @@ The rest of this page explains why and how to operate around it.
                 ┌──────────────────────┴──────────────────────┐
                 │   Shared contents/ volume (read-write)      │
                 │   - config/*.json, apps/, models/, …        │
-                │   - data/usage.json, data/feedback.jsonl    │
+                │   - data/usage-events/, data/feedback.jsonl │
                 │   - data/shortlinks.json                    │
                 │   - .encryption-key, .migration-history     │
                 └─────────────────────────────────────────────┘
@@ -150,7 +150,8 @@ following are written at runtime and must therefore be on shared storage:
 | --------------------------------- | ----------------------------------------- | ---------------------------------------------------- |
 | `contents/config/*.json`          | Admin UI saves                            | App, model, group, platform configs                  |
 | `contents/apps/*.json`            | Admin UI saves                            | Individual app configs                               |
-| `contents/data/usage.json`        | `usageTracker.js` (every ~10 s flush)     | Aggregate counters per app/model                     |
+| `contents/data/usage-events/`     | `UsageEventLog.js` (every ~10 s flush)    | One append-only file per day of usage call records   |
+| `contents/data/usage-daily/`      | `UsageAggregator.js` (hourly)             | Daily usage rollups, rebuilt by one process per host |
 | `contents/data/feedback.jsonl`    | `feedbackStorage.js` (every ~10 s flush)  | Append-only feedback log                             |
 | `contents/data/shortlinks.json`   | `shortLinkManager.js`                     | Shared chat / short link entries                     |
 | `contents/data/workflow-state/`   | Workflow `StateManager`                   | Optional persistence for in-flight workflow runs     |
@@ -247,30 +248,17 @@ If global rate limiting matters, swap the in-memory store for a shared
 backend (Redis, Memcached) — this is a code change in the rate limiter
 middleware. See [rate-limiting.md](rate-limiting.md).
 
-### Split usage and stats
+### Usage reporting
 
-`server/usageTracker.js` keeps an in-memory snapshot of `usage.json` and
-flushes to disk every ~10 seconds. With a shared `contents/` volume:
-
-- Each host loads the file at startup, then mutates **its own copy** in
-  memory.
-- On flush, each host writes the **whole file** with its view of the
-  counters. The last writer wins.
-- Usage from the loser host is lost on every flush boundary.
-
-What this means in practice:
-
-- The Admin **Usage** dashboard is unreliable as a global view across
-  multiple hosts.
-- Per-day totals will undercount.
-- Per-app and per-model breakdowns are still directionally correct but
-  not authoritative.
-
-If accurate usage matters, treat the JSON file as a per-host artefact
-(don't share it) and aggregate externally — for example by pointing
-telemetry / OpenTelemetry exports at a central collector
-(see [telemetry.md](telemetry.md)) and computing usage from those events
-instead of from `usage.json`.
+Usage call records are appended to one file per day under
+`contents/data/usage-events/` by every worker on every host, every ~10
+seconds. Appends do not overwrite each other, and retention deletes whole
+files, so a shared `contents/` volume gives one consistent set of records
+across hosts. Each host rolls the days up once an hour; two hosts writing the
+same day's rollup write the same content, and the report for today is
+always computed from the events themselves. Records still buffered on a host
+that crashes are lost (at most ~10 seconds of calls). See
+[Usage Reporting](usage-reporting.md).
 
 ### Feedback may be lost on crash
 

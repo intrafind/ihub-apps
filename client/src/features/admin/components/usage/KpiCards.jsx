@@ -3,13 +3,19 @@
 
 import { useTranslation } from 'react-i18next';
 import { CARD } from './UsageUi';
-import { changeOf, formatDuration, formatNumber, formatPercent } from './usageFormat';
+import {
+  changeOf,
+  formatCompact,
+  formatDuration,
+  formatNumber,
+  formatPercent
+} from './usageFormat';
 
 /**
  * One KPI with its change against the previous equal period. `lowerIsBetter`
  * colours a rise red (error rate, latency).
  */
-function Kpi({ label, value, hint, current, previous, lowerIsBetter = false, testId }) {
+function Kpi({ label, value, title, hint, current, previous, lowerIsBetter = false, testId }) {
   const { t, i18n } = useTranslation();
   const change = changeOf(current, previous);
   let tone = 'text-gray-500 dark:text-gray-400';
@@ -22,7 +28,10 @@ function Kpi({ label, value, hint, current, previous, lowerIsBetter = false, tes
       <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+      <p
+        className="mt-1 truncate text-2xl font-semibold tabular-nums text-gray-900 dark:text-gray-100"
+        title={title}
+      >
         {value}
       </p>
       {hint && <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
@@ -48,7 +57,7 @@ export default function KpiCards({ totals, previous }) {
   const prev = previous || {};
   return (
     <div
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7"
       data-testid="usage-kpis"
     >
       <Kpi
@@ -60,13 +69,15 @@ export default function KpiCards({ totals, previous }) {
       />
       <Kpi
         label={t('admin.usage.reports.kpi.inputTokens', 'Input tokens')}
-        value={formatNumber(cur.promptTokens, lang)}
+        value={formatCompact(cur.promptTokens || 0, lang)}
+        title={formatNumber(cur.promptTokens || 0, lang)}
         current={cur.promptTokens}
         previous={prev.promptTokens}
       />
       <Kpi
         label={t('admin.usage.reports.kpi.cachedTokens', 'Cached input')}
-        value={formatNumber(cur.cacheReadTokens, lang)}
+        value={formatCompact(cur.cacheReadTokens || 0, lang)}
+        title={formatNumber(cur.cacheReadTokens || 0, lang)}
         hint={t('admin.usage.reports.kpi.cacheHit', '{{percent}} cache hit', {
           percent: formatPercent(cur.cacheHitRate || 0, lang)
         })}
@@ -75,7 +86,8 @@ export default function KpiCards({ totals, previous }) {
       />
       <Kpi
         label={t('admin.usage.reports.kpi.outputTokens', 'Output tokens')}
-        value={formatNumber(cur.completionTokens, lang)}
+        value={formatCompact(cur.completionTokens || 0, lang)}
+        title={formatNumber(cur.completionTokens || 0, lang)}
         current={cur.completionTokens}
         previous={prev.completionTokens}
       />

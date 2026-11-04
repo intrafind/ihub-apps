@@ -334,40 +334,30 @@ See [Realtime Voice & Transcription](voice-transcription.md) and [Read Aloud](te
 
 ## Usage Reports
 
-**Observability → Usage Reports** (`/admin/usage`) shows messages, tokens, feedback and magic-prompt
-use, all-time on **Overview**, **Users**, **Applications** and **Details**, and per day or month on
-**Timeline** (range 7 days to 12 months, from the hourly rollups — **Generate Report** refreshes
-them on demand).
+**Observability → Usage Reports** (`/admin/usage`) shows requests, tokens, errors and latency of
+every model call — chats, agents, workflows, scheduled tasks, the Inference API, magic prompts and
+system work — over one time range (today, 24 hours, 7/30/90 days, 12 months or custom) shared by
+every tab and kept in the URL:
 
-![Usage reports overview with prompt caching](assets/screenshots/admin-usage.png)
+- **Overview** — KPI cards with the change against the previous period, usage over time (tokens or
+  requests), top models and apps.
+- **Breakdown** — per user, group, app, model, provider or surface, sortable, with per-model
+  sub-rows, table CSV and the raw records export.
+- **Reliability** — error rate over time, errors by code and provider, latency per model.
+- **Requests** — the request log of individual calls with a details drawer (metadata only).
+- **Limits & quotas** — budgets and who is near them (see [Usage Limits](usage-limits.md)).
 
-**How tokens are counted.** Prompt tokens are the whole input of a model call, including tokens the
-provider served from its prompt cache; completion tokens are the whole output, including reasoning
+![Usage reports overview](assets/screenshots/admin-usage.png)
+
+**How tokens are counted.** Input tokens are the whole input of a model call, including tokens the
+provider served from its prompt cache; output tokens are the whole output, including reasoning
 ("thinking") tokens. This holds for every provider, so numbers compare across models. The provider's
 own counts are used whenever it reports them; a call that failed or was stopped before the provider
-answered is counted with a local estimate. **Data Quality** shows the share of provider numbers.
+answered is counted with a local estimate.
 
-### Prompt caching
-
-Providers keep a cache of recently seen prompt prefixes (system prompt, tool definitions, the start
-of the conversation). Input served from that cache is billed at a discount and answers faster.
-Whether iHub marks prompts for the cache is a per-model switch in the model editor (**Prompt
-Caching → Use prompt caching**; see [Models → Prompt Caching](models.md#prompt-caching)). The
-**Prompt caching** panel on **Overview** shows:
-
-- **Cache hit ratio** — cached input tokens divided by input tokens, counted over the models that
-  report caching, so models without cache reporting don't dilute it.
-- **Cached input tokens** — input served from the cache.
-- **Cache write tokens** — input written to the cache. Anthropic and Bedrock charge extra for
-  writes; when writes exceed reads, the tile turns amber, because caching then costs more than it
-  saves.
-- A breakdown **by model, app or provider**. "not reported" means the provider never reported
-  cache usage for that row — it is not the same as 0 %.
-
-**Timeline** adds a **Cached input tokens** card with the hit ratio for the range, a **Cached vs.
-uncached input tokens** chart, cache columns in the app and model breakdowns, and a **Providers**
-breakdown.
-
+**Prompt caching.** Cached input is shown next to input everywhere: as a KPI card with the cache
+hit rate, as its own layer of the token chart, and as a column of the breakdown. Whether iHub marks
+prompts for the cache is a per-model switch (see [Models → Prompt Caching](models.md#prompt-caching)).
 What each provider reports:
 
 | Provider (adapter) | Cached input | Cache writes | Reasoning |
@@ -380,13 +370,8 @@ What each provider reports:
 | Mistral | when reported | — | — |
 | iAssistant | no usage reported | — | — |
 
-The provider breakdown and the cache counters cover usage recorded since the release that added
-them; older data counts as uncached.
-
-**Exports.** **Download CSV/JSON** export the all-time summary including the cache totals. The event
-export (`GET /api/admin/usage/export?range=90d&format=csv`) has the columns `provider`,
-`cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens` and `webSearchRequests` after the existing
-ones; a counter the provider did not report is left empty.
+What is recorded, the tracking modes, storage, retention and the API are described in
+[Usage Reporting](usage-reporting.md).
 
 ---
 

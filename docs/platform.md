@@ -66,7 +66,7 @@ The optional `platform.json` file controls global platform behavior and is locat
 Controls platform feature flags and capabilities.
 
 - **export** (boolean) – Enables or disables all export functionality including JSON, JSONL, Markdown, HTML, and PDF exports for chat conversations and canvas content. When disabled, all export buttons and menus are hidden across the platform. Default: `true`
-- **usageTracking** (boolean) – Enables or disables recording of usage statistics in `contents/data/usage.json`. Default: `true`
+- **usageTracking** (boolean) – Enables or disables usage reporting: one call record per model call in `contents/data/usage-events/` (see [Usage Reporting](usage-reporting.md)). Default: `true`
 
 **Note:** The `export` feature flag acts as a master switch for chat and canvas exports, PDF included.
 

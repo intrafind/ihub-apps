@@ -16,10 +16,10 @@ without reverse-engineering the codebase.
 | Audit log (admin actions) | Yes | `contents/data/audit-log/YYYY-MM-DD.jsonl`; **365 d** default | `audit.cleanupEnabled`, `audit.retentionDays` |
 | Audit log IP address | Yes (verbatim) | Audit log entries | **`audit.anonymizeIp`** (new) |
 | Audit log email-shaped identifiers | Masked by default | Audit log entries | `audit.includeEmail` |
-| Usage events (per-request) | Yes | `contents/data/usage-events.jsonl`; **90 d** default | `features.usageTracking: false`, `usageTracking.eventRetentionDays` |
+| Usage call records (one per model call) | Yes | `contents/data/usage-events/YYYY-MM-DD.jsonl`; **90 d** default | `features.usageTracking: false`, `usageTracking.eventRetentionDays`, `features.usageTrackingMode` |
 | Usage daily rollups | Yes | `contents/data/usage-daily/*.json`; **365 d** default | `usageTracking.dailyRetentionDays` |
 | Usage monthly rollups | Yes | `contents/data/usage-monthly/*.json`; **indefinite** default | `usageTracking.monthlyRetentionDays` |
-| Cumulative usage counters | Yes | `contents/data/usage.json`; never expires | Manual reset via admin |
+| Usage-limit counters | Yes (when a user calls a model) | `contents/data/quota-usage.json`; users unseen for 400 d are removed | See [Usage Limits](usage-limits.md) |
 | Feedback (rating + 300-char snippet + comment) | Only when a user rates | `contents/data/feedback.jsonl`; **indefinite** default | `features.feedbackTracking: false`, **`usageTracking.feedbackRetentionDays`** (new) |
 | Structured log lines | Yes (stdout) | Console always; optional file `logs/app.log` | `logging.level`, `logging.file.enabled` |
 | Logger IP context | Yes (merged into every line) | Same as above | **`logging.anonymizeIp`** (new) |
@@ -99,44 +99,56 @@ Other ways chat content can become durable are:
 
 ### 3. Usage events and rollups
 
-The usage tracker (`server/usageTracker.js`,
-`server/services/UsageEventLog.js`, `server/services/UsageAggregator.js`)
-records **metadata only** — never message content. Each request appends a
-one-line JSON event to `contents/data/usage-events.jsonl`:
+Usage reporting (`server/services/usage/`, `server/services/UsageEventLog.js`,
+`server/services/UsageAggregator.js`; see [Usage Reporting](usage-reporting.md))
+records **metadata only** — never message content. Every model call appends
+one JSON line to the file of its day, `contents/data/usage-events/YYYY-MM-DD.jsonl`:
 
 ```json
 {
-  "ts": "2026-06-18T10:14:22.123Z",
-  "type": "chat_request",
+  "v": 2,
+  "ts": "2026-11-04T10:14:22.123Z",
+  "type": "llm_call",
+  "surf": "chat",
+  "st": "ok",
   "uid": "usr_3a9c…",
+  "grp": ["sales"],
   "app": "translator",
-  "model": "claude-haiku-4-5-20251001",
-  "pt": 421,
-  "ct": 0,
-  "src": "provider",
+  "model": "claude-haiku-4-5",
   "prov": "anthropic",
+  "cid": "conv_81fe…",
+  "rid": "req-5b1d…",
+  "pt": 421,
+  "ct": 96,
   "cr": 384,
-  "cw": 0
+  "src": "provider",
+  "lat": 2310,
+  "ttft": 640,
+  "tc": 0
 }
 ```
 
-`pt`/`ct` are prompt and completion tokens, `src` whether they came from the
-provider or a local estimate, `prov` the provider adapter. The optional
-counters `cr`/`cw` (prompt-cache read/write tokens), `rt` (reasoning tokens)
-and `ws` (provider web searches) are only present when the provider reported
-them. All of them are counts, never content.
+`pt`/`ct` are input and output tokens, `cr`/`cw`/`rt`/`ws` cache read/write
+tokens, reasoning tokens and provider web searches (only when reported), `st`
+the outcome, `err` a normalized error code (never an error message), `lat`/
+`ttft` timings and `tc` tool calls. `grp` are the user's groups at the time of
+the call, without the built-in `authenticated` and `anonymous`. Feedback
+ratings are written as `type: "feedback"` records with the rating.
 
-`uid` form depends on `features.usageTrackingMode`:
+`uid` and `cid` depend on `features.usageTrackingMode`:
 
-| Mode | `uid` value | Reversible? |
-| --- | --- | --- |
-| `anonymous` | `usr_<sha256(userId + pepper)>` | No — pepper at `contents/.usage-pepper` |
-| `pseudonymous` (default) | Session id, rotates per browser session | No |
-| `identified` | Real user id | Yes |
+| Mode | `uid` | `cid` | Reversible? |
+| --- | --- | --- | --- |
+| `anonymous` | `usr_<sha256(userId + pepper)>` | `conv_<sha256(chatId + pepper)>` | No — pepper at `contents/.usage-pepper` |
+| `pseudonymous` (default) | The conversation / run id | As is | Only by matching the chat id |
+| `identified` | Real user id | As is | Yes |
 
-Daily and monthly rollups are aggregated counters (no `uid`, just counts) at
-`contents/data/usage-daily/YYYY-MM-DD.json` and
-`contents/data/usage-monthly/YYYY-MM.json`.
+Calls without a user (system work) have no `uid`.
+
+Daily and monthly rollups (`contents/data/usage-daily/YYYY-MM-DD.json`,
+`contents/data/usage-monthly/YYYY-MM.json`) are aggregated counters. Their
+per-user and per-group entries are keyed by the same `uid` and group names as
+the records, so they are as identifying as the tracking mode makes the records.
 
 ### 4. Audit log
 
@@ -226,8 +238,8 @@ honours it immediately.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `features.usageTracking` | `true` | Disables all writes to `usage.json` and `usage-events.jsonl` when `false` |
-| `features.usageTrackingMode` | `pseudonymous` | `anonymous` SHA-256-hashes the userId with a server-side pepper |
+| `features.usageTracking` | `true` | Disables all writes of usage call records (`usage-events/`) when `false`; usage-limit counters are still kept |
+| `features.usageTrackingMode` | `pseudonymous` | `anonymous` SHA-256-hashes the user id and conversation id with a server-side pepper |
 | `features.feedbackTracking` | `true` | Disables `feedback.jsonl` writes when `false` |
 | `telemetry.enabled` | `false` | OpenTelemetry master switch |
 | `telemetry.events.includePrompts` | `false` | Send prompt text to OTel |
@@ -319,7 +331,7 @@ recorded` by design — but the IP and email columns can both be anonymized.
 | **Access** (Art. 15) | Admin → Usage → Feedback (CSV export); audit log via Admin → Platform → Audit Log; user record at `contents/config/users.json` |
 | **Rectification** (Art. 16) | Edit the user via Admin → Users; OIDC/LDAP/NTLM users are read-only mirrors of the IdP |
 | **Erasure** (Art. 17) | Delete the user via Admin → Users, which also removes their API keys, connections, stored integration credentials, scheduled tasks, chats, prompts, skills and short links; rewrite `feedback.jsonl` with `cleanupFeedback()` or shorten `feedbackRetentionDays`; audit entries are kept for the configured `retentionDays` and cannot be deleted before expiry (regulatory requirement) |
-| **Portability** (Art. 20) | Export usage CSV (`GET /api/admin/usage/export`); user data lives in plain JSON files for direct extraction |
+| **Portability** (Art. 20) | Export usage records as CSV or JSON (`GET /api/admin/usage/export?range=…`); user data lives in plain JSON files for direct extraction |
 | **Restrict / object** (Art. 18, 21) | Disable the user (`active: false` in `users.json`); set `usageTrackingMode: "anonymous"` |
 
 ## Third-party data flow
@@ -341,8 +353,8 @@ For zero-egress deployments, use a local LLM provider — see
 | --- | --- |
 | `server/utils/userManager.js` | Canonical user record |
 | `server/utils/tokenService.js` | JWT payload + lifetime |
-| `server/usageTracker.js` | Usage counters + tracking modes |
-| `server/services/UsageEventLog.js` | Per-request event JSONL |
+| `server/services/usage/usageRecorder.js` | Usage call records + tracking modes |
+| `server/services/UsageEventLog.js` | Daily usage event files + retention |
 | `server/services/UsageAggregator.js` | Daily/monthly rollups + cleanup |
 | `server/feedbackStorage.js` | Feedback JSONL writes + cleanup |
 | `server/services/AuditLogService.js` | Audit log entries + retention |
