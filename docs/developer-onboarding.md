@@ -774,17 +774,12 @@ The project includes comprehensive testing:
 # Run all LLM adapter tests
 npm run test:all
 
-# Test specific adapters
-npm run test:openai
-npm run test:anthropic
-npm run test:google
-npm run test:mistral
+# Run every server test (node:test and jest files under server/tests)
+npm run test:server
 
-# Test tool calling functionality
-npm run test:tool-calling
-
-# Test authentication security
-cd server && node tests/authentication-security.test.js
+# Test specific adapters, or filter server tests by path substring
+npm run test:adapters
+node scripts/run-server-tests.js toolCalling
 ```
 
 ### Manual Testing Checklist

@@ -69,10 +69,8 @@ npm run test:all
 ### Individual provider tests
 
 ```bash
-npm run test:openai
-npm run test:anthropic
-npm run test:google
-npm run test:mistral
+npm run test:adapters                          # every *Adapter test
+node scripts/run-server-tests.js openaiAdapter # files whose path contains the string
 ```
 
 ### Tool calling consistency tests

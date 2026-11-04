@@ -17,7 +17,7 @@
  * the groups and the user are the fixture's. Scheduled tasks are on (storage
  * on a temporary directory), so the scheduling tools are listed.
  *
- * Run: node --test server/tests/builtin-app-tool-ids.test.js (part of `npm run test:tool-loading`)
+ * Run: node --test server/tests/builtin-app-tool-ids.test.js (part of `npm run test:server`)
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
