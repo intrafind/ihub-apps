@@ -30,15 +30,11 @@
  * because it is bounded — and when a bound truncates, it is logged, because a
  * silent cap reads to an administrator as "that is all there is".
  *
- * Everything degrades to a no-op when no storage provider is available. That
- * is a supported state, not an error: the caller keeps whatever non-persistent
- * behaviour it had before.
- *
  * @module services/runtime/RunSummaryRepository
  */
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'RunSummaryRepository';
@@ -298,8 +294,8 @@ function paginate(items, limit, offset) {
 export class RunSummaryRepository {
   /**
    * @param {Object} [options]
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents]
-   *   Document facet; null makes every method a no-op.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} options.documents
+   *   Document facet of the storage provider.
    * @param {import('../../storage/LockManager.js').LockManager|null} [options.locks]
    *   Lock facet. Optional: without it a read-modify-write still happens, it
    *   just loses its mutual exclusion — which is still strictly better than
@@ -307,19 +303,13 @@ export class RunSummaryRepository {
    *   status at all would be worse than either.
    * @param {Object} [options.logger] - Logger; defaults to the shared one.
    */
-  constructor({ documents = null, locks = null, logger: log } = {}) {
-    this.documents = documents || null;
+  constructor({ documents, locks = null, logger: log } = {}) {
+    if (!documents) {
+      throw new TypeError('RunSummaryRepository needs the provider documents facet');
+    }
+    this.documents = documents;
     this.locks = locks || null;
     this.logger = log || logger;
-  }
-
-  /**
-   * Whether this repository can store anything at all.
-   *
-   * @returns {boolean}
-   */
-  isAvailable() {
-    return Boolean(this.documents);
   }
 
   /**
@@ -331,7 +321,6 @@ export class RunSummaryRepository {
    * @private
    */
   _usable(runId, operation) {
-    if (!this.isAvailable()) return false;
     if (!isValidId(runId)) {
       this.logger.debug?.('Run id is not storable; skipping the run summary', {
         component: COMPONENT,
@@ -587,7 +576,7 @@ export class RunSummaryRepository {
    *   runs than the scan bound could load.
    */
   async listByOwner(ownerId, { status, kind, archived, limit, offset, match } = {}) {
-    if (!this.isAvailable() || !ownerId) return { ...EMPTY_PAGE };
+    if (!ownerId) return { ...EMPTY_PAGE };
     const accept = record =>
       !record.anonymous &&
       (status ? record.status === status : true) &&
@@ -632,7 +621,6 @@ export class RunSummaryRepository {
    * @returns {Promise<{items: Object[], total: number, truncated: boolean}>}
    */
   async listAll({ status, search, limit, offset, includeAnonymous, match } = {}) {
-    if (!this.isAvailable()) return { ...EMPTY_PAGE };
     const needle = typeof search === 'string' && search ? search.toLowerCase() : null;
     const accept = record =>
       (includeAnonymous === true || !record.anonymous) &&
@@ -657,8 +645,6 @@ export class RunSummaryRepository {
    * @returns {Promise<{totalExecutions: number, totalUsers: number, byStatus: Object, byKind: Object}>}
    */
   async stats() {
-    const empty = { totalExecutions: 0, totalUsers: 0, byStatus: {}, byKind: {} };
-    if (!this.isAvailable()) return empty;
     const { records, truncated } = await this._load();
     if (truncated) this._logTruncation('stats', { loaded: records.length });
     const byStatus = {};
@@ -683,7 +669,6 @@ export class RunSummaryRepository {
    * @returns {Promise<Object[]>} Summaries awaiting human input.
    */
   async getPendingCheckpoints() {
-    if (!this.isAvailable()) return [];
     const { records, truncated } = await this._load();
     if (truncated) this._logTruncation('getPendingCheckpoints', { loaded: records.length });
     return records
@@ -714,19 +699,19 @@ let cachedProvider = null;
  * provider.
  *
  * Rebuilt when the provider changes (a test swapping one in, a shutdown
- * followed by a fresh bootstrap) and cheap enough to call per request. Before
- * storage is up it returns a repository whose every method is a no-op, so
- * callers never branch on initialization order.
+ * followed by a fresh bootstrap) and cheap enough to call per request.
  *
  * @returns {RunSummaryRepository}
+ * @throws {import('../../storage/bootstrap.js').StorageBootstrapError} When
+ *   storage has not been bootstrapped.
  */
 export function getRunSummaryRepository() {
-  const provider = getStorage();
+  const provider = requireStorage();
   if (!cachedRepository || cachedProvider !== provider) {
     cachedProvider = provider;
     cachedRepository = new RunSummaryRepository({
-      documents: readFacet(provider, 'documents'),
-      locks: readFacet(provider, 'locks'),
+      documents: provider.documents,
+      locks: provider.locks,
       logger
     });
   }

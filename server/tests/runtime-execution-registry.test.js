@@ -35,7 +35,10 @@ import { FilesystemStorageProvider } from '../storage/providers/filesystem/index
 import { RunSummaryRepository, RUNS_NAMESPACE } from '../services/runtime/RunSummaryRepository.js';
 import { ExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { WorkflowStatus } from '../services/workflow/StateManager.js';
-import { LEGACY_STATE_FILE } from '../services/workflow/WorkflowStateRepository.js';
+import {
+  WorkflowStateRepository,
+  workflowStateOwnerId
+} from '../services/workflow/WorkflowStateRepository.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 
@@ -63,11 +66,9 @@ function recordingLogger() {
  * @param {Object} [options]
  * @param {string} [options.baseDir] - Existing directory to re-open, for the
  *   two-workers-one-volume cases.
- * @param {string} [options.stateDir] - Checkpoint directory the recovery scan
- *   reads.
- * @returns {Promise<Object>} Provider, repository, registry and directories.
+ * @returns {Promise<Object>} Provider, repository, registry, workflow states and directory.
  */
-async function openRegistry({ baseDir, stateDir } = {}) {
+async function openRegistry({ baseDir } = {}) {
   const root = baseDir || (await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-exec-registry-')));
   const provider = new FilesystemStorageProvider({ baseDir: root, flushIntervalMs: 25 });
   await provider.initialize();
@@ -76,13 +77,14 @@ async function openRegistry({ baseDir, stateDir } = {}) {
     locks: provider.locks,
     logger: recordingLogger().logger
   });
-  const { lines, logger } = recordingLogger();
-  const registry = new ExecutionRegistry({
-    summaries,
-    logger,
-    ...(stateDir ? { stateDir } : {})
+  const states = new WorkflowStateRepository({
+    documents: provider.documents,
+    locks: provider.locks,
+    logger: recordingLogger().logger
   });
-  return { baseDir: root, provider, summaries, registry, lines };
+  const { lines, logger } = recordingLogger();
+  const registry = new ExecutionRegistry({ summaries, states, logger });
+  return { baseDir: root, provider, summaries, states, registry, lines };
 }
 
 /**
@@ -586,27 +588,6 @@ describe('ExecutionRegistry: the local record and the document', () => {
       assert.equal(await registry.remove('wf-exec-missing'), false);
     });
   });
-
-  it('keeps working, in memory only, with no storage provider', async () => {
-    const registry = new ExecutionRegistry({
-      summaries: new RunSummaryRepository({ documents: null }),
-      logger: recordingLogger().logger
-    });
-    registry.register('wf-exec-7', metadata());
-    assert.equal((await registry.get('wf-exec-7')).status, WorkflowStatus.RUNNING);
-
-    registry.updateStatus('wf-exec-7', WorkflowStatus.COMPLETED);
-    await registry.flushWrites();
-    assert.equal(
-      (await registry.get('wf-exec-7')).status,
-      WorkflowStatus.COMPLETED,
-      'a terminal run stays in the map when there is nowhere to persist it'
-    );
-    assert.deepEqual(
-      (await registry.getByUser(OWNER)).map(e => e.executionId),
-      ['wf-exec-7']
-    );
-  });
 });
 
 describe('ExecutionRegistry: how the write reaches the document', () => {
@@ -774,28 +755,21 @@ describe('ExecutionRegistry: how the write reaches the document', () => {
 });
 
 /**
- * Write one legacy `<executionId>/latest.json` under `stateDir`.
+ * Store one workflow state, the way `StateManager` checkpoints it.
  *
- * @param {string} stateDir - Directory holding the per-execution states.
+ * @param {WorkflowStateRepository} states - Workflow state repository.
  * @param {string} executionId - Execution the state belongs to.
  * @param {Object} state - The state document.
  * @returns {Promise<void>}
  */
-async function writeLegacyState(stateDir, executionId, state) {
-  await fs.mkdir(path.join(stateDir, executionId), { recursive: true });
-  await fs.writeFile(
-    path.join(stateDir, executionId, LEGACY_STATE_FILE),
-    JSON.stringify(state),
-    'utf8'
-  );
+async function writeState(states, executionId, state) {
+  await states.write(executionId, state, { ownerId: workflowStateOwnerId(state) });
 }
 
 describe('ExecutionRegistry: recovery from checkpoints', () => {
-  it('recovers an execution that only has a state directory, and overwrites none', async () => {
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-exec-states-'));
-    const writeState = (executionId, state) => writeLegacyState(stateDir, executionId, state);
-    try {
-      await writeState('wf-exec-recovered', {
+  it('recovers an execution that only has a stored state, and overwrites none', async () => {
+    await withRegistry(async ({ registry, summaries, states }) => {
+      await writeState(states, 'wf-exec-recovered', {
         executionId: 'wf-exec-recovered',
         workflowId: 'quarterly-report',
         status: WorkflowStatus.RUNNING,
@@ -803,55 +777,47 @@ describe('ExecutionRegistry: recovery from checkpoints', () => {
         createdAt: new Date().toISOString(),
         data: { _workflow: { startedBy: OWNER } }
       });
-      await writeState('wf-child-ignored', {
+      await writeState(states, 'wf-child-ignored', {
         executionId: 'wf-child-ignored',
         workflowId: 'sub',
         status: WorkflowStatus.RUNNING,
         data: { _workflow: { startedBy: OWNER } }
       });
-      await writeState('wf-exec-live', {
+      await writeState(states, 'wf-exec-live', {
         executionId: 'wf-exec-live',
         workflowId: 'stale-copy',
         status: WorkflowStatus.RUNNING,
         data: { _workflow: { startedBy: 'someone-else' } }
       });
+      // Already known: recovery is degraded by nature and must never
+      // overwrite a record another writer put there.
+      await seedSummary(summaries, {
+        runId: 'wf-exec-live',
+        kind: 'workflow',
+        workflowId: 'quarterly-report',
+        workflowName: { en: 'Quarterly Report' },
+        inputPreview: { topic: 'Q4 revenue' }
+      });
 
-      await withRegistry(
-        async ({ registry, summaries }) => {
-          // Already known: recovery is degraded by nature and must never
-          // overwrite a record another writer put there.
-          await seedSummary(summaries, {
-            runId: 'wf-exec-live',
-            kind: 'workflow',
-            workflowId: 'quarterly-report',
-            workflowName: { en: 'Quarterly Report' },
-            inputPreview: { topic: 'Q4 revenue' }
-          });
+      await registry.loadFromDisk();
 
-          await registry.loadFromDisk();
+      const recovered = await registry.get('wf-exec-recovered');
+      assert.equal(recovered.userId, OWNER);
+      assert.equal(recovered.workflowId, 'quarterly-report');
+      assert.equal(recovered.currentNode, 'collect');
+      assert.equal(recovered.source, null, 'a checkpoint knows no source, and none is guessed');
 
-          const recovered = await registry.get('wf-exec-recovered');
-          assert.equal(recovered.userId, OWNER);
-          assert.equal(recovered.workflowId, 'quarterly-report');
-          assert.equal(recovered.currentNode, 'collect');
-          assert.equal(recovered.source, null, 'a checkpoint knows no source, and none is guessed');
-
-          assert.equal(
-            await registry.get('wf-child-ignored'),
-            null,
-            'a planner-spawned child is not an execution in its own right'
-          );
-
-          const untouched = await summaries.get('wf-exec-live');
-          assert.deepEqual(untouched.workflowName, { en: 'Quarterly Report' });
-          assert.deepEqual(untouched.inputPreview, { topic: 'Q4 revenue' });
-          assert.equal(untouched.workflowId, 'quarterly-report');
-        },
-        { stateDir }
+      assert.equal(
+        await registry.get('wf-child-ignored'),
+        null,
+        'a planner-spawned child is not an execution in its own right'
       );
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
+
+      const untouched = await summaries.get('wf-exec-live');
+      assert.deepEqual(untouched.workflowName, { en: 'Quarterly Report' });
+      assert.deepEqual(untouched.inputPreview, { topic: 'Q4 revenue' });
+      assert.equal(untouched.workflowId, 'quarterly-report');
+    });
   });
 
   it('does not overwrite a run registered while the scan was reading its state', async () => {
@@ -860,56 +826,49 @@ describe('ExecutionRegistry: recovery from checkpoints', () => {
     // may only ever create a record that does not exist. The window it has to
     // guard against is its own: the record can appear between the scan's read
     // and its write, which is why the check is repeated under the write queue.
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-exec-states-race-'));
-    try {
-      await writeLegacyState(stateDir, 'wf-exec-appeared', {
+    await withRegistry(async ({ summaries, states }) => {
+      await writeState(states, 'wf-exec-appeared', {
         executionId: 'wf-exec-appeared',
         workflowId: 'stale-copy',
         status: WorkflowStatus.RUNNING,
         data: { _workflow: { startedBy: 'someone-else' } }
       });
-
-      await withRegistry(async ({ summaries }) => {
-        // The record is invisible to the scan's read and present by the time
-        // it writes — another worker registering the run in between.
-        let reads = 0;
-        const store = {
-          isAvailable: () => summaries.isAvailable(),
-          get: async id => {
-            reads += 1;
-            return reads === 1 ? null : summaries.get(id);
-          },
-          put: (...args) => summaries.put(...args),
-          patch: (...args) => summaries.patch(...args),
-          merge: (...args) => summaries.merge(...args),
-          remove: (...args) => summaries.remove(...args),
-          listAll: (...args) => summaries.listAll(...args),
-          listByOwner: (...args) => summaries.listByOwner(...args)
-        };
-        await seedSummary(summaries, {
-          runId: 'wf-exec-appeared',
-          kind: 'workflow',
-          workflowId: 'quarterly-report',
-          workflowName: { en: 'Quarterly Report' },
-          inputPreview: { topic: 'Q4 revenue' }
-        });
-
-        const registry = new ExecutionRegistry({
-          summaries: store,
-          stateDir,
-          logger: recordingLogger().logger
-        });
-        await registry.loadFromDisk();
-
-        assert.ok(reads >= 2, 'the scan looked again before writing');
-        const stored = await summaries.get('wf-exec-appeared');
-        assert.equal(stored.workflowId, 'quarterly-report', 'the registered record stands');
-        assert.deepEqual(stored.workflowName, { en: 'Quarterly Report' });
-        assert.deepEqual(stored.inputPreview, { topic: 'Q4 revenue' });
+      // The record is invisible to the scan's read and present by the time
+      // it writes — another worker registering the run in between.
+      let reads = 0;
+      const store = {
+        get: async id => {
+          reads += 1;
+          return reads === 1 ? null : summaries.get(id);
+        },
+        put: (...args) => summaries.put(...args),
+        patch: (...args) => summaries.patch(...args),
+        merge: (...args) => summaries.merge(...args),
+        remove: (...args) => summaries.remove(...args),
+        listAll: (...args) => summaries.listAll(...args),
+        listByOwner: (...args) => summaries.listByOwner(...args)
+      };
+      await seedSummary(summaries, {
+        runId: 'wf-exec-appeared',
+        kind: 'workflow',
+        workflowId: 'quarterly-report',
+        workflowName: { en: 'Quarterly Report' },
+        inputPreview: { topic: 'Q4 revenue' }
       });
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
+
+      const registry = new ExecutionRegistry({
+        summaries: store,
+        states,
+        logger: recordingLogger().logger
+      });
+      await registry.loadFromDisk();
+
+      assert.ok(reads >= 2, 'the scan looked again before writing');
+      const stored = await summaries.get('wf-exec-appeared');
+      assert.equal(stored.workflowId, 'quarterly-report', 'the registered record stands');
+      assert.deepEqual(stored.workflowName, { en: 'Quarterly Report' });
+      assert.deepEqual(stored.inputPreview, { topic: 'Q4 revenue' });
+    });
   });
 });
 
@@ -1017,50 +976,5 @@ describe('ExecutionRegistry: the principal the ledger resolved', () => {
         );
       });
     });
-  });
-});
-
-describe('ExecutionRegistry: what a missing storage provider costs', () => {
-  it('reports itself as not durable, so a caller can tell', async () => {
-    await withRegistry(async ({ registry }) => {
-      assert.equal(registry.isDurable, true, 'with a provider behind it');
-    });
-
-    // No documents, no locks: what `bootstrapStorage` leaves after a misspelt
-    // provider name or an unwritable data directory.
-    const memoryOnly = new ExecutionRegistry({
-      summaries: { isAvailable: () => false },
-      logger: recordingLogger().logger
-    });
-    assert.equal(memoryOnly.isDurable, false);
-  });
-
-  it('recovers checkpoints into its own map when there is no store', async () => {
-    // The recovery is per-worker state without a provider, so every worker has
-    // to do it for itself — gating it on the scheduler lock, as the shared
-    // marking beside it is, would leave every other worker with an empty
-    // execution list and no way to ever fill it.
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-exec-nostore-'));
-    try {
-      await writeLegacyState(stateDir, 'wf-exec-memory', {
-        executionId: 'wf-exec-memory',
-        workflowId: 'quarterly-report',
-        status: WorkflowStatus.RUNNING,
-        data: { _workflow: { startedBy: OWNER } }
-      });
-
-      const registry = new ExecutionRegistry({
-        summaries: { isAvailable: () => false },
-        logger: recordingLogger().logger,
-        stateDir
-      });
-      await registry.loadFromDisk();
-
-      const recovered = await registry.get('wf-exec-memory');
-      assert.ok(recovered, 'the checkpoint was re-tracked');
-      assert.equal(recovered.userId, OWNER);
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
   });
 });

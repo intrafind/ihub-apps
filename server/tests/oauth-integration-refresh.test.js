@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { scratchDocuments } from './helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * What a failed token refresh does to a user's stored tokens, for the real
@@ -183,13 +186,17 @@ const expectUnavailable = (error, name) => {
   expect(isUnavailableError(error)).toBe(true);
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   jest.clearAllMocks();
   httpFetch.mockReset();
   store.expired = false;
   // A fresh connection index per test: a connection one test ended stays
   // ended (it is only revived by connecting again).
-  const connections = new IntegrationConnectionService({ documents: null, audit: () => {} });
+  const connections = new IntegrationConnectionService({
+    documents: scratch.documents,
+    audit: () => {}
+  });
   connections.refreshGraceMs = 0;
   setIntegrationConnectionServiceForTests(connections);
 });

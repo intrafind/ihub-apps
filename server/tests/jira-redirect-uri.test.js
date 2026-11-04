@@ -8,7 +8,7 @@
  *
  * Run: node --test server/tests/jira-redirect-uri.test.js
  */
-import { describe, it, beforeEach, after } from 'node:test';
+import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
@@ -26,6 +26,7 @@ import credentialService from '../services/CredentialService.js';
 import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
 import { getIntegrationConnectionService } from '../services/integrations/auth/IntegrationConnectionService.js';
 import os from 'node:os';
+import { startTestStorage } from './helpers/testStorage.js';
 import path from 'node:path';
 import { mkdtempSync } from 'node:fs';
 
@@ -134,6 +135,13 @@ describe('resolveJiraRedirectUri', () => {
 });
 
 describe('Jira OAuth routes', () => {
+  let storage;
+  before(async () => {
+    storage = await startTestStorage({ prefix: 'ihub-jira-redirect-' });
+  });
+  after(async () => {
+    await storage.stop();
+  });
   const headers = { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'ihub.example' };
   const originalStrategy = JiraService.oauthStrategy;
   let tokenEndpoint;

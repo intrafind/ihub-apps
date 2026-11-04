@@ -16,9 +16,6 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { InstalledIntegrationService } from '../../services/integrations/InstalledIntegrationService.js';
 import {
   answerLogEntry,
@@ -33,9 +30,9 @@ import {
 } from '../../services/workflow/questionPause.js';
 import { PromptNodeExecutor } from '../../services/workflow/executors/PromptNodeExecutor.js';
 import { oneShotGrant } from '../../services/loop/seams/approvalSeam.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
-import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
 import {
   MAX_TRANSCRIPT_CHARS,
@@ -158,12 +155,12 @@ test('#2 the recorded principal is rebuilt from the snapshot with the configured
 });
 
 test('#2 who answered is documented: the answer carries the approver, the execution logs it', async t => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-approver-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const storage = await startTestStorage({ prefix: 'tool-approval-approver-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog });
   t.after(async () => {
     await svc.stop?.();
-    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await storage.stop();
   });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'owner-1' } });
   const raised = await svc.raise({
@@ -196,12 +193,12 @@ test('#2 who answered is documented: the answer carries the approver, the execut
 });
 
 test('#2 the approver display name is recorded in the full identity mode only', async t => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-approver-name-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const storage = await startTestStorage({ prefix: 'tool-approval-approver-name-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog });
   t.after(async () => {
     await svc.stop?.();
-    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await storage.stop();
   });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'owner-1' } });
   const approverIn = async identityMode => {
@@ -281,23 +278,17 @@ test('#3 the grant of an approved call checks the arguments and is used once', (
 // ── 4 and 6 ──────────────────────────────────────────────────────────────────
 
 async function setup(t) {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-review-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const interactions = new InteractionService({ runLog, saveIntervalMs: 10 });
-  const provider = new FilesystemStorageProvider({
-    baseDir: path.join(baseDir, 'store'),
-    flushIntervalMs: 25
-  });
-  await provider.initialize();
+  const storage = await startTestStorage({ prefix: 'tool-approval-review-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const interactions = new InteractionService({ runLog });
   const repository = new ChatRepository({
-    documents: provider.documents,
-    locks: provider.locks,
+    documents: storage.provider.documents,
+    locks: storage.provider.locks,
     logger: silent
   });
   t.after(async () => {
     await interactions.stop?.();
-    await provider.shutdown();
-    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await storage.stop();
   });
   return { interactions, repository };
 }

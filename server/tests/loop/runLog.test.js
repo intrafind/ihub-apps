@@ -3,28 +3,31 @@
 
 /**
  * RunLog service tests — in-memory event stream + persistence + identity +
- * cascade delete + retention. Uses a temp dir and forceEnabled so the feature
- * flag / configCache are not involved.
+ * cascade delete + retention. Runs over a scratch filesystem storage provider
+ * and forceEnabled so the feature flag / configCache are not involved.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { RunLog, newRunId, hashPayload } from '../../services/loop/RunLog.js';
+import { getRunSummaryRepository } from '../../services/runtime/RunSummaryRepository.js';
+import { shutdownStorageBootstrap } from '../../storage/bootstrap.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { resolvePrincipal, isAnonymousUser } from '../../services/loop/runIdentity.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
+after(async () => {
+  await shutdownStorageBootstrap();
+});
+
 async function tmpLog(opts = {}) {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-test-'));
+  const storage = await startTestStorage({ prefix: 'runlog-test-' });
   const log = new RunLog({
-    baseDir,
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
     getFeatures: () => ({ runLog: true }),
     ...opts
   });
-  return { log, baseDir };
+  return { log, storage };
 }
 
 test('newRunId / hashPayload basics', () => {
@@ -56,16 +59,15 @@ test('append validates against the contract', async () => {
   await log.stop();
 });
 
-test('events persist to one JSONL per run and readEvents honours afterSeq', async () => {
-  const { log, baseDir } = await tmpLog();
+test('events persist to one stream per run and readEvents honours afterSeq', async () => {
+  const { log, storage } = await tmpLog();
   const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u1' } });
   log.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'a' });
   log.append(runId, RUN_LOG_EVENTS.MESSAGE_ASSISTANT, { step: 1, content: 'b' });
   log.endRun(runId, { status: 'completed', finishReason: 'stop' });
   await log.flush();
-  const file = path.join(baseDir, 'runs', `${runId}.jsonl`);
-  const lines = (await fs.readFile(file, 'utf8')).trim().split('\n');
-  assert.equal(lines.length, 4);
+  const stored = await storage.provider.logs.read(`run:${runId}`, { afterSeq: 0 });
+  assert.equal(stored.length, 4);
   const all = await log.readEvents(runId);
   assert.deepEqual(
     all.map(e => e.type),
@@ -77,7 +79,7 @@ test('events persist to one JSONL per run and readEvents honours afterSeq', asyn
     [3, 4]
   );
   // A fresh instance recovers the last seq from disk via resumeRun.
-  const log2 = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const log2 = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   await log2.resumeRun(runId);
   assert.equal(log2.currentSeq(runId), 4);
   const e = log2.append(runId, RUN_LOG_EVENTS.RUN_RESUMED, {});
@@ -105,8 +107,8 @@ test('listRuns excludes anonymous runs and reflects run/end status', async () =>
   await log.stop();
 });
 
-test('deleteRun cascades: run file, spill dir, index tombstone, hooks', async () => {
-  const { log, baseDir } = await tmpLog();
+test('deleteRun cascades: stream, spilled payloads, summary, hooks', async () => {
+  const { log, storage } = await tmpLog();
   const hooked = [];
   log.onDelete(async id => {
     hooked.push(id);
@@ -123,16 +125,16 @@ test('deleteRun cascades: run file, spill dir, index tombstone, hooks', async ()
   assert.ok(res.cascaded.includes('run-file'));
   assert.ok(res.cascaded.includes('interactions'));
   assert.deepEqual(hooked, [runId]);
-  await assert.rejects(fs.access(path.join(baseDir, 'runs', `${runId}.jsonl`)));
-  await assert.rejects(fs.access(path.join(baseDir, 'spill', runId)));
+  assert.deepEqual(await storage.provider.logs.read(`run:${runId}`, { afterSeq: 0 }), []);
+  await assert.rejects(log.readSpill(runId, ref));
   const runs = await log.listRuns();
-  assert.equal(runs.length, 0, 'tombstone hides the deleted run');
+  assert.equal(runs.length, 0, 'the deleted run is no longer listed');
   assert.equal(log.hasRun(runId), false);
   await log.stop();
 });
 
-test('persistence off: in-memory stream still works, nothing hits disk', async () => {
-  const { log, baseDir } = await tmpLog({ forceEnabled: false });
+test('persistence off: in-memory stream still works, nothing is stored', async () => {
+  const { log, storage } = await tmpLog({ forceEnabled: false });
   const seen = [];
   log.subscribeAll(e => seen.push(e.type));
   const { runId } = await log.startRun({ kind: 'inference', user: { id: 'u' } });
@@ -140,14 +142,14 @@ test('persistence off: in-memory stream still works, nothing hits disk', async (
   log.endRun(runId);
   await log.flush();
   assert.deepEqual(seen, ['run/start', 'message/assistant', 'run/end']);
-  await assert.rejects(fs.access(path.join(baseDir, 'runs')));
+  assert.deepEqual(await storage.provider.logs.read(`run:${runId}`, { afterSeq: 0 }), []);
   assert.deepEqual(await log.readEvents(runId), []);
   assert.equal(await log.spill(runId, 'x', 'y'), null);
   await log.stop();
 });
 
-test('cleanup removes run files older than retention and runs the delete cascade', async () => {
-  const { log, baseDir } = await tmpLog();
+test('cleanup removes runs older than retention and runs the delete cascade', async () => {
+  const { log } = await tmpLog();
   const cascaded = [];
   log.onDelete(runId => {
     cascaded.push(runId);
@@ -157,12 +159,11 @@ test('cleanup removes run files older than retention and runs the delete cascade
   log.endRun(runId);
   const { runId: recent } = await log.startRun({ kind: 'chat', user: { id: 'u' } });
   await log.flush();
-  const file = path.join(baseDir, 'runs', `${runId}.jsonl`);
-  const old = new Date(Date.now() - 10 * 24 * 3600 * 1000);
-  await fs.utimes(file, old, old);
+  const old = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+  await getRunSummaryRepository().patch(runId, { endedAt: old, updatedAt: old });
   const { removed } = await log.cleanup(5);
   assert.equal(removed, 1);
-  await assert.rejects(fs.access(file));
+  assert.equal(await getRunSummaryRepository().get(runId), null, 'the summary is gone');
   assert.deepEqual(cascaded, [runId], 'the same cascade as deleteRun, for the expired run only');
   assert.equal(log.getRunMeta(runId), null);
   assert.ok(log.getRunMeta(recent));
@@ -197,14 +198,13 @@ test('identity modes: full keeps PII, default id-only, pseudonymized hashes, ano
 });
 
 test('appendRecovered continues the persisted sequence for a run this process never started', async () => {
-  const { log, baseDir } = await tmpLog();
+  const { log } = await tmpLog();
   const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u1' } });
   log.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'hi' });
   await log.flush();
 
   // another worker (a second RunLog over the same directory) answers into the run
   const other = new RunLog({
-    baseDir,
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
     getFeatures: () => ({ runLog: true })
@@ -287,11 +287,10 @@ test('resumeRun re-reads the ledger, so the worker that lost the recovery race c
   // one that later resumes the run. It used to claim ownership with its stale
   // in-memory seq and re-allocate a number the other worker had already
   // written, putting two events on the same seq in an append-only ledger.
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-resume-'));
+  await startTestStorage({ prefix: 'runlog-resume-' });
   const cluster = fakeCluster();
   const mk = id =>
     new RunLog({
-      baseDir,
       forceEnabled: true,
       bus: cluster.worker(id),
       getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
@@ -331,11 +330,10 @@ test('resumeRun re-reads the ledger, so the worker that lost the recovery race c
 });
 
 test('appendRecovered: the owner allocates the sequence; without an owner recovery is serialized by a lock', async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-cluster-'));
+  await startTestStorage({ prefix: 'runlog-cluster-' });
   const cluster = fakeCluster();
   const mk = id =>
     new RunLog({
-      baseDir,
       forceEnabled: true,
       bus: cluster.worker(id),
       getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
@@ -378,7 +376,6 @@ test('appendRecovered: the owner allocates the sequence; without an owner recove
     events.map(e => e.seq),
     [1, 2, 3, 4, 5]
   );
-  assert.deepEqual(await fs.readdir(path.join(baseDir, 'locks')), [], 'locks are released');
 
   // A worker that resumes the run (the engine resuming a paused execution)
   // owns it again, and the others route to it.
@@ -391,8 +388,8 @@ test('appendRecovered: the owner allocates the sequence; without an owner recove
   await workerC.stop();
 });
 
-test('run/end is idempotent, hasEnded / lastSeq / readStart use the file head and tail', async () => {
-  const { log, baseDir } = await tmpLog();
+test('run/end is idempotent, hasEnded / lastSeq / readStart read the stored stream', async () => {
+  const { log } = await tmpLog();
   const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u1' } });
   log.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'x'.repeat(200_000) });
   assert.equal(await log.hasEnded(runId), false);
@@ -401,9 +398,8 @@ test('run/end is idempotent, hasEnded / lastSeq / readStart use the file head an
   assert.equal(await log.hasEnded(runId), true);
   await log.flush();
 
-  // another process: no memory, answers from the file's first / last line
+  // another process: no memory, answers from the stored stream
   const other = new RunLog({
-    baseDir,
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
     getFeatures: () => ({ runLog: true })
@@ -420,11 +416,9 @@ test('run/end is idempotent, hasEnded / lastSeq / readStart use the file head an
 });
 
 test("resolveRunMeta: a run that lives only in another worker's memory is described over the bus", async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-meta-'));
   const cluster = fakeCluster();
   const mk = id =>
     new RunLog({
-      baseDir,
       forceEnabled: false,
       bus: cluster.worker(id),
       getPlatformConfig: () => ({ runLog: { identityMode: 'default' } })

@@ -420,35 +420,6 @@ describe('RunSummaryRepository: the runs namespace', () => {
     });
   });
 
-  it('degrades to a no-op with no storage provider', async () => {
-    const { lines, logger } = recordingLogger();
-    const repository = new RunSummaryRepository({ logger });
-
-    assert.equal(repository.isAvailable(), false);
-    assert.equal(await repository.put(summary()), null);
-    assert.equal(await repository.get('run-1'), null);
-    assert.equal(await repository.patch('run-1', { status: 'completed' }), null);
-    assert.equal(await repository.remove('run-1'), false);
-    assert.deepEqual(await repository.listByOwner(OWNER), {
-      items: [],
-      total: 0,
-      truncated: false
-    });
-    assert.deepEqual(await repository.listAll(), { items: [], total: 0, truncated: false });
-    assert.deepEqual(await repository.stats(), {
-      totalExecutions: 0,
-      totalUsers: 0,
-      byStatus: {},
-      byKind: {}
-    });
-    assert.deepEqual(await repository.getPendingCheckpoints(), []);
-    assert.deepEqual(
-      lines.filter(line => line.level === 'error'),
-      [],
-      'unavailable storage is a supported state, not an error'
-    );
-  });
-
   it('refuses a run id that is not usable as a key, without throwing', async () => {
     await withRepository(async ({ repository, lines }) => {
       assert.equal(await repository.put(summary({ runId: '../escape' })), null);

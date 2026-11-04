@@ -23,12 +23,10 @@ import { FilesystemStorageProvider } from '../storage/providers/filesystem/index
 import {
   WorkflowStateRepository,
   WORKFLOW_STATE_NAMESPACE,
-  LEGACY_STATE_FILE,
   workflowStateOwnerId,
-  getWorkflowStateRepository,
-  resolveWorkflowStateRepository
+  getWorkflowStateRepository
 } from '../services/workflow/WorkflowStateRepository.js';
-import { StorageError } from '../storage/errors.js';
+import { StorageBootstrapError, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import {
   StateManager,
   WorkflowStatus,
@@ -91,27 +89,20 @@ function state(executionId, overrides = {}) {
 /**
  * Bring up a provider and a repository over `baseDir`.
  *
- * The legacy state directory is deliberately the namespace's own directory —
- * that is the on-disk collision this issue has to survive, with
- * `<id>/latest.json` directories sitting beside `<id>.json` documents.
- *
  * @param {string} [baseDir] - Existing directory to re-open.
- * @returns {Promise<Object>} Provider, repository, log lines and directories.
+ * @returns {Promise<Object>} Provider, repository, log lines and directory.
  */
 async function openRepository(baseDir) {
   const dir = baseDir || (await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-state-')));
   const provider = new FilesystemStorageProvider({ baseDir: dir, flushIntervalMs: 25 });
   await provider.initialize();
-  const stateDir = path.join(dir, WORKFLOW_STATE_NAMESPACE);
-  await fs.mkdir(stateDir, { recursive: true });
   const { lines, logger } = recordingLogger();
   const repository = new WorkflowStateRepository({
     documents: provider.documents,
     locks: provider.locks,
-    stateDir,
     logger
   });
-  return { baseDir: dir, stateDir, provider, repository, lines };
+  return { baseDir: dir, provider, repository, lines };
 }
 
 /**
@@ -131,19 +122,15 @@ async function withRepository(fn) {
 }
 
 /**
- * Write a state in the legacy `<executionId>/latest.json` layout.
+ * Store a state the way `StateManager` checkpoints it.
  *
- * @param {string} stateDir - The state directory.
+ * @param {WorkflowStateRepository} repository - Repository to write through.
  * @param {string} executionId - Execution identifier.
  * @param {Object} body - State to write.
- * @returns {Promise<string>} The file written.
+ * @returns {Promise<void>}
  */
-async function writeLegacyState(stateDir, executionId, body) {
-  const dir = path.join(stateDir, executionId);
-  await fs.mkdir(dir, { recursive: true });
-  const file = path.join(dir, LEGACY_STATE_FILE);
-  await fs.writeFile(file, JSON.stringify(body, null, 2), 'utf8');
-  return file;
+async function writeState(repository, executionId, body) {
+  await repository.write(executionId, body, { ownerId: workflowStateOwnerId(body) });
 }
 
 describe('WorkflowStateRepository', () => {
@@ -162,173 +149,75 @@ describe('WorkflowStateRepository', () => {
     });
   });
 
-  it('reads a legacy directory, and prefers the document when both exist', async () => {
-    await withRepository(async ({ repository, stateDir }) => {
-      await writeLegacyState(stateDir, 'wf-exec-legacy', state('wf-exec-legacy'));
-      assert.equal((await repository.read('wf-exec-legacy')).workflowId, 'wf-1');
-
-      await writeLegacyState(
-        stateDir,
-        'wf-exec-both',
-        state('wf-exec-both', { workflowId: 'old' })
-      );
-      await repository.write('wf-exec-both', state('wf-exec-both', { workflowId: 'new' }));
-      assert.equal(
-        (await repository.read('wf-exec-both')).workflowId,
-        'new',
-        'the document is the newer copy'
-      );
-
+  it('reads a state that is not a state, or an unusable id, as absent', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      await provider.documents.put(WORKFLOW_STATE_NAMESPACE, 'wf-exec-junk', { hello: 'world' });
+      assert.equal(await repository.read('wf-exec-junk'), null);
       assert.equal(await repository.read('wf-exec-missing'), null);
       assert.equal(await repository.read('../escape'), null, 'an unusable id reads as absent');
     });
   });
 
-  it('reads a legacy directory whose state is unparseable as absent', async () => {
-    await withRepository(async ({ repository, stateDir }) => {
-      const dir = path.join(stateDir, 'wf-exec-torn');
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(path.join(dir, LEGACY_STATE_FILE), '{"executionId":', 'utf8');
-      assert.equal(await repository.read('wf-exec-torn'), null);
-    });
-  });
-
-  it('removes both halves and reports whether anything went', async () => {
-    await withRepository(async ({ repository, provider, stateDir }) => {
+  it('removes a state and reports whether anything went', async () => {
+    await withRepository(async ({ repository, provider }) => {
       await repository.write('wf-exec-1', state('wf-exec-1'));
-      await writeLegacyState(stateDir, 'wf-exec-1', state('wf-exec-1'));
-
       assert.equal(await repository.remove('wf-exec-1'), true);
       assert.equal(await provider.documents.get(WORKFLOW_STATE_NAMESPACE, 'wf-exec-1'), null);
-      assert.equal(
-        await fs
-          .access(path.join(stateDir, 'wf-exec-1'))
-          .then(() => true)
-          .catch(() => false),
-        false
-      );
       assert.equal(await repository.remove('wf-exec-1'), false);
+      assert.equal(await repository.remove('../escape'), false);
     });
   });
 
-  it('scans the union of documents and legacy directories, without duplicates', async () => {
-    await withRepository(async ({ repository, stateDir }) => {
-      await repository.write('wf-exec-doc', state('wf-exec-doc'));
-      await writeLegacyState(stateDir, 'wf-exec-legacy', state('wf-exec-legacy'));
-      await writeLegacyState(stateDir, 'wf-exec-both', state('wf-exec-both'));
-      await repository.write('wf-exec-both', state('wf-exec-both'));
-      await writeLegacyState(stateDir, 'wf-child-1', state('wf-child-1'));
+  it('scans the namespace as metadata or with the states, with an optional prefix', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.write('wf-exec-a', state('wf-exec-a'));
+      await repository.write('wf-exec-b', state('wf-exec-b'));
+      await repository.write('wf-child-1', state('wf-child-1'));
 
       const summaries = await repository.listSummaries();
       assert.deepEqual(summaries.items.map(item => item.executionId).sort(), [
         'wf-child-1',
-        'wf-exec-both',
-        'wf-exec-doc',
-        'wf-exec-legacy'
+        'wf-exec-a',
+        'wf-exec-b'
       ]);
       assert.equal(summaries.truncated, false);
-      assert.equal(
-        summaries.items.filter(item => item.executionId === 'wf-exec-both').length,
-        1,
-        'a state that exists in both halves is listed once'
-      );
       for (const item of summaries.items) {
         assert.equal(Number.isFinite(item.updatedAt), true, 'every entry can be aged');
+        assert.equal('state' in item, false, 'no body is read for a metadata scan');
       }
-
       assert.deepEqual(
         (await repository.listSummaries({ prefix: 'wf-exec-' })).items
           .map(item => item.executionId)
           .sort(),
-        ['wf-exec-both', 'wf-exec-doc', 'wf-exec-legacy']
-      );
-      assert.deepEqual(
-        (await repository.listLegacy()).items.map(item => item.executionId).sort(),
-        ['wf-child-1', 'wf-exec-both', 'wf-exec-legacy'],
-        'the import walks only what is still legacy-only'
+        ['wf-exec-a', 'wf-exec-b']
       );
 
       const full = await repository.list({ prefix: 'wf-exec-' });
-      assert.equal(full.items.length, 3);
+      assert.equal(full.items.length, 2);
       for (const item of full.items) {
         assert.equal(item.state.executionId, item.executionId);
       }
     });
   });
 
-  it('keeps using the legacy layout when no provider is available', async () => {
-    // A repository bound to a directory of its own — a test, or tooling that
-    // redirected its state. Legacy is its normal mode, not a degraded one, so
-    // the refusal below must not reach it.
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-legacy-'));
-    const repository = new WorkflowStateRepository({
-      stateDir,
-      logger: recordingLogger().logger
+  it('never lists the legacy execution registry file as an execution', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      await provider.documents.put(WORKFLOW_STATE_NAMESPACE, 'execution-registry', {
+        version: 1,
+        executions: []
+      });
+      assert.deepEqual((await repository.listSummaries()).items, []);
+      assert.equal(await repository.remove('execution-registry'), false);
     });
-    try {
-      assert.equal(repository.isAvailable(), false);
-      await repository.write('wf-exec-1', state('wf-exec-1'), { ownerId: OWNER });
-      assert.equal(
-        await fs
-          .access(path.join(stateDir, 'wf-exec-1', LEGACY_STATE_FILE))
-          .then(() => true)
-          .catch(() => false),
-        true
-      );
-      assert.equal((await repository.read('wf-exec-1')).executionId, 'wf-exec-1');
-      assert.deepEqual(
-        (await repository.listSummaries()).items.map(i => i.executionId),
-        ['wf-exec-1']
-      );
-      assert.equal(await repository.remove('wf-exec-1'), true);
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
   });
 
-  it('refuses to checkpoint when the shared store has lost its provider', async () => {
-    // The shared store, provider down. Writing `latest.json` here is not a
-    // fallback but a fork: `read()` prefers the document unconditionally, so
-    // this checkpoint would be shadowed the moment the provider came back, and
-    // answering a human checkpoint would resume from the older document —
-    // re-running whatever side-effecting nodes lie between. Silently.
-    //
-    // Failing is the only outcome anyone sees. Nothing repairs this later,
-    // because the repair would have to run at boot and a boot is not something
-    // to design around.
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-shared-down-'));
-    const repository = new WorkflowStateRepository({
-      stateDir,
-      shared: true,
-      logger: recordingLogger().logger
-    });
-    try {
-      assert.equal(repository.isAvailable(), false);
-
-      await assert.rejects(
-        () => repository.write('wf-exec-A', state('wf-exec-A'), { ownerId: OWNER }),
-        error => error instanceof StorageError && error.code === 'STORAGE_UNAVAILABLE'
-      );
-
-      assert.equal(
-        await fs
-          .access(path.join(stateDir, 'wf-exec-A', LEGACY_STATE_FILE))
-          .then(() => true)
-          .catch(() => false),
-        false,
-        'and it wrote nothing — a half-written fork is the same bug'
-      );
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
+  it('refuses to be built without the provider documents', () => {
+    assert.throws(() => new WorkflowStateRepository({}), TypeError);
   });
 
-  it('the shared repository is the one built for this installation', async () => {
-    // The flag has to come from somewhere real: if `getWorkflowStateRepository`
-    // stopped setting it, the refusal above would never fire in production and
-    // every test here would still pass.
-    assert.equal(getWorkflowStateRepository().shared, true);
-    assert.equal(resolveWorkflowStateRepository('/tmp/somewhere-private').shared, false);
+  it('the shared repository needs a bootstrapped provider', async () => {
+    await shutdownStorageBootstrap();
+    assert.throws(() => getWorkflowStateRepository(), StorageBootstrapError);
   });
 });
 
@@ -389,10 +278,10 @@ describe('orphan sweep through the repository', () => {
     resetExecutionRegistry();
   });
 
-  it('marks interrupted executions failed in both halves of the store', async () => {
-    await withRepository(async ({ repository, provider, stateDir }) => {
+  it('marks interrupted executions failed', async () => {
+    await withRepository(async ({ repository, provider }) => {
       await repository.write('wf-exec-doc', state('wf-exec-doc'), { ownerId: OWNER });
-      await writeLegacyState(stateDir, 'wf-exec-legacy', state('wf-exec-legacy'));
+      await writeState(repository, 'wf-exec-legacy', state('wf-exec-legacy'));
       await repository.write(
         'wf-exec-pending',
         state('wf-exec-pending', { status: WorkflowStatus.PENDING }),
@@ -403,7 +292,7 @@ describe('orphan sweep through the repository', () => {
         state('wf-exec-done', { status: WorkflowStatus.COMPLETED }),
         { ownerId: OWNER }
       );
-      await writeLegacyState(stateDir, 'wf-child-1', state('wf-child-1'));
+      await writeState(repository, 'wf-child-1', state('wf-child-1'));
 
       const result = await sweepOrphanedExecutions({
         requireSchedulerOwner: false,
@@ -490,45 +379,25 @@ describe('orphan sweep through the repository', () => {
       assert.equal((await repository.read('wf-exec-live')).status, WorkflowStatus.RUNNING);
     });
   });
-
-  it('sees a partly migrated installation, not an empty one', async () => {
-    await withRepository(async ({ repository, stateDir, provider }) => {
-      // One interrupted run as a document, one only in the old layout: what an
-      // installation looks like while only part of its states are documents.
-      await writeLegacyState(stateDir, 'wf-exec-a', state('wf-exec-a'));
-      await repository.write('wf-exec-b', state('wf-exec-b'), { ownerId: OWNER });
-
-      const documents = await provider.documents.list(WORKFLOW_STATE_NAMESPACE, {
-        includeData: false
-      });
-      assert.equal(documents.items.length, 1, 'only half the states are documents');
-
-      const result = await sweepOrphanedExecutions({ requireSchedulerOwner: false, repository });
-      assert.equal(result.scanned, 2);
-      assert.equal(result.marked, 2, 'both halves were swept');
-      assert.equal((await repository.read('wf-exec-a')).status, 'failed');
-      assert.equal((await repository.read('wf-exec-b')).status, 'failed');
-    });
-  });
 });
 
 describe('resume through the repository', () => {
-  it('finds the interrupted runs a legacy installation still has', async () => {
-    await withRepository(async ({ stateDir }) => {
-      await writeLegacyState(stateDir, 'wf-exec-running', state('wf-exec-running'));
-      await writeLegacyState(
-        stateDir,
+  it('finds the interrupted runs that were checkpointed', async () => {
+    await withRepository(async ({ repository }) => {
+      await writeState(repository, 'wf-exec-running', state('wf-exec-running'));
+      await writeState(
+        repository,
         'wf-exec-pending',
         state('wf-exec-pending', { status: WorkflowStatus.PENDING })
       );
-      await writeLegacyState(
-        stateDir,
+      await writeState(
+        repository,
         'wf-exec-done',
         state('wf-exec-done', { status: WorkflowStatus.COMPLETED })
       );
-      await writeLegacyState(stateDir, 'wf-child-1', state('wf-child-1'));
+      await writeState(repository, 'wf-child-1', state('wf-child-1'));
 
-      const candidates = await findResumableExecutions(stateDir);
+      const candidates = await findResumableExecutions(repository);
       assert.deepEqual(
         candidates.map(candidate => candidate.executionId).sort(),
         ['wf-exec-pending', 'wf-exec-running'],
@@ -539,10 +408,10 @@ describe('resume through the repository', () => {
   });
 
   it('resumes what it can and skips what it cannot resolve', async () => {
-    await withRepository(async ({ stateDir }) => {
-      await writeLegacyState(stateDir, 'wf-exec-known', state('wf-exec-known'));
-      await writeLegacyState(
-        stateDir,
+    await withRepository(async ({ repository }) => {
+      await writeState(repository, 'wf-exec-known', state('wf-exec-known'));
+      await writeState(
+        repository,
         'wf-exec-unknown',
         state('wf-exec-unknown', { workflowId: 'gone' })
       );
@@ -556,7 +425,7 @@ describe('resume through the repository', () => {
       const result = await resumeInterruptedRuns({
         engine,
         requireSchedulerOwner: false,
-        stateDir,
+        repository,
         resolveDefinition: candidate =>
           candidate.workflowId === 'wf-1' ? { definition: { id: 'wf-1' } } : null
       });

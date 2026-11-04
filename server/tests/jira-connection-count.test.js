@@ -15,6 +15,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import tokenStorage from '../services/TokenStorageService.js';
+import { scratchDocuments } from './helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 // The token store writes to a temp directory with an in-memory key, before
 // the connector module is loaded (it seeds the count from disk on import).
@@ -63,8 +66,8 @@ JiraService.oauthStrategy = function oauthStrategyForTest() {
   };
 };
 const service = new IntegrationConnectionService({
-  documents: null,
-  flowStore: new OAuthFlowStore({ documents: null })
+  documents: scratch.documents,
+  flowStore: new OAuthFlowStore({ documents: scratch.documents })
 });
 setIntegrationConnectionServiceForTests(service);
 
@@ -104,7 +107,7 @@ describe('Jira connection count', () => {
   });
   beforeEach(async () => {
     await clearTokenFiles();
-    service.memory.clear();
+    await scratch.reset();
     resetJiraConnectionCount();
   });
   after(async () => {

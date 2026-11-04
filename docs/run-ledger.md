@@ -19,13 +19,11 @@ a chat answer is read back from its run's events, so the ledger cannot be
 switched off while chats are stored: neither the `runLog` feature flag nor
 `platform.runLog.enabled: false` stops it then (see
 [Chat Persistence](chat-persistence.md#stored-chats-turn-on-the-run-ledger)).
-The flag and the switch only matter on an installation where no storage provider
-came up.
+Because the storage provider is mandatory, the flag and the switch no longer
+change anything on a running installation.
 
 1. The `runLog` feature flag is on by default (Admin → Platform → Features, or
-   `features.runLog` in `contents/config/features.json`) and keeps the
-   ledger on even without a storage provider. Set it to `false` to opt out
-   where no storage provider is up.
+   `features.runLog` in `contents/config/features.json`).
 2. Optionally tune `platform.json → runLog` (also editable under Admin →
    Observability → Chat History):
 
@@ -202,14 +200,10 @@ cluster bus), and an answer is accepted by exactly one worker: the answer
 handlers run inside a lease taken on the interaction id, and the first thing
 inside that lease is a fresh read of the shared record. A concurrent answer
 gets `409 ANSWER_IN_PROGRESS`, a late one `409 NOT_PENDING`, even when that
-worker's replica still shows the interaction as pending. The lease replaces
-the exclusive `interaction-claims/<id>.json` marker files — and because a lease
+worker's replica still shows the interaction as pending. Because a lease
 is released the moment the critical section ends, the "already answered, do not
-resume twice" signal a marker carried as a tombstone is now the stored record
-itself, which is why the record had to move into shared storage in the same
-change. A settled record is kept as that tombstone for twice the in-memory
-grace period and then swept. With no storage provider the marker files are
-still what is used. `answer.by` is the
+resume twice" signal is the stored record itself: a settled record is kept as
+that tombstone for twice the in-memory grace period and then swept. `answer.by` is the
 actor in the run's identity mode (the pseudonymized hash when the run was
 recorded that way, `anonymous` for anonymous users), never a raw user id.
 
@@ -266,10 +260,9 @@ file (`locks/`), so two recovering workers never allocate the same number.
   distributed locks is what changes that.
 - **Gap re-sync needs the ledger.** A client that reconnects to a live stream
   fills the gap from `GET /api/runs/:runId/events`, retrying a failed read with
-  backoff (five attempts) before it gives up and keeps its live view. With the
-  ledger off (no storage provider and `features.runLog` off) there is nothing
-  to read back; the client rebuilds its view from the events
-  it receives from then on.
+  backoff (five attempts) before it gives up and keeps its live view. The ledger
+  is always on while the storage provider is up, so gap re-sync always has
+  something to read back.
 - **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
   is the only chat / workflow / run stream; the ledger flag decides what is
   persisted, not what is sent.
@@ -284,15 +277,11 @@ file (`locks/`), so two recovering workers never allocate the same number.
 ## Deleting data
 
 `DELETE /api/runs/:runId` removes the run's events, its spilled payloads, its
-summary document and every interaction that references it. On an installation
-that still has per-day index files it also writes the tombstone line those
-files need, because an append-only index cannot forget a run any other way.
+summary document and every interaction that references it.
 
 The retention sweep does the same for runs older than `retentionDays`,
 including the cascade (their interactions). It judges a run by the last
-timestamp on its summary — its end, or its last update — where before it
-judged the modification time of the run file; the legacy files it has not
-replaced yet are still aged out by modification time, as before. Deleting a
+timestamp on its summary — its end, or its last update. Deleting a
 chat conversation or a workflow execution through their own endpoints triggers
 the same cascade for the run they belong to. Workflow *state* has a sweep of
 its own with its own window — see [Workflows](workflows.md).

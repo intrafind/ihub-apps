@@ -45,6 +45,9 @@ import {
 } from '../services/integrations/auth/IntegrationConnectionService.js';
 import { OAuthFlowStore } from '../services/integrations/auth/oauthFlowStore.js';
 import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
+import { scratchDocuments } from './helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 // In-memory key material; tokens land in a temp directory.
 tokenStorageService.encryptionKey = 'd'.repeat(64);
@@ -88,8 +91,8 @@ for (const level of ['info', 'warn', 'error', 'debug']) {
 }
 
 const connections = new IntegrationConnectionService({
-  documents: null,
-  flowStore: new OAuthFlowStore({ documents: null })
+  documents: scratch.documents,
+  flowStore: new OAuthFlowStore({ documents: scratch.documents })
 });
 setIntegrationConnectionServiceForTests(connections);
 

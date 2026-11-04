@@ -297,13 +297,9 @@ function validateWorkflow(workflow) {
  */
 export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
   const registry = getExecutionRegistry();
-  // Without a store the registry is this worker's own memory, so recovering
-  // from the checkpoint directories is work every worker has to do for itself
-  // — gating it on the scheduler lock would leave every other worker with an
-  // empty execution list. With a store it is shared state, and exactly one
-  // process should write it.
+  // The registry is shared state, and exactly one process should write it.
   const owned = !requireSchedulerOwner || isSchedulerOwner();
-  if (!owned && registry.isDurable) {
+  if (!owned) {
     // Info, not debug: in a cluster this is the ordinary state of every worker
     // but one, so it is not a warning — but it is the one line that says why a
     // restart left executions marked `running`, and at debug it was invisible

@@ -11,6 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { LLMClient } from '../../../services/loop/LLMClient.js';
 import { RunLog } from '../../../services/loop/RunLog.js';
+import { getStorage } from '../../../storage/bootstrap.js';
+import { startTestStorage } from '../../helpers/testStorage.js';
 
 const encoder = new TextEncoder();
 
@@ -265,11 +267,19 @@ export function makeClient(opts = {}) {
   return { client, calls };
 }
 
-/** Temp-dir RunLog that persists + captures every event in memory. */
+/**
+ * RunLog over the process-wide storage provider that persists + captures every
+ * event in memory. Brings a scratch provider up when the test has not
+ * bootstrapped one; `baseDir` is that scratch directory (or a throwaway one
+ * when the caller owns the provider), so callers can remove it afterwards.
+ */
 export async function captureRunLog() {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'llmclient-runlog-'));
+  let baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'llmclient-runlog-'));
+  if (!getStorage()) {
+    const storage = await startTestStorage({ prefix: 'llmclient-runlog-storage-' });
+    baseDir = storage.dir;
+  }
   const runLog = new RunLog({
-    baseDir,
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 20 } }),
     getFeatures: () => ({ runLog: true })

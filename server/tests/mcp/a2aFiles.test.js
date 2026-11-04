@@ -7,6 +7,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { FilesystemStorageProvider } from '../../storage/index.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * A2A server: inbound `FilePart`s (base64 `bytes`, or an https `uri`) are
@@ -116,13 +119,14 @@ afterAll(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: { expose: { tools: true, apps: true, workflows: true }, a2a: { enabled: true } },
     oauth: { issuer: 'https://ihub.example' }
   };
-  store = new A2aTaskStore({ documents: null, relayCancel: false });
+  store = new A2aTaskStore({ documents: scratch.documents, relayCancel: false });
   invokeApp.mockReset();
   invokeApp.mockResolvedValue({ text: 'Hello', result: {} });
   runTool.mockReset();

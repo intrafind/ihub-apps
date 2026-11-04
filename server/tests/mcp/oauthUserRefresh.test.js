@@ -19,6 +19,9 @@ import {
   tokenBindingFor
 } from '../../services/mcp/mcpUserTokens.js';
 import { chatToolSeam } from '../../services/chat/chatSeams.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth review fixes in McpClientManager:
@@ -71,10 +74,11 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await scratch.reset();
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
-  clientStore = new McpOAuthClientStore({ documents: null });
+  clientStore = new McpOAuthClientStore({ documents: scratch.documents });
   mcpClientManager.clientStore = clientStore;
-  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: null });
+  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: scratch.documents });
   mcpClientManager.refreshGraceMs = 0;
   mcpClientManager.refreshAuthorization = null;
   await mcpClientManager.shutdown();

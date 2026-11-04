@@ -42,13 +42,10 @@
  * ones they had when they asked; the user's own listing checks with their
  * current groups.
  *
- * Without a storage provider (tests, a provider that failed to start) the
- * records live in memory on this worker.
- *
  * @module services/integrations/IntegrationRequestService
  */
 import crypto from 'node:crypto';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSchema.js';
 import { mayUseIntegration } from './integrationAccess.js';
@@ -151,21 +148,17 @@ function groupsOf(user) {
 export class IntegrationRequestService {
   /**
    * @param {Object} [options]
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents]
-   *   The document store; `null` keeps everything in memory. Absent: the
-   *   active storage provider's.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} [options.documents]
+   *   The document store; the active storage provider's when omitted.
    * @param {() => number} [options.now]
    */
   constructor(options = {}) {
-    this._pinned = Object.hasOwn(options, 'documents');
     this._documents = options.documents || null;
     this.now = options.now || (() => Date.now());
-    this.memory = { requests: new Map(), hidden: new Map() };
   }
 
   _docs() {
-    if (this._pinned) return this._documents;
-    return readFacet(getStorage(), 'documents');
+    return this._documents || requireStorage().documents;
   }
 
   _iso() {
@@ -175,14 +168,7 @@ export class IntegrationRequestService {
   // ── Storage ─────────────────────────────────────────────────────────────
 
   async _getDoc(ns, key) {
-    const documents = this._docs();
-    if (!documents) {
-      const map = ns === REQUESTS_NAMESPACE ? this.memory.requests : this.memory.hidden;
-      const data = map.get(key);
-      // In memory there is one worker: the etag only has to tell "exists" from "new".
-      return data ? { data: structuredClone(data), etag: `mem-${key}` } : null;
-    }
-    return documents.get(ns, key);
+    return this._docs().get(ns, key);
   }
 
   /**
@@ -190,17 +176,8 @@ export class IntegrationRequestService {
    * string replaces only that version. A lost race is a REQUEST_CONFLICT.
    */
   async _putDoc(ns, key, data, { ownerId, etag } = {}) {
-    const documents = this._docs();
-    if (!documents) {
-      const map = ns === REQUESTS_NAMESPACE ? this.memory.requests : this.memory.hidden;
-      if (etag === null && map.has(key)) {
-        throw new IntegrationRequestError('REQUEST_CONFLICT', 'Changed meanwhile', 409);
-      }
-      map.set(key, structuredClone(data));
-      return data;
-    }
     try {
-      await documents.put(ns, key, data, {
+      await this._docs().put(ns, key, data, {
         ownerId,
         ...(etag !== undefined ? { etag } : {})
       });
@@ -218,22 +195,11 @@ export class IntegrationRequestService {
   }
 
   async _deleteDoc(ns, key) {
-    const documents = this._docs();
-    if (!documents) {
-      const map = ns === REQUESTS_NAMESPACE ? this.memory.requests : this.memory.hidden;
-      return map.delete(key);
-    }
-    return documents.delete(ns, key);
+    return this._docs().delete(ns, key);
   }
 
   async _listDocs(ns, { ownerId } = {}) {
     const documents = this._docs();
-    if (!documents) {
-      const map = ns === REQUESTS_NAMESPACE ? this.memory.requests : this.memory.hidden;
-      return [...map.values()]
-        .filter(data => !ownerId || data.requester?.id === ownerId)
-        .map(data => structuredClone(data));
-    }
     const out = [];
     let cursor = null;
     do {

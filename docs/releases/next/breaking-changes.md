@@ -424,6 +424,22 @@ gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the
 Streamable HTTP (`http`) on `/mcp`, or connected through a bridge such as `mcp-remote`. Outbound SSE
 to third-party MCP servers is unchanged.
 
+## Installations Older Than Release 5.3.0 Cannot Be Upgraded Directly
+
+The configuration migrations up to V030 (release 5.3.0) have been removed. The server now refuses
+to start an installation whose migration history ends below V030, or whose `contents/` folder has a
+configuration but no migration history, and exits with this error:
+
+> This installation is older than the oldest supported version and cannot be migrated directly
+
+- Installations that ran release 5.3.0 or newer start as before; their history of the removed
+  migrations is kept and ignored.
+- New installations start from the shipped defaults and are recorded at V030.
+- Nothing is changed or written when the server stops with this error.
+
+**Before upgrading:** an installation older than 5.3.0 has to be upgraded to release 5.3.x first and
+started once, so that it migrates to V030 or higher. Then upgrade to this release.
+
 ## iHub Examples Marketplace Registry Removed
 
 The **iHub Examples** registry under **Admin → Marketplace** is gone. It served the `examples/`

@@ -809,7 +809,6 @@ describe('the ledger coupling (D4)', () => {
   async function withRunLog(options, fn) {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-runlog-'));
     const log = new RunLog({
-      baseDir: path.join(baseDir, 'run-log'),
       // `runLog` is pinned off: it is on by default now, and these tests are
       // about the ledger following chat persistence rather than its own flag.
       getFeatures: () => ({ ...FLAG_ON, runLog: false }),
@@ -874,8 +873,14 @@ describe('the ledger coupling (D4)', () => {
       });
       assert.equal(log.isEnabled(), false, 'the test override is absolute');
     });
-    await withRunLog({ forceEnabled: true, getFeatures: () => FLAG_OFF }, async ({ log }) => {
-      assert.equal(log.isEnabled(), true);
-    });
+    await withRunLog(
+      { forceEnabled: true, getFeatures: () => FLAG_OFF },
+      async ({ log, baseDir }) => {
+        await bootstrapStorage({
+          storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+        });
+        assert.equal(log.isEnabled(), true);
+      }
+    );
   });
 });
