@@ -413,9 +413,14 @@
 
   // Embedded login completed: refresh React auth state and notify the host.
   function finishEmbedded() {
-    var onSuccess = embedded && embedded.onSuccess;
+    var current = embedded;
+    var onSuccess = current && current.onSuccess;
     window.dispatchEvent(new CustomEvent('authGateSuccess'));
     if (typeof onSuccess === 'function') onSuccess();
+    // The host may keep the gate mounted (e.g. it rejects a non-admin login and
+    // offers sign-out). Reset the submitted form so it is usable again; if the
+    // host unmounted the gate in the meantime, there is nothing to render.
+    if (embedded === current && authConfig && !isSubmitting) renderAuthUI(current.container);
   }
 
   function hideGate() {
