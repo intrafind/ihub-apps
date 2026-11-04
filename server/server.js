@@ -88,8 +88,6 @@ import { registerChatClarificationLifecycle } from './services/chat/chatClarific
 import interactionService from './services/loop/InteractionService.js';
 import { startActionUsageTracking } from './services/integrations/actionUsage.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
-import { authRequired } from './middleware/authRequired.js';
-import { adminAuth } from './middleware/adminAuth.js';
 import { attachRealtimeTranscription } from './websocket/realtimeTranscription.js';
 import registerVoiceRoutes from './routes/voiceRoutes.js';
 import registerSetupRoutes from './routes/setup.js';
