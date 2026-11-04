@@ -350,3 +350,57 @@ fall back to memory or to older file layouts.
 - **Token files.** Migration V218 renames single-slot cloud-storage token files
   (`<userId>.json`) to the per-provider name once, instead of on every start. Jira's single token
   slot is unchanged.
+  
+## Legacy Config Shapes Are No Longer Read
+
+Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
+data on the first start.
+
+- **Resource arrays.** `config/apps.json`, `models.json`, `prompts.json`, `workflows.json` and
+  `agents.json` (one JSON array per resource) are no longer loaded. V220 moves every entry that has
+  no file yet into `apps/`, `models/`, `prompts/`, `workflows/` or `agents/profiles/` and deletes the
+  array; an array with an entry that has no usable `id` is kept and named in the log.
+- **Feedback counters.** The thumbs-style `good` and `bad` counters in `data/usage.json` are gone.
+  V221 folds counts that predate star ratings into the ratings and removes the counters. The
+  **Usage** CSV export has **Feedback Ratings** and **Average Rating** rows instead of **Feedback
+  Good** and **Feedback Bad**. Rating strings other than numbers (`"positive"`) are ignored.
+- **IP anonymization.** `logging.anonymizeIp` and `audit.anonymizeIp` accept `"off"`, `"mask"` and
+  `"drop"` only; V222 turns `false` into `"off"` and `true` into `"mask"`. An
+  `IHUB_PLATFORM__AUDIT__ANONYMIZE_IP=true` (or `LOGGING`) environment variable must become
+  `mask`.
+- **iFinder subject templates** accept `${user.field}` only; a bare `${username}` is rejected when
+  a token is minted instead of being resolved. The `token_usage_total` metric is removed; use
+  `gen_ai_client_token_usage`. Setting an `IHUB_PLATFORM__I_FINDER__*` or
+  `IHUB_PLATFORM__I_ASSISTANT__*` variable no longer logs a warning (it has had no effect since
+  V192).
+  
+## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
+
+- **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback
+  the browser is sent back with `?oidc=success&provider=<name>` and the session is the `authToken`
+  httpOnly cookie that was already set. Nothing changes for users. Custom code that read
+  `?token=` from the OIDC return URL has to use the cookie (or `redirect=false` for the JSON form).
+- **Old integration token files are deleted on the first start (migration V217).** Per-user
+  Office 365, Google Drive, Nextcloud, Jira and iFinder login tokens in
+  `contents/integrations/<service>/` that were written in the unauthenticated AES-256-CBC format
+  (installations from before 5.4.16) are removed without being decrypted; the server no longer
+  reads that format. The affected users connect the service again under **Settings →
+  Integrations**. AES-256-GCM files are not touched.
+  
+## Unused API Endpoints Removed
+
+Endpoints that nothing in iHub itself (web client, browser extension, Office add-in, Nextcloud app,
+Teams tab, scheduler, MCP/A2A/OAuth integrations) called are gone. Scripts of your own that call
+one of them get `404`.
+
+| Area | Removed |
+| --- | --- |
+| Authentication | `POST /api/auth/users` (use `POST /api/admin/auth/users`), `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`, `GET /api/auth/ntlm/status` (the providers are in `GET /api/auth/status`), `POST /api/auth/teams/config` |
+| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/sources/ifinder/content` and `/metadata`), `GET /api/integrations/jira/test` |
+| Workflows | `POST /api/workflows/executions/:id/resume` (answer checkpoints through `/api/runs/:id/interactions/:id/answer`, restart with `.../restart`), `GET /api/workflows/:id/versions`, `PUT /api/workflows/:id/activate/:version`, `GET /api/workflows/triggers`, `POST /api/workflows/:id/trigger`. The webhook route `POST /api/workflows/:workflowId/webhooks/:triggerId` stays |
+| Agents | `GET /api/agents/profiles`, `GET /api/agents/profiles/:profileId`, `GET /api/agents/profiles/:profileId/artifacts` |
+| Admin | `GET /api/admin/auth/test`, `GET /api/admin/oauth/cimd-clients` (`GET /api/admin/oauth/clients` carries them), `POST /api/admin/oauth/clients/:id/introspect-token`, `GET`/`PUT /api/admin/logging/level` (use `/api/admin/logging/config`), `POST /api/admin/skills/validate`, `GET /api/admin/update/check` (use `GET /api/admin/version/check-update`) |
+| Conversations | `GET /api/apps/:appId/conversations/:conversationId/messages`, `DELETE .../messages/:messageId` |
+
+`/api/docs` now also documents the routes in the files it did not scan before (workflows, prompts,
+user skills, projects, runs, OAuth, well-known metadata, integrations).

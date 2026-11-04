@@ -531,24 +531,12 @@ Content-Type: application/json
 
 **Note**: The `provider` parameter is optional. If not specified and multiple LDAP providers are configured, the system will try each provider until one succeeds.
 
-#### Get Providers
-
-```http
-GET /api/auth/ldap/providers
-```
-
 ### NTLM Authentication
 
 #### Login (requires Windows authentication)
 
 ```http
 POST /api/auth/ntlm/login
-```
-
-#### Status
-
-```http
-GET /api/auth/ntlm/status
 ```
 
 ### Authentication Status

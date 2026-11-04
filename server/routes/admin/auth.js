@@ -192,48 +192,6 @@ export default function registerAdminAuthRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/auth/test:
-   *   get:
-   *     summary: Test admin authentication
-   *     description: |
-   *       Tests if admin authentication is working correctly.
-   *       This endpoint requires valid admin authentication and returns
-   *       a success message if authentication passes.
-   *     tags:
-   *       - Admin
-   *       - Authentication
-   *     security:
-   *       - adminAuth: []
-   *     responses:
-   *       200:
-   *         description: Authentication test successful
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *                 authenticated:
-   *                   type: boolean
-   *             example:
-   *               message: "Admin authentication successful"
-   *               authenticated: true
-   *       401:
-   *         description: Authentication failed
-   *       500:
-   *         description: Failed to test authentication
-   */
-  app.get(buildServerPath('/api/admin/auth/test'), adminAuth, async (req, res) => {
-    try {
-      res.json({ message: 'Admin authentication successful', authenticated: true });
-    } catch (error) {
-      return sendInternalError(res, error, 'test authentication');
-    }
-  });
-
-  /**
-   * @swagger
    * /api/admin/auth/demo-accounts:
    *   get:
    *     summary: Demo accounts that still have their shipped password

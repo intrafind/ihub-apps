@@ -158,19 +158,6 @@ export default function registerAdminUpdateRoutes(app) {
   });
 
   /**
-   * GET /api/admin/update/check
-   * Check for available updates with platform-specific asset info
-   */
-  app.get(buildServerPath('/api/admin/update/check'), adminAuth, async (req, res) => {
-    try {
-      const result = await checkForUpdate();
-      res.json(result);
-    } catch (error) {
-      return sendInternalError(res, error, 'check for update');
-    }
-  });
-
-  /**
    * POST /api/admin/update/download
    * Download the latest release from GitHub and stage it
    */

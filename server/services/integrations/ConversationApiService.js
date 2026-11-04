@@ -172,34 +172,6 @@ class ConversationApiService {
   }
 
   /**
-   * Get messages for a conversation (paginated)
-   * @param {string} conversationId
-   * @param {Object} params
-   * @param {number} [params.size=50] - Page size
-   * @param {string} [params.nextCursor] - Cursor for pagination
-   * @returns {Promise<Object>} { messages: [], nextCursor?: string }
-   */
-  async getMessages(conversationId, { user, baseUrl, size = 50, nextCursor }) {
-    let path = `/conversations/${conversationId}/messages?size=${size}`;
-    if (nextCursor) path += `&next_cursor=${encodeURIComponent(nextCursor)}`;
-
-    const url = this.buildUrl(baseUrl, path);
-    const headers = await this.buildHeaders(user);
-
-    const response = await throttledFetch('iAssistantConversation', url, {
-      method: 'GET',
-      headers
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to get messages (${response.status}): ${errorText}`);
-    }
-
-    return response.json();
-  }
-
-  /**
    * Delete a conversation
    */
   async deleteConversation(conversationId, { user, baseUrl }) {
@@ -214,26 +186,6 @@ class ConversationApiService {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to delete conversation (${response.status}): ${errorText}`);
-    }
-
-    return response.status === 204 ? null : response.json();
-  }
-
-  /**
-   * Delete a specific message from a conversation
-   */
-  async deleteMessage(conversationId, messageId, { user, baseUrl }) {
-    const url = this.buildUrl(baseUrl, `/conversations/${conversationId}/messages/${messageId}`);
-    const headers = await this.buildHeaders(user);
-
-    const response = await throttledFetch('iAssistantConversation', url, {
-      method: 'DELETE',
-      headers
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to delete message (${response.status}): ${errorText}`);
     }
 
     return response.status === 204 ? null : response.json();

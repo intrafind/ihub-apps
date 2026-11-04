@@ -415,7 +415,6 @@ import { newConfigSchema, knownNewConfigKeys } from './validators/newConfigSchem
 
 const newConfigLoader = createResourceLoader({
   resourceName: 'NewConfig',
-  legacyPath: 'config/newconfigs.json',
   individualPath: 'newconfigs',
   validateItem: createSchemaValidator(newConfigSchema, knownNewConfigKeys)
 });

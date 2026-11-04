@@ -553,7 +553,7 @@ export function recordMagicPromptUsage(appId, extra = {}) {
 /**
  * Record a user feedback event.
  * @param {string} appId
- * @param {number|string} rating - numeric 1-5 or legacy 'positive' / 'negative'
+ * @param {number} rating - numeric 1-5
  */
 export function recordFeedbackEvent(appId, rating) {
   if (!feedbackCounter) return;
@@ -563,12 +563,6 @@ export function recordFeedbackEvent(appId, rating) {
     if (typeof rating === 'number' && Number.isFinite(rating)) {
       numeric = Math.max(1, Math.min(5, Math.ceil(rating)));
       label = String(numeric);
-    } else if (rating === 'positive') {
-      numeric = 5;
-      label = 'positive';
-    } else if (rating === 'negative') {
-      numeric = 1;
-      label = 'negative';
     }
     const labels = filterMetricLabels({ 'app.id': appId, 'feedback.rating': label });
     feedbackCounter.add(1, labels);

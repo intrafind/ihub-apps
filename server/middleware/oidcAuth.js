@@ -559,7 +559,7 @@ export function getConfiguredProviders() {
 
 /**
  * Validate a returnUrl query parameter to prevent open-redirect attacks via
- * the OIDC callback (which appends ?token=... to the value).
+ * the OIDC callback (which appends ?oidc=success to the value).
  *
  * Allows:
  *  - Same-origin absolute URLs (host must match req.get('host'))
@@ -635,7 +635,7 @@ export function createOidcAuthHandler(providerName) {
 
     // The return URL travels inside the signed state (utils/oidcLoginState.js).
     // Sanitize first to prevent open redirects through the callback's
-    // `${returnUrl}?token=...` redirect.
+    // `${returnUrl}?oidc=success` redirect.
     const sanitized = sanitizeReturnUrl(req.query.returnUrl, req);
 
     // Pass callbackURL at request time so buildServerPath() can detect the base path
@@ -871,10 +871,12 @@ export function createOidcCallbackHandler(providerName) {
         // Set HTTP-only cookie for authentication
         res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
 
-        // For web flows, redirect with token in query (for backward compatibility)
+        // For web flows, redirect back to the app. The session is the httpOnly cookie set
+        // above; the token is never put in the URL (it would end up in history, logs and
+        // Referer headers).
         if (req.query.redirect !== 'false') {
           const separator = returnUrl.includes('?') ? '&' : '?';
-          const finalRedirectUrl = `${returnUrl}${separator}token=${token}&provider=${providerName}`;
+          const finalRedirectUrl = `${returnUrl}${separator}oidc=success&provider=${providerName}`;
 
           authDebugService.log(
             'oidc',
@@ -883,7 +885,7 @@ export function createOidcCallbackHandler(providerName) {
             {
               provider: providerName,
               userId: user.id,
-              finalRedirectUrl: finalRedirectUrl.replace(/token=[^&]+/, 'token=***')
+              finalRedirectUrl
             },
             sessionId
           );
