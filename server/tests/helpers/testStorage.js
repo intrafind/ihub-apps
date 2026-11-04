@@ -93,7 +93,13 @@ export async function scratchDocuments({ prefix = 'ihub-test-docs-' } = {}) {
     /** Forget every stored document (between cases that must not share state). */
     async reset() {
       for (const entry of await fs.readdir(baseDir)) {
-        await fs.rm(path.join(baseDir, entry), { recursive: true, force: true });
+        // Background writes of the previous case may still be landing.
+        await fs.rm(path.join(baseDir, entry), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 50
+        });
       }
     },
     async stop() {
