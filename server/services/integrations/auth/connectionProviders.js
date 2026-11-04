@@ -566,7 +566,7 @@ export async function describeInstallation(installationId) {
 
 /**
  * The descriptors of every installation that takes a per-user OAuth
- * connection (for the re-index and the admin views).
+ * connection.
  *
  * @returns {Promise<ConnectionDescriptor[]>}
  */
