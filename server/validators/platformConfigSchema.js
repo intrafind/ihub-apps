@@ -151,9 +151,7 @@ const rateLimitSchema = z.object({
 // Accept either a boolean (true => mask) or a string mode ('off' | 'mask' |
 // 'drop') so admins can be explicit about whether the IP should be truncated
 // or omitted entirely.
-const ipAnonymizationSchema = z
-  .union([z.boolean(), z.enum(['off', 'mask', 'drop'])])
-  .prefault(false);
+const ipAnonymizationSchema = z.enum(['off', 'mask', 'drop']).prefault('off');
 
 const loggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).prefault('info'),

@@ -299,7 +299,7 @@
       "maxSize": 10485760,
       "maxFiles": 5
     },
-    "anonymizeIp": false
+    "anonymizeIp": "off"
   },
   "audit": {
     "retentionDays": 365,
@@ -307,7 +307,7 @@
     "includeEmail": false,
     "verbosity": "metadata",
     "winstonMirror": false,
-    "anonymizeIp": false
+    "anonymizeIp": "off"
   },
   "usageTracking": {
     "eventRetentionDays": 90,

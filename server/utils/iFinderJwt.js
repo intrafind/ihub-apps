@@ -198,32 +198,20 @@ export function resolveJwtSubject(user, config) {
     }
     default: {
       // Custom template. Placeholders ALWAYS resolve from the authenticated
-      // user object (`user[field]`), never from environment variables.
-      //
-      // Two accepted forms:
-      //   ${user.field}  — preferred, self-documenting.
-      //   ${field}       — legacy. configCache opts this path out of env var
-      //                    resolution via the `ENV_VAR_SKIP_PATHS_BY_KEY`
-      //                    entry for `config/platform.json`, so this form
-      //                    is now safe; before that skip was added it could
-      //                    collide with `process.env.field` (notably
-      //                    `process.env.username` on Windows = the OS
-      //                    service account running the server), leaking
-      //                    that account into every JWT subject. We still
-      //                    warn so admins migrate to the explicit
-      //                    `${user.field}` form.
-      if (/\$\{(?!user\.)\w+\}/.test(field)) {
-        logger.warn(
-          'iFinder jwtSubjectField uses legacy ${field} placeholder syntax. ' +
-            'Use ${user.field} instead (e.g. "BMG\\\\${user.username}") to ' +
-            'avoid collision with environment variable names.',
-          { component: 'iFinderJwt', jwtSubjectField: field }
+      // user object (`user.field`), never from environment variables. Only the
+      // explicit `${user.field}` form is accepted: the bare `${field}` form was
+      // rewritten by migrations V076/V192.
+      const bare = field.match(/\$\{(?!user\.)\w+\}/);
+      if (bare) {
+        throw new Error(
+          `iFinder jwtSubjectField "${field}" uses the placeholder ${bare[0]}; ` +
+            `write it as \${user.<field>} (for example \${user.username}).`
         );
       }
       // A placeholder with no value leaves a hole in the subject (`ROCHUS\\`),
       // which is just as wrong as the fallbacks above and equally invisible.
       const unresolved = [];
-      resolved = field.replaceAll(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
+      resolved = field.replaceAll(/\$\{user\.(\w+)\}/g, (_, key) => {
         const value = user[key];
         if (!hasSubjectValue(value)) {
           unresolved.push(`user.${key}`);

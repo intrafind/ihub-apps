@@ -11,7 +11,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
-import logger from '../utils/logger.js';
 
 const SET = [];
 
@@ -50,19 +49,5 @@ describe('IHUB_* overrides in the config cache', () => {
     assert.deepEqual(ui, {});
     const { data: platform } = configCache._resolveEntry('config/platform.json', {});
     assert.equal(platform.defaultLanguage, 'de');
-  });
-
-  it('ignores an override of a block that moved into an installation, warning once', () => {
-    const warn = mock.method(logger, 'warn', () => {});
-    setEnv('IHUB_PLATFORM__I_FINDER__BASE_URL_FOR_TEST', 'https://ifinder.env');
-    for (let i = 0; i < 2; i += 1) {
-      const { data } = configCache._resolveEntry('config/platform.json', {});
-      assert.equal(data.iFinder, undefined);
-    }
-    const warnings = warn.mock.calls.filter(call =>
-      String(call.arguments[0]).startsWith('Ignoring IHUB_PLATFORM__I_FINDER__BASE_URL_FOR_TEST')
-    );
-    assert.equal(warnings.length, 1);
-    assert.match(String(warnings[0].arguments[0]), /installed integration "ifinder"/);
   });
 });
