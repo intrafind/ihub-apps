@@ -582,10 +582,6 @@ if (cluster.isPrimary && workerCount > 1) {
     await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
-    // Rename any pre-scoping `<userId>.json` integration token files to
-    // the new `<userId>__<providerId>.json` layout. Safe no-op on
-    // already-migrated installs.
-    await tokenStorageService.migrateLegacyTokenFiles();
     // Project text (uploads, picked documents) is encrypted under that key;
     // the pipeline, the reader and the reconciler come up once it exists.
     const { bootstrapProjects } = await import('./services/projects/bootstrap.js');

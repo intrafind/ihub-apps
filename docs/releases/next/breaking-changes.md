@@ -332,3 +332,16 @@ installation's **Settings** tab shows it) — or set the old, working URI as the
 **Redirect URI**. If you set one of the `*_OAUTH_REDIRECT_URI` variables, enter its value as the
 installation's **Redirect URI**. Afterwards, check the log for V206 warnings (installations that
 kept their id, tenant ids to enter).
+
+## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
+
+- **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback
+  the browser is sent back with `?oidc=success&provider=<name>` and the session is the `authToken`
+  httpOnly cookie that was already set. Nothing changes for users. Custom code that read
+  `?token=` from the OIDC return URL has to use the cookie (or `redirect=false` for the JSON form).
+- **Old integration token files are deleted on the first start (migration V217).** Per-user
+  Office 365, Google Drive, Nextcloud and iFinder login tokens in `contents/integrations/<service>/`
+  that were written in the unauthenticated AES-256-CBC format, or in the single-slot
+  `<userId>.json` layout, are removed without being decrypted; the server no longer reads either.
+  The affected users connect the service again under **Settings → Integrations**. Files written by
+  5.4.16 and later (AES-256-GCM, `<userId>__<providerId>.json`) are not touched.
