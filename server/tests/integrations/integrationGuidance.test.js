@@ -15,7 +15,7 @@ import path from 'node:path';
  * loader (`getToolsForApp`), the prompt step is the one `RequestBuilder` and
  * the workflow prompt node run (`appendIntegrationGuidance`).
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 
 const { default: configCache } = await import('../../configCache.js');

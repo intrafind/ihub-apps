@@ -1660,7 +1660,7 @@ npm update eslint prettier
 1. **Run Specific Tests:**
 ```bash
 # Test specific LLM adapter
-npm run test:openai
+npm run test:adapters
 
 # Test authentication
 cd server && node tests/authentication-security.test.js

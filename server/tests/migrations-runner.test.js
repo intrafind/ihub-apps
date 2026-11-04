@@ -355,6 +355,23 @@ describe('Migration Runner', () => {
       expect(rejected[0].reason.message).toMatch(/Migration lock held/);
     });
 
+    it('treats a lock file that is still empty (being written) as held, not stale', async () => {
+      // acquireLock creates the file (O_EXCL) and then writes it, so a concurrent
+      // caller can read it empty. A fresh unreadable lock must not be stolen.
+      await fs.writeFile(path.join(tmpDir, '.migration-lock'), '');
+      await expect(acquireLock(tmpDir)).rejects.toThrow(/Migration lock held/);
+    });
+
+    it('steals an old unreadable lock file', async () => {
+      const lockPath = path.join(tmpDir, '.migration-lock');
+      await fs.writeFile(lockPath, '');
+      const old = new Date(Date.now() - 10 * 60 * 1000);
+      await fs.utimes(lockPath, old, old);
+      await acquireLock(tmpDir);
+      const lock = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+      expect(lock.pid).toBe(process.pid);
+    });
+
     it('steals a stale lock instead of blocking forever', async () => {
       const lockPath = path.join(tmpDir, '.migration-lock');
       const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();

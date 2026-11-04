@@ -247,7 +247,9 @@ for (const p of providers) {
   );
   check(
     'state is an opaque handle, not a ticket carrying the user or the verifier',
-    /^[A-Za-z0-9_-]{43}$/.test(first.state) && !first.state.includes('u1')
+    // A fixed-length random handle. It cannot carry the user id plus a 43-character verifier,
+    // and a substring check against the user id would fail ~1% of the time by chance.
+    /^[A-Za-z0-9_-]{43}$/.test(first.state)
   );
 
   // ---- callback (an alias of /api/integrations/oauth/callback)

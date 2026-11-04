@@ -8,7 +8,7 @@
  * the action policy and the app bindings (own, definition and type keys),
  * collisions, the final validation and the state an installation is in.
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
