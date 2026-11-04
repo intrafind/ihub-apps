@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describe, it, expect } from '@jest/globals';
+import { isPrivateIP as isPrivateIp } from '../../utils/ssrfGuard.js';
 import {
-  isPrivateIp,
   assertSafeHost,
   hostMatchesPattern,
   withoutAutoRedirects
 } from '../../services/mcp/safeFetch.js';
 
-describe('mcp/safeFetch isPrivateIp', () => {
+describe('ssrfGuard isPrivateIP (classifier used by safeFetch)', () => {
   it('matches all RFC1918 IPv4 ranges', () => {
     expect(isPrivateIp('10.0.0.1')).toBe(true);
     expect(isPrivateIp('10.255.255.255')).toBe(true);
