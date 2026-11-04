@@ -8,9 +8,6 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
@@ -22,7 +19,7 @@ import {
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 async function setup() {
-  const storage = await startTestStorage({ prefix: 'chat-clarification-' });
+  await startTestStorage({ prefix: 'chat-clarification-' });
   const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const svc = new InteractionService({ runLog });
   const unregister = registerChatClarificationLifecycle(svc, { runLog });

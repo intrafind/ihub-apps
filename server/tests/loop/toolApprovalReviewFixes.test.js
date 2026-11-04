@@ -16,9 +16,6 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { InstalledIntegrationService } from '../../services/integrations/InstalledIntegrationService.js';
 import {
   answerLogEntry,
@@ -36,7 +33,6 @@ import { oneShotGrant } from '../../services/loop/seams/approvalSeam.js';
 import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
-import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
 import {
   MAX_TRANSCRIPT_CHARS,
