@@ -29,6 +29,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { RunLog } from '../services/loop/RunLog.js';
+import { StorageBootstrapError, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { startTestStorage } from './helpers/testStorage.js';
 import {
   InteractionService,
   InteractionError,
@@ -678,5 +680,32 @@ describe('interactions: run cascade', () => {
       );
       assert.deepEqual(await service.listPending({}), [], 'and every interaction is gone');
     });
+  });
+});
+
+describe('interactions: a worker whose provider is not up yet', () => {
+  it('retries the first load instead of remembering the failure', async () => {
+    // A replicated mutation (or a request) can reach a worker before
+    // `bootstrapStorage()` has resolved. The load fails then, and must not stay
+    // failed: the next call, with the provider up, has to work.
+    await shutdownStorageBootstrap();
+    const runLog = new RunLog({ forceEnabled: false, getPlatformConfig: () => ({}) });
+    const service = new InteractionService({ runLog, bus: silentBus() });
+    let storage;
+    try {
+      await assert.rejects(
+        () => service.listPending({}),
+        error => error instanceof StorageBootstrapError
+      );
+      storage = await startTestStorage({ prefix: 'ihub-interactions-late-' });
+      assert.deepEqual(await service.listPending({}), [], 'the retried load succeeds');
+      const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+      const raised = await raiseQuestion(service, runId);
+      assert.ok(await storage.provider.documents.get(INTERACTIONS_NAMESPACE, raised.id));
+    } finally {
+      await service.stop();
+      await runLog.stop();
+      if (storage) await storage.stop();
+    }
   });
 });

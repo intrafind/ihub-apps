@@ -217,7 +217,15 @@ export class InteractionService extends EventEmitter {
    * sees the loaded view instead of an empty one.
    */
   _ensureLoaded() {
-    if (!this._loading) this._loading = this._loadStore();
+    if (!this._loading) {
+      // A failed first load must not be remembered: a replicated mutation can
+      // reach a worker before its storage provider is up, and every later call
+      // would otherwise reject until restart.
+      this._loading = this._loadStore().catch(error => {
+        this._loading = null;
+        throw error;
+      });
+    }
     return this._loading;
   }
 

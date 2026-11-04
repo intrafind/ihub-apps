@@ -260,10 +260,9 @@ file (`locks/`), so two recovering workers never allocate the same number.
   distributed locks is what changes that.
 - **Gap re-sync needs the ledger.** A client that reconnects to a live stream
   fills the gap from `GET /api/runs/:runId/events`, retrying a failed read with
-  backoff (five attempts) before it gives up and keeps its live view. With the
-  ledger off (`features.runLog` off and `runLog.enabled: false`) there is nothing
-  to read back; the client rebuilds its view from the events
-  it receives from then on.
+  backoff (five attempts) before it gives up and keeps its live view. The ledger
+  is always on while the storage provider is up, so gap re-sync always has
+  something to read back.
 - **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
   is the only chat / workflow / run stream; the ledger flag decides what is
   persisted, not what is sent.
