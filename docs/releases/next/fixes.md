@@ -188,3 +188,12 @@ The hint under **Sign with iHub's OIDC key pair** suggested the option works on 
 not: iFinder must first be configured to trust iHub as a JWT issuer through its JWKS endpoint
 (`/.well-known/jwks.json`), otherwise the connection fails with an unexplained `401`. The hint in
 the iFinder integration editor and the keyless setup guide now state this prerequisite.
+
+## Default Groups Can No Longer Be Deleted or Lost
+
+The built-in groups `admins`, `users`, `anonymous` and `authenticated` are required for permission
+resolution, yet the admin UI still offered Delete and an editable ID for `admins` and `users`.
+
+- The Delete action is now hidden and the ID locked for all four default groups.
+- A migration restores any default group that was already deleted, with its original inheritance.
+  Groups that still exist, including your customizations, are left untouched.

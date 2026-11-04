@@ -9,7 +9,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
 
-const PROTECTED_GROUP_IDS = new Set(['admin', 'user', 'anonymous', 'authenticated']);
+const PROTECTED_GROUP_IDS = new Set(['admins', 'users', 'anonymous', 'authenticated']);
 
 function GroupCell({ group }) {
   return (
