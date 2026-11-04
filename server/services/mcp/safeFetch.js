@@ -8,6 +8,7 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import configCache from '../../configCache.js';
 import { getTlsBypassOptions } from '../../utils/httpConfig.js';
+import { isPrivateIP } from '../../utils/ssrfGuard.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -53,30 +54,9 @@ function isInGlobalSsrfAllowlist(hostname) {
   return list.some(pattern => hostMatchesPattern(hostname, pattern));
 }
 
-const PRIVATE_IP_RE = [
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^0\./,
-  /^::1$/,
-  /^::ffff:127\./i,
-  /^::ffff:10\./i,
-  /^::ffff:192\.168\./i,
-  /^::ffff:172\.(1[6-9]|2\d|3[01])\./i,
-  /^fc/i,
-  /^fd/i,
-  /^fe80:/i
-];
-
-function isPrivateIp(ip) {
-  return PRIVATE_IP_RE.some(re => re.test(ip));
-}
-
 /**
  * Resolve `hostname` once, return the IP, and reject anything that lives on a
- * private/internal range. Unlike a string-blocklist guard this can't be bypassed
+ * private/internal range (classified by `utils/ssrfGuard`'s byte-based `isPrivateIP`). Unlike a string-blocklist guard this can't be bypassed
  * by a public DNS record pointing at 127.0.0.1.
  */
 async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
@@ -102,7 +82,7 @@ async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
     e.code = 'DNS_RESOLUTION_FAILED';
     throw e;
   }
-  if (!skipPrivateVeto && isPrivateIp(result.address)) {
+  if (!skipPrivateVeto && isPrivateIP(result.address)) {
     const e = new Error(
       `SSRF guard: hostname ${hostname} resolves to private IP ${result.address}`
     );
@@ -264,5 +244,3 @@ function nodeHttpFetch(url, init, agent) {
 export async function assertSafeHost(hostname, allowList, blockPrivateIps = true) {
   await resolveAndCheck(hostname, allowList, blockPrivateIps);
 }
-
-export { isPrivateIp };
