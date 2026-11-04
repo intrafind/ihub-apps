@@ -390,8 +390,11 @@
 
     // Re-fetch auth status and show UI
     renderLoading(root);
+    // Ignore a response that arrives after the embedded gate was replaced or hidden.
+    var requestEmbedded = embedded;
     fetchAuthStatus()
       .then(function (data) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         authConfig = data;
         gateUI = data.gateUI || null;
         if (data.authenticated) {
@@ -407,6 +410,7 @@
         renderAuthUI(root);
       })
       .catch(function (err) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         renderError(root, err.message || t('serverError'));
       });
   }
