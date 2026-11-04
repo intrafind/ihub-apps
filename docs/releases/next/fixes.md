@@ -216,3 +216,11 @@ Only `authenticated` inherited from `anonymous`; `users` and `admins` had no par
 default is now `admins` → `users` → `authenticated` → `anonymous`, matching the documentation.
 A migration adds the two missing links to existing installations. A group that already declares
 `inherits` (even an empty list) is left as you configured it.
+
+## A Group Named `admin` No Longer Grants Admin Rights in a Few Places
+
+The built-in administrator group is `admins`. A group called `admin` (singular) was still treated as
+an administrator when listing workflows, reading agent runs and artifacts, answering approvals and
+as the fallback when `groups.json` cannot be read. Only `admins` and the `adminAccess` permission
+grant admin rights now. If you created a group named `admin`, give it `adminAccess` under
+**Admin → Groups** or move its members to `admins`.

@@ -30,7 +30,7 @@ global.testUtils = {
     id: 'admin-user',
     username: 'admin',
     email: 'admin@example.com',
-    groups: ['admin'],
+    groups: ['admins'],
     active: true,
     ...overrides
   }),

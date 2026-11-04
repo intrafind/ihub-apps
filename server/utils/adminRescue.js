@@ -193,10 +193,9 @@ export async function assignAdminGroup(userId, usersFilePath = localUsersFile())
       return false;
     }
 
-    // Find an admin group to assign (prefer 'admins' or 'admin')
+    // Find an admin group to assign (prefer 'admins')
     const adminGroupId =
       groupsConfig.groups?.admins?.id ||
-      groupsConfig.groups?.admin?.id ||
       Object.keys(groupsConfig.groups || {}).find(groupId => {
         return groupsConfig.groups[groupId]?.permissions?.adminAccess === true;
       });

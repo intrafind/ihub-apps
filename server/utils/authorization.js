@@ -632,11 +632,11 @@ export function isAdminEligiblePrincipal(user) {
 }
 
 /**
- * Group names that count as admin when `groups.json` cannot be loaded.
+ * Group names that count as admin when `groups.json` cannot be loaded (`admins` is the only admin group).
  * Only the fallback: with a loaded configuration admin rights come from the
  * `adminAccess` / `contentAdmin` group permissions.
  */
-const FALLBACK_ADMIN_GROUPS = new Set(['admin', 'admins']);
+const FALLBACK_ADMIN_GROUPS = new Set(['admins']);
 
 /**
  * Whether any of the user's groups grants one of `permissionNames`, read from

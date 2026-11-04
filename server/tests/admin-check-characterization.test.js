@@ -93,7 +93,8 @@ const PRINCIPALS = {
     permissions: { adminAccess: true }
   },
   admin: { id: 'admin', groups: ['admins'], permissions: { adminAccess: true } },
-  // The group `admin` (singular) is not in groups.json: only the fallback lists know it.
+  // The group `admin` (singular) does not exist and never will (the groups are `users` and
+  // `admins`): it must grant nothing anywhere.
   legacyAdminGroup: { id: 'legacy', groups: ['admin'], permissions: {} },
   // A user whose resolved permissions say adminAccess but whose groups do not.
   flagOnly: { id: 'flag', groups: ['users'], permissions: { adminAccess: true } },
@@ -123,9 +124,9 @@ const EXPECTED = {
   anonymous: [false, false, false, false, false, false, false, false],
   anonymousWithAdminGroups: [false, false, false, false, false, false, false, false],
   admin: [true, true, true, true, true, true, true, true],
-  legacyAdminGroup: [false, false, false, true, true, false, false, false],
+  legacyAdminGroup: [false, false, false, false, false, false, false, false],
   flagOnly: [false, false, false, true, true, true, true, true],
-  groupOnly: [true, true, true, true, false, true, true, true],
+  groupOnly: [true, true, true, true, true, true, true, true],
   contentAdmin: [false, true, true, false, false, false, true, true],
   user: [false, false, false, false, false, false, false, false],
   personalApiKeyOfAdmin: [false, false, false, true, true, false, false, false],
@@ -234,21 +235,12 @@ describe('admin predicates, groups.json available', () => {
 
   // Where the sites disagree today (recorded, not endorsed):
   test('sites disagree about group-only vs flag-only vs the legacy `admin` group', () => {
-    // groups only (permissions flag missing): adminAuth + runIdentity + project/prompt say admin, workflowAccess does not
-    expect(answers('groupOnly')).toEqual([true, true, true, true, false, true, true, true]);
+    // groups only (permissions flag missing): every site says admin
+    expect(answers('groupOnly')).toEqual([true, true, true, true, true, true, true, true]);
     // flag only: adminAuth and contentAdminAuth ignore it, every other site honours it
     expect(answers('flagOnly')).toEqual([false, false, false, true, true, true, true, true]);
-    // `admin` (singular) group absent from groups.json: only runIdentity and workflowAccess honour the name
-    expect(answers('legacyAdminGroup')).toEqual([
-      false,
-      false,
-      false,
-      true,
-      true,
-      false,
-      false,
-      false
-    ]);
+    // `admin` (singular) is not a group: no site honours it
+    expect(answers('legacyAdminGroup')).toEqual(Array(8).fill(false));
     // delegated / machine principals: only runIdentity and workflowAccess skip the eligibility rule
     expect(answers('personalApiKeyOfAdmin')).toEqual([
       false,
@@ -277,12 +269,12 @@ describe('admin predicates when groups.json cannot be loaded', () => {
     else process.env.CONTENTS_DIR = savedContentsDir;
   });
 
-  // adminAuth and contentAdminAuth fall back to the names `admin` / `admins`.
+  // adminAuth and contentAdminAuth fall back to the group name `admins`.
   const fallback = {
     anonymous: false,
     anonymousWithAdminGroups: false, // hard anonymous veto
     admin: true,
-    legacyAdminGroup: true,
+    legacyAdminGroup: false,
     flagOnly: false,
     groupOnly: true,
     contentAdmin: false,
@@ -290,7 +282,7 @@ describe('admin predicates when groups.json cannot be loaded', () => {
     personalApiKeyOfAdmin: false, // eligibility veto
     agent: false
   };
-  test.each(NAMES)('adminAuth and contentAdminAuth fall back to admin/admins: %s', name => {
+  test.each(NAMES)('adminAuth and contentAdminAuth fall back to admins: %s', name => {
     expect(isAdmin(PRINCIPALS[name])).toBe(fallback[name]);
     expect(runMiddleware(contentAdminAuth, PRINCIPALS[name]).next).toBe(fallback[name]);
   });
@@ -301,11 +293,11 @@ describe('admin predicates when groups.json cannot be loaded', () => {
 
   test('hasAdminAccess-based sites: projectAdmin/promptAdmin fall back to runIdentity.isAdminUser', () => {
     expect(isProjectAdmin(PRINCIPALS.groupOnly)).toBe(true);
-    expect(isProjectAdmin(PRINCIPALS.legacyAdminGroup)).toBe(true);
+    expect(isProjectAdmin(PRINCIPALS.legacyAdminGroup)).toBe(false);
     expect(isProjectAdmin(PRINCIPALS.personalApiKeyOfAdmin)).toBe(false);
     expect(isProjectAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
     expect(isPromptAdmin(PRINCIPALS.groupOnly)).toBe(true);
-    expect(isPromptAdmin(PRINCIPALS.legacyAdminGroup)).toBe(true);
+    expect(isPromptAdmin(PRINCIPALS.legacyAdminGroup)).toBe(false);
     expect(isPromptAdmin(PRINCIPALS.personalApiKeyOfAdmin)).toBe(false);
     // ...but a resolved `permissions.contentAdmin` / `adminAccess` flag is honoured before
     // groups.json is consulted, so these keep answering without it.
@@ -402,12 +394,12 @@ describe('short links: admin = `isAdmin(req.user)`', () => {
   });
 });
 
-describe('agent run + artifact routes: admin = permissions.adminAccess OR group admin/admins', () => {
+describe('agent run + artifact routes: admin = permissions.adminAccess OR group admins', () => {
   const app = buildApp([registerAgentRunRoutes, registerAgentArtifactRoutes]);
   // The run belongs to `owner`; nobody in PRINCIPALS is `owner`, so only the admin rule can pass.
   const ALLOWED = {
     admin: true,
-    legacyAdminGroup: true, // group `admin` counts here, but not in adminAuth
+    legacyAdminGroup: false,
     flagOnly: true,
     groupOnly: true,
     contentAdmin: false,

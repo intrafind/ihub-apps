@@ -348,8 +348,8 @@ export default function registerAdminGroupRoutes(app) {
    *               $ref: '#/components/schemas/GroupsData'
    *             example:
    *               groups:
-   *                 admin:
-   *                   id: "admin"
+   *                 admins:
+   *                   id: "admins"
    *                   name: "Administrators"
    *                   description: "Full administrative access"
    *                   permissions:

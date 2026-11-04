@@ -26,7 +26,7 @@ const interactionFor = (runId, source = {}) => ({
 test('authorizeInteraction: owner by recorded principal, admin, anonymous-run id possession; strangers denied', async () => {
   const alice = { id: 'alice', groups: ['users'] };
   const bob = { id: 'bob', groups: ['users'] };
-  const admin = { id: 'root', groups: ['admin'] };
+  const admin = { id: 'root', groups: ['admins'] };
 
   const { runId, principal } = await runLog.startRun({
     runId: 'run-access-owned',

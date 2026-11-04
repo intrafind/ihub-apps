@@ -234,9 +234,9 @@ Map ADFS/Active Directory groups to iHub Apps permissions in `contents/config/gr
 5. **Merge Permissions**: User gets the union of all permissions from all groups
 
 **Example**: User in AD groups `["Domain Users", "IT-Admin"]`:
-- Matched mappings: `users`, `admin`
+- Matched mappings: `users`, `admins`
 - Default groups: `authenticated`
-- Final groups: `["users", "admin", "authenticated"]`
+- Final groups: `["users", "admins", "authenticated"]`
 - Permissions: Union of all three groups (including admin access)
 
 ### Step 4: Restart iHub Apps
