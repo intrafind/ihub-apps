@@ -29,6 +29,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { RunLog } from '../services/loop/RunLog.js';
+import { StorageBootstrapError, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { startTestStorage } from './helpers/testStorage.js';
 import {
   InteractionService,
   InteractionError,
@@ -102,33 +104,25 @@ function withDeadline(promise, ms, what) {
  *
  * @param {Object} [options]
  * @param {number} [options.services=1] - How many workers to simulate.
- * @param {boolean} [options.withProvider=true] - Wire the provider in.
  * @returns {Promise<Object>} Directories, the ledger and the services.
  */
-async function openInteractions({ services = 1, withProvider = true } = {}) {
+async function openInteractions({ services = 1 } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-interactions-'));
-  const legacyDir = path.join(root, 'run-log');
-  await fs.mkdir(legacyDir, { recursive: true });
-  let provider = null;
-  if (withProvider) {
-    provider = new FilesystemStorageProvider({
-      baseDir: path.join(root, 'storage'),
-      flushIntervalMs: 25
-    });
-    await provider.initialize();
-  }
+  const provider = new FilesystemStorageProvider({
+    baseDir: path.join(root, 'storage'),
+    flushIntervalMs: 25
+  });
+  await provider.initialize();
   const runLog = new RunLog({
-    baseDir: legacyDir,
     forceEnabled: false,
     getPlatformConfig: () => ({})
   });
   const make = () =>
     new InteractionService({
       runLog,
-      saveIntervalMs: 10,
       bus: silentBus(),
-      documents: provider ? provider.documents : null,
-      locks: provider ? provider.locks : null
+      documents: provider.documents,
+      locks: provider.locks
     });
   const all = Array.from({ length: services }, make);
   const addService = () => {
@@ -136,7 +130,7 @@ async function openInteractions({ services = 1, withProvider = true } = {}) {
     all.push(extra);
     return extra;
   };
-  return { root, legacyDir, provider, runLog, services: all, service: all[0], addService };
+  return { root, provider, runLog, services: all, service: all[0], addService };
 }
 
 /**
@@ -153,7 +147,7 @@ async function withInteractions(fn, options = {}) {
   } finally {
     for (const service of ctx.services) await service.stop();
     await ctx.runLog.stop();
-    await ctx.provider?.shutdown();
+    await ctx.provider.shutdown();
     await fs.rm(ctx.root, { recursive: true, force: true });
   }
 }
@@ -179,7 +173,7 @@ function raiseQuestion(service, runId, overrides = {}) {
 
 describe('interactions: the shared namespace', () => {
   it('persists with the ledger flag off, owned by the raising principal', async () => {
-    await withInteractions(async ({ service, runLog, provider, legacyDir }) => {
+    await withInteractions(async ({ service, runLog, provider }) => {
       assert.equal(runLog.isEnabled(), false, 'the ledger is off for this whole suite');
       const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
       const raised = await raiseQuestion(service, runId);
@@ -192,14 +186,6 @@ describe('interactions: the shared namespace', () => {
       assert.equal(doc.ownerId, 'u1');
       assert.equal(doc.data.status, 'pending');
       assert.equal(doc.data.runId, runId);
-      assert.equal(
-        await fs
-          .access(path.join(legacyDir, 'interactions.json'))
-          .then(() => true)
-          .catch(() => false),
-        false,
-        'and the legacy whole-file store is not written any more'
-      );
     });
   });
 
@@ -208,7 +194,6 @@ describe('interactions: the shared namespace', () => {
       async ({ runLog, services: [first, second] }) => {
         const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
         const raised = await raiseQuestion(first, runId);
-        await first.flush();
 
         // A second service over the same storage is what the process after a
         // restart — or a sibling worker — sees.
@@ -347,33 +332,6 @@ describe('interactions: the shared namespace', () => {
         );
       },
       { services: 2 }
-    );
-  });
-
-  it('keeps the legacy file layout when there is no provider', async () => {
-    await withInteractions(
-      async ({ runLog, service, legacyDir }) => {
-        const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
-        const raised = await raiseQuestion(service, runId);
-        await service.flush();
-
-        const stored = JSON.parse(
-          await fs.readFile(path.join(legacyDir, 'interactions.json'), 'utf8')
-        );
-        assert.ok(stored.interactions[raised.id], 'the pending store is written as before');
-
-        await service.answer(raised.id, { value: 'eu' }, { user: USER });
-        await service.flush();
-        const settled = JSON.parse(
-          await fs.readFile(path.join(legacyDir, 'interactions.json'), 'utf8')
-        );
-        assert.equal(
-          settled.interactions[raised.id],
-          undefined,
-          'and an answered interaction is still dropped from it'
-        );
-      },
-      { withProvider: false }
     );
   });
 });
@@ -722,5 +680,32 @@ describe('interactions: run cascade', () => {
       );
       assert.deepEqual(await service.listPending({}), [], 'and every interaction is gone');
     });
+  });
+});
+
+describe('interactions: a worker whose provider is not up yet', () => {
+  it('retries the first load instead of remembering the failure', async () => {
+    // A replicated mutation (or a request) can reach a worker before
+    // `bootstrapStorage()` has resolved. The load fails then, and must not stay
+    // failed: the next call, with the provider up, has to work.
+    await shutdownStorageBootstrap();
+    const runLog = new RunLog({ forceEnabled: false, getPlatformConfig: () => ({}) });
+    const service = new InteractionService({ runLog, bus: silentBus() });
+    let storage;
+    try {
+      await assert.rejects(
+        () => service.listPending({}),
+        error => error instanceof StorageBootstrapError
+      );
+      storage = await startTestStorage({ prefix: 'ihub-interactions-late-' });
+      assert.deepEqual(await service.listPending({}), [], 'the retried load succeeds');
+      const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+      const raised = await raiseQuestion(service, runId);
+      assert.ok(await storage.provider.documents.get(INTERACTIONS_NAMESPACE, raised.id));
+    } finally {
+      await service.stop();
+      await runLog.stop();
+      if (storage) await storage.stop();
+    }
   });
 });

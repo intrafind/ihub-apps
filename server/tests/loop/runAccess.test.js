@@ -1,10 +1,19 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import runLog from '../../services/loop/RunLog.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
+
+let storage;
+before(async () => {
+  storage = await startTestStorage();
+});
+after(async () => {
+  await storage.stop();
+});
 
 const interactionFor = (runId, source = {}) => ({
   id: `int-${runId}`,

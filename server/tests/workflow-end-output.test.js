@@ -15,9 +15,6 @@
  *
  * Run: node --test server/tests/workflow-end-output.test.js
  */
-import os from 'node:os';
-import path from 'node:path';
-import { mkdtempSync } from 'node:fs';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -29,7 +26,7 @@ import {
   getWorkflowEngine,
   resetWorkflowEngine
 } from '../services/workflow/WorkflowEngine.js';
-import { StateManager } from '../services/workflow/StateManager.js';
+import { startTestStorage, stateManagerFor } from './helpers/testStorage.js';
 import { actionTracker } from '../actionTracker.js';
 import { workflowConfigSchema } from '../validators/workflowConfigSchema.js';
 import {
@@ -574,9 +571,13 @@ describe('saving a workflow', () => {
 
 describe('a real run of the engine', () => {
   let engine;
-  before(() => {
-    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'ihub-end-output-'));
-    engine = new WorkflowEngine({ stateManager: new StateManager({ stateDir }) });
+  let storage;
+  before(async () => {
+    storage = await startTestStorage({ prefix: 'ihub-end-output-' });
+    engine = new WorkflowEngine({ stateManager: stateManagerFor(storage) });
+  });
+  after(async () => {
+    await storage.stop();
   });
 
   /** Run a start → end workflow to its end and resolve with the event that ended it. */
@@ -662,20 +663,19 @@ describe('a run through the chat runner', () => {
   let stopObserving;
   let chatSeq = 0;
 
-  before(() => {
-    // The runner takes the shared engine; give it one that keeps its state in a temp directory.
+  let runnerStorage;
+  before(async () => {
+    // The runner takes the shared engine; give it one that keeps its state in a scratch provider.
     resetWorkflowEngine();
-    getWorkflowEngine({
-      stateManager: new StateManager({
-        stateDir: mkdtempSync(path.join(os.tmpdir(), 'ihub-runner-'))
-      })
-    });
+    runnerStorage = await startTestStorage({ prefix: 'ihub-runner-' });
+    getWorkflowEngine({ stateManager: stateManagerFor(runnerStorage) });
     stopObserving = observeEmittedEnvelopes(envelope => envelopes.push(envelope));
   });
-  after(() => {
+  after(async () => {
     stopObserving();
     configCache.setCacheEntry('config/workflows.json', []);
     resetWorkflowEngine();
+    await runnerStorage.stop();
   });
 
   const node = (id, type, config = {}) => ({

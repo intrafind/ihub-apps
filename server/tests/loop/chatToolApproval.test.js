@@ -24,6 +24,7 @@ import os from 'node:os';
 import path from 'node:path';
 import ChatService from '../../services/chat/ChatService.js';
 import { AgentLoop } from '../../services/loop/AgentLoop.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
 import { setEnvelopeDelivery, stampSeq } from '../../services/loop/RunStream.js';
@@ -106,12 +107,12 @@ function spy(impl) {
 }
 
 async function interactionsFor(t) {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const storage = await startTestStorage({ prefix: 'tool-approval-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog });
   t.after(async () => {
     await svc.stop?.();
-    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await storage.stop();
   });
   return svc;
 }

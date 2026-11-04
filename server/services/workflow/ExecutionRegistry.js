@@ -24,8 +24,7 @@
  * re-create the per-worker staleness this change exists to remove, so `get`,
  * `getByUser`, `getAll`, `getActive`, `list`, `getStats` and
  * `getPendingCheckpoints` all return promises. They never reject: a storage
- * failure degrades to what this process knows, exactly as an installation
- * without a storage provider does.
+ * failure degrades to what this process knows.
  *
  * **Writes stay synchronous to call.** Every writer in the engine, the
  * workflow runner and the routes calls `register`/`updateStatus` without
@@ -43,20 +42,6 @@
  * document, because this process is the one driving that execution and its
  * queued write may not have landed yet.
  *
- * When no storage provider is available the map is the whole store — and the
- * map is memory. Nothing writes `execution-registry.json` any more, so this is
- * *not* what it used to be: the file was the durability, and without a provider
- * the execution index does not survive a restart and is not visible to another
- * worker. A run started here is listable here and nowhere else, and gone when
- * the process is.
- *
- * It is still a supported state rather than an error — a workflow that runs is
- * more useful than one refused because storage is down — but it is a degraded
- * one, and the way to find out you are in it is `/api/health`, which reports
- * `storage.ready`. What remains recoverable without a provider is whatever the
- * checkpoint directories hold, which {@link ExecutionRegistry#loadFromDisk}
- * re-tracks into this worker's own map; that recovery is per-worker state, so
- * unlike the shared marking beside it, it is not gated on the scheduler lock.
  *
  * @module services/workflow/ExecutionRegistry
  */
@@ -65,7 +50,7 @@ import { WorkflowStatus } from './StateManager.js';
 import { getRunSummaryRepository } from '../runtime/RunSummaryRepository.js';
 import runLog from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
-import { DEFAULT_STATE_DIR, resolveWorkflowStateRepository } from './WorkflowStateRepository.js';
+import { getWorkflowStateRepository } from './WorkflowStateRepository.js';
 
 const COMPONENT = 'ExecutionRegistry';
 
@@ -336,8 +321,9 @@ export class ExecutionRegistry {
   /**
    * Creates a new ExecutionRegistry instance
    * @param {Object} [options] - Configuration options
-   * @param {string} [options.stateDir] - Directory holding the workflow
-   *   states that {@link ExecutionRegistry#loadFromDisk} recovers from.
+   * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [options.states]
+   *   Workflow states that {@link ExecutionRegistry#loadFromDisk} recovers from;
+   *   the shared, provider-backed repository when omitted.
    * @param {import('../runtime/RunSummaryRepository.js').RunSummaryRepository} [options.summaries]
    *   Repository to store records in. Injected by tests; by default the
    *   process-wide one is resolved per call, so a registry constructed before
@@ -378,17 +364,11 @@ export class ExecutionRegistry {
     this.userExecutions = new Map();
 
     /**
-     * Directory the workflow states are read from
-     * @type {string}
-     */
-    this.stateDir = options.stateDir || DEFAULT_STATE_DIR;
-
-    /**
-     * Flag indicating whether the legacy recovery scan has run
-     * @type {boolean}
+     * Injected workflow state repository, or null for the shared one
+     * @type {import('./WorkflowStateRepository.js').WorkflowStateRepository|null}
      * @private
      */
-    this._loaded = false;
+    this._states = options.states || null;
 
     /**
      * Injected repository, or null to resolve the shared one per call
@@ -417,35 +397,6 @@ export class ExecutionRegistry {
    */
   _repo() {
     return this._summaries || getRunSummaryRepository();
-  }
-
-  /**
-   * The repository, or null when nothing can be stored right now.
-   *
-   * @returns {import('../runtime/RunSummaryRepository.js').RunSummaryRepository|null}
-   * @private
-   */
-  _store() {
-    try {
-      const repo = this._repo();
-      return repo.isAvailable() ? repo : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Whether this registry has a durable store behind it.
-   *
-   * Exposed because the answer changes what a caller may assume: without one,
-   * the registry is this worker's memory, so recovery from the checkpoint
-   * directories is per-worker work that every worker has to do for itself,
-   * rather than shared state exactly one of them should write.
-   *
-   * @returns {boolean}
-   */
-  get isDurable() {
-    return this._store() !== null;
   }
 
   /**
@@ -611,23 +562,20 @@ export class ExecutionRegistry {
    */
   async _scanExecutions() {
     const records = new Map();
-    const store = this._store();
-    if (store) {
-      try {
-        // `match` runs inside the repository's scan, so the bound counts
-        // executions rather than documents: the `runs` namespace is shared
-        // with every chat and inference run the ledger records, and those
-        // sort before `wf-exec-…`.
-        const page = await store.listAll({ match: isExecutionSummary });
-        for (const summary of page.items) {
-          records.set(summary.runId, fromSummary(summary));
-        }
-      } catch (error) {
-        this.logger.warn('Could not read executions from storage; reporting local runs only', {
-          component: COMPONENT,
-          error: error.message
-        });
+    try {
+      // `match` runs inside the repository's scan, so the bound counts
+      // executions rather than documents: the `runs` namespace is shared
+      // with every chat and inference run the ledger records, and those
+      // sort before `wf-exec-…`.
+      const page = await this._repo().listAll({ match: isExecutionSummary });
+      for (const summary of page.items) {
+        records.set(summary.runId, fromSummary(summary));
       }
+    } catch (error) {
+      this.logger.warn('Could not read executions from storage; reporting local runs only', {
+        component: COMPONENT,
+        error: error.message
+      });
     }
     return records;
   }
@@ -726,8 +674,7 @@ export class ExecutionRegistry {
     });
 
     void this._enqueue(executionId, async () => {
-      const store = this._store();
-      if (!store) return;
+      const store = this._repo();
       // One locked upsert, never a read then a replace: the ledger records a
       // summary for the same run id at `run/start` from a queue of its own,
       // and the two chains have no ordering between them. A create fallback
@@ -797,13 +744,10 @@ export class ExecutionRegistry {
     });
 
     void this._enqueue(executionId, async () => {
-      const store = this._store();
-      if (!store) return;
+      const store = this._repo();
       await store.patch(executionId, fields);
       // A finished run is no longer this process's business. Dropping it only
-      // after the write lands keeps it visible to a listing taken in between,
-      // and keeping it when there is no store preserves the in-memory-only
-      // behaviour of an installation without a storage provider.
+      // after the write lands keeps it visible to a listing taken in between.
       if (terminal) this._untrack(executionId);
     });
 
@@ -841,8 +785,7 @@ export class ExecutionRegistry {
       : { pendingCheckpoint: null, updatedAt: now };
 
     void this._enqueue(executionId, async () => {
-      const store = this._store();
-      if (store) await store.patch(executionId, fields);
+      await this._repo().patch(executionId, fields);
     });
 
     return execution ? { ...execution } : null;
@@ -871,8 +814,7 @@ export class ExecutionRegistry {
 
     let stored = null;
     await this._enqueue(executionId, async () => {
-      const store = this._store();
-      if (store) stored = await store.patch(executionId, fields);
+      stored = await this._repo().patch(executionId, fields);
     });
 
     if (execution) return { ...execution };
@@ -896,10 +838,8 @@ export class ExecutionRegistry {
   async get(executionId) {
     const local = this.executions.get(executionId);
     if (local) return { ...local };
-    const store = this._store();
-    if (!store) return null;
     try {
-      const summary = await store.get(executionId);
+      const summary = await this._repo().get(executionId);
       if (isExecutionSummary(summary)) return fromSummary(summary);
     } catch (error) {
       this.logger.warn('Could not read execution from storage', {
@@ -959,9 +899,9 @@ export class ExecutionRegistry {
    */
   async getByUser(userId, filters = {}) {
     const records = new Map();
-    const store = this._store();
-    if (store && userId) {
+    if (userId) {
       try {
+        const store = this._repo();
         // The owner ids to ask for. The ledger resolves a run's principal in
         // the installation's identity mode, so under `pseudonymized` the
         // summary is owned by a salted hash and the raw id finds nothing.
@@ -1099,8 +1039,7 @@ export class ExecutionRegistry {
 
     let removed = false;
     await this._enqueue(executionId, async () => {
-      const store = this._store();
-      if (store) removed = await store.remove(executionId);
+      removed = await this._repo().remove(executionId);
     });
 
     if (hadLocal || removed) {
@@ -1110,13 +1049,10 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Recovers executions that have a checkpoint directory on disk but no run
-   * summary.
+   * Recovers executions that have a stored checkpoint but no run summary.
    *
-   * The whole-file registry is not read here any more: it is imported into the
-   * `runs` namespace once, on first boot, and left on disk. What is left for
-   * this scan is the case that import cannot cover — a state directory whose
-   * execution the registry file never held. Recovery is degraded by nature
+   * What this scan covers is a workflow state whose execution has no run
+   * summary — a state that was written without one. Recovery is degraded by nature
    * (the checkpoint knows nothing about `source`, `models` or who triggered
    * the run) so it only ever creates a record that does not exist; it never
    * overwrites one.
@@ -1126,7 +1062,6 @@ export class ExecutionRegistry {
   async loadFromDisk() {
     try {
       const recovered = await this._scanCheckpointDirectories();
-      this._loaded = true;
       this.logger.info('Registry loaded', {
         component: COMPONENT,
         recoveredFromCheckpoints: recovered
@@ -1136,23 +1071,19 @@ export class ExecutionRegistry {
         component: COMPONENT,
         error
       });
-      this._loaded = true; // Mark as loaded even on error to allow fresh start
     }
   }
 
   /**
    * Scans stored workflow states to recover execution metadata
    *
-   * Goes through {@link WorkflowStateRepository} rather than reading
-   * `latest.json` itself, so it sees a state wherever it lives — the
-   * `workflow-state` namespace, or the legacy per-execution directory that
-   * still sits beside it until the import has carried it over.
+   * Goes through {@link WorkflowStateRepository}.
    *
    * @returns {Promise<number>} How many executions were recovered
    * @private
    */
   async _scanCheckpointDirectories() {
-    const states = resolveWorkflowStateRepository(this.stateDir);
+    const states = this._states || getWorkflowStateRepository();
     const { items, truncated } = await states.listSummaries();
     if (truncated) {
       this.logger.warn('Workflow state scan hit its bound; recovery is incomplete', {
@@ -1193,13 +1124,7 @@ export class ExecutionRegistry {
       };
 
       void this._enqueue(executionId, async () => {
-        const store = this._store();
-        if (!store) {
-          // No provider: this process's memory is the whole registry, which
-          // is where recovery has always put these records.
-          this._track(execution);
-          return;
-        }
+        const store = this._repo();
         // Re-checked under the write queue: a run registered while the scan
         // was reading the state must not be overwritten by the degraded copy
         // the checkpoint yields.

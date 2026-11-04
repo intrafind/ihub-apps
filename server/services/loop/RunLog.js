@@ -13,12 +13,10 @@
  *
  * Everything in the second layer lives in {@link RunLedgerStore}: one run's
  * events are an append-log stream, large payloads are blobs beside it, and run
- * summaries are owner-indexed documents in the `runs` namespace. When no
- * storage provider is available the store keeps writing the layout every
- * installation already has (`runs/<runId>.jsonl`, `spill/<runId>/`,
- * `index/<YYYY-MM-DD>.jsonl`), and it reads that layout either way so runs
- * written before the move stay readable. Anonymous runs are recorded with
- * `anonymous: true` and are never returned by `listRuns()`.
+ * summaries are owner-indexed documents in the `runs` namespace. The storage
+ * provider is mandatory; runs written before it existed are carried over by
+ * migration V219. Anonymous runs are recorded with `anonymous: true` and are
+ * never returned by `listRuns()`.
  *
  * Deleting a run (`deleteRun`) removes everything stored for it — events,
  * spilled payloads, summary — and runs any registered cascade hooks (e.g.
@@ -100,7 +98,6 @@ export function hashPayload(value) {
 export class RunLog {
   /**
    * @param {Object} [opts]
-   * @param {string} [opts.baseDir] - override data dir (tests)
    * @param {() => Object} [opts.getPlatformConfig] - override platform config lookup
    * @param {() => Object} [opts.getFeatures] - override feature flags lookup
    * @param {boolean} [opts.forceEnabled] - bypass the feature flag (tests)
@@ -163,8 +160,6 @@ export class RunLog {
     this._store =
       opts.store ||
       new RunLedgerStore({
-        baseDir: opts.baseDir,
-        flushIntervalMs: this._runLogConfig().flushIntervalMs,
         logs: opts.logs,
         documents: opts.documents,
         locks: opts.locks,
@@ -210,34 +205,6 @@ export class RunLog {
   spillThresholdBytes() {
     const v = Number(this._runLogConfig().spillThresholdBytes);
     return Number.isFinite(v) && v > 0 ? v : 64 * 1024;
-  }
-
-  /**
-   * The ledger's own directory. `InteractionService` keeps its store beside
-   * it, so this stays the ledger's identity on disk even when events are
-   * persisted through a storage provider.
-   * @returns {string}
-   */
-  get baseDir() {
-    return this._store.baseDir;
-  }
-
-  /**
-   * Path of a run's event file in the ledger directory.
-   * @param {string} runId
-   * @returns {string}
-   */
-  runFilePath(runId) {
-    return this._store.runFilePath(runId);
-  }
-
-  /**
-   * Path of a run's spill directory in the ledger directory.
-   * @param {string} runId
-   * @returns {string}
-   */
-  spillDir(runId) {
-    return this._store.spillDir(runId);
   }
 
   // ── run lifecycle ──────────────────────────────────────────────────────
@@ -735,6 +702,7 @@ export class RunLog {
   // ── persistence helpers ────────────────────────────────────────────────
 
   async flush() {
+    if (!this.isEnabled()) return;
     await this._store.flush();
   }
 
@@ -808,8 +776,7 @@ export class RunLog {
   /**
    * List runs, newest first. Anonymous runs are never listed.
    *
-   * The `runs` namespace is the index; runs that predate it are still read out
-   * of the legacy per-day index files.
+   * The `runs` namespace is the index.
    *
    * @param {{from?:string|Date, to?:string|Date, kind?:string, principalId?:string, limit?:number}} [opts]
    * @returns {Promise<Object[]>}
@@ -901,8 +868,7 @@ export class RunLog {
   /**
    * Remove runs older than `retentionDays`: their events, their spilled
    * payloads, their summary, and the same cascade `deleteRun` performs
-   * (delete hooks, e.g. the run's interactions). Legacy index files older
-   * than the cutoff are removed as well.
+   * (delete hooks, e.g. the run's interactions).
    *
    * @param {number} retentionDays - days to keep; `<= 0` disables the sweep
    * @returns {Promise<{removed:number}>}
@@ -943,7 +909,6 @@ export class RunLog {
     this._unrespondMeta?.();
     this._unrespondMeta = null;
     this._owned.clear();
-    this._store.stop();
     await this.flush();
   }
 }

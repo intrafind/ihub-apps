@@ -22,7 +22,7 @@
  * type; `assertWellFormed` checks every envelope against the v2 contract
  * (`sseV2EventSchema`), a strictly increasing `seq` and the turn's `runId`.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import ChatService from '../../services/chat/ChatService.js';
@@ -33,6 +33,7 @@ import { sseV2EventSchema } from '../../services/loop/contracts/sseV2.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { activeRequests, routeEnvelope } from '../../sse.js';
 import PromptService from '../../services/PromptService.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
   fakeResponse,
@@ -42,6 +43,12 @@ import {
   openaiText,
   MODELS
 } from './helpers/llmFixtures.js';
+
+// Interactions raised by the real interaction service persist in the provider.
+const storage = await startTestStorage({ prefix: 'chat-turn-' });
+after(async () => {
+  await storage.stop();
+});
 
 const {
   RUN_STARTED,

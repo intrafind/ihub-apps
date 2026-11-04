@@ -45,9 +45,9 @@ when all of these hold, and temporary otherwise:
 
 A chat stays what it was created as: a later turn's `ephemeral` is ignored, and
 `PATCH /api/chats/:chatId { "temporary": false }` is the one way from
-temporary to kept (there is none back). Without a storage provider no chat can
-be stored, and the chat POST answers `503 CHAT_STORAGE_UNAVAILABLE` rather
-than a conversation nobody could continue.
+temporary to kept (there is none back). The storage provider is mandatory, so
+every chat is stored; if the provider fails at runtime the chat POST answers
+`503 CHAT_STORAGE_UNAVAILABLE` rather than a conversation nobody could continue.
 
 ## Enabling
 

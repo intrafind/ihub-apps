@@ -9,10 +9,7 @@
  * crashed/restarted process and resumes them from their last checkpoint via
  * `WorkflowEngine.resume()`.
  *
- * State comes from {@link WorkflowStateRepository}, which reads both the
- * `workflow-state` documents and the legacy `<id>/latest.json` directories —
- * so an installation half way through the one-time import still has all of
- * its interrupted runs found, rather than looking empty and losing them.
+ * State comes from {@link WorkflowStateRepository}.
  *
  * Definition reconstruction is delegated to a caller-supplied
  * `resolveDefinition(state)` because only a workflow *summary* is persisted in
@@ -27,7 +24,7 @@
  */
 
 import logger from '../../utils/logger.js';
-import { DEFAULT_STATE_DIR, resolveWorkflowStateRepository } from './WorkflowStateRepository.js';
+import { getWorkflowStateRepository } from './WorkflowStateRepository.js';
 import { isSchedulerOwner } from './triggers/schedulerLock.js';
 
 /** Only these two statuses mean "was mid-flight when the process died". */
@@ -44,13 +41,11 @@ const RESUMABLE_ID_PREFIX = 'wf-exec-';
 /**
  * Scan for runs that are eligible to resume (status `running` or `pending`).
  *
- * @param {string} [stateDir] - Directory holding the legacy state layout.
- *   The installation's own directory resolves to the shared, provider-backed
- *   repository; anything else is read as a private directory.
+ * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [repository]
+ *   Store to scan; the shared, provider-backed one when omitted.
  * @returns {Promise<Array<{ executionId: string, state: Object }>>}
  */
-export async function findResumableExecutions(stateDir = DEFAULT_STATE_DIR) {
-  const repository = resolveWorkflowStateRepository(stateDir);
+export async function findResumableExecutions(repository = getWorkflowStateRepository()) {
   const { items, truncated } = await repository.list({ prefix: RESUMABLE_ID_PREFIX });
   if (truncated) {
     logger.warn({
@@ -70,14 +65,14 @@ export async function findResumableExecutions(stateDir = DEFAULT_STATE_DIR) {
  * @param {import('./WorkflowEngine.js').WorkflowEngine} params.engine
  * @param {(state: Object) => Promise<{definition: Object, options?: Object}\|null>} params.resolveDefinition
  * @param {boolean} [params.requireSchedulerOwner=true] - Only resume if this instance owns the scheduler lock
- * @param {string} [params.stateDir]
+ * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [params.repository]
  * @returns {Promise<{ scanned: number, resumed: string[], skipped: string[] }>}
  */
 export async function resumeInterruptedRuns({
   engine,
   resolveDefinition,
   requireSchedulerOwner = true,
-  stateDir = DEFAULT_STATE_DIR
+  repository = null
 } = {}) {
   if (!engine || typeof engine.resumeFromCheckpoint !== 'function') {
     throw new Error(
@@ -98,7 +93,7 @@ export async function resumeInterruptedRuns({
     return { scanned: 0, resumed: [], skipped: [] };
   }
 
-  const candidates = await findResumableExecutions(stateDir);
+  const candidates = await findResumableExecutions(repository || getWorkflowStateRepository());
   const resumed = [];
   const skipped = [];
 
