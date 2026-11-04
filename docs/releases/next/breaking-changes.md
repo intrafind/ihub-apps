@@ -407,10 +407,10 @@ user skills, projects, runs, OAuth, well-known metadata, integrations).
 
 ## iFinder Search Hits Lose Duplicate Alias Fields
 
-The iFinder `search` tool no longer repeats values under old names: `mimeType` (use `mediaType`),
-`source` (use `sourceName`), `breadcrumbs` (use `navigationTree`), `lastModified` (use
-`modificationDate`) and `extension` (use `file.extension`). Prompts or workflow nodes of your own
-that read one of the old names have to switch.
+The iFinder `search` tool no longer repeats values under old names: `source` (use `sourceName`),
+`breadcrumbs` (use `navigationTree`) and `extension` (use `file.extension`). `mimeType` and
+`lastModified` stay, because the project item picker reads them. Prompts or workflow nodes of your
+own that read one of the removed names have to switch.
 
 ## MCP Gateway: The Legacy SSE Transport Is Gone
 
