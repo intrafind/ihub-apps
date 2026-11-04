@@ -75,15 +75,6 @@ export const LEGACY_STATE_FILE = 'latest.json';
  */
 export const DEFAULT_STATE_DIR = getContentsPath('data', 'workflow-state');
 
-/** Namespace holding the "this import already ran" markers. */
-export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
-
-/** Key of the workflow-state import marker within {@link IMPORT_STATE_NAMESPACE}. */
-export const IMPORT_STATE_KEY = 'workflow-states';
-
-/** Hard bound on how many legacy states one import carries over. */
-export const MAX_IMPORT_STATES = 5000;
-
 /**
  * Hard ceiling on how many states one scan considers.
  *
@@ -113,13 +104,6 @@ const RESERVED_KEYS = new Set(['execution-registry']);
  * inside the namespace directory and must never be mistaken for executions.
  */
 const RESERVED_DIRS = new Set(['.owners', '.locks']);
-
-/**
- * Lease for the whole import. Long, because the import is the critical
- * section: a sibling worker that cannot take the lock skips the import
- * entirely rather than racing it.
- */
-const IMPORT_LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
 
 /**
  * Whether a parsed value looks like a workflow execution state.
@@ -625,151 +609,6 @@ export function getWorkflowStateRepository() {
 export function resolveWorkflowStateRepository(stateDir) {
   if (!stateDir || stateDir === DEFAULT_STATE_DIR) return getWorkflowStateRepository();
   return new WorkflowStateRepository({ stateDir });
-}
-
-/**
- * Import the legacy `<executionId>/latest.json` directories into the
- * `workflow-state` namespace, once.
- *
- * Safe to call on every boot, and safe to interrupt:
- *
- *   - **Idempotent.** A state that already has a document is left alone, so a
- *     retry finishes the job rather than overwriting newer data with an older
- *     copy of itself, and the marker short-circuits the whole thing afterwards.
- *   - **Never destructive.** The legacy directories stay exactly where they
- *     are. A later release removes them; until then they remain the fallback
- *     for everything this import could not carry over, and every read and scan
- *     in this module still consults them.
- *   - **Bounded.** A very large directory is imported newest-first up to
- *     `maxStates` and the truncation is logged. What is left behind is still
- *     readable through the legacy path.
- *
- * @param {Object} [options]
- * @param {WorkflowStateRepository} [options.repository] - Repository to write
- *   through; defaults to the process-wide one.
- * @param {number} [options.maxStates] - Import bound.
- * @param {boolean} [options.force=false] - Import again even though the marker
- *   says it already ran (tests, a manual re-import).
- * @param {Object} [options.logger] - Logger.
- * @returns {Promise<{ran: boolean, reason?: string, imported: number,
- *   skipped: number, truncated: boolean, candidates: number}>} What the import
- *   did. `ran: false` means it decided there was nothing for it to do, never
- *   that it failed.
- */
-export async function importLegacyWorkflowStates({
-  repository,
-  maxStates = MAX_IMPORT_STATES,
-  force = false,
-  logger: log = logger
-} = {}) {
-  const repo = repository || getWorkflowStateRepository();
-  const idle = { ran: false, imported: 0, skipped: 0, truncated: false, candidates: 0 };
-  if (!repo.isAvailable()) {
-    log.debug?.('No storage provider; legacy workflow states stay where they are', {
-      component: COMPONENT
-    });
-    return { ...idle, reason: 'storage-unavailable' };
-  }
-
-  const documents = repo.documents;
-
-  /**
-   * Whether the import has already completed.
-   *
-   * Read twice: once before the lock, so a later boot costs one document
-   * read, and once inside it, because on the *first* boot every worker passes
-   * the outer check at the same moment and would otherwise each rescan the
-   * whole legacy directory behind the lock to import nothing.
-   *
-   * @returns {Promise<boolean>}
-   */
-  const alreadyImported = async () => {
-    if (force) return false;
-    const marker = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
-    return Boolean(marker?.data?.completedAt);
-  };
-
-  if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
-
-  const run = async () => {
-    if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
-    const scan = await repo.listLegacy({ max: MAX_SCAN_STATES });
-    // Newest first, so a bound that cuts the import keeps the runs a user is
-    // most likely to go looking for. An unknown timestamp sorts last rather
-    // than crowding out states whose age is known.
-    const ordered = [...scan.items].sort((a, b) => {
-      const left = Number.isFinite(a.updatedAt) ? a.updatedAt : 0;
-      const right = Number.isFinite(b.updatedAt) ? b.updatedAt : 0;
-      if (left !== right) return right - left;
-      return a.executionId < b.executionId ? -1 : 1;
-    });
-    const truncated = scan.truncated || ordered.length > maxStates;
-    const selected = ordered.length > maxStates ? ordered.slice(0, maxStates) : ordered;
-
-    let imported = 0;
-    let skipped = 0;
-    for (const { executionId } of selected) {
-      if (await documents.get(WORKFLOW_STATE_NAMESPACE, executionId)) {
-        skipped += 1;
-        continue;
-      }
-      // The legacy copy specifically, not `read()`: by the time the import
-      // reaches a state a concurrent checkpoint may have written a document
-      // for it, and `read()` would hand back that newer copy to be written
-      // over itself.
-      const state = await repo._readLegacy(executionId);
-      if (!state) {
-        skipped += 1;
-        continue;
-      }
-      try {
-        await repo.write(executionId, state, { ownerId: workflowStateOwnerId(state) });
-        imported += 1;
-      } catch (error) {
-        skipped += 1;
-        log.warn('Could not import a legacy workflow state', {
-          component: COMPONENT,
-          executionId,
-          error: error.message
-        });
-      }
-    }
-
-    await documents.put(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY, {
-      completedAt: new Date().toISOString(),
-      imported,
-      skipped,
-      truncated,
-      candidates: ordered.length
-    });
-
-    const result = { ran: true, imported, skipped, truncated, candidates: ordered.length };
-    if (ordered.length === 0) {
-      log.debug?.('No legacy workflow states to import', { component: COMPONENT });
-    } else {
-      log.info('Imported legacy workflow states into the workflow-state namespace', {
-        component: COMPONENT,
-        ...result,
-        ...(truncated ? { bound: maxStates } : {})
-      });
-    }
-    return result;
-  };
-
-  if (!repo.locks) return run();
-  try {
-    return await repo.locks.withLock('runtime-import:workflow-states', run, IMPORT_LOCK_OPTIONS);
-  } catch (error) {
-    if (error?.code === 'LOCK_TIMEOUT') {
-      // Another worker is importing the same states; there is nothing useful
-      // this one could add by waiting.
-      log.debug?.('Legacy workflow state import is already running elsewhere', {
-        component: COMPONENT
-      });
-      return { ...idle, reason: 'in-progress' };
-    }
-    throw error;
-  }
 }
 
 export default WorkflowStateRepository;

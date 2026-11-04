@@ -13,7 +13,6 @@ import { agentProfileSchema, knownAgentProfileKeys } from './validators/agentPro
 
 const agentsLoader = createResourceLoader({
   resourceName: 'Agent Profiles',
-  legacyPath: 'config/agents.json',
   individualPath: 'agents/profiles',
   validateItem: createSchemaValidator(agentProfileSchema, knownAgentProfileKeys)
 });

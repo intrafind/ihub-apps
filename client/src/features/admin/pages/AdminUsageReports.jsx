@@ -17,9 +17,7 @@ import PromptCachePanel from '../components/PromptCachePanel';
 import { summarizePromptCache } from '../utils/promptCacheStats';
 
 const entryValue = value =>
-  typeof value === 'object' && value !== null
-    ? value.total || (value.good || 0) + (value.bad || 0)
-    : value || 0;
+  typeof value === 'object' && value !== null ? value.total || 0 : value || 0;
 
 // Sort [key, value] entries of a usage map from highest to lowest value
 const sortEntriesDesc = (data, getValue = entryValue) =>
@@ -59,8 +57,8 @@ function StatCard({ title, value, icon, color, change, changeType, linkTo, linkL
 function TopUsersCard({ title, data, color, showRating = false }) {
   const sortedData = Object.entries(data || {})
     .sort(([, a], [, b]) => {
-      const valueA = typeof a === 'object' ? a.total || (a.good || 0) + (a.bad || 0) : a;
-      const valueB = typeof b === 'object' ? b.total || (b.good || 0) + (b.bad || 0) : b;
+      const valueA = typeof a === 'object' ? a.total || 0 : a;
+      const valueB = typeof b === 'object' ? b.total || 0 : b;
       return valueA - valueB;
     })
     .reverse()
@@ -71,11 +69,10 @@ function TopUsersCard({ title, data, color, showRating = false }) {
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{title}</h3>
       <div className="space-y-3">
         {sortedData.map(([key, value], index) => {
-          const displayValue =
-            typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value;
+          const displayValue = typeof value === 'object' ? value.total || 0 : value;
           const maxValue = Math.max(
             ...sortedData.map(([, v]) => {
-              const val = typeof v === 'object' ? v.total || (v.good || 0) + (v.bad || 0) : v;
+              const val = typeof v === 'object' ? v.total || 0 : v;
               return val;
             })
           );
@@ -127,9 +124,7 @@ function AppUsageCard({ data }) {
   const { t } = useTranslation();
   const apps = sortEntriesDesc(data);
   const total = apps.reduce(
-    (sum, [, value]) =>
-      sum +
-      (typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value),
+    (sum, [, value]) => sum + (typeof value === 'object' ? value.total || 0 : value),
     0
   );
 
@@ -140,8 +135,7 @@ function AppUsageCard({ data }) {
       </h3>
       <div className="space-y-4">
         {apps.map(([app, value]) => {
-          const displayValue =
-            typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value;
+          const displayValue = typeof value === 'object' ? value.total || 0 : value;
           const percentage = total > 0 ? (displayValue / total) * 100 : 0;
 
           return (
@@ -235,8 +229,8 @@ function AdminUsageReports() {
         'Cached / input tokens on models that report caching'
       ],
       ['Reasoning Tokens', tokens.reasoning?.total || 0, 'Output tokens spent on reasoning'],
-      ['Feedback Good', feedback.good, 'Positive feedback count'],
-      ['Feedback Bad', feedback.bad, 'Negative feedback count'],
+      ['Feedback Ratings', feedback.total || 0, 'Number of star ratings'],
+      ['Average Rating', (feedback.averageRating || 0).toFixed(2), 'Average star rating (1-5)'],
       ['Magic Prompt Uses', magicPrompt.total, 'Magic prompt invocations'],
       ['Magic Prompt Input Tokens', magicPrompt.tokensIn.total, 'Magic prompt input tokens'],
       ['Magic Prompt Output Tokens', magicPrompt.tokensOut.total, 'Magic prompt output tokens']

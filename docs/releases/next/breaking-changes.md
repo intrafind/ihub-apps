@@ -333,6 +333,47 @@ installation's **Settings** tab shows it) — or set the old, working URI as the
 installation's **Redirect URI**. Afterwards, check the log for V206 warnings (installations that
 kept their id, tenant ids to enter).
 
+## The Storage Provider Is Mandatory
+
+The server no longer starts without a working storage provider. The filesystem provider is the
+default and needs no configuration; a `storage` block in `platform.json` that names an unknown
+provider, or a provider that cannot initialize, now ends startup with a clear error instead of
+running without persistence. Chats, workflows, run history and integration connections no longer
+fall back to memory or to older file layouts.
+
+- **Check before upgrading:** if `platform.json` has a `storage` block, or `IHUB_STORAGE_PROVIDER`
+  is set, make sure it starts. Remove the block to use the default filesystem provider.
+- **Older runtime files are imported once.** Installations that last ran a release before 5.5.2
+  have workflow checkpoints, the run index, run event files and pending interactions under
+  `contents/data/`. Migration V219 carries them into the storage provider on the first start. The
+  old files stay where they are but are no longer read.
+- **Token files.** Migration V218 renames single-slot cloud-storage token files
+  (`<userId>.json`) to the per-provider name once, instead of on every start. Jira's single token
+  slot is unchanged.
+  
+## Legacy Config Shapes Are No Longer Read
+
+Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
+data on the first start.
+
+- **Resource arrays.** `config/apps.json`, `models.json`, `prompts.json`, `workflows.json` and
+  `agents.json` (one JSON array per resource) are no longer loaded. V220 moves every entry that has
+  no file yet into `apps/`, `models/`, `prompts/`, `workflows/` or `agents/profiles/` and deletes the
+  array; an array with an entry that has no usable `id` is kept and named in the log.
+- **Feedback counters.** The thumbs-style `good` and `bad` counters in `data/usage.json` are gone.
+  V221 folds counts that predate star ratings into the ratings and removes the counters. The
+  **Usage** CSV export has **Feedback Ratings** and **Average Rating** rows instead of **Feedback
+  Good** and **Feedback Bad**. Rating strings other than numbers (`"positive"`) are ignored.
+- **IP anonymization.** `logging.anonymizeIp` and `audit.anonymizeIp` accept `"off"`, `"mask"` and
+  `"drop"` only; V222 turns `false` into `"off"` and `true` into `"mask"`. An
+  `IHUB_PLATFORM__AUDIT__ANONYMIZE_IP=true` (or `LOGGING`) environment variable must become
+  `mask`.
+- **iFinder subject templates** accept `${user.field}` only; a bare `${username}` is rejected when
+  a token is minted instead of being resolved. The `token_usage_total` metric is removed; use
+  `gen_ai_client_token_usage`. Setting an `IHUB_PLATFORM__I_FINDER__*` or
+  `IHUB_PLATFORM__I_ASSISTANT__*` variable no longer logs a warning (it has had no effect since
+  V192).
+  
 ## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
 
 - **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback

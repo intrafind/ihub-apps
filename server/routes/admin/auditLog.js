@@ -22,18 +22,10 @@ import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import configStore from '../../services/config/ConfigStore.js';
 
-// Accept the platform.json shape exactly: false (off), true (mask),
-// or one of 'off' | 'mask' | 'drop'. Anything else is a 400 — we don't
-// want the UI accidentally writing something the runtime would ignore.
-const VALID_ANONYMIZE_IP = new Set([false, true, 'off', 'mask', 'drop']);
-
-function normalizeAnonymizeIp(value) {
-  // Legacy aliases: treat `true` and `false` as their string equivalents so
-  // the UI only has to deal with one shape.
-  if (value === false) return 'off';
-  if (value === true) return 'mask';
-  return value;
-}
+// Accept the platform.json shape exactly: 'off' | 'mask' | 'drop'. Anything
+// else is a 400 — we don't want the UI accidentally writing something the
+// runtime would ignore.
+const VALID_ANONYMIZE_IP = new Set(['off', 'mask', 'drop']);
 
 // Upper bound on rows returned by the CSV export to keep memory bounded.
 const MAX_EXPORT_ROWS = 100000;
@@ -46,7 +38,7 @@ function getAuditSettings() {
       ? cfg.retentionDays
       : getAuditLogRetentionDefault(),
     cleanupEnabled: cfg.cleanupEnabled !== false,
-    anonymizeIp: normalizeAnonymizeIp(cfg.anonymizeIp ?? false)
+    anonymizeIp: cfg.anonymizeIp ?? 'off'
   };
 }
 
@@ -190,7 +182,7 @@ export default function registerAdminAuditLogRoutes(app) {
       if (anonymizeIp !== undefined && !VALID_ANONYMIZE_IP.has(anonymizeIp)) {
         return sendBadRequest(
           res,
-          "Invalid anonymizeIp value; expected one of 'off' | 'mask' | 'drop' (or boolean)"
+          "Invalid anonymizeIp value; expected one of 'off' | 'mask' | 'drop'"
         );
       }
 

@@ -7,12 +7,11 @@ import logger from './logger.js';
 /**
  * Generic Resource Loader Factory
  *
- * Creates a resource loader that can load resources from both individual files
- * and legacy JSON array files for backward compatibility.
+ * Creates a resource loader that loads resources from individual files.
  *
  * This eliminates the duplication between appsLoader, modelsLoader, and promptsLoader.
  *
- * Both sources are read through {@link module:services/config/ConfigStore}, so
+ * The files are read through {@link module:services/config/ConfigStore}, so
  * apps, models, prompts and the rest go through the storage provider like every
  * other configuration file. That also gives them the `CONTENTS_DIR` setting,
  * which the hardcoded `contents/` path this loader used to build ignored: an
@@ -24,7 +23,6 @@ import logger from './logger.js';
  * Create a resource loader with the specified configuration
  * @param {Object} config - Loader configuration
  * @param {string} config.resourceName - Name of the resource (for logging)
- * @param {string} config.legacyPath - Path to legacy JSON file (relative to contents/)
  * @param {string} config.individualPath - Path to individual files directory (relative to contents/)
  * @param {Function} config.schema - Optional validation schema function
  * @param {Function} config.validateItem - Optional item validation function
@@ -35,15 +33,14 @@ import logger from './logger.js';
  */
 export function createResourceLoader({
   resourceName,
-  legacyPath,
   individualPath,
   validateItem,
   processItem,
   postProcess,
   sortComparator
 }) {
-  if (!resourceName || !legacyPath || !individualPath) {
-    throw new Error('resourceName, legacyPath, and individualPath are required');
+  if (!resourceName || !individualPath) {
+    throw new Error('resourceName and individualPath are required');
   }
 
   /**
@@ -133,73 +130,6 @@ export function createResourceLoader({
   }
 
   /**
-   * Load resources from legacy JSON file
-   * @param {boolean} verbose - Whether to log verbose output
-   * @returns {Array} Array of resource objects
-   */
-  async function loadFromLegacyFile(verbose = true) {
-    // A missing legacy file and an unreadable one both read as null; the store
-    // has already logged the difference.
-    let resources = await configStore.readJson(legacyPath);
-
-    if (resources === null) {
-      if (verbose) {
-        logger.info('Legacy file not found, skipping', {
-          component: 'ResourceLoader',
-          legacyPath
-        });
-      }
-      return [];
-    }
-
-    try {
-      if (!Array.isArray(resources)) {
-        logger.warn('Legacy file is not an array', { component: 'ResourceLoader', legacyPath });
-        return [];
-      }
-
-      if (verbose) {
-        logger.info('Loading resources from legacy file', {
-          component: 'ResourceLoader',
-          legacyPath,
-          count: resources.length,
-          resourceName
-        });
-      }
-
-      // Process each resource
-      resources = resources.map((resource, idx) => {
-        // Add enabled field if it doesn't exist (defaults to true)
-        if (resource.enabled === undefined) {
-          resource.enabled = true;
-        }
-
-        // Process item if processor is provided
-        let processedResource = resource;
-        if (processItem) {
-          processedResource = processItem(resource, `${legacyPath}[${idx}]`);
-        }
-
-        // Validate item if validator is provided
-        if (validateItem) {
-          processedResource = validateItem(processedResource, `${legacyPath}[${idx}]`);
-        }
-
-        return processedResource;
-      });
-
-      return resources;
-    } catch (error) {
-      logger.error('Error loading legacy file', {
-        component: 'ResourceLoader',
-        legacyPath,
-        error
-      });
-      return [];
-    }
-  }
-
-  /**
    * Default sort comparator
    * @param {Object} a - First item
    * @param {Object} b - Second item
@@ -227,31 +157,13 @@ export function createResourceLoader({
   }
 
   /**
-   * Load all resources from both sources
-   * Individual files take precedence over legacy file
+   * Load all resources from the individual files
    * @param {boolean} includeDisabled - Whether to include disabled resources
    * @param {boolean} verbose - Whether to log verbose output
    * @returns {Array} Array of resource objects
    */
   async function loadAll(includeDisabled = false, verbose = true) {
-    const individualResources = await loadFromFiles(verbose);
-    const legacyResources = await loadFromLegacyFile(verbose);
-
-    // Create a map to track resources by ID
-    const resourcesMap = new Map();
-
-    // Add legacy resources first
-    legacyResources.forEach(resource => {
-      resourcesMap.set(resource.id, resource);
-    });
-
-    // Individual files override legacy resources
-    individualResources.forEach(resource => {
-      resourcesMap.set(resource.id, resource);
-    });
-
-    // Convert map to array and filter resources
-    const allResources = Array.from(resourcesMap.values());
+    const allResources = await loadFromFiles(verbose);
     let filteredResources = allResources.filter(
       resource => resource.enabled === true || includeDisabled
     );
@@ -280,31 +192,11 @@ export function createResourceLoader({
     return filteredResources;
   }
 
-  /**
-   * Load resources from individual files only
-   * @param {boolean} verbose - Whether to log verbose output
-   * @returns {Array} Array of resource objects
-   */
-  async function loadFromFilesOnly(verbose = true) {
-    return await loadFromFiles(verbose);
-  }
-
-  /**
-   * Load resources from legacy file only
-   * @param {boolean} verbose - Whether to log verbose output
-   * @returns {Array} Array of resource objects
-   */
-  async function loadFromLegacyOnly(verbose = true) {
-    return await loadFromLegacyFile(verbose);
-  }
-
   // Return the resource loader object
   return {
     loadAll,
-    loadFromFiles: loadFromFilesOnly,
-    loadFromLegacy: loadFromLegacyOnly,
+    loadFromFiles,
     resourceName,
-    legacyPath,
     individualPath
   };
 }

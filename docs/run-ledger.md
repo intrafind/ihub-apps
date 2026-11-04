@@ -77,8 +77,10 @@ contents/data/
   interactions/<id>.json         pending and recently settled human interactions
 ```
 
-Each of those replaces something the ledger used to hand-write under
-`contents/data/run-log/`:
+Releases before 5.5.2 hand-wrote this under `contents/data/run-log/`
+(`runs/<runId>.jsonl`, `spill/<runId>/`, `index/<YYYY-MM-DD>.jsonl`,
+`interactions.json`). Nothing reads those files any more; migration `V219`
+carries them into the namespaces above once (see [Upgrading](#upgrading-an-installation-that-already-has-a-ledger)).
 
 | Was                        | Is now                                | Why                                                                         |
 | -------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
@@ -90,10 +92,8 @@ Each of those replaces something the ledger used to hand-write under
 index did: workflow executions and agent runs are recorded there too, so one
 namespace answers `GET /api/runs`, *My Executions* and the admin execution
 list. Each document carries the run's principal as its owner, so "this user's
-runs" never scans. The ledger writes a summary under the same switch as the
-rest of the ledger (on while storage is up, otherwise `runLog.enabled` and the
-feature flag); workflow and agent
-executions get theirs either way, because their registry always recorded them.
+runs" never scans. The ledger always writes a summary, because the storage
+provider is always up.
 Listings are still newest-first and still never include an anonymous run.
 
 **Spill references did not change shape.** An event still refers to a spilled
@@ -102,10 +102,9 @@ that string is copied into the tool result the model reads and hashed into
 `request/header`, so changing it would change what the model sees. The payload
 itself is a blob beside the run's stream; the path is what it always was.
 
-**Without a storage provider nothing moves.** If no provider comes up, the
-ledger writes and reads the layout it always had —
-`contents/data/run-log/runs/`, `spill/`, `index/` and `interactions.json` — and
-behaves exactly as before. That is a supported state, not an error.
+**There is no mode without a storage provider.** The provider is mandatory (the
+filesystem provider is the default); if it cannot start, the server does not
+start. See [Storage](storage.md).
 
 Event types are defined in `shared/runEvents.js` and validated by the Zod
 contracts in `server/services/loop/contracts/runLogEvents.js`
@@ -131,48 +130,36 @@ a mismatch.
 
 ### Upgrading an installation that already has a ledger
 
-Nothing is converted by hand and nothing is deleted. On the first boot after
-the upgrade, one worker — whichever takes the import lock — reads what is
-already on disk and writes it into the new namespaces:
+Installations that last ran a release before 5.5.2 hold their runtime records as
+files. Migration `V219` (`server/migrations/V219__import_legacy_runtime_stores.js`)
+reads them once, on the first start after the upgrade, and writes them into the
+storage provider; the migration runner records it as done, so later starts do
+not look at the files again.
 
-| Imported from                                  | Into                       | Bound              |
-| ---------------------------------------------- | -------------------------- | ------------------ |
-| `run-log/index/<YYYY-MM-DD>.jsonl`             | `runs` documents           | 5000, newest first |
-| `workflow-state/execution-registry.json`       | `runs` documents           | shares that bound  |
-| `workflow-state/<executionId>/latest.json`     | `workflow-state` documents | 5000, newest first |
-| `run-log/interactions.json` (pending only)     | `interactions` documents   | 5000               |
+| Imported from                                  | Into                       |
+| ---------------------------------------------- | -------------------------- |
+| `run-log/index/<YYYY-MM-DD>.jsonl`             | `runs` documents           |
+| `workflow-state/execution-registry.json`       | `runs` documents           |
+| `workflow-state/<executionId>/latest.json`     | `workflow-state` documents |
+| `run-log/runs/<runId>.jsonl`                   | the run's `run:<runId>` stream |
+| `run-log/spill/<runId>/<name>`                 | blobs beside that stream   |
+| `run-log/interactions.json` (pending only)     | `interactions` documents   |
 
-The import is idempotent — a run that already has a document is left alone —
-and writes a marker document (`runtime-imports/…`) so later boots
-short-circuit. An import interrupted by a crash is finished by the next boot.
-Anonymous runs are skipped: they were never listable, and importing them would
-spend the bound on runs nobody can ask for.
-
-**The legacy files stay exactly where they are.** They are not moved, emptied
-or rewritten; a later release removes them. Until then they are still read:
-
-- a run's *events* are never imported at all — `run-log/runs/<runId>.jsonl` is
-  read in place, so a run recorded before the upgrade still opens, still
-  re-syncs and still replays. A run that is *continued* after the upgrade —
-  feedback on yesterday's answer, a checkpoint answered today — has events in
-  both places, and reading it merges the two by sequence number, so its whole
-  history stays visible;
-- `GET /api/runs` merges the `runs` namespace with the per-day index files, the
-  namespace winning on any run both describe, so runs past the import bound
-  stay listed until retention ages those files out;
-- a payload spilled before the upgrade is read from `spill/<runId>/`;
-- a workflow checkpoint that was not imported is read from its
-  `<executionId>/latest.json` directory.
+At most 50,000 runs and workflow states are carried over, newest first; a
+truncation is logged as a warning. The import never overwrites a record that
+already has a document, skips anonymous runs (they were never listable), and
+leaves the old files where they are — they are not read afterwards, so an
+operator may delete `contents/data/run-log/` and the `<executionId>/` directories
+under `contents/data/workflow-state/` once the upgrade is confirmed. An
+installation whose server already ran the former boot-time importers keeps
+their markers (`runtime-imports/…`), and the migration honours them rather than
+importing a second time, which would bring back records deleted since.
 
 **What that means for a rollback.** The previous release finds its own files
 untouched and runs. What it does not find is anything written *after* the
 upgrade: those events, summaries, checkpoints and interactions are in the new
 namespaces, which the old code does not read. A rollback therefore loses the
-window, not the history. Rolling forward again does not re-run the import —
-the marker is already there — but little is lost by that, because the fallbacks
-above keep reading the legacy files. The one exception worth knowing: an
-execution that already has a state document takes it, so a checkpoint the old
-release rewrote during the rollback window is shadowed by the imported copy.
+window, not the history.
 
 ## API
 

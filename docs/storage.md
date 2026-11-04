@@ -28,7 +28,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
-| `runtime-imports`           | markers saying a one-time legacy import has already run       | –                           | [Run Ledger](run-ledger.md)              |
+| `runtime-imports`           | markers saying a one-time import (migration V219, the connection re-index) has already run | –            | [Run Ledger](run-ledger.md)              |
 | `a2a-tasks`                 | tasks of the inbound A2A endpoint, kept 24 hours after they finish | the calling principal | [MCP Integration](mcp-integration.md) |
 | `a2a-contexts`              | A2A conversations (`contextId`): bound skill and recent history, kept 7 days after the last message | the calling principal | [MCP Integration](mcp-integration.md) |
 | `a2a-client-contexts`       | conversations with remote A2A agents: the agent's `contextId` and a waiting `taskId` per user, chat and agent, kept 30 days after the last call | the user | [A2A agents](a2a-agents.md) |
@@ -51,23 +51,23 @@ Append-log streams are named `run:<runId>` and carry a run's events, with its
 spilled payloads as blobs beside them. Leases are taken on `chat:<id>` for a
 chat's read-modify-write, on `interaction:<id>` for the answer critical
 section, on `runlog:<runId>` while a recovering worker continues a run's
-sequence, and on `runtime-import:<store>` for the one-time legacy imports.
+sequence, and on `runtime-import:<store>` for the one-time connection re-index.
 
-**A provider that fails to initialize is not fatal to any of them.** Each
-consumer keeps the behaviour and the on-disk layout it had before the move:
-the ledger writes `contents/data/run-log/` as it always did, workflow state
-stays in its `<executionId>/latest.json` directories, interactions fall back to
-`interactions.json` plus claim markers, iAssistant conversation state stays
-in memory. Chat is the exception: it has no earlier layout, and every chat is
-stored, so without a provider a chat turn answers `503 CHAT_STORAGE_UNAVAILABLE`
-until storage comes up.
+**The provider is mandatory.** The filesystem provider is the default and needs
+no configuration. A `storage` block that names an unknown provider, or a
+provider that fails to initialize, stops the server from starting with a
+`StorageBootstrapError` (`server/storage/bootstrap.js`) that says which setting
+to check; in a cluster the primary checks once before it forks workers, so a
+bad block ends the process instead of a respawn loop. Nothing falls back to an
+in-memory or earlier on-disk layout.
 
-One namespace shares a directory with the files it replaces: `workflow-state`
-documents (`contents/data/workflow-state/<executionId>.json`) sit beside the
-legacy `<executionId>/latest.json` checkpoint directories that are already
-there, and the two are read as a union with the document winning. The one-time
-imports that populate these namespaces never delete what they read — see
+Installations that last ran a release before the storage provider (5.5.2) keep
+their old runtime files under `contents/data/`. Migration `V219` carries them
+into these namespaces once, on the first start after the upgrade — see
 [Upgrading an installation that already has a ledger](run-ledger.md#upgrading-an-installation-that-already-has-a-ledger).
+`workflow-state` shares a directory with the files it replaced:
+`contents/data/workflow-state/<executionId>.json` documents sit beside the old
+`<executionId>/latest.json` directories, which nothing reads any more.
 
 The full plan is in
 `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`.

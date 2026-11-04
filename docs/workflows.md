@@ -572,10 +572,10 @@ What the sweep deletes, precisely:
 
 Age is measured from when the state was **last stored**, which in the steady
 state is the moment the run finished: its last checkpoint is written as it
-ends. Two things move that clock forward — the one-time import of legacy state
-directories on the first boot after upgrading, and the orphan sweeper marking
-an interrupted run failed at boot — so a few runs are kept one window longer
-than their age suggests. The sweep never errs in the other direction.
+ends. Two things move that clock forward — the migration that imports legacy state
+directories on the first start after upgrading from a release before 5.5.2, and
+the orphan sweeper marking an interrupted run failed at boot — so a few runs are
+kept one window longer than their age suggests. The sweep never errs in the other direction.
 
 It runs once at startup, so a misconfigured window shows up in the log at boot
 rather than a day later, and then every 24 hours. Like the chat and run-ledger
