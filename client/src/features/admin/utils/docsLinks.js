@@ -20,6 +20,21 @@ const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
  */
 export const REPOSITORY_BLOB_URL = 'https://github.com/intrafind/ihub-apps/blob/main/';
 
+/**
+ * A URL fragment (without `#`) decoded, or as written when it is not valid percent-encoding: a
+ * hand-typed `#50%` must not throw during render.
+ *
+ * @param {string} fragment
+ * @returns {string}
+ */
+export function decodeFragment(fragment) {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
+}
+
 /** Source path of a release-notes section file, e.g. `releases/5.6.4/features.md`. */
 export const releaseSourcePath = (version, file) => `releases/${version}/${file}`;
 

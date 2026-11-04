@@ -10,7 +10,7 @@ import { renderMarkdown } from '../../../config/marked.config';
 import { useCodeBlockInteractions } from '../../../hooks/useCodeBlockInteractions';
 import { useMermaidRenderer } from '../../../hooks/useMermaidRenderer';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
-import { handleDocsLinkClick, rewriteDocsHtml } from '../utils/docsLinks';
+import { decodeFragment, handleDocsLinkClick, rewriteDocsHtml } from '../utils/docsLinks';
 
 /**
  * Admin → Documentation.
@@ -126,7 +126,8 @@ function AdminDocsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
-  const currentPath = params['*'] ? decodeURIComponent(params['*']) : HOME_PAGE;
+  // React Router already decodes the splat; decoding it again throws on a literal `%`.
+  const currentPath = params['*'] || HOME_PAGE;
   const contentRef = useRef(null);
   useCodeBlockInteractions();
 
@@ -224,7 +225,7 @@ function AdminDocsPage() {
   // Scroll to the heading in the URL fragment once the page is rendered, or to the top.
   useEffect(() => {
     if (!html) return;
-    const id = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
+    const id = location.hash ? decodeFragment(location.hash.slice(1)) : '';
     const target = id ? document.getElementById(id) : null;
     if (target && typeof target.scrollIntoView === 'function') {
       target.scrollIntoView({ block: 'start' });

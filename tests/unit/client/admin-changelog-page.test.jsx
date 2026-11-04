@@ -370,6 +370,13 @@ describe('AdminChangelogPage', () => {
     expect(detailCalls()).toEqual(['/admin/changelog/5.5.6']);
   });
 
+  test('a malformed fragment does not break the page', async () => {
+    mockApi();
+    render(<AdminChangelogPage />, { route: '/admin/changelog?version=5.5.6#50%' });
+
+    expect(await screen.findByRole('heading', { level: 3, name: 'Older Feature' })).toBeVisible();
+  });
+
   test('says so when there are no release notes', async () => {
     mockApi({ index: { currentVersion: '5.5.7', versions: [] } });
     render(<AdminChangelogPage />);

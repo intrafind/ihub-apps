@@ -14,7 +14,12 @@ import {
   defaultExpandedGroups,
   visibleReleases
 } from '../utils/changelogReleaseTree';
-import { handleDocsLinkClick, releaseSourcePath, rewriteDocsHtml } from '../utils/docsLinks';
+import {
+  decodeFragment,
+  handleDocsLinkClick,
+  releaseSourcePath,
+  rewriteDocsHtml
+} from '../utils/docsLinks';
 
 /**
  * Admin → What's New.
@@ -82,7 +87,7 @@ const compact = text =>
  * hyphen, so both are compared without anything but letters and digits.
  */
 function findEntryForFragment(release, fragment) {
-  const wanted = compact(decodeURIComponent(fragment));
+  const wanted = compact(decodeFragment(fragment));
   if (!wanted) return null;
   for (const section of SECTIONS) {
     const match = (release.sections?.[section.key] ?? []).find(
@@ -523,7 +528,9 @@ function AdminChangelogPage() {
     if (index.versions.some(item => item.version === requestedVersion)) {
       setSelected(requestedVersion);
     }
-  }, [requestedVersion, index]);
+    // location.key: a link to the release named in the current query string still re-selects it
+    // after the admin picked another release in the switcher.
+  }, [requestedVersion, index, location.key]);
 
   // The selected release's entries, fetched on first selection and kept.
   useEffect(() => {

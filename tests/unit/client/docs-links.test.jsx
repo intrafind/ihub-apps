@@ -10,6 +10,7 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
   buildPath: p => `/ihub${p}`
 }));
 import {
+  decodeFragment,
   docsLinkTarget,
   repositoryLinkTarget,
   resolveDocsReference,
@@ -67,6 +68,13 @@ describe('repositoryLinkTarget', () => {
       expect(repositoryLinkTarget(href, 'apps.md')).toBeNull();
     }
   );
+});
+
+describe('decodeFragment', () => {
+  test('decodes valid percent-encoding and keeps malformed input as written', () => {
+    expect(decodeFragment('caf%C3%A9')).toBe('café');
+    expect(decodeFragment('50%')).toBe('50%');
+  });
 });
 
 describe('rewriteDocsHtml', () => {
