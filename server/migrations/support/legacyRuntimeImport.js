@@ -198,11 +198,11 @@ export async function importWorkflowStates({
     if (!entry.isDirectory() || RESERVED_DIRS.has(entry.name) || !isStorableExecutionId(entry.name))
       continue;
     const file = path.join(stateDir, entry.name, 'latest.json');
-    let state = null;
-    let mtime = Number.NaN;
+    let state;
+    let mtimeMs;
     try {
       state = JSON.parse(await fs.readFile(file, 'utf8'));
-      mtime = (await fs.stat(file)).mtimeMs;
+      mtimeMs = (await fs.stat(file)).mtimeMs;
     } catch {
       continue;
     }
@@ -210,7 +210,7 @@ export async function importWorkflowStates({
     const stamp = [state.completedAt, state.updatedAt, state.createdAt]
       .map(parseTime)
       .find(Number.isFinite);
-    candidates.push({ executionId: entry.name, state, time: stamp ?? mtime });
+    candidates.push({ executionId: entry.name, state, time: stamp ?? mtimeMs });
   }
   candidates.sort((a, b) => {
     const left = Number.isFinite(a.time) ? a.time : 0;
