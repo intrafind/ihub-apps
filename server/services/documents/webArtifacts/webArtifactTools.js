@@ -26,6 +26,11 @@ const RELATIVE_LINK_RE =
 // An absolute URL the preview's CSP (no network) blocks: script, stylesheet or image.
 const EXTERNAL_RESOURCE_RE =
   /<(?:script\b[^>]*\bsrc|link\b[^>]*\bhref|img\b[^>]*\bsrc)\s*=\s*["'](?:https?:)?\/\/[^"']+["']/i;
+// An <a> whose target cannot work in the sandboxed preview: an empty or bare "#",
+// "javascript:", an absolute or root-relative URL, or a relative file path. Only
+// "#section" anchors that point at an element of the same document work.
+const ANCHOR_HREF_RE = /<a\b[^>]*?\bhref\s*=\s*(["'])(.*?)\1/gis;
+const WINDOW_OPEN_RE = /\bwindow\.open\s*\(/;
 const STORAGE_RE = /\b(?:localStorage|sessionStorage)\b/g;
 const TRY_OPEN_RE = /\btry\s*\{/g;
 const BRAND_TOKEN_DEFINITION_RE = /--brand-primary\s*:|\bid\s*=\s*["']ihub-brand-tokens["']/i;
@@ -78,6 +83,23 @@ function hasUnguardedStorageAccess(text) {
 }
 
 /**
+ * Links that do nothing in the sandboxed preview, as short descriptions. A link
+ * with `href="#"` or an external URL is a dead end there: the frame has no
+ * network and no popups, so everything a link points to must be inside the file.
+ */
+function findDeadLinks(text) {
+  const ids = new Set([...text.matchAll(/\b(?:id|name)\s*=\s*["']([^"']+)["']/gi)].map(m => m[1]));
+  const dead = [];
+  for (const match of text.matchAll(ANCHOR_HREF_RE)) {
+    const href = match[2].trim();
+    if (/^(?:mailto|tel|data|blob):/i.test(href)) continue;
+    if (href.startsWith('#') && href.length > 1 && ids.has(href.slice(1))) continue;
+    dead.push(href || '(empty)');
+  }
+  return [...new Set(dead)];
+}
+
+/**
  * Inspect HTML or SVG content for sandbox and self-containment pitfalls.
  *
  * @param {string} content
@@ -113,6 +135,16 @@ export function inspectWebArtifact(content, format) {
   if (EXTERNAL_RESOURCE_RE.test(text)) {
     warnings.push(
       'An external script, stylesheet or image URL is blocked in the sandboxed preview, which has no network access. Inline all JavaScript and CSS, and embed images as data: URIs.'
+    );
+  }
+  const deadLinks = findDeadLinks(text);
+  if (deadLinks.length || WINDOW_OPEN_RE.test(text)) {
+    const shown = deadLinks
+      .slice(0, 5)
+      .map(href => `"${href}"`)
+      .join(', ');
+    warnings.push(
+      `Links that cannot work in the sandboxed preview${shown ? ` (href ${shown})` : ''}: it has no network and opens no new windows, so "#", external URLs, file paths and window.open() lead nowhere. Make every link, source or reference do something inside the file: a "#id" anchor to a section that exists, or a button that opens an in-page panel, modal or view that shows the content. Show an external address as plain text, not as a link.`
     );
   }
   if (hasUnguardedStorageAccess(text)) {
