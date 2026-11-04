@@ -88,7 +88,7 @@ const filter = args.find(a => !a.startsWith('--'));
 const files = walk(path.join(root, 'server', 'tests'))
   .filter(f => !QUARANTINED[path.basename(f)])
   .filter(f => !filter || f.includes(filter))
-  .sort();
+  .sort((a, b) => a.localeCompare(b));
 const jestFiles = files.filter(isJest);
 const nodeFiles = files.filter(f => !jestFiles.includes(f));
 
