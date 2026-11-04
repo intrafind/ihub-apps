@@ -19,6 +19,7 @@ import registerAdminContentAccessRoutes from './admin/contentAccess.js';
 import registerAdminTranslateRoute from './admin/translate.js';
 import registerAdminPagesRoutes from './admin/pages.js';
 import registerAdminUIRoutes from './admin/ui.js';
+import registerAdminTranslationsRoutes from './admin/translations.js';
 import registerBackupRoutes from './admin/backup.js';
 import registerAdminSchemasRoutes from './admin/schemas.js';
 import registerAdminVersionRoutes from './admin/version.js';
@@ -77,6 +78,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminTranslateRoute(app);
   registerAdminPagesRoutes(app);
   registerAdminUIRoutes(app);
+  registerAdminTranslationsRoutes(app);
   await registerBackupRoutes(app);
   registerAdminSchemasRoutes(app);
   registerAdminVersionRoutes(app);

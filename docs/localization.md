@@ -92,3 +92,12 @@ channel.addEventListener('message', event => {
 ```
 
 **Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Messages with any other `type` are passed through silently, so unrelated cross-product events on the same channel will not affect the language.
+
+## Editing Overrides in the Admin UI
+
+**Admin → Customization → Localization** has a *Translation overrides* section. It opens on the
+keys that have been changed. Search by key or text (for example `answerSource`) to find any
+label, edit it and save; *Reset to built-in* removes the override again. Edits are written to
+`contents/locales/{lang}.json` — the same files described above — so manual and UI edits
+are interchangeable. Only keys that exist in the built-in locale can be overridden; keys in the
+file that no longer exist are listed as "unknown key" so they can be reset.
