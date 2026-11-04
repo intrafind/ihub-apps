@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V219 - feedback `good`/`bad` counters fold into star ratings
+ * Migration V221 - feedback `good`/`bad` counters fold into star ratings
  *
  * `data/usage.json` kept thumbs-style `good` and `bad` counters next to the
  * 1-5 star ratings. Every new star rating bumped them as well (4-5 = good,
@@ -13,7 +13,7 @@
  * every per-user, per-app and per-model bucket.
  */
 
-export const version = '219';
+export const version = '221';
 export const description = 'usage_feedback_good_bad_to_ratings';
 
 const USAGE_FILE = 'data/usage.json';

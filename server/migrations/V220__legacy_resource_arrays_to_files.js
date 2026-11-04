@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V218 - legacy resource arrays become individual files
+ * Migration V220 - legacy resource arrays become individual files
  *
  * Apps, models, prompts, workflows and agent profiles used to be loadable from
  * one JSON array each (`config/apps.json`, `config/models.json`,
@@ -14,7 +14,7 @@
  * left untouched and a warning names it, so nothing is lost silently.
  */
 
-export const version = '218';
+export const version = '220';
 export const description = 'legacy_resource_arrays_to_files';
 
 const LEGACY_ARRAYS = [

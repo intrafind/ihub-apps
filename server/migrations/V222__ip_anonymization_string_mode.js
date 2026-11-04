@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V220 - IP anonymization takes a string mode only
+ * Migration V222 - IP anonymization takes a string mode only
  *
  * `logging.anonymizeIp` and `audit.anonymizeIp` accepted a boolean as well as
  * 'off' | 'mask' | 'drop'; V060 shipped them as `false`. Only the strings
@@ -10,7 +10,7 @@
  * meant).
  */
 
-export const version = '220';
+export const version = '222';
 export const description = 'ip_anonymization_string_mode';
 
 const PLATFORM_FILE = 'config/platform.json';

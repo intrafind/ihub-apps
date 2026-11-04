@@ -8,7 +8,7 @@ import {
   up,
   precondition,
   version
-} from '../migrations/V219__usage_feedback_good_bad_to_ratings.js';
+} from '../migrations/V221__usage_feedback_good_bad_to_ratings.js';
 
 function makeCtx(usage) {
   let stored = usage === undefined ? undefined : structuredClone(usage);
@@ -29,8 +29,8 @@ function makeCtx(usage) {
 
 const empty = () => ({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
 
-describe('migration V219', () => {
-  it('has version 219', () => assert.equal(version, '219'));
+describe('migration V221', () => {
+  it('has version 221', () => assert.equal(version, '221'));
 
   it('is skipped without a usage file', async () => {
     assert.equal(await precondition(makeCtx(undefined)), false);
