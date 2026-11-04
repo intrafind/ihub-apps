@@ -50,12 +50,7 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
   adminAuth: (req, res, next) => {
     req.user = { id: 'admin' };
     next();
-  },
-  isAdminAuthRequired: () => false
-}));
-
-jest.unstable_mockModule('../middleware/contentAdminAuth.js', () => ({
-  isContentAdminAuthRequired: () => false
+  }
 }));
 
 jest.unstable_mockModule('../utils/adminRescue.js', () => ({

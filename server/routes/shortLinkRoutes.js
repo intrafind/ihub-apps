@@ -14,7 +14,7 @@ import {
 } from '../shortLinkManager.js';
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
-import { isAdminAuthRequired } from '../middleware/adminAuth.js';
+import { isAdmin } from '../utils/authorization.js';
 import { isAllowedShortLinkTarget } from '../utils/shortLinkTarget.js';
 import {
   sendBadRequest,
@@ -30,11 +30,6 @@ import logger from '../utils/logger.js';
 /** Hosts an absolute short link target may name (`platform.shortLinks.allowedHosts`). */
 function allowedHosts() {
   return configCache.getPlatform()?.shortLinks?.allowedHosts || [];
-}
-
-/** Whether the caller is an admin, by the same rule as `adminAuth`. */
-function isAdmin(req) {
-  return !isAdminAuthRequired(req);
 }
 
 const TARGET_NOT_ALLOWED =
@@ -87,7 +82,7 @@ export default function registerShortLinkRoutes(app) {
       try {
         const appId = typeof req.query.appId === 'string' ? req.query.appId : undefined;
         // Admins see every link (optionally one owner's); everyone else their own.
-        const ownerId = isAdmin(req)
+        const ownerId = isAdmin(req.user)
           ? typeof req.query.ownerId === 'string'
             ? req.query.ownerId
             : undefined
@@ -110,7 +105,7 @@ export default function registerShortLinkRoutes(app) {
         if (!link) return sendNotFound(res, 'Short link');
         // Anyone signed in may learn that a code is taken (the share dialog
         // checks a custom code this way); only the owner and admins see the link.
-        if (!canManageLink(link, req.user, isAdmin(req))) {
+        if (!canManageLink(link, req.user, isAdmin(req.user))) {
           return res.json({ code: link.code });
         }
         res.json(link);
@@ -128,7 +123,7 @@ export default function registerShortLinkRoutes(app) {
       try {
         const existing = await getLink(req.params.code);
         if (!existing) return sendNotFound(res, 'Short link');
-        if (!canManageLink(existing, req.user, isAdmin(req))) {
+        if (!canManageLink(existing, req.user, isAdmin(req.user))) {
           return sendInsufficientPermissions(res, 'ownership of the short link');
         }
         const link = await updateLink(req.params.code, req.body || {}, {
@@ -153,7 +148,7 @@ export default function registerShortLinkRoutes(app) {
       try {
         const existing = await getLink(req.params.code);
         if (!existing) return sendNotFound(res, 'Short link');
-        if (!canManageLink(existing, req.user, isAdmin(req))) {
+        if (!canManageLink(existing, req.user, isAdmin(req.user))) {
           return sendInsufficientPermissions(res, 'ownership of the short link');
         }
         const ok = await deleteLink(req.params.code);

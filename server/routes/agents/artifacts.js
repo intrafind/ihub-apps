@@ -15,6 +15,7 @@ import {
   sendNotFound,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
+import { isAdminUser } from '../../services/loop/runIdentity.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
@@ -53,13 +54,6 @@ function safeName(name) {
   const base = path.basename(name);
   if (base !== name) return null;
   return base;
-}
-
-function isAdminUser(user) {
-  if (!user) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.includes('admin') || groups.includes('admins');
 }
 
 /**

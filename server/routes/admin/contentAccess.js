@@ -4,7 +4,7 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
-import { isAdminAuthRequired } from '../../middleware/adminAuth.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -115,7 +115,7 @@ function buildView(req, groupsData, type, contentId) {
     user: req.user,
     // The same rule adminAuth applies: adminAccess through a group, and an
     // eligible principal (no API keys, OAuth clients or agents).
-    fullAdmin: !isAdminAuthRequired(req),
+    fullAdmin: isAdmin(req.user),
     implicitGroups: implicitGroups()
   });
   return {
