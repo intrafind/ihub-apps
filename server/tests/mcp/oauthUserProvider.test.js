@@ -139,7 +139,8 @@ describe('McpUserOAuthProvider', () => {
       ...extra
     });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await scratch.reset();
     clientStore = new McpOAuthClientStore({ documents: scratch.documents });
   });
 

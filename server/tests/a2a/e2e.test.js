@@ -140,7 +140,8 @@ async function useAgent(extra) {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: {

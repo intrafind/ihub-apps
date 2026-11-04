@@ -171,6 +171,7 @@ let connections;
 let tokenEndpoint;
 const originalStrategy = JiraService.oauthStrategy;
 beforeEach(async () => {
+  await scratch.reset();
   // The per-user start limit (20 a minute) is not what these tests exercise.
   for (const user of Object.values(USERS)) await connectLimiter.resetKey(`user:${user.id}`);
   connections = new IntegrationConnectionService({

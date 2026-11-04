@@ -92,6 +92,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await scratch.reset();
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
   documents = memoryDocuments();
   mcpClientManager.catalogStore = new McpToolCatalogStore({ documents });

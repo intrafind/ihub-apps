@@ -139,9 +139,9 @@ const { validateClientMetadata } = await import('../../utils/clientIdMetadata.js
 const { default: registerMcpOAuthRoutes } = await import('../../routes/mcpOAuth.js');
 const { default: userIntegrationRoutes } =
   await import('../../routes/integrations/userIntegrations.js');
-const { returnPathWith } =
+const { returnPathWith, IntegrationConnectionService, setIntegrationConnectionServiceForTests } =
   await import('../../services/integrations/auth/IntegrationConnectionService.js');
-const { OAUTH_FLOWS_NAMESPACE } =
+const { OAUTH_FLOWS_NAMESPACE, OAuthFlowStore, setOAuthFlowStoreForTests } =
   await import('../../services/integrations/auth/oauthFlowStore.js');
 const { default: cryptoModule } = await import('node:crypto');
 
@@ -189,6 +189,14 @@ afterAll(async () => {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  // Every case starts without the previous case's registration, flows and
+  // connections: they live in the shared scratch store.
+  await scratch.reset();
+  const flowStore = new OAuthFlowStore({ documents: scratch.documents });
+  setOAuthFlowStoreForTests(flowStore);
+  setIntegrationConnectionServiceForTests(
+    new IntegrationConnectionService({ documents: scratch.documents, flowStore })
+  );
   state.platform = { anonymousAuth: { enabled: false }, auth: {} };
   state.apps = [{ id: 'assistant', tools: ['okta'] }];
   state.integrations = oktaInstallation();
@@ -533,7 +541,13 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
     expect(tokenRequests()).toHaveLength(1);
 
     const started = decodeState((await startFlow()).location);
-    started.payload.exp = Date.now() - 1000;
+    const startedDoc = await scratch.documents.get(OAUTH_FLOWS_NAMESPACE, started.key);
+    await scratch.documents.put(
+      OAUTH_FLOWS_NAMESPACE,
+      started.key,
+      { ...startedDoc.data, exp: Date.now() - 1000 },
+      { ownerId: 'system' }
+    );
     const late = await callback({ code: 'c', state: started.stateParam });
     expect(late.headers.location).toBe(
       '/chat/abc?integration_error=state_expired&integration=okta'
@@ -732,8 +746,14 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
   }
 
   it("gives every server its own redirect URI and binds the flow to that server's AS", async () => {
-    const evil = await start('evil');
-    const corp = await start('corp');
+    const evilStart = await start('evil');
+    const corpStart = await start('corp');
+    const evil = {
+      payload: (await scratch.documents.get(OAUTH_FLOWS_NAMESPACE, evilStart.key)).data
+    };
+    const corp = {
+      payload: (await scratch.documents.get(OAUTH_FLOWS_NAMESPACE, corpStart.key)).data
+    };
     expect(evil.payload.redirectUri).toBe('https://ihub.example.com/api/mcp/oauth/callback/evil');
     expect(corp.payload.redirectUri).toBe('https://ihub.example.com/api/mcp/oauth/callback/corp');
     expect(evil.payload).toMatchObject({

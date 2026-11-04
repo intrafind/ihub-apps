@@ -119,7 +119,8 @@ afterAll(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: { expose: { tools: true, apps: true, workflows: true }, a2a: { enabled: true } },

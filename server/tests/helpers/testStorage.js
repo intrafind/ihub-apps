@@ -13,6 +13,7 @@
  * after(async () => { await storage.stop(); });
  */
 import fs from 'node:fs/promises';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../../storage/bootstrap.js';
@@ -86,6 +87,9 @@ export async function scratchDocuments({ prefix = 'ihub-test-docs-' } = {}) {
   const baseDir = path.join(dir, 'data');
   const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
   await provider.initialize();
+  // Most test files never call `stop()`, so the scratch directory is also removed
+  // when the test process ends.
+  process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
   return {
     documents: provider.documents,
     provider,

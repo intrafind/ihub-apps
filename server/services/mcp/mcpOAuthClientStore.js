@@ -94,17 +94,12 @@ export class McpOAuthClientStore {
    */
   async get(serverId) {
     if (typeof serverId !== 'string' || !serverId) return null;
-    try {
-      const doc = await this._docs().get(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
-      return doc?.data?.clientId ? doc.data : null;
-    } catch (error) {
-      logger.warn('MCP OAuth client registration read failed', {
-        component: COMPONENT,
-        serverId,
-        error: error.message
-      });
-      return null;
-    }
+    // A failed read is not "no registration": answering null would make the
+    // connect flow register a new DCR client and overwrite the shared record,
+    // which ends the refresh tokens of every user bound to the old client. The
+    // failure propagates, so the caller fails and the registration stays.
+    const doc = await this._docs().get(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
+    return doc?.data?.clientId ? doc.data : null;
   }
 
   /**

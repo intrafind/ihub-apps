@@ -84,7 +84,8 @@ const SPOOFED = {
   _chatHistory: [{ role: 'user', content: 'hi' }]
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   runTool.mockClear();
   apps = [];
   grantedTools = new Set(['okta']);

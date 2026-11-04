@@ -103,7 +103,8 @@ const message = (text, metadata) => ({
   ...(metadata ? { metadata } : {})
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: {
