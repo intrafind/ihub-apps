@@ -1003,7 +1003,7 @@ export JWT_SECRET=your-secure-secret-key
 
 ## Examples
 
-See `examples/authentication/` directory for:
+Typical setups:
 
 - nginx proxy configuration
 - Docker Compose setup with OAuth2 Proxy

@@ -228,8 +228,8 @@ test('promotes the Nano Banana preview ids to their stable release', async () =>
 });
 
 test('skips the models that are no longer shipped in server/defaults', async () => {
-  // The cloud models this migration seeded moved to examples/models (iHub
-  // Examples marketplace): a fresh install starts without them, and an update
+  // The cloud models this migration seeded moved to the iHub
+  // marketplace: a fresh install starts without them, and an update
   // that reaches V089 only now skips them instead of failing.
   const ctx = fakeCtx({ 'config/platform.json': {} });
 

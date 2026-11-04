@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Projection of an SSE v2 `interaction` (contracts/interaction.js) back onto
- * the legacy workflow `checkpoint` shape that `HumanCheckpoint.jsx` renders:
+ * Projection of an SSE v2 `interaction` (contracts/interaction.js) onto the
+ * workflow `checkpoint` shape that `HumanCheckpoint.jsx` renders:
  *
  *   { id, nodeId, nodeName, type, message, title, options, inputSchema,
  *     showData, displayData, expiresAt, timeout, createdAt,
@@ -16,7 +16,7 @@
  * @module shared/run/interactionToCheckpoint
  */
 
-/** interaction.kind → legacy checkpoint.type */
+/** interaction.kind → checkpoint.type */
 const KIND_TO_CHECKPOINT_TYPE = Object.freeze({
   approval: 'approval',
   review: 'review',

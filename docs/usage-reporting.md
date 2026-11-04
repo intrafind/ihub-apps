@@ -140,7 +140,7 @@ events).
 
 ### Upgrading
 
-The first start on this version deletes the old usage data once (migration V224):
+The first start on this version deletes the old usage data once (migration V225):
 `contents/data/usage.json`, `usage-events.jsonl`, `usage-daily/` and `usage-monthly/`. It counted
 chat only, counted every exchange twice and keyed users on browser sessions, so it could not be
 merged with the new records. The usage-limit counters (`quota-usage.json`) are not touched.

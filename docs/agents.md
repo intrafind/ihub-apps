@@ -278,35 +278,6 @@ workflow on the chosen branch and resumes the run (`interaction/answered`,
 `run/resumed`); a rejected answer leaves the interaction pending. The run id of
 an agent run is its execution id.
 
-## Demos shipped
-
-Two demo Profiles ship disabled in `contents/agents/profiles/`:
-
-1. **`todo-worker.json`** — drain-only path. Reads inbox, dynamic-tasks fan-out, writes artifact, marks done.
-2. **`research-and-summarize.json`** — Planner + drain. Plans tasks, runs them, drain handles sub-tasks.
-
-Enable them by setting `"enabled": true` in their JSON, then trigger from the
-admin UI.
-
-### Claude-style autonomous agent (`claude-style-agent`)
-
-A demo profile + external workflow modeled on Claude Code, shipped **disabled**:
-
-- Profile: `contents/agents/profiles/claude-style-agent.json` (references the
-  workflow externally; turns on dynamic tasks, memory, and a per-run token
-  budget).
-- Workflow: `contents/workflows/claude-style-agent.json` — a self-correction
-  loop: `start → agent → verify → {pass: end | retry: agent}`.
-
-The `agent` prompt node plans with `set_plan`, executes with tools while
-keeping one task in progress (`update_task`), and reconsiders as it learns —
-running in a budget- and context-managed tool loop. The `verify` node is a
-**tool-enabled adversarial verifier**: it tries to break the result, and on
-`FAIL`/`PARTIAL` loops back to the agent with the specific gaps until it passes
-(bounded by `maxRetries`). Enable the profile, install a web search engine under
-**Admin → Integrations → Web search** and grant it to the agent's service-account groups, and
-trigger it from the agents admin UI.
-
 ## Crash recovery (resume on boot)
 
 On startup the server reconstructs each interrupted run's definition (agent

@@ -102,24 +102,14 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
  */
 export function convertOpenAIToolsToGeneric(openaiTools = []) {
   return openaiTools.map((tool, index) => {
-    // Handle both nested function format and flat format
-    if (tool.type === 'function' && tool.function) {
-      return createGenericTool(
-        tool.function.name, // Use name as ID
-        tool.function.name,
-        tool.function.description || '',
-        tool.function.parameters || { type: 'object', properties: {} },
-        { originalFormat: 'openai', type: tool.type }
-      );
-    }
-
-    // Handle flat format (legacy or simplified)
+    // Chat Completions tools are nested: { type: 'function', function: { name, ... } }
+    const fn = tool.function || {};
     return createGenericTool(
-      tool.name || tool.id || `tool_${index}`,
-      tool.name || `tool_${index}`,
-      tool.description || '',
-      tool.parameters || { type: 'object', properties: {} },
-      { originalFormat: 'openai' }
+      fn.name || `tool_${index}`, // Use name as ID
+      fn.name || `tool_${index}`,
+      fn.description || '',
+      fn.parameters || { type: 'object', properties: {} },
+      { originalFormat: 'openai', type: tool.type }
     );
   });
 }
