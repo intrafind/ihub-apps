@@ -225,7 +225,9 @@ export default function VoiceModeTryButton({ speech, savedEnabled = true }) {
                           : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                       }`}
                     >
-                      <div className="markdown-content">{message.content}</div>
+                      <div className="markdown-content whitespace-pre-wrap wrap-break-word">
+                        {message.content}
+                      </div>
                     </div>
                   </div>
                 ))

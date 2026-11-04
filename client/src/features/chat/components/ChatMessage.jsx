@@ -862,12 +862,21 @@ function ChatMessage({
       );
     }
 
+    // A plain user message is shown as typed, so the first line keeps its
+    // leading indentation (the display content itself is trimmed).
+    const userText = isUser
+      ? (() => {
+          const plain = splitUserMessageContent(contentToRender, message.rawContent);
+          return plain && !plain.html ? plain.text : null;
+        })()
+      : null;
+
     return (
       <div
         className="wrap-break-word whitespace-pre-wrap"
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
-        {contentToRender}
+        {userText ?? contentToRender}
       </div>
     );
   };

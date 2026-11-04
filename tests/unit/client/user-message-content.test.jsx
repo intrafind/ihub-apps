@@ -20,3 +20,11 @@ test('no raw content or mismatch means no split', () => {
   expect(splitUserMessageContent(badge, typed)).toBeNull();
   expect(splitUserMessageContent(`${typed} ${badge}`, '')).toBeNull();
 });
+
+test('keeps the leading indentation of the first line', () => {
+  const code = '    code\n    next';
+  const r = splitUserMessageContent(`${code.trim()}\n\n${badge}`, code);
+  expect(r.text).toBe(code);
+  expect(r.html.trim()).toBe(badge);
+  expect(splitUserMessageContent(code.trim(), code)).toEqual({ text: code, html: '' });
+});
