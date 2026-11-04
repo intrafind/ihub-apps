@@ -170,9 +170,6 @@ export function buildPersonalKeyEndpoints(req, platform = {}) {
       ? stripTrailingSlash(platform.mcpServer.publicUrl)
       : baseUrl;
     endpoints.mcp = `${mcpBase}/mcp`;
-    if (platform.mcpServer.transports?.sse?.enabled !== false) {
-      endpoints.mcpSse = `${mcpBase}/mcp/sse`;
-    }
   }
 
   if (getPersonalKeyConfig(platform).allowClientCredentials && platform.oauth?.enabled?.authz) {

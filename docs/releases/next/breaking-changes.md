@@ -363,3 +363,15 @@ one of them get `404`.
 
 `/api/docs` now also documents the routes in the files it did not scan before (workflows, prompts,
 user skills, projects, runs, OAuth, well-known metadata, integrations).
+
+## MCP Gateway: The Legacy SSE Transport Is Gone
+
+`GET /mcp/sse` and `POST /mcp/messages` (the 2024-11-05 HTTP+SSE transport) are removed; the
+gateway speaks Streamable HTTP on `/mcp` only. The **SSE (legacy)** toggle on **Admin → MCP
+gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the "MCP endpoint
+(SSE)" row of the personal API keys page are gone. V223 deletes `mcpServer.transports.sse` from
+`platform.json`.
+
+**Before upgrading:** an MCP client configured for the SSE transport has to be switched to
+Streamable HTTP (`http`) on `/mcp`, or connected through a bridge such as `mcp-remote`. Outbound SSE
+to third-party MCP servers is unchanged.

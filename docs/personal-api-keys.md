@@ -98,7 +98,7 @@ The same card lists the endpoints the key works against, so there is no base URL
 
 - the base URL of the deployment
 - the OpenAI-compatible API (`/api/inference/v1`)
-- the MCP gateway (`/mcp` and `/mcp/sse`), when the gateway is enabled
+- the MCP gateway (`/mcp`), when the gateway is enabled
 - the OAuth token endpoint, when client credentials are offered
 
 ## Using a key
