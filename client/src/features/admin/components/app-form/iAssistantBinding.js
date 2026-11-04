@@ -79,7 +79,7 @@ export function syncPinnedScope(binding, iassistant) {
 }
 
 /**
- * Scope settings the panel does not write: a `defaultScope`, or a
+ * Scope settings the panel does not write (the server still honours them): a `defaultScope`, or a
  * `pinnedScope` that is not the one the panel derives (hand-edited JSON).
  * @param {Object} [binding]
  * @param {Object} [iassistant] - `app.iassistant`
@@ -96,7 +96,7 @@ export function legacyScopeSettings(binding, iassistant) {
 }
 
 /**
- * The binding without its legacy scope settings: `defaultScope` goes, and a
+ * The binding without the scope settings the panel does not write: `defaultScope` goes, and a
  * `pinnedScope` is removed, or re-derived while the binding is fixed.
  * @param {Object} [binding]
  * @param {Object} [iassistant] - `app.iassistant`

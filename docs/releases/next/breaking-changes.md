@@ -405,6 +405,13 @@ one of them get `404`.
 `/api/docs` now also documents the routes in the files it did not scan before (workflows, prompts,
 user skills, projects, runs, OAuth, well-known metadata, integrations).
 
+## iFinder Search Hits Lose Duplicate Alias Fields
+
+The iFinder `search` tool no longer repeats values under old names: `mimeType` (use `mediaType`),
+`source` (use `sourceName`), `breadcrumbs` (use `navigationTree`), `lastModified` (use
+`modificationDate`) and `extension` (use `file.extension`). Prompts or workflow nodes of your own
+that read one of the old names have to switch.
+
 ## MCP Gateway: The Legacy SSE Transport Is Gone
 
 `GET /mcp/sse` and `POST /mcp/messages` (the 2024-11-05 HTTP+SSE transport) are removed; the

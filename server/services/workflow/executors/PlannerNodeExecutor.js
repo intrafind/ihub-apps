@@ -193,8 +193,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // Inside a plan-and-review loop the planner runs once per iteration
       // and node.id is constant ('planner'). Suffix the log key by round
       // so iteration N's transcript doesn't overwrite iteration N-1's.
-      // Round 0 stays as plain node.id for backward-compat with non-review
-      // runs and pre-loop tooling.
+      // Round 0 stays as plain node.id, as in runs without a review loop.
       const plannerLogKey = activeReviewRound >= 1 ? `${node.id}_r${activeReviewRound}` : node.id;
       try {
         const { getStateManager } = await import('../StateManager.js');
@@ -504,7 +503,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // them. We still need to merge the recorded log so the UI shows
         // artifacts written from inside the sub-workflow.
         //
-        // Dedupe by name+writtenAt so even if a legacy shared _agent
+        // Dedupe by name+writtenAt so even if a shared _agent
         // reference is in play we don't end up with double entries — the
         // synthesizer's References list would otherwise inherit doubles.
         const childArtifacts = childData._agent?.artifacts;
@@ -1232,7 +1231,7 @@ Output rules:
    * Namespace every task id (and matching dependsOn references) in `plan` for
    * the given review round.
    *
-   * - Round 0 (the initial plan): ids are left unchanged for backward-compat.
+   * - Round 0 (the initial plan): ids are left unchanged.
    * - Round N≥1: every task id that is not already prefixed `r{N}_` gets the
    *   prefix `r{N}_`. Within-round dependsOn references are re-prefixed to
    *   match; cross-round references (ids not emitted by THIS round) are left

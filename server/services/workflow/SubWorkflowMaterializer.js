@@ -146,7 +146,7 @@ export class SubWorkflowMaterializer {
       // schema-bound to choose from templateTools, so its choice is always a
       // subset. Merging would re-add every templateTool and undo the planner's
       // attempt to split webSearch off from function tools.
-      //   - task.tools undefined / missing → inherit templateTools (legacy)
+      //   - task.tools undefined / missing → inherit templateTools
       //   - task.tools === []              → no tools for this task
       //   - task.tools === [...non-empty]  → use exactly these
       const taskToolsExplicit = Array.isArray(task.tools);
@@ -261,16 +261,14 @@ export class SubWorkflowMaterializer {
           // full semantics. The planner's response schema enum-binds each
           // field (tools/apps/projects) to its catalog when the catalog is
           // non-empty, so unknown ids are rejected at structured-output
-          // time. Backward-compat for hand-written plans that omit a field
-          // is via the explicit-array check (omit → inherit template).
+          // time. A plan that omits a field inherits the template, via the
+          // explicit-array check.
           tools: effectiveTools,
           apps: effectiveApps,
           projects: effectiveProjects
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
-          // PromptNodeExecutor._autoPersistResult. The legacy flat
-          // `task_<id>_result` state key it used to produce duplicated
-          // _taskResults[<id>].content and had zero readers.
+          // PromptNodeExecutor._autoPersistResult.
         }
       };
     });
