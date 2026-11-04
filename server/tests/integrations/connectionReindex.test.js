@@ -37,6 +37,9 @@ import {
   REINDEX_MARKER_NAMESPACE,
   reindexIntegrationConnections
 } from '../../services/integrations/auth/connectionReindex.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'connection-reindex-'));
 const tokenDir = path.join(tmp, 'integrations');
@@ -132,8 +135,8 @@ before(async () => {
   await tokenStorage.storeUserTokens('dave', 'googledrive', camel());
   // Per-user MCP: hashed storage id for an OIDC subject, bound to the endpoint.
   await mcpClientManager.shutdown();
-  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: null });
-  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: null });
+  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: scratch.documents });
+  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: scratch.documents });
   await mcpClientManager.initialize({ servers: [MCP_SERVER] });
   await tokenStorage.storeUserTokens(
     tokenStorageIdFor(OIDC_USER),
@@ -170,7 +173,7 @@ before(async () => {
   };
   service = new IntegrationConnectionService({
     documents,
-    flowStore: new OAuthFlowStore({ documents: null }),
+    flowStore: new OAuthFlowStore({ documents: scratch.documents }),
     audit: () => {}
   });
 });

@@ -58,6 +58,9 @@ import {
   unavailableReasonOf
 } from '../../services/integrations/userIntegrations.js';
 import { fakeTokenEndpoint } from '../helpers/integrationConnect.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'user-integrations-'));
 tokenStorageService.encryptionKey = 'e'.repeat(64);
@@ -168,11 +171,12 @@ let connections;
 let tokenEndpoint;
 const originalStrategy = JiraService.oauthStrategy;
 beforeEach(async () => {
+  await scratch.reset();
   // The per-user start limit (20 a minute) is not what these tests exercise.
   for (const user of Object.values(USERS)) await connectLimiter.resetKey(`user:${user.id}`);
   connections = new IntegrationConnectionService({
-    documents: null,
-    flowStore: new OAuthFlowStore({ documents: null })
+    documents: scratch.documents,
+    flowStore: new OAuthFlowStore({ documents: scratch.documents })
   });
   setIntegrationConnectionServiceForTests(connections);
   tokenEndpoint = fakeTokenEndpoint([{ scope: 'read:jira-work offline_access' }]);

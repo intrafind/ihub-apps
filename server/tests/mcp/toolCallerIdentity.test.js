@@ -4,6 +4,9 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Tool calls made for an external caller always run as the authenticated
@@ -81,7 +84,8 @@ const SPOOFED = {
   _chatHistory: [{ role: 'user', content: 'hi' }]
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   runTool.mockClear();
   apps = [];
   grantedTools = new Set(['okta']);
@@ -197,7 +201,7 @@ describe('A2A message/send', () => {
       {
         user: caller,
         platform: { defaultLanguage: 'en', mcpServer: { expose: { workflows: true } } },
-        store: new A2aTaskStore({ documents: null, relayCancel: false })
+        store: new A2aTaskStore({ documents: scratch.documents, relayCancel: false })
       }
     );
     expect(r.result.status.state).toBe('completed');

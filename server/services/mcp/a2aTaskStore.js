@@ -9,11 +9,10 @@
  * messages of one conversation. Both live here.
  *
  * Tasks and contexts are documents on the storage provider (`a2a-tasks`,
- * `a2a-contexts`), owned by the calling principal, with an in-memory copy for
- * the worker that runs the task. The document is what makes `tasks/get` work
- * on a worker other than the one that ran `message/send`; without a provider
- * the store is memory-only and tasks are visible on the worker that created
- * them.
+ * `a2a-contexts`), owned by the calling principal, with an in-memory copy of
+ * the task for the worker that runs it (artifact chunks are not persisted while
+ * a task streams). The document is what makes `tasks/get` work on a worker
+ * other than the one that ran `message/send`.
  *
  * In-flight runs stay local: the AbortController of a running task is kept
  * per worker, and a cancel that lands elsewhere is relayed over the cluster
@@ -24,7 +23,7 @@
  * @module services/mcp/a2aTaskStore
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -99,20 +98,20 @@ export function taskStatus(state, message) {
 export class A2aTaskStore {
   /**
    * @param {Object} [options]
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents] -
-   *   Document store to persist to. Passing `null` pins memory-only mode; leaving
-   *   it out resolves the storage provider lazily on first use.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} [options.documents] -
+   *   Document store to persist to; the storage provider's, resolved lazily on
+   *   first use, when omitted.
    * @param {() => number} [options.now]
    * @param {boolean} [options.relayCancel=true] - Relay cancellations over the cluster bus
    */
   constructor({ documents, now = () => Date.now(), relayCancel = true } = {}) {
-    this._documents = documents;
-    this._pinned = documents !== undefined;
+    this._documents = documents || null;
     this.now = now;
-    /** @type {Map<string, {task: Object, ownerId: string, skillId: string, updatedAt: number}>} */
+    /**
+     * Tasks this worker has loaded or runs, newest copy of a running one.
+     * @type {Map<string, {task: Object, ownerId: string, skillId: string, updatedAt: number}>}
+     */
     this.tasks = new Map();
-    /** @type {Map<string, Object>} */
-    this.contexts = new Map();
     /** @type {Map<string, AbortController>} tasks running on this worker */
     this.runs = new Map();
     /** Cursors of the next sweep page for each namespace, so successive
@@ -129,8 +128,7 @@ export class A2aTaskStore {
   }
 
   _docs() {
-    if (this._pinned) return this._documents || null;
-    return readFacet(getStorage(), 'documents');
+    return this._documents || requireStorage().documents;
   }
 
   // ── tasks ────────────────────────────────────────────────────────────────
@@ -220,10 +218,8 @@ export class A2aTaskStore {
   async _loadTask(taskId) {
     if (typeof taskId !== 'string' || !taskId) return null;
     const local = this.tasks.get(taskId);
-    const documents = this._docs();
-    if (!documents) return local || null;
     try {
-      const doc = await documents.get(A2A_TASKS_NAMESPACE, taskId);
+      const doc = await this._docs().get(A2A_TASKS_NAMESPACE, taskId);
       if (doc?.data?.task) {
         const entry = doc.data;
         // A task this worker is still running has the freshest copy in memory
@@ -234,7 +230,7 @@ export class A2aTaskStore {
         return entry;
       }
     } catch (error) {
-      logger.warn('A2A task read failed; using in-memory copy', {
+      logger.warn("A2A task read failed; using this worker's copy of the task", {
         component: COMPONENT,
         taskId,
         error: error.message
@@ -245,10 +241,10 @@ export class A2aTaskStore {
 
   async _saveTask(entry) {
     remember(this.tasks, entry.task.id, entry);
-    const documents = this._docs();
-    if (!documents) return;
     try {
-      await documents.put(A2A_TASKS_NAMESPACE, entry.task.id, entry, { ownerId: entry.ownerId });
+      await this._docs().put(A2A_TASKS_NAMESPACE, entry.task.id, entry, {
+        ownerId: entry.ownerId
+      });
     } catch (error) {
       logger.warn('A2A task write failed; task is visible on this worker only', {
         component: COMPONENT,
@@ -269,22 +265,16 @@ export class A2aTaskStore {
     if (typeof contextId !== 'string' || !contextId) return null;
     if (typeof ownerId !== 'string' || !ownerId) return null;
     const key = contextStorageKey(contextId, ownerId);
-    let context = this.contexts.get(key) || null;
-    const documents = this._docs();
-    if (documents) {
-      try {
-        const doc = await documents.get(A2A_CONTEXTS_NAMESPACE, key);
-        if (doc?.data?.contextId) {
-          context = doc.data;
-          remember(this.contexts, key, context);
-        }
-      } catch (error) {
-        logger.warn('A2A context read failed; using in-memory copy', {
-          component: COMPONENT,
-          contextId,
-          error: error.message
-        });
-      }
+    let context = null;
+    try {
+      const doc = await this._docs().get(A2A_CONTEXTS_NAMESPACE, key);
+      if (doc?.data?.contextId) context = doc.data;
+    } catch (error) {
+      logger.warn('A2A context read failed', {
+        component: COMPONENT,
+        contextId,
+        error: error.message
+      });
     }
     if (!context || context.ownerId !== ownerId || context.contextId !== contextId) return null;
     return context;
@@ -314,18 +304,14 @@ export class A2aTaskStore {
       updatedAt: this.now()
     };
     const key = contextStorageKey(contextId, ownerId);
-    remember(this.contexts, key, context);
-    const documents = this._docs();
-    if (documents) {
-      try {
-        await documents.put(A2A_CONTEXTS_NAMESPACE, key, context, { ownerId });
-      } catch (error) {
-        logger.warn('A2A context write failed; context is visible on this worker only', {
-          component: COMPONENT,
-          contextId,
-          error: error.message
-        });
-      }
+    try {
+      await this._docs().put(A2A_CONTEXTS_NAMESPACE, key, context, { ownerId });
+    } catch (error) {
+      logger.warn('A2A context write failed', {
+        component: COMPONENT,
+        contextId,
+        error: error.message
+      });
     }
     return context;
   }
@@ -400,14 +386,7 @@ export class A2aTaskStore {
         removed.tasks += 1;
       }
     }
-    for (const [id, context] of this.contexts) {
-      if (now - (context.updatedAt || 0) > CONTEXT_RETENTION_MS) {
-        this.contexts.delete(id);
-        removed.contexts += 1;
-      }
-    }
     const documents = this._docs();
-    if (!documents) return removed;
     try {
       const tasks = await documents.list(A2A_TASKS_NAMESPACE, {
         limit: SWEEP_PAGE_SIZE,

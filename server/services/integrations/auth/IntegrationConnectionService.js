@@ -46,7 +46,7 @@
  * @module services/integrations/auth/IntegrationConnectionService
  */
 import crypto from 'node:crypto';
-import { getStorage, readFacet } from '../../../storage/bootstrap.js';
+import { requireStorage } from '../../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../../storage/namespaces.js';
 import { logAudit } from '../../AuditLogService.js';
 import logger from '../../../utils/logger.js';
@@ -202,21 +202,18 @@ export function resultParams(descriptorOrId, outcome) {
 export class IntegrationConnectionService {
   /**
    * @param {Object} [options]
-   * @param {Object|null} [options.documents] - Document store; `null` pins memory-only mode
+   * @param {Object} [options.documents] - Document store; the storage provider's when omitted
    * @param {import('./oauthFlowStore.js').OAuthFlowStore} [options.flowStore]
    * @param {(installationId: string) => Promise<Object|null>} [options.describe] - Test seam
    * @param {(entry: Object) => void} [options.audit] - Audit writer (default: the audit log)
    * @param {() => number} [options.now]
    */
   constructor({ documents, flowStore, describe, audit, now = () => Date.now() } = {}) {
-    this._documents = documents;
-    this._pinned = documents !== undefined;
+    this._documents = documents || null;
     this._flowStore = flowStore || null;
     this.describe = describe || describeInstallation;
     this.audit = audit || logAudit;
     this.now = now;
-    /** @type {Map<string, Object>} memory-only records */
-    this.memory = new Map();
     /** @type {Map<string, Promise<Object>>} single-flight refreshes per connection id */
     this._refreshes = new Map();
     /** @type {Map<string, number>} failed "connected as" lookups per connection id */
@@ -232,8 +229,7 @@ export class IntegrationConnectionService {
   }
 
   _docs() {
-    if (this._pinned) return this._documents || null;
-    return readFacet(getStorage(), 'documents');
+    return this._documents || requireStorage().documents;
   }
 
   _flows() {
@@ -252,10 +248,8 @@ export class IntegrationConnectionService {
    * @returns {Promise<Object|null>}
    */
   async getConnection(id) {
-    const documents = this._docs();
-    if (!documents) return this.memory.get(id) || null;
     try {
-      const doc = await documents.get(CONNECTIONS_NAMESPACE, id);
+      const doc = await this._docs().get(CONNECTIONS_NAMESPACE, id);
       return doc?.data || null;
     } catch (error) {
       logger.warn('Connection record could not be read', {
@@ -296,13 +290,8 @@ export class IntegrationConnectionService {
       return null;
     }
     const stored = parsed.data;
-    const documents = this._docs();
-    if (!documents) {
-      this.memory.set(stored.id, stored);
-      return stored;
-    }
     const ownerId = stored.principal.type === 'user' ? stored.principal.id : 'system';
-    await documents.put(CONNECTIONS_NAMESPACE, stored.id, stored, { ownerId });
+    await this._docs().put(CONNECTIONS_NAMESPACE, stored.id, stored, { ownerId });
     return stored;
   }
 
@@ -316,10 +305,6 @@ export class IntegrationConnectionService {
    */
   async createConnection(record) {
     const documents = this._docs();
-    if (!documents) {
-      if (this.memory.has(record.id)) return { created: false, record: this.memory.get(record.id) };
-      return { created: true, record: await this.putConnection(record) };
-    }
     const now = this._iso();
     const parsed = validateIntegrationConnection({
       issuer: null,
@@ -365,9 +350,7 @@ export class IntegrationConnectionService {
   }
 
   async _deleteConnection(id) {
-    const documents = this._docs();
-    if (!documents) return this.memory.delete(id);
-    return documents.delete(CONNECTIONS_NAMESPACE, id);
+    return this._docs().delete(CONNECTIONS_NAMESPACE, id);
   }
 
   /**
@@ -384,7 +367,6 @@ export class IntegrationConnectionService {
       record &&
       (!integration || record.integration === integration) &&
       (!userId || (record.principal?.type === 'user' && record.principal.id === userId));
-    if (!documents) return [...this.memory.values()].filter(keep);
     const out = [];
     let cursor = null;
     do {

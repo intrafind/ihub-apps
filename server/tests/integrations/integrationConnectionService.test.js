@@ -33,6 +33,9 @@ import {
   connectThroughService,
   fakeRequest
 } from '../helpers/integrationConnect.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'connection-service-'));
 const saved = {
@@ -88,8 +91,8 @@ let service;
 function newService(now) {
   audit = [];
   const created = new IntegrationConnectionService({
-    documents: null,
-    flowStore: new OAuthFlowStore({ documents: null }),
+    documents: scratch.documents,
+    flowStore: new OAuthFlowStore({ documents: scratch.documents }),
     audit: entry => audit.push(entry),
     ...(now ? { now } : {})
   });
@@ -118,7 +121,8 @@ after(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   rmSync(path.join(tmp, 'googledrive'), { recursive: true, force: true });
   rmSync(path.join(tmp, 'nextcloud'), { recursive: true, force: true });
   resetInstallations();

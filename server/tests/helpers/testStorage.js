@@ -13,6 +13,7 @@
  * after(async () => { await storage.stop(); });
  */
 import fs from 'node:fs/promises';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../../storage/bootstrap.js';
@@ -69,4 +70,45 @@ export function stateRepositoryFor(storage) {
  */
 export function stateManagerFor(storage) {
   return new StateManager({ repository: stateRepositoryFor(storage) });
+}
+
+/**
+ * A document store over a scratch filesystem provider that is not the
+ * process-wide one, for tests that hand a store its own `documents`.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.prefix] - Scratch directory name prefix.
+ * @returns {Promise<{documents: Object, provider: Object, dir: string,
+ *   reset: () => Promise<void>, stop: () => Promise<void>}>}
+ */
+export async function scratchDocuments({ prefix = 'ihub-test-docs-' } = {}) {
+  const { FilesystemStorageProvider } = await import('../../storage/providers/filesystem/index.js');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  const baseDir = path.join(dir, 'data');
+  const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+  await provider.initialize();
+  // Most test files never call `stop()`, so the scratch directory is also removed
+  // when the test process ends.
+  process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
+  return {
+    documents: provider.documents,
+    provider,
+    dir,
+    /** Forget every stored document (between cases that must not share state). */
+    async reset() {
+      for (const entry of await fs.readdir(baseDir)) {
+        // Background writes of the previous case may still be landing.
+        await fs.rm(path.join(baseDir, entry), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 50
+        });
+      }
+    },
+    async stop() {
+      await provider.shutdown();
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    }
+  };
 }

@@ -3,6 +3,9 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import express from 'express';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * End to end: iHub's outbound A2A client against iHub's own inbound A2A
@@ -69,7 +72,10 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 }));
 jest.unstable_mockModule('../../storage/bootstrap.js', () => ({
   getStorage: () => null,
-  readFacet: () => null
+  readFacet: () => null,
+  requireStorage: () => {
+    throw new Error('storage is not bootstrapped in this test');
+  }
 }));
 jest.unstable_mockModule('../../clusterBus.js', () => ({
   publish: jest.fn(() => false),
@@ -95,6 +101,8 @@ const { default: registerMcpServerRoutes } = await import('../../routes/mcpServe
 const { A2aTaskStore, setA2aTaskStoreForTests } =
   await import('../../services/mcp/a2aTaskStore.js');
 const { default: manager } = await import('../../services/a2a/A2aClientManager.js');
+const { A2aClientContextStore } = await import('../../services/a2a/a2aClientContextStore.js');
+manager.contexts = new A2aClientContextStore({ documents: scratch.documents });
 
 let server;
 let base;
@@ -132,7 +140,8 @@ async function useAgent(extra) {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: {
@@ -143,7 +152,7 @@ beforeEach(() => {
       a2a: { enabled: true }
     }
   };
-  setA2aTaskStoreForTests(new A2aTaskStore({ documents: null, relayCancel: false }));
+  setA2aTaskStoreForTests(new A2aTaskStore({ documents: scratch.documents, relayCancel: false }));
   invokeApp.mockReset();
   invokeApp.mockImplementation(async ({ messages, onTextDelta }) => {
     const answer = `Answer to "${messages.at(-1).content}" (${messages.length} messages)`;

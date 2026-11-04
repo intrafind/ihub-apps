@@ -9,6 +9,9 @@ import {
   clientContextKey,
   clientContextRef
 } from '../../services/a2a/a2aClientContextStore.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * The outbound A2A client's conversation memory lives on the storage
@@ -108,7 +111,7 @@ describe('A2aClientContextStore', () => {
   });
 
   it('works memory-only without a storage provider', async () => {
-    const store = new A2aClientContextStore({ documents: null });
+    const store = new A2aClientContextStore({ documents: scratch.documents });
     await store.set(ref, { contextId: 'ctx-1' });
     expect(await store.get(ref)).toEqual({ contextId: 'ctx-1' });
   });

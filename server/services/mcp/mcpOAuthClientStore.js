@@ -14,14 +14,12 @@
  * Records are documents in the `mcp-oauth-clients` namespace of the storage
  * provider, keyed by server id, so every worker sees the same registration.
  * A DCR client secret is stored `ENC[...]`-encrypted with the token store's
- * key. Without a storage provider the store is memory-only (one registration
- * per worker; the authorization servers used here register public clients,
- * so a second registration is harmless).
+ * key.
  *
  * @module services/mcp/mcpOAuthClientStore
  */
 import crypto from 'node:crypto';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
@@ -76,22 +74,17 @@ export function registrationFingerprint(serverConfig) {
 export class McpOAuthClientStore {
   /**
    * @param {Object} [options]
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents] -
-   *   Document store; `null` pins memory-only mode, leaving it out resolves the
-   *   provider lazily.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} [options.documents] -
+   *   Document store; the bootstrapped provider's, resolved lazily, when omitted.
    * @param {() => number} [options.now]
    */
   constructor({ documents, now = () => Date.now() } = {}) {
-    this._documents = documents;
-    this._pinned = documents !== undefined;
+    this._documents = documents || null;
     this.now = now;
-    /** @type {Map<string, McpOAuthClientRegistration>} */
-    this.memory = new Map();
   }
 
   _docs() {
-    if (this._pinned) return this._documents || null;
-    return readFacet(getStorage(), 'documents');
+    return this._documents || requireStorage().documents;
   }
 
   /**
@@ -101,27 +94,12 @@ export class McpOAuthClientStore {
    */
   async get(serverId) {
     if (typeof serverId !== 'string' || !serverId) return null;
-    const documents = this._docs();
-    if (documents) {
-      try {
-        const doc = await documents.get(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
-        if (doc?.data?.clientId) {
-          this.memory.set(serverId, doc.data);
-          return doc.data;
-        }
-        // The document store is authoritative: a record only in memory here
-        // was removed elsewhere.
-        this.memory.delete(serverId);
-        return null;
-      } catch (error) {
-        logger.warn('MCP OAuth client registration read failed; using in-memory copy', {
-          component: COMPONENT,
-          serverId,
-          error: error.message
-        });
-      }
-    }
-    return this.memory.get(serverId) || null;
+    // A failed read is not "no registration": answering null would make the
+    // connect flow register a new DCR client and overwrite the shared record,
+    // which ends the refresh tokens of every user bound to the old client. The
+    // failure propagates, so the caller fails and the registration stays.
+    const doc = await this._docs().get(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
+    return doc?.data?.clientId ? doc.data : null;
   }
 
   /**
@@ -169,18 +147,14 @@ export class McpOAuthClientStore {
     } else {
       delete record.clientSecret;
     }
-    this.memory.set(serverId, record);
-    const documents = this._docs();
-    if (documents) {
-      try {
-        await documents.put(MCP_OAUTH_CLIENTS_NAMESPACE, serverId, record, { ownerId: 'system' });
-      } catch (error) {
-        logger.warn('MCP OAuth client registration write failed; kept on this worker only', {
-          component: COMPONENT,
-          serverId,
-          error: error.message
-        });
-      }
+    try {
+      await this._docs().put(MCP_OAUTH_CLIENTS_NAMESPACE, serverId, record, { ownerId: 'system' });
+    } catch (error) {
+      logger.warn('MCP OAuth client registration write failed', {
+        component: COMPONENT,
+        serverId,
+        error: error.message
+      });
     }
     return record;
   }
@@ -205,11 +179,8 @@ export class McpOAuthClientStore {
    * @returns {Promise<void>}
    */
   async clear(serverId) {
-    this.memory.delete(serverId);
-    const documents = this._docs();
-    if (!documents) return;
     try {
-      await documents.delete(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
+      await this._docs().delete(MCP_OAUTH_CLIENTS_NAMESPACE, serverId);
     } catch (error) {
       logger.warn('MCP OAuth client registration delete failed', {
         component: COMPONENT,
