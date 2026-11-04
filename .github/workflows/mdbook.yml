@@ -28,7 +28,7 @@ jobs:
           cache: 'npm'
 
       - name: Setup mdBook and Rust
-        uses: $/.github/actions/setup-mdbook-rust
+        uses: ./.github/actions/setup-mdbook-rust
 
       # - name: Install Chromium (for PDF generation)
       #   run: |
