@@ -191,7 +191,7 @@ export function AuthProvider({ children }) {
             // Remove any existing auth-related query parameters
             const cleanUrl = currentUrl.split('?')[0];
             const searchParams = new URLSearchParams(window.location.search);
-            searchParams.delete('token');
+            searchParams.delete('oidc');
             searchParams.delete('provider');
             searchParams.delete('logout');
             const queryString = searchParams.toString();
@@ -307,28 +307,20 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Handle OIDC callback (extract token from URL)
+  // Handle the OIDC callback: the server set the httpOnly session cookie and redirected here
   const handleOidcCallback = useCallback(async () => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get('token');
 
-      if (token) {
-        // OIDC callback processing - allow all manual logins
-        console.log('🔍 OIDC Callback: Processing login token');
-
+      if (urlParams.get('oidc') === 'success') {
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
 
-        // Login with the token (will handle redirect to authReturnUrl)
-        const result = await loginWithToken(token);
+        // Pick the session up from the cookie, then return to the page the user came from
+        await loadAuthStatus();
+        redirectToReturnUrl('oidc login');
 
-        if (result.success) {
-          // Refresh auth status to ensure all components are updated
-          await loadAuthStatus();
-        }
-
-        return result;
+        return { success: true };
       }
     } catch (error) {
       console.error('OIDC callback error:', error);
@@ -351,7 +343,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Check if this is an OIDC callback
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('token') && urlParams.get('provider')) {
+    if (urlParams.get('oidc') === 'success') {
       handleOidcCallback();
     } else {
       loadAuthStatus();
