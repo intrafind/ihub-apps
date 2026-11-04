@@ -478,6 +478,13 @@ install apps, models, prompts, skills, workflows and integrations as usual.
 
 See [Marketplace → Air-gapped installations](../../marketplace.md#air-gapped-installations).
 
+## Localization: Edit Translation Overrides in the Admin UI
+
+**Admin → Customization → Localization** now lets you overwrite labels and translations without
+editing files. The editor opens on the keys you changed; search by key or text to find any other
+label, edit it per language and save, or reset a key to the built-in text. Changes are stored in
+`contents/locales/{lang}.json` and apply immediately.
+
 ## Configure Group Inheritance in the Group Editor
 
 Admins can now choose which parent groups a group inherits from directly in **Admin → Groups**,
