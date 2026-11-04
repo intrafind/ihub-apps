@@ -78,42 +78,4 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
   }
 });
 
-/**
- * Test JIRA connection
- * GET /api/integrations/jira/test
- */
-router.get('/test', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    // Test connection by getting user info
-    const userInfo = await JiraService.getUserInfo(req.user.id);
-
-    // Test a simple search
-    const testSearch = await JiraService.searchTickets({
-      jql: 'assignee = currentUser() ORDER BY updated DESC',
-      maxResults: 1,
-      userId: req.user.id
-    });
-
-    res.json({
-      success: true,
-      userInfo: {
-        displayName: userInfo.displayName,
-        emailAddress: userInfo.emailAddress,
-        accountType: userInfo.accountType
-      },
-      testResults: {
-        canSearchTickets: true,
-        accessibleTickets: testSearch.total
-      },
-      message: 'JIRA connection test successful'
-    });
-  } catch (error) {
-    return sendInternalError(res, error, 'test JIRA connection');
-  }
-});
-
 export default router;

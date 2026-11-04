@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { loginUser, createUser } from '../middleware/localAuth.js';
-import { createAuthorizationMiddleware } from '../utils/authorization.js';
+import { loginUser } from '../middleware/localAuth.js';
 import {
   getConfiguredProviders,
   createOidcAuthHandler,
@@ -10,17 +9,8 @@ import {
   configuredProviders
 } from '../middleware/oidcAuth.js';
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
-import {
-  processNtlmLogin,
-  getNtlmConfig,
-  markNtlmRequested,
-  clearNtlmRequested
-} from '../middleware/ntlmAuth.js';
-import {
-  teamsTokenExchange,
-  teamsTabConfigSave,
-  teamsClientConfig
-} from '../middleware/teamsAuth.js';
+import { processNtlmLogin, markNtlmRequested, clearNtlmRequested } from '../middleware/ntlmAuth.js';
+import { teamsTokenExchange, teamsClientConfig } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
 import { isJiraConfigured } from '../services/integrations/jiraConfig.js';
 import { cloudStorageStatus } from '../services/integrations/cloudStorageConfig.js';
@@ -32,7 +22,6 @@ import { logAudit } from '../services/AuditLogService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
-import { localUsersFile } from '../utils/contentsPath.js';
 import { LoginLockedError } from '../utils/loginLockout.js';
 
 /**
@@ -637,37 +626,6 @@ export default function registerAuthRoutes(app) {
   });
 
   /**
-   * Create new user (admin only)
-   */
-  app.post(
-    buildServerPath('/api/auth/users'),
-    createAuthorizationMiddleware({ requireAdmin: true }),
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const localAuthConfig = platform.localAuth || {};
-
-        if (!localAuthConfig.enabled) {
-          return sendBadRequest(res, 'Local authentication is not enabled');
-        }
-
-        const userData = req.body;
-        const usersFilePath = localUsersFile(localAuthConfig);
-
-        const newUser = await createUser(userData, usersFilePath);
-
-        res.status(201).json({
-          success: true,
-          user: newUser
-        });
-      } catch (error) {
-        logger.error('User creation error', { component: 'Auth', error });
-        return sendBadRequest(res, error.message || 'Failed to create user');
-      }
-    }
-  );
-
-  /**
    * Get authentication status and configuration
    */
   app.get(buildServerPath('/api/auth/status'), (req, res) => {
@@ -792,49 +750,6 @@ export default function registerAuthRoutes(app) {
     };
 
     res.json(status);
-  });
-
-  /**
-   * OIDC provider authentication routes
-   */
-  app.get(buildServerPath('/api/auth/oidc/providers'), (req, res) => {
-    const providers = getConfiguredProviders();
-    res.json({
-      success: true,
-      providers
-    });
-  });
-
-  /**
-   * LDAP provider list
-   */
-  app.get(buildServerPath('/api/auth/ldap/providers'), (req, res) => {
-    const providers = getConfiguredLdapProviders();
-    res.json({
-      success: true,
-      providers
-    });
-  });
-
-  /**
-   * NTLM authentication status
-   */
-  app.get(buildServerPath('/api/auth/ntlm/status'), (req, res) => {
-    const ntlmConfig = getNtlmConfig();
-    res.json({
-      success: true,
-      enabled: ntlmConfig?.enabled ?? false,
-      domain: ntlmConfig?.domain,
-      type: ntlmConfig?.type || 'ntlm',
-      authenticated: req.ntlm?.Authenticated ?? false,
-      user: req.ntlm?.Authenticated
-        ? {
-            username: req.ntlm.UserName || req.ntlm.username,
-            domain: req.ntlm.Domain || req.ntlm.domain,
-            workstation: req.ntlm.Workstation || req.ntlm.workstation
-          }
-        : null
-    });
   });
 
   /**
@@ -1019,12 +934,6 @@ export default function registerAuthRoutes(app) {
    * POST /api/auth/teams/exchange
    */
   app.post(buildServerPath('/api/auth/teams/exchange'), teamsTokenExchange);
-
-  /**
-   * Teams tab configuration save
-   * POST /api/auth/teams/config
-   */
-  app.post(buildServerPath('/api/auth/teams/config'), teamsTabConfigSave);
 
   /**
    * Teams client configuration (public Azure AD client/tenant IDs)
