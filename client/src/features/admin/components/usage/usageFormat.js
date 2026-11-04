@@ -107,7 +107,9 @@ export function toCsv(headers, rows) {
   const cell = value => {
     if (value === null || value === undefined) return '';
     const text = String(value);
-    return /[",\n\r]/.test(text) || /^[=+\-@]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    return /[",\n\r]/.test(text) || /^[=+\-@]/.test(text)
+      ? `"${text.replaceAll('"', '""')}"`
+      : text;
   };
   return [headers, ...rows].map(row => row.map(cell).join(',')).join('\n');
 }

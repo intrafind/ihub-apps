@@ -27,6 +27,9 @@ import { buildCallRecord, buildFeedbackRecord, reportGroupsOf } from './callReco
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
 
+/** The one-way fingerprint functions identities are resolved with. */
+const FINGERPRINTS = Object.freeze({ fingerprint, fingerprintConversation });
+
 /** Whether usage tracking is on (`features.usageTracking`). */
 export function isUsageTrackingEnabled() {
   try {
@@ -52,10 +55,7 @@ export function getUsageTrackingMode() {
  * @param {Object} [deps] - fingerprint functions (tests)
  * @returns {Promise<{uid: string|null, cid: string|null}>}
  */
-export async function resolveIdentity(
-  { user, conversationId, mode },
-  deps = { fingerprint, fingerprintConversation }
-) {
+export async function resolveIdentity({ user, conversationId, mode }, deps = FINGERPRINTS) {
   const key = user ? quotaUserKey(user) : null;
   const conv = conversationId ? String(conversationId) : null;
   if (mode === 'identified') return { uid: key, cid: conv };

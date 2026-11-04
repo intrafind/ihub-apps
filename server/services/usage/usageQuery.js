@@ -408,5 +408,5 @@ export async function getFeedbackSummary(params, now = Date.now()) {
 /** Oldest day with data, for the range picker. */
 export async function getDataStart() {
   const [events, rollups] = await Promise.all([listEventDays(), listDailyRollupDays()]);
-  return [events[0], rollups[0]].filter(Boolean).sort()[0] || null;
+  return [events[0], rollups[0]].filter(Boolean).sort((a, b) => a.localeCompare(b))[0] || null;
 }

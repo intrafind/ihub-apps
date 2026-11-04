@@ -180,7 +180,11 @@ export default function BreakdownTable({ state }) {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead>
                 <tr>
-                  <th className="w-8" aria-hidden="true" />
+                  <th className="w-8">
+                    <span className="sr-only">
+                      {t('admin.usage.reports.perModel', 'Per model')}
+                    </span>
+                  </th>
                   {columns.map(([key, label]) => (
                     <th
                       key={key}
