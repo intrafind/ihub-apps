@@ -390,8 +390,11 @@
 
     // Re-fetch auth status and show UI
     renderLoading(root);
+    // Ignore a response that arrives after the embedded gate was replaced or hidden.
+    var requestEmbedded = embedded;
     fetchAuthStatus()
       .then(function (data) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         authConfig = data;
         gateUI = data.gateUI || null;
         if (data.authenticated) {
@@ -407,15 +410,21 @@
         renderAuthUI(root);
       })
       .catch(function (err) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         renderError(root, err.message || t('serverError'));
       });
   }
 
   // Embedded login completed: refresh React auth state and notify the host.
   function finishEmbedded() {
-    var onSuccess = embedded && embedded.onSuccess;
+    var current = embedded;
+    var onSuccess = current && current.onSuccess;
     window.dispatchEvent(new CustomEvent('authGateSuccess'));
     if (typeof onSuccess === 'function') onSuccess();
+    // The host may keep the gate mounted (e.g. it rejects a non-admin login and
+    // offers sign-out). Reset the submitted form so it is usable again; if the
+    // host unmounted the gate in the meantime, there is nothing to render.
+    if (embedded === current && authConfig && !isSubmitting) renderAuthUI(current.container);
   }
 
   function hideGate() {
