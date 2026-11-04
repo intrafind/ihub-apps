@@ -28,6 +28,7 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentCheckIcon,
   NewspaperIcon,
+  BookOpenIcon,
   MicrophoneIcon,
   StarIcon,
   ChatBubbleLeftRightIcon,
@@ -35,7 +36,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 /**
- * Returns the 7-section sidebar navigation structure.
+ * Returns the 8-section sidebar navigation structure.
  *
  * @param {object} params
  * @param {function} params.t - i18n translation function
@@ -64,7 +65,7 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
     },
     {
       id: 'whatsNew',
-      label: t('admin.nav.changelog', "What's New"),
+      label: t('admin.sidebar.sections.whatsNewAndDocs', "What's New & Docs"),
       icon: NewspaperIcon,
       items: [
         {
@@ -72,6 +73,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           label: t('admin.nav.changelog', "What's New"),
           href: '/admin/changelog',
           icon: NewspaperIcon,
+          visible: true
+        },
+        {
+          key: 'docs',
+          label: t('admin.nav.docs', 'Documentation'),
+          href: '/admin/docs',
+          icon: BookOpenIcon,
           visible: true
         }
       ]

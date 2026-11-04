@@ -18,7 +18,7 @@ const outputDir = path.join(__dirname, 'dist-bin');
 const defaultConfigDir = path.join(__dirname, 'server', 'defaults');
 const clientPublicDir = path.join(__dirname, 'client/dist');
 const browserExtensionDir = path.join(__dirname, 'browser-extension');
-const docsBookDir = path.join(__dirname, 'docs/book');
+const docsDir = path.join(__dirname, 'docs');
 const docsReleasesDir = path.join(__dirname, 'docs/releases');
 const serverDir = path.join(__dirname, 'server');
 const configEnvPath = path.join(__dirname, 'config.env');
@@ -546,9 +546,18 @@ try {
     });
   }
 
-  // Copy generated documentation
-  if (fs.existsSync(docsBookDir)) {
-    fs.cpSync(docsBookDir, path.join(outputDir, 'docs'), { recursive: true });
+  // Copy the documentation Markdown and its images (rendered by Admin → Documentation)
+  if (fs.existsSync(docsDir)) {
+    fs.mkdirSync(path.join(outputDir, 'docs'), { recursive: true });
+    for (const name of fs.readdirSync(docsDir)) {
+      if (name.toLowerCase().endsWith('.md')) {
+        fs.copyFileSync(path.join(docsDir, name), path.join(outputDir, 'docs', name));
+      }
+    }
+    const docsAssetsDir = path.join(docsDir, 'assets');
+    if (fs.existsSync(docsAssetsDir)) {
+      fs.cpSync(docsAssetsDir, path.join(outputDir, 'docs', 'assets'), { recursive: true });
+    }
   }
 
   // Copy release notes (read by the admin changelog endpoint at runtime)
