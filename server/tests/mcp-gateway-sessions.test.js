@@ -39,7 +39,7 @@ jest.unstable_mockModule('../middleware/mcpAuth.js', () => ({
 const platform = {
   mcpServer: {
     enabled: true,
-    transports: { streamableHttp: { enabled: true }, sse: { enabled: false } }
+    transports: { streamableHttp: { enabled: true } }
   }
 };
 
@@ -411,50 +411,5 @@ describe('MCP gateway session handling', () => {
     terminate({ sessionId: nextSessionId, userId: 'user-1' });
     await new Promise(resolve => setImmediate(resolve));
     expect(close).toHaveBeenCalled();
-  });
-
-  it('relays a legacy SSE message to the worker holding the stream', async () => {
-    const sessionId = 'sse-on-worker-2';
-    bus.remote.add(`mcp-sse-session:${sessionId}`);
-    bus.reply = { status: 202 };
-    const message = { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} };
-
-    const res = await request(makeApp())
-      .post(`/mcp/messages?sessionId=${sessionId}`)
-      .set('Authorization', 'Bearer secret-token')
-      .send(message);
-
-    expect(res.status).toBe(202);
-    expect(bus.requests).toHaveLength(1);
-    const [relayed] = bus.requests;
-    expect(relayed.type).toBe('mcp-sse:message');
-    expect(relayed.options.route).toEqual({ kind: 'mcp-sse-session', key: sessionId });
-    expect(relayed.payload).toMatchObject({ sessionId, userId: 'user-1', body: message });
-    // Credentials never cross to the other worker.
-    expect(relayed.payload.headers.authorization).toBeUndefined();
-  });
-
-  it('passes on the owner refusing a relayed SSE message for another user', async () => {
-    const sessionId = 'sse-of-someone-else';
-    bus.remote.add(`mcp-sse-session:${sessionId}`);
-    bus.reply = { status: 403 };
-
-    const res = await request(makeApp())
-      .post(`/mcp/messages?sessionId=${sessionId}`)
-      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('answers 404 when the worker holding the SSE stream does not reply', async () => {
-    const sessionId = 'sse-gone';
-    bus.remote.add(`mcp-sse-session:${sessionId}`);
-    bus.reply = null;
-
-    const res = await request(makeApp())
-      .post(`/mcp/messages?sessionId=${sessionId}`)
-      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
-
-    expect(res.status).toBe(404);
   });
 });

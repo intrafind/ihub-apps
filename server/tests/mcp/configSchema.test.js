@@ -175,12 +175,12 @@ describe('mcpServersFileSchema', () => {
 });
 
 describe('mcpGatewayConfigSchema', () => {
-  it('defaults to disabled with stream + sse transports enabled and resources off', () => {
+  it('defaults to disabled with the Streamable HTTP transport enabled and resources off', () => {
     const result = mcpGatewayConfigSchema.safeParse({});
     expect(result.success).toBe(true);
     expect(result.data.enabled).toBe(false);
     expect(result.data.transports.streamableHttp.enabled).toBe(true);
-    expect(result.data.transports.sse.enabled).toBe(true);
+    expect(result.data.transports.sse).toBeUndefined();
     expect(result.data.expose.resources).toBe(false);
   });
 });

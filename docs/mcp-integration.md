@@ -867,8 +867,6 @@ With the gateway enabled the endpoints go live at:
 POST   /mcp           # Streamable HTTP (canonical)
 GET    /mcp           # Streamable HTTP SSE upgrade
 DELETE /mcp           # Session termination
-GET    /mcp/sse       # Legacy SSE
-POST   /mcp/messages  # Legacy SSE client→server
 GET    /mcp/.well-known   # Public unauthenticated discovery
 ```
 
@@ -1330,8 +1328,7 @@ spread across workers round-robin (`WORKERS` defaults to 4), so a client's
 `initialize` and its follow-up `tools/call` usually reach different workers,
 and the workers share which sessions exist. A request for a session another
 worker holds is served on the worker that received it, `DELETE /mcp` is
-forwarded to the owning worker, and legacy SSE messages are relayed to the
-worker holding the SSE stream. Every worker answers `403` for a session that
+forwarded to the owning worker. Every worker answers `403` for a session that
 belongs to another user: a session id carries a hash of the user it was
 issued to, so the check needs no round trip to the owning worker.
 
@@ -1595,10 +1592,11 @@ Troubleshooting:
     has no push channel" and carries on, so tools still list and run.
     Sign-in works, tools work, and a `405` shows up once per connection —
     nothing to fix.
-  - **Wrong transport.** A client configured for the _legacy SSE_
+  - **Wrong transport.** A client configured for the old HTTP+SSE
     transport but pointed at `/mcp`. It needs a GET stream and cannot
-    recover from the `405`. Point it at `/mcp/sse`, or reconfigure it as
-    a Streamable HTTP (`http`) client on `/mcp`.
+    recover from the `405`. The gateway speaks Streamable HTTP only:
+    reconfigure it as a Streamable HTTP (`http`) client on `/mcp`, or put a
+    bridge such as `mcp-remote` in front of it.
   - **Header stripped in transit.** A reverse proxy dropping the
     `Mcp-Session-Id` request header. The give-away is `405` with
     `hadSessionHeader: false` _after_ a successful `initialize`, usually
