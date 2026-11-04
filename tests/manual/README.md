@@ -27,6 +27,5 @@ If you fix a bug in one of these areas going forward, prefer adding real coverag
 | `test-audio-extraction.html`                     | Audio extraction from uploads                            |
 | `test-client-secret-preservation.js`             | OAuth client secret preservation                         |
 | `test-encryption-workflow.js`                    | Environment variable encryption/decryption               |
-| `test-nda-prompt.js`                             | NDA risk-analyzer prompt                                 |
 | `test-oidc-provider-selector.sh`                 | OIDC provider template selector                          |
 | `test-sources-disabled-fix.js`                   | App editor behavior when the sources feature is disabled |

@@ -10,6 +10,7 @@
  * arguments forwarded by recordTokenUsage.
  */
 
+import { jest } from '@jest/globals';
 import { initializeMetrics, recordTokenUsage } from '../telemetry/metrics.js';
 
 function makeFakeMeterProvider() {

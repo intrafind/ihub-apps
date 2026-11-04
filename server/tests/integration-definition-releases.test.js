@@ -9,7 +9,7 @@
  * the migration did to their installations (Admin → Integrations → an
  * installation → Releases).
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
