@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Migration V217 — reset usage reporting data
+ * Migration V218 — reset usage reporting data
  *
  * Usage reporting moved to one call record (schema v2) per model call,
  * written by LLMClient for every surface, keyed on the real user. The old
@@ -14,7 +14,7 @@ import path from 'node:path';
  * deleted once. The quota ledger (`data/quota-usage.json`) is left alone.
  */
 
-export const version = '217';
+export const version = '218';
 export const description = 'reset_usage_data';
 
 const TARGETS = [
