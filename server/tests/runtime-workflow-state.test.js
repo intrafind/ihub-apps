@@ -4,16 +4,13 @@
 /**
  * Workflow state on the storage provider: `WorkflowStateRepository`, the
  * checkpoint path through `StateManager`, the two boot sweeps that read it,
- * and the one-time import of the legacy `<executionId>/latest.json`
- * directories.
+ * and the legacy `<executionId>/latest.json` directories.
  *
  * The namespace shares a directory with the layout it replaces, so almost
  * every case here is really about the union of the two halves. The one that
- * matters most is the half-imported installation: the import is bounded and
- * idempotent, so a real upgrade sits in that state for a while, and a scanner
- * that saw only the documents would report an installation full of
- * interrupted runs as empty — leaving every one of them stuck at `running`
- * for ever.
+ * matters most is the partly migrated installation: a scanner that saw only
+ * the documents would report an installation full of interrupted runs as
+ * empty — leaving every one of them stuck at `running` for ever.
  *
  * Contract: `RUNTIME_STORES_CONTRACT.md` §5 and D5.
  */
@@ -27,9 +24,6 @@ import {
   WorkflowStateRepository,
   WORKFLOW_STATE_NAMESPACE,
   LEGACY_STATE_FILE,
-  IMPORT_STATE_NAMESPACE,
-  IMPORT_STATE_KEY,
-  importLegacyWorkflowStates,
   workflowStateOwnerId,
   getWorkflowStateRepository,
   resolveWorkflowStateRepository
@@ -497,21 +491,12 @@ describe('orphan sweep through the repository', () => {
     });
   });
 
-  it('sees a half-imported installation, not an empty one', async () => {
+  it('sees a partly migrated installation, not an empty one', async () => {
     await withRepository(async ({ repository, stateDir, provider }) => {
-      // Two interrupted runs on disk in the old layout; the import is bounded
-      // to one, which is exactly what a large installation looks like part way
-      // through its first boot on the new release.
+      // One interrupted run as a document, one only in the old layout: what an
+      // installation looks like while only part of its states are documents.
       await writeLegacyState(stateDir, 'wf-exec-a', state('wf-exec-a'));
-      await writeLegacyState(stateDir, 'wf-exec-b', state('wf-exec-b'));
-
-      const imported = await importLegacyWorkflowStates({
-        repository,
-        maxStates: 1,
-        logger: recordingLogger().logger
-      });
-      assert.equal(imported.imported, 1);
-      assert.equal(imported.truncated, true);
+      await repository.write('wf-exec-b', state('wf-exec-b'), { ownerId: OWNER });
 
       const documents = await provider.documents.list(WORKFLOW_STATE_NAMESPACE, {
         includeData: false
@@ -580,105 +565,6 @@ describe('resume through the repository', () => {
       assert.deepEqual(result.skipped, ['wf-exec-unknown']);
       assert.deepEqual(resumed, ['wf-exec-known']);
     });
-  });
-});
-
-describe('importLegacyWorkflowStates', () => {
-  it('carries the legacy directories into the namespace, owner and all', async () => {
-    await withRepository(async ({ repository, provider, stateDir, lines }) => {
-      await writeLegacyState(stateDir, 'wf-exec-1', state('wf-exec-1'));
-      await writeLegacyState(
-        stateDir,
-        'wf-exec-agent',
-        state('wf-exec-agent', { data: { _agent: { profileId: 'p-7' } } })
-      );
-      await writeLegacyState(stateDir, 'wf-child-1', state('wf-child-1'));
-
-      const result = await importLegacyWorkflowStates({
-        repository,
-        logger: recordingLogger().logger
-      });
-
-      assert.equal(result.ran, true);
-      assert.equal(result.imported, 3, 'sub-workflow states are carried over too');
-      assert.equal(result.truncated, false);
-      assert.equal(
-        (await provider.documents.get(WORKFLOW_STATE_NAMESPACE, 'wf-exec-1')).ownerId,
-        OWNER
-      );
-      assert.equal(
-        (await provider.documents.get(WORKFLOW_STATE_NAMESPACE, 'wf-exec-agent')).ownerId,
-        'agent:p-7'
-      );
-      assert.deepEqual(
-        lines.filter(line => line.level === 'error'),
-        []
-      );
-    });
-  });
-
-  it('leaves the legacy directories exactly where they are', async () => {
-    await withRepository(async ({ repository, stateDir }) => {
-      const file = await writeLegacyState(stateDir, 'wf-exec-1', state('wf-exec-1'));
-      const before = await fs.readFile(file, 'utf8');
-
-      await importLegacyWorkflowStates({ repository, logger: recordingLogger().logger });
-
-      assert.equal(await fs.readFile(file, 'utf8'), before);
-      assert.equal(
-        (await repository.listLegacy()).items.length,
-        1,
-        'the legacy copy is still the fallback for anything not yet carried over'
-      );
-    });
-  });
-
-  it('is idempotent, and never overwrites a newer document', async () => {
-    await withRepository(async ({ repository, provider, stateDir }) => {
-      await writeLegacyState(stateDir, 'wf-exec-1', state('wf-exec-1', { workflowId: 'old' }));
-
-      const first = await importLegacyWorkflowStates({
-        repository,
-        logger: recordingLogger().logger
-      });
-      assert.equal(first.imported, 1);
-
-      const second = await importLegacyWorkflowStates({
-        repository,
-        logger: recordingLogger().logger
-      });
-      assert.equal(second.ran, false);
-      assert.equal(second.reason, 'already-imported');
-      assert.ok(
-        (await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY)).data.completedAt
-      );
-
-      // A checkpoint written after the import must not be rolled back by a
-      // forced re-run.
-      await repository.write('wf-exec-1', state('wf-exec-1', { workflowId: 'new' }));
-      const third = await importLegacyWorkflowStates({
-        repository,
-        force: true,
-        logger: recordingLogger().logger
-      });
-      assert.equal(third.imported, 0);
-      assert.equal(third.skipped, 1);
-      assert.equal((await repository.read('wf-exec-1')).workflowId, 'new');
-    });
-  });
-
-  it('reports unavailable storage instead of throwing', async () => {
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-noprovider-'));
-    try {
-      const result = await importLegacyWorkflowStates({
-        repository: new WorkflowStateRepository({ stateDir, logger: recordingLogger().logger }),
-        logger: recordingLogger().logger
-      });
-      assert.equal(result.ran, false);
-      assert.equal(result.reason, 'storage-unavailable');
-    } finally {
-      await fs.rm(stateDir, { recursive: true, force: true });
-    }
   });
 });
 

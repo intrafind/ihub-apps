@@ -335,11 +335,11 @@ describe('chat persistence policy: the real storage probe', () => {
     }
   });
 
-  it('a broken storage configuration degrades instead of throwing', async () => {
+  it('a broken storage configuration fails the bootstrap instead of degrading', async () => {
     try {
-      const provider = await bootstrapStorage({ storage: { provider: 'no-such-backend' } });
-
-      assert.equal(provider, null);
+      await assert.rejects(() => bootstrapStorage({ storage: { provider: 'no-such-backend' } }), {
+        code: 'STORAGE_BOOTSTRAP_FAILED'
+      });
       assert.equal(isStorageReady(), false);
       assert.equal(isChatHistoryConfigured(FLAG_ON, {}), false);
     } finally {

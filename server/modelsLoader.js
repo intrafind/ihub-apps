@@ -8,8 +8,7 @@ import logger from './utils/logger.js';
 /**
  * Models Loader Service
  *
- * This service loads models from both individual files in contents/models/
- * and the legacy models.json file for backward compatibility.
+ * This service loads models from the individual files in contents/models/.
  *
  * Uses the generic resource loader factory to eliminate code duplication.
  */
@@ -53,7 +52,6 @@ function ensureOneDefaultModel(models) {
 // Create the models resource loader
 const modelsLoader = createResourceLoader({
   resourceName: 'Models',
-  legacyPath: 'config/models.json',
   individualPath: 'models',
   validateItem: createSchemaValidator(modelConfigSchema, knownModelKeys),
   postProcess: ensureOneDefaultModel
@@ -69,17 +67,7 @@ export async function loadModelsFromFiles(verbose = true) {
 }
 
 /**
- * Load models from legacy models.json file
- * @param {boolean} verbose - Whether to log verbose output
- * @returns {Array} Array of model objects
- */
-export async function loadModelsFromLegacyFile(verbose = true) {
-  return await modelsLoader.loadFromLegacy(verbose);
-}
-
-/**
- * Load all models from both sources
- * Individual files take precedence over legacy models.json
+ * Load all models
  * @param {boolean} includeDisabled - Whether to include disabled models
  * @param {boolean} verbose - Whether to log verbose output
  * @returns {Array} Array of model objects

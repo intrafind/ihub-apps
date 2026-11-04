@@ -148,14 +148,6 @@ const IHUB_ENV_PREFIXES = {
 };
 
 /**
- * platform.json blocks that became installed integrations (V192). An
- * `IHUB_PLATFORM__I_FINDER__*` / `IHUB_PLATFORM__I_ASSISTANT__*` override
- * still set after the upgrade is ignored with a warning (once per variable).
- */
-const MOVED_PLATFORM_BLOCKS = new Set(['iFinder', 'iAssistant']);
-const warnedMovedOverrides = new Set();
-
-/**
  * Per-cache-key config paths that must NOT be passed through env var
  * substitution. Used by `setCacheEntry` to opt specific fields out.
  *
@@ -183,13 +175,6 @@ function applyIhubEnvOverrides(configPath, data) {
   for (const [envKey, envValue] of Object.entries(process.env)) {
     const pathParts = envOverridePath(envKey, prefix);
     if (!pathParts) continue;
-
-    if (configPath === 'config/platform.json' && MOVED_PLATFORM_BLOCKS.has(pathParts[0])) {
-      // The block left platform.json (V192): the override would land on a key
-      // nothing reads. Say so once instead of silently doing nothing.
-      warnMovedOverrideOnce(envKey, pathParts[0]);
-      continue;
-    }
 
     const parsedValue = parseEnvValue(envValue);
     setNestedValue(data, pathParts, parsedValue);
@@ -219,25 +204,6 @@ function envOverridePath(envKey, prefix) {
   if (!pathStr) return null;
   const pathParts = pathStr.split('__').map(toCamelCase);
   return pathParts.some(p => !p) ? null : pathParts;
-}
-
-/**
- * Warn, once per variable, that an override of a platform block that moved
- * into an installed integration (V192) is ignored.
- *
- * @param {string} envKey - the variable's name
- * @param {string} block - the moved block (`iFinder` or `iAssistant`)
- */
-function warnMovedOverrideOnce(envKey, block) {
-  if (warnedMovedOverrides.has(envKey)) return;
-  warnedMovedOverrides.add(envKey);
-  logger.warn(
-    `Ignoring ${envKey}: platform.${block} moved into the installed integration ` +
-      `"${block === 'iFinder' ? 'ifinder' : 'iassistant'}" (Admin → Integrations → ` +
-      `Installed, config/integrations.json). Migration V192 copied the variable's value ` +
-      `into the installation once; edit the installation and remove the variable.`,
-    { component: 'ConfigCache' }
-  );
 }
 
 /**

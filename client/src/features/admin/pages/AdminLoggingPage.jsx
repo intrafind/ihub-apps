@@ -6,13 +6,10 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-// Accepts the platform.json shape (boolean | 'off' | 'mask' | 'drop') and
-// produces the string form used by the <select>. Older configs that pre-date
-// the string enum stored `true`/`false`, so map those to the closest mode.
+// The platform.json value ('off' | 'mask' | 'drop') for the <select>; an
+// unset value reads as 'off'.
 function normalizeAnonymizeIp(value) {
-  if (value === true || value === 'mask') return 'mask';
-  if (value === 'drop') return 'drop';
-  return 'off';
+  return value === 'mask' || value === 'drop' ? value : 'off';
 }
 
 function AdminLoggingPage() {
@@ -52,9 +49,6 @@ function AdminLoggingPage() {
       ntlm: { enabled: true }
     }
   });
-  // Both anonymizeIp settings accept boolean | 'off' | 'mask' | 'drop' on the
-  // server. The UI normalises everything to the string form so the <select>
-  // always has a single source of truth.
   const [privacyConfig, setPrivacyConfig] = useState({
     loggingAnonymizeIp: 'off',
     auditAnonymizeIp: 'off'
@@ -244,7 +238,7 @@ function AdminLoggingPage() {
       setLoggingConfig({
         level: loadedConfig.level || 'info',
         format: loadedConfig.format || 'json',
-        anonymizeIp: loadedConfig.anonymizeIp ?? false,
+        anonymizeIp: loadedConfig.anonymizeIp ?? 'off',
         file: loadedConfig.file || {
           enabled: false,
           path: 'logs/app.log',

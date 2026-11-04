@@ -7,8 +7,7 @@ import { workflowConfigSchema, knownWorkflowKeys } from './validators/workflowCo
 /**
  * Workflows Loader Service
  *
- * This service loads workflow definitions from individual files in contents/workflows/
- * and the legacy config/workflows.json file for backward compatibility.
+ * This service loads workflow definitions from individual files in contents/workflows/.
  *
  * Uses the generic resource loader factory to eliminate code duplication.
  * Workflow definitions are validated against the workflowConfigSchema.
@@ -19,7 +18,6 @@ import { workflowConfigSchema, knownWorkflowKeys } from './validators/workflowCo
 // Create the workflows resource loader
 const workflowsLoader = createResourceLoader({
   resourceName: 'Workflows',
-  legacyPath: 'config/workflows.json',
   individualPath: 'workflows',
   validateItem: createSchemaValidator(workflowConfigSchema, knownWorkflowKeys)
 });
@@ -34,17 +32,7 @@ export async function loadWorkflowsFromFiles(verbose = true) {
 }
 
 /**
- * Load workflows from legacy workflows.json file
- * @param {boolean} verbose - Whether to log verbose output
- * @returns {Promise<Array>} Array of workflow objects
- */
-export async function loadWorkflowsFromLegacyFile(verbose = true) {
-  return await workflowsLoader.loadFromLegacy(verbose);
-}
-
-/**
- * Load all workflows from both sources
- * Individual files take precedence over legacy workflows.json
+ * Load all workflows
  * @param {boolean} includeDisabled - Whether to include disabled workflows
  * @param {boolean} verbose - Whether to log verbose output
  * @returns {Promise<Array>} Array of workflow objects, sorted by order

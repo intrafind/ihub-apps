@@ -163,11 +163,14 @@ filesystem path because no provider exists yet; `bootstrapStorage()` runs on
 the result. `server/migrations/runner.js` makes the same exception for the same
 reason, earlier still.
 
-This is also why **configuration never depends on optional runtime storage.**
-When a provider fails to come up — a supported state, not an error — the store
-reads and writes the same contained paths, and the server boots normally. A
-malformed `storage` block cannot stop the server from reading the file that
-block lives in.
+This is also why a malformed `storage` block cannot stop the server from
+**reading** the file that block lives in. It can stop the server from
+**starting**: the storage provider is mandatory (the filesystem provider is the
+default and needs no configuration), so a `storage` block that names an unknown
+provider, or a provider that cannot initialize, ends startup with a
+`StorageBootstrapError` that names the setting to check — the same weight as an
+invalid `platform.json`. There is no mode in which chats, workflows and
+integrations run without storage and forget everything on the next restart.
 
 ## Reaching around the seam
 

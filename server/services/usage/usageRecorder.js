@@ -18,7 +18,6 @@
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import { recordTokenUsage } from '../../telemetry.js';
 import { recordFeedbackEvent as recordFeedbackMetric } from '../../telemetry/metrics.js';
 import { fingerprint, fingerprintConversation } from '../UserFingerprint.js';
 import { appendUsageRecord } from '../UsageEventLog.js';
@@ -92,7 +91,6 @@ export async function recordLlmCall(call) {
       groups: reportGroupsOf(call.user)
     });
     appendUsageRecord(record);
-    recordTokenUsage((record.pt || 0) + (record.ct || 0));
     return record;
   } catch (error) {
     logger.warn('Could not record model call usage', { component: 'UsageRecorder', error });

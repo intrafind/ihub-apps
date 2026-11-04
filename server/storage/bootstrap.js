@@ -3,16 +3,20 @@
 
 /**
  * Storage bootstrap — bring the configured provider up once per worker and
- * hand it out without ever throwing at the call site.
+ * hand it out.
  *
- * The registry deliberately fails loudly: `initializeStorage()` rejects on a
- * misconfigured provider and `getStorageProvider()` throws before it has run.
- * Durable chats must not inherit either behaviour. A broken `storage` block is
- * an administrator's mistake, and the right answer is chats that behave like
- * they did before persistence existed — not a server that refuses to boot. So
- * this module wraps the registry: one error log on failure, and
- * `getStorage() === null` afterwards, which every consumer treats as
- * "persistence is off".
+ * The storage provider is mandatory. The filesystem provider is the default and
+ * needs no configuration, so a working installation always has one. A `storage`
+ * block that names an unknown provider, or a provider that cannot initialize,
+ * is an administrator's mistake of the same weight as an invalid
+ * `platform.json`: {@link bootstrapStorage} rejects with a
+ * {@link StorageBootstrapError} and the server refuses to start, instead of
+ * running chats, workflows and integrations in a mode that forgets everything
+ * on the next restart. There is no "persistence is off" state to degrade to.
+ *
+ * {@link getStorage} returns `null` only before the bootstrap has run and after
+ * shutdown. Code that needs the provider calls {@link requireStorage}, which
+ * says what is wrong instead of failing on a property of `null`.
  *
  * @module storage/bootstrap
  */
@@ -26,16 +30,33 @@ import { initializeStorage, shutdownStorage } from './index.js';
 const COMPONENT = 'StorageBootstrap';
 
 /**
- * The initialized provider, or null while storage is unavailable.
+ * The initialized provider, or null before the bootstrap has run.
  * @type {import('./StorageProvider.js').StorageProvider|null}
  */
 let activeProvider = null;
 
 /**
  * In-flight bootstrap, so concurrent callers share one initialization.
- * @type {Promise<import('./StorageProvider.js').StorageProvider|null>|null}
+ * @type {Promise<import('./StorageProvider.js').StorageProvider>|null}
  */
 let pendingBootstrap = null;
+
+/**
+ * Raised when the storage provider cannot be brought up, or is asked for before
+ * it has been. Startup treats it as fatal.
+ */
+export class StorageBootstrapError extends Error {
+  /**
+   * @param {string} message - What went wrong and where to look.
+   * @param {Object} [options]
+   * @param {Error} [options.cause] - The underlying failure.
+   */
+  constructor(message, { cause } = {}) {
+    super(message, cause ? { cause } : undefined);
+    this.name = 'StorageBootstrapError';
+    this.code = 'STORAGE_BOOTSTRAP_FAILED';
+  }
+}
 
 /**
  * Capabilities worth knowing at a glance when a chat write later misbehaves:
@@ -63,36 +84,39 @@ function describeCapabilities(provider) {
 /**
  * Resolve, initialize and remember the storage provider for this process.
  *
- * Idempotent and non-throwing: a second call returns the provider already
- * running (or null when the first attempt failed), and a failure is logged
- * once and reported as unavailable storage.
+ * Idempotent: a second call returns the provider already running. A failure is
+ * not remembered, so a caller may correct the configuration and try again.
  *
  * @param {Object} [platformConfig] - Platform configuration; `storage.provider`
  *   and the provider's own block are read from it.
- * @returns {Promise<import('./StorageProvider.js').StorageProvider|null>} The
- *   provider, or null when storage could not be brought up.
+ * @returns {Promise<import('./StorageProvider.js').StorageProvider>} The provider.
+ * @throws {StorageBootstrapError} When the provider cannot be resolved or
+ *   initialized.
  */
 export async function bootstrapStorage(platformConfig) {
   if (activeProvider) return activeProvider;
   if (pendingBootstrap) return pendingBootstrap;
 
   pendingBootstrap = (async () => {
+    let provider;
     try {
-      const provider = await initializeStorage({ platformConfig });
-      activeProvider = provider || null;
-      if (activeProvider) {
-        logger.info('Storage bootstrap complete', {
-          component: COMPONENT,
-          ...describeCapabilities(activeProvider)
-        });
-      }
+      provider = await initializeStorage({ platformConfig });
     } catch (error) {
-      activeProvider = null;
-      logger.error('Storage bootstrap failed; features that need it stay off', {
-        component: COMPONENT,
-        error: error.message
-      });
+      throw new StorageBootstrapError(
+        `Storage provider could not be started: ${error.message}. ` +
+          'Check the "storage" section of contents/config/platform.json (or the ' +
+          "storage environment override) and the provider's own settings.",
+        { cause: error }
+      );
     }
+    if (!provider) {
+      throw new StorageBootstrapError('Storage provider could not be started: none was returned');
+    }
+    activeProvider = provider;
+    logger.info('Storage bootstrap complete', {
+      component: COMPONENT,
+      ...describeCapabilities(activeProvider)
+    });
     return activeProvider;
   })();
 
@@ -104,11 +128,8 @@ export async function bootstrapStorage(platformConfig) {
 }
 
 /**
- * The initialized storage provider, or null when storage is unavailable —
- * not bootstrapped yet, or bootstrapped and failed.
- *
- * Null is a supported state, not an error: consumers degrade to their
- * non-persistent behaviour rather than reporting a failure to the user.
+ * The initialized storage provider, or null before {@link bootstrapStorage}
+ * has completed (and after shutdown).
  *
  * @returns {import('./StorageProvider.js').StorageProvider|null}
  */
@@ -117,12 +138,23 @@ export function getStorage() {
 }
 
 /**
- * Read one facet of a provider without letting an accessor throw out of it.
+ * The initialized storage provider.
  *
- * Four runtime stores had this verbatim, JSDoc included, because every one of
- * them has to answer the same question: a provider that does not implement a
- * facet is unavailable storage, which each of them already knows how to be —
- * and a getter that throws on the way to finding that out is not.
+ * @returns {import('./StorageProvider.js').StorageProvider}
+ * @throws {StorageBootstrapError} When storage has not been bootstrapped.
+ */
+export function requireStorage() {
+  if (!activeProvider) {
+    throw new StorageBootstrapError(
+      'Storage is not available: bootstrapStorage() has not completed. ' +
+        'The storage provider is mandatory and is started before anything that keeps state.'
+    );
+  }
+  return activeProvider;
+}
+
+/**
+ * Read one facet of a provider without letting an accessor throw out of it.
  *
  * @param {Object|null} provider - Storage provider, or null.
  * @param {string} facet - Facet name: `documents`, `logs`, `locks`, `notifier`.
@@ -161,13 +193,9 @@ export async function shutdownStorageBootstrap() {
     // provider moments after we cleared the singleton and leak it.
     await pendingBootstrap.catch(() => {});
   }
-  // Shut down first, forget second. The other order left a window where
-  // `getStorage()` answered null while the provider was still flushing, so a
-  // consumer mid-request silently switched to its legacy on-disk path halfway
-  // through a shutdown — writing one record to the old layout and the rest to
-  // the new. Callers that reach the provider during the flush now get either a
-  // completed write or a `STORAGE_SHUT_DOWN` rejection, both of which are
-  // answerable; a silent change of destination is not.
+  // Shut down first, forget second: callers that reach the provider during the
+  // flush get either a completed write or a `STORAGE_SHUT_DOWN` rejection, both
+  // of which are answerable.
   try {
     await shutdownStorage();
   } catch (error) {

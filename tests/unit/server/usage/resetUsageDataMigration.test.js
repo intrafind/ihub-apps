@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import * as migration from '../../../../server/migrations/V218__reset_usage_data.js';
+import * as migration from '../../../../server/migrations/V223__reset_usage_data.js';
 
 let dir;
 
@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-describe('V218 reset usage data', () => {
+describe('V223 reset usage data', () => {
   it('is skipped when there is nothing to reset', async () => {
     write('data/quota-usage.json');
     await expect(migration.precondition(ctx())).resolves.toBe(false);

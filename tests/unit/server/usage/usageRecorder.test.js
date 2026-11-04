@@ -18,7 +18,6 @@ jest.mock('../../../../server/utils/logger.js', () => ({
   __esModule: true,
   default: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} }
 }));
-jest.mock('../../../../server/telemetry.js', () => ({ recordTokenUsage: () => {} }));
 jest.mock('../../../../server/telemetry/metrics.js', () => ({ recordFeedbackEvent: () => {} }));
 jest.mock('../../../../server/services/UserFingerprint.js', () => ({
   fingerprint: async id => `usr_${id}`,

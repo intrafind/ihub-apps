@@ -161,7 +161,7 @@ export function logAudit({
     // email), so honor the same masking as the actor.
     const safeResourceId = includeEmail ? resourceId || '' : maskEmail(resourceId || '');
     // Honor audit.anonymizeIp:
-    //   true / 'mask' -> mask the host bits (/24 IPv4, /48 IPv6)
+    //   'mask'        -> mask the host bits (/24 IPv4, /48 IPv6)
     //   'drop'        -> omit the `ip` property from the entry entirely
     //   anything else -> store verbatim
     const rawIp = req?.ip;
@@ -178,10 +178,7 @@ export function logAudit({
       requestId: requestId || getContext()?.requestId || randomUUID()
     };
     if (auditCfg.anonymizeIp !== 'drop') {
-      entry.ip =
-        auditCfg.anonymizeIp === true || auditCfg.anonymizeIp === 'mask'
-          ? anonymizeIp(rawIp)
-          : rawIp;
+      entry.ip = auditCfg.anonymizeIp === 'mask' ? anonymizeIp(rawIp) : rawIp;
     }
 
     const validation = validateAuditEntry(entry);
