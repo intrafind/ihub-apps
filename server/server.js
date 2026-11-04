@@ -80,8 +80,6 @@ import {
   startWorkflowStateRetention,
   stopWorkflowStateRetention
 } from './services/workflow/workflowRetention.js';
-import { importLegacyWorkflowStates } from './services/workflow/WorkflowStateRepository.js';
-import { importLegacyRunSummaries } from './services/runtime/runSummaryImport.js';
 import conversationStateManager from './services/integrations/ConversationStateManager.js';
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
@@ -271,6 +269,34 @@ async function prepareContents() {
   }
 }
 
+/**
+ * Bring the storage provider up or end the process with a clear error.
+ *
+ * The provider is mandatory (filesystem is the default). A broken `storage`
+ * block, or a provider that cannot start, is a configuration error like an
+ * invalid platform.json: refusing to start is the only outcome that does not
+ * serve with state that is lost on the next restart.
+ *
+ * @param {Object} platformConfig - Parsed platform.json.
+ * @returns {Promise<import('./storage/StorageProvider.js').StorageProvider>}
+ */
+async function bootstrapStorageOrExit(platformConfig) {
+  try {
+    return await bootstrapStorage(platformConfig);
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: `Cannot start: ${error.message}`,
+      error: error.message,
+      stack: error.stack,
+      pid: process.pid
+    });
+    // Give the log transport a moment to flush the line that explains the exit.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    process.exit(1);
+  }
+}
+
 if (cluster.isPrimary && workerCount > 1) {
   logger.info({
     component: 'Server',
@@ -295,6 +321,20 @@ if (cluster.isPrimary && workerCount > 1) {
   // Seed contents/ and migrate BEFORE any worker exists, so the workers never
   // race each other over the same config files (see prepareContents).
   await prepareContents();
+
+  // Check the storage provider once here, before forking: a worker that cannot
+  // start it exits, and the primary would respawn it in a loop. The primary
+  // keeps no provider of its own, so it is shut down again straight away.
+  {
+    let primaryPlatformConfig = {};
+    try {
+      primaryPlatformConfig = await loadJson('config/platform.json');
+    } catch {
+      // Same tolerance as the worker: a missing platform.json means defaults.
+    }
+    await bootstrapStorageOrExit(primaryPlatformConfig);
+    await shutdownStorageBootstrap();
+  }
 
   // Start the repeater before forking so a worker's first presence
   // announcement — sent as soon as its module graph loads — is never dropped.
@@ -528,10 +568,11 @@ if (cluster.isPrimary && workerCount > 1) {
   }
 
   // Bring the storage provider up in every worker, before anything that keeps
-  // durable state can be asked for it. It never throws: a broken `storage`
-  // block leaves `getStorage()` null and the features built on it degrade to
-  // their in-memory behaviour instead of taking the server down.
-  await bootstrapStorage(platformConfig);
+  // durable state can be asked for it. The provider is mandatory (filesystem is
+  // the default): a broken `storage` block or a provider that cannot start is a
+  // configuration error like an invalid platform.json, and the worker refuses
+  // to start instead of serving with state that is lost on restart.
+  await bootstrapStorageOrExit(platformConfig);
 
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
   // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
@@ -580,10 +621,6 @@ if (cluster.isPrimary && workerCount > 1) {
     await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
-    // Rename any pre-scoping `<userId>.json` integration token files to
-    // the new `<userId>__<providerId>.json` layout. Safe no-op on
-    // already-migrated installs.
-    await tokenStorageService.migrateLegacyTokenFiles();
     // Project text (uploads, picked documents) is encrypted under that key;
     // the pipeline, the reader and the reconciler come up once it exists.
     const { bootstrapProjects } = await import('./services/projects/bootstrap.js');
@@ -1066,44 +1103,11 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Carry what an upgraded installation already has on disk — the ledger's
-  // per-day run index, the workflow execution registry and the
-  // `<executionId>/latest.json` state directories — into the namespaces that
-  // now hold them. Both are one-time, idempotent and non-destructive (the
-  // legacy files stay, and stay readable), both short-circuit on a marker
-  // document afterwards, and both take a storage lock so only one worker does
-  // the work. A failure here must not stop the server: the legacy paths are
-  // still the fallback for everything not yet carried over.
-  //
-  // After the worker is serving, not before. On the awaited boot path this was
-  // between the process starting and the port being answerable, and it is not a
-  // fast step: a 100k-run legacy index is seconds of scanning, and the write
-  // loop is serial locked writes, up to `MAX_IMPORT_RUNS` of them. On a network
-  // filesystem that is minutes of an unbound port, which a container health
-  // check answers by killing the worker — and the restart re-reads the same
-  // index and is killed again. Nothing on the request path needs it to have
-  // finished: `readRunSummary` falls back to the legacy records and
-  // `GET /api/runs` merges the namespace with the per-day index files.
-  //
-  // Still awaited here rather than fired and forgotten, because the workflow
-  // recovery below reads the execution records this carries over — a rescan
-  // that runs first would not see a legacy execution at all.
-  try {
-    await importLegacyRunSummaries();
-    await importLegacyWorkflowStates();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Legacy runtime store import failed; falling back to the legacy files',
-      error: error.message
-    });
-  }
-
   // One-time re-index of the per-user integration tokens (Jira, cloud
   // storage, per-user MCP) into the connection index, after the MCP manager
   // knows its servers. Idempotent, marker-guarded and run under a storage
-  // lock, so every worker may call it. After the worker is serving, like the
-  // imports above: nothing on the request path waits on it, because the
+  // lock, so every worker may call it. After the worker is serving: nothing on
+  // the request path waits on it, because the
   // connection service indexes a token file it meets without a record
   // (create-only, so the two never overwrite each other).
   try {

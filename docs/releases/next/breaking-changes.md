@@ -333,6 +333,24 @@ installation's **Settings** tab shows it) — or set the old, working URI as the
 installation's **Redirect URI**. Afterwards, check the log for V206 warnings (installations that
 kept their id, tenant ids to enter).
 
+## The Storage Provider Is Mandatory
+
+The server no longer starts without a working storage provider. The filesystem provider is the
+default and needs no configuration; a `storage` block in `platform.json` that names an unknown
+provider, or a provider that cannot initialize, now ends startup with a clear error instead of
+running without persistence. Chats, workflows, run history and integration connections no longer
+fall back to memory or to older file layouts.
+
+- **Check before upgrading:** if `platform.json` has a `storage` block, or `IHUB_STORAGE_PROVIDER`
+  is set, make sure it starts. Remove the block to use the default filesystem provider.
+- **Older runtime files are imported once.** Installations that last ran a release before 5.5.2
+  have workflow checkpoints, the run index, run event files and pending interactions under
+  `contents/data/`. Migration V219 carries them into the storage provider on the first start. The
+  old files stay where they are but are no longer read.
+- **Token files.** Migration V218 renames single-slot cloud-storage token files
+  (`<userId>.json`) to the per-provider name once, instead of on every start. Jira's single token
+  slot is unchanged.
+  
 ## Legacy Config Shapes Are No Longer Read
 
 Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
