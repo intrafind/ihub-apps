@@ -95,7 +95,7 @@ Die GPU-Auswahl erfolgt fallbezogen gemeinsam mit IntraFind, abhängig von:
 2. **Eigene Micro-App erstellen**:
    - GitHub-Repo enthält Beispiele und Dokumentation
    - Siehe Ordner `examples` und `docs` sowie den Repository-Agenten-Leitfaden in `CLAUDE.md`
-   - Komplette Dokumentation im laufenden iHub unter `/help`
+   - Komplette Dokumentation im laufenden iHub unter **Admin → Dokumentation** (`/admin/docs`)
 
 ### Sind Prompt-Kenntnisse erforderlich?
 Nein, der iHub ist explizit auf "keine Prompt-Kenntnisse nötig" ausgelegt. Die Eingabemasken führen zum gewünschten Ergebnis.
@@ -126,12 +126,12 @@ Je nach gewählter Option:
 ## Support & Dokumentation
 
 ### Wo finde ich die vollständige Dokumentation?
-- **Im laufenden iHub**: Unter `/help` als mdBook
+- **Im laufenden iHub**: Unter **Admin → Dokumentation** (`/admin/docs`), für Admins
 - **GitHub-Repository**: [github.com/intrafind/ihub-apps](https://github.com/intrafind/ihub-apps)
 - **Dateien im iHub-Paket**: Ordner `docs` mit Anleitungen
 
 ### Wie erhalte ich Support?
-- Konsultieren Sie zunächst die integrierte Dokumentation unter `/help`
+- Konsultieren Sie zunächst die integrierte Dokumentation unter **Admin → Dokumentation** (`/admin/docs`)
 - Prüfen Sie das GitHub-Repository für aktuelle Updates
 - Kontaktieren Sie IntraFind für projektbezogene Beratung zu Modellauswahl und GPU-Konfiguration
 
@@ -154,7 +154,7 @@ Der iHub läuft standardmäßig auf Port 3001 (http://localhost:3001/)
 Ja, der iHub ist erweiterbar. Sie können:
 - Bestehende Apps duplizieren und anpassen
 - Neue Apps basierend auf den Beispielen erstellen
-- Die Dokumentation unter `/help` für Entwicklungsanleitungen nutzen
+- Die Dokumentation unter **Admin → Dokumentation** (`/admin/docs`) für Entwicklungsanleitungen nutzen
 
 ## Schnellstart-Anleitung
 
@@ -178,7 +178,7 @@ Ja, der iHub ist erweiterbar. Sie können:
 ### Best Practices für Einsteiger
 - Beginnen Sie mit Cloud-LLMs für die einfachste Einrichtung
 - Verwenden Sie bestehende Micro-Apps als Vorlagen
-- Konsultieren Sie die `/help` Dokumentation im laufenden iHub
+- Konsultieren Sie die Dokumentation im laufenden iHub unter **Admin → Dokumentation** (`/admin/docs`)
 - Beginnen Sie mit einfachen Prompt-Modifikationen, bevor Sie neue Apps erstellen
 
 ## Erweiterte Themen

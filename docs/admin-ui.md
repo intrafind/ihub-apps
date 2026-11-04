@@ -16,7 +16,8 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 
 | Section | What's inside |
 |---------|--------------|
-| **Overview** | Dashboard, What's New |
+| **Overview** | Dashboard |
+| **What's New & Docs** | Documentation, What's New |
 | **AI Workspace** | Apps, Models, Providers, Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
@@ -116,6 +117,21 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 - **Entries** are full Markdown: nested and numbered lists, quoted error messages, tables, links and code blocks (with copy and download buttons).
 
 The content comes from `docs/releases/` in the repository and ships with every build; see [Release Process](release-process.md) for how entries get from `next/` to a numbered release.
+
+Links in an entry go where the reader can follow them: a link to a documentation page opens it in [Documentation](#documentation) at the linked heading, a link to another release's notes opens that release here (`/admin/changelog?version=5.6.4`).
+
+---
+
+## Documentation
+
+**Documentation** (`/admin/docs`) shows the iHub Apps documentation that ships with the version you are running — the same Markdown pages as in `docs/` of the repository, so what you read matches what is installed. It is available to admins only.
+
+- **Contents** (left): the chapters and pages in the order of the published documentation.
+- **Search** (top right): finds every section whose title or text contains all the words you type, best match first; a result opens the page at that section.
+- **Pages** render with tables, code blocks, diagrams and screenshots. Links to other pages stay inside the admin UI; links to release notes open [What's New](#whats-new); links to files outside the documentation open on GitHub.
+- Every page has its own address (`/admin/docs/integrations.md#migrations`), so a link, bookmark or reload lands on the same heading.
+
+The old documentation site at `/docs` redirects here. The documentation is also published as a website on GitHub Pages from the `main` branch.
 
 ---
 

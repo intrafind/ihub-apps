@@ -58,11 +58,22 @@ jobs:
           echo "=== Markdown Output ==="
           ls -lh docs/book/*.md || echo "No Markdown output"
 
+      # mdBook writes to book/html/ when more than one renderer is configured, to book/ otherwise.
+      - name: Locate HTML output
+        id: html
+        run: |
+          if [ -d docs/book/html ]; then echo "path=docs/book/html" >> "$GITHUB_OUTPUT"; else echo "path=docs/book" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ steps.html.outputs.path }}
+
       - name: Upload HTML artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-html
-          path: docs/book/html
+          path: ${{ steps.html.outputs.path }}
 
       - name: Upload PDF artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -77,3 +88,24 @@ jobs:
           name: docs-markdown
           path: docs/book/iHub-Apps-Documentation.md
         continue-on-error: true
+
+  # Publishes the documentation site to GitHub Pages (Settings → Pages → Source: GitHub Actions).
+  deploy-pages:
+    needs: build-docs
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One Pages deployment at a time. Only deploy jobs join the group, so a docs build on another
+    # branch can never replace a queued deployment from main.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

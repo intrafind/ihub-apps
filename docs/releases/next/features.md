@@ -499,3 +499,19 @@ have several parents.
   problem and the group file is left untouched, instead of failing when the groups are next loaded.
 - **Same behaviour as before:** members still receive the combined permissions of all parents plus
   the group's own. See [Admin UI → Groups](../../admin-ui.md).
+
+## Admin → Documentation: Read and Search the Docs for Your Version
+
+Admins can now read the iHub Apps documentation inside the admin UI under **Admin → Documentation**
+(`/admin/docs`). It is the documentation that ships with the installed version, so it matches what
+is running — also in the Docker image, which did not include the documentation before.
+
+- **Search** finds every section that contains all the words you type and opens the page at that
+  section.
+- **Links in What's New work.** Links in the release notes pointed to addresses such as
+  `/integrations.md#…` and ended on an error page; they now open the documentation page at the
+  linked heading, and links to another release's notes open that release in What's New.
+- **`/docs` redirects to Admin → Documentation.** The separate documentation website is no longer
+  part of the installation; it is published on GitHub Pages instead.
+
+See [Admin UI → Documentation](../../admin-ui.md#documentation).

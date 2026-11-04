@@ -147,4 +147,4 @@ New here? Start with [Getting Started](GETTING_STARTED.md), then take the tour i
 
 ---
 
-**Full Documentation Portal**: The complete documentation is also available as an interactive mdBook at `/help` when running the application.
+**Full Documentation Portal**: In a running installation, admins read the documentation for the installed version under **Admin → Documentation** (`/admin/docs`), with search. It is also published as a website on GitHub Pages.

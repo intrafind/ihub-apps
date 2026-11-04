@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRightIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { renderInlineMarkdown, renderMarkdown } from '../../../config/marked.config';
@@ -13,6 +14,12 @@ import {
   defaultExpandedGroups,
   visibleReleases
 } from '../utils/changelogReleaseTree';
+import {
+  decodeFragment,
+  handleDocsLinkClick,
+  releaseSourcePath,
+  rewriteDocsHtml
+} from '../utils/docsLinks';
 
 /**
  * Admin → What's New.
@@ -33,9 +40,19 @@ import {
 
 /** Reading order. The keys match the sections the server returns. */
 const SECTIONS = [
-  { key: 'breakingChanges', i18nKey: 'admin.changelog.breakingChanges', label: 'Breaking changes' },
-  { key: 'features', i18nKey: 'admin.changelog.features', label: 'New & improved' },
-  { key: 'fixes', i18nKey: 'admin.changelog.fixes', label: 'Fixes' }
+  {
+    key: 'breakingChanges',
+    file: 'breaking-changes.md',
+    i18nKey: 'admin.changelog.breakingChanges',
+    label: 'Breaking changes'
+  },
+  {
+    key: 'features',
+    file: 'features.md',
+    i18nKey: 'admin.changelog.features',
+    label: 'New & improved'
+  },
+  { key: 'fixes', file: 'fixes.md', i18nKey: 'admin.changelog.fixes', label: 'Fixes' }
 ];
 
 /** A DOM id from arbitrary parts: version numbers contain dots, titles anything. */
@@ -56,6 +73,29 @@ function scrollToElement(event, id) {
   if (typeof target.focus === 'function') {
     target.focus({ preventScroll: true });
   }
+}
+
+/** Letters and digits only: how a link fragment and an entry id are compared. */
+const compact = text =>
+  String(text ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+/**
+ * The entry a link fragment such as `#configtoolsjson-is-removed` points to. Release notes link to
+ * entries with mdBook's heading anchors, which drop punctuation where entry ids turn it into a
+ * hyphen, so both are compared without anything but letters and digits.
+ */
+function findEntryForFragment(release, fragment) {
+  const wanted = compact(decodeFragment(fragment));
+  if (!wanted) return null;
+  for (const section of SECTIONS) {
+    const match = (release.sections?.[section.key] ?? []).find(
+      entry => compact(entry.id) === wanted
+    );
+    if (match) return match;
+  }
+  return null;
 }
 
 /** Headings inside an entry body sit one level below the entry's own `<h3>`. */
@@ -435,6 +475,13 @@ function ReleaseSection({ section, entries, release, tocId, sectionLabel, t }) {
 
 function AdminChangelogPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const requestedVersion = searchParams.get('version');
+  // Read by the one-time index load below, which must not re-run when the query changes.
+  const requestedVersionRef = useRef(requestedVersion);
+  requestedVersionRef.current = requestedVersion;
   useCodeBlockInteractions();
 
   const [index, setIndex] = useState(null);
@@ -459,7 +506,10 @@ function AdminChangelogPage() {
           previousVersion: data.previousVersion || null,
           versions
         });
-        setSelected(versions[0]?.version ?? null);
+        // `?version=` comes from a link in another release's notes or in the documentation.
+        const requested = requestedVersionRef.current;
+        const initial = versions.find(item => item.version === requested) ?? versions[0];
+        setSelected(initial?.version ?? null);
       } catch (err) {
         if (active) {
           setIndexError(err.message || t('admin.changelog.loadError', 'Failed to load changelog'));
@@ -471,6 +521,16 @@ function AdminChangelogPage() {
       active = false;
     };
   }, [t]);
+
+  // A link to another release while this page is open changes only the query string.
+  useEffect(() => {
+    if (!requestedVersion || !index) return;
+    if (index.versions.some(item => item.version === requestedVersion)) {
+      setSelected(requestedVersion);
+    }
+    // location.key: a link to the release named in the current query string still re-selects it
+    // after the admin picked another release in the switcher.
+  }, [requestedVersion, index, location.key]);
 
   // The selected release's entries, fetched on first selection and kept.
   useEffect(() => {
@@ -538,12 +598,32 @@ function AdminChangelogPage() {
         // Release notes are hard-wrapped by hand; a newline inside a paragraph is wrapping,
         // not a line break.
         bodyHtml: entry.body
-          ? renderMarkdown(entry.body, { t, breaks: false, transformHtml: demoteHeadings })
+          ? renderMarkdown(entry.body, {
+              t,
+              breaks: false,
+              transformHtml: html =>
+                rewriteDocsHtml(
+                  demoteHeadings(html),
+                  releaseSourcePath(release.version, section.file)
+                )
+            })
           : ''
       }));
     }
     return { ...release, sections };
   }, [release, t]);
+
+  // A link with a fragment (`?version=5.6.4#some-entry`) scrolls to that entry once it renders.
+  useEffect(() => {
+    if (!prepared || !location.hash) return;
+    const entry = findEntryForFragment(prepared, location.hash.slice(1));
+    const target = entry && document.getElementById(entry.domId);
+    if (!target) return;
+    if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'start' });
+    }
+    if (typeof target.focus === 'function') target.focus({ preventScroll: true });
+  }, [prepared, location.hash]);
 
   const shortLabel = item =>
     item.unreleased ? t('admin.changelog.unreleasedShort', 'Unreleased') : item.version;
@@ -652,7 +732,9 @@ function AdminChangelogPage() {
               message={t('admin.changelog.loadingRelease', 'Loading release notes...')}
             />
           ) : (
-            <div className="space-y-8">
+            // Documentation links inside entry bodies navigate within the admin UI.
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+            <div className="space-y-8" onClick={event => handleDocsLinkClick(event, navigate)}>
               <TableOfContents id={tocId} release={prepared} sectionLabel={sectionLabel} t={t} />
               {SECTIONS.filter(section => prepared.sections[section.key].length > 0).map(
                 section => (

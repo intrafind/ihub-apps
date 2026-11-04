@@ -32,7 +32,7 @@ describe('admin sidebar labels', () => {
     expect(labels.size).toBeGreaterThanOrEqual(40);
     expect(
       [...labels.keys()].filter(key => key.startsWith('admin.sidebar.sections.'))
-    ).toHaveLength(7);
+    ).toHaveLength(8);
   });
 
   it.each([...labels.entries()])('%s is translated into English and German', (key, fallback) => {

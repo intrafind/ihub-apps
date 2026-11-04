@@ -2552,7 +2552,8 @@
       "security": "Sicherheit",
       "backup": "Backup & Wiederherstellung",
       "updates": "Updates",
-      "advanced": "Erweitert"
+      "advanced": "Erweitert",
+      "docs": "Dokumentation"
     },
     "mcp": {
       "common": {
@@ -4348,7 +4349,8 @@
         "integrations": "Integrationen",
         "customization": "Anpassung",
         "observability": "Überwachung",
-        "platform": "Plattform"
+        "platform": "Plattform",
+        "whatsNewAndDocs": "Neuigkeiten & Doku"
       }
     },
     "ui": {
@@ -5887,6 +5889,22 @@
       "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
       "leave": "Verlassen",
       "stay": "Bleiben"
+    },
+    "docs": {
+      "title": "Dokumentation",
+      "subtitle": "Die iHub-Apps-Dokumentation zur installierten Version.",
+      "searchLabel": "Dokumentation durchsuchen",
+      "searchPlaceholder": "Dokumentation durchsuchen...",
+      "searching": "Suche läuft...",
+      "noResults": "Nichts gefunden für „{{query}}“.",
+      "searchError": "Die Suche ist fehlgeschlagen",
+      "searchResults": "Suchergebnisse",
+      "contents": "Inhalt der Dokumentation",
+      "loading": "Dokumentation wird geladen...",
+      "loadingPage": "Seite wird geladen...",
+      "notFound": "Diese Dokumentationsseite gibt es in dieser Version nicht.",
+      "loadError": "Die Dokumentationsseite konnte nicht geladen werden",
+      "backHome": "Zur Startseite der Dokumentation"
     }
   },
   "cloudStorage": {
