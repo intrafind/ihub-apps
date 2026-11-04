@@ -100,7 +100,8 @@ describe('daily rollups', () => {
       cacheWriteTokens: 150,
       reasoningTokens: 10,
       webSearchRequests: 1,
-      messages: 3
+      // Two exchanges: the request counts the message, its response does not.
+      messages: 2
     });
     expect(day.byModel.claude).toMatchObject({
       promptTokens: 2000,
@@ -112,7 +113,7 @@ describe('daily rollups', () => {
     expect(day.byUser.u1.cacheReadTokens).toBe(1800);
     expect(Object.keys(day.byProvider)).toEqual(['anthropic']);
     expect(day.byProvider.anthropic).toMatchObject({
-      messages: 2,
+      messages: 1,
       promptTokens: 2000,
       cacheReadTokens: 1800
     });

@@ -337,6 +337,24 @@ function incFeedback(map, key, rating) {
   applyRating(map[key], rating);
 }
 
+/**
+ * The id a usage record is counted under. `identified` and `anonymous` key on
+ * the real user (as is, or fingerprinted) so one person is one user however
+ * many chats they open; `pseudonymous` keeps the session id. Without a user
+ * (system work) every mode falls back to the session id.
+ *
+ * @param {{sessionId?: string, user?: Object}} who
+ * @param {string} mode
+ * @returns {Promise<string|null>}
+ */
+export async function resolveTrackedUser({ sessionId, user }, mode) {
+  const realId = user?.id ? String(user.id) : null;
+  if (realId && (mode === 'identified' || mode === 'anonymous')) {
+    return resolveUserId(realId, mode);
+  }
+  return resolveUserId(sessionId || realId, mode);
+}
+
 export function estimateTokens(text) {
   return estimateTokensShared(text);
 }
@@ -373,8 +391,7 @@ async function recordChatMessage({
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser =
-    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
+  const resolvedUser = await resolveTrackedUser({ sessionId: userId, user }, trackingMode);
   const data = loadUsage();
   data.messages.total += 1;
   inc(data.messages.perUser, resolvedUser, 1);
@@ -434,8 +451,7 @@ export async function recordChatResponse(args) {
 export async function recordFeedback({ userId, appId, modelId, rating, user }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser =
-    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
+  const resolvedUser = await resolveTrackedUser({ sessionId: userId, user }, trackingMode);
   const data = loadUsage();
 
   applyRating(data.feedback, rating);
@@ -464,8 +480,7 @@ export async function recordMagicPrompt({
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser =
-    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
+  const resolvedUser = await resolveTrackedUser({ sessionId: userId, user }, trackingMode);
   const data = loadUsage();
   data.magicPrompt.total += 1;
   inc(data.magicPrompt.perUser, resolvedUser, 1);

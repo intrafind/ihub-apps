@@ -68,8 +68,12 @@ export function sumRollupDimension(rollups, dim, { countDays = false } = {}) {
 
 /**
  * Build a daily rollup from events for a given date string (YYYY-MM-DD).
+ *
+ * A message is one exchange: its `chat_request` counts it, its
+ * `chat_response` only adds tokens. Feedback and magic-prompt events have
+ * their own counters and never count as messages.
  */
-function buildDailyRollup(events, date) {
+export function buildDailyRollup(events, date) {
   const rollup = {
     date,
     totals: {
@@ -96,7 +100,8 @@ function buildDailyRollup(events, date) {
     const model = event.model || 'unknown';
     const pt = event.pt || 0;
     const ct = event.ct || 0;
-    const counts = { messages: 1, promptTokens: pt, completionTokens: ct };
+    const isMessage = event.type === 'chat_request';
+    const counts = { messages: isMessage ? 1 : 0, promptTokens: pt, completionTokens: ct };
     for (const [field, key] of Object.entries(ROLLUP_COUNTERS)) counts[field] = event[key] || 0;
 
     rollup.totals.uniqueUsers.add(uid);
@@ -109,7 +114,6 @@ function buildDailyRollup(events, date) {
       rollup.totals.messages += 1;
     } else if (event.type === 'chat_response') {
       rollup.totals.chatResponses += 1;
-      rollup.totals.messages += 1;
     } else if (event.type === 'feedback') {
       rollup.totals.feedbackCount += 1;
     } else if (event.type === 'magic_prompt') {
