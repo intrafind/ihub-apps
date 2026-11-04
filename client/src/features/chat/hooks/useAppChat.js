@@ -490,7 +490,7 @@ function useAppChat({
       }
 
       // Stream-level error (transport failure / error before any run started):
-      // nothing to project, append the message like the legacy 'error' case.
+      // nothing to project, append the error message to the reply.
       if (type === RUN_EVENTS.STREAM_ERROR && !run) {
         // Before the early return below, which is what used to strand a
         // re-attached turn: the stream names the chat rather than the run, so
@@ -546,8 +546,8 @@ function useAppChat({
         case RUN_EVENTS.RUN_PAUSED:
           updateAssistantMessage(messageId, content, loading, extras);
           if (extras.awaitingInput) {
-            // Legacy done{finishReason:'clarification'}: the turn hands control
-            // back to the user; processing stops but the clarification stays pending.
+            // The turn hands control back to the user (finishReason
+            // 'clarification', which the server still sends); processing stops but the clarification stays pending.
             setProcessing(false);
           }
           break;
@@ -585,7 +585,7 @@ function useAppChat({
           updateAssistantMessage(messageId, content, false, { ...extras, ...metadata });
 
           if (rootRun.status === 'error' || rootRun.error) {
-            // Legacy error path: content already carries the stream/error message.
+            // A failed run: content already carries the stream/error message.
             setProcessing(false);
             break;
           }
