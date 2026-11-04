@@ -74,6 +74,21 @@
   pointer-events: none;
 }
 
+/* Embedded mode: gate rendered inline inside a host container (setup wizard) */
+.ag-embedded {
+  font-family: var(--ag-font);
+  color: var(--ag-text);
+}
+
+.ag-embedded .ag-card {
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  min-height: 0;
+  background: transparent;
+}
+
 /* Card */
 .ag-card {
   background: var(--ag-card-bg);

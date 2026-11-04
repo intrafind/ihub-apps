@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 // Auth components
-export { default as LoginForm } from './components/LoginForm';
 export { default as AuthGuard } from './components/AuthGuard';
 export { default as UserAuthMenu } from './components/UserAuthMenu';
 // Legacy export for backward compatibility
