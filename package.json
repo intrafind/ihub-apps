@@ -28,7 +28,7 @@
     "// === PRODUCTION BUILDS ===": "",
     "prod:build": "npm run build && npm run build:package",
     "prod:deploy": "npm run prod:build && npm run start:prod",
-    "start:prod": "cd dist && node server/start-prod.js",
+    "start:prod": "cd dist && npm start",
     "// === BUILD STEPS ===": "",
     "build": "npm run build:no-docs && npm run docs:build:all && npm run docs:copy:all",
     "build:no-docs": "npm run build:clean && npm run build:client && npm run build:extension && npm run build:server && npm run build:shared && npm run build:config && npm run build:releases",

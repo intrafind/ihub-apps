@@ -110,7 +110,6 @@ samples/
 
 # Development scripts
 test-authentication.sh
-concatenate-code.sh
 
 # Concept documentation
 concepts/
