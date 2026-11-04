@@ -24,38 +24,26 @@
  *
  * ## Where the records live
  *
- * With a storage provider the records are documents in the `interactions`
- * namespace, owned by the run's principal, and an answer runs inside
- * `locks.withLock('interaction:<id>')`. Without one — a provider that failed
- * to start, or a test constructing this class directly — everything falls
- * back to the layout this service has always used:
- * `contents/data/run-log/interactions.json` written through a debounced
- * atomic whole-file store, plus exclusive claim markers under
- * `interaction-claims/`. Both are supported states. The mode is decided once,
- * at the first load, and never mixed: a process that split its records across
- * two stores would answer some interactions twice and lose others.
+ * The records are documents in the `interactions` namespace of the storage
+ * provider (mandatory), owned by the run's principal, and an answer runs inside
+ * `locks.withLock('interaction:<id>')`. Pending interactions the previous
+ * layout (`run-log/interactions.json`) still held are carried over once by
+ * migration V219.
  *
  * ## Answering exactly once
  *
  * A lease cannot say "already answered": `withLock` releases the moment the
- * critical section settles, where the claim marker it replaces stayed on disk
- * as a tombstone. So the decisive check is the *shared record* read at the top
- * of the critical section, and a settled document is the tombstone — kept for
- * twice the in-memory grace period, then swept. Swapping the lock in without
- * moving the record into shared storage would have regressed the
- * compare-and-set, which is why both moved in the same change.
+ * critical section settles. So the decisive check is the *shared record* read at
+ * the top of the critical section, and a settled document is the tombstone —
+ * kept for twice the in-memory grace period, then swept.
  *
  * @module services/loop/InteractionService
  */
 import { EventEmitter } from 'node:events';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
-import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
-import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { resolveActorId, isAdminUser } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -81,9 +69,6 @@ export const ANSWER_CLAIM_TTL_MS = 30 * 1000;
  * dropped. It lives on in the run's ledger; only pending ones are kept.
  */
 const SETTLED_RETENTION_MS = 60 * 1000;
-/** Directory (next to the pending store) holding the exclusive answer claim markers. */
-export const CLAIM_DIR_NAME = 'interaction-claims';
-
 /** Namespace holding one document per interaction (pending, or recently settled). */
 export const INTERACTIONS_NAMESPACE = RUNTIME_NAMESPACES.interactions;
 
@@ -169,12 +154,10 @@ export class InteractionService extends EventEmitter {
   /**
    * @param {Object} [opts]
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
-   * @param {string} [opts.storePath] - override pending-store file (tests; legacy layout only)
-   * @param {boolean} [opts.persist] - disable the durable store and claim markers (tests; default true)
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [opts.documents] -
-   *   document facet; null forces the legacy file layout. Omitted entirely, the
-   *   bootstrapped provider is used when one is up.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} [opts.documents] -
+   *   document facet; the bootstrapped provider's when omitted.
    * @param {import('../../storage/LockManager.js').LockManager|null} [opts.locks] - lock facet
+   *   (with an injected `documents`; otherwise the provider's)
    * @param {() => number} [opts.now]
    * @param {{publish: Function, subscribe: Function}} [opts.bus] - cluster bus (default: clusterBus)
    */
@@ -184,27 +167,16 @@ export class InteractionService extends EventEmitter {
     this.runLog = opts.runLog || defaultRunLog;
     this._bus = opts.bus || { publish: busPublish, subscribe: busSubscribe };
     this._pid = opts.pid ?? process.pid;
-    this._persistOverride = opts.persist ?? null;
     this._now = opts.now || (() => Date.now());
-    this._storePath = opts.storePath || path.join(this.runLog.baseDir, 'interactions.json');
-    this._claimDir = path.join(path.dirname(this._storePath), CLAIM_DIR_NAME);
-    this._store = createDebouncedJsonStore({
-      filePath: this._storePath,
-      createDefault: () => ({ version: 1, interactions: {} }),
-      saveIntervalMs: opts.saveIntervalMs ?? 500,
-      component: 'InteractionService'
-    });
     /**
-     * Document and lock facets. Passing either (even as null) pins the mode;
-     * otherwise the bootstrapped provider is resolved at the first load, once
-     * — see the module header on why the two layouts are never mixed.
+     * Document and lock facets. Injected by tests; otherwise the bootstrapped
+     * provider's, resolved at the first load (the process-wide singleton is
+     * built when this module is imported, long before the provider is up).
      * @type {Object|null}
      */
     this._documents = opts.documents ?? null;
     /** @type {Object|null} */
     this._locks = opts.locks ?? null;
-    /** @type {boolean} the caller chose the mode; do not consult the bootstrap */
-    this._storagePinned = 'documents' in opts || 'locks' in opts;
     /** @type {Map<string, Object>} in-memory mirror (id → interaction) */
     this._byId = new Map();
     this._settledRetentionMs = opts.settledRetentionMs ?? SETTLED_RETENTION_MS;
@@ -239,10 +211,6 @@ export class InteractionService extends EventEmitter {
         : null;
   }
 
-  _persist() {
-    return this._persistOverride ?? true;
-  }
-
   /**
    * Load the pending store once. Every caller awaits the same load, so a
    * request (or a replicated mutation) arriving while the file is being read
@@ -254,17 +222,9 @@ export class InteractionService extends EventEmitter {
   }
 
   async _loadStore() {
-    if (!this._persist()) return;
     this._resolveStorage();
     try {
-      if (this._documents) {
-        await this._loadFromNamespace();
-        return;
-      }
-      const data = await this._store.load();
-      for (const [id, it] of Object.entries(data.interactions || {})) {
-        if (!this._byId.has(id)) this._byId.set(id, it);
-      }
+      await this._loadFromNamespace();
     } catch (err) {
       logger.warn('InteractionService: failed to load pending store', {
         component: 'InteractionService',
@@ -274,19 +234,17 @@ export class InteractionService extends EventEmitter {
   }
 
   /**
-   * Pick the storage mode for the lifetime of this service.
+   * Resolve the facets for the lifetime of this service.
    *
-   * Called from the one-shot load rather than the constructor: the
-   * process-wide singleton is built when this module is imported, long before
-   * `bootstrapStorage()` has resolved a provider.
+   * @throws {import('../../storage/bootstrap.js').StorageBootstrapError} When no
+   *   documents facet was injected and storage has not been bootstrapped.
    * @private
    */
   _resolveStorage() {
-    if (this._storagePinned) return;
-    this._storagePinned = true;
-    const provider = getStorage();
-    this._documents = readFacet(provider, 'documents');
-    this._locks = readFacet(provider, 'locks');
+    if (this._documents) return;
+    const provider = requireStorage();
+    this._documents = provider.documents;
+    this._locks = provider.locks;
   }
 
   /**
@@ -303,7 +261,6 @@ export class InteractionService extends EventEmitter {
    * @private
    */
   async _pageInteractions(visit, { max = MAX_SCAN_INTERACTIONS } = {}) {
-    if (!this._documents) return { count: 0, truncated: false };
     let cursor;
     let count = 0;
     do {
@@ -360,7 +317,6 @@ export class InteractionService extends EventEmitter {
    * @private
    */
   async _refreshPending() {
-    if (!this._documents) return;
     try {
       await this._loadFromNamespace();
     } catch (err) {
@@ -380,22 +336,19 @@ export class InteractionService extends EventEmitter {
    * @private
    */
   async _readShared(id) {
-    if (!this._documents) return this._byId.get(id) || null;
     const doc = await this._documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(id));
     if (isInteractionRecord(doc?.data)) return doc.data;
     // No document at all: the record was never persisted (a store that could
     // not be written — `_save` logs and carries on), or its tombstone has aged
-    // out. Both are exactly the situation a swept claim marker used to leave
-    // behind, so fall back to the local mirror as before.
+    // out, so fall back to the local mirror.
     return this._byId.get(id) || null;
   }
 
   /**
    * Write one interaction document.
    *
-   * Settled records are written too, unlike the legacy file which deleted
-   * them: the settled document is the tombstone the answer compare-and-set
-   * reads. `_scheduleEviction` and `_sweepSettled` remove it once no lagging
+   * Settled records are written too: the settled document is the tombstone the
+   * answer compare-and-set reads. `_scheduleEviction` and `_sweepSettled` remove it once no lagging
    * replica could still act on it.
    *
    * @param {Object} interaction - The record to store.
@@ -419,7 +372,6 @@ export class InteractionService extends EventEmitter {
    * @private
    */
   async _removeDocument(id) {
-    if (!this._documents) return;
     try {
       await this._documents.delete(INTERACTIONS_NAMESPACE, interactionDocumentKey(id));
     } catch (err) {
@@ -444,36 +396,23 @@ export class InteractionService extends EventEmitter {
         });
       }
     }
-    if (!this._persist()) return;
-    if (this._documents) {
-      // A replicated mutation was already written by the worker that made it.
-      // Writing it again would be a redundant round-trip, and could race that
-      // worker's eviction of the same document back into existence.
-      if (!replicate) return;
-      // Best effort, exactly as the debounced file store is: a store that
-      // cannot be written must not fail the run that raised the interaction.
-      // The one place durability is load-bearing — the answer compare-and-set
-      // — reads the record back instead, and fails loudly there.
-      try {
-        await this._writeDocument(interaction);
-      } catch (err) {
-        logger.warn('InteractionService: could not persist interaction', {
-          component: 'InteractionService',
-          interactionId: interaction.id,
-          error: err.message
-        });
-      }
-      return;
+    // A replicated mutation was already written by the worker that made it.
+    // Writing it again would be a redundant round-trip, and could race that
+    // worker's eviction of the same document back into existence.
+    if (!replicate) return;
+    // Best effort: a store that cannot be written must not fail the run that
+    // raised the interaction. The one place durability is load-bearing — the
+    // answer compare-and-set — reads the record back instead, and fails
+    // loudly there.
+    try {
+      await this._writeDocument(interaction);
+    } catch (err) {
+      logger.warn('InteractionService: could not persist interaction', {
+        component: 'InteractionService',
+        interactionId: interaction.id,
+        error: err.message
+      });
     }
-    const data = await this._store.load();
-    if (interaction.status === 'pending') {
-      data.interactions[interaction.id] = interaction;
-    } else {
-      // Only pending interactions need to survive a restart; answered ones are
-      // on the run's ledger.
-      delete data.interactions[interaction.id];
-    }
-    this._store.markDirty();
   }
 
   /**
@@ -551,32 +490,20 @@ export class InteractionService extends EventEmitter {
           this._waiters.delete(id);
           w.reject(new InteractionError('Run deleted', 'RUN_DELETED', 410));
         }
-        await this._releaseAnswerClaim(this._claimPath(id));
         n++;
       }
     }
-    if (this._persist() && this._documents) {
-      // The mirror only holds what this worker saw, so the cascade pages the
-      // namespace as well — the same reason the file rewrite below walks the
-      // whole store rather than the ids just deleted from memory. One pass for
-      // every run in the batch.
-      const { truncated } = await this._pageInteractions(async record => {
-        if (runs.has(record.runId)) await this._removeDocument(record.id);
+    // The mirror only holds what this worker saw, so the cascade pages the
+    // namespace as well. One pass for every run in the batch.
+    const { truncated } = await this._pageInteractions(async record => {
+      if (runs.has(record.runId)) await this._removeDocument(record.id);
+    });
+    if (truncated) {
+      logger.warn('InteractionService: run cascade hit the namespace scan bound', {
+        component: 'InteractionService',
+        runs: runs.size,
+        bound: MAX_SCAN_INTERACTIONS
       });
-      if (truncated) {
-        logger.warn('InteractionService: run cascade hit the namespace scan bound', {
-          component: 'InteractionService',
-          runs: runs.size,
-          bound: MAX_SCAN_INTERACTIONS
-        });
-      }
-    } else if (this._persist()) {
-      const data = await this._store.load();
-      for (const [id, it] of Object.entries(data.interactions || {})) {
-        if (runs.has(it.runId)) delete data.interactions[id];
-      }
-      this._store.markDirty();
-      await this._store.flush();
     }
     return n > 0 ? `interactions:${n}` : null;
   }
@@ -947,21 +874,11 @@ export class InteractionService extends EventEmitter {
       }
     };
 
-    let claimFile = null;
     try {
-      claimFile = await this._acquireAnswerClaim(id);
       await this._withAnswerLock(id, runAnswer);
-    } catch (err) {
-      await this._releaseAnswerClaim(claimFile);
-      throw err;
     } finally {
       this._answering.delete(id);
     }
-    // Legacy layout: the marker now says "answered", so a worker whose replica
-    // still shows pending gets NOT_PENDING instead of a second resume. On the
-    // provider the settled document `_save(answered)` just wrote is that
-    // tombstone, and this is a no-op.
-    await this._settleAnswerClaim(claimFile, id, full.at);
     try {
       await this.runLog.appendRecovered(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
         interactionId: id,
@@ -993,7 +910,6 @@ export class InteractionService extends EventEmitter {
       updatedAt: new Date(this._now()).toISOString()
     };
     await this._save(cancelled);
-    await this._releaseAnswerClaim(this._claimPath(id));
     const w = this._waiters.get(id);
     if (w) {
       this._waiters.delete(id);
@@ -1009,7 +925,6 @@ export class InteractionService extends EventEmitter {
     if (!it || it.status !== 'pending') return it || null;
     const expired = { ...it, status: 'expired', updatedAt: new Date(this._now()).toISOString() };
     await this._save(expired);
-    await this._releaseAnswerClaim(this._claimPath(id));
     const w = this._waiters.get(id);
     if (w) {
       this._waiters.delete(id);
@@ -1021,7 +936,7 @@ export class InteractionService extends EventEmitter {
 
   /**
    * Expire every pending interaction whose policy.expiresAt has passed, and
-   * drop the claim markers (or settled documents) that are of no use any more.
+   * drop the settled documents that are of no use any more.
    *
    * The sweep runs first because it also adopts pending records this worker
    * never saw — one raised by a worker that has since died — so they expire in
@@ -1051,16 +966,13 @@ export class InteractionService extends EventEmitter {
    * has not seen, and drop settled documents that have outlived their use as
    * tombstones.
    *
-   * The retention is twice the in-memory grace period — the same relationship
-   * the claim-marker sweep it replaces had to the claim TTL. A tombstone only
-   * has to outlive the replication of the answer that created it.
+   * The retention is twice the in-memory grace period. A tombstone only has to
+   * outlive the replication of the answer that created it.
    *
-   * Falls through to the claim-marker sweep in the legacy layout, and never
-   * throws: it runs on the expiry timer, ahead of work that must still happen.
+   * Never throws: it runs on the expiry timer, ahead of work that must still happen.
    * @private
    */
   async _sweepSettled() {
-    if (!this._documents) return this._sweepAnswerClaims();
     const cutoff = this._now() - 2 * this._settledRetentionMs;
     const stale = [];
     try {
@@ -1114,115 +1026,6 @@ export class InteractionService extends EventEmitter {
         throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
       }
       throw err;
-    }
-  }
-
-  // ── answer claims (legacy shared-filesystem CAS) ───────────────────────
-
-  _claimPath(id) {
-    const safe = String(id)
-      .replace(/[^A-Za-z0-9._-]+/g, '_')
-      .slice(0, 160);
-    return path.join(this._claimDir, `${path.basename(safe)}.json`);
-  }
-
-  /**
-   * Take the exclusive answer claim for `id`: creating the marker file is
-   * atomic on the shared filesystem, so exactly one worker wins even when its
-   * replica of the interaction lags. Resolves the marker path, or null when
-   * there is nothing to claim — persistence is off (a single process, where
-   * `_answering` suffices), or the provider layout is in use and
-   * {@link InteractionService#_withAnswerLock} holds the lease instead.
-   *
-   * @throws {InteractionError} ANSWER_IN_PROGRESS (live claim) / NOT_PENDING (already answered)
-   * @private
-   */
-  async _acquireAnswerClaim(id) {
-    if (!this._persist() || this._documents) return null;
-    const file = this._claimPath(id);
-    const payload = JSON.stringify({
-      interactionId: id,
-      pid: this._pid,
-      at: new Date(this._now()).toISOString(),
-      status: 'claimed'
-    });
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (await tryCreateExclusive(file, payload)) return file;
-      const existing = await readJsonMarker(file);
-      if (!existing) continue; // released between the two calls: retry at once
-      if (existing.data?.status === 'answered') {
-        throw new InteractionError('Interaction is answered', 'NOT_PENDING', 409);
-      }
-      const claimedAt = existing.data?.at ? new Date(existing.data.at).getTime() : existing.mtimeMs;
-      if (this._now() - claimedAt < ANSWER_CLAIM_TTL_MS) {
-        throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
-      }
-      // Left behind by a worker that died mid-answer: take it over.
-      await removeIfExists(file);
-    }
-    throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
-  }
-
-  /** Mark the claim as settled so a lagging worker sees "answered", not "free". */
-  async _settleAnswerClaim(file, id, at) {
-    if (!file) return;
-    try {
-      await fs.writeFile(
-        file,
-        JSON.stringify({ interactionId: id, pid: this._pid, at, status: 'answered' }),
-        'utf8'
-      );
-    } catch (err) {
-      logger.debug('InteractionService: could not settle answer claim', {
-        component: 'InteractionService',
-        interactionId: id,
-        error: err.message
-      });
-    }
-  }
-
-  /** Remove a claim marker (a failed handler, a cancel / expiry, a deleted run). */
-  async _releaseAnswerClaim(file) {
-    if (!file || !this._persist() || this._documents) return;
-    try {
-      await removeIfExists(file);
-    } catch (err) {
-      logger.debug('InteractionService: could not release answer claim', {
-        component: 'InteractionService',
-        error: err.message
-      });
-    }
-  }
-
-  /**
-   * Remove claim markers older than twice the claim TTL. A settled marker only
-   * has to outlive the replication of the answer; a stale live claim is taken
-   * over by the next answer attempt anyway.
-   * @private
-   */
-  async _sweepAnswerClaims() {
-    if (!this._persist() || this._documents) return;
-    let names;
-    try {
-      names = await fs.readdir(this._claimDir);
-    } catch {
-      return;
-    }
-    const cutoff = this._now() - 2 * ANSWER_CLAIM_TTL_MS;
-    for (const name of names) {
-      if (!name.endsWith('.json')) continue;
-      const file = path.join(this._claimDir, path.basename(name));
-      try {
-        const marker = await readJsonMarker(file);
-        if (!marker) continue;
-        const at = marker.data?.at ? new Date(marker.data.at).getTime() : marker.mtimeMs;
-        if (at <= cutoff) await removeIfExists(file);
-      } catch (err) {
-        logger.debug('InteractionService: claim sweep skipped a marker', {
-          component: 'InteractionService',
-          error: err.message
-        });
-      }
     }
   }
 
@@ -1332,26 +1135,11 @@ export class InteractionService extends EventEmitter {
     this._expiryTimer = null;
   }
 
-  /**
-   * Drain the debounced pending store. A no-op on the storage provider, where
-   * every record is written before its mutation resolves — nothing is
-   * buffered there to lose.
-   *
-   * @returns {Promise<void>}
-   */
-  async flush() {
-    if (this._persist()) await this._store.flush();
-  }
-
   async stop() {
     this.stopExpirySweep();
     for (const id of [...this._evictTimers.keys()]) this._clearEviction(id);
     this._unsubscribeBus?.();
     this._unhookDelete?.();
-    if (this._persist()) {
-      await this._store.flush();
-      this._store.stop?.();
-    }
   }
 }
 

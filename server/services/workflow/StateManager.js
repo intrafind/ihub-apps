@@ -5,12 +5,7 @@ import { deepMerge } from '../../utils/deepMerge.js';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import {
-  DEFAULT_STATE_DIR as STATE_DIR,
-  getWorkflowStateRepository,
-  resolveWorkflowStateRepository,
-  workflowStateOwnerId
-} from './WorkflowStateRepository.js';
+import { getWorkflowStateRepository, workflowStateOwnerId } from './WorkflowStateRepository.js';
 
 /**
  * Maximum allowed size for workflow state in bytes (50MB)
@@ -88,10 +83,9 @@ export class StateManager {
   /**
    * Creates a new StateManager instance
    * @param {Object} options - Configuration options
-   * @param {string} [options.stateDir] - Directory for persisting state checkpoints
    * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [options.repository]
-   *   Store to persist checkpoints through. Resolved from `stateDir` when
-   *   omitted; injected directly by tests that supply their own.
+   *   Store to persist checkpoints through. The shared, provider-backed one
+   *   when omitted; injected directly by tests that supply their own.
    */
   constructor(options = {}) {
     /**
@@ -102,25 +96,11 @@ export class StateManager {
     this.activeStates = new Map();
 
     /**
-     * Directory path for persisting state checkpoints
-     * @type {string}
-     */
-    this.stateDir = options.stateDir || STATE_DIR;
-
-    /**
-     * Caller-supplied store, which wins over anything derived from `stateDir`.
+     * Caller-supplied store, which wins over the shared one.
      * @type {import('./WorkflowStateRepository.js').WorkflowStateRepository|null}
      * @private
      */
     this._injectedRepository = options.repository || null;
-
-    /**
-     * Memo for the store serving a non-default `stateDir`. Resolved once and
-     * kept, because `get()` reaches for it on every cache miss.
-     * @type {import('./WorkflowStateRepository.js').WorkflowStateRepository|null}
-     * @private
-     */
-    this._boundRepository = null;
 
     /**
      * Whether an execution is running on this worker, set by the engine via
@@ -161,12 +141,7 @@ export class StateManager {
    * @returns {import('./WorkflowStateRepository.js').WorkflowStateRepository}
    */
   get repository() {
-    if (this._injectedRepository) return this._injectedRepository;
-    if (!this.stateDir || this.stateDir === STATE_DIR) return getWorkflowStateRepository();
-    if (!this._boundRepository) {
-      this._boundRepository = resolveWorkflowStateRepository(this.stateDir);
-    }
-    return this._boundRepository;
+    return this._injectedRepository || getWorkflowStateRepository();
   }
 
   /**

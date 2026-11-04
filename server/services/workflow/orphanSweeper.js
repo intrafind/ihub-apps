@@ -14,11 +14,7 @@
  * a final state in the UI and "My Executions" stops listing dead runs as
  * running.
  *
- * State is read and written through {@link WorkflowStateRepository}, which
- * covers both the `workflow-state` documents and the legacy
- * `<id>/latest.json` directories. That union matters here more than anywhere
- * else: a half-imported installation that looked empty to this sweeper would
- * leave every interrupted run stuck at `running` forever.
+ * State is read and written through {@link WorkflowStateRepository}.
  *
  * @module services/workflow/orphanSweeper
  */
@@ -28,11 +24,7 @@ import { hasRemote } from '../../clusterBus.js';
 import { RUN_PRESENCE_KIND } from '../loop/RunLog.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { getStateManager } from './StateManager.js';
-import {
-  DEFAULT_STATE_DIR,
-  resolveWorkflowStateRepository,
-  workflowStateOwnerId
-} from './WorkflowStateRepository.js';
+import { getWorkflowStateRepository, workflowStateOwnerId } from './WorkflowStateRepository.js';
 import { isSchedulerOwner } from './triggers/schedulerLock.js';
 
 // Statuses that indicate the workflow was mid-execution when the process died.
@@ -85,11 +77,8 @@ function isHeldByAnotherWorker(executionId, state) {
  * @param {Object} [opts]
  * @param {boolean} [opts.requireSchedulerOwner=true] - Only sweep if this
  *   instance owns the scheduler lock.
- * @param {string} [opts.stateDir] - Directory holding the legacy state layout;
- *   the installation's own directory resolves to the shared, provider-backed
- *   repository.
  * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [opts.repository]
- *   Store to sweep. Resolved from `stateDir` when omitted.
+ *   Store to sweep; the shared, provider-backed one when omitted.
  * @param {(executionId: string, state: Object) => boolean} [opts.heldByAnotherWorker]
  *   Whether another worker runs a chat-launched execution; the cluster's
  *   presence when omitted.
@@ -97,7 +86,6 @@ function isHeldByAnotherWorker(executionId, state) {
  */
 export async function sweepOrphanedExecutions({
   requireSchedulerOwner = true,
-  stateDir = DEFAULT_STATE_DIR,
   repository = null,
   heldByAnotherWorker = isHeldByAnotherWorker
 } = {}) {
@@ -108,7 +96,7 @@ export async function sweepOrphanedExecutions({
     return { scanned: 0, marked: 0 };
   }
 
-  const store = repository || resolveWorkflowStateRepository(stateDir);
+  const store = repository || getWorkflowStateRepository();
   // Metadata only: the guard below rejects most candidates without ever
   // needing the state, and a state can carry a whole workflow definition.
   const items = [];
