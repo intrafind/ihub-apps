@@ -103,6 +103,13 @@ function GroupFormEditor({
     handleInputChange('mappings', mappingArray);
   };
 
+  const handleInheritsChange = inheritsArray => {
+    handleInputChange('inherits', inheritsArray);
+  };
+
+  // Parent candidates: every group except this one, so a group cannot inherit itself.
+  const parentCandidates = Object.values(groups || {}).filter(g => g && g.id && g.id !== group?.id);
+
   const isProtectedGroup = groupId => {
     return ['admin', 'user', 'anonymous', 'authenticated'].includes(groupId);
   };
@@ -341,6 +348,45 @@ function GroupFormEditor({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Inherited Groups */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                {t('admin.groups.inheritance', 'Group Inheritance')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.groups.inheritanceDescription',
+                  'Optionally let this group inherit the permissions of one or more parent groups'
+                )}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <GroupMultiSelect
+                id="group-inherits"
+                label={t('admin.groups.inheritsFrom', 'Inherits From')}
+                value={group.inherits || []}
+                onChange={handleInheritsChange}
+                availableGroups={parentCandidates}
+                allowCustom={false}
+                placeholder={t(
+                  'admin.groups.inheritsPlaceholder',
+                  'Search groups to inherit from…'
+                )}
+                emptyMessage={t(
+                  'admin.groups.inheritsEmpty',
+                  'No parent groups - this group only has its own permissions'
+                )}
+                helpText={t(
+                  'admin.groups.inheritsHelp',
+                  "Members of this group also get the permissions of every parent group (combined, never reduced). The group's own permissions are added on top. Inheritance is optional, and circular inheritance is rejected when you save."
+                )}
+              />
             </div>
           </div>
         </div>

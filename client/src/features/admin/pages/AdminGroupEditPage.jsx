@@ -60,6 +60,7 @@ function AdminGroupEditPage() {
         adminAccess: false
       },
       mappings: [],
+      inherits: [],
       enabled: true
     }),
     []

@@ -477,3 +477,16 @@ install apps, models, prompts, skills, workflows and integrations as usual.
 - **Unchanged:** the hosted MCP integrations and the model providers still need to be reachable.
 
 See [Marketplace → Air-gapped installations](../../marketplace.md#air-gapped-installations).
+
+## Configure Group Inheritance in the Group Editor
+
+Admins can now choose which parent groups a group inherits from directly in **Admin → Groups**,
+without switching to the JSON tab. The new **Group Inheritance** card on the group form has an
+**Inherits From** picker that lists every other group; inheritance stays optional and a group can
+have several parents.
+
+- **Safe to save:** a group can no longer be saved with a parent that does not exist, with itself as
+  a parent, or with a chain that leads back to itself. The save is refused with a message naming the
+  problem and the group file is left untouched, instead of failing when the groups are next loaded.
+- **Same behaviour as before:** members still receive the combined permissions of all parents plus
+  the group's own. See [Admin UI → Groups](../../admin-ui.md).

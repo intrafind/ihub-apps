@@ -246,7 +246,7 @@ Deleting cannot be undone. To stop someone from signing in while keeping what th
 
 Groups control what users can access. Go to **Access & Identity → Groups**.
 
-**Group inheritance:** Groups can inherit permissions from parent groups. For example, the built-in `users` group inherits from `authenticated`, which inherits from `anonymous`. A user's effective permissions are the union of their group's permissions and all inherited parent groups.
+**Group inheritance:** Groups can inherit permissions from parent groups. Pick the parents in the **Group Inheritance** card of the group form (**Inherits From**); inheritance is optional and a group can have several parents. A group cannot inherit itself, and a parent that does not exist or a circular chain is refused with an error when you save. For example, the built-in `users` group inherits from `authenticated`, which inherits from `anonymous`. A user's effective permissions are the union of their group's permissions and all inherited parent groups.
 
 **Permissions:** Each group can be configured with:
 - Which apps, prompts, and models are accessible
