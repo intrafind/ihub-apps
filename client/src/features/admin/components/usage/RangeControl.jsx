@@ -113,7 +113,7 @@ export default function RangeControl({ state }) {
           {t('admin.usage.reports.autoRefresh', 'Auto-refresh')}
         </label>
       )}
-      <span className="text-xs text-gray-400 dark:text-gray-500">
+      <span className="text-xs text-gray-500 dark:text-gray-400">
         {t('admin.usage.reports.utcNote', 'Days are UTC days.')}
       </span>
     </div>

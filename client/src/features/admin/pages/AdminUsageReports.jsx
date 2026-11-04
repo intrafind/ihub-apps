@@ -106,7 +106,7 @@ function AdminUsageReports() {
                 )}{' '}
                 <Link
                   to="/admin/feedback"
-                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="text-indigo-700 underline hover:no-underline dark:text-indigo-300"
                 >
                   {t('admin.usage.reviewFeedback', 'Review feedback')} →
                 </Link>
