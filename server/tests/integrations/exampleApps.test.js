@@ -7,7 +7,7 @@
  * definition schema, `IntegrationRegistry.readExampleApp`, and every
  * example app a shipped definition names passes the app schema.
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

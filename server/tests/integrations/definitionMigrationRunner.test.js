@@ -8,7 +8,7 @@
  * and its fencing token, restore and adopt, the startup run and the
  * marketplace update path.
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
