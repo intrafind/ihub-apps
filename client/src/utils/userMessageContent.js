@@ -15,7 +15,9 @@
  */
 export function splitUserMessageContent(content, rawContent) {
   if (typeof content !== 'string' || typeof rawContent !== 'string') return null;
-  const typed = rawContent.trim();
-  if (!typed || !content.startsWith(typed)) return null;
-  return { text: typed, html: content.slice(typed.length) };
+  // The display content was built from the trimmed text, so match against that,
+  // but show the text as typed: the first line keeps its leading indentation.
+  const trimmed = rawContent.trim();
+  if (!trimmed || !content.startsWith(trimmed)) return null;
+  return { text: rawContent.trimEnd(), html: content.slice(trimmed.length) };
 }
