@@ -381,6 +381,38 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
     assert.match(held.data.toString('utf8'), /--brand-primary:\s*#1d4ed8/);
   });
 
+  it('tells the model to fix and resubmit when the artifact has warnings', async () => {
+    clearHeldGeneratedFiles();
+    const res = await runCreateWebArtifact({
+      filename: 'dead.html',
+      content: '<!DOCTYPE html><html><body><a href="#">Quellen</a></body></html>',
+      user: { id: 'u-dead' },
+      chatId: 'chat-dead'
+    });
+    assert.equal(res.success, true);
+    assert.equal(res.warnings.length, 1);
+    assert.match(res.message, /Do NOT answer yet/);
+    clearHeldGeneratedFiles();
+  });
+
+  it('warns about links that lead nowhere in the sandboxed preview', () => {
+    const dead = inspectWebArtifact(
+      '<a href="#">Quellen 2</a><a href="https://example.com/x">Ext</a><a href="./detail.html">D</a>',
+      'html'
+    );
+    assert.equal(dead.length, 1);
+    assert.match(dead[0], /cannot work/);
+    assert.match(dead[0], /"#"/);
+    assert.equal(
+      inspectWebArtifact('<script>window.open("https://x.test")</script>', 'html').length,
+      1
+    );
+    const fine =
+      '<a href="#sources">Quellen</a><section id="sources"></section><a href="mailto:a@b.de">Mail</a>';
+    assert.deepEqual(inspectWebArtifact(fine, 'html'), []);
+    assert.equal(inspectWebArtifact('<a href="#missing">x</a>', 'html').length, 1);
+  });
+
   it('checks that each storage access is guarded, not that some try block exists', () => {
     const guarded = '<script>try { localStorage.setItem("k","v"); } catch (e) {}</script>';
     assert.deepEqual(inspectWebArtifact(guarded, 'html'), []);
