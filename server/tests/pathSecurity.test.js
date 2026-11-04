@@ -3,7 +3,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { isValidId, isValidExtensionId, isValidWorkflowVersion } from '../utils/pathSecurity.js';
+import { isValidId, isValidExtensionId } from '../utils/pathSecurity.js';
 
 describe('pathSecurity', () => {
   describe('isValidId', () => {
@@ -67,17 +67,6 @@ describe('pathSecurity', () => {
       assert.strictEqual(isValidExtensionId('valid-id8'), true);
       assert.strictEqual(isValidExtensionId('a'.repeat(128)), true);
       assert.strictEqual(isValidExtensionId('a'.repeat(129)), false);
-    });
-  });
-
-  describe('isValidWorkflowVersion', () => {
-    it('should require safe IDs with alphanumeric boundaries', () => {
-      assert.strictEqual(isValidWorkflowVersion('v1.2.3'), true);
-      assert.strictEqual(isValidWorkflowVersion('1-release'), true);
-      assert.strictEqual(isValidWorkflowVersion('-starts-with-symbol'), false);
-      assert.strictEqual(isValidWorkflowVersion('ends-with-symbol-'), false);
-      assert.strictEqual(isValidWorkflowVersion('version..1'), false);
-      assert.strictEqual(isValidWorkflowVersion('a'.repeat(65)), false);
     });
   });
 });

@@ -861,7 +861,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);
   registerWorkflowRoutes(app, { getLocalizedError });
-  registerTriggerRoutes(app, { authRequired, adminAuth });
+  registerTriggerRoutes(app);
   registerAgentRoutes(app);
   registerRunRoutes(app);
   registerStoredChatRoutes(app);

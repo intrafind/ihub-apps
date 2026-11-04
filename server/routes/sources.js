@@ -33,7 +33,7 @@ const MAX_SCOPE_CHARS = 256;
  * @param {import('express').Response} res
  * @param {Object} content
  */
-export function sendProviderContent(res, content) {
+function sendProviderContent(res, content) {
   res.set('Content-Type', content.contentType || 'application/octet-stream');
   if (content.contentDisposition) res.set('Content-Disposition', content.contentDisposition);
   else if (content.fileName) {

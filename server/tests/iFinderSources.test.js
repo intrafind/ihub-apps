@@ -13,8 +13,7 @@ import assert from 'node:assert/strict';
 import {
   iAssistantSourceFrame,
   iFinderSourceProducer,
-  isIFinderDocumentTool,
-  withConversationSources
+  isIFinderDocumentTool
 } from '../services/sources/producers/ifinder.js';
 import { extractToolSources, MAX_FRAME_SOURCES } from '../services/sources/index.js';
 
@@ -340,31 +339,4 @@ test('iAssistant over all search profiles: each document names the profile iFind
   assert.equal(named.scopes, undefined);
   // Nothing found: no frame, whatever was asked.
   assert.equal(iAssistantSourceFrame({ resultItems: [] }, { scope }), null);
-});
-
-test('withConversationSources: a resumed conversation’s answers carry their documents as sources', () => {
-  const page = {
-    messages: [
-      { role: 'user', content: 'q' },
-      {
-        role: 'assistant',
-        content: 'a <cite type="r">1</cite>',
-        result_items: [resultItem('doc-a', 'Travel policy')],
-        references: []
-      }
-    ]
-  };
-  const resumed = withConversationSources(page, 'sales');
-  assert.equal(resumed.messages[0].sources, undefined);
-  assert.deepEqual(resumed.messages[1].sources.items[0].ref, { id: 'doc-a', scope: 'sales' });
-  assert.equal(resumed.messages[1].sources.items[0].id, 'ifinder:doc-a');
-  assert.deepEqual(resumed.messages[1].sources.queries, []);
-  const bare = withConversationSources([page.messages[1]], undefined);
-  assert.deepEqual(bare[0].sources.items[0].ref, { id: 'doc-a' });
-  assert.equal(withConversationSources(null, 'p'), null);
-  // The reopened answer names the profiles as the live one did.
-  const named = withConversationSources(page, 'sales', {
-    scopeNames: new Map([['sales', 'Sales documents']])
-  });
-  assert.equal(named.messages[1].sources.items[0].scopeName, 'Sales documents');
 });

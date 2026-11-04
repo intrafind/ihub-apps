@@ -40,14 +40,12 @@ The system supports seven different types of rate limiters, each configurable th
   - `POST /api/auth/ldap/login`
   - `GET|POST /api/auth/ntlm/login`
   - `POST /api/auth/teams/exchange`
-  - `POST /api/auth/teams/config`
 - **Not applied to** read-only endpoints in the same namespace. These are covered
   by the public API limiter instead:
   - `GET /api/auth/status` — fetched on every SPA boot and every 401 recovery,
     and commonly used as the container liveness/readiness probe
   - `GET /api/auth/user`
-  - `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`,
-    `GET /api/auth/ntlm/status`, `GET /api/auth/teams/client-config`
+  - `GET /api/auth/teams/client-config`
   - `GET /api/auth/oidc/:provider` and `GET /api/auth/oidc/:provider/callback` —
     the SSO redirect targets
   - `POST /api/auth/logout`
