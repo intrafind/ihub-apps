@@ -19,7 +19,6 @@ export default [
       'browser-extension/extension/**',
       'browser-extension/assets/**',
       'docs/**',
-      'examples/**',
       'concepts/**',
       'logs/**',
       '*.log',

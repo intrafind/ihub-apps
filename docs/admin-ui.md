@@ -295,7 +295,7 @@ See [Projects](projects.md).
 
 ## Marketplace
 
-**AI Workspace → Marketplace** installs apps, models, prompts, skills, workflows and integrations from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is on by default — switch it off under **Platform → Features**.
+**AI Workspace → Marketplace** installs apps, models, prompts, skills, workflows and integrations from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** registry is preconfigured; **Manage Registries** adds your own. The marketplace is on by default — switch it off under **Platform → Features**.
 
 ![Admin marketplace](assets/screenshots/admin-marketplace.png)
 

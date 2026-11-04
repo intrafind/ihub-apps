@@ -36,8 +36,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Poll interval while waiting for the background sweep to do something. */
 const POLL_MS = 10;
 
-/** Give-up budget for those waits; a sweep over a handful of chats is instant. */
-const WAIT_BUDGET_MS = 2000;
+/**
+ * Give-up budget for those waits. A sweep over a handful of chats is instant, and
+ * `waitFor` returns the moment its condition holds, so a generous budget costs a
+ * passing run nothing. 2 s was too tight for a shared CI runner, where a
+ * stall of the event loop between two tests timed out the first tick once.
+ */
+const WAIT_BUDGET_MS = 15_000;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
