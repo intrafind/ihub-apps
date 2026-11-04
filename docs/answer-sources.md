@@ -220,8 +220,7 @@ registerSourceProvider({
 });
 ```
 
-`ifinder` is built in (`services/sources/providers/ifinder.js`). The iFinder document routes
-(`/api/integrations/ifinder/document*`) use the same provider.
+`ifinder` is built in (`services/sources/providers/ifinder.js`).
 
 A source keeps its `ref` only when its provider is registered, because a ref that no provider
 serves would offer actions that cannot work. A source with a `ref` is always private.

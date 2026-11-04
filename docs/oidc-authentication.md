@@ -387,14 +387,6 @@ Set permissions in `contents/config/groups.json` (the same file that contains gr
 
 ## API Endpoints
 
-### Get Available Providers
-
-```http
-GET /api/auth/oidc/providers
-```
-
-Returns list of configured OIDC providers.
-
 ### Initiate Authentication
 
 ```http
@@ -581,9 +573,6 @@ curl https://accounts.google.com/.well-known/openid_configuration
 
 # Test authentication status
 curl http://localhost:3000/api/auth/status
-
-# Test provider list
-curl http://localhost:3000/api/auth/oidc/providers
 ```
 
 ## Troubleshooting

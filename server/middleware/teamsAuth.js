@@ -353,20 +353,3 @@ export async function teamsClientConfig(req, res) {
     tenantId: teamsConfig.tenantId || null
   });
 }
-
-/**
- * Teams tab configuration save handler
- */
-export async function teamsTabConfigSave(req, res) {
-  const errorHandler = new ErrorHandler();
-  const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
-
-  // This endpoint is called when a Teams tab is configured
-  // For now, we just return success as we don't need to save any configuration
-  const message = await errorHandler.getLocalizedError('TEAMS_TAB_CONFIG_SAVED', {}, language);
-  res.json({
-    success: true,
-    message: message,
-    messageKey: 'TEAMS_TAB_CONFIG_SAVED'
-  });
-}

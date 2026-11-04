@@ -145,7 +145,7 @@ The `source=ifinder` parameter is **required** to trigger the attachment — the
 
 1. The page loads and shows a loading placeholder in the attachment area.
 2. The document is fetched server-side via the iFinder proxy
-   (`/api/integrations/ifinder/document`), which resolves the download link and
+   (`GET /api/sources/ifinder/content`), which resolves the download link and
    streams the binary. If the binary fetch fails, the text content is fetched as
    a fallback.
 3. The document is processed through the same pipeline as an uploaded file and
