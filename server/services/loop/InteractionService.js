@@ -87,12 +87,6 @@ export const CLAIM_DIR_NAME = 'interaction-claims';
 /** Namespace holding one document per interaction (pending, or recently settled). */
 export const INTERACTIONS_NAMESPACE = RUNTIME_NAMESPACES.interactions;
 
-/** Namespace the runtime stores keep their "this import already ran" markers in. */
-export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
-
-/** Key of the interaction import marker within {@link IMPORT_STATE_NAMESPACE}. */
-export const IMPORT_STATE_KEY = 'interactions';
-
 /**
  * Lease options for the answer critical section.
  *
@@ -128,24 +122,6 @@ const SCAN_PAGE_SIZE = 200;
  * that is logged: a silently short list reads as "that is all there is".
  */
 export const MAX_SCAN_INTERACTIONS = 20_000;
-
-/** Hard bound on how many legacy pending interactions one import carries over. */
-const MAX_IMPORT_INTERACTIONS = 5000;
-
-/**
- * Lease for the whole legacy import. Long, because the import is the critical
- * section: a sibling worker that cannot take the lock skips the import rather
- * than racing it.
- *
- * 300s, matching `runSummaryImport` and `WorkflowStateRepository`, which carry
- * the same shape of one-time import. `ttlMs` bounds how long the section may
- * run — a lease older than its TTL is taken over whether or not its holder is
- * alive — and this section reads a legacy file, then does up to
- * `MAX_IMPORT_INTERACTIONS` document reads and writes. At 60s a slow disk was
- * enough for the lease to be taken from a worker still importing, which is the
- * one thing the lock is here to prevent.
- */
-const IMPORT_LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
 
 /**
  * Document key for an interaction id.
@@ -282,18 +258,6 @@ export class InteractionService extends EventEmitter {
     this._resolveStorage();
     try {
       if (this._documents) {
-        // The import runs before the first read so that a checkpoint raised by
-        // the previous release is in the mirror from the very first request,
-        // not only after the next sweep. It is carrying old data over, so a
-        // failure must not cost us the records already in the namespace.
-        try {
-          await this._importLegacyPending();
-        } catch (err) {
-          logger.warn('InteractionService: legacy interaction import failed', {
-            component: 'InteractionService',
-            error: err.message
-          });
-        }
         await this._loadFromNamespace();
         return;
       }
@@ -463,99 +427,6 @@ export class InteractionService extends EventEmitter {
         component: 'InteractionService',
         interactionId: id,
         error: err.message
-      });
-    }
-  }
-
-  /**
-   * Carry the pending interactions of the previous release into the namespace.
-   *
-   * Safe on every boot: a marker records that it ran, ids that already have a
-   * document are left alone, and the legacy file is never touched — it stays
-   * as it is until a later release removes it. The marker matters more here
-   * than for the other runtime stores: without it, an interaction answered
-   * after the import would be re-imported as pending on the next boot and
-   * could resume its run a second time.
-   * @private
-   */
-  async _importLegacyPending() {
-    const documents = this._documents;
-    const marker = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
-    if (marker?.data?.completedAt) return;
-
-    const run = async () => {
-      // Re-read the marker now that the lock is held. The check above answers
-      // from before the wait, and the ordinary case is exactly the one it gets
-      // wrong: every worker boots at once, one imports, the rest wait, take
-      // the lock in turn and — without this — each re-reads the legacy file
-      // and re-checks up to MAX_IMPORT_INTERACTIONS documents to import
-      // nothing. `runSummaryImport` and `WorkflowStateRepository` both do this;
-      // this third importer was the one that missed it.
-      const held = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
-      if (held?.data?.completedAt) return;
-
-      let parsed = null;
-      try {
-        parsed = JSON.parse(await fs.readFile(this._storePath, 'utf8'));
-      } catch {
-        // No legacy file, or one that is not readable JSON: nothing to carry.
-      }
-      const candidates =
-        parsed && typeof parsed === 'object' ? Object.values(parsed.interactions || {}) : [];
-      const pending = candidates.filter(
-        record => isInteractionRecord(record) && record.status === 'pending'
-      );
-      const truncated = pending.length > MAX_IMPORT_INTERACTIONS;
-      const selected = truncated ? pending.slice(0, MAX_IMPORT_INTERACTIONS) : pending;
-
-      let imported = 0;
-      let skipped = 0;
-      for (const record of selected) {
-        try {
-          const key = interactionDocumentKey(record.id);
-          if (await documents.get(INTERACTIONS_NAMESPACE, key)) {
-            skipped += 1;
-            continue;
-          }
-          await this._writeDocument(record);
-          imported += 1;
-        } catch (err) {
-          skipped += 1;
-          logger.warn('InteractionService: could not import a legacy interaction', {
-            component: 'InteractionService',
-            interactionId: record.id,
-            error: err.message
-          });
-        }
-      }
-
-      await documents.put(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY, {
-        completedAt: new Date(this._now()).toISOString(),
-        imported,
-        skipped,
-        truncated,
-        candidates: pending.length
-      });
-      if (pending.length > 0) {
-        logger.info('Imported legacy pending interactions into the interactions namespace', {
-          component: 'InteractionService',
-          imported,
-          skipped,
-          truncated,
-          candidates: pending.length,
-          ...(truncated ? { bound: MAX_IMPORT_INTERACTIONS } : {})
-        });
-      }
-    };
-
-    if (!this._locks) return run();
-    try {
-      await this._locks.withLock('runtime-import:interactions', run, IMPORT_LOCK_OPTIONS);
-    } catch (err) {
-      if (err?.code !== 'LOCK_TIMEOUT') throw err;
-      // A sibling worker is importing the same records; waiting adds nothing.
-      logger.debug('InteractionService: legacy interaction import already running elsewhere', {
-        component: 'InteractionService'
       });
     }
   }

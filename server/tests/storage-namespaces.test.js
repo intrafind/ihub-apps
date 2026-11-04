@@ -24,15 +24,8 @@ import assert from 'node:assert/strict';
 import { CONFIG_NAMESPACES, RUNTIME_NAMESPACES, getRawNamespace } from '../storage/namespaces.js';
 import { CHATS_NAMESPACE, CHAT_MESSAGES_NAMESPACE } from '../services/chat/ChatRepository.js';
 import { RUNS_NAMESPACE } from '../services/runtime/RunSummaryRepository.js';
-import {
-  INTERACTIONS_NAMESPACE,
-  IMPORT_STATE_NAMESPACE as INTERACTIONS_IMPORT_NAMESPACE
-} from '../services/loop/InteractionService.js';
-import {
-  WORKFLOW_STATE_NAMESPACE,
-  IMPORT_STATE_NAMESPACE as WORKFLOW_IMPORT_NAMESPACE
-} from '../services/workflow/WorkflowStateRepository.js';
-import { IMPORT_STATE_NAMESPACE as RUN_IMPORT_NAMESPACE } from '../services/runtime/runSummaryImport.js';
+import { INTERACTIONS_NAMESPACE } from '../services/loop/InteractionService.js';
+import { WORKFLOW_STATE_NAMESPACE } from '../services/workflow/WorkflowStateRepository.js';
 import { INTEGRATION_CONVERSATIONS_NAMESPACE } from '../services/integrations/ConversationStateManager.js';
 import { A2A_TASKS_NAMESPACE, A2A_CONTEXTS_NAMESPACE } from '../services/mcp/a2aTaskStore.js';
 import { MCP_OAUTH_CLIENTS_NAMESPACE } from '../services/mcp/mcpOAuthClientStore.js';
@@ -65,15 +58,6 @@ describe('storage namespaces', () => {
           `writing it would land in contents/${CONFIG_NAMESPACES[ns]?.dir}/`
       );
     }
-  });
-
-  it('gives the shared import marker exactly one spelling', () => {
-    // It had three definitions in three modules. Two importers disagreeing by
-    // one character each believe the other has already run, and a one-time
-    // import runs twice or never — neither of which fails loudly.
-    assert.equal(INTERACTIONS_IMPORT_NAMESPACE, RUNTIME_NAMESPACES.runtimeImports);
-    assert.equal(WORKFLOW_IMPORT_NAMESPACE, RUNTIME_NAMESPACES.runtimeImports);
-    assert.equal(RUN_IMPORT_NAMESPACE, RUNTIME_NAMESPACES.runtimeImports);
   });
 
   it('has every runtime store using a declared namespace', () => {

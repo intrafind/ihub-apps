@@ -33,8 +33,6 @@ import {
   InteractionService,
   InteractionError,
   INTERACTIONS_NAMESPACE,
-  IMPORT_STATE_NAMESPACE,
-  IMPORT_STATE_KEY,
   interactionDocumentKey
 } from '../services/loop/InteractionService.js';
 
@@ -691,53 +689,7 @@ describe('interactions: the answer claim', () => {
   });
 });
 
-/**
- * The pending interaction a previous release left in `interactions.json`.
- *
- * @returns {Object} A legacy record.
- */
-function legacyRecord() {
-  return {
-    id: 'int-legacy',
-    runId: 'wf-exec-1',
-    step: 0,
-    kind: 'question',
-    origin: 'node',
-    prompt: { message: 'Approve?', inputType: 'text', allowSkip: false, allowOther: false },
-    policy: { onTimeout: 'fail', fallback: 'park' },
-    status: 'pending',
-    source: { principalId: 'u1', executionId: 'wf-exec-1' },
-    createdAt: new Date().toISOString()
-  };
-}
-
-describe('interactions: the legacy import', () => {
-  it('carries pending interactions over once, leaving the file alone', async () => {
-    await withInteractions(
-      async ({ legacyDir, provider, services: [first, second] }) => {
-        const legacyFile = path.join(legacyDir, 'interactions.json');
-        const body = JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } });
-        await fs.writeFile(legacyFile, body, 'utf8');
-
-        const pending = await first.listPending({});
-        assert.deepEqual(
-          pending.map(item => item.id),
-          ['int-legacy'],
-          'a checkpoint raised by the previous release is visible from the first request'
-        );
-        assert.ok(await provider.documents.get(INTERACTIONS_NAMESPACE, 'int-legacy'));
-        assert.equal(await fs.readFile(legacyFile, 'utf8'), body, 'the legacy file is untouched');
-
-        // Answering it must be final: a re-import on the next boot would resume
-        // the run a second time.
-        await first.answer('int-legacy', { value: 'yes' }, { user: USER });
-        assert.deepEqual(await second.listPending({}), []);
-        assert.equal(await fs.readFile(legacyFile, 'utf8'), body);
-      },
-      { services: 2 }
-    );
-  });
-
+describe('interactions: run cascade', () => {
   it('scans the namespace once for a whole sweep, not once per run', async () => {
     // The cascade's expensive half is a scan of the interactions namespace,
     // and it costs the same whether it is looking for one run or five hundred.
@@ -770,135 +722,5 @@ describe('interactions: the legacy import', () => {
       );
       assert.deepEqual(await service.listPending({}), [], 'and every interaction is gone');
     });
-  });
-
-  it('does not redo the scan on a worker that waited for the import lock', async () => {
-    // Every worker boots at once, so they all see no marker, one takes the
-    // lock and imports, and the rest wait. Checking the marker only *before*
-    // the wait, each of those then takes the lock in turn and re-reads the
-    // legacy file and re-checks every record — up to 5000 document reads per
-    // worker — to import nothing. The two sibling importers
-    // (`runSummaryImport`, `WorkflowStateRepository`) both re-check under the
-    // lock; this one did not.
-    await withInteractions(
-      async ({ legacyDir, provider, services: [first, second] }) => {
-        const records = {};
-        for (const id of ['int-a', 'int-b', 'int-c']) {
-          records[id] = { ...legacyRecord(), id };
-        }
-        await fs.writeFile(
-          path.join(legacyDir, 'interactions.json'),
-          JSON.stringify({ version: 1, interactions: records }),
-          'utf8'
-        );
-
-        const perRecordReads = [];
-        const realGet = provider.documents.get.bind(provider.documents);
-        provider.documents.get = async (ns, key) => {
-          if (ns === INTERACTIONS_NAMESPACE) perRecordReads.push(key);
-          return realGet(ns, key);
-        };
-
-        // Concurrently, so both pass the pre-lock marker check before either
-        // has written one — the ordinary boot, not a contrived one.
-        await Promise.all([first.listPending({}), second.listPending({})]);
-        provider.documents.get = realGet;
-
-        const imported = perRecordReads.filter(key => key in records);
-        assert.equal(
-          imported.length,
-          Object.keys(records).length,
-          `each legacy record is checked once, by the worker that won the lock; ` +
-            `saw ${imported.length} checks for ${Object.keys(records).length} records`
-        );
-        assert.deepEqual(
-          (await second.listPending({})).map(item => item.id).sort(),
-          ['int-a', 'int-b', 'int-c'],
-          'and the import still happened'
-        );
-      },
-      { services: 2 }
-    );
-  });
-
-  it('does not re-import once the answered record s tombstone has been swept', async () => {
-    // The marker is the guard with an independent failure path. The settled
-    // document is evicted after its grace period, and the legacy file is
-    // deliberately never rewritten — so on a boot more than two grace periods
-    // after the answer, only the marker stands between the untouched
-    // `status: 'pending'` record and a second resume of the run.
-    await withInteractions(
-      async ({ legacyDir, provider, service, addService }) => {
-        await fs.writeFile(
-          path.join(legacyDir, 'interactions.json'),
-          JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } }),
-          'utf8'
-        );
-
-        await service.listPending({});
-        await service.answer('int-legacy', { value: 'yes' }, { user: USER });
-
-        // What `_scheduleEviction` and `_sweepSettled` do once the tombstone
-        // has outlived its use.
-        await provider.documents.delete(INTERACTIONS_NAMESPACE, 'int-legacy');
-        assert.ok(
-          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
-          'the import marker is what is left'
-        );
-
-        assert.deepEqual(
-          await addService().listPending({}),
-          [],
-          'a later boot does not raise the answered checkpoint again'
-        );
-        assert.equal(
-          await provider.documents.get(INTERACTIONS_NAMESPACE, 'int-legacy'),
-          null,
-          'and writes nothing back into the namespace'
-        );
-      },
-      { services: 1 }
-    );
-  });
-
-  it('never overwrites a record the live path already wrote', async () => {
-    // The per-record existence check, on its own: with the marker absent —
-    // an import interrupted before it could write one — a settled document
-    // must still win over the legacy file's stale pending copy.
-    await withInteractions(
-      async ({ legacyDir, provider, addService }) => {
-        await fs.writeFile(
-          path.join(legacyDir, 'interactions.json'),
-          JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } }),
-          'utf8'
-        );
-        const settled = {
-          ...legacyRecord(),
-          status: 'answered',
-          answer: { value: 'yes', by: 'u1', at: new Date().toISOString(), channel: 'api' },
-          updatedAt: new Date().toISOString()
-        };
-        await provider.documents.put(INTERACTIONS_NAMESPACE, 'int-legacy', settled, {
-          ownerId: 'u1'
-        });
-        assert.equal(
-          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
-          null,
-          'no marker: the import runs in full'
-        );
-
-        assert.deepEqual(await addService().listPending({}), []);
-        assert.equal(
-          (await provider.documents.get(INTERACTIONS_NAMESPACE, 'int-legacy')).data.status,
-          'answered',
-          'the settled document is left exactly as it was'
-        );
-        assert.ok(
-          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
-          'and the import still records that it ran'
-        );
-      },
-      { services: 0 }
-    );
   });
 });
