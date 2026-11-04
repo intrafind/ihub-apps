@@ -2,22 +2,18 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 export const version = '217';
-export const description = 'Delete legacy integration token files (AES-CBC, single-slot)';
+export const description = 'Delete integration token files in the AES-CBC format';
 
 export async function precondition(ctx) {
   return (await ctx.listFiles('integrations')).length > 0;
 }
 
 /**
- * Per-user integration token files live in `integrations/<service>/<userId>__<providerId>.json`
- * and are encrypted with authenticated AES-256-GCM. Two older shapes can still be on disk:
- *
- *   - unauthenticated AES-256-CBC files (no `authTag`), and
- *   - single-slot files (`<userId>.json`, no `providerId`).
- *
- * The server no longer reads either. Reading CBC needs a decrypt path without a MAC, and the
- * single-slot files can only be assigned to a provider by decrypting them, so they are deleted
- * without being decrypted: the affected users connect the service again. Nothing else is touched.
+ * Per-user integration token files (`integrations/<service>/<userId>[__<providerId>].json`) are
+ * encrypted with authenticated AES-256-GCM. Files from before 5.4.16 may still be in the
+ * unauthenticated AES-256-CBC format (no `authTag`). The server no longer reads that format, since
+ * reading it needs a decrypt path without a MAC, so those files are deleted without being
+ * decrypted and the affected users connect the service again. GCM files are never touched.
  */
 export async function up(ctx) {
   let removed = 0;
@@ -32,12 +28,11 @@ export async function up(ctx) {
       }
       const isTokenFile =
         data && typeof data === 'object' && data.encrypted && data.iv && data.contextHash;
-      if (!isTokenFile) continue;
-      if (!data.authTag || !data.providerId) {
+      if (isTokenFile && !data.authTag) {
         await ctx.deleteFile(`${dir}/${file}`);
         removed += 1;
       }
     }
   }
-  ctx.log(`Deleted ${removed} legacy integration token file(s); affected users reconnect`);
+  ctx.log(`Deleted ${removed} AES-CBC integration token file(s); affected users reconnect`);
 }

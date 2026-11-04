@@ -340,8 +340,8 @@ kept their id, tenant ids to enter).
   httpOnly cookie that was already set. Nothing changes for users. Custom code that read
   `?token=` from the OIDC return URL has to use the cookie (or `redirect=false` for the JSON form).
 - **Old integration token files are deleted on the first start (migration V217).** Per-user
-  Office 365, Google Drive, Nextcloud and iFinder login tokens in `contents/integrations/<service>/`
-  that were written in the unauthenticated AES-256-CBC format, or in the single-slot
-  `<userId>.json` layout, are removed without being decrypted; the server no longer reads either.
-  The affected users connect the service again under **Settings → Integrations**. Files written by
-  5.4.16 and later (AES-256-GCM, `<userId>__<providerId>.json`) are not touched.
+  Office 365, Google Drive, Nextcloud, Jira and iFinder login tokens in
+  `contents/integrations/<service>/` that were written in the unauthenticated AES-256-CBC format
+  (installations from before 5.4.16) are removed without being decrypted; the server no longer
+  reads that format. The affected users connect the service again under **Settings →
+  Integrations**. AES-256-GCM files are not touched.

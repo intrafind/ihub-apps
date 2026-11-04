@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V217: integration token files in the AES-CBC or single-slot shape are deleted
- * (never decrypted); GCM files scoped to a provider and unrelated files are kept.
+ * Migration V217: integration token files in the AES-CBC format are deleted (never decrypted);
+ * GCM files, including Jira's single-slot ones, and unrelated files are kept.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,17 +35,18 @@ function fakeCtx(files) {
 
 const gcm = { encrypted: 'aa', iv: 'bb', authTag: 'cc', contextHash: 'dd', providerId: 'p1' };
 
-test('deletes CBC and single-slot token files, keeps scoped GCM and other files', async () => {
+test('deletes AES-CBC token files, keeps GCM files (scoped or single-slot) and other files', async () => {
   const ctx = fakeCtx({
     'integrations/office365/u1__p1.json': { ...gcm },
     'integrations/office365/u2.json': { encrypted: 'aa', iv: 'bb', contextHash: 'dd' },
     'integrations/nextcloud/u3__p2.json': { ...gcm, authTag: undefined },
-    'integrations/nextcloud/u4.json': { ...gcm, providerId: null },
+    'integrations/jira/u4.json': { ...gcm, providerId: null },
     'integrations/nextcloud/notes.json': { hello: 'world' }
   });
   assert.equal(await precondition(ctx), true);
   await up(ctx);
   assert.deepEqual(Object.keys(ctx.files).sort(), [
+    'integrations/jira/u4.json',
     'integrations/nextcloud/notes.json',
     'integrations/office365/u1__p1.json'
   ]);
