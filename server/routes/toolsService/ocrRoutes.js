@@ -9,7 +9,7 @@ import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { recordUpload } from '../../telemetry/metrics.js';
-import { estimateTokens } from '../../usageTracker.js';
+import { estimateTokens } from '../../../shared/tokenEstimator.js';
 
 const router = express.Router();
 

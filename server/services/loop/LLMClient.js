@@ -64,6 +64,7 @@ import {
 } from './llmRetry.js';
 import { normalizeUsage, mergeUsage, addUsage } from './llmUsage.js';
 import { mergeToolCallDeltas } from './toolCallMerge.js';
+import { resolveSurface, outcomeOf, errorCodeOf } from '../usage/callRecord.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
 
@@ -497,6 +498,9 @@ export class LLMClient {
     // or null to turn them off. Every model call passes through `execute`, so
     // this is the one place they are enforced and counted.
     this.quota = opts.quota !== undefined ? opts.quota : defaultQuota;
+    // Usage reporting (services/usage): `{ record(call) }`, or null to turn it
+    // off. One call record per model call, whatever the surface.
+    this.usage = opts.usage !== undefined ? opts.usage : defaultUsage;
     // Kept as the constructed values only; the effective ceilings are
     // resolved per call so platform.json and per-model overrides apply to the
     // module-level singleton too (see resolveTimeoutMs).
@@ -621,6 +625,7 @@ export class LLMClient {
       telemetry = {},
       includeDisabled = false
     } = params;
+    const callStartedAt = Date.now();
     if (!Array.isArray(messages)) {
       throw new LLMError('messages must be an array', {
         code: LLM_ERROR_CODES.INVALID_REQUEST,
@@ -641,7 +646,60 @@ export class LLMClient {
     // sent. `quota: false` on the params exempts a call (none do today).
     const quotaUser = options.user || telemetry.user || null;
     const quota = params.quota === false ? null : this.quota;
-    if (quota && quotaUser) await quota.assert(quotaUser, model);
+
+    // Usage reporting: exactly one call record per call, however it ends.
+    let usageRecorded = false;
+    let firstChunkAt = null;
+    const recordUsage = ({
+      err = null,
+      usage = null,
+      aborted = false,
+      requestId = null,
+      toolCalls = 0
+    } = {}) => {
+      if (usageRecorded || !this.usage) return;
+      usageRecorded = true;
+      try {
+        let runMeta = null;
+        try {
+          runMeta = telemetry.runId ? this.runLog?.getRunMeta?.(telemetry.runId) || null : null;
+        } catch {
+          runMeta = null;
+        }
+        this.usage.record({
+          user: quotaUser,
+          surface: resolveSurface(telemetry, runMeta),
+          appId: telemetry.appId || options.appConfig?.id || runMeta?.refs?.appId || null,
+          modelId: model.id,
+          provider: model.provider,
+          conversationId:
+            telemetry.chatId ||
+            telemetry.executionId ||
+            runMeta?.refs?.chatId ||
+            runMeta?.refs?.executionId ||
+            telemetry.runId ||
+            null,
+          requestId,
+          usage,
+          outcome: outcomeOf(err, { aborted }),
+          errorCode: errorCodeOf(err),
+          latencyMs: Date.now() - callStartedAt,
+          ttftMs: firstChunkAt ? firstChunkAt - callStartedAt : null,
+          toolCalls
+        });
+      } catch {
+        /* reporting must never break a call */
+      }
+    };
+
+    if (quota && quotaUser) {
+      try {
+        await quota.assert(quotaUser, model);
+      } catch (err) {
+        recordUsage({ err });
+        throw err;
+      }
+    }
     const recordQuota = usage => {
       if (!quota || !quotaUser) return;
       try {
@@ -729,6 +787,7 @@ export class LLMClient {
     const failEarly = err => {
       if (timer) clearTimeout(timer);
       clearStreamIdle();
+      recordUsage({ err });
       throw err;
     };
 
@@ -869,6 +928,7 @@ export class LLMClient {
         });
       }
       this._recordError({ runId, step, err, span, startedAt });
+      recordUsage({ err, requestId });
       throw err;
     }
 
@@ -940,6 +1000,7 @@ export class LLMClient {
                     }
                   );
                 }
+                if (!firstChunkAt) firstChunkAt = Date.now();
                 accumulator.push(chunk);
                 yield chunk;
                 if (chunk.complete) break;
@@ -983,10 +1044,12 @@ export class LLMClient {
                 complete: false,
                 finishReason: null
               });
+              if (!firstChunkAt) firstChunkAt = Date.now();
               accumulator.push(partial);
               yield partial;
               paused = pausedBlocks;
             } else {
+              if (!firstChunkAt) firstChunkAt = Date.now();
               accumulator.push(chunk);
               yield chunk;
             }
@@ -1051,16 +1114,32 @@ export class LLMClient {
         } catch {
           /* providers without converter state */
         }
+        const toolCalls = accumulator.toolCalls.length;
         if (failure) {
           client._recordError({ runId, step, err: failure, span, startedAt });
           // A call that failed or was stopped after the answer started still
           // used tokens: the provider's count when it sent one, an estimate
           // otherwise (most providers report usage only in the last chunk, so
           // stopping an answer must not keep it off the budget).
-          if (accumulator.usage || accumulator.chunkCount > 0) recordQuota(accumulator.usage);
+          const started = accumulator.usage || accumulator.chunkCount > 0;
+          if (started) recordQuota(accumulator.usage);
+          recordUsage({
+            err: failure,
+            usage: started ? accumulator.usage || estimateCallUsage(messages, accumulator) : null,
+            requestId,
+            toolCalls
+          });
         } else {
           client._endSpan(span, { model, accumulator, startedAt });
           recordQuota(accumulator.usage);
+          // A consumer that stopped reading before the end (a stop button
+          // that broke out of the loop) ended the call early.
+          recordUsage({
+            usage: accumulator.usage || estimateCallUsage(messages, accumulator),
+            aborted: !accumulator.complete && callSignal?.aborted === true,
+            requestId,
+            toolCalls
+          });
         }
       }
     };
@@ -1660,6 +1739,15 @@ const defaultQuota = {
     loadQuota()
       .then(({ recordModelUsage }) => recordModelUsage(user, call))
       .catch(() => {});
+  }
+};
+
+/** The usage recorder, loaded on first use (it reads config). */
+let usageModule = null;
+const defaultUsage = {
+  record(call) {
+    if (!usageModule) usageModule = import('../usage/usageRecorder.js');
+    usageModule.then(({ recordLlmCall }) => recordLlmCall(call)).catch(() => {});
   }
 };
 

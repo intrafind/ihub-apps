@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../configCache.js';
-import { recordMagicPrompt, estimateTokens } from '../usageTracker.js';
+import { recordMagicPromptUsage } from '../telemetry/metrics.js';
 import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
@@ -131,20 +131,9 @@ export default function registerMagicPromptRoutes(app, { llmClient = defaultLlmC
 
         const newPrompt = result.content;
 
-        // Prefer provider-reported usage; fall back to an estimate when the
-        // provider sent none (or zero) so accounting never records 0/0.
-        const inputTokens = result.usage?.promptTokens || estimateTokens(input);
-        const outputTokens = result.usage?.completionTokens || estimateTokens(newPrompt);
-
-        const userSessionId = req.headers['x-session-id'];
-        await recordMagicPrompt({
-          userId: userSessionId,
-          appId,
-          modelId: selectedModelId,
-          inputTokens,
-          outputTokens,
-          user: req.user
-        });
+        // The model call itself is recorded for usage reporting by LLMClient
+        // (surface `magic`); only the OpenTelemetry counter is kept here.
+        recordMagicPromptUsage(appId);
 
         return res.json({ prompt: newPrompt });
       } catch (error) {

@@ -100,7 +100,8 @@ export function buildDailyRollup(events, date) {
     const model = event.model || 'unknown';
     const pt = event.pt || 0;
     const ct = event.ct || 0;
-    const isMessage = event.type === 'chat_request';
+    // v2 records: one `llm_call` per model call. v1: a request/response pair.
+    const isMessage = event.type === 'chat_request' || event.type === 'llm_call';
     const counts = { messages: isMessage ? 1 : 0, promptTokens: pt, completionTokens: ct };
     for (const [field, key] of Object.entries(ROLLUP_COUNTERS)) counts[field] = event[key] || 0;
 
@@ -109,7 +110,7 @@ export function buildDailyRollup(events, date) {
     rollup.totals.completionTokens += ct;
     for (const field of Object.keys(ROLLUP_COUNTERS)) rollup.totals[field] += counts[field];
 
-    if (event.type === 'chat_request') {
+    if (event.type === 'chat_request' || event.type === 'llm_call') {
       rollup.totals.chatRequests += 1;
       rollup.totals.messages += 1;
     } else if (event.type === 'chat_response') {

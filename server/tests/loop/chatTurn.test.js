@@ -402,7 +402,7 @@ test('no tools, streaming: run/started → step/delta×2 → step/completed → 
   assert.deepEqual(startArgs.baseLog, baseLogFor(chatId));
   assert.equal(startArgs.messages.length, 1);
   assert.deepEqual(endOutcomes(telemetry), ['completed']);
-  assert.equal(telemetry.recordChatCallEnd.calls[0][0].content, 'Hello there');
+  assert.equal(telemetry.recordChatCallEnd.calls[0][0].model, MODELS.openai);
   assert.equal(activeRequests.has(chatId), false, 'in-flight controller released');
 });
 

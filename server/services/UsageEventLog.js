@@ -28,6 +28,14 @@ const OPTIONAL_EVENT_COUNTERS = {
 };
 
 /**
+ * Append a prebuilt usage record (schema v2, services/usage/callRecord.js).
+ * @param {Object} record
+ */
+export function appendUsageRecord(record) {
+  appender.append(record);
+}
+
+/**
  * Log a usage event to the JSONL append-only file.
  * Events are buffered and flushed every 10 seconds.
  *
