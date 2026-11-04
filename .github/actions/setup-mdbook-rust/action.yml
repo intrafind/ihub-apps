@@ -1,0 +1,48 @@
+name: Setup mdBook and Rust
+description: Install mdBook, the Rust toolchain and mdbook-mermaid (shared by the docs and SEA binary workflows).
+
+inputs:
+  cache:
+    description: >-
+      Restore/save the cargo cache. Keep this "false" in jobs that publish
+      artifacts: a cache written by a PR or push run must not feed released
+      binaries (zizmor cache-poisoning).
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Install mdBook
+      uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
+      with:
+        mdbook-version: 'latest'
+
+    - name: Install Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install stable --profile minimal
+        rustup default stable
+
+    - name: Cache Cargo binaries
+      if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }} # zizmor: ignore[cache-poisoning] callers that publish artifacts pass cache=false
+        restore-keys: |
+          ${{ runner.os }}-cargo-mdbook-
+
+    - name: Install mdbook-mermaid
+      shell: bash
+      run: |
+        if ! command -v mdbook-mermaid &> /dev/null; then
+          echo "Installing mdbook-mermaid..."
+          cargo install mdbook-mermaid
+        else
+          echo "mdbook-mermaid already installed"
+        fi

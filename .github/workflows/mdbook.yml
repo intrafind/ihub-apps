@@ -27,44 +27,8 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install mdBook
-        uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
-        with:
-          mdbook-version: 'latest'
-
-      - name: Install Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-
-      - name: Cache Cargo binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-mdbook-
-
-      - name: Install mdBook backends
-        run: |
-          # Check if already cached, install if not
-          # if ! command -v mdbook-pdf &> /dev/null; then
-          #   echo "Installing mdbook-pdf..."
-          #   cargo install mdbook-pdf
-          # else
-          #   echo "mdbook-pdf already installed"
-          # fi
-
-          if ! command -v mdbook-mermaid &> /dev/null; then
-            echo "Installing mdbook-mermaid..."
-            cargo install mdbook-mermaid
-          else
-            echo "mdbook-mermaid already installed"
-          fi
+      - name: Setup mdBook and Rust
+        uses: ./.github/actions/setup-mdbook-rust
 
       # - name: Install Chromium (for PDF generation)
       #   run: |
