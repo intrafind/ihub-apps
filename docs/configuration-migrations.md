@@ -67,10 +67,28 @@ export async function up(ctx) {
 | `ctx.transformWhere(array, pred, fn)` | Apply `fn` to items matching `pred` |
 | `ctx.log(msg)` / `ctx.warn(msg)` | Structured logging with version prefix |
 
+## Baseline (squashed migrations)
+
+Migrations up to the **baseline** have been deleted from the repository: the baseline is **V030**, the last migration of release **5.3.0**. `V031` and everything above stays, numbered as it was shipped. The runner (`server/migrations/runner.js`, `BASELINE_VERSION` / `BASELINE_RELEASE`) treats the baseline like this:
+
+- **Fresh install** (`contents/` seeded from `server/defaults` by this start): recorded as applied at V030 (a `baseline` row in the history); the migrations above V030 then run against the defaults like on any other install.
+- **Existing install at or above V030** (highest `success` or `skipped` row in the history): starts normally. History rows of removed versions, with their old checksums, are only history: they are never checksum-validated and never reported as "no longer on disk", even with `checksumValidation: strict`. A gap in numbers below the baseline is fine for `scripts/check-migration-versions.js`.
+- **Existing install below V030**, or a `contents/` with a configuration but no migration history (it predates the migration system): the server logs an error and exits with code 1. The message tells the admin to upgrade to release 5.3.x first, start it once, and then upgrade to the current release. Nothing is migrated or written.
+
+Supported upgrade path: from release 5.3.0 or newer straight to the latest release.
+
+### Raising the baseline later
+
+1. Pick the release R that is old enough that no supported install is below it. Its highest migration is the last `V*` file in `server/migrations/` at the tag of R (list it with `ls-tree --name-only vR:server/migrations` of the repository); that number is the new baseline.
+2. Change `BASELINE_VERSION` and `BASELINE_RELEASE` in `server/migrations/runner.js`.
+3. Delete the migration files up to the baseline and their `server/tests/migration-v<NNN>.test.js` files. Keep files that something else imports. `server/migrations/support/legacyRuntimeImport.js` stays: V219 imports it.
+4. Keep the `RENAMED_MIGRATIONS` rows whose new version is above the baseline (they stop an install that ran a branch from re-applying the renumbered migration). Drop the rows whose new version is at or below it.
+5. Check that migrations above the baseline do not read a `server/defaults` file that only a removed migration used to create, update the text above, and add a release note for the new minimum release.
+
 ## Rules
 
 - **Never modify an applied migration** — checksums are tracked; mismatches trigger warnings or halt startup.
 - Migrations are **forward-only**. To undo a change, create a new higher-versioned migration.
 - History is stored at `contents/.migration-history.json`. Each entry records status, checksum, and timing.
-- V001 is the no-op baseline; new migrations start at the next available number.
+- New migrations start at the next available number above the highest one in `server/migrations/`. The numbers up to the baseline (below) are gone from the repository and are never reused.
 - **Version collisions are caught in CI.** Two branches opened from the same `main` both pick "highest + 1". The `Migration Version Check` workflow compares each PR's new migrations against the _current_ base branch and fails on a reused version, a version below the base's highest one, or an `export const version` that differs from the file name. When migrations land on `main`/`develop`, it re-runs the check on every open PR that adds migrations, so the second PR turns red as soon as the first merges. Fix by merging the base branch and renumbering to the next free version the check reports. Run it locally with `node scripts/check-migration-versions.js --base origin/main`.

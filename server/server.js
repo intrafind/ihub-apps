@@ -229,6 +229,17 @@ async function prepareContents() {
       error: error.message,
       stack: error.stack
     });
+    if (error.belowBaseline) {
+      // The installation is older than the migration baseline: the migrations
+      // that would bring it forward are gone, so serving it would run on
+      // configuration this release cannot read. The message names the release
+      // to upgrade through.
+      logger.error({
+        component: 'Server',
+        message: 'Halting startup: installation is below the migration baseline'
+      });
+      process.exit(1);
+    }
     if (error.migrationHalt) {
       // The operator's `platform.json` `migrations.onFailure` is 'halt' (the
       // default) and a migration failed: continuing would serve traffic
