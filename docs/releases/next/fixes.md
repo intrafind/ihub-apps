@@ -1,5 +1,11 @@
 # Fixes — Unreleased
 
+## Deadlocked Workflow Runs Now Fail Instead of Hanging
+
+A workflow run whose remaining steps can never start (for example a step that depends on one that
+is not part of the workflow) used to stay in **Running** forever without any message. The run now
+ends as **Failed** with a "Workflow deadlocked" error naming the blocked steps.
+
 ## Shared Chats and Files Get a Descriptive Title
 
 The title of a shared link — in the browser tab, the link preview, **Shared with me** and your list
@@ -181,6 +187,12 @@ always fits the page.
 - A word that cannot fit its column at all, such as a long URL, is broken inside the column instead
   of shrinking the whole table.
 - Tables a model lays out with its own column widths keep them.
+
+## Your Messages Keep Their Line Breaks in the Chat
+
+A long, structured prompt (headings, lists, indented code, blank lines) was shown as one run-on line
+in your own message bubble. Messages now keep their line breaks and indentation, also when a file or
+image is attached. The model always received the text with its structure; only the display changed.
 
 ## iFinder: "Sign with iHub's OIDC Key Pair" States Its iFinder-Side Prerequisite
 

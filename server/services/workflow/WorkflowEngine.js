@@ -696,11 +696,36 @@ export class WorkflowEngine {
             // Workflow complete
             await this._completeWorkflow(executionId, state, customStatus, workflow);
           } else {
-            // Nodes are blocked (shouldn't happen in valid workflow)
-            logger.warn('Workflow has blocked nodes', {
+            // Nodes are blocked on an unsatisfiable dependency: a deadlock. Fail the
+            // run so it does not stay RUNNING forever.
+            logger.error('Workflow has blocked nodes (deadlock)', {
               component: 'WorkflowEngine',
               executionId,
               blockedNodes: state.currentNodes
+            });
+
+            await this.stateManager.update(executionId, {
+              status: WorkflowStatus.FAILED,
+              completedAt: new Date().toISOString()
+            });
+
+            await this.stateManager.addError(executionId, {
+              message: `Workflow deadlocked: node(s) ${state.currentNodes.join(', ')} have unsatisfiable dependencies`,
+              code: 'WORKFLOW_DEADLOCK'
+            });
+
+            await this.stateManager.checkpoint(executionId, 'deadlock_failure');
+
+            getExecutionRegistry().updateStatus(executionId, WorkflowStatus.FAILED, {
+              currentNode: null
+            });
+
+            this._emitEvent('workflow.failed', {
+              executionId,
+              error: {
+                message: 'Workflow deadlocked: one or more nodes have unsatisfiable dependencies',
+                code: 'WORKFLOW_DEADLOCK'
+              }
             });
           }
           break;

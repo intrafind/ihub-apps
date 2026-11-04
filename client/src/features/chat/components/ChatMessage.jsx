@@ -80,6 +80,7 @@ import './ChatMessage.css';
 import { useChatFiles } from '../contexts/ChatFilesContext';
 import { formatBytes } from '../utils/artifactFiles';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
+import { splitUserMessageContent } from '../../../utils/userMessageContent';
 
 /** How an answer ends when it stopped before it was complete. */
 const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'error']);
@@ -775,6 +776,22 @@ function ChatMessage({
 
     // If the message contains HTML content with an image tag or file content, render it as HTML
     if (hasHTMLContent && isUser) {
+      // The typed text keeps its line breaks and is shown as text; only the
+      // markup around it (image previews, file badges) is rendered as HTML.
+      const split = splitUserMessageContent(contentToRender, message.rawContent);
+      if (split) {
+        return (
+          <div>
+            <div className="wrap-break-word whitespace-pre-wrap">{split.text}</div>
+            {split.html.trim() && (
+              <div
+                className="wrap-break-word whitespace-normal"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(split.html) }}
+              />
+            )}
+          </div>
+        );
+      }
       return (
         <div
           className="wrap-break-word whitespace-normal"
@@ -847,7 +864,7 @@ function ChatMessage({
 
     return (
       <div
-        className="wrap-break-word whitespace-normal"
+        className="wrap-break-word whitespace-pre-wrap"
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
         {contentToRender}

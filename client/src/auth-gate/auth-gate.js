@@ -28,8 +28,7 @@
   var IS_DEV = !!window.__AUTH_GATE_DEV_MODE__;
 
   // localStorage key for the last successfully logged-in username, used to
-  // pre-fill the field when the user opted into "Remember me". Shared with the
-  // React LoginForm so the preference carries across both surfaces.
+  // pre-fill the field when the user opted into "Remember me".
   var REMEMBERED_USERNAME_KEY = 'ihub_rememberedUsername';
 
   // --- State ---
@@ -39,6 +38,9 @@
   var isSubmitting = false;
   var selectedAuthMethod = null; // 'local' | 'ldap' | null
   var isOverlayMode = false; // Track if gate is shown as overlay
+  // Set while the gate is mounted inside a caller-supplied container (e.g. the
+  // setup wizard) instead of the full-page #auth-gate-root: { container, onSuccess }.
+  var embedded = null;
 
   // --- Public API ---
   window.__authGate = {
@@ -356,13 +358,30 @@
 
   function showGate(options) {
     options = options || {};
-    var root = document.getElementById(ROOT_ID);
-    if (!root) return;
+    var root;
 
-    root.classList.remove('ag-hidden', 'ag-fade-out');
-    root.textContent = '';
+    if (options.container) {
+      // Embedded mode: render inline into the caller's container. No backdrop,
+      // close button, or header; the host page provides the surrounding chrome.
+      if (embedded && embedded.container !== options.container) {
+        hideGate();
+      }
+      root = options.container;
+      root.classList.add('ag-embedded');
+      embedded = { container: root, onSuccess: options.onSuccess, reason: options.reason };
+      root.textContent = '';
+      isOverlayMode = false;
+    } else {
+      embedded = null;
+      root = document.getElementById(ROOT_ID);
+      if (!root) return;
+      root.classList.remove('ag-hidden', 'ag-fade-out');
+      root.textContent = '';
+    }
 
-    if (options.overlay) {
+    if (embedded) {
+      // handled above
+    } else if (options.overlay) {
       root.classList.add('ag-overlay');
       isOverlayMode = true;
     } else {
@@ -371,11 +390,18 @@
 
     // Re-fetch auth status and show UI
     renderLoading(root);
+    // Ignore a response that arrives after the embedded gate was replaced or hidden.
+    var requestEmbedded = embedded;
     fetchAuthStatus()
       .then(function (data) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         authConfig = data;
         gateUI = data.gateUI || null;
         if (data.authenticated) {
+          if (embedded) {
+            finishEmbedded();
+            return;
+          }
           hideGate();
           window.dispatchEvent(new CustomEvent('authGateSuccess'));
           return;
@@ -384,11 +410,30 @@
         renderAuthUI(root);
       })
       .catch(function (err) {
+        if (requestEmbedded && embedded !== requestEmbedded) return;
         renderError(root, err.message || t('serverError'));
       });
   }
 
+  // Embedded login completed: refresh React auth state and notify the host.
+  function finishEmbedded() {
+    var current = embedded;
+    var onSuccess = current && current.onSuccess;
+    window.dispatchEvent(new CustomEvent('authGateSuccess'));
+    if (typeof onSuccess === 'function') onSuccess();
+    // The host may keep the gate mounted (e.g. it rejects a non-admin login and
+    // offers sign-out). Reset the submitted form so it is usable again; if the
+    // host unmounted the gate in the meantime, there is nothing to render.
+    if (embedded === current && authConfig && !isSubmitting) renderAuthUI(current.container);
+  }
+
   function hideGate() {
+    if (embedded) {
+      embedded.container.textContent = '';
+      embedded.container.classList.remove('ag-embedded');
+      embedded = null;
+      return;
+    }
     var root = document.getElementById(ROOT_ID);
     if (!root) return;
     root.classList.add('ag-fade-out');
@@ -421,7 +466,7 @@
 
   function renderError(root, message) {
     var card = createElement('div', 'ag-card');
-    card.appendChild(buildHeader());
+    if (!embedded) card.appendChild(buildHeader());
 
     var errDiv = createElement('div', 'ag-error');
     errDiv.setAttribute('role', 'alert');
@@ -431,6 +476,10 @@
     var retryBtn = createElement('button', 'ag-btn ag-btn-primary');
     retryBtn.textContent = t('retry');
     retryBtn.addEventListener('click', function () {
+      if (embedded) {
+        showGate({ container: embedded.container, onSuccess: embedded.onSuccess });
+        return;
+      }
       checkAuthAndDecide();
     });
     card.appendChild(retryBtn);
@@ -506,7 +555,7 @@
     var isLocalPrimary = authConfig.authMode === 'local' || authConfig.authMode === 'ldap';
 
     var card = createElement('div', 'ag-card');
-    card.appendChild(buildHeader());
+    if (!embedded) card.appendChild(buildHeader());
 
     // Error message
     if (currentError) {
@@ -836,6 +885,11 @@
 
           // Clean ?logout=true from URL so the app doesn't think we just logged out
           cleanUrlParams(['logout']);
+
+          if (embedded) {
+            finishEmbedded();
+            return;
+          }
 
           // Dispatch success event so React app refreshes its auth state
           window.dispatchEvent(new CustomEvent('authGateSuccess'));
