@@ -8,14 +8,13 @@
  *
  * Entries are documents on the storage provider (`a2a-client-contexts`),
  * owned by the user, so a chat keeps its conversation with an agent across
- * restarts and whichever worker serves the next tool call. Each worker keeps
- * a bounded in-memory copy; the document is read first, so an update another
- * worker made wins. Without a provider the store is memory-only.
+ * restarts and whichever worker serves the next tool call. Every read goes to
+ * the document, so an update another worker made is seen at once.
  *
  * @module services/a2a/a2aClientContextStore
  */
 import { createHash } from 'node:crypto';
-import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import logger from '../../utils/logger.js';
 
@@ -25,9 +24,6 @@ export const A2A_CLIENT_CONTEXTS_NAMESPACE = RUNTIME_NAMESPACES.a2aClientContext
 
 /** Conversations nobody continued for this long are dropped. */
 export const CLIENT_CONTEXT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** Conversations held in memory per worker before the oldest are dropped. */
-export const MAX_REMEMBERED_CONTEXTS = 5000;
 
 /** Documents looked at per retention sweep. */
 const SWEEP_PAGE_SIZE = 200;
@@ -65,33 +61,21 @@ export function clientContextRef(params, agentId) {
 export class A2aClientContextStore {
   /**
    * @param {Object} [options]
-   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents] -
-   *   Document store to persist to. `null` pins memory-only mode; leaving it
-   *   out resolves the storage provider lazily on each use.
+   * @param {import('../../storage/DocumentStore.js').DocumentStore} [options.documents] -
+   *   Document store to persist to; the storage provider's, resolved lazily on
+   *   each use, when omitted.
    * @param {() => number} [options.now]
    */
   constructor({ documents, now = () => Date.now() } = {}) {
-    this._documents = documents;
-    this._pinned = documents !== undefined;
+    this._documents = documents || null;
     this.now = now;
-    /** @type {Map<string, {contextId: string|null, taskId?: string, updatedAt: number}>} LRU-ordered */
-    this.entries = new Map();
     /** Cursor of the next sweep page, so successive ticks page through the
      *  whole namespace instead of re-reading the same page forever. */
     this._sweepCursor = null;
   }
 
   _docs() {
-    if (this._pinned) return this._documents || null;
-    return readFacet(getStorage(), 'documents');
-  }
-
-  _cache(key, entry) {
-    this.entries.delete(key);
-    this.entries.set(key, entry);
-    while (this.entries.size > MAX_REMEMBERED_CONTEXTS) {
-      this.entries.delete(this.entries.keys().next().value);
-    }
+    return this._documents || requireStorage().documents;
   }
 
   /**
@@ -102,29 +86,21 @@ export class A2aClientContextStore {
    */
   async get(ref) {
     const key = clientContextKey(ref);
-    let entry = this.entries.get(key) || null;
-    const documents = this._docs();
-    if (documents) {
-      try {
-        const doc = await documents.get(A2A_CLIENT_CONTEXTS_NAMESPACE, key);
-        // The document holds the ids it is for, so a digest collision (or a
-        // stale copy of another conversation) can never be handed out.
-        const data = doc?.data;
-        entry = this._entryOf(data, ref);
-      } catch (error) {
-        logger.warn('A2A conversation read failed; using in-memory copy', {
-          component: COMPONENT,
-          agentId: ref.agentId,
-          error: error.message
-        });
-      }
+    let entry = null;
+    try {
+      const doc = await this._docs().get(A2A_CLIENT_CONTEXTS_NAMESPACE, key);
+      // The document holds the ids it is for, so a digest collision (or a
+      // stale copy of another conversation) can never be handed out.
+      entry = this._entryOf(doc?.data, ref);
+    } catch (error) {
+      logger.warn('A2A conversation read failed', {
+        component: COMPONENT,
+        agentId: ref.agentId,
+        error: error.message
+      });
     }
-    if (!entry) {
-      this.entries.delete(key);
-      return null;
-    }
+    if (!entry) return null;
     if (this.now() - (entry.updatedAt || 0) > CLIENT_CONTEXT_RETENTION_MS) return null;
-    this._cache(key, entry);
     return { contextId: entry.contextId, ...(entry.taskId ? { taskId: entry.taskId } : {}) };
   }
 
@@ -152,8 +128,6 @@ export class A2aClientContextStore {
     const key = clientContextKey(ref);
     const documents = this._docs();
     if (!contextId && !taskId) {
-      this.entries.delete(key);
-      if (!documents) return;
       try {
         await documents.delete(A2A_CLIENT_CONTEXTS_NAMESPACE, key);
       } catch (error) {
@@ -170,8 +144,6 @@ export class A2aClientContextStore {
       ...(taskId ? { taskId } : {}),
       updatedAt: this.now()
     };
-    this._cache(key, entry);
-    if (!documents) return;
     try {
       await documents.put(
         A2A_CLIENT_CONTEXTS_NAMESPACE,
@@ -180,17 +152,12 @@ export class A2aClientContextStore {
         { ownerId: ref.userId }
       );
     } catch (error) {
-      logger.warn('A2A conversation write failed; it is remembered on this worker only', {
+      logger.warn('A2A conversation write failed', {
         component: COMPONENT,
         agentId: ref.agentId,
         error: error.message
       });
     }
-  }
-
-  /** Forget everything this worker holds in memory (the documents stay). */
-  clearMemory() {
-    this.entries.clear();
   }
 
   /**
@@ -202,14 +169,7 @@ export class A2aClientContextStore {
   async sweep() {
     const now = this.now();
     let removed = 0;
-    for (const [key, entry] of this.entries) {
-      if (now - (entry.updatedAt || 0) > CLIENT_CONTEXT_RETENTION_MS) {
-        this.entries.delete(key);
-        removed += 1;
-      }
-    }
     const documents = this._docs();
-    if (!documents) return removed;
     try {
       const page = await documents.list(A2A_CLIENT_CONTEXTS_NAMESPACE, {
         limit: SWEEP_PAGE_SIZE,

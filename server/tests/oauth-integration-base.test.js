@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { scratchDocuments } from './helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Characterization tests for the API request wrapper in OAuthIntegrationBase
@@ -155,8 +158,8 @@ function connectionServiceFor(getService) {
     mayConnect: async () => true
   };
   const connections = new IntegrationConnectionService({
-    documents: null,
-    flowStore: new OAuthFlowStore({ documents: null }),
+    documents: scratch.documents,
+    flowStore: new OAuthFlowStore({ documents: scratch.documents }),
     describe: async id => (id === PROVIDER ? descriptor : null)
   });
   connections.refreshGraceMs = 0;
@@ -228,7 +231,8 @@ function expectUnavailable(error) {
 
 let service = new TestService();
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   jest.clearAllMocks();
   httpFetch.mockReset();
   store.tokens = { accessToken: 'access-1', refreshToken: 'refresh-1', providerId: PROVIDER };

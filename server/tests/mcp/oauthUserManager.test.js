@@ -24,6 +24,9 @@ import {
 import { chatToolSeam, authRequiredOf } from '../../services/chat/chatSeams.js';
 import { parseSseV2EventData } from '../../services/loop/contracts/sseV2.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth servers in McpClientManager: one pooled connection per
@@ -92,7 +95,7 @@ beforeEach(async () => {
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
   documents = memoryDocuments();
   mcpClientManager.catalogStore = new McpToolCatalogStore({ documents });
-  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: null });
+  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: scratch.documents });
   await mcpClientManager.shutdown();
   await mcpClientManager.initialize({ servers: [OKTA] });
 });

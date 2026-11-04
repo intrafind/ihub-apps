@@ -132,12 +132,11 @@ class A2aClientManager {
   }
 
   /**
-   * Forget every connection and the conversations held in memory; the stored
-   * conversations stay for the next configuration.
+   * Forget every connection; the stored conversations stay for the next
+   * configuration.
    */
   async shutdown() {
     this.connections.clear();
-    this.contexts.clearMemory();
   }
 
   /**
@@ -517,5 +516,3 @@ function connectionChanged(a, b) {
 
 const instance = new A2aClientManager();
 export default instance;
-
-export { MAX_REMEMBERED_CONTEXTS } from './a2aClientContextStore.js';

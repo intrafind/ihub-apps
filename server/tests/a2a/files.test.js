@@ -58,6 +58,10 @@ jest.unstable_mockModule('../../services/chatFiles/ChatFileRepository.js', () =>
 }));
 
 const { default: manager } = await import('../../services/a2a/A2aClientManager.js');
+const { A2aClientContextStore } = await import('../../services/a2a/a2aClientContextStore.js');
+const { scratchDocuments } = await import('../helpers/testStorage.js');
+const scratch = await scratchDocuments();
+manager.contexts = new A2aClientContextStore({ documents: scratch.documents });
 const { buildSkillTools, partsFiles, StreamCollector, A2A_ACCEPTED_OUTPUT_MODES } =
   await import('../../services/a2a/a2aTools.js');
 const { chatFilesToSend } = await import('../../services/a2a/a2aFiles.js');

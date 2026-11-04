@@ -5,6 +5,9 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * A2A 0.3 protocol handler: Agent Card, skills, message/send, message/stream,
@@ -63,7 +66,10 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 }));
 jest.unstable_mockModule('../../storage/bootstrap.js', () => ({
   getStorage: () => null,
-  readFacet: () => null
+  readFacet: () => null,
+  requireStorage: () => {
+    throw new Error('storage is not bootstrapped in this test');
+  }
 }));
 const published = [];
 jest.unstable_mockModule('../../clusterBus.js', () => ({
@@ -106,13 +112,14 @@ const ctx = (overrides = {}) => ({
 
 const rpc = (method, params, id = 1) => ({ jsonrpc: '2.0', id, method, params });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   platform = {
     defaultLanguage: 'en',
     mcpServer: { expose: { tools: true, apps: true, workflows: true }, a2a: { enabled: true } },
     oauth: { issuer: 'https://ihub.example' }
   };
-  store = new A2aTaskStore({ documents: null, relayCancel: false });
+  store = new A2aTaskStore({ documents: scratch.documents, relayCancel: false });
   invokeApp.mockReset();
   invokeApp.mockImplementation(async ({ onTextDelta }) => {
     onTextDelta?.('Hel');

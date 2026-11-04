@@ -43,11 +43,13 @@ jest.unstable_mockModule('../../services/loop/RunStream.js', () => ({
   emitToolProgress: (chatId, progress) => progressFrames.push({ chatId, ...progress })
 }));
 
-const {
-  default: manager,
-  MAX_REMEMBERED_CONTEXTS,
-  DISCOVERY_WAIT_MS
-} = await import('../../services/a2a/A2aClientManager.js');
+const { default: manager, DISCOVERY_WAIT_MS } =
+  await import('../../services/a2a/A2aClientManager.js');
+const { A2aClientContextStore } = await import('../../services/a2a/a2aClientContextStore.js');
+const { scratchDocuments } = await import('../helpers/testStorage.js');
+
+const scratch = await scratchDocuments();
+manager.contexts = new A2aClientContextStore({ documents: scratch.documents });
 
 function defineAgent(host, skills, reply) {
   agents[host] = {
@@ -73,6 +75,7 @@ function agentConfig(id, host, extra = {}) {
 
 let replies;
 beforeEach(async () => {
+  await scratch.reset();
   requests.length = 0;
   progressFrames.length = 0;
   replies = 0;
@@ -211,19 +214,6 @@ describe('callTool', () => {
     expect(contextOf(1)).toBe('ctx-1');
     expect(contextOf(2)).toBeUndefined();
     expect(contextOf(3)).toBeUndefined();
-  });
-
-  it('keeps the conversation memory bounded', async () => {
-    for (let i = 0; i < MAX_REMEMBERED_CONTEXTS + 10; i++) {
-      await manager.contexts.set(
-        { userId: 'u', chatId: `chat-${i}`, agentId: 'one' },
-        { contextId: `c${i}` }
-      );
-    }
-    expect(manager.contexts.entries.size).toBe(MAX_REMEMBERED_CONTEXTS);
-    expect(await manager.contexts.get({ userId: 'u', chatId: 'chat-0', agentId: 'one' })).toBe(
-      null
-    );
   });
 
   it('reports the agent status to the chat as tool progress', async () => {

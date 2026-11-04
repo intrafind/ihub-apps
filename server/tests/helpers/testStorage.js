@@ -70,3 +70,35 @@ export function stateRepositoryFor(storage) {
 export function stateManagerFor(storage) {
   return new StateManager({ repository: stateRepositoryFor(storage) });
 }
+
+/**
+ * A document store over a scratch filesystem provider that is not the
+ * process-wide one, for tests that hand a store its own `documents`.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.prefix] - Scratch directory name prefix.
+ * @returns {Promise<{documents: Object, provider: Object, dir: string,
+ *   reset: () => Promise<void>, stop: () => Promise<void>}>}
+ */
+export async function scratchDocuments({ prefix = 'ihub-test-docs-' } = {}) {
+  const { FilesystemStorageProvider } = await import('../../storage/providers/filesystem/index.js');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  const baseDir = path.join(dir, 'data');
+  const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+  await provider.initialize();
+  return {
+    documents: provider.documents,
+    provider,
+    dir,
+    /** Forget every stored document (between cases that must not share state). */
+    async reset() {
+      for (const entry of await fs.readdir(baseDir)) {
+        await fs.rm(path.join(baseDir, entry), { recursive: true, force: true });
+      }
+    },
+    async stop() {
+      await provider.shutdown();
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    }
+  };
+}

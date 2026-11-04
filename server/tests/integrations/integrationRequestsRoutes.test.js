@@ -27,6 +27,9 @@ import request from 'supertest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 // The audit log lands in a contents directory of its own; config reads it on import.
 const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'integration-requests-'));
@@ -153,13 +156,16 @@ const queue = async () => {
 const decide = (id, action, body = {}, user = 'admin') =>
   asUser(user, 'post', `/api/admin/integrations/requests/${id}/${action}`).send(body);
 
-beforeEach(() => {
+beforeEach(async () => {
+  await scratch.reset();
   state.installed = [
     { id: 'jira-main', definition: 'com.intrafind/jira', enabled: true, values: {} }
   ];
   state.groups = baseGroups();
   state.platform = { anonymousAuth: { enabled: false } };
-  setIntegrationRequestServiceForTests(new IntegrationRequestService({ documents: null }));
+  setIntegrationRequestServiceForTests(
+    new IntegrationRequestService({ documents: scratch.documents })
+  );
 });
 
 describe('the user side', () => {
