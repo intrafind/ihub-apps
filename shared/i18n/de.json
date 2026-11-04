@@ -4850,7 +4850,8 @@
         "limits": "Limits & Kontingente",
         "overview": "Übersicht",
         "breakdown": "Aufschlüsselung",
-        "reliability": "Zuverlässigkeit"
+        "reliability": "Zuverlässigkeit",
+        "requests": "Anfragen"
       },
       "reports": {
         "dim": {
@@ -4967,6 +4968,31 @@
           "aborted": "Abgebrochen",
           "quota": "Durch Limit abgewiesen",
           "rate_limited": "Ratenbegrenzt"
+        },
+        "calls": {
+          "time": "Zeit",
+          "groups": "Gruppen",
+          "outcome": "Ergebnis",
+          "cacheWrite": "Cache-Schreibvorgänge",
+          "reasoning": "Reasoning",
+          "webSearches": "Websuchen",
+          "tokenSource": "Token-Zählung",
+          "fromProvider": "Vom Anbieter gemeldet",
+          "estimated": "Geschätzt",
+          "latency": "Latenz",
+          "ttft": "Zeit bis zum ersten Token",
+          "toolCalls": "Tool-Aufrufe",
+          "conversation": "Unterhaltung / Lauf",
+          "requestId": "Anfrage-ID",
+          "details": "Aufrufdetails",
+          "noContent": "Nutzungseinträge enthalten nur Metadaten – keinen Prompt- oder Antworttext.",
+          "title": "Anfragen",
+          "subtitle": "Jeder Modellaufruf mit Tokens, Ergebnis und Zeiten. Aufbewahrt so lange wie die Nutzungsereignisse (Ereignis-Aufbewahrung).",
+          "clearFilters": "Filter zurücksetzen",
+          "any": "Alle",
+          "empty": "Keine passenden Aufrufe",
+          "emptyFiltered": "Weniger Filter oder einen längeren Zeitraum versuchen.",
+          "loadMore": "Mehr laden"
         }
       },
       "title": "Nutzungsberichte",

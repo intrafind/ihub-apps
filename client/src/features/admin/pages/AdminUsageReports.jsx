@@ -11,6 +11,7 @@ import RangeControl from '../components/usage/RangeControl';
 import UsageOverview from '../components/usage/UsageOverview';
 import BreakdownTable from '../components/usage/BreakdownTable';
 import ReliabilityPanel from '../components/usage/ReliabilityPanel';
+import RequestLog from '../components/usage/RequestLog';
 import useUsageReportState from '../components/usage/useUsageReportState';
 
 const MODES = ['anonymous', 'pseudonymous', 'identified'];
@@ -84,6 +85,7 @@ function AdminUsageReports() {
     ['overview', t('admin.usage.tabs.overview', 'Overview'), 'chart'],
     ['breakdown', t('admin.usage.tabs.breakdown', 'Breakdown'), 'table-cells'],
     ['reliability', t('admin.usage.tabs.reliability', 'Reliability'), 'exclamation-triangle'],
+    ['requests', t('admin.usage.tabs.requests', 'Requests'), 'list'],
     ['limits', t('admin.usage.tabs.limits', 'Limits & quotas'), 'chart-bar']
   ];
   const showRange = state.tab !== 'limits';
@@ -143,6 +145,7 @@ function AdminUsageReports() {
         {state.tab === 'overview' && <UsageOverview state={state} />}
         {state.tab === 'breakdown' && <BreakdownTable state={state} />}
         {state.tab === 'reliability' && <ReliabilityPanel state={state} />}
+        {state.tab === 'requests' && <RequestLog state={state} />}
         {state.tab === 'limits' && <UsageQuotasPanel />}
       </div>
     </div>

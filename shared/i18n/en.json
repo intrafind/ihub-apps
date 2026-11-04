@@ -4551,7 +4551,8 @@
         "limits": "Limits & quotas",
         "overview": "Overview",
         "breakdown": "Breakdown",
-        "reliability": "Reliability"
+        "reliability": "Reliability",
+        "requests": "Requests"
       },
       "reports": {
         "dim": {
@@ -4668,6 +4669,31 @@
           "aborted": "Stopped",
           "quota": "Refused by limit",
           "rate_limited": "Rate limited"
+        },
+        "calls": {
+          "time": "Time",
+          "groups": "Groups",
+          "outcome": "Outcome",
+          "cacheWrite": "Cache write",
+          "reasoning": "Reasoning",
+          "webSearches": "Web searches",
+          "tokenSource": "Token counts",
+          "fromProvider": "Reported by the provider",
+          "estimated": "Estimated",
+          "latency": "Latency",
+          "ttft": "Time to first token",
+          "toolCalls": "Tool calls",
+          "conversation": "Conversation / run",
+          "requestId": "Request id",
+          "details": "Call details",
+          "noContent": "Usage records hold metadata only — no prompt or response text.",
+          "title": "Requests",
+          "subtitle": "Every model call with its tokens, outcome and timing. Kept as long as the usage events (event retention).",
+          "clearFilters": "Clear filters",
+          "any": "Any",
+          "empty": "No calls match",
+          "emptyFiltered": "Try fewer filters or a longer range.",
+          "loadMore": "Load more"
         }
       },
       "title": "Usage Reports",

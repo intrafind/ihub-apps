@@ -9,6 +9,7 @@
  *   GET  /api/admin/usage/breakdown          — rows per user|group|app|model|provider|surface
  *   GET  /api/admin/usage/reliability        — errors over time, by code/provider, latency
  *   GET  /api/admin/usage/feedback/summary   — ratings per user/app/model
+ *   GET  /api/admin/usage/calls              — request log: call records, filtered, paged
  *   GET  /api/admin/usage/export             — raw call records (CSV or JSON)
  *   GET  /api/admin/usage/feedback           — stored feedback entries, newest first
  *   GET/PUT /api/admin/usage/meta            — tracking mode
@@ -35,6 +36,7 @@ import {
   UsageQueryError
 } from '../../services/usage/usageQuery.js';
 import { readFeedbackPage } from '../../feedbackStorage.js';
+import { queryCalls } from '../../services/usage/callLog.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { escapeCsvField } from '../../utils/csv.js';
 
@@ -48,7 +50,14 @@ function rangeParams(query) {
     to: pick(query.to),
     dimension: pick(query.dimension),
     sort: pick(query.sort),
-    order: pick(query.order)
+    order: pick(query.order),
+    user: pick(query.user),
+    app: pick(query.app),
+    model: pick(query.model),
+    surface: pick(query.surface),
+    outcome: pick(query.outcome),
+    limit: pick(query.limit),
+    cursor: pick(query.cursor)
   };
 }
 
@@ -176,6 +185,36 @@ export default function registerAdminUsageRoutes(app) {
     buildServerPath('/api/admin/usage/feedback/summary'),
     adminAuth,
     queryRoute(getFeedbackSummary, 'load feedback summary')
+  );
+
+  /**
+   * @swagger
+   * /admin/usage/calls:
+   *   get:
+   *     summary: Request log — individual model calls, newest first
+   *     description: |
+   *       Call records of the range (metadata only: tokens, outcome, error code,
+   *       latency, tool calls; never prompt or response text), filtered by user,
+   *       app, model, surface and outcome. Page with `cursor` (`nextCursor` of the
+   *       previous page). Kept for `usageTracking.eventRetentionDays`.
+   *     tags: [Admin - Usage]
+   *     parameters:
+   *       - { in: query, name: range, schema: { type: string } }
+   *       - { in: query, name: user, schema: { type: string } }
+   *       - { in: query, name: app, schema: { type: string } }
+   *       - { in: query, name: model, schema: { type: string } }
+   *       - { in: query, name: surface, schema: { type: string, enum: [chat, agent, workflow, task, api, magic, system] } }
+   *       - { in: query, name: outcome, schema: { type: string, enum: [ok, error, aborted, quota, rate_limited] } }
+   *       - { in: query, name: limit, schema: { type: integer, maximum: 200 } }
+   *       - { in: query, name: cursor, schema: { type: string } }
+   *     responses:
+   *       200: { description: "{ items, nextCursor }" }
+   *       400: { description: Invalid parameters }
+   */
+  app.get(
+    buildServerPath('/api/admin/usage/calls'),
+    adminAuth,
+    queryRoute(queryCalls, 'load usage calls')
   );
 
   app.get(buildServerPath('/api/admin/usage/meta'), adminAuth, (req, res) => {
