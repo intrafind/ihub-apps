@@ -10,8 +10,14 @@
  * @returns {string}
  */
 export function headingAnchor(text) {
-  return String(text ?? '')
-    .replace(/<[^>]+>/g, '')
+  // Strip tags until none are left: one pass over `<<b>b>` would leave a new `<b>` behind.
+  let plain = String(text ?? '');
+  let previous;
+  do {
+    previous = plain;
+    plain = plain.replace(/<[^<>]*>/g, '');
+  } while (plain !== previous);
+  return plain
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .trim()
     .toLowerCase()
