@@ -281,7 +281,7 @@ the tool definition instead. The paths point into that tool's result:
 - **The provider.** Register a stub with `registerSourceProvider` and request the route with
   `supertest`. The template is `server/tests/sources-route.test.js`.
 - **Run it.** Put a new test file where a `test:*` script in `package.json` picks it up, so that
-  `npm run test:quick` runs it. `server/tests/loop/*.test.js` (`test:loop`) is picked up
+  `npm run test:quick` runs it. `server/tests/loop/*.test.js` (`test:server`) is picked up
   automatically.
 - **Try it.** Start iHub with `npm run dev`, install the integration under **Admin →
   Integrations**, and run each action with **Test** on the installation page. The test result

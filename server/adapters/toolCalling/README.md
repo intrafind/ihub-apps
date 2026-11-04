@@ -227,7 +227,7 @@ The system includes comprehensive tests that verify:
 Run tests with:
 
 ```bash
-npm run test:tool-calling
+node scripts/run-server-tests.js toolCalling
 ```
 
 ## Contributing

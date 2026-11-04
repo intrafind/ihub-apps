@@ -7,7 +7,7 @@
  * are stubbed; the definition, the connector, the tool runner, the scope
  * provider and the source producer are real.
  *
- * Run: node --test server/tests/iassistantAsk.test.js (part of `npm run test:ifinder`)
+ * Run: node --test server/tests/iassistantAsk.test.js (part of `npm run test:server`)
  */
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
