@@ -111,6 +111,13 @@ is no manual key exchange step.
 - **RS256 signing** — iHub's default JWT algorithm. The JWKS endpoint only
   publishes a key when `platform.jwt.algorithm` is `RS256` (the default). If it
   was changed to `HS256`, switch it back to `RS256` first.
+- **iFinder-side trust configured.** Ticking *Sign with iHub's OIDC key pair*
+  only changes how iHub signs the token; it does not configure iFinder. Your
+  iFinder instance must already have registered iHub as a trusted JWT issuer via
+  its JWKS endpoint (`<issuer>/.well-known/jwks.json`) — see
+  [Step 2](#step-2--configure-ifinder). Without it, every request fails with a
+  `401` and an empty body (diagnostics step `api_request`), which looks like an
+  iHub misconfiguration but is not.
 - **Administrative access** to both the iHub Admin UI and the iFinder Spring
   configuration.
 - **iFinder** must recognize the user identity that iHub puts in the token's

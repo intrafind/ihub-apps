@@ -438,7 +438,7 @@ function IFinderEditor({ instance, definition, onSaved, onCancel }) {
                 <p id="ifinder-use-oidc-key-pair-help" className={`${HELP_CLASS} ml-6`}>
                   {t(
                     `${K}.useOidcKeyPairHelp`,
-                    'Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed.'
+                    'Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed. Prerequisite: your iFinder instance must already trust iHub as a JWT issuer via its JWKS endpoint (/.well-known/jwks.json). Without this iFinder-side configuration the connection fails with a 401 error.'
                   )}
                 </p>
                 <FieldError message={errors.useOidcKeyPair} />

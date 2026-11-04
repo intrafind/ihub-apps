@@ -104,7 +104,7 @@ function GroupFormEditor({
   };
 
   const isProtectedGroup = groupId => {
-    return ['admin', 'user', 'anonymous', 'authenticated'].includes(groupId);
+    return ['admins', 'users', 'anonymous', 'authenticated'].includes(groupId);
   };
 
   if (!group) {

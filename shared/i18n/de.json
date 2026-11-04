@@ -3722,7 +3722,7 @@
             "ihubSignedHelp": "iHub signiert das iFinder-Token selbst, mit einem privaten Schlüssel oder dem OIDC-Schlüsselpaar von iHub. iFinder vertraut iHub als Aussteller."
           },
           "useOidcKeyPair": "Mit dem OIDC-Schlüsselpaar von iHub signieren",
-          "useOidcKeyPairHelp": "Tokens werden mit dem RSA-Schlüssel des OIDC-Servers von iHub signiert. iFinder prüft sie über JWKS-Discovery (/.well-known/jwks.json); kein Schlüssel muss verteilt werden.",
+          "useOidcKeyPairHelp": "Tokens werden mit dem RSA-Schlüssel des OIDC-Servers von iHub signiert. iFinder prüft sie über JWKS-Discovery (/.well-known/jwks.json); kein Schlüssel muss verteilt werden. Voraussetzung: Ihre iFinder-Instanz muss iHub zuvor als vertrauenswürdigen JWT-Aussteller über dessen JWKS-Endpunkt (/.well-known/jwks.json) eingetragen haben. Ohne diese iFinder-seitige Konfiguration schlägt die Verbindung mit einem 401-Fehler fehl.",
           "defaultScope": "Token-Scope",
           "jwtSubjectField": "An iFinder gesendete Benutzeridentität",
           "jwtSubject": {
@@ -4881,7 +4881,24 @@
       "saveSuccess": "Standardsprache gespeichert",
       "saveError": "Standardsprache konnte nicht gespeichert werden",
       "loadError": "Plattformkonfiguration konnte nicht geladen werden",
-      "noTranslations": "keine Übersetzungen"
+      "noTranslations": "keine Übersetzungen",
+      "overrides": {
+        "title": "Übersetzungen überschreiben",
+        "desc": "Ändern Sie den Wortlaut beliebiger Beschriftungen. Gespeichert werden nur die geänderten Schlüssel, in contents/locales/. Suchen Sie eine Beschriftung und bearbeiten Sie sie; mit „Zurücksetzen“ gilt wieder der mitgelieferte Text.",
+        "language": "Sprache",
+        "search": "Nach Schlüssel oder Text suchen, z. B. \"answerSource\" oder \"E-Mail\"",
+        "searchLabel": "Übersetzungen durchsuchen",
+        "changedOnly": "Nur geänderte",
+        "changed": "geändert",
+        "unknown": "unbekannter Schlüssel",
+        "original": "Mitgeliefert",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "reset": "Auf Standard zurücksetzen",
+        "none": "Noch keine Schlüssel geändert. Suchen Sie oben nach einer Beschriftung.",
+        "noMatches": "Keine passenden Übersetzungen.",
+        "more": "Mehr anzeigen"
+      }
     },
     "prompts": {
       "tabs": {
