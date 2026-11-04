@@ -418,8 +418,12 @@ class IFinderService {
             url: getFieldValue(doc, 'url'),
             deepLink: getFieldValue(doc, 'accessInfo.deepLink'),
             documentType: getFieldValue(doc, 'documentType'),
+            // Read by IFinderHandler.searchDocuments and the project item picker
+            mimeType: getFieldValue(doc, 'mediaType'),
             content: getFieldValue(doc, 'content'),
             createdDate: getFieldValue(doc, 'createdDate'),
+            lastModified:
+              getFieldValue(doc, 'lastModified') || getFieldValue(doc, 'modificationDate'),
             author: getFieldValue(doc, 'author'),
             owner: getFieldValue(doc, 'owner'),
 
