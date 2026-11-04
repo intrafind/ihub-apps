@@ -171,12 +171,6 @@ export default function registerAdminUsageRoutes(app) {
     }
   });
 
-  // GET alias for rollup trigger (convenience)
-  app.get(buildServerPath('/api/admin/usage/_rollup'), adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
-  });
-
   // Export endpoint
   app.get(buildServerPath('/api/admin/usage/export'), adminAuth, async (req, res) => {
     try {
