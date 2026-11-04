@@ -358,6 +358,8 @@ Two new system skills, enabled per app by adding `xlsx` and `web-artifacts` to i
 - **Web artifacts:** a self-contained interactive `.html` page (dashboard, calculator, simulator) or
   `.svg` using `--brand-primary`, `--brand-accent` and `--brand-font`. It runs sandboxed and cannot
   contact other sites.
+  Links in an artifact (sources, details, menu items) open content inside the file instead of
+  pointing nowhere; a link the preview cannot follow is flagged so the model rebuilds it.
 - **Previews:** PDFs, HTML, SVG, CSV/TSV tables and Jupyter notebooks open in the panel, with a
   **Preview | Code** switch.
 - **Open:** the Files panel's preview has an **Open** button (or double-click a file) that opens the
