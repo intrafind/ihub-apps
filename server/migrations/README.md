@@ -4,6 +4,14 @@ A Flyway-inspired versioned migration system for JSON configuration files.
 Migrations run automatically on server startup (before `configCache.initialize()`)
 and are tracked in `contents/.migration-history.json`.
 
+Migrations up to **V030** (release 5.3.0, the baseline) have been squashed away:
+their files are deleted and `V031` is the oldest one left. Fresh installs are
+recorded at the baseline, an install below it stops at startup with an error that
+points to release 5.3.x, and history rows of removed versions are never
+validated. See "Baseline" in `docs/configuration-migrations.md` for the rules and
+for how to raise the baseline. `support/legacyRuntimeImport.js` is not a
+migration and stays: V219 imports it.
+
 ---
 
 ## Naming convention
@@ -56,7 +64,8 @@ next fresh install, while already-migrated installations retain the old result.
    in `platform.json`). If a fix is needed, create a new higher-numbered migration.
 
 5. **Forward-only.** There is no rollback mechanism. To undo a change, write a
-   new migration.
+   new migration. (Old migrations are not kept forever: the ones up to the
+   baseline are deleted, see above. Never delete one above the baseline.)
 
 ### Acceptable imports inside a migration
 

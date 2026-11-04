@@ -29,11 +29,27 @@ import {
   transformWhere
 } from './utils.js';
 import { getContentsPath } from '../utils/contentsPath.js';
+import { wasContentsFreshlySeeded } from '../utils/setupUtils.js';
 
 const HISTORY_FILE = '.migration-history.json';
 const LOCK_FILE = '.migration-lock';
 const LOCK_STALE_MS = 5 * 60 * 1000; // 5 minutes
 const MIGRATION_FILE_PATTERN = /^V(\d{3})__(.+)\.js$/;
+
+/**
+ * The migration baseline: the highest migration version that was squashed out of
+ * the repository. Migrations V001..BASELINE_VERSION no longer exist as files; an
+ * installation is only supported from this version up.
+ *
+ * - A fresh install (set up from server/defaults) is recorded as being at the baseline.
+ * - An existing install whose history shows it below the baseline refuses to start.
+ * - History rows for versions at or below the baseline are never validated.
+ *
+ * V030 is the last migration of release 5.3.0 (see docs/configuration-migrations.md,
+ * "Baseline", for how to raise it).
+ */
+export const BASELINE_VERSION = '030';
+export const BASELINE_RELEASE = '5.3.0';
 
 const DEFAULT_MIGRATION_CONFIG = {
   enabled: true,
@@ -406,6 +422,38 @@ export function reconcileRenamedMigrations(history) {
 }
 
 /**
+ * Highest migration version recorded as applied (success or skipped) in the history.
+ * @param {{migrations: Array}} history
+ * @returns {number} 0 when nothing is recorded
+ */
+export function highestAppliedVersion(history) {
+  let highest = 0;
+  for (const entry of history.migrations || []) {
+    if (entry.status !== 'success' && entry.status !== 'skipped') continue;
+    const version = Number.parseInt(entry.version, 10);
+    if (Number.isFinite(version) && version > highest) highest = version;
+  }
+  return highest;
+}
+
+/**
+ * Build the error for an installation below the migration baseline.
+ * @param {string} detail - What the runner saw (history state)
+ * @returns {Error} with `belowBaseline = true`, so server.js exits instead of continuing
+ */
+export function createBelowBaselineError(detail) {
+  const error = new Error(
+    `This installation is older than the oldest supported version and cannot be migrated ` +
+      `directly: ${detail}. The configuration migrations up to V${BASELINE_VERSION} ` +
+      `(iHub Apps release ${BASELINE_RELEASE}) are no longer part of this release. ` +
+      `Upgrade to release 5.3.x (${BASELINE_RELEASE} or a later 5.3 patch release) first, start it once ` +
+      `so it migrates the configuration to V${BASELINE_VERSION} or higher, then upgrade to this release.`
+  );
+  error.belowBaseline = true;
+  return error;
+}
+
+/**
  * Load migration history from disk.
  * @param {string} contentsDir - Absolute path to contents/
  * @returns {Promise<{schemaVersion: string, migrations: Array}>}
@@ -455,6 +503,9 @@ async function validateAppliedMigrations(history, migrationFiles, mode) {
 
   for (const entry of history.migrations) {
     if (entry.status !== 'success') continue;
+    // Migrations at or below the baseline were squashed: their files are gone on
+    // purpose and their history rows are just history.
+    if (Number.parseInt(entry.version, 10) <= Number.parseInt(BASELINE_VERSION, 10)) continue;
 
     const file = filesByVersion.get(entry.version);
     if (!file) {
@@ -658,13 +709,15 @@ async function loadMigrationConfig(contentsDir) {
 /**
  * Run all pending configuration migrations.
  * This is the main entry point, called from server.js after performInitialSetup().
+ * The options exist for tests; production calls it without arguments.
+ * @throws {Error} with `belowBaseline` when the install is older than the baseline
  */
-export async function runConfigMigrations() {
-  const rootDir = getRootDir();
-  const contentsDir = getContentsPath();
-  const migrationsDir = join(rootDir, 'server', 'migrations');
-  const defaultsDir = join(rootDir, 'server', 'defaults');
-
+export async function runConfigMigrations({
+  contentsDir = getContentsPath(),
+  migrationsDir = join(getRootDir(), 'server', 'migrations'),
+  defaultsDir = join(getRootDir(), 'server', 'defaults'),
+  freshlySeeded = wasContentsFreshlySeeded()
+} = {}) {
   // Load migration config
   const migrationConfig = await loadMigrationConfig(contentsDir);
   if (!migrationConfig.enabled) {
@@ -686,30 +739,29 @@ export async function runConfigMigrations() {
     // Load history
     const history = await loadHistory(contentsDir);
 
-    // Handle baseline for existing installations
-    const isExistingInstall =
-      history.migrations.length === 0 &&
-      (await fileExistsRaw(join(contentsDir, 'config', 'platform.json')));
-
-    if (isExistingInstall) {
-      // Auto-record V001 baseline without executing it
-      const baselineFile = migrationFiles.find(f => f.version === '001');
-      if (baselineFile) {
-        const checksum = await computeChecksum(baselineFile.filePath);
-        history.migrations.push({
-          version: '001',
-          description: baselineFile.description,
-          file: baselineFile.file,
-          checksum,
-          appliedAt: new Date().toISOString(),
-          executionTimeMs: 0,
-          status: 'success'
-        });
-        await saveHistory(contentsDir, history);
-        logger.info('Baseline established for existing installation (V001 auto-recorded)', {
-          component: 'Migration'
-        });
+    // Fresh install: record it as being at the baseline. Without history, only
+    // contents seeded from server/defaults by this start count as fresh; a contents
+    // directory with a platform.json but no history predates the migration system.
+    if (history.migrations.length === 0) {
+      const hasPlatformJson = await fileExistsRaw(join(contentsDir, 'config', 'platform.json'));
+      if (hasPlatformJson && !freshlySeeded) {
+        throw createBelowBaselineError(
+          'the contents directory has a configuration but no migration history'
+        );
       }
+      history.migrations.push({
+        version: BASELINE_VERSION,
+        description: 'baseline',
+        file: `baseline (release ${BASELINE_RELEASE})`,
+        checksum: null,
+        appliedAt: new Date().toISOString(),
+        executionTimeMs: 0,
+        status: 'success'
+      });
+      await saveHistory(contentsDir, history);
+      logger.info(`Fresh installation recorded at baseline V${BASELINE_VERSION}`, {
+        component: 'Migration'
+      });
     }
 
     // Reconcile history entries for migrations renumbered to resolve a
@@ -718,6 +770,15 @@ export async function runConfigMigrations() {
     // "removed from disk" or collide with its sibling's checksum.
     if (reconcileRenamedMigrations(history)) {
       await saveHistory(contentsDir, history);
+    }
+
+    // An existing install below the baseline cannot be migrated: the migrations
+    // that would bring it forward no longer exist.
+    const highestApplied = highestAppliedVersion(history);
+    if (highestApplied < Number.parseInt(BASELINE_VERSION, 10)) {
+      throw createBelowBaselineError(
+        `its migration history ends at V${String(highestApplied).padStart(3, '0')}, below V${BASELINE_VERSION}`
+      );
     }
 
     // Validate previously applied migrations
