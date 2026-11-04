@@ -47,10 +47,6 @@ jest.unstable_mockModule('../services/UsageEventLog.js', () => ({
   logUsageEvent: () => {}
 }));
 
-jest.unstable_mockModule('../telemetry.js', () => ({
-  recordTokenUsage: () => {}
-}));
-
 jest.unstable_mockModule('../telemetry/metrics.js', () => ({
   recordMagicPromptUsage: () => {},
   recordFeedbackEvent: () => {}
@@ -166,22 +162,20 @@ describe('recordFeedback', () => {
     expect(usage.feedback.ratings[5]).toBe(1);
     expect(usage.feedback.ratings[1]).toBe(1);
     expect(usage.feedback.averageRating).toBe(3);
-    expect(usage.feedback.good).toBe(1);
-    expect(usage.feedback.bad).toBe(1);
+    expect(usage.feedback.good).toBeUndefined();
+    expect(usage.feedback.bad).toBeUndefined();
 
     // Per-app bucket must agree with the top-level totals it feeds into.
     expect(usage.feedback.perApp.a1.total).toBe(2);
     expect(usage.feedback.perApp.a1.averageRating).toBe(3);
   });
 
-  it('legacy string rating only bumps good/bad, not ratings/total', async () => {
+  it('ignores a non-numeric rating', async () => {
     await recordFeedback({ userId: 'u1', appId: 'a1', modelId: 'm1', rating: 'positive' });
 
     const usage = await getUsage();
-    expect(usage.feedback.good).toBe(1);
-    expect(usage.feedback.bad).toBe(0);
     expect(usage.feedback.total).toBe(0);
-    expect(usage.feedback.perUser.u1.good).toBe(1);
+    expect(usage.feedback.perUser.u1.total).toBe(0);
   });
 });
 

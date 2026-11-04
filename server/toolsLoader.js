@@ -19,9 +19,6 @@ import { describeToolScript } from './utils/toolScripts.js';
 
 const toolsLoader = createResourceLoader({
   resourceName: 'Tools',
-  // createResourceLoader requires a legacyPath, but loadAllTools() below only
-  // ever calls loadFromFiles() — this path is never read.
-  legacyPath: 'config/tools.json',
   individualPath: 'tools',
   validateItem: createValidator(['id', 'name'])
 });

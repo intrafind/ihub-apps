@@ -38,7 +38,18 @@ export function apiDocGlobs(routesDir, sep = path.sep) {
       'shortLinkRoutes.js',
       'auth.js',
       'scheduledTasks.js',
-      'chat/**/*.js'
+      'chat/**/*.js',
+      'chats.js',
+      'integrations/*.js',
+      'oauth.js',
+      'oauthRegister.js',
+      'projectRoutes.js',
+      'promptRoutes.js',
+      'runs.js',
+      'usageRoutes.js',
+      'userSkillRoutes.js',
+      'wellKnown.js',
+      'workflow/*.js'
     ].map(at),
     admin: ['adminRoutes.js', 'admin/**/*.js'].map(at),
     openai: ['openaiProxy.js', 'inference/*.js'].map(at)

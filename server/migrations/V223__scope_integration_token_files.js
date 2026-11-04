@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V218 — rename single-slot integration token files to the
+ * Migration V223 — rename single-slot integration token files to the
  * per-provider layout
  *
  * Release 5.3.13 scoped the stored tokens of the cloud-storage providers per
@@ -28,7 +28,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export const version = '218';
+export const version = '223';
 export const description = 'scope_integration_token_files';
 
 /** The same safe-name rule `TokenStorageService` applies to file names. */

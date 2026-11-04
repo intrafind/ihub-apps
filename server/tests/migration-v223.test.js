@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V218 — single-slot integration token files are renamed to the
+ * Migration V223 — single-slot integration token files are renamed to the
  * per-provider layout once, and only where the payload names its provider.
  *
  * Jira keeps its tokens in one unscoped slot on purpose, so a file without a
@@ -17,7 +17,7 @@ import {
   precondition,
   scopeTokenFiles,
   version
-} from '../migrations/V218__scope_integration_token_files.js';
+} from '../migrations/V223__scope_integration_token_files.js';
 
 function recordingLog() {
   const lines = [];
@@ -29,7 +29,7 @@ function recordingLog() {
 }
 
 async function withTokens(files, fn) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v218-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v223-'));
   const baseDir = path.join(root, 'integrations');
   try {
     for (const [relative, body] of Object.entries(files)) {
@@ -55,13 +55,13 @@ const decrypt = envelope => {
   return envelope.payload || {};
 };
 
-describe('migration V218', () => {
+describe('migration V223', () => {
   it('has the number it was created with', () => {
-    assert.equal(version, '218');
+    assert.equal(version, '223');
   });
 
   it('runs only where an integrations directory has content', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v218-pre-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v223-pre-'));
     try {
       const listFiles = async directory => {
         try {
@@ -79,7 +79,7 @@ describe('migration V218', () => {
   });
 });
 
-describe('V218: scopeTokenFiles', () => {
+describe('V223: scopeTokenFiles', () => {
   it('renames a single-slot file whose providerId is in plaintext', async () => {
     await withTokens(
       { 'office365/alice.json': { providerId: 'o365-corp', iv: 'x' } },
@@ -161,7 +161,7 @@ describe('V218: scopeTokenFiles', () => {
   it('does nothing on an install without an integrations directory', async () => {
     const log = recordingLog();
     const result = await scopeTokenFiles({
-      baseDir: path.join(os.tmpdir(), 'ihub-v218-does-not-exist'),
+      baseDir: path.join(os.tmpdir(), 'ihub-v223-does-not-exist'),
       decrypt,
       log
     });

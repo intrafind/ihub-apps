@@ -113,23 +113,6 @@ export function isValidExtensionId(id) {
 }
 
 /**
- * Validates workflow version strings used in path contexts.
- * Must be a valid safe ID and start/end with an alphanumeric character.
- *
- * @param {string} version - Workflow version string
- * @returns {boolean} - True if valid
- */
-export function isValidWorkflowVersion(version) {
-  return (
-    typeof version === 'string' &&
-    version.length <= 64 &&
-    isValidId(version) &&
-    /^[a-zA-Z0-9]/.test(version) &&
-    /[a-zA-Z0-9]$/.test(version)
-  );
-}
-
-/**
  * Validates multiple IDs (e.g., for batch operations).
  *
  * @param {string|string[]} ids - Single ID, comma-separated string, or array of IDs

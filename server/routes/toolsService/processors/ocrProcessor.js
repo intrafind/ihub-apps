@@ -693,7 +693,7 @@ export async function processOcrJob(job) {
         resultSize: job.result.length
       });
     } else {
-      // ── Image input mode (legacy base64 path) ──
+      // ── Image input mode (uploaded image files, one page each) ──
       const pageImages = job.data.pageImages;
       const pageTexts = [];
       let completed = 0;

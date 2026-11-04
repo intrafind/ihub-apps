@@ -788,9 +788,6 @@ VITE_API_URL=/api                     # Optional, defaults to runtime detection
 - **GET /api/auth/status** - Get auth status and available methods
 - **GET /api/auth/user** - Get current user info
 - **POST /api/auth/logout** - Clear authentication cookie
-- **GET /api/auth/ntlm/status** - Get NTLM status
-- **GET /api/auth/oidc/providers** - List OIDC providers
-- **GET /api/auth/ldap/providers** - List LDAP providers
 
 ### Group-Protected Routes
 

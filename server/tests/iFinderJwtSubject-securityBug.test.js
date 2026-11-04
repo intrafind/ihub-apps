@@ -15,9 +15,8 @@
  * These tests pin three guarantees:
  *   1. configCache does not env-resolve `iFinder.jwtSubjectField` even
  *      when a same-named env var exists.
- *   2. iFinderJwt's template regex matches both `${field}` (legacy) and
- *      `${user.field}` (preferred) syntaxes, and the legacy detector
- *      flags only the unprefixed form.
+ *   2. iFinderJwt's template regex matches only the `${user.field}` syntax,
+ *      and the bare-form detector flags only the unprefixed form.
  *   3. The V076 migration converts `${field}` to `${user.field}` in
  *      existing platform.json files.
  */
@@ -127,17 +126,11 @@ describe('iFinder JWT subject — template regex pin', () => {
   // writing templates) depend on — if you change the regex, update both
   // sites AND bump V076 (or add a new migration) to convert existing configs.
 
-  const TEMPLATE_RE = /\$\{(?:user\.)?(\w+)\}/g;
+  const TEMPLATE_RE = /\$\{user\.(\w+)\}/g;
   const LEGACY_DETECT_RE = /\$\{(?!user\.)\w+\}/;
 
   it('captures field name from ${user.field}', () => {
     const m = [...'BMG\\${user.username}'.matchAll(TEMPLATE_RE)];
-    assert.equal(m.length, 1);
-    assert.equal(m[0][1], 'username');
-  });
-
-  it('captures field name from ${field} (legacy)', () => {
-    const m = [...'BMG\\${username}'.matchAll(TEMPLATE_RE)];
     assert.equal(m.length, 1);
     assert.equal(m[0][1], 'username');
   });
@@ -149,7 +142,7 @@ describe('iFinder JWT subject — template regex pin', () => {
   });
 
   it('handles multiple placeholders in one template', () => {
-    const m = [...'${domain}\\${user.username}'.matchAll(TEMPLATE_RE)];
+    const m = [...'${user.domain}\\${user.username}'.matchAll(TEMPLATE_RE)];
     assert.equal(m.length, 2);
     assert.equal(m[0][1], 'domain');
     assert.equal(m[1][1], 'username');

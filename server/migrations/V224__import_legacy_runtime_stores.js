@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V219 — carry the pre-provider runtime records into the storage
+ * Migration V224 — carry the pre-provider runtime records into the storage
  * provider
  *
  * Releases before 5.5.2 (the storage provider) kept what ran in files under
@@ -45,7 +45,7 @@ import {
   legacyLocations
 } from './support/legacyRuntimeImport.js';
 
-export const version = '219';
+export const version = '224';
 export const description = 'import_legacy_runtime_stores';
 
 export async function precondition(ctx) {

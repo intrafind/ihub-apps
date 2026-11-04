@@ -4,10 +4,8 @@
 /**
  * Workflow Trigger Routes
  *
- * Provides endpoints for managing and invoking workflow triggers:
- * - GET  /api/workflows/triggers                          — list active triggers (admin)
- * - POST /api/workflows/:id/trigger                       — manually fire a trigger (admin)
- * - POST /api/workflows/:workflowId/webhooks/:triggerId   — public webhook endpoint
+ * Provides the public webhook endpoint for workflow triggers:
+ * - POST /api/workflows/:workflowId/webhooks/:triggerId
  *
  * The webhook endpoint is intentionally public (no authRequired) but uses
  * HMAC-SHA256 signature verification when a secret is configured on the trigger.
@@ -29,75 +27,8 @@ const checkWorkflowsFeature = requireFeature('workflows');
  * Registers all trigger-related routes on the Express app.
  *
  * @param {import('express').Express} app - The Express application
- * @param {Object} deps - Route dependencies (middleware)
- * @param {Function} deps.authRequired - Middleware that enforces authentication
- * @param {Function} deps.adminAuth - Middleware that enforces admin privileges
  */
-export function registerTriggerRoutes(app, { authRequired, adminAuth }) {
-  /**
-   * GET /api/workflows/triggers
-   *
-   * Returns all currently active triggers across all workflows.
-   * Admin-only. Useful for monitoring which schedules / webhooks are registered.
-   */
-  app.get(
-    buildServerPath('/api/workflows/triggers'),
-    authRequired,
-    adminAuth,
-    checkWorkflowsFeature,
-    (req, res) => {
-      try {
-        const triggerManager = getTriggerManager();
-        const triggers = triggerManager.getActiveTriggers();
-        res.json({ triggers });
-      } catch (error) {
-        logger.error({
-          component: 'triggerRoutes',
-          message: `Failed to list triggers: ${error.message}`
-        });
-        res.status(500).json({ error: 'Failed to list triggers' });
-      }
-    }
-  );
-
-  /**
-   * POST /api/workflows/:id/trigger
-   *
-   * Manually fires the trigger for a workflow, starting a new execution.
-   * Admin-only. Accepts optional `initialData` in the request body.
-   */
-  app.post(
-    buildServerPath('/api/workflows/:id/trigger'),
-    authRequired,
-    adminAuth,
-    checkWorkflowsFeature,
-    async (req, res) => {
-      if (!validateIdForPath(req.params.id, 'workflow', res)) {
-        return;
-      }
-
-      try {
-        const triggerManager = getTriggerManager();
-        await triggerManager.fireTrigger(
-          req.params.id,
-          {
-            id: 'manual',
-            type: 'manual',
-            initialData: req.body?.initialData || {}
-          },
-          { user: req.user }
-        );
-        res.json({ success: true, message: 'Trigger fired' });
-      } catch (error) {
-        logger.error({
-          component: 'triggerRoutes',
-          message: `Failed to fire trigger: ${error.message}`
-        });
-        res.status(500).json({ error: 'Failed to fire trigger' });
-      }
-    }
-  );
-
+export function registerTriggerRoutes(app) {
   /**
    * POST /api/workflows/:workflowId/webhooks/:triggerId
    *

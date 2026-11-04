@@ -1,11 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import {
-  getCimdClientRow,
-  listCimdClientRows,
-  clientsFileFor
-} from '../../services/oauth/CimdGovernanceService.js';
+import { getCimdClientRow, clientsFileFor } from '../../services/oauth/CimdGovernanceService.js';
 import { revokeConnectionsForClient } from '../../services/oauth/ConnectionService.js';
 import {
   CIMD_POLICY_FIELDS,
@@ -90,46 +86,6 @@ function requireCimdClient(req, res) {
 }
 
 export default function registerAdminOAuthCimdRoutes(app) {
-  /**
-   * @swagger
-   * /api/admin/oauth/cimd-clients:
-   *   get:
-   *     summary: List clients identified by a metadata document
-   *     description: |
-   *       The join of the stored policy records and the connections that exist,
-   *       so a client nobody has decided anything about yet is still listed.
-   *       Pending clients sort first. Each row carries both the policy the
-   *       record sets and the effective policy after layering over
-   *       `platform.oauth.cimd`.
-   *     tags: [Admin, OAuth]
-   *     security:
-   *       - BearerAuth: []
-   *     responses:
-   *       200:
-   *         description: The CIMD clients
-   *       400:
-   *         description: OAuth clients are not enabled
-   */
-  app.get(buildServerPath('/api/admin/oauth/cimd-clients'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      if (!platform.oauth?.enabled?.clients) {
-        return res
-          .status(400)
-          .json({ success: false, error: 'OAuth clients are not enabled on this server' });
-      }
-
-      res.json({
-        success: true,
-        clients: listCimdClientRows(platform),
-        approvalMode: platform.oauth?.cimd?.approvalMode === 'auto' ? 'auto' : 'approval'
-      });
-    } catch (error) {
-      logger.error('[OAuth Admin] List CIMD clients error', { component: 'OAuthAdmin', error });
-      res.status(500).json({ success: false, error: 'Failed to list client-metadata clients' });
-    }
-  });
-
   /**
    * @swagger
    * /api/admin/oauth/clients/cimd/{encodedClientId}:

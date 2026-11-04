@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Support code for migration V219: carries the runtime records written by
+ * Support code for migration V224: carries the runtime records written by
  * releases before the storage provider into the provider's namespaces.
  *
  * Three legacy layouts exist on an installation that was last started on a

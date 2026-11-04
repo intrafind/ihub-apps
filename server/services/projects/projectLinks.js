@@ -21,7 +21,7 @@
 import configCache from '../../configCache.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
-import { visibleToUser as profileVisibleToUser } from '../../routes/agents/profiles.js';
+import { visibleToUser as profileVisibleToUser } from '../../utils/agentProfileVisibility.js';
 import { filterByPermissions } from '../workflow/workflowAccess.js';
 import { appUsesProjects } from './projectSettings.js';
 
@@ -135,7 +135,7 @@ function workflowUsableBy(workflow, user) {
 }
 
 /**
- * The policy the profile routes apply (`visibleToUser`): a profile a user
+ * The agent-profile visibility policy (`visibleToUser`): a profile a user
  * cannot open cannot grant them its linked projects either.
  */
 function agentUsableBy(profile, user) {
