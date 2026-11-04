@@ -21,7 +21,7 @@ function fakeCtx(files) {
   return {
     files,
     listFiles: async (dir, pattern) =>
-      list(dir).filter(n => !pattern || n.endsWith(pattern.replace('*', ''))),
+      list(dir).filter(n => !pattern || n.endsWith(pattern.replaceAll('*', ''))),
     readJson: async p => {
       if (dirs.has(p) || !(p in files)) throw new Error('not a file');
       return files[p];
