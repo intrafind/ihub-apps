@@ -125,6 +125,8 @@ export function createQuotaLedger({
   let dirty = false;
   let timer = null;
   let inFlight = null;
+  /** Flushes started so far; a read compares it before and after. */
+  let flushCount = 0;
 
   function scheduleFlush() {
     if (timer) return;
@@ -145,6 +147,7 @@ export function createQuotaLedger({
     const delta = pending;
     pending = createDefault();
     dirty = false;
+    flushCount += 1;
     const op = file.update(data => {
       mergeInto(data, delta);
       prune(data, Date.now());
@@ -194,18 +197,29 @@ export function createQuotaLedger({
     scheduleFlush();
   }
 
-  /** The file's data with this worker's pending counts added. */
+  /**
+   * The file's data with this worker's pending counts added.
+   *
+   * A flush moves its counts out of `pending` before they are in the file, so
+   * a read that overlaps one would miss them: wait for a flush in progress,
+   * and read again when one started during the read.
+   */
   async function snapshot() {
-    let data;
-    try {
-      data = structuredClone(await file.read());
-    } catch (error) {
-      logger.warn('Could not read quota usage', { component: COMPONENT, error: error.message });
-      data = createDefault();
+    for (;;) {
+      if (inFlight) await inFlight.catch(() => {});
+      const startedFlushes = flushCount;
+      let data;
+      try {
+        data = structuredClone(await file.read());
+      } catch (error) {
+        logger.warn('Could not read quota usage', { component: COMPONENT, error: error.message });
+        data = createDefault();
+      }
+      if (startedFlushes !== flushCount) continue;
+      if (dirty) mergeInto(data, structuredClone(pending));
+      if (!data.users || typeof data.users !== 'object') data.users = {};
+      return data;
     }
-    if (dirty) mergeInto(data, structuredClone(pending));
-    if (!data.users || typeof data.users !== 'object') data.users = {};
-    return data;
   }
 
   /**

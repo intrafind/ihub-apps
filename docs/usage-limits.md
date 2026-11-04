@@ -81,7 +81,7 @@ Every model call goes through one place, the LLM client. That covers chat, agent
 - If a budget is used up, the call is refused with code `QUOTA_EXCEEDED`.
   - The chat shows a localized message naming the model, the budget and when it resets.
   - The Inference API answers `429` with `details` holding `{ scope, modelId, window, limit, used, resetAt }`.
-- What a call used is counted when the call ends, and also when it fails or is stopped after the answer started (by estimate when the provider had not yet reported usage).
+- What a call used is counted when the call ends — for every call that names its user, including agent steps and workflow nodes, which show in the reports and are counted the same way — and also when it fails or is stopped after the answer started (by estimate when the provider had not yet reported usage).
 - Calls that are already running when a budget runs out still finish, and so do calls that passed the check together, such as parallel agent steps, workflow nodes or API requests. Cluster workers share their counts within a few seconds. A budget can therefore be exceeded by the calls in flight at that moment.
 - If the limit check itself fails (for example, an unreadable groups or users configuration), the call is refused rather than let through, with the message "Usage limits could not be checked".
 - A multi-step agent run stops at the next model call once the budget is used up.
@@ -134,4 +134,4 @@ The user editor also shows the user's current usage, with a **Reset usage** butt
 
 ## Storage and privacy
 
-Counters live in `contents/data/quota-usage.json`. They are kept per user, model and window, and hold counts only, never content. They are separate from the usage analytics ([Usage Reporting](usage-reporting.md)) and are written even when analytics tracking is off or pseudonymized: enforcing a per-user limit needs the real user. Users not seen for 400 days are removed. Cluster workers add their counts to the file every few seconds under a lock.
+Counters live in `contents/data/quota-usage.json`. They are kept per user, model and window, and hold counts only, never content. They are the fast, pre-summed view of the same model calls that the usage analytics ([Usage Reporting](usage-reporting.md)) store: both are written from one call record, in one place, so the tokens of a call are the same in your usage menu, on the Limits & quotas tab and in the reports. The counters are keyed on the real user and written even when analytics tracking is off or pseudonymized, because enforcing a per-user limit needs the real user. Their windows follow the configured reset schedule, whereas the reports use UTC days, so a "today" can differ by the time zone offset. Users not seen for 400 days are removed. Cluster workers add their counts to the file every few seconds under a lock.
