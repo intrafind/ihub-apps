@@ -217,14 +217,18 @@ describe('quota ledger', () => {
 
   it('a count from an earlier window is zero after the reset', async () => {
     const l = await ledger();
-    const yesterday = currentWindows({ timezone: 'UTC' }, Date.parse('2026-11-02T12:00:00Z'));
-    const today = currentWindows({ timezone: 'UTC' }, Date.parse('2026-11-03T12:00:00Z'));
-    l.record('u1', { modelId: 'a', tokens: 70, windows: yesterday });
+    const yesterdayAt = Date.parse('2026-11-02T12:00:00Z');
+    const todayAt = Date.parse('2026-11-03T12:00:00Z');
+    const yesterday = currentWindows({ timezone: 'UTC' }, yesterdayAt);
+    const today = currentWindows({ timezone: 'UTC' }, todayAt);
+    // Each count carries the time it belongs to: without it both get the same
+    // clock reading on a fast machine and the newer window loses the tie.
+    l.record('u1', { modelId: 'a', tokens: 70, windows: yesterday, now: yesterdayAt });
     await l.flush();
     const counts = await l.getUser('u1', today);
     assert.equal(counts.models.a.day, 0);
     assert.equal(counts.models.a.week, 70); // same week (Monday 2 November)
-    l.record('u1', { modelId: 'a', tokens: 5, windows: today });
+    l.record('u1', { modelId: 'a', tokens: 5, windows: today, now: todayAt });
     await l.flush();
     assert.equal((await l.getUser('u1', today)).models.a.day, 5);
   });
