@@ -256,8 +256,8 @@ describe('storage providers as installations', () => {
     );
     assert.deepEqual(await listCloudStorageConnections('googledrive', 'googledrive'), []);
     assert.deepEqual(await listCloudStorageConnections('nextcloud'), [], 'an id is needed');
-    // The Connections dialog reads the connection index (seeded here; the
-    // re-index and every connect write it in production).
+    // The Connections dialog reads the connection index (seeded here; a
+    // connect or the first use of a token file writes it in production).
     const connections = getIntegrationConnectionService();
     for (const [integration, userId] of [
       ['office365-main', 'erin'],
