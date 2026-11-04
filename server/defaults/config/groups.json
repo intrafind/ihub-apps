@@ -4,6 +4,7 @@
       "id": "admins",
       "name": "Admins",
       "description": "Full administrative access to all resources",
+      "inherits": ["users"],
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],
@@ -21,6 +22,7 @@
       "id": "users",
       "name": "Users",
       "description": "Standard user access to common applications and models",
+      "inherits": ["authenticated"],
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],

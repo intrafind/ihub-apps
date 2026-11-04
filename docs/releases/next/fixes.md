@@ -209,3 +209,10 @@ resolution, yet the admin UI still offered Delete and an editable ID for `admins
 - The Delete action is now hidden and the ID locked for all four default groups.
 - A migration restores any default group that was already deleted, with its original inheritance.
   Groups that still exist, including your customizations, are left untouched.
+
+## Default Group Inheritance Is Now a Complete Chain
+
+Only `authenticated` inherited from `anonymous`; `users` and `admins` had no parent. The shipped
+default is now `admins` → `users` → `authenticated` → `anonymous`, matching the documentation.
+A migration adds the two missing links to existing installations. A group that already declares
+`inherits` (even an empty list) is left as you configured it.
