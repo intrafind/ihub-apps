@@ -83,14 +83,14 @@ export async function resolveIdentity({ user, conversationId, mode }, deps = FIN
  * @returns {Promise<Object|null>} the record written, or null
  */
 export async function recordLlmCall(call) {
-  if (call.countQuota !== false) {
-    recordModelUsage(call.user || null, {
-      model: { id: call.modelId },
-      usage: call.usage,
-      appId: call.appId
-    });
-  }
   try {
+    if (call?.countQuota !== false) {
+      recordModelUsage(call?.user || null, {
+        model: { id: call?.modelId },
+        usage: call?.usage,
+        appId: call?.appId
+      });
+    }
     if (!isUsageTrackingEnabled()) return null;
     const mode = getUsageTrackingMode();
     const { uid, cid } = await resolveIdentity({
