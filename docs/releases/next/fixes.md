@@ -1,5 +1,11 @@
 # Fixes — Unreleased
 
+## Deadlocked Workflow Runs Now Fail Instead of Hanging
+
+A workflow run whose remaining steps can never start (for example a step that depends on one that
+is not part of the workflow) used to stay in **Running** forever without any message. The run now
+ends as **Failed** with a "Workflow deadlocked" error naming the blocked steps.
+
 ## Shared Chats and Files Get a Descriptive Title
 
 The title of a shared link — in the browser tab, the link preview, **Shared with me** and your list
