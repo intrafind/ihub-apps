@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createHash, randomUUID } from 'node:crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
@@ -27,8 +26,6 @@ import {
  *   POST /mcp           — Streamable HTTP (canonical, MCP 2025-03-26+)
  *   GET  /mcp           — Streamable HTTP GET (SSE upgrade)
  *   DELETE /mcp         — Streamable HTTP session termination
- *   GET  /mcp/sse       — Legacy SSE transport (back-compat)
- *   POST /mcp/messages  — Legacy SSE client→server messages
  *
  * and, when `platform.mcpServer.a2a.enabled` is on, the A2A 0.3 agent:
  *
@@ -60,8 +57,6 @@ import {
  * was issued to the caller: a session id names its user (see
  * `mintGatewaySessionId`), so another user's id is refused with 403 here, as
  * the owning worker would refuse it, instead of being served or kept alive.
- *   - Legacy SSE messages are relayed to the worker holding the SSE stream,
- *     since only that worker can write the response onto it.
  *
  * The bus spans one process tree, not pods. Behind a load balancer that fans
  * out across pods, set `platform.mcpServer.transports.streamableHttp.stateless
@@ -74,14 +69,9 @@ import {
 const SESSION_PRESENCE = 'mcp-session';
 const sessions = createPresenceMap(SESSION_PRESENCE);
 
-// Map<sessionId, { server, transport, userId }> for the legacy SSE transport.
-const SSE_SESSION_PRESENCE = 'mcp-sse-session';
-const sseSessions = createPresenceMap(SSE_SESSION_PRESENCE);
-
 /** Cross-worker channels, see the module comment. */
 const BUS_SESSION_TOUCH = 'mcp-session:touch';
 const BUS_SESSION_TERMINATE = 'mcp-session:terminate';
-const BUS_SSE_MESSAGE = 'mcp-sse:message';
 
 /**
  * A new session id, bound to the user it is issued to:
@@ -303,25 +293,6 @@ function registerSessionBusHandlers() {
     }
     destroySession(sessionId).catch(() => {});
   });
-
-  // A legacy SSE client POSTs its messages to whichever worker the connection
-  // reaches; the reply has to go out on the SSE stream this worker holds.
-  respond(BUS_SSE_MESSAGE, async ({ sessionId, userId, body, headers } = {}) => {
-    const entry = sseSessions.get(sessionId);
-    if (!entry) return undefined; // not ours — stay silent for the owner
-    if (entry.userId !== userId) return { status: 403 };
-    try {
-      await entry.transport.handleMessage(body, { requestInfo: { headers } });
-      return { status: 202 };
-    } catch (err) {
-      logger.warn('MCP gateway relayed SSE message failed', {
-        component: 'McpGateway',
-        sessionId,
-        error: err?.message
-      });
-      return { status: 400 };
-    }
-  });
 }
 
 export default function registerMcpServerRoutes(app) {
@@ -527,7 +498,7 @@ export default function registerMcpServerRoutes(app) {
           res,
           405,
           -32000,
-          `Method Not Allowed: open a session with an initialize request before requesting the SSE stream. Legacy SSE clients must connect to ${buildServerPath('/mcp/sse')} instead.`,
+          `Method Not Allowed: open a session with an initialize request before requesting the SSE stream.`,
           { Allow: 'POST, DELETE' }
         );
       }
@@ -616,86 +587,6 @@ export default function registerMcpServerRoutes(app) {
     res.status(204).end();
   });
 
-  // ---- Legacy SSE transport ---------------------------------------------
-  // Older MCP clients still use the SSE transport. Keep a thin compat layer.
-
-  app.get(buildServerPath('/mcp/sse'), enabledCheck, mcpAuth, async (req, res) => {
-    const cfg = gatewayConfig();
-    if (cfg.transports?.sse?.enabled === false) {
-      return res
-        .status(404)
-        .json({ error: 'not_found', error_description: 'SSE transport disabled' });
-    }
-    try {
-      const platform = configCache.getPlatform() || {};
-      const server = await buildMcpServer({ user: req.user, platform });
-      const transport = new SSEServerTransport(buildServerPath('/mcp/messages'), res);
-      await server.connect(transport);
-      const sessionId = transport.sessionId;
-      sseSessions.set(sessionId, { server, transport, userId: req.user.id });
-      transport.onclose = () => {
-        sseSessions.delete(sessionId);
-        server.close().catch(() => {});
-      };
-    } catch (err) {
-      logger.error('MCP gateway SSE handler failed', {
-        component: 'McpGateway',
-        error: err.message,
-        stack: err.stack
-      });
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'internal_error', error_description: err.message });
-      }
-    }
-  });
-
-  app.post(buildServerPath('/mcp/messages'), enabledCheck, jsonBody, mcpAuth, async (req, res) => {
-    const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : null;
-    const entry = sessionId ? sseSessions.get(sessionId) : null;
-    if (!entry && sessionId && hasRemote(SSE_SESSION_PRESENCE, sessionId)) {
-      // The SSE stream lives on another worker; only it can write the reply.
-      const reply = await request(
-        BUS_SSE_MESSAGE,
-        {
-          sessionId,
-          userId: req.user.id,
-          body: req.body,
-          headers: relayableHeaders(req.headers)
-        },
-        { route: { kind: SSE_SESSION_PRESENCE, key: sessionId } }
-      );
-      if (reply?.status === 202) return res.status(202).end('Accepted');
-      if (reply?.status === 403) {
-        return res
-          .status(403)
-          .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
-      }
-      if (reply?.status === 400) return res.status(400).end('Invalid message');
-      // No answer: the owner went away between the presence check and now.
-    }
-    if (!entry) {
-      return res
-        .status(404)
-        .json({ error: 'not_found', error_description: 'No active SSE session' });
-    }
-    if (entry.userId !== req.user.id) {
-      return res
-        .status(403)
-        .json({ error: 'forbidden', error_description: 'Session belongs to a different user' });
-    }
-    try {
-      await entry.transport.handlePostMessage(req, res, req.body);
-    } catch (err) {
-      logger.error('MCP gateway SSE message handler failed', {
-        component: 'McpGateway',
-        error: err.message
-      });
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'internal_error', error_description: err.message });
-      }
-    }
-  });
-
   // ---- Public discovery -------------------------------------------------
   // Unauthenticated metadata endpoint; safe to expose.
   app.get(buildServerPath('/mcp/.well-known'), enabledCheck, (req, res) => {
@@ -706,10 +597,8 @@ export default function registerMcpServerRoutes(app) {
     // Only advertise transports the operator has actually enabled so clients
     // don't pick a disabled one.
     const streamableHttpEnabled = cfg.transports?.streamableHttp?.enabled !== false;
-    const sseEnabled = cfg.transports?.sse?.enabled !== false;
     const transports = [];
     if (streamableHttpEnabled) transports.push('streamableHttp');
-    if (sseEnabled) transports.push('sse');
     if (a2aEnabled) transports.push('a2a');
 
     const allScopes = [
@@ -723,7 +612,6 @@ export default function registerMcpServerRoutes(app) {
     res.json({
       issuer: baseUrl,
       mcp_endpoint: streamableHttpEnabled ? `${baseUrl}/mcp` : null,
-      mcp_sse_endpoint: sseEnabled ? `${baseUrl}/mcp/sse` : null,
       a2a_endpoint: a2aEnabled ? `${baseUrl}/a2a` : null,
       a2a_agent_card: a2aEnabled ? `${baseUrl}/a2a/.well-known/agent-card.json` : null,
       transports,

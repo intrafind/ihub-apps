@@ -2579,8 +2579,6 @@
         "transports": "Transporte",
         "transportStreamableHttp": "Streamable HTTP (empfohlen)",
         "transportStreamableHttpDesc": "Kanonischer MCP-HTTP-Transport gemäß Spezifikation 2025-03-26+. Unterstützt Session-Resumption über Mcp-Session-Id + Last-Event-ID.",
-        "transportSse": "SSE (veraltet)",
-        "transportSseDesc": "Älterer Transport zur Abwärtskompatibilität mit MCP-Clients, die noch nicht auf Streamable HTTP umgestellt haben. Wiederholt laufende Anfragen statt sie fortzusetzen — deaktivieren, wenn Idempotenz wichtig ist.",
         "transportA2a": "A2A (Agent-to-Agent) 0.3",
         "transportA2aDesc": "Stellt eine Agent Card unter /.well-known/agent-card.json bereit und mountet /a2a neben /mcp, hinter demselben OAuth- + mcp:*-Scope-Gate (persönliche API-Schlüssel funktionieren ebenfalls). Apps und Workflows werden zu den Skills des Agenten; unterstützt message/send, message/stream, tasks/get und tasks/cancel.",
         "expose": "Bereitgestellte Ressourcen",
@@ -6201,7 +6199,6 @@
           "baseUrl": "Basis-URL",
           "openaiCompatible": "OpenAI-kompatible API",
           "mcp": "MCP-Endpunkt",
-          "mcpSse": "MCP-Endpunkt (SSE)",
           "token": "OAuth-Token-Endpunkt"
         },
         "usageHint": "Senden Sie den API-Schlüssel als Authorization: Bearer Header.",

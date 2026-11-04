@@ -437,19 +437,6 @@ function AdminMcpGatewayPage() {
               )}
             />
             <Toggle
-              checked={transports.sse?.enabled !== false}
-              onChange={v =>
-                update({
-                  transports: { sse: { enabled: v, deprecated: true } }
-                })
-              }
-              label={t('admin.mcp.gateway.transportSse', 'SSE (legacy)')}
-              description={t(
-                'admin.mcp.gateway.transportSseDesc',
-                'Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.'
-              )}
-            />
-            <Toggle
               checked={!!gateway.a2a?.enabled}
               onChange={v =>
                 setPlatform(prev => ({

@@ -113,7 +113,6 @@ export default function PersonalApiKeysCard({
       label: t('integrations.page.apiKeys.endpoints.openaiCompatible', 'OpenAI-compatible API')
     },
     { key: 'mcp', label: t('integrations.page.apiKeys.endpoints.mcp', 'MCP endpoint') },
-    { key: 'mcpSse', label: t('integrations.page.apiKeys.endpoints.mcpSse', 'MCP endpoint (SSE)') },
     { key: 'token', label: t('integrations.page.apiKeys.endpoints.token', 'OAuth token endpoint') }
   ].filter(row => endpoints[row.key]);
 
