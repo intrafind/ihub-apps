@@ -91,8 +91,8 @@ direct URL.
   with their API addresses filled in. No cloud model is preconfigured: **Admin → Models → Import
   from provider** lists the models of a provider and adds the ones you pick. The disabled local
   models (vLLM chat, Voxtral transcription on vLLM, iAssistant) are ready to switch on.
-- **Two marketplace registries**: the iHub Official Marketplace (90 apps, 98 skills, 19 models,
-  6 workflows, 5 prompts) and the iHub Examples.
+- **One marketplace registry**: the iHub Official Marketplace (90 apps, 98 skills, 19 models,
+  6 workflows, 5 prompts).
 - **Authentication**: local accounts and anonymous access are on.
 
 ## Default access

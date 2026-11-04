@@ -124,19 +124,3 @@ describe('warnAboutMissingToolScripts', () => {
     assert.deepStrictEqual(missingScriptWarnings, []);
   });
 });
-
-describe('examples/config/tools.json', () => {
-  it('only references scripts that exist in server/tools', () => {
-    const scriptsDir = path.join(getRootDir(), 'server', 'tools');
-    const examples = JSON.parse(
-      fs.readFileSync(path.join(getRootDir(), 'examples', 'config', 'tools.json'), 'utf8')
-    );
-    const tools = Array.isArray(examples) ? examples : examples.tools;
-
-    const missing = tools
-      .filter(tool => tool.script && !fs.existsSync(path.join(scriptsDir, tool.script)))
-      .map(tool => `${tool.id} -> ${tool.script}`);
-
-    assert.deepStrictEqual(missing, []);
-  });
-});

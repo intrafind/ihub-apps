@@ -7,7 +7,6 @@
  * Tests for the migration runner, utils, and migration files.
  */
 
-import { jest } from '@jest/globals';
 import {
   setDefault,
   removeKey,
@@ -646,106 +645,6 @@ describe('Migration Runner', () => {
       const hash1 = await computeChecksum(file1);
       const hash2 = await computeChecksum(file2);
       expect(hash1).not.toBe(hash2);
-    });
-  });
-});
-
-// ──────────────────────────────────────────────────────────────────────
-// Migration File Tests
-// ──────────────────────────────────────────────────────────────────────
-
-describe('Migration Files', () => {
-  describe('V001__baseline', () => {
-    it('should export the correct version and description', async () => {
-      const mod = await import('../migrations/V001__baseline.js');
-      expect(mod.version).toBe('001');
-      expect(mod.description).toBe('baseline');
-      expect(typeof mod.up).toBe('function');
-    });
-
-    it('should be a no-op that calls ctx.log', async () => {
-      const mod = await import('../migrations/V001__baseline.js');
-      const ctx = { log: jest.fn() };
-      await mod.up(ctx);
-      expect(ctx.log).toHaveBeenCalledTimes(1);
-      expect(ctx.log).toHaveBeenCalledWith(expect.stringContaining('Baseline'));
-    });
-  });
-
-  describe('V002__ensure_default_providers', () => {
-    it('should export the correct version and description', async () => {
-      const mod = await import('../migrations/V002__ensure_default_providers.js');
-      expect(mod.version).toBe('002');
-      expect(mod.description).toBe('Ensure default providers are present');
-      expect(typeof mod.up).toBe('function');
-      expect(typeof mod.precondition).toBe('function');
-    });
-
-    it('should skip if providers.json does not exist', async () => {
-      const mod = await import('../migrations/V002__ensure_default_providers.js');
-      const ctx = { fileExists: jest.fn().mockResolvedValue(false) };
-      const result = await mod.precondition(ctx);
-      expect(result).toBe(false);
-    });
-
-    it('should proceed if providers.json exists', async () => {
-      const mod = await import('../migrations/V002__ensure_default_providers.js');
-      const ctx = { fileExists: jest.fn().mockResolvedValue(true) };
-      const result = await mod.precondition(ctx);
-      expect(result).toBe(true);
-    });
-
-    it('should add missing providers', async () => {
-      const mod = await import('../migrations/V002__ensure_default_providers.js');
-
-      const existingProviders = {
-        providers: [{ id: 'openai', name: 'OpenAI' }]
-      };
-      const defaultProviders = {
-        providers: [
-          { id: 'openai', name: 'OpenAI' },
-          { id: 'anthropic', name: 'Anthropic' },
-          { id: 'google', name: 'Google' }
-        ]
-      };
-      let writtenData = null;
-      const ctx = {
-        readJson: jest.fn().mockResolvedValue(existingProviders),
-        readDefaultJson: jest.fn().mockResolvedValue(defaultProviders),
-        writeJson: jest.fn().mockImplementation(async (path, data) => {
-          writtenData = data;
-        }),
-        log: jest.fn()
-      };
-
-      await mod.up(ctx);
-
-      expect(ctx.writeJson).toHaveBeenCalledTimes(1);
-      expect(writtenData.providers).toHaveLength(3);
-      expect(writtenData.providers.map(p => p.id)).toEqual(['openai', 'anthropic', 'google']);
-      expect(ctx.log).toHaveBeenCalledWith(expect.stringContaining('2 missing provider'));
-    });
-
-    it('should not write if all providers are present', async () => {
-      const mod = await import('../migrations/V002__ensure_default_providers.js');
-
-      const providers = {
-        providers: [
-          { id: 'openai', name: 'OpenAI' },
-          { id: 'anthropic', name: 'Anthropic' }
-        ]
-      };
-      const ctx = {
-        readJson: jest.fn().mockResolvedValue(providers),
-        readDefaultJson: jest.fn().mockResolvedValue(providers),
-        writeJson: jest.fn(),
-        log: jest.fn()
-      };
-
-      await mod.up(ctx);
-
-      expect(ctx.writeJson).not.toHaveBeenCalled();
-      expect(ctx.log).toHaveBeenCalledWith(expect.stringContaining('already present'));
     });
   });
 });

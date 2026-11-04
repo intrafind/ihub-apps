@@ -105,7 +105,6 @@ docker-compose*.yml
 .dockerignore
 
 # Examples and samples (not needed in production)
-examples/
 samples/
 
 # Development scripts

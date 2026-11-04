@@ -366,6 +366,26 @@ export async function syncManagedDefaultFiles({
   return updated;
 }
 
+let freshlySeeded = false;
+
+async function pathExists(p) {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether the last performInitialSetup() found no platform.json, i.e. seeded the
+ * contents directory from server/defaults. False when it has not run.
+ * @returns {boolean}
+ */
+export function wasContentsFreshlySeeded() {
+  return freshlySeeded;
+}
+
 /**
  * Performs initial setup by copying any missing default configuration files
  * This function should be called during server startup
@@ -373,6 +393,10 @@ export async function syncManagedDefaultFiles({
  */
 export async function performInitialSetup() {
   try {
+    // Whether this start creates the installation: no platform.json yet. The
+    // migration runner records such an install at its baseline instead of
+    // treating an old contents directory as fresh.
+    freshlySeeded = !(await pathExists(path.join(getContentsPath(), 'config', 'platform.json')));
     logger.info('Checking for missing default configuration files', { component: 'Setup' });
 
     const filesCopied = await copyDefaultConfiguration();
