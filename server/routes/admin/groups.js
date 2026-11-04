@@ -16,13 +16,62 @@ import {
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
+import { resolveGroupInheritance } from '../../utils/authorization.js';
 import { PROTECTED_GROUP_IDS } from '../../utils/protectedGroups.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
 
 /**
- * The `{ id, name }` summaries a resource namespace holds.
+ * Check the `inherits` list of one group against the whole group map.
+ *
+ * A saved group that names a missing parent, or closes a cycle, makes
+ * `loadGroupsConfiguration()` throw on the next load — so it is refused here,
+ * before it is written. The cycle and missing-parent rules are the resolver's
+ * own (`resolveGroupInheritance`), not a second copy of them.
+ *
+ * @param {Object<string, Object>} groups - Every group by id, with the group being saved already in place
+ * @param {string} groupId - The group being saved
+ * @returns {string|null} A message for the admin, or `null` when the inheritance is valid
+ */
+function validateGroupInheritance(groups, groupId) {
+  const inherits = groups[groupId]?.inherits;
+  if (inherits === undefined || inherits.length === 0) return null;
+
+  for (const parentId of inherits) {
+    if (typeof parentId !== 'string' || !parentId) {
+      return 'Inherited groups must be a list of group IDs';
+    }
+    // Own-property check: "constructor" and the like are not groups.
+    if (!Object.hasOwn(groups, parentId)) {
+      return `Parent group not found: ${parentId}`;
+    }
+    if (parentId === groupId) {
+      return `Group '${groupId}' cannot inherit from itself`;
+    }
+  }
+
+  try {
+    resolveGroupInheritance({ groups });
+  } catch (error) {
+    return `Invalid group inheritance: ${error.message}`;
+  }
+  return null;
+}
+
+/**
+ * Normalize a request's `inherits` value: a list of distinct group ids.
+ * Anything that is not an array becomes an empty list.
+ *
+ * @param {*} inherits - The value from the request body
+ * @returns {Array} The list without duplicates; non-string entries are kept so validation can name them
+ */
+function normalizeInherits(inherits) {
+  return Array.isArray(inherits) ? [...new Set(inherits)] : [];
+}
+
+/**
+ * The ``{ id, name }` summaries a resource namespace holds.
  *
  * A document that does not parse is skipped and a namespace with no directory
  * yet reads as empty — both are how this endpoint has always behaved for
@@ -503,6 +552,14 @@ export default function registerAdminGroupRoutes(app) {
    *                 items:
    *                   type: string
    *                 example: ["QA-Team", "Testers"]
+   *               inherits:
+   *                 type: array
+   *                 description: |
+   *                   IDs of the parent groups this group inherits permissions from.
+   *                   Every ID must be an existing group and the chain must not form a cycle.
+   *                 items:
+   *                   type: string
+   *                 example: ["users"]
    *           example:
    *             id: "qa-team"
    *             name: "QA Team"
@@ -601,11 +658,13 @@ export default function registerAdminGroupRoutes(app) {
         description: description || '',
         permissions: normalizeGroupPermissions(permissions),
         mappings: Array.isArray(mappings) ? mappings : [],
-        inherits: Array.isArray(inherits) ? inherits : [],
+        inherits: normalizeInherits(inherits),
         ...(limits?.value ? { usageLimits: limits.value } : {})
       };
 
       groupsData.groups[id] = newGroup;
+      const inheritanceError = validateGroupInheritance(groupsData.groups, id);
+      if (inheritanceError) return sendBadRequest(res, inheritanceError);
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
@@ -672,6 +731,13 @@ export default function registerAdminGroupRoutes(app) {
    *                 description: Updated external mappings
    *                 items:
    *                   type: string
+   *               inherits:
+   *                 type: array
+   *                 description: |
+   *                   Updated parent group IDs. Every ID must be an existing group and the chain
+   *                   must not form a cycle; otherwise the request is rejected with 400.
+   *                 items:
+   *                   type: string
    *           example:
    *             name: "Senior Developers"
    *             description: "Senior development team with extended permissions"
@@ -724,7 +790,11 @@ export default function registerAdminGroupRoutes(app) {
       if (name !== undefined) group.name = name;
       if (description !== undefined) group.description = description;
       if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
-      if (inherits !== undefined) group.inherits = Array.isArray(inherits) ? inherits : [];
+      if (inherits !== undefined) {
+        group.inherits = normalizeInherits(inherits);
+        const inheritanceError = validateGroupInheritance(groupsData.groups, groupId);
+        if (inheritanceError) return sendBadRequest(res, inheritanceError);
+      }
       if (limits) {
         if (limits.value) group.usageLimits = limits.value;
         else delete group.usageLimits;
