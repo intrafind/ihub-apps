@@ -225,7 +225,7 @@ async function run() {
     platformConfig({}, { mcpServer: { enabled: true } })
   );
   check('advertises MCP once the gateway is on', 'https://ihub.example.com/mcp', withMcp.mcp);
-  check('advertises the MCP SSE transport', 'https://ihub.example.com/mcp/sse', withMcp.mcpSse);
+  check('does not advertise an SSE endpoint', undefined, withMcp.mcpSse);
 
   const withoutCredentials = buildPersonalKeyEndpoints(
     fakeRequest(),
