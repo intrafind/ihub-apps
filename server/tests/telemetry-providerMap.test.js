@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Tests for the shared provider/operation resolver used by llmInstrumentation
+ * Tests for the shared provider/operation resolver used by LLMClient
  * for streaming and non-streaming model calls alike.
  * The two paths must agree on `gen_ai.provider.name` and
  * `gen_ai.operation.name` so dashboards aren't fragmented.

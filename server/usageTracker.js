@@ -508,12 +508,6 @@ export async function getUsage() {
   recomputeAverages(usage);
   return usage;
 }
-
-export async function isTrackingEnabled() {
-  await loadConfig();
-  return trackingEnabled;
-}
-
 export async function getTrackingMode() {
   await loadConfig();
   return trackingMode;

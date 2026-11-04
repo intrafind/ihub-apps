@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import searchWithExtraction from './lib/searchWithExtraction.js';
-import logger from '../utils/logger.js';
 
 /**
  * Perform a web search using the Brave Search API, with optional content extraction.
@@ -48,32 +47,4 @@ export default async function braveSearch({
     chatId,
     searchOptions: { language }
   });
-}
-
-// CLI interface for direct execution
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  const searchQuery = args.filter(a => !a.startsWith('--')).join(' ');
-
-  if (!searchQuery) {
-    logger.error('Usage: node braveSearch.js <search term> [--extract] [--max-results=N]');
-    process.exit(1);
-  }
-
-  const extractContent = args.includes('--extract');
-  const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
-  const maxResults = maxResultsMatch ? Number.parseInt(maxResultsMatch.split('=')[1]) || 10 : 10;
-
-  logger.info('Searching', { component: 'BraveSearch', searchQuery, extractContent });
-
-  try {
-    const result = await braveSearch({ query: searchQuery, extractContent, maxResults });
-    logger.info('Search complete', {
-      component: 'BraveSearch',
-      resultCount: result.results?.length
-    });
-  } catch (error) {
-    logger.error('Error performing search', { component: 'BraveSearch', error });
-    process.exit(1);
-  }
 }

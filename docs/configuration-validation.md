@@ -288,41 +288,9 @@ Validates registry entries stored in `config/registries.json`. Each registry poi
 }
 ```
 
-### 11. MIME Type Configuration (`mimetypeConfigSchema.js`)
+### 11. MIME Type Configuration
 
-Validates the MIME type configuration used to classify and display uploadable file types.
-
-**Key Components:**
-- **Categories**: Named groups of related MIME types (e.g., images, audio, documents, text), each with a localized name and list of associated MIME type keys
-- **MIME Types**: Detailed entries for each MIME type including file extensions, a display name, and the category it belongs to
-
-**Cross-Validation:**
-- MIME types referenced in category lists are checked against the detailed entries (warning if missing)
-- MIME type entries are checked to ensure their `category` field matches a defined category key
-
-**Example Valid Configuration:**
-```json
-{
-  "categories": {
-    "images": {
-      "name": { "en": "Images" },
-      "mimeTypes": ["image/png", "image/jpeg"]
-    }
-  },
-  "mimeTypes": {
-    "image/png": {
-      "extensions": [".png"],
-      "displayName": "PNG Image",
-      "category": "images"
-    },
-    "image/jpeg": {
-      "extensions": [".jpg", ".jpeg"],
-      "displayName": "JPEG Image",
-      "category": "images"
-    }
-  }
-}
-```
+Retired: `mimetypeConfigSchema.js` was never called by the config loader and has been removed.
 
 ### 12. Cloud Storage Configuration
 

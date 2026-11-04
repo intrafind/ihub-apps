@@ -265,22 +265,6 @@ export default function ldapAuthMiddleware(req, res, next) {
 }
 
 /**
- * Get LDAP configuration for a specific provider
- * @param {string} providerName - LDAP provider name
- * @returns {Object|null} LDAP provider configuration
- */
-export function getLdapConfig(providerName) {
-  const platform = configCache.getPlatform() || {};
-  const ldapAuth = platform.ldapAuth || {};
-
-  if (!ldapAuth.enabled || !ldapAuth.providers) {
-    return null;
-  }
-
-  return ldapAuth.providers.find(provider => provider.name === providerName) || null;
-}
-
-/**
  * Get list of configured LDAP providers
  * @returns {Array} Array of LDAP provider configurations
  */

@@ -207,15 +207,6 @@ export function recordTokenUsage(tokens) {
 export function getGenAIInstrumentation() {
   return genAIInstrumentation;
 }
-
-export function isGenAIInstrumentationEnabled() {
-  return genAIInstrumentation?.isEnabled() || false;
-}
-
-export function getActiveTelemetryConfig() {
-  return activeConfig;
-}
-
 /**
  * Apply runtime-mutable parts of the telemetry configuration without restarting
  * the OpenTelemetry SDK. Use this when admins change config through the UI.
