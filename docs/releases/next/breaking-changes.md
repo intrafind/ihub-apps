@@ -345,12 +345,12 @@ fall back to memory or to older file layouts.
   is set, make sure it starts. Remove the block to use the default filesystem provider.
 - **Older runtime files are imported once.** Installations that last ran a release before 5.5.2
   have workflow checkpoints, the run index, run event files and pending interactions under
-  `contents/data/`. Migration V224 carries them into the storage provider on the first start. The
+  `contents/data/`. Migration V219 carries them into the storage provider on the first start. The
   old files stay where they are but are no longer read.
-- **Token files.** Migration V223 renames single-slot cloud-storage token files
+- **Token files.** Migration V218 renames single-slot cloud-storage token files
   (`<userId>.json`) to the per-provider name once, instead of on every start. Jira's single token
   slot is unchanged.
-
+  
 ## Legacy Config Shapes Are No Longer Read
 
 Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
@@ -404,3 +404,22 @@ one of them get `404`.
 
 `/api/docs` now also documents the routes in the files it did not scan before (workflows, prompts,
 user skills, projects, runs, OAuth, well-known metadata, integrations).
+
+## iFinder Search Hits Lose Duplicate Alias Fields
+
+The iFinder `search` tool no longer repeats values under old names: `source` (use `sourceName`),
+`breadcrumbs` (use `navigationTree`) and `extension` (use `file.extension`). `mimeType` and
+`lastModified` stay, because the project item picker reads them. Prompts or workflow nodes of your
+own that read one of the removed names have to switch.
+
+## MCP Gateway: The Legacy SSE Transport Is Gone
+
+`GET /mcp/sse` and `POST /mcp/messages` (the 2024-11-05 HTTP+SSE transport) are removed; the
+gateway speaks Streamable HTTP on `/mcp` only. The **SSE (legacy)** toggle on **Admin → MCP
+gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the "MCP endpoint
+(SSE)" row of the personal API keys page are gone. V223 deletes `mcpServer.transports.sse` from
+`platform.json`.
+
+**Before upgrading:** an MCP client configured for the SSE transport has to be switched to
+Streamable HTTP (`http`) on `/mcp`, or connected through a bridge such as `mcp-remote`. Outbound SSE
+to third-party MCP servers is unchanged.

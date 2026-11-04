@@ -91,7 +91,7 @@ class AnthropicAdapterClass extends BaseAdapter {
                 });
               });
           } else {
-            // Handle single image (legacy behavior)
+            // A tool result lifted by the image-lift seam carries one image object
             toolContent.push({
               type: 'image',
               source: {
@@ -166,7 +166,7 @@ class AnthropicAdapterClass extends BaseAdapter {
               });
             });
         } else {
-          // Handle single image (legacy behavior)
+          // A single image object rather than an array
           contentArray.push({
             type: 'image',
             source: {

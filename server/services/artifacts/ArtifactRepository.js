@@ -54,6 +54,21 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+
+let lastCreatedAtMs = 0;
+
+/**
+ * A creation time that never repeats within this process. Artifact ids are
+ * random, so two artifacts stored in the same millisecond would otherwise have
+ * no order at all, and `list()` (newest first) and the ZIP built from it would
+ * come out differently from run to run.
+ *
+ * @returns {string} ISO timestamp, at least 1 ms after the previous call
+ */
+function nextCreatedAt() {
+  lastCreatedAtMs = Math.max(Date.now(), lastCreatedAtMs + 1);
+  return new Date(lastCreatedAtMs).toISOString();
+}
 import { artifactKind, artifactMediaType, artifactPolicy } from './artifactPolicy.js';
 
 const COMPONENT = 'ArtifactRepository';
@@ -287,7 +302,7 @@ export class ArtifactRepository {
       sha256: ref.sha256,
       ...(label ? { name: label } : {}),
       ...(typeof runId === 'string' && runId ? { runId } : {}),
-      createdAt: new Date().toISOString()
+      createdAt: nextCreatedAt()
     };
     try {
       await this.documents.put(ARTIFACTS_NAMESPACE, key, body);
@@ -355,7 +370,7 @@ export class ArtifactRepository {
       if (!doc.data || (doc.data.scope && !sameScope(doc.data.scope, target))) continue;
       entries.push(toDescriptor(doc.key.slice(prefix.length), doc.data));
     }
-    entries.sort((a, b) => ((a.createdAt || '') < (b.createdAt || '') ? 1 : -1));
+    entries.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     return entries;
   }
 
