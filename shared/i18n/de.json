@@ -4881,7 +4881,24 @@
       "saveSuccess": "Standardsprache gespeichert",
       "saveError": "Standardsprache konnte nicht gespeichert werden",
       "loadError": "Plattformkonfiguration konnte nicht geladen werden",
-      "noTranslations": "keine Übersetzungen"
+      "noTranslations": "keine Übersetzungen",
+      "overrides": {
+        "title": "Übersetzungen überschreiben",
+        "desc": "Ändern Sie den Wortlaut beliebiger Beschriftungen. Gespeichert werden nur die geänderten Schlüssel, in contents/locales/. Suchen Sie eine Beschriftung und bearbeiten Sie sie; mit „Zurücksetzen“ gilt wieder der mitgelieferte Text.",
+        "language": "Sprache",
+        "search": "Nach Schlüssel oder Text suchen, z. B. \"answerSource\" oder \"E-Mail\"",
+        "searchLabel": "Übersetzungen durchsuchen",
+        "changedOnly": "Nur geänderte",
+        "changed": "geändert",
+        "unknown": "unbekannter Schlüssel",
+        "original": "Mitgeliefert",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "reset": "Auf Standard zurücksetzen",
+        "none": "Noch keine Schlüssel geändert. Suchen Sie oben nach einer Beschriftung.",
+        "noMatches": "Keine passenden Übersetzungen.",
+        "more": "Mehr anzeigen"
+      }
     },
     "prompts": {
       "tabs": {

@@ -4582,7 +4582,24 @@
       "saveSuccess": "Default language saved",
       "saveError": "Failed to save the default language",
       "loadError": "Failed to load the platform configuration",
-      "noTranslations": "no translations"
+      "noTranslations": "no translations",
+      "overrides": {
+        "title": "Translation overrides",
+        "desc": "Change the wording of any label. Only the keys you change are stored, in contents/locales/. Search to find a label and edit it; reset a key to return to the built-in text.",
+        "language": "Language",
+        "search": "Search by key or text, e.g. \"answerSource\" or \"email\"",
+        "searchLabel": "Search translations",
+        "changedOnly": "Changed only",
+        "changed": "changed",
+        "unknown": "unknown key",
+        "original": "Built-in",
+        "save": "Save",
+        "cancel": "Cancel",
+        "reset": "Reset to built-in",
+        "none": "No keys changed yet. Search above to find a label to change.",
+        "noMatches": "No matching translations.",
+        "more": "Show more"
+      }
     },
     "prompts": {
       "tabs": {
