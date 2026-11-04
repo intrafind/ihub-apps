@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
 import {
@@ -126,9 +127,9 @@ function fakeEngine({ state, agent = false } = {}) {
 }
 
 async function setup() {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'checkpoint-resume-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const storage = await startTestStorage({ prefix: 'checkpoint-resume-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog });
   await runLog.startRun({ runId: EXECUTION_ID, kind: 'workflow', user: { id: 'u1' } });
   return { runLog, svc };
 }
@@ -426,9 +427,9 @@ test('an expired checkpoint interaction cancels its execution (policy onTimeout:
 
 test('the expiry sweep transitions overdue interactions and is idempotent to start', async () => {
   let now = Date.parse('2026-01-01T00:00:00Z');
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'checkpoint-sweep-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10, now: () => now });
+  const storage = await startTestStorage({ prefix: 'checkpoint-sweep-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog, now: () => now });
   await runLog.startRun({ runId: EXECUTION_ID, kind: 'workflow', user: { id: 'u1' } });
   const it = await svc.raise({
     runId: EXECUTION_ID,

@@ -702,6 +702,7 @@ export class RunLog {
   // ── persistence helpers ────────────────────────────────────────────────
 
   async flush() {
+    if (!this.isEnabled()) return;
     await this._store.flush();
   }
 

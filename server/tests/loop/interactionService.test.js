@@ -1,20 +1,27 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { RunLog } from '../../services/loop/RunLog.js';
-import { InteractionService, InteractionError } from '../../services/loop/InteractionService.js';
+import {
+  InteractionService,
+  InteractionError,
+  INTERACTIONS_NAMESPACE
+} from '../../services/loop/InteractionService.js';
+import { shutdownStorageBootstrap } from '../../storage/bootstrap.js';
+import { startTestStorage } from '../helpers/testStorage.js';
+
+after(async () => {
+  await shutdownStorageBootstrap();
+});
 
 async function setup(opts = {}) {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-test-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10, ...opts });
+  const storage = await startTestStorage({ prefix: 'interaction-test-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog, ...opts });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
-  return { baseDir, runLog, svc, runId };
+  return { storage, runLog, svc, runId };
 }
 
 test('raise → pending, ledger event, listPending, answer → answered + ledger', async () => {
@@ -186,18 +193,16 @@ test('expiry via timeoutMs, expireOverdue, and waitForAnswer', async () => {
 });
 
 test('pending interactions survive a restart and are removed when the run is deleted', async () => {
-  const { baseDir, runLog, svc, runId } = await setup();
+  const { storage, runLog, svc, runId } = await setup();
   const it = await svc.raise({
     runId,
     kind: 'approval',
     origin: 'node',
     prompt: { message: 'persist me' }
   });
-  await svc.flush();
-  const raw = JSON.parse(await fs.readFile(path.join(baseDir, 'interactions.json'), 'utf8'));
-  assert.ok(raw.interactions[it.id]);
+  assert.ok(await storage.provider.documents.get(INTERACTIONS_NAMESPACE, it.id));
   // "restart": fresh service over the same store
-  const svc2 = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const svc2 = new InteractionService({ runLog });
   const pending = await svc2.listPending({ runId });
   assert.equal(pending.length, 1);
   assert.equal(pending[0].id, it.id);
@@ -207,8 +212,7 @@ test('pending interactions survive a restart and are removed when the run is del
   assert.ok(res.cascaded.some(c => c.startsWith('interactions:')));
   await waiterRejects;
   assert.equal((await svc2.listPending({ runId })).length, 0);
-  const raw2 = JSON.parse(await fs.readFile(path.join(baseDir, 'interactions.json'), 'utf8'));
-  assert.equal(Object.keys(raw2.interactions).length, 0);
+  assert.equal(await storage.provider.documents.get(INTERACTIONS_NAMESPACE, it.id), null);
   await svc.stop();
   await svc2.stop();
   await runLog.stop();
@@ -309,11 +313,11 @@ function fakeBus() {
 }
 
 test('cluster: a mutation on one worker is visible on the others; waiters settle remotely', async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-cluster-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  await startTestStorage({ prefix: 'interaction-cluster-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const bus = fakeBus();
-  const workerA = new InteractionService({ runLog, bus, pid: 1, saveIntervalMs: 10 });
-  const workerB = new InteractionService({ runLog, bus, pid: 2, saveIntervalMs: 10 });
+  const workerA = new InteractionService({ runLog, bus, pid: 1 });
+  const workerB = new InteractionService({ runLog, bus, pid: 2 });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
 
   // raised on A → listed on B
@@ -399,11 +403,11 @@ test('answer: a concurrent answer is rejected while the first one is being appli
 });
 
 test('cluster: a claim replicated from another worker blocks a concurrent answer there', async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-claim-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  await startTestStorage({ prefix: 'interaction-claim-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const bus = fakeBus();
-  const workerA = new InteractionService({ runLog, bus, pid: 1, saveIntervalMs: 10 });
-  const workerB = new InteractionService({ runLog, bus, pid: 2, saveIntervalMs: 10 });
+  const workerA = new InteractionService({ runLog, bus, pid: 1 });
+  const workerB = new InteractionService({ runLog, bus, pid: 2 });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
   const it = await workerA.raise({
     runId,
@@ -442,21 +446,20 @@ async function until(predicate, { timeoutMs = 2000 } = {}) {
   }
 }
 
-test('cluster: the shared-filesystem claim decides when a replica lags behind', async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-lag-'));
-  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+test('cluster: the shared record decides when a replica lags behind', async () => {
+  await startTestStorage({ prefix: 'interaction-lag-' });
+  const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
   // Two workers whose buses are NOT connected: B only knows what the shared
   // store holds, so its replica never learns about A's claim or answer.
-  const workerA = new InteractionService({ runLog, bus: fakeBus(), pid: 1, saveIntervalMs: 10 });
+  const workerA = new InteractionService({ runLog, bus: fakeBus(), pid: 1 });
   const it = await workerA.raise({
     runId,
     kind: 'approval',
     origin: 'node',
     prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] }
   });
-  await workerA.flush();
-  const workerB = new InteractionService({ runLog, bus: fakeBus(), pid: 2, saveIntervalMs: 10 });
+  const workerB = new InteractionService({ runLog, bus: fakeBus(), pid: 2 });
   assert.equal((await workerB.get(it.id)).status, 'pending');
 
   const calls = [];
@@ -472,7 +475,7 @@ test('cluster: the shared-filesystem claim decides when a replica lags behind', 
 
   const first = workerA.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
   await until(() => calls.includes('A'));
-  // B sees "pending" and no replicated claim — the marker on disk still rejects it
+  // B sees "pending" and no replicated claim — the lease on the shared record rejects it
   await assert.rejects(
     workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
     e => e.code === 'ANSWER_IN_PROGRESS' && e.status === 409
@@ -481,7 +484,7 @@ test('cluster: the shared-filesystem claim decides when a replica lags behind', 
   assert.equal((await first).status, 'answered');
 
   // After A is done, B's replica is still stale, yet a second answer is not a
-  // second resume: the settled marker says the interaction is answered.
+  // second resume: the settled document says the interaction is answered.
   assert.equal((await workerB.get(it.id)).status, 'pending');
   await assert.rejects(
     workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
@@ -489,33 +492,29 @@ test('cluster: the shared-filesystem claim decides when a replica lags behind', 
   );
   assert.deepEqual(calls, ['A'], 'the run was resumed exactly once');
 
-  const markers = await fs.readdir(path.join(baseDir, 'interaction-claims'));
-  assert.equal(markers.length, 1);
   await workerA.stop();
   await workerB.stop();
   await runLog.stop();
 });
 
 test('pending interactions are persisted even when the run ledger is disabled', async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-noledger-'));
+  const storage = await startTestStorage({ prefix: 'interaction-noledger-' });
   const runLog = new RunLog({
-    baseDir,
     forceEnabled: false,
     getPlatformConfig: () => ({}),
     getFeatures: () => ({})
   });
   assert.equal(runLog.isEnabled(), false);
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const svc = new InteractionService({ runLog });
   const it = await svc.raise({
     runId: 'run-noledger',
     kind: 'question',
     origin: 'tool',
     prompt: { message: 'Still here after a restart?' }
   });
-  await svc.flush();
-  const raw = JSON.parse(await fs.readFile(path.join(baseDir, 'interactions.json'), 'utf8'));
-  assert.equal(raw.interactions[it.id].status, 'pending');
-  const again = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const stored = await storage.provider.documents.get(INTERACTIONS_NAMESPACE, it.id);
+  assert.equal(stored.data.status, 'pending');
+  const again = new InteractionService({ runLog });
   assert.equal((await again.get(it.id)).status, 'pending');
   await svc.stop();
   await again.stop();
@@ -523,13 +522,12 @@ test('pending interactions are persisted even when the run ledger is disabled', 
 });
 
 test("answer.by is recorded in the run's identity mode, never as the raw user id when pseudonymized", async () => {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-actor-'));
+  const storage = await startTestStorage({ prefix: 'interaction-actor-' });
   const runLog = new RunLog({
-    baseDir,
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'pseudonymized' } })
   });
-  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const svc = new InteractionService({ runLog });
   const { runId, principal } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
   assert.notEqual(principal.id, 'u1');
   const ledger = [];

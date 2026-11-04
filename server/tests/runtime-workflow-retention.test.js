@@ -13,9 +13,9 @@
  * a non-positive `retentionDays` must do nothing at all rather than treat
  * "keep for zero days" as "delete everything".
  *
- * The clock is injected rather than the files backdated, except in the
- * scheduler case, which has no clock seam and uses a legacy checkpoint whose
- * mtime says it is old.
+ * The clock is injected rather than the states backdated, except in the
+ * scheduler case, which has no clock seam and stores a state whose own
+ * timestamps say it is old.
  *
  * Contract: `RUNTIME_STORES_CONTRACT.md` §5 (new retention) and §7.
  */
@@ -27,8 +27,7 @@ import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import {
   WorkflowStateRepository,
-  WORKFLOW_STATE_NAMESPACE,
-  LEGACY_STATE_FILE
+  workflowStateOwnerId
 } from '../services/workflow/WorkflowStateRepository.js';
 import { WorkflowStatus } from '../services/workflow/StateManager.js';
 import { RunSummaryRepository } from '../services/runtime/RunSummaryRepository.js';
@@ -99,13 +98,10 @@ async function withStores(fn) {
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-retention-'));
   const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
   await provider.initialize();
-  const stateDir = path.join(baseDir, WORKFLOW_STATE_NAMESPACE);
-  await fs.mkdir(stateDir, { recursive: true });
   const { logger } = recordingLogger();
   const repository = new WorkflowStateRepository({
     documents: provider.documents,
     locks: provider.locks,
-    stateDir,
     logger
   });
   const runSummaries = new RunSummaryRepository({
@@ -114,7 +110,7 @@ async function withStores(fn) {
     logger
   });
   try {
-    await fn({ baseDir, stateDir, provider, repository, runSummaries });
+    await fn({ baseDir, provider, repository, runSummaries });
   } finally {
     await provider.shutdown();
     await fs.rm(baseDir, { recursive: true, force: true });
@@ -122,34 +118,34 @@ async function withStores(fn) {
 }
 
 /**
- * Write a state in the legacy `<executionId>/latest.json` layout.
+ * Store a state the way `StateManager` checkpoints it.
  *
- * @param {string} stateDir - The state directory.
+ * @param {WorkflowStateRepository} repository - Repository to write through.
  * @param {string} executionId - Execution identifier.
  * @param {Object} body - State to write.
- * @returns {Promise<string>} The file written.
+ * @returns {Promise<void>}
  */
-async function writeLegacyState(stateDir, executionId, body) {
-  const dir = path.join(stateDir, executionId);
-  await fs.mkdir(dir, { recursive: true });
-  const file = path.join(dir, LEGACY_STATE_FILE);
-  await fs.writeFile(file, JSON.stringify(body), 'utf8');
-  return file;
+async function writeState(repository, executionId, body) {
+  await repository.write(executionId, body, { ownerId: workflowStateOwnerId(body) });
 }
 
 /**
- * Whether a path exists.
+ * Make a stored state look as if it was last written at `iso`.
  *
- * @param {string} target - Path to probe.
- * @returns {Promise<boolean>}
+ * Retention ages a state from when it was last stored, which the document
+ * envelope records; a test with no clock seam has to rewrite it.
+ *
+ * @param {Object} ctx - Stores from {@link withStores}.
+ * @param {string} executionId - Execution identifier.
+ * @param {string} iso - Timestamp to record.
+ * @returns {Promise<void>}
  */
-async function exists(target) {
-  try {
-    await fs.access(target);
-    return true;
-  } catch {
-    return false;
-  }
+async function backdate(ctx, executionId, iso) {
+  const file = path.join(ctx.baseDir, 'workflow-state', `${executionId}.json`);
+  const envelope = JSON.parse(await fs.readFile(file, 'utf8'));
+  envelope.createdAt = iso;
+  envelope.updatedAt = iso;
+  await fs.writeFile(file, JSON.stringify(envelope), 'utf8');
 }
 
 /**
@@ -226,25 +222,6 @@ describe('sweepWorkflowStates', () => {
       await seed(ctx, 'wf-child-1', WorkflowStatus.COMPLETED);
       await seed(ctx, 'wf-exec-paused', WorkflowStatus.PAUSED);
       await seed(ctx, 'wf-exec-running', WorkflowStatus.RUNNING);
-      // A run whose document was imported from the old layout still has its
-      // directory; retention owes the disk both halves.
-      await writeLegacyState(
-        ctx.stateDir,
-        'wf-exec-completed',
-        state('wf-exec-completed', WorkflowStatus.COMPLETED)
-      );
-      await writeLegacyState(
-        ctx.stateDir,
-        'wf-exec-legacy',
-        state('wf-exec-legacy', WorkflowStatus.COMPLETED)
-      );
-      await ctx.runSummaries.put({
-        runId: 'wf-exec-legacy',
-        kind: 'workflow',
-        ownerId: OWNER,
-        status: WorkflowStatus.COMPLETED,
-        startedAt: new Date().toISOString()
-      });
 
       const fresh = await sweepWorkflowStates({
         repository: ctx.repository,
@@ -252,7 +229,7 @@ describe('sweepWorkflowStates', () => {
         retentionDays: 30
       });
       assert.equal(fresh.removed, 0, 'nothing is old enough yet');
-      assert.equal(fresh.scanned, 7);
+      assert.equal(fresh.scanned, 6);
 
       const swept = await sweepWorkflowStates({
         repository: ctx.repository,
@@ -261,22 +238,11 @@ describe('sweepWorkflowStates', () => {
         now: () => Date.now() + 40 * DAY_MS
       });
 
-      assert.equal(swept.removed, 5, 'three terminal, one child and one legacy-only');
-      assert.equal(swept.summariesRemoved, 5);
-      for (const id of [
-        'wf-exec-completed',
-        'wf-exec-failed',
-        'wf-exec-cancelled',
-        'wf-child-1',
-        'wf-exec-legacy'
-      ]) {
+      assert.equal(swept.removed, 4, 'three terminal ones and one sub-workflow state');
+      assert.equal(swept.summariesRemoved, 4);
+      for (const id of ['wf-exec-completed', 'wf-exec-failed', 'wf-exec-cancelled', 'wf-child-1']) {
         assert.equal(await ctx.repository.read(id), null, `${id} state removed`);
         assert.equal(await ctx.runSummaries.get(id), null, `${id} summary removed`);
-        assert.equal(
-          await exists(path.join(ctx.stateDir, id)),
-          false,
-          `${id} legacy directory removed`
-        );
       }
 
       // Nothing that could still be live is touched, whatever its age.
@@ -369,8 +335,8 @@ describe('startWorkflowStateRetention', () => {
     await withStores(async ctx => {
       const old = Date.now() - 90 * DAY_MS;
       const oldIso = new Date(old).toISOString();
-      const file = await writeLegacyState(
-        ctx.stateDir,
+      await writeState(
+        ctx.repository,
         'wf-exec-ancient',
         state('wf-exec-ancient', WorkflowStatus.COMPLETED, {
           createdAt: oldIso,
@@ -378,8 +344,7 @@ describe('startWorkflowStateRetention', () => {
           completedAt: oldIso
         })
       );
-      // The scan dates a legacy entry by its file, so age the file too.
-      await fs.utimes(file, new Date(old), new Date(old));
+      await backdate(ctx, 'wf-exec-ancient', oldIso);
       await ctx.runSummaries.put({
         runId: 'wf-exec-ancient',
         kind: 'workflow',
@@ -418,8 +383,8 @@ describe('startWorkflowStateRetention', () => {
     await withStores(async ctx => {
       const old = Date.now() - 90 * DAY_MS;
       const oldIso = new Date(old).toISOString();
-      const file = await writeLegacyState(
-        ctx.stateDir,
+      await writeState(
+        ctx.repository,
         'wf-exec-ancient',
         state('wf-exec-ancient', WorkflowStatus.COMPLETED, {
           createdAt: oldIso,
@@ -427,7 +392,7 @@ describe('startWorkflowStateRetention', () => {
           completedAt: oldIso
         })
       );
-      await fs.utimes(file, new Date(old), new Date(old));
+      await backdate(ctx, 'wf-exec-ancient', oldIso);
 
       for (const workflowState of [
         { retentionDays: 30, cleanupEnabled: false },

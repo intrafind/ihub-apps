@@ -14,11 +14,11 @@
  * Run directly: `node server/tests/agent-plan-reconciliation.test.js`.
  */
 
-import os from 'os';
-import path from 'path';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { startTestStorage, stateRepositoryFor } from './helpers/testStorage.js';
 import { StateManager } from '../services/workflow/StateManager.js';
+
+const storage = await startTestStorage();
 
 let failures = 0;
 function check(label, cond, details) {
@@ -27,36 +27,31 @@ function check(label, cond, details) {
   if (!cond && details) console.log(`   ${details}`);
 }
 
-function seedState(stateDir, executionId, data) {
-  mkdirSync(path.join(stateDir, executionId), { recursive: true });
-  writeFileSync(
-    path.join(stateDir, executionId, 'latest.json'),
-    JSON.stringify({
-      executionId,
-      workflowId: 'claude-style-agent',
-      status: 'running',
-      currentNodes: [],
-      completedNodes: [],
-      checkpoints: [],
-      history: [],
-      data
-    }),
-    'utf8'
-  );
+async function seedState(repository, executionId, data) {
+  await repository.write(executionId, {
+    executionId,
+    workflowId: 'claude-style-agent',
+    status: 'running',
+    currentNodes: [],
+    completedNodes: [],
+    checkpoints: [],
+    history: [],
+    data
+  });
 }
 
 function newEngine() {
-  const stateDir = mkdtempSync(path.join(os.tmpdir(), 'ihub-reconcile-'));
-  const sm = new StateManager({ stateDir });
-  return { engine: new WorkflowEngine({ stateManager: sm }), sm, stateDir };
+  const repository = stateRepositoryFor(storage);
+  const sm = new StateManager({ repository });
+  return { engine: new WorkflowEngine({ stateManager: sm }), sm, repository };
 }
 
 async function run() {
   console.log('🧪 reconcile cancels leftover in_progress/open tasks\n');
   {
-    const { engine, sm, stateDir } = newEngine();
+    const { engine, sm, repository } = newEngine();
     const execId = 'wf-exec-recon-1';
-    seedState(stateDir, execId, {
+    await seedState(repository, execId, {
       _taskQueue: [
         { id: 't1', title: 'Step 1', status: 'in_progress' },
         { id: 't2', title: 'Step 2', status: 'open' },
@@ -75,9 +70,9 @@ async function run() {
 
   console.log('\n🧪 reconcile is a no-op when nothing is open\n');
   {
-    const { engine, sm, stateDir } = newEngine();
+    const { engine, sm, repository } = newEngine();
     const execId = 'wf-exec-recon-2';
-    seedState(stateDir, execId, {
+    await seedState(repository, execId, {
       _taskQueue: [{ id: 't1', title: 'Step 1', status: 'done' }]
     });
     await engine._reconcilePlanOnTerminal(execId);
@@ -87,9 +82,9 @@ async function run() {
 
   console.log('\n🧪 reconcile is a no-op for non-agent runs (no _taskQueue)\n');
   {
-    const { engine, sm, stateDir } = newEngine();
+    const { engine, sm, repository } = newEngine();
     const execId = 'wf-exec-recon-3';
-    seedState(stateDir, execId, { foo: 'bar' });
+    await seedState(repository, execId, { foo: 'bar' });
     let threw = false;
     try {
       await engine._reconcilePlanOnTerminal(execId);
@@ -102,6 +97,7 @@ async function run() {
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
+  await storage.stop();
   process.exit(failures ? 1 : 0);
 }
 

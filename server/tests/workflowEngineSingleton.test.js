@@ -21,11 +21,10 @@
  * Run directly: `node server/tests/workflowEngineSingleton.test.js`.
  */
 
-import os from 'os';
-import path from 'path';
-import { mkdtempSync } from 'fs';
 import { getWorkflowEngine, resetWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
-import { StateManager } from '../services/workflow/StateManager.js';
+import { startTestStorage, stateManagerFor } from './helpers/testStorage.js';
+
+const storage = await startTestStorage({ prefix: 'ihub-engine-singleton-' });
 
 let failures = 0;
 function check(label, cond, details) {
@@ -75,13 +74,12 @@ async function run() {
   console.log('🧪 getWorkflowEngine() singleton identity\n');
   {
     resetWorkflowEngine();
-    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'ihub-engine-singleton-'));
-    const stateManager = new StateManager({ stateDir });
+    const stateManager = stateManagerFor(storage);
 
     const engineFromRunner = getWorkflowEngine({ stateManager });
     const engineFromRoutes = getWorkflowEngine();
     const engineFromAgentsRuns = getWorkflowEngine({
-      stateManager: new StateManager({ stateDir })
+      stateManager: stateManagerFor(storage)
     });
 
     check(
@@ -105,8 +103,7 @@ async function run() {
   console.log('\n🧪 cancel() through a different reference aborts an in-flight node\n');
   {
     resetWorkflowEngine();
-    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'ihub-engine-singleton-cancel-'));
-    const stateManager = new StateManager({ stateDir });
+    const stateManager = stateManagerFor(storage);
 
     // Simulates workflowRunner.js obtaining the engine and starting a run.
     const engineA = getWorkflowEngine({ stateManager });

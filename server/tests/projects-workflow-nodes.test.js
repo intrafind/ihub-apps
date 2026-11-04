@@ -15,7 +15,8 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
-import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { bootstrapStorage, getStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { WorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { getPermissionsForUser, resolveGroupInheritance } from '../utils/authorization.js';
 import { locateConfigFile } from '../utils/configFileLocation.js';
 import {
@@ -1035,8 +1036,14 @@ describe('project-write and project-read', () => {
 
 describe('a failed project step in a run', () => {
   it('reaches the engine with the project code, not the generic one', async () => {
-    const stateDir = await fs.mkdtemp(path.join(scratch, 'engine-'));
-    const engine = new WorkflowEngine({ stateManager: new StateManager({ stateDir }) });
+    const engine = new WorkflowEngine({
+      stateManager: new StateManager({
+        repository: new WorkflowStateRepository({
+          documents: getStorage().documents,
+          locks: getStorage().locks
+        })
+      })
+    });
     const executionId = 'wf-exec-code';
     await engine.stateManager.create({ executionId, workflowId: 'memo-writer', data: {} });
     const node = {

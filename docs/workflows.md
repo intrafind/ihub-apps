@@ -563,8 +563,7 @@ What the sweep deletes, precisely:
 - **Only terminal executions**: `completed`, `failed` and `cancelled`. A
   `paused` execution is waiting for a person to answer a checkpoint and is
   never swept, however old; neither is one still `running` or `pending`.
-- **Both records** of each: the state — the document *and* the legacy
-  `<executionId>/latest.json` directory — and the run summary that lists it.
+- **Both records** of each: the state document and the run summary that lists it.
 - **`wf-child-…` sub-workflow states included**, which nothing has ever
   deleted before.
 - Nothing whose age or status cannot be established. Where a delete is
