@@ -4,6 +4,7 @@
 import configCache from '../../configCache.js';
 import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
+import { recordFeedback as recordFeedbackUsage } from '../../services/usage/usageRecorder.js';
 import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
@@ -306,6 +307,13 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           modelId,
           rating,
           user: req.user
+        });
+        await recordFeedbackUsage({
+          user: req.user,
+          appId,
+          modelId,
+          conversationId: chatId,
+          rating
         });
         logger.info('Feedback received', {
           component: 'feedbackRoutes',

@@ -726,9 +726,7 @@ if (cluster.isPrimary && workerCount > 1) {
   if (ownsClusterSingletons) {
     try {
       const { startRollupScheduler } = await import('./services/UsageAggregator.js');
-      const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-      const retentionConfig = platform?.usageTracking || {};
-      startRollupScheduler(retentionConfig);
+      startRollupScheduler(() => configCache.getPlatform?.()?.usageTracking || {});
     } catch (error) {
       logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
     }

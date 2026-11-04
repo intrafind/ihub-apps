@@ -134,3 +134,40 @@ export async function cleanupFeedback(retentionDays) {
     return { removed, kept: retained.length };
   });
 }
+
+/**
+ * One page of stored feedback, newest first. Entries are appended in time
+ * order, so a page is a slice from the end of the file: only the lines of
+ * that page are parsed, and nothing is sorted.
+ *
+ * @param {{limit?: number, offset?: number}} [opts]
+ * @returns {Promise<{feedbackEntries: Object[], total: number, limit: number, offset: number}>}
+ */
+export async function readFeedbackPage({ limit = 100, offset = 0 } = {}) {
+  const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 100, 1), 500);
+  const skip = Math.max(Number.parseInt(offset, 10) || 0, 0);
+  try {
+    await appender.flush();
+  } catch {
+    // Show what is on disk.
+  }
+  let content;
+  try {
+    content = await fs.readFile(dataFile, 'utf8');
+  } catch {
+    return { feedbackEntries: [], total: 0, limit: pageSize, offset: skip };
+  }
+  const lines = content.split('\n').filter(line => line.trim());
+  const total = lines.length;
+  const end = Math.max(total - skip, 0);
+  const start = Math.max(end - pageSize, 0);
+  const feedbackEntries = [];
+  for (let i = end - 1; i >= start; i--) {
+    try {
+      feedbackEntries.push(JSON.parse(lines[i]));
+    } catch {
+      // Skip a malformed line.
+    }
+  }
+  return { feedbackEntries, total, limit: pageSize, offset: skip };
+}

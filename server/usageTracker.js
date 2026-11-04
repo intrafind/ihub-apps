@@ -4,7 +4,6 @@
 import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
-import { logUsageEvent } from './services/UsageEventLog.js';
 import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import logger from './utils/logger.js';
 import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
@@ -424,19 +423,6 @@ async function recordChatMessage({
     inc(data.webSearch.perModel, modelId, webSearchRequests);
   }
   recordTokenUsage(tokens);
-  logUsageEvent({
-    type: direction === 'prompt' ? 'chat_request' : 'chat_response',
-    userId: resolvedUser,
-    appId,
-    modelId,
-    provider,
-    ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
-    cacheReadTokens: details.cacheRead,
-    cacheWriteTokens: details.cacheWrite,
-    reasoningTokens: details.reasoning,
-    ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
-    tokenSource
-  });
   markDirty();
 }
 
@@ -460,13 +446,6 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
   incFeedback(data.feedback.perApp, appId, rating);
   incFeedback(data.feedback.perModel, modelId, rating);
   recordFeedbackEvent(appId, rating);
-  logUsageEvent({
-    type: 'feedback',
-    userId: resolvedUser,
-    appId,
-    modelId,
-    rating
-  });
   markDirty();
 }
 
@@ -499,15 +478,6 @@ export async function recordMagicPrompt({
 
   recordTokenUsage(inputTokens + outputTokens);
   recordMagicPromptUsage(appId);
-  logUsageEvent({
-    type: 'magic_prompt',
-    userId: resolvedUser,
-    appId,
-    modelId,
-    promptTokens: inputTokens,
-    completionTokens: outputTokens,
-    tokenSource: 'estimate'
-  });
 
   markDirty();
 }
