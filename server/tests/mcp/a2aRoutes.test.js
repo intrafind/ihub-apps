@@ -4,6 +4,9 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * HTTP surface of the A2A endpoint (routes/mcpServer.js): the public and
@@ -68,7 +71,10 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 }));
 jest.unstable_mockModule('../../storage/bootstrap.js', () => ({
   getStorage: () => null,
-  readFacet: () => null
+  readFacet: () => null,
+  requireStorage: () => {
+    throw new Error('storage is not bootstrapped in this test');
+  }
 }));
 jest.unstable_mockModule('../../clusterBus.js', () => ({
   publish: jest.fn(() => false),
@@ -108,7 +114,7 @@ beforeEach(() => {
       a2a: { enabled: true }
     }
   };
-  setA2aTaskStoreForTests(new A2aTaskStore({ documents: null, relayCancel: false }));
+  setA2aTaskStoreForTests(new A2aTaskStore({ documents: scratch.documents, relayCancel: false }));
   invokeApp.mockReset();
   invokeApp.mockImplementation(async ({ onTextDelta }) => {
     onTextDelta?.('Hi ');

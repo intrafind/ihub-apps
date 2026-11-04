@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import configCache from '../../configCache.js';
+import { startTestStorage } from '../helpers/testStorage.js';
 import tokenStorage from '../../services/TokenStorageService.js';
 import { runWithContext } from '../../utils/requestContext.js';
 import {
@@ -103,8 +104,10 @@ function request(headers = {}) {
 
 let tokenDir;
 let originalBasePath;
+let storage;
 
 before(async () => {
+  storage = await startTestStorage({ prefix: 'ihub-cloud-storage-' });
   configCache.setCacheEntry('config/integrations.json', {
     installed: INSTALLED,
     security: { blockPrivateIps: true, allowedHosts: [] }
@@ -126,6 +129,7 @@ before(async () => {
 });
 
 after(async () => {
+  await storage.stop();
   tokenStorage.storageBasePath = originalBasePath;
   await fs.rm(tokenDir, { recursive: true, force: true });
   resetCloudStorageConnectionCounts();

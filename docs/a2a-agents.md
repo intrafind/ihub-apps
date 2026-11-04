@@ -244,7 +244,6 @@ answer (`input-required`), until that task moves on. Neither is ever shared acro
 The conversations are kept on the storage provider (`a2a-client-contexts`, see
 [Storage](storage.md)), so a chat continues its conversation with an agent after a restart and on
 whichever worker serves the next tool call. A conversation nobody continued for 30 days is dropped.
-Without a storage provider the memory is per server process (5,000 conversations).
 
 ## Admin page
 

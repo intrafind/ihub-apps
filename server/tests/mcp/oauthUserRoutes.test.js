@@ -7,6 +7,9 @@ import request from 'supertest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth for outbound MCP servers — the one connect flow of every
@@ -138,7 +141,8 @@ const { default: userIntegrationRoutes } =
   await import('../../routes/integrations/userIntegrations.js');
 const { returnPathWith } =
   await import('../../services/integrations/auth/IntegrationConnectionService.js');
-const { getOAuthFlowStore } = await import('../../services/integrations/auth/oauthFlowStore.js');
+const { OAUTH_FLOWS_NAMESPACE } =
+  await import('../../services/integrations/auth/oauthFlowStore.js');
 const { default: cryptoModule } = await import('node:crypto');
 
 const SERVER = {
@@ -190,8 +194,8 @@ beforeEach(async () => {
   state.integrations = oktaInstallation();
   state.groups = OPEN_GROUPS;
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
-  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: null });
-  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: null });
+  mcpClientManager.clientStore = new McpOAuthClientStore({ documents: scratch.documents });
+  mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: scratch.documents });
   await mcpClientManager.shutdown();
   await mcpClientManager.initialize({ servers: [SERVER] });
 
@@ -269,7 +273,7 @@ function decodeState(location) {
   return {
     stateParam,
     challenge: url.searchParams.get('code_challenge'),
-    payload: getOAuthFlowStore().memory.get(key) || null
+    key
   };
 }
 
@@ -319,7 +323,8 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
       /^http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/oauth\/callback\/okta$/
     );
 
-    const { payload, stateParam } = decodeState(res.location);
+    const { key, stateParam } = decodeState(res.location);
+    const payload = (await scratch.documents.get(OAUTH_FLOWS_NAMESPACE, key))?.data || null;
     // The state is an opaque handle; the flow stays on the server.
     expect(stateParam).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(payload).toMatchObject({

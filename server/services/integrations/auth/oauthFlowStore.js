@@ -24,14 +24,12 @@
  * are swept opportunistically.
  *
  * The record is keyed by a hash of the state, so the namespace does not hold
- * the values a browser presents. Without a storage provider the store keeps
- * flows in this worker's memory (a single-process installation).
+ * the values a browser presents.
  *
  * @module services/integrations/auth/oauthFlowStore
  */
 import crypto from 'node:crypto';
-import cluster from 'node:cluster';
-import { getStorage, readFacet } from '../../../storage/bootstrap.js';
+import { requireStorage } from '../../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../../storage/namespaces.js';
 import tokenStorageService from '../../TokenStorageService.js';
 import logger from '../../../utils/logger.js';
@@ -73,21 +71,17 @@ function keyFor(state) {
 export class OAuthFlowStore {
   /**
    * @param {Object} [options]
-   * @param {Object|null} [options.documents] - Document store; `null` pins memory-only mode
+   * @param {Object} [options.documents] - Document store; the storage provider's when omitted
    * @param {() => number} [options.now]
    */
   constructor({ documents, now = () => Date.now() } = {}) {
-    this._documents = documents;
-    this._pinned = documents !== undefined;
+    this._documents = documents || null;
     this.now = now;
-    /** @type {Map<string, Object>} */
-    this.memory = new Map();
     this._lastSweep = 0;
   }
 
   _docs() {
-    if (this._pinned) return this._documents || null;
-    return readFacet(getStorage(), 'documents');
+    return this._documents || requireStorage().documents;
   }
 
   /**
@@ -109,29 +103,9 @@ export class OAuthFlowStore {
       exp: this.now() + OAUTH_FLOW_TTL_MS
     };
     const key = keyFor(state);
-    const documents = this._docs();
-    if (documents) {
-      await documents.put(OAUTH_FLOWS_NAMESPACE, key, record, { ownerId: 'system' });
-    } else {
-      this._warnMemoryOnly();
-      this.memory.set(key, record);
-    }
+    await this._docs().put(OAUTH_FLOWS_NAMESPACE, key, record, { ownerId: 'system' });
     this._sweepSoon();
     return state;
-  }
-
-  /**
-   * Without a storage provider the flows live in this worker's memory, which
-   * another cluster worker (or pod) cannot read: a callback landing there
-   * fails with `invalid_state`. Said once, loudly, when that can happen.
-   */
-  _warnMemoryOnly() {
-    if (this._warned || !cluster.isWorker) return;
-    this._warned = true;
-    logger.warn(
-      'No storage provider: integration sign-ins are kept in this worker only, so a callback that lands on another worker fails with invalid_state. Configure the storage provider (shared contents/) for cluster mode.',
-      { component: COMPONENT }
-    );
   }
 
   /**
@@ -146,16 +120,11 @@ export class OAuthFlowStore {
   async peek(state) {
     if (typeof state !== 'string' || !state || state.length > MAX_STATE_LENGTH) return null;
     const key = keyFor(state);
-    const documents = this._docs();
     let record = null;
-    if (documents) {
-      try {
-        record = (await documents.get(OAUTH_FLOWS_NAMESPACE, key))?.data || null;
-      } catch {
-        record = null;
-      }
-    } else {
-      record = this.memory.get(key) || null;
+    try {
+      record = (await this._docs().get(OAUTH_FLOWS_NAMESPACE, key))?.data || null;
+    } catch {
+      record = null;
     }
     if (!record) return null;
     return {
@@ -182,21 +151,16 @@ export class OAuthFlowStore {
     const key = keyFor(state);
     const documents = this._docs();
     let record = null;
-    if (documents) {
-      try {
-        const doc = await documents.get(OAUTH_FLOWS_NAMESPACE, key);
-        record = doc?.data || null;
-        if (record && !(await documents.delete(OAUTH_FLOWS_NAMESPACE, key))) {
-          // Another request consumed it between our read and our delete.
-          return { ok: false, reason: 'invalid' };
-        }
-      } catch (error) {
-        logger.warn('OAuth flow lookup failed', { component: COMPONENT, error: error.message });
+    try {
+      const doc = await documents.get(OAUTH_FLOWS_NAMESPACE, key);
+      record = doc?.data || null;
+      if (record && !(await documents.delete(OAUTH_FLOWS_NAMESPACE, key))) {
+        // Another request consumed it between our read and our delete.
         return { ok: false, reason: 'invalid' };
       }
-    } else {
-      record = this.memory.get(key) || null;
-      this.memory.delete(key);
+    } catch (error) {
+      logger.warn('OAuth flow lookup failed', { component: COMPONENT, error: error.message });
+      return { ok: false, reason: 'invalid' };
     }
     if (!record) return { ok: false, reason: 'invalid' };
     const routing = {
@@ -235,15 +199,6 @@ export class OAuthFlowStore {
     const now = this.now();
     const documents = this._docs();
     let removed = 0;
-    if (!documents) {
-      for (const [key, record] of this.memory) {
-        if (!(record?.exp > now)) {
-          this.memory.delete(key);
-          removed += 1;
-        }
-      }
-      return removed;
-    }
     let cursor = null;
     do {
       const page = await documents.list(OAUTH_FLOWS_NAMESPACE, {

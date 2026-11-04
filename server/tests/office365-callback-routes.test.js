@@ -15,9 +15,15 @@ import {
   IntegrationConnectionService,
   setIntegrationConnectionServiceForTests
 } from '../services/integrations/auth/IntegrationConnectionService.js';
-import { OAuthFlowStore } from '../services/integrations/auth/oauthFlowStore.js';
+import {
+  OAuthFlowStore,
+  OAUTH_FLOWS_NAMESPACE
+} from '../services/integrations/auth/oauthFlowStore.js';
 import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
 import { IntegrationAuthRequiredError } from '../services/integrations/auth/integrationAuthRequired.js';
+import { scratchDocuments } from './helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 // In-memory key material; tokens land in a temp directory.
 tokenStorageService.encryptionKey = 'c'.repeat(64);
@@ -88,9 +94,15 @@ Office365Service.oauthStrategy = function oauthStrategyForTest(providerId) {
 
 // Two "workers" that share nothing but the flow store (in production: the
 // storage provider's `integration-oauth-flows` namespace).
-const sharedFlows = new OAuthFlowStore({ documents: null });
-const workerA = new IntegrationConnectionService({ documents: null, flowStore: sharedFlows });
-const workerB = new IntegrationConnectionService({ documents: null, flowStore: sharedFlows });
+const sharedFlows = new OAuthFlowStore({ documents: scratch.documents });
+const workerA = new IntegrationConnectionService({
+  documents: scratch.documents,
+  flowStore: sharedFlows
+});
+const workerB = new IntegrationConnectionService({
+  documents: scratch.documents,
+  flowStore: sharedFlows
+});
 
 const member = id => ({ id, groups: ['users'], permissions: { integrations: ['*'] } });
 
@@ -190,7 +202,15 @@ check(
 );
 
 const expiring = await startSignIn();
-for (const record of sharedFlows.memory.values()) record.exp = Date.now() - 1000;
+for (const doc of (await scratch.documents.list(OAUTH_FLOWS_NAMESPACE, { includeData: true }))
+  .items) {
+  await scratch.documents.put(
+    OAUTH_FLOWS_NAMESPACE,
+    doc.key,
+    { ...doc.data, exp: Date.now() - 1000 },
+    { ownerId: 'system' }
+  );
+}
 const expired = await callbackRedirect({ code: 'c', state: expiring.state });
 check(
   'expired state reports state_expired',

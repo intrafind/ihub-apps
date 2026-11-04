@@ -25,11 +25,16 @@ import {
 } from '../../services/mcp/mcpOAuthClientStore.js';
 import {
   OAuthFlowStore,
-  OAUTH_FLOW_TTL_MS
+  OAUTH_FLOW_TTL_MS,
+  OAUTH_FLOWS_NAMESPACE
 } from '../../services/integrations/auth/oauthFlowStore.js';
 import { buildMcpClientMetadata } from '../../services/mcp/mcpOAuthPublicUrl.js';
 import { validateClientMetadata } from '../../utils/clientIdMetadata.js';
 import { mcpServerConfigSchema } from '../../validators/mcpServerConfigSchema.js';
+import { createHash } from 'node:crypto';
+import { scratchDocuments } from '../helpers/testStorage.js';
+
+const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth for outbound MCP servers — the pieces below the routes: the
@@ -135,7 +140,7 @@ describe('McpUserOAuthProvider', () => {
     });
 
   beforeEach(() => {
-    clientStore = new McpOAuthClientStore({ documents: null });
+    clientStore = new McpOAuthClientStore({ documents: scratch.documents });
   });
 
   it("exposes the server's own redirect URI and CIMD URL for an https base", () => {
@@ -318,11 +323,12 @@ describe('MCP OAuth state (server-side flow record)', () => {
   };
 
   it('keeps the context server-side; the state is an opaque random handle', async () => {
-    const store = new OAuthFlowStore({ documents: null });
+    const store = new OAuthFlowStore({ documents: scratch.documents });
     const state = await store.create(context);
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(state).not.toContain('alice');
-    const [record] = [...store.memory.values()];
+    const key = `flow_${createHash('sha256').update(state, 'utf8').digest('hex').slice(0, 48)}`;
+    const record = (await scratch.documents.get(OAUTH_FLOWS_NAMESPACE, key)).data;
     expect(JSON.stringify(record)).not.toContain('the-pkce-verifier');
     const consumed = await store.consume(state);
     expect(consumed.ok).toBe(true);
@@ -330,7 +336,7 @@ describe('MCP OAuth state (server-side flow record)', () => {
   });
 
   it('is single use and refuses unknown states', async () => {
-    const store = new OAuthFlowStore({ documents: null });
+    const store = new OAuthFlowStore({ documents: scratch.documents });
     const state = await store.create(context);
     expect((await store.consume(state)).ok).toBe(true);
     expect(await store.consume(state)).toEqual({ ok: false, reason: 'invalid' });
@@ -339,7 +345,7 @@ describe('MCP OAuth state (server-side flow record)', () => {
   });
 
   it('refuses to record a flow without the user, installation or verifier', async () => {
-    const store = new OAuthFlowStore({ documents: null });
+    const store = new OAuthFlowStore({ documents: scratch.documents });
     await expect(store.create({ ...context, userId: '' })).rejects.toThrow(/userId/);
     await expect(store.create({ ...context, installationId: undefined })).rejects.toThrow(
       /installationId/
@@ -349,7 +355,7 @@ describe('MCP OAuth state (server-side flow record)', () => {
 
   it('expires after 15 minutes', async () => {
     let now = Date.now();
-    const store = new OAuthFlowStore({ documents: null, now: () => now });
+    const store = new OAuthFlowStore({ documents: scratch.documents, now: () => now });
     const fresh = await store.create(context);
     now += OAUTH_FLOW_TTL_MS - 1000;
     expect((await store.consume(fresh)).ok).toBe(true);
