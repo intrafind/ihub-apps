@@ -713,22 +713,6 @@ POST /api/auth/logout
 Authorization: Bearer <token>
 ```
 
-### Create User (Admin Only)
-
-```http
-POST /api/auth/users
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "username": "newuser",
-  "email": "user@example.com",
-  "password": "securepassword",
-  "name": "New User",
-  "groups": ["user"]
-}
-```
-
 ## Testing
 
 ### Proxy Mode Testing

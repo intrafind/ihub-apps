@@ -38,7 +38,7 @@ function createTestApp(platformConfig = {}) {
   // Mirrors the real registrations in routes/auth.js.
   app.get('/api/auth/status', (req, res) => res.status(200).json({ ok: true, ip: req.ip }));
   app.get('/api/auth/user', (req, res) => res.status(200).json({ ok: true }));
-  app.get('/api/auth/oidc/providers', (req, res) => res.status(200).json({ ok: true }));
+  app.get('/api/auth/teams/client-config', (req, res) => res.status(200).json({ ok: true }));
   app.get('/api/auth/oidc/entra/callback', (req, res) => res.status(200).json({ ok: true }));
   app.post('/api/auth/logout', (req, res) => res.status(200).json({ ok: true }));
   app.get('/api/auth/oidc-logout', (req, res) => res.status(200).json({ ok: true }));
@@ -73,7 +73,7 @@ describe('read-only /api/auth endpoints are exempt from the credential limiter',
   test('other read-only auth endpoints are exempt too', async () => {
     const app = createTestApp(STRICT);
 
-    for (const path of ['/api/auth/user', '/api/auth/oidc/providers']) {
+    for (const path of ['/api/auth/user', '/api/auth/teams/client-config']) {
       for (let i = 0; i < 10; i++) {
         expect((await request(app).get(path)).status).toBe(200);
       }
@@ -139,9 +139,6 @@ describe('isReadOnlyAuthRequest', () => {
     expect(check('GET', '/status/')).toBe(true);
     expect(check('GET', '/user')).toBe(true);
     expect(check('POST', '/logout')).toBe(true);
-    expect(check('GET', '/oidc/providers')).toBe(true);
-    expect(check('GET', '/ldap/providers')).toBe(true);
-    expect(check('GET', '/ntlm/status')).toBe(true);
     expect(check('GET', '/teams/client-config')).toBe(true);
     expect(check('GET', '/oidc/entra')).toBe(true);
     expect(check('GET', '/oidc/entra/callback')).toBe(true);

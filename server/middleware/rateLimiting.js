@@ -23,9 +23,7 @@ import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
  *
  *   - `/api/auth/status` — fetched on every SPA boot and on every 401 recovery,
  *     and commonly used as the container liveness/readiness probe.
- *   - `/api/auth/user`, the per-provider discovery endpoints
- *     (`/api/auth/oidc/providers`, `/api/auth/ldap/providers`,
- *     `/api/auth/ntlm/status`, `/api/auth/teams/client-config`) — read-only.
+ *   - `/api/auth/user` and `/api/auth/teams/client-config` — read-only.
  *   - `/api/auth/oidc/:provider/callback` — the SSO redirect target. One
  *     exhausted window here locks every user out of logging in.
  *   - `/api/auth/logout` and `/api/auth/oidc-logout` — must always be able to
@@ -50,9 +48,6 @@ const READ_ONLY_AUTH_PATHS = new Set([
   '/logout',
   // Not covered by the `/oidc/` prefix rule below - that requires a slash.
   '/oidc-logout',
-  '/oidc/providers',
-  '/ldap/providers',
-  '/ntlm/status',
   '/teams/client-config'
 ]);
 

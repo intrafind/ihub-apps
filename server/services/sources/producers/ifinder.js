@@ -33,7 +33,6 @@
  *
  * @module services/sources/producers/ifinder
  */
-import { storedSourceSet } from '../../../../shared/sources/index.js';
 
 const DOCUMENT_TOOLS = new Set(['ifinder_search', 'ifinder_getmetadata', 'ifinder_getcontent']);
 
@@ -305,33 +304,3 @@ export const iAssistantAskSourceProducer = {
     return { items: reported, ...(scopes.length ? { scopes } : {}) };
   }
 };
-
-/**
- * A page of iAssistant conversation history, as `GET /conversations/:id/messages`
- * returns it (`{ messages: [...] }` or a bare array, each message carrying
- * `references` and `result_items`), with each message's documents as
- * `sources` — so a resumed conversation's answers show the same panel and
- * actions as the live ones.
- *
- * @param {Object|Array} page - the conversation API's response
- * @param {string} [searchProfile] - the conversation's search profile
- * @param {Object} [context]
- * @param {Map<string, string>|Object<string, string>} [context.scopeNames] -
- *   display names of the user's search profiles, by id
- * @returns {Object|Array} the page with `sources` on each message that lists documents
- */
-export function withConversationSources(page, searchProfile, { scopeNames } = {}) {
-  const convert = messages =>
-    messages.map(message => {
-      if (!message || typeof message !== 'object') return message;
-      const frame = iAssistantSourceFrame(
-        { references: message.references, resultItems: message.result_items },
-        { searchProfile, scopeNames }
-      );
-      const sources = frame ? storedSourceSet(frame) : null;
-      return sources ? { ...message, sources } : message;
-    });
-  if (Array.isArray(page)) return convert(page);
-  if (page && Array.isArray(page.messages)) return { ...page, messages: convert(page.messages) };
-  return page;
-}

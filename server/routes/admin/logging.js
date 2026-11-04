@@ -3,123 +3,12 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { sendInternalError } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import configStore from '../../services/config/ConfigStore.js';
 
 export default function registerAdminLoggingRoutes(app) {
-  /**
-   * @swagger
-   * /api/admin/logging/level:
-   *   get:
-   *     summary: Get current log level and available levels
-   *     tags: [Admin - Logging]
-   *     security:
-   *       - AdminSecret: []
-   *     responses:
-   *       200:
-   *         description: Current log level information
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 current:
-   *                   type: string
-   *                   description: Current log level
-   *                 available:
-   *                   type: array
-   *                   items:
-   *                     type: string
-   *                   description: Available log levels
-   */
-  app.get(buildServerPath('/api/admin/logging/level'), adminAuth, (req, res) => {
-    try {
-      const levelInfo = logger.getLogLevelInfo();
-      res.json(levelInfo);
-    } catch (error) {
-      return sendInternalError(res, error, 'get log level');
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/admin/logging/level:
-   *   put:
-   *     summary: Update log level
-   *     tags: [Admin - Logging]
-   *     security:
-   *       - AdminSecret: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - level
-   *             properties:
-   *               level:
-   *                 type: string
-   *                 enum: [error, warn, info, http, verbose, debug, silly]
-   *               persist:
-   *                 type: boolean
-   *                 default: true
-   *                 description: Whether to persist the change to platform.json
-   *     responses:
-   *       200:
-   *         description: Log level updated successfully
-   *       400:
-   *         description: Invalid log level
-   */
-  app.put(buildServerPath('/api/admin/logging/level'), adminAuth, async (req, res) => {
-    try {
-      const { level, persist = true } = req.body;
-
-      // Validate log level
-      const validLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
-      if (!validLevels.includes(level)) {
-        return sendBadRequest(res, 'Invalid log level');
-      }
-
-      // Update logger immediately
-      logger.setLogLevel(level);
-      logger.info('Log level changed', { component: 'AdminLogging', level });
-
-      // Optionally persist to platform.json
-      if (persist) {
-        const platformConfig = await configStore.readJson('config/platform.json');
-        if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-        // Update logging level
-        if (!platformConfig.logging) {
-          platformConfig.logging = {};
-        }
-        platformConfig.logging.level = level;
-
-        await configStore.writeJson('config/platform.json', platformConfig);
-
-        // Refresh config cache
-        await configCache.refreshCacheEntry('config/platform.json');
-
-        // Reconfigure logger to pick up any other changes
-        logger.reconfigureLogger();
-
-        logger.info('Log level persisted to platform.json', { component: 'AdminLogging', level });
-      }
-
-      res.json({
-        success: true,
-        level,
-        persisted: persist,
-        message: `Log level updated to ${level}${persist ? ' and saved to configuration' : ' (runtime only)'}`
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update log level');
-    }
-  });
-
   /**
    * @swagger
    * /api/admin/logging/config:

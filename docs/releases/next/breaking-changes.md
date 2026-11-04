@@ -355,3 +355,34 @@ data on the first start.
   `gen_ai_client_token_usage`. Setting an `IHUB_PLATFORM__I_FINDER__*` or
   `IHUB_PLATFORM__I_ASSISTANT__*` variable no longer logs a warning (it has had no effect since
   V192).
+  
+## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
+
+- **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback
+  the browser is sent back with `?oidc=success&provider=<name>` and the session is the `authToken`
+  httpOnly cookie that was already set. Nothing changes for users. Custom code that read
+  `?token=` from the OIDC return URL has to use the cookie (or `redirect=false` for the JSON form).
+- **Old integration token files are deleted on the first start (migration V217).** Per-user
+  Office 365, Google Drive, Nextcloud, Jira and iFinder login tokens in
+  `contents/integrations/<service>/` that were written in the unauthenticated AES-256-CBC format
+  (installations from before 5.4.16) are removed without being decrypted; the server no longer
+  reads that format. The affected users connect the service again under **Settings →
+  Integrations**. AES-256-GCM files are not touched.
+  
+## Unused API Endpoints Removed
+
+Endpoints that nothing in iHub itself (web client, browser extension, Office add-in, Nextcloud app,
+Teams tab, scheduler, MCP/A2A/OAuth integrations) called are gone. Scripts of your own that call
+one of them get `404`.
+
+| Area | Removed |
+| --- | --- |
+| Authentication | `POST /api/auth/users` (use `POST /api/admin/auth/users`), `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`, `GET /api/auth/ntlm/status` (the providers are in `GET /api/auth/status`), `POST /api/auth/teams/config` |
+| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/sources/ifinder/content` and `/metadata`), `GET /api/integrations/jira/test` |
+| Workflows | `POST /api/workflows/executions/:id/resume` (answer checkpoints through `/api/runs/:id/interactions/:id/answer`, restart with `.../restart`), `GET /api/workflows/:id/versions`, `PUT /api/workflows/:id/activate/:version`, `GET /api/workflows/triggers`, `POST /api/workflows/:id/trigger`. The webhook route `POST /api/workflows/:workflowId/webhooks/:triggerId` stays |
+| Agents | `GET /api/agents/profiles`, `GET /api/agents/profiles/:profileId`, `GET /api/agents/profiles/:profileId/artifacts` |
+| Admin | `GET /api/admin/auth/test`, `GET /api/admin/oauth/cimd-clients` (`GET /api/admin/oauth/clients` carries them), `POST /api/admin/oauth/clients/:id/introspect-token`, `GET`/`PUT /api/admin/logging/level` (use `/api/admin/logging/config`), `POST /api/admin/skills/validate`, `GET /api/admin/update/check` (use `GET /api/admin/version/check-update`) |
+| Conversations | `GET /api/apps/:appId/conversations/:conversationId/messages`, `DELETE .../messages/:messageId` |
+
+`/api/docs` now also documents the routes in the files it did not scan before (workflows, prompts,
+user skills, projects, runs, OAuth, well-known metadata, integrations).
