@@ -41,3 +41,11 @@ export const resetUsageLimitUser = async (userKey, body = {}) =>
       body
     })
   ).data;
+
+/** Users at or above `threshold` (default 0.8) of a limit, one row per budget, soonest reset first. */
+export const fetchUsageLimitNear = async ({ threshold, limit } = {}) => {
+  const params = new URLSearchParams();
+  if (threshold != null) params.set('threshold', String(threshold));
+  if (limit != null) params.set('limit', String(limit));
+  return (await makeAdminApiCall(`/admin/usage/limits/near?${params}`)).data;
+};

@@ -94,6 +94,7 @@ Calls without a user, such as system work, are neither checked nor counted. A fi
 
 ## What users see
 
+- **My usage** (top of the user menu): tokens used today and this month, and the budget closest to its limit with what is left and when it resets. Users see a refusal coming before a call fails with `QUOTA_EXCEEDED`.
 - **Usage page** (user menu → **Usage**, `/settings/usage`):
   - Every budget that applies to them, with what they have used, the percentage, when it resets, and where the limit comes from (the model, a group, or a personal limit).
   - This month's usage of models without a limit.
@@ -103,9 +104,11 @@ Calls without a user, such as system work, are neither checked nor counted. A fi
   - A red notice once it is used up.
 - **Model picker:** each limited model shows how much of its budget is used, or that its limit is reached and when it resets.
 
+Every budget is drawn as a bar that is green, turns amber from 70 % and red from 90 % of its limit, with a countdown to its next reset that stays current while the page is open.
+
 ## What administrators see
 
-**Usage Reports → Limits & quotas** (`/admin/usage?tab=limits`) has three views:
+**Usage Reports → Limits & quotas** (`/admin/usage?tab=limits`) starts with **Near a limit**: every user above 80 % of a budget, one row per budget with its bar and reset countdown, the soonest reset first — who will be refused next, and when that ends. Below it are the settings and three views:
 
 - **Users:**
   - Everyone known to iHub (users in `users.json` and everyone who has used a model), sorted by who is closest to a limit.
@@ -127,7 +130,8 @@ The user editor also shows the user's current usage, with a **Reset usage** butt
 | `POST /api/admin/usage/limits/users/:userKey/reset` | admin | reset current counts (`{ modelId?, window? }`) |
 | `GET /api/admin/usage/limits/models` | admin | per-model overview |
 | `GET /api/admin/usage/limits/groups` | admin | per-group overview |
+| `GET /api/admin/usage/limits/near` | admin | users at or above `threshold` (default `0.8`) of a budget, soonest reset first (`threshold`, `limit`) |
 
 ## Storage and privacy
 
-Counters live in `contents/data/quota-usage.json`. They are kept per user, model and window, and hold counts only, never content. They are separate from the usage analytics (`usage.json`, `usage-events.jsonl`) and are written even when analytics tracking is off or pseudonymized: enforcing a per-user limit needs the real user. Users not seen for 400 days are removed. Cluster workers add their counts to the file every few seconds under a lock.
+Counters live in `contents/data/quota-usage.json`. They are kept per user, model and window, and hold counts only, never content. They are separate from the usage analytics ([Usage Reporting](usage-reporting.md)) and are written even when analytics tracking is off or pseudonymized: enforcing a per-user limit needs the real user. Users not seen for 400 days are removed. Cluster workers add their counts to the file every few seconds under a lock.

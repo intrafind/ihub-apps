@@ -65,7 +65,7 @@ graph TB
     J --> K[Log iFinder response]
     H -->|No| K
     K --> L[Store in feedback.jsonl]
-    L --> M[Record in usage.json]
+    L --> M[Record a usage feedback event]
     M --> N[Log interaction event]
     N --> O[Return success to client]
 ```
@@ -138,45 +138,16 @@ Each line is a complete JSON object representing one feedback entry.
 | `ifinderMessageId` | string | No | iFinder message ID (iAssistant only) |
 | `baseUrl` | string | No | iFinder base URL (iAssistant only) |
 
-### Secondary Storage: usage.json
+### Secondary Storage: usage events
 
-Feedback aggregates are also stored in `contents/data/usage.json`:
+Each rating is also written as a usage record (`type: "feedback"`) to the day's
+file in `contents/data/usage-events/`, with the user (per tracking mode), the
+user's groups, app, model and rating. The daily rollups count ratings per user,
+app and model, which the **Feedback** review page and the usage reports read.
+See [Usage Reporting](usage-reporting.md).
 
 ```json
-{
-  "feedback": {
-    "total": 1523,
-    "ratings": {
-      "1": 45,
-      "2": 123,
-      "3": 456,
-      "4": 678,
-      "5": 221
-    },
-    "averageRating": 3.8,
-    "perUser": {
-      "usr_a7f3b2...": {
-        "total": 25,
-        "ratings": { "1": 0, "2": 2, "3": 5, "4": 12, "5": 6 },
-        "averageRating": 4.1
-      }
-    },
-    "perApp": {
-      "enterprise-chat": {
-        "total": 450,
-        "ratings": { "1": 10, "2": 35, "3": 150, "4": 200, "5": 55 },
-        "averageRating": 3.7
-      }
-    },
-    "perModel": {
-      "gpt-4o": {
-        "total": 890,
-        "ratings": { "1": 20, "2": 60, "3": 250, "4": 400, "5": 160 },
-        "averageRating": 3.9
-      }
-    }
-  }
-}
+{ "v": 2, "ts": "2026-11-04T10:01:00.000Z", "type": "feedback", "uid": "usr_a7f3b2…", "grp": ["sales"], "app": "chat", "model": "gpt-4o", "cid": "conv_19ad…", "rating": 4 }
 ```
 
 ### Storage Characteristics
@@ -277,7 +248,7 @@ Control user identification in feedback data:
 | Mode | Description | User Identifier | Reversible? |
 |------|-------------|-----------------|-------------|
 | `anonymous` | One-way hashed fingerprints | `usr_a7f3b2...` (SHA-256) | No - cannot identify users |
-| `pseudonymous` | Session-based IDs | `session-{timestamp}-{random}` | Partially - requires correlation effort |
+| `pseudonymous` | The conversation stands in for the user | the chat id | Partially - requires correlation effort |
 | `identified` | Real usernames/emails | `user@company.com` | Yes - directly identifies users |
 
 **Default**: `pseudonymous`
@@ -406,10 +377,9 @@ grep "Feedback received" server.log | jq '.ifinderFeedbackSent'
 ```
 
 **How It Works**:
-- User identifier is session-based: `session-1640000000000-abc123xyz`
-- Session IDs stored in browser localStorage
-- Same user gets new ID if they clear browser data
-- **Partially reversible**: Requires access to session logs and correlation effort
+- The usage records name the conversation (chat id) instead of the user, so each conversation counts as its own user
+- No user id is stored in the usage records
+- **Partially reversible**: Requires access to the stored chats and correlation effort
 
 **Use Cases**:
 - Most enterprise deployments
@@ -417,10 +387,9 @@ grep "Feedback received" server.log | jq '.ifinderFeedbackSent'
 - Ability to track patterns without direct identification
 
 **Characteristics**:
-- Same user across sessions: Different IDs
-- Same browser session: Same ID
-- Clearing cookies: New ID
-- Different devices: Different IDs
+- Each conversation: its own ID
+- Same user, different conversations: different IDs
+- Browser sessions and cookies: no effect on the ID
 
 #### 3. Identified Mode (Full Accountability)
 
@@ -458,7 +427,6 @@ grep "Feedback received" server.log | jq '.ifinderFeedbackSent'
 1. **Backup current data**:
    ```bash
    cp contents/data/feedback.jsonl contents/data/feedback.jsonl.backup
-   cp contents/data/usage.json contents/data/usage.json.backup
    ```
 
 2. **Update configuration**:
@@ -521,8 +489,8 @@ The page has two tabs:
 
 - **Settings** — collection on/off (platform-wide and per app), storage (`feedbackTracking`) and the
   identification mode (`usageTrackingMode`)
-- **Feedback** — the review: total count, average rating, the star distribution, the breakdowns per
-  user, app and model, and the individual entries with their comments
+- **Feedback** — the review: total count, average rating, the star distribution and the breakdowns per
+  user, app and model over the last 90 days, and the individual entries with their comments
 
 Already-submitted feedback stays readable here no matter how the switches stand.
 
@@ -531,8 +499,8 @@ Already-submitted feedback stays readable here no matter how the switches stand.
 - Navigate to `/admin/feedback`
 
 The page can be hidden like any other admin page, with `admin.pages.feedback: false` in
-`contents/config/ui.json`. **Admin → Usage Reports** keeps the average-rating tile, which links
-here.
+`contents/config/ui.json`. **Admin → Usage Reports** shows the number of ratings and their average
+for the selected range and links here.
 
 ### File System Access
 
@@ -558,59 +526,43 @@ jq -s 'map(.rating) | add / length' contents/data/feedback.jsonl
 jq 'select(.comment != "")' contents/data/feedback.jsonl
 ```
 
-#### Reading usage.json
+#### Reading the usage feedback records
 
 ```bash
-# View feedback summary
-jq '.feedback' contents/data/usage.json
+# Ratings of one day
+jq -c 'select(.type == "feedback")' contents/data/usage-events/2026-11-04.jsonl
 
-# Get average rating
-jq '.feedback.averageRating' contents/data/usage.json
-
-# Top-rated app
-jq '.feedback.perApp | to_entries | max_by(.value.averageRating)' contents/data/usage.json
-
-# Ratings distribution
-jq '.feedback.ratings' contents/data/usage.json
+# Average rating over all retained days
+cat contents/data/usage-events/*.jsonl | jq -s 'map(select(.type == "feedback") | .rating) | add / length'
 ```
 
 ### API Access
 
-#### GET /api/admin/usage (Feedback Summary)
+#### GET /api/admin/usage/feedback/summary
 
 **Authentication**: Requires admin access
 
-**Response**:
+Ratings in a range (`range` = `today`, `24h`, `7d`, `30d`, `90d`, `12m`, or `custom` with `from`/`to`), in total and per user, app and model:
+
 ```json
 {
-  "feedback": {
-    "total": 1523,
-    "ratings": {
-      "1": 45,
-      "2": 123,
-      "3": 456,
-      "4": 678,
-      "5": 221
-    },
-    "averageRating": 3.8
-  }
+  "range": "90d",
+  "total": 1523,
+  "ratings": { "1": 45, "2": 123, "3": 456, "4": 678, "5": 221 },
+  "averageRating": 3.8,
+  "perUser": { "usr_a7f3b2…": { "total": 25, "ratings": { … }, "averageRating": 4.1 } },
+  "perApp": { … },
+  "perModel": { … }
 }
 ```
 
-#### POST /api/admin/usage/export (Export Feedback)
+#### GET /api/admin/usage/feedback
 
-**Authentication**: Requires admin access
+Stored feedback entries with comments, newest first (`limit`, `offset`).
 
-**Request**:
-```json
-{
-  "format": "csv",
-  "type": "feedback",
-  "dateRange": "30d"
-}
-```
+#### GET /api/admin/usage/export
 
-**Response**: CSV file with feedback data
+All usage records of a range, feedback included (`format=csv` or `json`).
 
 ### Database Integration (Future)
 
@@ -645,42 +597,15 @@ Both systems respect the same privacy settings:
 Every feedback submission is recorded in **three places**:
 
 1. **feedback.jsonl**: Detailed individual feedback entries
-2. **usage.json**: Aggregated feedback statistics
+2. **Usage events**: A `feedback` record, rolled up per user, app and model
 3. **Interaction logs**: Structured event logging (if enabled)
 
 ### Usage Statistics
 
-Feedback updates the following usage metrics:
-
-```json
-{
-  "feedback": {
-    "total": 1523,                    // Total feedback count
-    "ratings": { ... },               // Rating distribution
-    "averageRating": 3.8,            // Mean rating
-    "perUser": { ... },              // Per-user aggregates
-    "perApp": { ... },               // Per-app aggregates
-    "perModel": { ... }              // Per-model aggregates
-  }
-}
-```
-
-### Legacy Compatibility
-
-For backward compatibility, the system maintains legacy `good/bad` counts:
-
-```json
-{
-  "feedback": {
-    "good": 899,   // Ratings >= 4 stars
-    "bad": 168     // Ratings <= 2 stars
-  }
-}
-```
-
-**Migration**: On first load, legacy thumbs up/down data is automatically converted to star ratings:
-- Thumbs up → 5 stars
-- Thumbs down → 1 star
+The usage rollups count ratings (1–5) per user, app and model. The **Feedback**
+review page shows the last 90 days of them; the usage reports' overview shows
+the number of ratings and the average for the selected range. Thumbs up and
+down count as 5 and 1 stars.
 
 ## API Reference
 
@@ -893,9 +818,8 @@ grep "Authentication failed" server.log
 
 **Solutions**:
 - Refresh browser page
-- Expand date range filter to "All Time"
-- Check file permissions on `feedback.jsonl` and `usage.json`
-- Restart server to reload usage data
+- Choose a longer range in the usage reports (up to 12 months, or a custom range); the Feedback review shows the last 90 days
+- Check file permissions on `feedback.jsonl` and `contents/data/usage-events/`
 
 ### Performance Issues
 
@@ -992,7 +916,7 @@ If you encounter issues not covered here:
 
 ### For Administrators
 
-1. **Regular Backups**: Backup `feedback.jsonl` and `usage.json` regularly
+1. **Regular Backups**: Backup `feedback.jsonl` and `contents/data/usage-events/` regularly
 2. **Monitor Growth**: Track file sizes and implement rotation before issues arise
 3. **Privacy Compliance**: Document and communicate tracking mode to users
 4. **Data Retention**: Define and enforce feedback data retention policies

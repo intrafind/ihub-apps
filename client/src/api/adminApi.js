@@ -128,10 +128,6 @@ export const makeAdminApiCall = async (url, options = {}) => {
 };
 
 // Specific admin API functions
-export const fetchAdminUsageData = async () => {
-  const response = await makeAdminApiCall('/admin/usage');
-  return response.data;
-};
 export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/admin/apps');
   return response.data;
@@ -1217,13 +1213,6 @@ export const fetchMarketplaceInstallations = async () => {
   return response.data;
 };
 
-export const fetchAdminUsageTimeline = async (range = '30d', granularity) => {
-  const params = new URLSearchParams({ range });
-  if (granularity) params.set('granularity', granularity);
-  const response = await makeAdminApiCall(`/admin/usage/timeline?${params}`);
-  return response.data;
-};
-
 export const fetchAdminUsageMeta = async () => {
   const response = await makeAdminApiCall('/admin/usage/meta');
   return response.data;
@@ -1234,31 +1223,6 @@ export const updateAdminUsageTrackingMode = async mode => {
     method: 'PUT',
     body: { trackingMode: mode }
   });
-  return response.data;
-};
-
-export const triggerUsageRollup = async () => {
-  const response = await makeAdminApiCall('/admin/usage/_rollup', { method: 'POST' });
-  return response.data;
-};
-
-export const fetchAdminUsageUsers = async (range = '30d') => {
-  const response = await makeAdminApiCall(`/admin/usage/users?range=${range}`);
-  return response.data;
-};
-
-export const fetchAdminUsageApps = async (range = '30d') => {
-  const response = await makeAdminApiCall(`/admin/usage/apps?range=${range}`);
-  return response.data;
-};
-
-export const fetchAdminUsageModels = async (range = '30d') => {
-  const response = await makeAdminApiCall(`/admin/usage/models?range=${range}`);
-  return response.data;
-};
-
-export const fetchAdminUsageProviders = async (range = '30d') => {
-  const response = await makeAdminApiCall(`/admin/usage/providers?range=${range}`);
   return response.data;
 };
 

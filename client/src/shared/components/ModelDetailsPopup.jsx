@@ -8,7 +8,8 @@ import { getLocalizedContent } from '../../utils/localizeContent';
 import Icon from './Icon';
 import Modal from './Modal';
 import { DetailsPopupHeader, DetailsPopupFooter } from './DetailsPopup';
-import { fetchAdminUsageData, fetchAdminApps } from '../../api/adminApi';
+import { fetchAdminApps } from '../../api/adminApi';
+import { fetchUsageBreakdown } from '../../api/usageReportsAdminApi';
 
 function ModelDetailsPopup({ model, isOpen, onClose }) {
   const { t, i18n } = useTranslation();
@@ -27,18 +28,10 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
   const loadModelData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load usage data
-      const usageData = await fetchAdminUsageData();
-      if (
-        usageData.messages &&
-        usageData.messages.perModel &&
-        usageData.messages.perModel[model.id]
-      ) {
-        setUsage({
-          messages: usageData.messages.perModel[model.id],
-          tokens: usageData.tokens.perModel[model.id] || 0
-        });
-      }
+      // Usage of this model over the last 30 days
+      const breakdown = await fetchUsageBreakdown({ range: '30d', dimension: 'model' });
+      const row = (breakdown?.rows || []).find(r => r.key === model.id);
+      setUsage(row ? { requests: row.requests, tokens: row.totalTokens } : null);
 
       // Load apps using this model
       const allApps = await fetchAdminApps();
@@ -238,15 +231,15 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {t('admin.models.details.messages', 'Messages')}
+                  {t('admin.models.details.requests30d', 'Requests (30 days)')}
                 </div>
                 <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                  {usage.messages.toLocaleString()}
+                  {usage.requests.toLocaleString()}
                 </div>
               </div>
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {t('admin.models.details.tokens', 'Tokens')}
+                  {t('admin.models.details.tokens30d', 'Tokens (30 days)')}
                 </div>
                 <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                   {usage.tokens.toLocaleString()}

@@ -5,11 +5,6 @@ import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 import cache, { DEFAULT_CACHE_TTL } from '../../utils/cache';
 
-// Admin usage data
-export const fetchUsageData = async () => {
-  return handleApiResponse(() => apiClient.get('/admin/usage'), null, null, false);
-};
-
 // Admin API functions
 export const fetchAdminPrompts = async (options = {}) => {
   const { skipCache = false } = options;

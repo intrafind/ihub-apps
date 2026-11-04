@@ -978,7 +978,6 @@ class ChatService {
         generatedFiles,
         generatedImages,
         promptSources,
-        takePendingCall: () => turnSeam.takePendingCall(),
         signal: controller.signal,
         structured: outputSeam
           ? {
@@ -1153,7 +1152,6 @@ class ChatService {
     generatedFiles = [],
     generatedImages = [],
     promptSources = [],
-    takePendingCall = () => null,
     structured = null,
     signal = null
   }) {
@@ -1205,8 +1203,6 @@ class ChatService {
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
-        // The call stopped mid-way is still billed: its request side, estimated.
-        request: takePendingCall(),
         outcome: 'aborted'
       });
       // A stopped turn keeps what it had already written, and that answer is
@@ -1243,7 +1239,6 @@ class ChatService {
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
-        request: takePendingCall(),
         outcome: 'error',
         error: err
       });

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchUsageBreakdown } from '../../../api/usageReportsAdminApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
@@ -308,18 +309,10 @@ function AdminModelEditPage() {
 
   const loadUsageData = useCallback(async () => {
     try {
-      const response = await makeAdminApiCall('/admin/usage');
-      const usageData = response.data;
-      if (
-        usageData.messages &&
-        usageData.messages.perModel &&
-        usageData.messages.perModel[modelId]
-      ) {
-        setUsage({
-          messages: usageData.messages.perModel[modelId],
-          tokens: usageData.tokens.perModel[modelId] || 0
-        });
-      }
+      // Usage of this model over the last 30 days
+      const breakdown = await fetchUsageBreakdown({ range: '30d', dimension: 'model' });
+      const row = (breakdown?.rows || []).find(r => r.key === modelId);
+      setUsage(row ? { requests: row.requests, tokens: row.totalTokens } : null);
     } catch (err) {
       console.error('Error loading usage data:', err);
     }
@@ -514,10 +507,10 @@ function AdminModelEditPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="text-center">
                         <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                          {usage.messages?.toLocaleString() || 0}
+                          {usage.requests?.toLocaleString() || 0}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {t('admin.models.details.messages')}
+                          {t('admin.models.details.requests30d', 'Requests (30 days)')}
                         </div>
                       </div>
                       <div className="text-center">
@@ -525,7 +518,7 @@ function AdminModelEditPage() {
                           {usage.tokens?.toLocaleString() || 0}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {t('admin.models.details.tokens')}
+                          {t('admin.models.details.tokens30d', 'Tokens (30 days)')}
                         </div>
                       </div>
                     </div>

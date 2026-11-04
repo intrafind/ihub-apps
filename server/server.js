@@ -772,9 +772,7 @@ if (cluster.isPrimary && workerCount > 1) {
   if (ownsClusterSingletons) {
     try {
       const { startRollupScheduler } = await import('./services/UsageAggregator.js');
-      const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-      const retentionConfig = platform?.usageTracking || {};
-      startRollupScheduler(retentionConfig);
+      startRollupScheduler(() => configCache.getPlatform?.()?.usageTracking || {});
     } catch (error) {
       logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
     }
@@ -1315,15 +1313,26 @@ if (cluster.isPrimary && workerCount > 1) {
     // off the streaming path; drain what is still buffered, or a chat resumes
     // after the restart threaded onto a stale parent message.
     await conversationStateManager.flush();
-    // Usage counts wait in memory for the next flush to usage.json; write
-    // them now rather than losing up to one flush interval.
+    // Usage records and quota counts wait in memory for their next flush;
+    // write them now rather than losing up to one flush interval.
+    // Each flush on its own, so a failed usage write cannot cost quota counts.
     try {
-      const { flushUsage } = await import('./usageTracker.js');
-      await flushUsage();
+      const { flushQueue } = await import('./services/UsageEventLog.js');
+      await flushQueue();
+    } catch (error) {
+      logger.error('Could not flush usage records on shutdown', {
+        component: 'Server',
+        error: error?.message
+      });
+    }
+    try {
       const { getQuotaLedger } = await import('./services/quota/QuotaLedger.js');
       await getQuotaLedger().flush();
-    } catch {
-      // Failures are logged within the tracker
+    } catch (error) {
+      logger.error('Could not flush usage-limit counters on shutdown', {
+        component: 'Server',
+        error: error?.message
+      });
     }
     // Flush buffered storage writes (chat documents, append-log entries) and
     // release the provider's handles before the process goes away.

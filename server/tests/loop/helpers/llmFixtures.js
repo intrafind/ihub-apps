@@ -260,7 +260,9 @@ export function makeClient(opts = {}) {
     streamIdleTimeoutMs: opts.streamIdleTimeoutMs,
     debugDumps: false,
     // Usage limits are off unless a test passes its own `quota`.
-    quota: opts.quota ?? null
+    quota: opts.quota ?? null,
+    // Usage reporting is off unless a test passes its own `usage` recorder.
+    usage: opts.usage ?? null
   });
   return { client, calls };
 }

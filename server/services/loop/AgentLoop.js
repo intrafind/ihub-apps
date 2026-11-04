@@ -497,7 +497,11 @@ export class AgentLoop {
               appId: ctx.refs.appId,
               userId: ctx.refs.userId,
               chatId: ctx.refs.chatId,
-              executionId: ctx.refs.executionId
+              executionId: ctx.refs.executionId,
+              // A workflow or agent run carries its user on the request, not in
+              // the provider options: name it on the usage record only (no
+              // usage-limit enforcement for workflows).
+              reportUser: request.user ?? null
             }
           });
           ctx.stream = stream;

@@ -4,7 +4,6 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { announceFullConfigReload, getConfigSyncStats } from '../../configSync.js';
-import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
@@ -12,15 +11,6 @@ import tokenStorageService from '../../services/TokenStorageService.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 export default function registerAdminCacheRoutes(app) {
-  app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
-    try {
-      const data = await getUsage();
-      res.json(data);
-    } catch (error) {
-      return sendInternalError(res, error, 'load usage data');
-    }
-  });
-
   app.get(buildServerPath('/api/admin/cache/stats'), adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();

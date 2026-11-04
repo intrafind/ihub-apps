@@ -234,11 +234,6 @@ const NON_CONFIG_SITES = [
       'in a build), zipped into the package as bytes — application assets, not configuration.'
   },
   {
-    path: 'server/routes/admin/usage.js',
-    arg: /\bfeedbackFile\b/,
-    reason: 'contents/data/feedback.jsonl is runtime data under the provider dataDir, not config.'
-  },
-  {
     path: 'server/routes/admin/skills.js',
     // `skillDir` is here because `fs.cp(skillDir, targetPath)` passes the
     // source first, and the exemption matches the call's *first* argument.

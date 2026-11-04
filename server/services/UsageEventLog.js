@@ -1,162 +1,170 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+/**
+ * The usage event log: one JSONL file per UTC day,
+ * `contents/data/usage-events/YYYY-MM-DD.jsonl`, holding schema-v2 records
+ * (services/usage/callRecord.js).
+ *
+ * Every worker appends to the file of the record's day (O_APPEND, so
+ * concurrent appends from several processes do not interleave). Retention
+ * deletes whole day files — nothing is ever rewritten, so there is no
+ * read-modify-write to race with another worker.
+ *
+ * @module services/UsageEventLog
+ */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../utils/logger.js';
 import { createJsonlAppender } from '../utils/jsonlAppender.js';
 import { getContentsPath } from '../utils/contentsPath.js';
+import { USAGE_SCHEMA_VERSION } from './usage/callRecord.js';
 
-const dataDir = getContentsPath('data');
-const eventFile = path.join(dataDir, 'usage-events.jsonl');
+const DAY_FILE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Directory of the daily event files. */
+export function getEventsDir() {
+  return getContentsPath('data', 'usage-events');
+}
+
+/** Directory of the daily rollups. */
+export function getDailyDir() {
+  return getContentsPath('data', 'usage-daily');
+}
+
+/** Directory of the monthly rollups. */
+export function getMonthlyDir() {
+  return getContentsPath('data', 'usage-monthly');
+}
+
+/** Path of one day's event file. */
+export function eventFileFor(date) {
+  if (!DATE.test(date)) throw new Error(`Invalid usage event date: ${date}`);
+  return path.join(getEventsDir(), `${date}.jsonl`);
+}
+
+/** The UTC day (`YYYY-MM-DD`) of an ISO timestamp, or today. */
+export function dayOf(ts) {
+  return typeof ts === 'string' && DATE.test(ts.slice(0, 10))
+    ? ts.slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+}
 
 const appender = createJsonlAppender({
-  getFilePath: () => eventFile,
+  getFilePath: entry => eventFileFor(dayOf(entry.ts)),
   component: 'UsageEventLog'
 });
 
+/** Write everything still buffered to disk. */
 export async function flushQueue() {
   return appender.flush();
 }
 
-/** Optional provider counters: event key → field name. Written only when reported. */
-const OPTIONAL_EVENT_COUNTERS = {
-  cr: 'cacheReadTokens',
-  cw: 'cacheWriteTokens',
-  rt: 'reasoningTokens',
-  ws: 'webSearchRequests'
-};
-
 /**
- * Log a usage event to the JSONL append-only file.
- * Events are buffered and flushed every 10 seconds.
- *
- * Keys: `pt`/`ct` prompt/completion tokens (the prompt count includes cached
- * tokens), `cr`/`cw` prompt-cache read/write tokens, `rt` reasoning tokens,
- * `ws` provider web searches, `prov` provider (adapter) id, `src` token source.
- * The optional counters are omitted when the provider did not report them, so
- * "not reported" and "zero" stay apart.
+ * Append a usage record (schema v2). Buffered and flushed every few seconds.
+ * @param {Object} record
  */
-export function logUsageEvent({
-  type,
-  userId,
-  appId,
-  modelId,
-  provider = null,
-  promptTokens = 0,
-  completionTokens = 0,
-  tokenSource = 'estimate',
-  conversationId = null,
-  rating = null,
-  metadata = null,
-  ...counters
-}) {
-  const entry = {
-    ts: new Date().toISOString(),
-    type,
-    uid: userId,
-    app: appId,
-    model: modelId,
-    pt: promptTokens,
-    ct: completionTokens,
-    src: tokenSource
-  };
-  if (provider) entry.prov = provider;
-  for (const [key, field] of Object.entries(OPTIONAL_EVENT_COUNTERS)) {
-    const value = counters[field];
-    if (Number.isFinite(value) && value >= 0) entry[key] = value;
-  }
-  if (conversationId) entry.cid = conversationId;
-  if (rating != null) entry.rating = rating;
-  if (metadata) entry.meta = metadata;
-  appender.append(entry);
+export function appendUsageRecord(record) {
+  if (!record || typeof record !== 'object') return;
+  appender.append(record);
 }
 
 /**
- * Read all events from the JSONL file, optionally filtered by date range.
+ * Days that have an event file, oldest first.
+ * @returns {Promise<string[]>}
  */
-export async function readEvents({ startDate, endDate } = {}) {
+export async function listEventDays() {
+  let files;
   try {
-    const content = await fs.readFile(eventFile, 'utf8');
-    const lines = content.trim().split('\n').filter(Boolean);
-    let events = lines
-      .map(line => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    if (startDate) {
-      const start = new Date(startDate).toISOString();
-      events = events.filter(e => e.ts >= start);
-    }
-    if (endDate) {
-      // If endDate is a date-only string (YYYY-MM-DD), include the entire day
-      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-        const nextDay = new Date(endDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const end = nextDay.toISOString();
-        events = events.filter(e => e.ts < end);
-      } else {
-        const end = new Date(endDate).toISOString();
-        events = events.filter(e => e.ts <= end);
-      }
-    }
-    return events;
+    files = await fs.readdir(getEventsDir());
   } catch {
     return [];
   }
+  return files
+    .map(f => DAY_FILE.exec(f)?.[1])
+    .filter(Boolean)
+    .sort();
 }
 
 /**
- * Get the path to daily rollup files.
+ * Last modification of a day's event file (ms), or null when there is none.
+ * @param {string} date
  */
-export function getDailyDir() {
-  return path.join(dataDir, 'usage-daily');
-}
-
-/**
- * Get the path to monthly rollup files.
- */
-export function getMonthlyDir() {
-  return path.join(dataDir, 'usage-monthly');
-}
-
-/**
- * Clean up old event data based on retention policy.
- */
-export async function cleanupEvents(retentionDays = 90) {
-  if (retentionDays < 0) return; // -1 means keep forever
+export async function eventFileMtime(date) {
   try {
-    await appender.withWriteLock(async () => {
-      // Drain any queued events into the on-disk file first so they're
-      // included in the read-filter pass below. Done under the lock so a
-      // new append() can't slip in between drain and rewrite.
-      try {
-        await appender.drainToDisk();
-      } catch {
-        // A drain failure is logged elsewhere; continue with what's on disk.
-      }
-
-      const events = await readEvents();
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - retentionDays);
-      const cutoffStr = cutoff.toISOString();
-      const retained = events.filter(e => e.ts >= cutoffStr);
-      if (retained.length < events.length) {
-        const lines =
-          retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
-        await fs.writeFile(eventFile, lines, 'utf8');
-        logger.info('Usage event cleanup completed', {
-          component: 'UsageEventLog',
-          removed: events.length - retained.length
-        });
-      }
-    });
-  } catch (error) {
-    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error });
+    return (await fs.stat(eventFileFor(date))).mtimeMs;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * The records of one day, in the order they were written. Lines that do not
+ * parse (a torn write) and records of another schema version are skipped.
+ * @param {string} date - `YYYY-MM-DD`
+ * @returns {Promise<Object[]>}
+ */
+export async function readDayEvents(date) {
+  let content;
+  try {
+    content = await fs.readFile(eventFileFor(date), 'utf8');
+  } catch {
+    return [];
+  }
+  const events = [];
+  for (const line of content.split('\n')) {
+    if (!line) continue;
+    try {
+      const event = JSON.parse(line);
+      if (event?.v === USAGE_SCHEMA_VERSION && typeof event.ts === 'string') events.push(event);
+    } catch {
+      /* torn line */
+    }
+  }
+  return events;
+}
+
+/**
+ * Records of a range of days (inclusive), oldest day first.
+ * @param {{startDate?: string, endDate?: string}} [range]
+ * @returns {Promise<Object[]>}
+ */
+export async function readEvents({ startDate, endDate } = {}) {
+  const days = (await listEventDays()).filter(
+    d => (!startDate || d >= startDate) && (!endDate || d <= endDate)
+  );
+  const out = [];
+  for (const day of days) out.push(...(await readDayEvents(day)));
+  return out;
+}
+
+/**
+ * Delete event files older than `retentionDays` days. A negative value keeps
+ * everything.
+ * @param {number} retentionDays
+ * @param {number} [now]
+ * @returns {Promise<number>} files deleted
+ */
+export async function cleanupEvents(retentionDays = 90, now = Date.now()) {
+  if (!Number.isFinite(retentionDays) || retentionDays < 0) return 0;
+  const cutoff = new Date(now - retentionDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let removed = 0;
+  for (const day of await listEventDays()) {
+    if (day >= cutoff) break;
+    try {
+      await fs.unlink(eventFileFor(day));
+      removed++;
+    } catch (error) {
+      logger.warn('Failed to delete usage event file', {
+        component: 'UsageEventLog',
+        day,
+        error: error.message
+      });
+    }
+  }
+  if (removed > 0) {
+    logger.info('Usage event cleanup completed', { component: 'UsageEventLog', removed });
+  }
+  return removed;
 }

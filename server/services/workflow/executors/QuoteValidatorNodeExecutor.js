@@ -173,6 +173,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
               runId: context?.runId || context?.executionId || state?.executionId,
               step: context?.iteration ?? 0,
               purpose: 'quote-validator',
+              reportUser: context?.user || null,
               refs: { executionId: state?.executionId, nodeId: node.id }
             }
           });

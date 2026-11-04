@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import MyUsagePanel from '../../../shared/components/MyUsagePanel';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -275,6 +276,11 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                     via {user.authMethod}
                   </div>
                 )}
+              </div>
+
+              {/* Tokens used and the budget closest to its limit */}
+              <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                <MyUsagePanel />
               </div>
 
               {/* Menu items */}

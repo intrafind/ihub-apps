@@ -1043,6 +1043,7 @@ Output rules:
         runId: context.runId || context.executionId || state.executionId,
         step: context.iteration ?? 0,
         purpose: 'planner',
+        reportUser: context.user || null,
         refs: { executionId: state.executionId, nodeId, workflowId: context.workflow?.id }
       }
     });

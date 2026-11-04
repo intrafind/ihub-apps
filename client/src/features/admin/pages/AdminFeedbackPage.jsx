@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo } from 'react';
+import { fetchUsageFeedbackSummary } from '../../../api/usageReportsAdminApi';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   makeAdminApiCall,
   fetchAdminApps,
-  fetchAdminUsageData,
   fetchAdminUsageMeta,
   updateAdminUsageTrackingMode,
   setAppFeedbackEnabled,
@@ -77,7 +77,7 @@ function AdminFeedbackPage() {
         makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
         fetchAdminUsageMeta().catch(() => null),
         fetchAdminApps().catch(() => []),
-        fetchAdminUsageData().catch(() => null)
+        fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
       ]);
 
       const feedbackFeature = (featuresResponse.data?.features || []).find(
@@ -341,14 +341,21 @@ function AdminFeedbackPage() {
   );
 
   const renderReview = () => {
-    if (!usage?.feedback) {
+    if (!usage) {
       return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-8 text-center text-gray-500 dark:text-gray-400">
           {t('admin.feedback.review.unavailable', 'Feedback statistics are not available.')}
         </div>
       );
     }
-    return <FeedbackReview feedback={usage.feedback} />;
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {t('admin.feedback.review.range', 'Ratings of the last 90 days.')}
+        </p>
+        <FeedbackReview feedback={usage} />
+      </div>
+    );
   };
 
   return (

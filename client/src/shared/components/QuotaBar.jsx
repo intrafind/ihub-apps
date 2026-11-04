@@ -1,25 +1,44 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatReset, formatTokens } from '../utils/usageFormat';
 
 const BAR = {
-  ok: 'bg-indigo-500',
+  ok: 'bg-green-500',
   warn: 'bg-amber-500',
   full: 'bg-red-500'
 };
 
-/** ok below 80 %, warn from 80 %, full at the limit. */
+/** Share of a limit from which a bar turns amber, and red. */
+export const WARN_AT = 0.7;
+export const CRITICAL_AT = 0.9;
+
+/** ok (green) below 70 %, warn (amber) from 70 %, full (red) from 90 % and at the limit. */
 export function quotaLevel(used, limit) {
   if (limit === null || limit === undefined) return 'ok';
   if (limit <= 0 || used >= limit) return 'full';
-  return used / limit >= 0.8 ? 'warn' : 'ok';
+  const share = used / limit;
+  if (share >= CRITICAL_AT) return 'full';
+  return share >= WARN_AT ? 'warn' : 'ok';
+}
+
+/** The current time, updated every minute while `active` (for reset countdowns). */
+function useMinuteClock(active) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
 }
 
 /**
- * One usage limit as a bar: label, "used / limit", a bar that turns amber
- * from 80 % and red at the limit, and when it resets.
+ * One usage limit as a bar: label, "used / limit", a bar that is green, turns
+ * amber from 70 % and red from 90 %, and a countdown to its reset that
+ * stays current.
  *
  * @param {Object} props
  * @param {string} props.label
@@ -33,6 +52,7 @@ export function quotaLevel(used, limit) {
  */
 function QuotaBar({ label, used, limit, resetAt, hint, format, size = 'md', className = '' }) {
   const { t, i18n } = useTranslation();
+  const now = useMinuteClock(Boolean(resetAt));
   const fmt = format || (v => formatTokens(v, i18n.language));
   const unlimited = limit == null;
   const level = quotaLevel(used, limit);
@@ -82,7 +102,7 @@ function QuotaBar({ label, used, limit, resetAt, hint, format, size = 'md', clas
       )}
       {(resetAt || hint) && (
         <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-xs text-gray-500 dark:text-gray-400">
-          {resetAt && <span>{formatReset(resetAt, t, i18n.language)}</span>}
+          {resetAt && <span>{formatReset(resetAt, t, i18n.language, now)}</span>}
           {hint && <span>{hint}</span>}
         </div>
       )}

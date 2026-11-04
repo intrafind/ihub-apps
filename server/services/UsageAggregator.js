@@ -1,331 +1,203 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+/**
+ * Usage rollup files: one per UTC day (`usage-daily/YYYY-MM-DD.json`) and
+ * one per month (`usage-monthly/YYYY-MM.json`), built from the daily event
+ * files (services/usage/rollup.js for the shape).
+ *
+ * Generation is incremental: a day is rebuilt when it is today or yesterday
+ * (late flushes from other workers), when it has no rollup yet, or when its
+ * event file changed after its rollup was written. History is not re-read.
+ * A month is rebuilt when one of its days was.
+ *
+ * @module services/UsageAggregator
+ */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
-  readEvents,
+  listEventDays,
+  readDayEvents,
+  eventFileMtime,
   getDailyDir,
   getMonthlyDir,
   cleanupEvents,
   flushQueue
 } from './UsageEventLog.js';
+import { buildRollup, mergeRollups, ROLLUP_VERSION } from './usage/rollup.js';
 import { cleanupFeedback } from '../feedbackStorage.js';
 import logger from '../utils/logger.js';
 
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Optional counters rolled up next to prompt/completion tokens: rollup field
- * → usage-event key. Prompt-cache read/write tokens are subsets of
- * `promptTokens`, reasoning tokens a subset of `completionTokens`. Events
- * written before these were tracked simply contribute zero.
- */
-export const ROLLUP_COUNTERS = Object.freeze({
-  cacheReadTokens: 'cr',
-  cacheWriteTokens: 'cw',
-  reasoningTokens: 'rt',
-  webSearchRequests: 'ws'
-});
-
-/** Per-dimension entry: messages, prompt/completion tokens and the optional counters. */
-function emptyDimension() {
-  const entry = { messages: 0, promptTokens: 0, completionTokens: 0 };
-  for (const field of Object.keys(ROLLUP_COUNTERS)) entry[field] = 0;
-  return entry;
+function utcDay(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** Add one dimension entry (daily rollup or event-derived) into another. */
-function addDimension(target, source) {
-  target.messages += source.messages || 0;
-  target.promptTokens += source.promptTokens || 0;
-  target.completionTokens += source.completionTokens || 0;
-  for (const field of Object.keys(ROLLUP_COUNTERS)) {
-    target[field] = (target[field] || 0) + (source[field] || 0);
-  }
-}
-
-/**
- * Sum one dimension (`byUser`, `byApp`, `byModel`, `byProvider`) across a set
- * of rollups. With `countDays`, each entry also gets the number of rollups it
- * appeared in.
- * @param {Object[]} rollups - daily or monthly rollups
- * @param {string} dim
- * @param {{countDays?: boolean}} [options]
- * @returns {Object<string, Object>}
- */
-export function sumRollupDimension(rollups, dim, { countDays = false } = {}) {
-  const out = {};
-  for (const rollup of rollups) {
-    for (const [key, val] of Object.entries(rollup?.[dim] || {})) {
-      if (!out[key]) out[key] = countDays ? { ...emptyDimension(), days: 0 } : emptyDimension();
-      addDimension(out[key], val);
-      if (countDays) out[key].days += 1;
-    }
-  }
-  return out;
-}
-
-/**
- * Build a daily rollup from events for a given date string (YYYY-MM-DD).
- */
-function buildDailyRollup(events, date) {
-  const rollup = {
-    date,
-    totals: {
-      messages: 0,
-      promptTokens: 0,
-      completionTokens: 0,
-      ...Object.fromEntries(Object.keys(ROLLUP_COUNTERS).map(field => [field, 0])),
-      uniqueUsers: new Set(),
-      chatRequests: 0,
-      chatResponses: 0,
-      feedbackCount: 0,
-      magicPrompts: 0
-    },
-    byUser: {},
-    byApp: {},
-    byModel: {},
-    byProvider: {},
-    tokenQuality: { provider: 0, estimate: 0 }
-  };
-
-  for (const event of events) {
-    const uid = event.uid || 'unknown';
-    const app = event.app || 'unknown';
-    const model = event.model || 'unknown';
-    const pt = event.pt || 0;
-    const ct = event.ct || 0;
-    const counts = { messages: 1, promptTokens: pt, completionTokens: ct };
-    for (const [field, key] of Object.entries(ROLLUP_COUNTERS)) counts[field] = event[key] || 0;
-
-    rollup.totals.uniqueUsers.add(uid);
-    rollup.totals.promptTokens += pt;
-    rollup.totals.completionTokens += ct;
-    for (const field of Object.keys(ROLLUP_COUNTERS)) rollup.totals[field] += counts[field];
-
-    if (event.type === 'chat_request') {
-      rollup.totals.chatRequests += 1;
-      rollup.totals.messages += 1;
-    } else if (event.type === 'chat_response') {
-      rollup.totals.chatResponses += 1;
-      rollup.totals.messages += 1;
-    } else if (event.type === 'feedback') {
-      rollup.totals.feedbackCount += 1;
-    } else if (event.type === 'magic_prompt') {
-      rollup.totals.magicPrompts += 1;
-    }
-
-    if (event.src === 'provider') {
-      rollup.tokenQuality.provider += 1;
-    } else {
-      rollup.tokenQuality.estimate += 1;
-    }
-
-    // Per-user / per-app / per-model aggregation; per provider (adapter) only
-    // for events that recorded one.
-    for (const [dim, key] of [
-      ['byUser', uid],
-      ['byApp', app],
-      ['byModel', model],
-      ['byProvider', event.prov]
-    ]) {
-      if (!key) continue;
-      if (!rollup[dim][key]) rollup[dim][key] = emptyDimension();
-      addDimension(rollup[dim][key], counts);
-    }
-  }
-
-  // Convert Set to count
-  rollup.totals.uniqueUsers = rollup.totals.uniqueUsers.size;
-  return rollup;
-}
-
-/**
- * Build a monthly rollup by aggregating daily rollups.
- */
-function buildMonthlyRollup(dailyRollups, month) {
-  const rollup = {
-    month,
-    totals: {
-      messages: 0,
-      promptTokens: 0,
-      completionTokens: 0,
-      ...Object.fromEntries(Object.keys(ROLLUP_COUNTERS).map(field => [field, 0])),
-      uniqueUsers: new Set(),
-      days: dailyRollups.length
-    },
-    byUser: {},
-    byApp: {},
-    byModel: {},
-    byProvider: {},
-    tokenQuality: { provider: 0, estimate: 0 }
-  };
-
-  for (const daily of dailyRollups) {
-    rollup.totals.messages += daily.totals.messages;
-    rollup.totals.promptTokens += daily.totals.promptTokens;
-    rollup.totals.completionTokens += daily.totals.completionTokens;
-    // Daily files written before these counters existed have none of them.
-    for (const field of Object.keys(ROLLUP_COUNTERS)) {
-      rollup.totals[field] += daily.totals[field] || 0;
-    }
-    rollup.tokenQuality.provider += daily.tokenQuality.provider;
-    rollup.tokenQuality.estimate += daily.tokenQuality.estimate;
-
-    // Merge per-dimension data
-    for (const dim of ['byUser', 'byApp', 'byModel', 'byProvider']) {
-      for (const [key, val] of Object.entries(daily[dim] || {})) {
-        if (!rollup[dim][key]) rollup[dim][key] = emptyDimension();
-        addDimension(rollup[dim][key], val);
-        if (dim === 'byUser') rollup.totals.uniqueUsers.add(key);
-      }
-    }
-  }
-
-  rollup.totals.uniqueUsers = rollup.totals.uniqueUsers.size;
-  return rollup;
-}
-
-/**
- * Generate daily rollup files from events.
- */
-export async function generateDailyRollups() {
+async function mtimeOf(file) {
   try {
-    const events = await readEvents();
-    if (events.length === 0) {
-      logger.info('No usage events found for daily rollup generation', {
-        component: 'UsageAggregator'
-      });
-      return { eventsProcessed: 0, daysGenerated: 0 };
-    }
-
-    // Group events by date
-    const byDate = {};
-    for (const event of events) {
-      const date = event.ts.substring(0, 10); // YYYY-MM-DD
-      if (!byDate[date]) byDate[date] = [];
-      byDate[date].push(event);
-    }
-
-    const dailyDir = getDailyDir();
-    await fs.mkdir(dailyDir, { recursive: true });
-
-    for (const [date, dateEvents] of Object.entries(byDate)) {
-      const rollup = buildDailyRollup(dateEvents, date);
-      const filePath = path.join(dailyDir, `${date}.json`);
-      await fs.writeFile(filePath, JSON.stringify(rollup, null, 2));
-    }
-
-    const daysGenerated = Object.keys(byDate).length;
-    logger.info('Generated daily rollups', { component: 'UsageAggregator', daysGenerated });
-    return { eventsProcessed: events.length, daysGenerated };
-  } catch (error) {
-    logger.error('Failed to generate daily rollups', { component: 'UsageAggregator', error });
-    return { eventsProcessed: 0, daysGenerated: 0 };
+    return (await fs.stat(file)).mtimeMs;
+  } catch {
+    return null;
   }
 }
 
-/**
- * Generate monthly rollup files from daily rollups.
- */
-export async function generateMonthlyRollups() {
+async function readJson(file) {
   try {
-    const dailyDir = getDailyDir();
-    const monthlyDir = getMonthlyDir();
-    await fs.mkdir(monthlyDir, { recursive: true });
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
 
-    let files;
+/** Write a file whole or not at all. */
+async function writeJsonAtomic(file, data) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(data));
+  await fs.rename(tmp, file);
+}
+
+export function dailyRollupFile(date) {
+  return path.join(getDailyDir(), `${date}.json`);
+}
+
+export function monthlyRollupFile(month) {
+  return path.join(getMonthlyDir(), `${month}.json`);
+}
+
+/**
+ * Whether a day's stored rollup is current: written after its event file
+ * last changed, and of this rollup version.
+ * @param {string} date
+ * @returns {Promise<boolean>}
+ */
+export async function isDailyRollupFresh(date) {
+  const [rollupAt, eventsAt] = await Promise.all([
+    mtimeOf(dailyRollupFile(date)),
+    eventFileMtime(date)
+  ]);
+  if (rollupAt === null) return false;
+  return eventsAt === null || rollupAt >= eventsAt;
+}
+
+/** Build one day's rollup from its event file (not written). */
+export async function buildDayRollup(date) {
+  return buildRollup(await readDayEvents(date), { date });
+}
+
+/**
+ * Rebuild the daily rollups that need it.
+ * @param {Object} [opts]
+ * @param {number} [opts.now]
+ * @param {boolean} [opts.all=false] - rebuild every day that has events
+ * @returns {Promise<{daysGenerated: number, eventsProcessed: number, days: string[]}>}
+ */
+export async function generateDailyRollups({ now = Date.now(), all = false } = {}) {
+  const today = utcDay(now);
+  const yesterday = utcDay(now - DAY_MS);
+  const days = [];
+  let eventsProcessed = 0;
+  for (const date of await listEventDays()) {
+    const recent = date === today || date === yesterday;
+    if (!all && !recent && (await isDailyRollupFresh(date))) continue;
     try {
-      files = await fs.readdir(dailyDir);
-    } catch {
-      return { monthsGenerated: 0 }; // No daily rollups yet
+      const events = await readDayEvents(date);
+      eventsProcessed += events.length;
+      await writeJsonAtomic(dailyRollupFile(date), buildRollup(events, { date }));
+      days.push(date);
+    } catch (error) {
+      logger.error('Failed to write daily usage rollup', {
+        component: 'UsageAggregator',
+        date,
+        error
+      });
     }
+  }
+  if (days.length) {
+    logger.info('Generated daily usage rollups', {
+      component: 'UsageAggregator',
+      daysGenerated: days.length
+    });
+  }
+  return { daysGenerated: days.length, eventsProcessed, days };
+}
 
-    // Group daily files by month
-    const byMonth = {};
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const month = file.substring(0, 7); // YYYY-MM
-      if (!byMonth[month]) byMonth[month] = [];
-      const content = await fs.readFile(path.join(dailyDir, file), 'utf8');
-      byMonth[month].push(JSON.parse(content));
-    }
-
-    for (const [month, dailyRollups] of Object.entries(byMonth)) {
-      const rollup = buildMonthlyRollup(dailyRollups, month);
-      const filePath = path.join(monthlyDir, `${month}.json`);
-      await fs.writeFile(filePath, JSON.stringify(rollup, null, 2));
-    }
-
-    const monthsGenerated = Object.keys(byMonth).length;
-    logger.info('Generated monthly rollups', { component: 'UsageAggregator', monthsGenerated });
-    return { monthsGenerated };
-  } catch (error) {
-    logger.error('Failed to generate monthly rollups', { component: 'UsageAggregator', error });
+/**
+ * Rebuild the monthly rollups of the given days' months from their daily
+ * rollups.
+ * @param {string[]} days
+ * @returns {Promise<{monthsGenerated: number}>}
+ */
+export async function generateMonthlyRollups(days) {
+  const months = [...new Set(days.map(d => d.slice(0, 7)))];
+  let files = [];
+  try {
+    files = await fs.readdir(getDailyDir());
+  } catch {
     return { monthsGenerated: 0 };
   }
-}
-
-/**
- * Read daily rollups for a given date range.
- */
-export async function getDailyRollups(startDate, endDate) {
-  const dailyDir = getDailyDir();
-  const results = [];
-  try {
-    const files = await fs.readdir(dailyDir);
-    for (const file of files.sort()) {
-      if (!file.endsWith('.json')) continue;
-      const date = file.replace('.json', '');
-      if (startDate && date < startDate) continue;
-      if (endDate && date > endDate) continue;
-      const content = await fs.readFile(path.join(dailyDir, file), 'utf8');
-      results.push(JSON.parse(content));
+  let generated = 0;
+  for (const month of months) {
+    const rollups = [];
+    for (const file of files.filter(f => f.startsWith(month) && f.endsWith('.json')).sort()) {
+      const rollup = await readJson(path.join(getDailyDir(), file));
+      if (rollup?.v === ROLLUP_VERSION) rollups.push(rollup);
     }
-  } catch {
-    // No rollups yet
-  }
-  return results;
-}
-
-/**
- * Read monthly rollups for a given range.
- */
-export async function getMonthlyRollups(startMonth, endMonth) {
-  const monthlyDir = getMonthlyDir();
-  const results = [];
-  try {
-    const files = await fs.readdir(monthlyDir);
-    for (const file of files.sort()) {
-      if (!file.endsWith('.json')) continue;
-      const month = file.replace('.json', '');
-      if (startMonth && month < startMonth) continue;
-      if (endMonth && month > endMonth) continue;
-      const content = await fs.readFile(path.join(monthlyDir, file), 'utf8');
-      results.push(JSON.parse(content));
+    if (!rollups.length) continue;
+    try {
+      await writeJsonAtomic(
+        monthlyRollupFile(month),
+        mergeRollups(rollups, { month, days: rollups.length })
+      );
+      generated++;
+    } catch (error) {
+      logger.error('Failed to write monthly usage rollup', {
+        component: 'UsageAggregator',
+        month,
+        error
+      });
     }
-  } catch {
-    // No rollups yet
   }
-  return results;
+  return { monthsGenerated: generated };
 }
 
 /**
- * Delete rollup files older than `retentionDays` in the given directory.
- *
- * Files are expected to be named `<key>.json` where `<key>` is a
- * lexicographically-sortable date prefix (e.g. `YYYY-MM-DD` for daily,
- * `YYYY-MM` for monthly). A non-positive `retentionDays` (e.g. `-1`)
- * disables cleanup entirely so admins can keep history forever.
- *
- * @param {string} dir - Absolute path to the rollup directory.
- * @param {number} retentionDays
- * @param {number} keyLength - Length of the lexicographic date prefix
- *   (`10` for `YYYY-MM-DD`, `7` for `YYYY-MM`).
- * @returns {Promise<string[]>} list of deleted file names
+ * The stored daily rollup of a day (current rollup version only), or null.
+ * @param {string} date
  */
-async function cleanupRollupDir(dir, retentionDays, keyLength) {
+export async function readDailyRollup(date) {
+  const rollup = await readJson(dailyRollupFile(date));
+  return rollup?.v === ROLLUP_VERSION ? rollup : null;
+}
+
+/**
+ * The stored monthly rollup of a month, or null.
+ * @param {string} month - `YYYY-MM`
+ */
+export async function readMonthlyRollup(month) {
+  const rollup = await readJson(monthlyRollupFile(month));
+  return rollup?.v === ROLLUP_VERSION ? rollup : null;
+}
+
+/** Days that have a stored daily rollup. */
+export async function listDailyRollupDays() {
+  try {
+    return (await fs.readdir(getDailyDir()))
+      .map(f => /^(\d{4}-\d{2}-\d{2})\.json$/.exec(f)?.[1])
+      .filter(Boolean)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Delete rollup files older than `retentionDays` in a directory. A
+ * non-positive value keeps everything.
+ */
+async function cleanupRollupDir(dir, retentionDays, keyLength, now = Date.now()) {
   if (!Number.isFinite(retentionDays) || retentionDays <= 0) return [];
   let files;
   try {
@@ -333,88 +205,62 @@ async function cleanupRollupDir(dir, retentionDays, keyLength) {
   } catch {
     return [];
   }
-
-  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-  // Format the cutoff to match the file key length so string comparison works.
-  const cutoffKey =
-    keyLength === 7 ? cutoff.toISOString().slice(0, 7) : cutoff.toISOString().slice(0, 10);
-
+  const cutoffKey = new Date(now - retentionDays * DAY_MS).toISOString().slice(0, keyLength);
   const deleted = [];
   for (const file of files) {
     if (!file.endsWith('.json')) continue;
     const key = file.replace('.json', '');
-    if (key.length !== keyLength) continue;
-    if (key < cutoffKey) {
-      try {
-        await fs.unlink(path.join(dir, file));
-        deleted.push(file);
-      } catch (err) {
-        logger.warn('Failed to delete rollup file', {
-          component: 'UsageAggregator',
-          file,
-          error: err.message
-        });
-      }
+    if (key.length !== keyLength || key >= cutoffKey) continue;
+    try {
+      await fs.unlink(path.join(dir, file));
+      deleted.push(file);
+    } catch (err) {
+      logger.warn('Failed to delete rollup file', {
+        component: 'UsageAggregator',
+        file,
+        error: err.message
+      });
     }
   }
   return deleted;
 }
 
-/**
- * Clean up daily rollup files past the configured retention. Returns the
- * list of deleted file names so callers can log a summary.
- */
-export async function cleanupDailyRollups(retentionDays) {
-  return cleanupRollupDir(getDailyDir(), retentionDays, 10);
+export async function cleanupDailyRollups(retentionDays, now) {
+  return cleanupRollupDir(getDailyDir(), retentionDays, 10, now);
+}
+
+export async function cleanupMonthlyRollups(retentionDays, now) {
+  return cleanupRollupDir(getMonthlyDir(), retentionDays, 7, now);
 }
 
 /**
- * Clean up monthly rollup files past the configured retention.
+ * Flush, roll up incrementally, and apply retention.
+ * @param {Object} [retentionConfig] - platform `usageTracking`
+ * @param {Object} [opts] - `{ now, all }`
  */
-export async function cleanupMonthlyRollups(retentionDays) {
-  return cleanupRollupDir(getMonthlyDir(), retentionDays, 7);
-}
-
-/**
- * Run all rollup generation and cleanup tasks.
- */
-export async function runRollups(retentionConfig = {}) {
-  const eventsFlushed = (await flushQueue()) || 0;
-  const { eventsProcessed = 0, daysGenerated = 0 } = (await generateDailyRollups()) || {};
-  const { monthsGenerated = 0 } = (await generateMonthlyRollups()) || {};
+export async function runRollups(retentionConfig = {}, opts = {}) {
+  const eventsFlushed = (await flushQueue().catch(() => 0)) || 0;
+  const { daysGenerated, eventsProcessed, days } = await generateDailyRollups(opts);
+  const { monthsGenerated } = await generateMonthlyRollups(days);
+  let eventsDeleted = 0;
   if (retentionConfig.eventRetentionDays != null) {
-    await cleanupEvents(retentionConfig.eventRetentionDays);
+    eventsDeleted = await cleanupEvents(retentionConfig.eventRetentionDays, opts.now);
   }
-  let dailyDeleted = [];
-  let monthlyDeleted = [];
-  if (retentionConfig.dailyRetentionDays != null) {
-    dailyDeleted = await cleanupDailyRollups(retentionConfig.dailyRetentionDays);
-    if (dailyDeleted.length > 0) {
-      logger.info('Daily rollup cleanup removed expired files', {
-        component: 'UsageAggregator',
-        removed: dailyDeleted.length
-      });
-    }
-  }
-  if (retentionConfig.monthlyRetentionDays != null) {
-    monthlyDeleted = await cleanupMonthlyRollups(retentionConfig.monthlyRetentionDays);
-    if (monthlyDeleted.length > 0) {
-      logger.info('Monthly rollup cleanup removed expired files', {
-        component: 'UsageAggregator',
-        removed: monthlyDeleted.length
-      });
-    }
-  }
+  const dailyDeleted =
+    retentionConfig.dailyRetentionDays != null
+      ? await cleanupDailyRollups(retentionConfig.dailyRetentionDays, opts.now)
+      : [];
+  const monthlyDeleted =
+    retentionConfig.monthlyRetentionDays != null
+      ? await cleanupMonthlyRollups(retentionConfig.monthlyRetentionDays, opts.now)
+      : [];
   let feedbackRemoved = 0;
   if (retentionConfig.feedbackRetentionDays != null) {
     try {
-      const result = await cleanupFeedback(retentionConfig.feedbackRetentionDays);
-      feedbackRemoved = result?.removed || 0;
+      feedbackRemoved =
+        (await cleanupFeedback(retentionConfig.feedbackRetentionDays))?.removed || 0;
     } catch (err) {
-      logger.warn('Feedback cleanup failed', {
-        component: 'UsageAggregator',
-        error: err.message
-      });
+      logger.warn('Feedback cleanup failed', { component: 'UsageAggregator', error: err.message });
     }
   }
   return {
@@ -422,23 +268,32 @@ export async function runRollups(retentionConfig = {}) {
     eventsProcessed,
     daysGenerated,
     monthsGenerated,
+    eventsDeleted,
     dailyDeleted: dailyDeleted.length,
     monthlyDeleted: monthlyDeleted.length,
     feedbackRemoved
   };
 }
 
-// Schedule periodic rollup generation
 let rollupInterval = null;
-export function startRollupScheduler(retentionConfig = {}) {
+
+/**
+ * Roll up now and every hour. Retention is read from `getRetention()` on
+ * every run, so a changed setting applies without a restart.
+ * @param {() => Object} getRetention
+ */
+export function startRollupScheduler(getRetention = () => ({})) {
   if (rollupInterval) return;
-  // Run immediately on start
-  runRollups(retentionConfig).catch(e =>
-    logger.error('Initial rollup failed', { component: 'UsageAggregator', error: e })
-  );
-  rollupInterval = setInterval(() => {
-    runRollups(retentionConfig).catch(e =>
-      logger.error('Scheduled rollup failed', { component: 'UsageAggregator', error: e })
+  const run = label =>
+    runRollups(getRetention() || {}).catch(e =>
+      logger.error(`${label} rollup failed`, { component: 'UsageAggregator', error: e })
     );
-  }, ROLLUP_INTERVAL_MS);
+  void run('Initial');
+  rollupInterval = setInterval(() => void run('Scheduled'), ROLLUP_INTERVAL_MS);
+  rollupInterval.unref?.();
+}
+
+export function stopRollupScheduler() {
+  if (rollupInterval) clearInterval(rollupInterval);
+  rollupInterval = null;
 }

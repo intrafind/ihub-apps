@@ -82,29 +82,20 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
     };
 
     const load = async () => {
-      const [
-        appsResult,
-        sessionsResult,
-        timelineResult,
-        versionResult,
-        overviewResult,
-        auditResult
-      ] = await Promise.allSettled([
-        fetchAdminApps(),
-        makeAdminApiCall('/admin/usage/users'),
-        makeAdminApiCall('/admin/usage/timeline'),
-        makeAdminApiCall('/admin/version'),
-        makeAdminApiCall('/admin/overview/stats'),
-        makeAdminApiCall('/admin/audit-log?limit=8')
-      ]);
+      const [appsResult, usageResult, versionResult, overviewResult, auditResult] =
+        await Promise.allSettled([
+          fetchAdminApps(),
+          makeAdminApiCall('/admin/usage/summary?range=30d'),
+          makeAdminApiCall('/admin/version'),
+          makeAdminApiCall('/admin/overview/stats'),
+          makeAdminApiCall('/admin/audit-log?limit=8')
+        ]);
 
       if (cancelled) return;
 
       const apps = appsResult.status === 'fulfilled' ? appsResult.value : [];
-      const sessionsData =
-        sessionsResult.status === 'fulfilled' ? sessionsResult.value?.data : null;
-      const timelineData =
-        timelineResult.status === 'fulfilled' ? timelineResult.value?.data : null;
+      const usageTotals =
+        usageResult.status === 'fulfilled' ? usageResult.value?.data?.totals || null : null;
       const versionData = versionResult.status === 'fulfilled' ? versionResult.value?.data : null;
       const overview = overviewResult.status === 'fulfilled' ? overviewResult.value?.data : null;
 
@@ -114,14 +105,12 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
       // Actual registered users from overview stats
       const userCount = overview?.users ?? null;
 
-      // Sessions active in last 30d (from usage tracking)
-      const sessionCount =
-        sessionsData?.users != null ? Object.keys(sessionsData.users).length : null;
+      // Users with model calls in the last 30 days (usage reports; in
+      // pseudonymous mode each conversation counts as a user).
+      const activeUsers = usageTotals ? usageTotals.activeUsers : null;
 
-      // Total chat requests summed across all timeline rollups
-      const totalChats = Array.isArray(timelineData?.data)
-        ? timelineData.data.reduce((sum, d) => sum + (d.totals?.chatRequests ?? 0), 0)
-        : null;
+      // Model calls of every surface in the last 30 days
+      const totalCalls = usageTotals ? usageTotals.requests : null;
 
       setStats({
         apps: {
@@ -132,15 +121,15 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
         users: {
           value: userCount !== null ? userCount : '—',
           sub:
-            sessionCount !== null
-              ? t('admin.overview.users.sessions', '{{count}} sessions (30d)', {
-                  count: sessionCount
+            activeUsers !== null
+              ? t('admin.overview.users.active', '{{count}} active (30d)', {
+                  count: activeUsers
                 })
               : t('admin.overview.users.noSessions', 'no session data'),
           href: '/admin/users'
         },
         chats: {
-          value: totalChats !== null ? totalChats : '—',
+          value: totalCalls !== null ? totalCalls : '—',
           sub: t('admin.overview.chats.period', 'last 30d'),
           href: '/admin/usage'
         },
