@@ -311,17 +311,3 @@ export async function resolveAndValidateRealPath(filePath, baseDir) {
 
   return realFull;
 }
-
-/**
- * Strips leading slashes from a relative path to prevent it from being treated
- * as absolute by path.resolve(). Replaces the repeated `.replace(/^\/+/, '')` pattern.
- *
- * @param {string} filePath - The relative path to sanitize
- * @returns {string} - The cleaned path with leading slashes removed
- */
-export function sanitizeRelativePath(filePath) {
-  if (!filePath || typeof filePath !== 'string') {
-    return '';
-  }
-  return filePath.replace(/^[/\\]+/, '');
-}

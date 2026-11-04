@@ -24,35 +24,6 @@ const UNICODE_FONT_BYTES = readFileSync(
 /** Max concurrent VLM calls per job */
 const OCR_PAGE_CONCURRENCY = 5;
 
-/**
- * Default OCR prompt optimized for complex documents with tables, charts, and diagrams.
- * Designed so that each table row is self-contained (includes column context)
- * and visual elements get meaningful text representations for downstream LLM consumption.
- */
-export const DEFAULT_OCR_PROMPT2 = `Extract ALL text from this document page into clean markdown. Output each content block exactly once.
-
-IMPORTANT: All descriptive text you add (table summaries, chart descriptions, diagram descriptions) MUST be written in the same language as the document content. Detect the document language and use it consistently.
-
-Rules:
-- Headings: use # / ## / ### as appropriate.
-- Paragraphs and lists: preserve as-is with line breaks.
-- Tables: output as markdown tables with a brief description before each table in the document's language. Prefix every data row with an HTML comment restating the column headers for chunking context. After the table, add a **summary paragraph** that explains the key data points, notable values, trends, totals, or comparisons — so a reader can understand the table content without seeing it:
-  Tabelle: Mitarbeiterverzeichnis.
-  | Name | Alter | Stadt |
-  |------|-------|-------|
-  <!-- Spalten: Name, Alter, Stadt -->
-  | Alice | 30 | Berlin |
-  <!-- Spalten: Name, Alter, Stadt -->
-  | Bob | 25 | München |
-
-  Zusammenfassung: Die Tabelle listet zwei Mitarbeiter. Alice (30) arbeitet in Berlin, Bob (25) in München. Das Durchschnittsalter beträgt 27,5 Jahre.
-- Multi-level table headers: flatten into single row (e.g., "Q1 - Revenue").
-- Charts/graphs: [CHART: <type>] then write a **comprehensive description** that includes: the chart type, axis labels and units, all data points or series, the key trend or pattern, highest and lowest values, and any notable comparisons — all in the document's language.
-- Diagrams/drawings: [DIAGRAM] then write a **comprehensive description** that explains: the overall purpose, all shapes/nodes and their labels, all arrows/connections and their direction, the process flow or relationships depicted, and any decision points or branches — all in the document's language.
-- Process in reading order (top-to-bottom, left-to-right). Separate blocks with a blank line.
-- Empty page: output exactly [BLANK PAGE].
-- Do NOT duplicate content. Do NOT add commentary or preamble.`;
-
 export const DEFAULT_OCR_PROMPT = `You are a production-grade document extraction system optimized for Retrieval-Augmented Generation (RAG) and full-text search indexing. Convert this document page image into structured, annotated Markdown following these rules precisely.
 
 ### GLOBAL RULES & NEGATIVE CONSTRAINTS:
