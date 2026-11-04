@@ -48,7 +48,8 @@ export async function listDocPages(docsDir) {
     }
   }
   await walk(docsDir, '');
-  return pages.sort();
+  // Code-unit order, so the listing is the same on every platform and locale.
+  return pages.sort((a, b) => Number(a > b) - Number(a < b));
 }
 
 /**
@@ -75,8 +76,8 @@ export function parseSummary(markdown) {
     const indent = item[1].replace(/\t/g, '  ').length;
     const target = item[3].trim().replace(/^\.\//, '');
     const node = { title: item[2], path: target || null, children: [] };
-    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
-    stack[stack.length - 1].children.push(node);
+    while (stack.length > 1 && stack.at(-1).indent >= indent) stack.pop();
+    stack.at(-1).children.push(node);
     stack.push({ indent, children: node.children });
   }
   return root;
@@ -142,7 +143,7 @@ export function splitSections(markdown) {
     const fenceMatch = FENCE_RE.exec(line);
     if (fenceMatch) {
       if (!fence) fence = fenceMatch[1][0];
-      else if (fenceMatch[1][0] === fence) fence = null;
+      else if (fenceMatch[1].startsWith(fence)) fence = null;
     }
     const heading = !fence && /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) {

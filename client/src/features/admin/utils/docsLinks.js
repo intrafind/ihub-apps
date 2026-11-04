@@ -136,7 +136,7 @@ export function rewriteDocsHtml(html, sourcePath, { headingIds = false } = {}) {
     if (!target) continue;
     dropRawTooltip();
     anchor.setAttribute('href', buildPath(target));
-    anchor.setAttribute('data-docs-link', target);
+    anchor.dataset.docsLink = target;
     anchor.removeAttribute('target');
     anchor.removeAttribute('rel');
   }
@@ -144,7 +144,7 @@ export function rewriteDocsHtml(html, sourcePath, { headingIds = false } = {}) {
   for (const image of root.querySelectorAll('img[src]')) {
     const src = image.getAttribute('src');
     const resolved = resolveDocsReference(src.split('#')[0], sourcePath);
-    if (resolved && resolved.startsWith('assets/')) {
+    if (resolved?.startsWith('assets/')) {
       image.setAttribute(
         'src',
         buildApiUrl(`admin/docs/${resolved.split('/').map(encodeURIComponent).join('/')}`)
@@ -175,5 +175,5 @@ export function handleDocsLinkClick(event, navigate) {
   const anchor = event.target?.closest?.('a[data-docs-link]');
   if (!anchor) return;
   event.preventDefault();
-  navigate(anchor.getAttribute('data-docs-link'));
+  navigate(anchor.dataset.docsLink);
 }
