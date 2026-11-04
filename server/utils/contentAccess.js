@@ -65,15 +65,6 @@ export function canonicalContentAccessType(type) {
 }
 
 /**
- * Whether `type` is one of the content permission lists.
- * @param {string} type
- * @returns {boolean}
- */
-export function isContentAccessType(type) {
-  return canonicalContentAccessType(type) !== undefined;
-}
-
-/**
  * A group's own (not inherited) list for a permission, always as an array.
  * @param {object} group
  * @param {string} type

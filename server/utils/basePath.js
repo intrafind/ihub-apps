@@ -66,20 +66,6 @@ export const buildServerPath = path => {
 };
 
 /**
- * Build public URL for client consumption
- * @param {string} path - Path to make public
- * @param {Object} req - Express request object (optional)
- * @returns {string} Complete public URL
- */
-export const buildPublicUrl = (path, _req) => {
-  const basePath = getBasePath();
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-
-  if (!basePath) return cleanPath;
-  return `${basePath}${cleanPath}`;
-};
-
-/**
  * Build API endpoint path with base path
  * @param {string} endpoint - API endpoint
  * @returns {string} Complete API path
@@ -119,18 +105,6 @@ export const buildDocsPath = (path = '') => {
 };
 
 /**
- * Build short link path with base path
- * @param {string} code - Short link code
- * @returns {string} Complete short link path
- */
-export const buildShortLinkPath = code => {
-  const basePath = getBasePath();
-
-  if (!basePath) return `/s/${code}`;
-  return `${basePath}/s/${code}`;
-};
-
-/**
  * Extract relative path from request URL
  * @param {string} requestPath - Full request path
  * @returns {string} Path relative to base path
@@ -153,41 +127,6 @@ export const getRelativeRequestPath = requestPath => {
  */
 export const isSubpathDeployment = () => {
   return getBasePath() !== '';
-};
-
-/**
- * Convert an absolute path to relative by removing base path
- * @param {string} absolutePath - Absolute path including base path
- * @returns {string} Relative path without base path
- */
-export const toRelativePath = absolutePath => {
-  const basePath = getBasePath();
-  if (!basePath) return absolutePath;
-
-  if (absolutePath.startsWith(basePath + '/')) {
-    return absolutePath.substring(basePath.length);
-  }
-
-  if (absolutePath === basePath) return '/';
-
-  return absolutePath;
-};
-
-/**
- * Convert a relative path to absolute by adding base path
- * @param {string} relativePath - Relative path
- * @returns {string} Absolute path with base path
- */
-export const toAbsolutePath = relativePath => {
-  const basePath = getBasePath();
-  if (!basePath) return relativePath;
-
-  const cleanPath = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
-
-  // If path already includes base path, return as-is
-  if (cleanPath.startsWith(basePath)) return cleanPath;
-
-  return `${basePath}${cleanPath}`;
 };
 
 /**
@@ -301,21 +240,4 @@ export const getBasePathInfo = () => {
     headerName: process.env.BASE_PATH_HEADER || 'x-forwarded-prefix',
     nodeEnv: process.env.NODE_ENV
   };
-};
-
-/**
- * Health check endpoint that includes base path information
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- */
-export const healthCheckHandler = (req, res) => {
-  const basePathInfo = getBasePathInfo();
-
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    basePathConfig: basePathInfo,
-    requestPath: req.path,
-    relativePath: getRelativeRequestPath(req.path)
-  });
 };

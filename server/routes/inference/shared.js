@@ -77,12 +77,3 @@ export function numberField(
   }
   return value;
 }
-
-/** Start an SSE response. */
-export function startEventStream(res) {
-  res.status(200);
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders?.();
-}

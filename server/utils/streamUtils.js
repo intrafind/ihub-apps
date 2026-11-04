@@ -36,14 +36,3 @@ export function getReadableStream(response) {
     'Response body is not a readable stream. Expected Web Streams API or Node.js stream.'
   );
 }
-
-/**
- * Get a reader from a fetch response, handling both native fetch and node-fetch responses.
- * Convenience wrapper around getReadableStream().
- *
- * @param {Response} response - The fetch response object
- * @returns {ReadableStreamDefaultReader} Reader from the response body
- */
-export function getStreamReader(response) {
-  return getReadableStream(response).getReader();
-}

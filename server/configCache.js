@@ -1547,22 +1547,6 @@ class ConfigCache {
   }
 
   /**
-   * Refresh tools cache (both enabled and all tools)
-   * Should be called when tools are modified (create, update, delete, toggle)
-   */
-  async refreshToolsCache() {
-    logger.info('Refreshing tools cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/tools.json');
-      const { data: tools } = this.getTools(true);
-      logger.info('Tools cache refreshed', { component: 'ConfigCache', count: tools.length });
-    } catch (error) {
-      logger.error('Error refreshing tools cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
    * Refresh the admin projects cache. Called after an admin project was
    * created, changed or deleted through the admin API or a cascade.
    */

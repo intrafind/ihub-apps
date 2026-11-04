@@ -16,7 +16,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import * as contracts from '../../services/loop/contracts/index.js';
+import * as errors from '../../services/loop/contracts/errors.js';
+import * as runLogEvents from '../../services/loop/contracts/runLogEvents.js';
+import * as interaction from '../../services/loop/contracts/interaction.js';
+import * as loop from '../../services/loop/contracts/loop.js';
+import * as sseV2 from '../../services/loop/contracts/sseV2.js';
+
+const contracts = { ...errors, ...runLogEvents, ...interaction, ...loop, ...sseV2 };
 import {
   RUN_LOG_EVENT_LIST,
   SSE_V2_EVENT_LIST,

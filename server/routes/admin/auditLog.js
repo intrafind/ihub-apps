@@ -50,9 +50,6 @@ function getAuditSettings() {
   };
 }
 
-// Backward-compat alias — the retention badge in AdminAuditLogPage reads this.
-const getRetentionSettings = getAuditSettings;
-
 export default function registerAdminAuditLogRoutes(app) {
   /**
    * GET /api/admin/audit-log
@@ -147,7 +144,7 @@ export default function registerAdminAuditLogRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/audit-log/retention'), adminAuth, async (_req, res) => {
     try {
-      res.json(getRetentionSettings());
+      res.json(getAuditSettings());
     } catch (error) {
       return sendInternalError(res, error, 'read audit log retention');
     }
@@ -159,7 +156,7 @@ export default function registerAdminAuditLogRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/audit-log/retention/run'), adminAuth, async (_req, res) => {
     try {
-      const { retentionDays } = getRetentionSettings();
+      const { retentionDays } = getAuditSettings();
       const result = await cleanupAuditLog(retentionDays);
       res.json({ ok: true, ...result });
     } catch (error) {

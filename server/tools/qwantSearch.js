@@ -3,7 +3,6 @@
 
 import searchWithExtraction from './lib/searchWithExtraction.js';
 import { QWANT_MAX_WEB_RESULTS } from '../services/search/qwantProvider.js';
-import logger from '../utils/logger.js';
 
 /**
  * Perform a web search using Qwant, with optional content extraction.
@@ -60,43 +59,4 @@ export default async function qwantSearch({
     chatId,
     searchOptions: { language, count: limit }
   });
-}
-
-// CLI interface for direct execution
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  const searchQuery = args.filter(a => !a.startsWith('--')).join(' ');
-
-  if (!searchQuery) {
-    logger.error(
-      'Usage: node qwantSearch.js <search term> [--extract] [--max-results=N] [--language=de]'
-    );
-    process.exit(1);
-  }
-
-  const extractContent = args.includes('--extract');
-  const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
-  const maxResults = maxResultsMatch
-    ? Number.parseInt(maxResultsMatch.split('=')[1]) || QWANT_MAX_WEB_RESULTS
-    : QWANT_MAX_WEB_RESULTS;
-  const languageMatch = args.find(a => a.startsWith('--language='));
-  const language = languageMatch ? languageMatch.split('=')[1] : undefined;
-
-  logger.info('Searching', { component: 'QwantSearch', searchQuery, extractContent });
-
-  try {
-    const result = await qwantSearch({
-      query: searchQuery,
-      extractContent,
-      maxResults,
-      language
-    });
-    logger.info('Search complete', {
-      component: 'QwantSearch',
-      resultCount: result.results?.length
-    });
-  } catch (error) {
-    logger.error('Error performing search', { component: 'QwantSearch', error });
-    process.exit(1);
-  }
 }

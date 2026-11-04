@@ -7,11 +7,6 @@ import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import MistralAdapter from '../adapters/mistral.js';
 import logger from '../utils/logger.js';
-import {
-  formatToolsForOpenAI,
-  formatToolsForAnthropic,
-  formatToolsForGoogle
-} from '../adapters/toolFormatter.js';
 import { convertResponseToGeneric } from '../adapters/toolCalling/index.js';
 
 // Test tool definition
@@ -95,32 +90,8 @@ const multiRoundMessages = [
 
 logger.info('🧪 Testing Tool Calling Consistency Across All Adapters\n');
 
-// Test 1: Tool Formatting Consistency
-logger.info('📋 Test 1: Tool Formatting Consistency');
-
-const openaiTools = formatToolsForOpenAI([testTool]);
-const anthropicTools = formatToolsForAnthropic([testTool]);
-const googleTools = formatToolsForGoogle([testTool]);
-
-logger.info('OpenAI tool format:', JSON.stringify(openaiTools[0], null, 2));
-logger.info('Anthropic tool format:', JSON.stringify(anthropicTools[0], null, 2));
-logger.info('Google tool format:', JSON.stringify(googleTools[0], null, 2));
-
-// Verify tool formatting
-assert.strictEqual(openaiTools[0].type, 'function');
-assert.strictEqual(openaiTools[0].function.name, 'test_search');
-assert.ok(openaiTools[0].function.parameters);
-
-assert.strictEqual(anthropicTools[0].name, 'test_search');
-assert.ok(anthropicTools[0].input_schema);
-
-assert.ok(googleTools[0].functionDeclarations);
-assert.strictEqual(googleTools[0].functionDeclarations[0].name, 'test_search');
-
-logger.info('✅ Tool formatting consistency test passed\n');
-
-// Test 2: Single Tool Call Request Generation
-logger.info('📋 Test 2: Single Tool Call Request Generation');
+// Test 1: Single Tool Call Request Generation
+logger.info('📋 Test 1: Single Tool Call Request Generation');
 
 const openaiSingleReq = await OpenAIAdapter.createCompletionRequest(
   models.openai,
