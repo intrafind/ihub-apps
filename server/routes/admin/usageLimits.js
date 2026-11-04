@@ -298,13 +298,25 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       200: { description: "{ threshold, items, total }" }
    */
   app.get(buildServerPath('/api/admin/usage/limits/near'), adminAuth, async (req, res) => {
+    // Optional numbers: one non-empty value each, or a 400 (an empty value
+    // must not silently become 0 and list everyone).
+    const numberParam = name => {
+      const raw = req.query[name];
+      if (raw === undefined) return { value: undefined };
+      if (typeof raw !== 'string' || raw.trim() === '' || !Number.isFinite(Number(raw))) {
+        return { error: `${name} must be a number` };
+      }
+      return { value: Number(raw) };
+    };
+    const threshold = numberParam('threshold');
+    const limit = numberParam('limit');
+    const invalid = threshold.error || limit.error;
+    if (invalid) return sendBadRequest(res, invalid);
+    if (threshold.value !== undefined && (threshold.value < 0 || threshold.value > 1)) {
+      return sendBadRequest(res, 'threshold must be between 0 and 1');
+    }
     try {
-      res.json(
-        await listNearLimitUsers({
-          threshold: req.query.threshold !== undefined ? Number(req.query.threshold) : undefined,
-          limit: req.query.limit
-        })
-      );
+      res.json(await listNearLimitUsers({ threshold: threshold.value, limit: limit.value }));
     } catch (error) {
       return sendInternalError(res, error, 'load users near their limits');
     }

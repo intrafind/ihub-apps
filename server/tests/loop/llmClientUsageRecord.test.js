@@ -138,6 +138,18 @@ test('the surface comes from the run on the ledger when the caller names none', 
   );
 });
 
+test('the app comes from telemetry refs when the caller sets no appId', async () => {
+  const { records, usage } = recorder();
+  const { client } = makeClient({ usage, transport: async () => sseResponse(openaiText(['ok'])) });
+  await client.complete({
+    modelId: 'oa',
+    messages,
+    telemetry: { purpose: 'magic-prompt', refs: { appId: 'writer' }, autoRun: false }
+  });
+  assert.equal(records[0].appId, 'writer');
+  assert.equal(records[0].surface, 'magic');
+});
+
 test('tool calls are counted', async () => {
   const { records, usage } = recorder();
   const { client } = makeClient({

@@ -387,10 +387,9 @@ grep "Feedback received" server.log | jq '.ifinderFeedbackSent'
 - Ability to track patterns without direct identification
 
 **Characteristics**:
-- Same user across sessions: Different IDs
-- Same browser session: Same ID
-- Clearing cookies: New ID
-- Different devices: Different IDs
+- Each conversation: its own ID
+- Same user, different conversations: different IDs
+- Browser sessions and cookies: no effect on the ID
 
 #### 3. Identified Mode (Full Accountability)
 
@@ -819,7 +818,7 @@ grep "Authentication failed" server.log
 
 **Solutions**:
 - Refresh browser page
-- Expand date range filter to "All Time"
+- Choose a longer range in the usage reports (up to 12 months, or a custom range); the Feedback review shows the last 90 days
 - Check file permissions on `feedback.jsonl` and `contents/data/usage-events/`
 
 ### Performance Issues

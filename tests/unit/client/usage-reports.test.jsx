@@ -13,7 +13,10 @@ import {
 import useUsageReportState from '../../../client/src/features/admin/components/usage/useUsageReportState';
 import KpiCards from '../../../client/src/features/admin/components/usage/KpiCards';
 import BreakdownTable from '../../../client/src/features/admin/components/usage/BreakdownTable';
-import { fetchUsageBreakdown } from '../../../client/src/api/usageReportsAdminApi';
+import {
+  fetchUsageBreakdown,
+  downloadUsageExport
+} from '../../../client/src/api/usageReportsAdminApi';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -164,6 +167,16 @@ describe('BreakdownTable', () => {
     expect(screen.getByText('gpt')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Requests/ }));
     expect(state.update).toHaveBeenCalledWith({ sort: 'requests', order: 'desc' });
+  });
+
+  test('shows a failed raw export instead of swallowing it', async () => {
+    fetchUsageBreakdown.mockResolvedValue({ rows: [] });
+    downloadUsageExport.mockRejectedValue(new Error('Export failed: range too large'));
+    render(<BreakdownTable state={state} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: /Raw events CSV/ }));
+    await flush();
+    expect(screen.getByRole('alert')).toHaveTextContent('Export failed: range too large');
   });
 
   test('shows an empty state for a range without data', async () => {

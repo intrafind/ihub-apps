@@ -31,6 +31,7 @@ export default function BreakdownTable({ state }) {
   const lang = i18n.language;
   const [open, setOpen] = useState(() => new Set());
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
   const params = {
     ...state.rangeParams,
     dimension: state.dim,
@@ -122,8 +123,11 @@ export default function BreakdownTable({ state }) {
 
   const exportRaw = async () => {
     setExporting(true);
+    setExportError(null);
     try {
       await downloadUsageExport(state.rangeParams, 'csv');
+    } catch (err) {
+      setExportError(err);
     } finally {
       setExporting(false);
     }
@@ -133,7 +137,7 @@ export default function BreakdownTable({ state }) {
 
   return (
     <div className="space-y-4" data-testid="usage-breakdown">
-      <ErrorNote error={error} />
+      <ErrorNote error={error || exportError} />
       <Panel
         title={t('admin.usage.reports.breakdown', 'Breakdown')}
         loading={loading}

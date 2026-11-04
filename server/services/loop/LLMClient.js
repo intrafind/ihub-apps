@@ -669,7 +669,12 @@ export class LLMClient {
         this.usage.record({
           user: quotaUser,
           surface: resolveSurface(telemetry, runMeta),
-          appId: telemetry.appId || options.appConfig?.id || runMeta?.refs?.appId || null,
+          appId:
+            telemetry.appId ||
+            options.appConfig?.id ||
+            telemetry.refs?.appId ||
+            runMeta?.refs?.appId ||
+            null,
           modelId: model.id,
           provider: model.provider,
           conversationId:

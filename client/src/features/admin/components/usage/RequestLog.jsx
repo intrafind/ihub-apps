@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchUsageCalls } from '../../../../api/usageReportsAdminApi';
 import Icon from '../../../../shared/components/Icon';
+import useFocusTrap from '../../../../shared/hooks/useFocusTrap';
 import { EmptyState, ErrorNote, Panel, SmallButton } from './UsageUi';
 import { formatDateTime, formatDuration, formatNumber, formatRelative } from './usageFormat';
 
@@ -59,6 +60,14 @@ function FilterInput({ label, value, onChange }) {
 function CallDrawer({ call, onClose }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const panelRef = useRef(null);
+  const closeRef = useRef(null);
+  // Focus moves into the drawer, stays there, and returns to the row on close.
+  useFocusTrap(panelRef, {
+    isActive: true,
+    initialFocusRef: closeRef,
+    returnFocusOnDeactivate: true
+  });
   useEffect(() => {
     const onKey = e => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -116,6 +125,7 @@ function CallDrawer({ call, onClose }) {
         onClick={onClose}
       />
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="usage-call-title"
@@ -129,6 +139,7 @@ function CallDrawer({ call, onClose }) {
             {t('admin.usage.reports.calls.details', 'Call details')}
           </h2>
           <button
+            ref={closeRef}
             type="button"
             onClick={onClose}
             aria-label={t('common.close', 'Close')}

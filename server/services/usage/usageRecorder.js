@@ -111,6 +111,9 @@ export async function recordFeedback(fb) {
   try {
     recordFeedbackMetric(fb.appId, fb.rating);
     if (!isUsageTrackingEnabled()) return null;
+    // Feedback storage off (`features.feedbackTracking: false`) keeps nothing,
+    // the usage statistics included.
+    if (configCache.getPlatform?.()?.features?.feedbackTracking === false) return null;
     const mode = getUsageTrackingMode();
     const { uid, cid } = await resolveIdentity({
       user: fb.user || null,

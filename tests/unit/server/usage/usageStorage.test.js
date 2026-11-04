@@ -159,6 +159,18 @@ describe('ranges', () => {
     expect(new Date(custom.to).toISOString()).toBe('2026-10-31T23:59:59.999Z');
 
     expect(() => resolveRange({ range: 'forever' }, NOW)).toThrow(UsageQueryError);
+    // Impossible or malformed days are a 400, not a NaN that throws later.
+    for (const [from, to] of [
+      ['2026-10-01', '2026-13-01'],
+      ['2026-02-30', '2026-03-01'],
+      ['2026-10-01', 'nope']
+    ]) {
+      expect(() => resolveRange({ range: 'custom', from, to }, NOW)).toThrow(UsageQueryError);
+    }
+    // The day limit is checked without building the span.
+    expect(() =>
+      resolveRange({ range: 'custom', from: '0001-01-01', to: '9999-12-31' }, NOW)
+    ).toThrow(/limited/);
     expect(() => resolveRange({ range: 'custom', from: '2026-10-31', to: '2026-10-01' })).toThrow(
       UsageQueryError
     );

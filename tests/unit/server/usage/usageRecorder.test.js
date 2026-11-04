@@ -110,6 +110,12 @@ describe('recordLlmCall', () => {
 });
 
 describe('recordFeedback', () => {
+  it('keeps nothing when feedback storage is off', async () => {
+    mockPlatform = { features: { usageTrackingMode: 'identified', feedbackTracking: false } };
+    await expect(recordFeedback({ user, appId: 'chat', rating: 5 })).resolves.toBe(null);
+    expect(mockAppended).toHaveLength(0);
+  });
+
   it('writes a feedback record', async () => {
     mockPlatform = { features: { usageTrackingMode: 'anonymous' } };
     const record = await recordFeedback({ user, appId: 'chat', modelId: 'gpt', rating: 5 });

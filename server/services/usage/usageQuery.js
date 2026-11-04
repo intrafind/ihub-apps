@@ -44,6 +44,13 @@ export class UsageQueryError extends Error {}
 const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
 const startOfDay = date => Date.parse(`${date}T00:00:00.000Z`);
 
+/** A real calendar day as `YYYY-MM-DD` (rejects `2026-13-01`, `2026-02-30`). */
+function isRealDay(value) {
+  if (typeof value !== 'string' || !DATE.test(value)) return false;
+  const t = startOfDay(value);
+  return Number.isFinite(t) && utcDay(t) === value;
+}
+
 function daysBetween(fromDay, toDay) {
   const out = [];
   for (let t = startOfDay(fromDay); t <= startOfDay(toDay); t += DAY_MS) out.push(utcDay(t));
@@ -86,11 +93,11 @@ export function resolveRange({ range = '7d', from, to } = {}, now = Date.now()) 
   let firstDay;
   let lastDay;
   if (range === 'custom') {
-    if (!DATE.test(from || '') || !DATE.test(to || '') || Number.isNaN(startOfDay(from))) {
+    if (!isRealDay(from) || !isRealDay(to)) {
       throw new UsageQueryError('Custom ranges need from and to as YYYY-MM-DD');
     }
     if (from > to) throw new UsageQueryError('from must not be after to');
-    if (daysBetween(from, to).length > MAX_CUSTOM_DAYS) {
+    if ((startOfDay(to) - startOfDay(from)) / DAY_MS + 1 > MAX_CUSTOM_DAYS) {
       throw new UsageQueryError(`Custom ranges are limited to ${MAX_CUSTOM_DAYS} days`);
     }
     firstDay = from;
@@ -282,7 +289,9 @@ async function maybeFlush(resolved, now) {
 }
 
 function cacheKey(kind, resolved, extra = '') {
-  return `${kind}|${resolved.granularity}|${resolved.from}|${Math.floor(resolved.to / 1000)}|${extra}`;
+  // The end of a range that reaches now moves every request; bucket it by the
+  // cache lifetime so the requests of one window share a result.
+  return `${kind}|${resolved.range}|${resolved.granularity}|${resolved.from}|${Math.floor(resolved.to / CACHE_TTL_MS)}|${extra}`;
 }
 
 /**
