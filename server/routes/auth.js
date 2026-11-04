@@ -19,7 +19,7 @@ import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
-import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
+import { setAuthCookie, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { LoginLockedError } from '../utils/loginLockout.js';
@@ -190,7 +190,7 @@ export default function registerAuthRoutes(app) {
       }
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      setAuthCookie(req, res, result.token, result.expiresIn);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -375,7 +375,7 @@ export default function registerAuthRoutes(app) {
       });
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      setAuthCookie(req, res, result.token, result.expiresIn);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -422,7 +422,7 @@ export default function registerAuthRoutes(app) {
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      setAuthCookie(req, res, result.token, result.expiresIn);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -528,7 +528,7 @@ export default function registerAuthRoutes(app) {
       });
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      setAuthCookie(req, res, result.token, result.expiresIn);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 

@@ -83,6 +83,20 @@ export function getAuthCookieOptions(maxAge, req, overrides = {}) {
 }
 
 /**
+ * Set the `authToken` session cookie. The one place that names the cookie and
+ * derives its options, so every sign-in path (local, OIDC, NTLM, Teams, ...)
+ * gets the same `HttpOnly`, `SameSite` and request-derived `Secure` flag.
+ *
+ * @param {Object} req - Express request (the `Secure` flag follows its protocol)
+ * @param {Object} res - Express response
+ * @param {string} token - The signed session token
+ * @param {number} expiresInSeconds - Token lifetime; the cookie lives as long
+ */
+export function setAuthCookie(req, res, token, expiresInSeconds) {
+  res.cookie('authToken', token, getAuthCookieOptions(expiresInSeconds * 1000, req));
+}
+
+/**
  * Get cookie options for clearing authentication tokens
  *
  * NOTE: `path` and `sameSite` must match the values the cookie was SET with,

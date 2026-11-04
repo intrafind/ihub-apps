@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
-import { verifyJwt, decodeJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
+import { verifyJwt, decodeJwt, signAppJwt } from './tokenService.js';
 import logger from './logger.js';
 
 /**
@@ -40,13 +39,6 @@ export function generateOAuthToken(client, options = {}) {
   if (!client || !client.clientId) {
     throw new Error('Client object with clientId is required for OAuth token generation');
   }
-  const algorithm = getJwtAlgorithm();
-  const signingKey = getJwtSigningKey();
-
-  if (!signingKey) {
-    throw new Error(`JWT signing key not configured for OAuth authentication with ${algorithm}`);
-  }
-
   // Determine scopes for this token
   let tokenScopes = client.scopes || [];
 
@@ -97,11 +89,9 @@ export function generateOAuthToken(client, options = {}) {
         // OAuth tokens are machine-to-machine, no user context
         groups: ['oauth_clients'] // Special group for OAuth clients
       };
-  const token = jwt.sign(tokenPayload, signingKey, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ihub-apps',
-    audience: 'ihub-apps',
-    algorithm: algorithm
+  const token = signAppJwt(tokenPayload, {
+    expiresInSeconds: expiresIn,
+    purpose: 'OAuth authentication'
   });
 
   return {
@@ -245,13 +235,6 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     throw new Error('Client object with clientId is required for API key generation');
   }
 
-  const algorithm = getJwtAlgorithm();
-  const signingKey = getJwtSigningKey();
-
-  if (!signingKey) {
-    throw new Error(`JWT signing key not configured for API key generation with ${algorithm}`);
-  }
-
   // Static API key has longer expiration
   const expiresInSeconds = expirationDays * 24 * 60 * 60;
 
@@ -271,11 +254,9 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     static_key: true
   };
 
-  const token = jwt.sign(tokenPayload, signingKey, {
-    expiresIn: `${expiresInSeconds}s`,
-    issuer: 'ihub-apps',
-    audience: 'ihub-apps',
-    algorithm: algorithm
+  const token = signAppJwt(tokenPayload, {
+    expiresInSeconds: expiresInSeconds,
+    purpose: 'API key generation'
   });
 
   logger.info('Static API key generated', {
@@ -345,13 +326,6 @@ export function generatePersonalApiKey(client, expirationDays) {
     );
   }
 
-  const algorithm = getJwtAlgorithm();
-  const signingKey = getJwtSigningKey();
-
-  if (!signingKey) {
-    throw new Error(`JWT signing key not configured for API key generation with ${algorithm}`);
-  }
-
   const expiresInSeconds = expirationDays * 24 * 60 * 60;
 
   const tokenPayload = {
@@ -372,11 +346,9 @@ export function generatePersonalApiKey(client, expirationDays) {
     static_key: true
   };
 
-  const token = jwt.sign(tokenPayload, signingKey, {
-    expiresIn: `${expiresInSeconds}s`,
-    issuer: 'ihub-apps',
-    audience: 'ihub-apps',
-    algorithm: algorithm
+  const token = signAppJwt(tokenPayload, {
+    expiresInSeconds: expiresInSeconds,
+    purpose: 'API key generation'
   });
 
   logger.info('Personal API key generated', {
