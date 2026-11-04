@@ -95,7 +95,7 @@ GPU selection is done case-by-case together with IntraFind, depending on:
 2. **Create your own micro-app**:
    - GitHub repo contains examples and documentation
    - See folders `examples` and `docs`, and see the repository agent guide in `CLAUDE.md`
-   - Complete documentation in running iHub under `/help`
+   - Complete documentation in running iHub under **Admin → Documentation** (`/admin/docs`)
 
 ### Are prompt skills required?
 No, iHub is explicitly designed for "no prompt skills needed". The input forms lead to the desired result.
@@ -131,7 +131,7 @@ Depending on the chosen option:
 - **Files in iHub package**: `docs` folder with guides
 
 ### How do I get support?
-- First consult the integrated documentation under `/help`
+- First consult the integrated documentation under **Admin → Documentation** (`/admin/docs`)
 - Check the GitHub repository for current updates
 - Contact IntraFind for project-specific consultation on model selection and GPU configuration
 
@@ -154,7 +154,7 @@ iHub runs by default on port 3001 (http://localhost:3001/)
 Yes, iHub is extensible. You can:
 - Duplicate and customize existing apps
 - Create new apps based on the examples
-- Use the documentation under `/help` for development guides
+- Use the documentation under **Admin → Documentation** (`/admin/docs`) for development guides
 
 ## Quick Start Guide
 
@@ -178,7 +178,7 @@ Yes, iHub is extensible. You can:
 ### Best practices for beginners
 - Start with cloud LLMs for the easiest setup
 - Use existing micro-apps as templates
-- Consult the `/help` documentation in the running iHub
+- Consult the documentation in the running iHub under **Admin → Documentation** (`/admin/docs`)
 - Begin with simple prompt modifications before creating new apps
 
 ## Advanced Topics
