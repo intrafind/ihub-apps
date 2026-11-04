@@ -93,7 +93,7 @@ function last(list, predicate) {
   return null;
 }
 
-/** The answer text with the run's sources and, on the legacy error path, its error appended. */
+/** The answer text with the run's sources and, for a failed run, its error appended. */
 function contentOf(run, extras, fallbackErrorMessage) {
   // Everything the run found (`sources/added`, folded by the reducer). Google's
   // answer text carries no links: its grounding supports say which passage
@@ -104,7 +104,7 @@ function contentOf(run, extras, fallbackErrorMessage) {
   if (sources?.supports?.length) content = insertSupportMarkers(content, sources.supports);
   if (sources?.items?.length || sources?.queries?.length) extras.sources = sources;
   if (run.error) {
-    // Legacy 'error' path: the error text is appended to whatever streamed.
+    // A failed run: the error text is appended to whatever streamed.
     content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
   }
   return content;

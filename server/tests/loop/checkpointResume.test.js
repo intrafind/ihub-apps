@@ -8,9 +8,6 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { startTestStorage } from '../helpers/testStorage.js';
 import { RunLog } from '../../services/loop/RunLog.js';
 import { InteractionService } from '../../services/loop/InteractionService.js';
@@ -127,7 +124,7 @@ function fakeEngine({ state, agent = false } = {}) {
 }
 
 async function setup() {
-  const storage = await startTestStorage({ prefix: 'checkpoint-resume-' });
+  await startTestStorage({ prefix: 'checkpoint-resume-' });
   const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const svc = new InteractionService({ runLog });
   await runLog.startRun({ runId: EXECUTION_ID, kind: 'workflow', user: { id: 'u1' } });
@@ -427,7 +424,7 @@ test('an expired checkpoint interaction cancels its execution (policy onTimeout:
 
 test('the expiry sweep transitions overdue interactions and is idempotent to start', async () => {
   let now = Date.parse('2026-01-01T00:00:00Z');
-  const storage = await startTestStorage({ prefix: 'checkpoint-sweep-' });
+  await startTestStorage({ prefix: 'checkpoint-sweep-' });
   const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
   const svc = new InteractionService({ runLog, now: () => now });
   await runLog.startRun({ runId: EXECUTION_ID, kind: 'workflow', user: { id: 'u1' } });

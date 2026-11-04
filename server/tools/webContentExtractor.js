@@ -36,8 +36,8 @@ function createError(message, code) {
 
 /**
  * Validate a single URL hop against the SSRF guard, honoring the admin SSL
- * domain whitelist bypass (kept for backward compatibility with the
- * pre-existing `webContentExtractor` behavior). Every redirect hop is
+ * domain whitelist: a whitelisted host is admin-trusted (typically an
+ * internal one) and skips the public-address rule. Every redirect hop is
  * revalidated independently so a public initial hostname that redirects to a
  * private/internal address after the first check is still blocked.
  *

@@ -191,9 +191,6 @@
       "streamableHttp": {
         "enabled": true,
         "stateless": false
-      },
-      "sse": {
-        "enabled": true
       }
     },
     "a2a": {

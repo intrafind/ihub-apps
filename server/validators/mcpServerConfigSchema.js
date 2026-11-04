@@ -214,10 +214,7 @@ export const mcpGatewayConfigSchema = z.object({
   defaultScopes: z.array(z.string()).prefault(['mcp:tools:read', 'mcp:tools:call']),
   transports: z
     .object({
-      streamableHttp: z.object({ enabled: z.boolean().prefault(true) }).prefault({}),
-      sse: z
-        .object({ enabled: z.boolean().prefault(true), deprecated: z.boolean().prefault(true) })
-        .prefault({})
+      streamableHttp: z.object({ enabled: z.boolean().prefault(true) }).prefault({})
     })
     .prefault({}),
   // Resource exposure flags. When false the corresponding adapter is skipped

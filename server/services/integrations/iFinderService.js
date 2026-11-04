@@ -407,23 +407,20 @@ class IFinderService {
               label: getFieldValue(doc, 'sourceLocations.label', [])
             },
 
-            // Backward compatibility fields
+            // Flattened copies of nested fields; callers read these directly
             filename: getFieldValue(doc, 'file.name'),
             size: getFieldValue(doc, 'file.size'),
-            extension: getFieldValue(doc, 'file.extension'),
             sizeFormatted: (() => {
               const bytes = getFieldValue(doc, 'file.size') || getFieldValue(doc, 'contentLength');
               return bytes ? this._formatFileSize(bytes) : null;
             })(),
 
-            // Legacy/fallback fields for backward compatibility
             url: getFieldValue(doc, 'url'),
             deepLink: getFieldValue(doc, 'accessInfo.deepLink'),
             documentType: getFieldValue(doc, 'documentType'),
-            mimeType: getFieldValue(doc, 'mediaType'), // Legacy alias
+            // Read by IFinderHandler.searchDocuments and the project item picker
+            mimeType: getFieldValue(doc, 'mediaType'),
             content: getFieldValue(doc, 'content'),
-            source: getFieldValue(doc, 'sourceName'), // Legacy alias
-            breadcrumbs: getFieldValue(doc, 'navigationTree', []), // Legacy alias
             createdDate: getFieldValue(doc, 'createdDate'),
             lastModified:
               getFieldValue(doc, 'lastModified') || getFieldValue(doc, 'modificationDate'),

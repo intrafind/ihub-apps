@@ -673,15 +673,14 @@ export async function convertOpenaiResponsesResponseToGeneric(data, streamId = '
         }
         // Handle function calls
         else if (item.type === 'function_call') {
-          // Real Responses API items are flat ({ call_id, name, arguments });
-          // keep accepting the legacy nested `function` shape as well.
+          // Responses API items are flat: { call_id, name, arguments }.
           toolCalls.push({
             id: item.call_id || item.id,
             type: 'function',
             complete: true,
             function: {
-              name: item.name ?? item.function?.name ?? '',
-              arguments: item.arguments ?? item.function?.arguments ?? ''
+              name: item.name ?? '',
+              arguments: item.arguments ?? ''
             }
           });
         }
@@ -696,30 +695,9 @@ export async function convertOpenaiResponsesResponseToGeneric(data, streamId = '
       finishReason = toolCalls.length > 0 ? 'tool_calls' : 'stop';
       if (parsed.usage) nonStreamingUsage = responsesUsageToGeneric(parsed.usage);
     }
-    // Handle legacy streaming chunks format
-    else if (parsed.output_chunk) {
-      const chunk = parsed.output_chunk;
-      if (chunk.type === 'message' && chunk.delta?.content) {
-        for (const contentItem of chunk.delta.content) {
-          if (contentItem.type === 'output_text' && contentItem.text) {
-            content.push(contentItem.text);
-          }
-        }
-      } else if (chunk.type === 'function_call' && chunk.delta) {
-        const normalized = {
-          index: chunk.index || 0,
-          id: chunk.id,
-          type: 'function'
-        };
-        if (chunk.delta.function) {
-          normalized.function = { ...chunk.delta.function };
-        }
-        toolCalls.push(normalized);
-      }
-    }
 
-    // Check for completion in legacy format
-    if (parsed.status === 'completed' || parsed.output_status === 'completed') {
+    // A non-streaming response body reports its own status
+    if (parsed.status === 'completed') {
       complete = true;
       // Set finish reason based on whether tool calls are present
       finishReason = toolCalls.length > 0 ? 'tool_calls' : 'stop';

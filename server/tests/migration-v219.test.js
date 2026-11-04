@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V224 — the pre-provider runtime records (workflow checkpoints, the
+ * Migration V219 — the pre-provider runtime records (workflow checkpoints, the
  * run ledger index, the execution registry, pending interactions) are carried
  * into the storage provider once.
  *
@@ -27,7 +27,7 @@ import {
   importRunSummaries,
   importWorkflowStates
 } from '../migrations/support/legacyRuntimeImport.js';
-import { precondition, version } from '../migrations/V224__import_legacy_runtime_stores.js';
+import { precondition, version } from '../migrations/V219__import_legacy_runtime_stores.js';
 
 const OWNER = 'user-1';
 const OTHER_OWNER = 'user-2';
@@ -51,7 +51,7 @@ function recordingLog() {
  * under the same root, laid out as the releases before 5.5.2 wrote them.
  */
 async function withInstall(fn) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v224-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v219-'));
   const dataDir = path.join(root, 'data');
   await fs.mkdir(dataDir, { recursive: true });
   const provider = new FilesystemStorageProvider({ baseDir: dataDir, flushIntervalMs: 25 });
@@ -139,13 +139,13 @@ function pendingInteraction(id = 'int-legacy') {
   };
 }
 
-describe('migration V224', () => {
+describe('migration V219', () => {
   it('has the number it was created with', () => {
-    assert.equal(version, '224');
+    assert.equal(version, '219');
   });
 
   it('runs only where a legacy runtime file exists', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v224-pre-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v219-pre-'));
     try {
       assert.equal(await hasLegacyRuntimeData(root), false);
       assert.equal(await precondition({ contentsDir: root }), false, 'a fresh install skips it');
@@ -158,7 +158,7 @@ describe('migration V224', () => {
   });
 });
 
-describe('V224: workflow states', () => {
+describe('V219: workflow states', () => {
   it('carries the checkpoint directories into the namespace, owner and all', async () => {
     await withInstall(async ({ provider, stateDir, log }) => {
       await writeLegacyState(stateDir, 'wf-exec-1', state('wf-exec-1'));
@@ -296,7 +296,7 @@ describe('V224: workflow states', () => {
   });
 });
 
-describe('V224: run summaries', () => {
+describe('V219: run summaries', () => {
   it('carries the ledger index and the execution registry into the namespace', async () => {
     await withInstall(async ({ provider, repository, indexDir, registryFile, log }) => {
       await writeIndexFile(indexDir, '2026-01-01', [
@@ -575,7 +575,7 @@ describe('V224: run summaries', () => {
   });
 });
 
-describe('V224: pending interactions', () => {
+describe('V219: pending interactions', () => {
   it('carries pending interactions over, leaving the file alone', async () => {
     await withInstall(async ({ provider, interactionsFile, log }) => {
       await fs.mkdir(path.dirname(interactionsFile), { recursive: true });
@@ -662,7 +662,7 @@ describe('V224: pending interactions', () => {
   });
 });
 
-describe('V224: run events', () => {
+describe('V219: run events', () => {
   const event = (seq, type, runId = 'run-1') => ({
     seq,
     ts: `2026-01-01T10:00:0${seq}.000Z`,

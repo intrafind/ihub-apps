@@ -77,7 +77,7 @@ contents/data/
 
 Releases before 5.5.2 hand-wrote this under `contents/data/run-log/`
 (`runs/<runId>.jsonl`, `spill/<runId>/`, `index/<YYYY-MM-DD>.jsonl`,
-`interactions.json`). Nothing reads those files any more; migration `V224`
+`interactions.json`). Nothing reads those files any more; migration `V219`
 carries them into the namespaces above once (see [Upgrading](#upgrading-an-installation-that-already-has-a-ledger)).
 
 | Was                        | Is now                                | Why                                                                         |
@@ -129,7 +129,7 @@ a mismatch.
 ### Upgrading an installation that already has a ledger
 
 Installations that last ran a release before 5.5.2 hold their runtime records as
-files. Migration `V224` (`server/migrations/V224__import_legacy_runtime_stores.js`)
+files. Migration `V219` (`server/migrations/V219__import_legacy_runtime_stores.js`)
 reads them once, on the first start after the upgrade, and writes them into the
 storage provider; the migration runner records it as done, so later starts do
 not look at the files again.

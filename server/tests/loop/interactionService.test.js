@@ -522,7 +522,7 @@ test('pending interactions are persisted even when the run ledger is disabled', 
 });
 
 test("answer.by is recorded in the run's identity mode, never as the raw user id when pseudonymized", async () => {
-  const storage = await startTestStorage({ prefix: 'interaction-actor-' });
+  await startTestStorage({ prefix: 'interaction-actor-' });
   const runLog = new RunLog({
     forceEnabled: true,
     getPlatformConfig: () => ({ runLog: { identityMode: 'pseudonymized' } })

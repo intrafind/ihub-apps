@@ -72,7 +72,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         };
       }
 
-      // Handle single image (legacy behavior)
+      // A single image object rather than an array
       return {
         ...base,
         content: [
