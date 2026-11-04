@@ -19,15 +19,12 @@ import {
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 const MODEL_PATH = 'models/voxtral-mini-transcribe-realtime.json';
-// The model no longer ships in server/defaults; its config lives on as an
-// example (iHub Examples marketplace) and serves as the fixture here.
+// The model no longer ships in server/defaults; its config lives in the iHub
+// marketplace, and server/tests/fixtures/models holds a copy for this test.
 const shippedDefault = () =>
   JSON.parse(
     fs.readFileSync(
-      new URL(
-        '../../examples/models/mistral/voxtral-mini-transcribe-realtime.json',
-        import.meta.url
-      ),
+      new URL('./fixtures/models/mistral/voxtral-mini-transcribe-realtime.json', import.meta.url),
       'utf8'
     )
   );

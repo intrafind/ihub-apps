@@ -15,12 +15,12 @@ import { up, precondition, version } from '../migrations/V150__seed_google_tts_m
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 const PATHS = ['models/gemini-3.8-flash-tts.json', 'models/gemini-3.8-flash-lite-tts.json'];
-// The models no longer ship in server/defaults; their configs live on as
-// examples (iHub Examples marketplace) and serve as the fixtures here.
+// The models no longer ship in server/defaults; their configs live in the iHub
+// marketplace, and server/tests/fixtures/models holds copies for these tests.
 const shipped = path =>
   JSON.parse(
     fs.readFileSync(
-      new URL(`../../examples/models/google/${path.slice('models/'.length)}`, import.meta.url),
+      new URL(`./fixtures/models/google/${path.slice('models/'.length)}`, import.meta.url),
       'utf8'
     )
   );

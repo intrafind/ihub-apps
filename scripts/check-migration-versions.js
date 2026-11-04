@@ -181,7 +181,7 @@ function main() {
     '',
     `1. Merge the base branch into this PR.`,
     `2. Rename each conflicting migration to the next free number(s) starting at V${nextVersion}, keeping their relative order.`,
-    `3. Update \`export const version\` and the JSDoc header in the file, the matching \`server/tests/migration-v<NNN>.test.js\` and its entry in \`test:migrations\` in package.json.`,
+    `3. Update \`export const version\` and the JSDoc header in the file, the matching \`server/tests/migration-v<NNN>.test.js\`.`,
     `4. If the old number was ever run outside CI (a shared dev or test install), add a \`RENAMED_MIGRATIONS\` entry in \`server/migrations/runner.js\`.`
   ];
 
