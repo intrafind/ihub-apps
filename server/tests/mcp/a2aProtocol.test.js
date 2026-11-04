@@ -557,8 +557,13 @@ describe('message/send', () => {
     // The run continues in the background; give it a tick to reach the model.
     await new Promise(resolve => setTimeout(resolve, 10));
     release();
-    await new Promise(resolve => setTimeout(resolve, 10));
-    const got = await dispatchA2A(rpc('tasks/get', { id: taskId }), ctx());
+    // The result is stored with a document write; poll rather than guess how long it takes.
+    let got;
+    for (let waited = 0; waited < 2000; waited += 10) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      got = await dispatchA2A(rpc('tasks/get', { id: taskId }), ctx());
+      if (got.result.status.state === 'completed') break;
+    }
     expect(got.result.status.state).toBe('completed');
     expect(got.result.artifacts[0].parts[0].text).toBe('Later');
   });
@@ -612,8 +617,11 @@ describe('tasks/get and tasks/cancel', () => {
       rpc('message/send', { message: textMessage('hi', { metadata: { skillId: 'app__chat' } }) }),
       ctx()
     );
-    // Let the task start, then cancel it by id.
-    await new Promise(resolve => setTimeout(resolve, 10));
+    // Let the task start (it is stored first, which takes a document write), then
+    // cancel it by id.
+    for (let waited = 0; store.runs.size === 0 && waited < 2000; waited += 10) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
     const [taskId] = [...store.runs.keys()];
     expect(taskId).toBeDefined();
     const cancel = await dispatchA2A(rpc('tasks/cancel', { id: taskId }), ctx());
