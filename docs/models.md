@@ -999,17 +999,6 @@ These translations are defined in `shared/i18n/en.json` and `shared/i18n/de.json
 4. User must click "I Understand" to enable input
 5. Acknowledgment must be repeated if user switches to another model and back
 
-### Example Models
-
-Example model configurations demonstrating all hint levels are available in [`docs/examples/model-hints/`](examples/model-hints/):
-
-- `gpt-4-turbo-hint-example.json` - Hint level demo
-- `claude-3-info-example.json` - Info level demo
-- `gemini-warning-example.json` - Warning level demo
-- `experimental-alert-example.json` - Alert level demo
-
-See [`MODEL_HINTS_EXAMPLES.md`](examples/model-hints/MODEL_HINTS_EXAMPLES.md) in that folder for detailed usage documentation.
-
 ### Technical Implementation
 
 **Files:**

@@ -8,7 +8,6 @@ This is a full-stack AI application platform built with **Node.js (Express)** an
 - **`server/`**: Node.js Express backend with LLM adapters and authentication
 - **`shared/`**: Code shared between client and server (utilities, i18n)
 - **`contents/`**: JSON configuration files for apps, models, UI, groups, sources, tools
-- **`docs/examples/`**: Reference material for the docs (locale overrides, OAuth client sample, agent profiles); installable example content lives in the iHub marketplace repository
 - **`concepts/`**: Feature concept documents, design docs, RFCs (format: `YYYY-MM-DD {title}.md`)
 - **`docs/`**: User-facing feature documentation (rendered to `/help` in production)
 - **`tests/`**: Test files for server components and integrations

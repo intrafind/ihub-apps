@@ -436,8 +436,8 @@ registry you added yourself, or one with that id that you pointed elsewhere, is 
   longer checked for updates, because their registry is gone.
 - The official marketplace now carries the newer model configurations of the examples (the
   three-state `supportsTools`) and the `{{content}}` placeholder in its prompts.
-- Reference material that was in `examples/` (locale overrides, the OAuth client sample, agent
-  profiles, the logging demo, the LDAP mapping example) is under `docs/examples/`.
+- The reference material that was in `examples/` (locale overrides, OAuth client sample, agent
+  profiles, logging demo, LDAP mapping example) is removed along with it.
 
 **Before upgrading:** to get updates for an item installed from the examples registry, install it
 again from the official marketplace (the same id replaces the local copy) or detach it. Automation

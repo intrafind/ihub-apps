@@ -605,7 +605,7 @@ docker service scale ihub-apps_ihub-app=3
 ## Support and Resources
 
 - **Documentation**: See `docs/` directory for comprehensive guides
-- **Examples**: Check `docs/examples/` for reference material and the [iHub Official Marketplace](https://github.com/intrafind/ihub-marketplace) for installable apps and models
+- **Examples**: Check the [iHub Official Marketplace](https://github.com/intrafind/ihub-marketplace) for installable apps and models
 - **Issues**: Report Docker-related issues on GitHub
 - **Security**: Follow security best practices in production
 

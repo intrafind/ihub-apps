@@ -257,12 +257,7 @@ For more details, see:
    - Common issues and solutions
    - Configuration examples
 
-3. **Example Configurations**: `docs/examples/ldap/ldap-group-mapping-example.md`
-   - Working configurations for different scenarios
-   - Active Directory examples
-   - Multi-level permissions
-
-4. **Main LDAP Documentation**: `docs/ldap-ntlm-authentication.md`
+3. **Main LDAP Documentation**: `docs/ldap-ntlm-authentication.md`
    - Complete LDAP authentication guide
    - Updated with group mapping section
 
