@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { apiClient } from '../../api/client';
-import { useAuth } from '../auth';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
 
 /**

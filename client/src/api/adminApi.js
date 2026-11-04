@@ -132,12 +132,6 @@ export const fetchAdminUsageData = async () => {
   const response = await makeAdminApiCall('/admin/usage');
   return response.data;
 };
-
-export const fetchAdminCacheStats = async () => {
-  const response = await makeAdminApiCall('/admin/cache/stats');
-  return response.data;
-};
-
 export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/admin/apps');
   return response.data;
@@ -182,12 +176,6 @@ export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/admin/apps/templates');
   return response.data;
 };
-
-export const fetchAppInheritance = async appId => {
-  const response = await makeAdminApiCall(`/admin/apps/${appId}/inheritance`);
-  return response.data;
-};
-
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/admin/prompts', {
     method: 'POST',
@@ -298,48 +286,6 @@ export const deletePage = async pageId => {
   });
   return response.data;
 };
-
-// UI Customization API functions
-export const getUIConfig = async () => {
-  const response = await makeAdminApiCall('/admin/ui/config');
-  return response;
-};
-
-export const updateUIConfig = async config => {
-  const response = await makeAdminApiCall('/admin/ui/config', {
-    method: 'POST',
-    body: { config }
-  });
-  return response;
-};
-
-export const backupUIConfig = async () => {
-  const response = await makeAdminApiCall('/admin/ui/backup', {
-    method: 'POST'
-  });
-  return response;
-};
-
-export const getUIAssets = async () => {
-  const response = await makeAdminApiCall('/admin/ui/assets');
-  return response;
-};
-
-export const uploadUIAsset = async formData => {
-  const response = await makeAdminApiCall('/admin/ui/upload-asset', {
-    method: 'POST',
-    body: formData
-  });
-  return response;
-};
-
-export const deleteUIAsset = async assetId => {
-  const response = await makeAdminApiCall(`/admin/ui/assets/${assetId}`, {
-    method: 'DELETE'
-  });
-  return response;
-};
-
 // Projects API functions (#1036). Admin projects replace the admin sources:
 // knowledge an admin links to apps, workflow nodes and agent profiles.
 
@@ -483,22 +429,6 @@ export const updateAdminProject = async (projectId, project) => {
   const response = await makeAdminApiCall(adminProjectPath(projectId), {
     method: 'PUT',
     body: project
-  });
-  return response.data?.project;
-};
-
-/**
- * Change some settings of an admin project.
- *
- * @param {string} projectId
- * @param {Object} changes - Any of `name`, `description`, `instructions`, `enabled`,
- *   `category`, `tags`.
- * @returns {Promise<Object>} The updated project.
- */
-export const patchAdminProject = async (projectId, changes) => {
-  const response = await makeAdminApiCall(adminProjectPath(projectId), {
-    method: 'PATCH',
-    body: changes
   });
   return response.data?.project;
 };
@@ -896,17 +826,6 @@ export const listCredentials = async () => {
 };
 
 /**
- * Fetches a single credential profile by id (secrets redacted).
- *
- * @param {string} id - The credential profile id
- * @returns {Promise<Object>} The credential profile object
- */
-export const getCredential = async id => {
-  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`);
-  return response.data;
-};
-
-/**
  * Creates a new credential profile.
  *
  * @param {Object} data - Credential profile data (id, type, and type-specific fields)
@@ -1298,16 +1217,6 @@ export const fetchMarketplaceInstallations = async () => {
   return response.data;
 };
 
-/**
- * Fetches marketplace items that have updates available for installed content.
- *
- * @returns {Promise<Array>} Array of items with available updates
- */
-export const fetchMarketplaceUpdates = async () => {
-  const response = await makeAdminApiCall('/admin/marketplace/updates');
-  return response.data;
-};
-
 export const fetchAdminUsageTimeline = async (range = '30d', granularity) => {
   const params = new URLSearchParams({ range });
   if (granularity) params.set('granularity', granularity);
@@ -1397,128 +1306,4 @@ export const setAppFeedbackEnabled = async (appId, enabled) => {
 export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
   const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
   return response.data;
-};
-
-// Create an adminApi object that contains all the functions for compatibility
-export const adminApi = {
-  // Existing functions
-  makeAdminApiCall,
-  fetchAdminUsageData,
-  fetchAdminUsageTimeline,
-  fetchAdminUsageMeta,
-  updateAdminUsageTrackingMode,
-  triggerUsageRollup,
-  fetchAdminUsageUsers,
-  fetchAdminUsageApps,
-  fetchAdminUsageModels,
-  fetchAdminUsageProviders,
-  fetchAdminUsageLimitUser,
-  resetAdminUsageLimitUser,
-  fetchAdminFeedbackEntries,
-  setAppFeedbackEnabled,
-  fetchAdminCacheStats,
-  fetchAdminApps,
-  fetchAdminModels,
-  fetchAdminPrompts,
-  fetchAdminAppTemplates,
-  fetchAppInheritance,
-  createPrompt,
-  updatePrompt,
-  translateText,
-  generateAppUsageGuide,
-  toggleApps,
-  reorderApps,
-  fetchAdminPages,
-  fetchAdminPage,
-  createPage,
-  toggleModels,
-  updatePage,
-  togglePrompts,
-  deletePage,
-  getUIConfig,
-  updateUIConfig,
-  backupUIConfig,
-  getUIAssets,
-  uploadUIAsset,
-  deleteUIAsset,
-
-  // Projects functions
-  fetchAdminProjects,
-  fetchAdminProjectStats,
-  fetchAdminProjectKinds,
-  fetchAdminProjectConfig,
-  fetchAdminProjectTokens,
-  fetchAdminProjectDependencies,
-  fetchAdminProject,
-  createAdminProject,
-  updateAdminProject,
-  patchAdminProject,
-  deleteAdminProject,
-  toggleAdminProjects,
-  mergeAdminProjects,
-  transferAdminProjectItems,
-  testAdminProject,
-  estimateAdminProject,
-  addAdminProjectItem,
-  uploadAdminProjectItem,
-  updateAdminProjectItem,
-  updateAdminProjectItemText,
-  deleteAdminProjectItem,
-  refreshAdminProjectItem,
-  fetchAdminProjectItemText,
-  fetchProjectPickerPages,
-  searchProjectPickerIFinder,
-  fetchProjectPickerIFinderProfiles,
-  checkProjectPickerUrl,
-  previewProjectPickerUrl,
-  crawlProjectPickerUrl,
-
-  // Workflow functions
-  fetchAdminWorkflows,
-  fetchAdminWorkflow,
-  createAdminWorkflow,
-  updateAdminWorkflow,
-  deleteAdminWorkflow,
-  toggleAdminWorkflow,
-  fetchAdminGroups,
-
-  // Content access functions
-  fetchContentAccess,
-  updateContentAccess,
-
-  // Workflow Execution functions
-  fetchAdminExecutions,
-  cancelAdminExecution,
-
-  // Credential store functions
-  listCredentials,
-  getCredential,
-  createCredential,
-  updateCredential,
-  deleteCredential,
-
-  // Skills functions
-  fetchAdminSkills,
-  fetchAdminSkillDetail,
-  updateSkill,
-  toggleSkill,
-  deleteSkill,
-  importSkill,
-  exportSkill,
-
-  // Marketplace functions
-  fetchMarketplaceRegistries,
-  createMarketplaceRegistry,
-  updateMarketplaceRegistry,
-  deleteMarketplaceRegistry,
-  refreshMarketplaceRegistry,
-  testMarketplaceRegistry,
-  browseMarketplace,
-  fetchMarketplaceItemDetail,
-  installMarketplaceItem,
-  updateMarketplaceItem,
-  uninstallMarketplaceItem,
-  detachMarketplaceItem,
-  fetchMarketplaceInstallations,
-  fetchMarketplaceUpdates
 };
