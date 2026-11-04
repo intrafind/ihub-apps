@@ -17,21 +17,8 @@ import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 function FeedbackCard({ data }) {
   const { t } = useTranslation();
 
-  // New star rating data (merge with legacy feedback)
   const starRatings = { ...data.ratings };
 
-  // Map legacy feedback: good -> 5 stars, bad -> 1 star
-  const legacyGood = data.good || 0;
-  const legacyBad = data.bad || 0;
-
-  if (legacyGood > 0) {
-    starRatings[5] = (starRatings[5] || 0) + legacyGood;
-  }
-  if (legacyBad > 0) {
-    starRatings[1] = (starRatings[1] || 0) + legacyBad;
-  }
-
-  // Calculate total and average including legacy data
   const totalStarRatings = Object.values(starRatings).reduce((sum, count) => sum + count, 0);
   const weightedSum = Object.entries(starRatings).reduce(
     (sum, [rating, count]) => sum + Number.parseInt(rating) * count,

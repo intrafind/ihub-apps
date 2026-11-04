@@ -372,7 +372,7 @@ function mergeRequestContext(logData) {
 
 /**
  * Read logging.anonymizeIp from platform config and normalize it to
- * 'off' | 'mask' | 'drop'. Accepts boolean (true => mask) for ergonomics.
+ * 'off' | 'mask' | 'drop'.
  * Returns 'off' when config is unavailable so we never accidentally hide IPs
  * before config has loaded.
  */
@@ -382,7 +382,7 @@ function getIpAnonymizationMode() {
     const platformConfig = configCacheRef.getPlatform();
     const v = platformConfig?.logging?.anonymizeIp;
     if (v === 'drop') return 'drop';
-    if (v === true || v === 'mask') return 'mask';
+    if (v === 'mask') return 'mask';
     return 'off';
   } catch {
     return 'off';

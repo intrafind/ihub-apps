@@ -6,8 +6,7 @@
  *
  * encryptTokens/decryptTokens store OAuth access/refresh tokens for
  * Office365/GoogleDrive/Nextcloud integrations. They now use authenticated
- * AES-256-GCM instead of unauthenticated AES-256-CBC, while still accepting
- * the legacy CBC format so tokens written before this change keep decrypting.
+ * AES-256-GCM. The old unauthenticated AES-256-CBC format is rejected.
  */
 import crypto from 'crypto';
 import tokenStorage from '../services/TokenStorageService.js';
@@ -36,9 +35,8 @@ describe('TokenStorageService token encryption', () => {
     expect(decrypted).toEqual(tokens);
   });
 
-  test('still decrypts tokens stored in the legacy unauthenticated AES-256-CBC format', () => {
-    // Hand-build a payload the way the old encryptTokens() used to, before
-    // this fix switched to GCM, to prove old on-disk tokens keep working.
+  test('rejects tokens stored in the legacy unauthenticated AES-256-CBC format', () => {
+    // Hand-build a payload the way the old encryptTokens() used to.
     const key = Buffer.from(VALID_HEX_KEY, 'hex');
     const iv = crypto.randomBytes(16);
     const userId = 'user-legacy';
@@ -63,8 +61,9 @@ describe('TokenStorageService token encryption', () => {
       // no `algorithm`/`authTag` — matches what pre-fix encryptTokens() wrote
     };
 
-    const decrypted = tokenStorage.decryptTokens(legacyPayload, userId, serviceName);
-    expect(decrypted).toEqual(tokens);
+    expect(() => tokenStorage.decryptTokens(legacyPayload, userId, serviceName)).toThrow(
+      'Failed to decrypt tokens'
+    );
   });
 
   test('rejects a GCM payload whose ciphertext has been tampered with', () => {

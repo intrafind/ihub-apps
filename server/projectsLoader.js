@@ -14,9 +14,6 @@ import { createResourceLoader, createValidator } from './utils/resourceLoader.js
  */
 const projectsLoader = createResourceLoader({
   resourceName: 'Projects',
-  // createResourceLoader requires a legacyPath, but loadAllProjects() below
-  // only ever calls loadFromFiles() — this path is never read.
-  legacyPath: 'config/projects.json',
   individualPath: 'projects',
   validateItem: createValidator(['id', 'name'])
 });

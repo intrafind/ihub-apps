@@ -257,43 +257,6 @@ export default function registerAdminSkillsRoutes(app) {
   );
 
   /**
-   * POST /api/admin/skills/validate - Validate a skill directory
-   */
-  app.post(
-    buildServerPath('/api/admin/skills/validate'),
-    adminAuth,
-    requireFeature('skills'),
-    async (req, res) => {
-      try {
-        const { skillName } = req.body;
-        if (!skillName) {
-          return sendBadRequest(res, 'skillName is required');
-        }
-
-        const nameValidation = validateSkillName(skillName);
-        if (!nameValidation.valid) {
-          return res.json({ valid: false, errors: [nameValidation.error] });
-        }
-
-        const skillsRoot = getSkillsDirectory();
-        const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
-        if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
-          logger.warn('Skill directory validation blocked for invalid path', {
-            component: 'AdminSkills',
-            skillName
-          });
-          return sendBadRequest(res, 'Invalid skill path');
-        }
-
-        const validation = await validateSkillDirectory(resolvedSkillPath);
-        res.json(validation);
-      } catch (error) {
-        return sendInternalError(res, error, 'validate skill');
-      }
-    }
-  );
-
-  /**
    * GET /api/admin/skills/:name/export - Export single skill as zip
    */
   app.get(
