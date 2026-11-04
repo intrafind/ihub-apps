@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { buildApiUrl } from '../../utils/runtimeBasePath';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../shared/contexts/PlatformConfigContext';
-import LoginForm from '../auth/components/LoginForm';
 
 const PROVIDERS = [
   {
@@ -49,6 +48,25 @@ const PROVIDERS = [
 ];
 
 const TOTAL_STEPS = 4;
+
+// Mounts the vanilla auth gate (the single login UI, see auth-gate/auth-gate.js)
+// inline in this card instead of full-page. OIDC/NTLM buttons redirect away;
+// the wizard step is persisted in sessionStorage and restored on return.
+function EmbeddedLogin({ onSuccess }) {
+  const containerRef = useRef(null);
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+
+  useEffect(() => {
+    const gate = window.__authGate;
+    const container = containerRef.current;
+    if (!gate || !container) return undefined;
+    gate.show({ container, onSuccess: () => onSuccessRef.current?.() });
+    return () => gate.hide();
+  }, []);
+
+  return <div ref={containerRef} />;
+}
 
 export default function SetupWizard() {
   const navigate = useNavigate();
@@ -326,7 +344,7 @@ export default function SetupWizard() {
                 </div>
               )}
 
-              <LoginForm embedded onSuccess={handleLoginSuccess} />
+              <EmbeddedLogin onSuccess={handleLoginSuccess} />
 
               <button
                 onClick={handleSkip}
