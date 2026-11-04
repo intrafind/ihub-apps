@@ -38,7 +38,7 @@ jobs:
           cache: 'npm' # zizmor: ignore[cache-poisoning] PR/push check only; release jobs restore no cache
 
       - name: Setup mdBook and Rust
-        uses: ./.github/actions/setup-mdbook-rust
+        uses: $/.github/actions/setup-mdbook-rust
 
       - name: Install dependencies
         run: |
@@ -105,7 +105,7 @@ jobs:
           check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
 
       - name: Setup mdBook and Rust
-        uses: ./.github/actions/setup-mdbook-rust
+        uses: $/.github/actions/setup-mdbook-rust
         with:
           cache: 'false'
 
