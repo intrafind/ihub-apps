@@ -16,6 +16,7 @@ import {
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
+import { PROTECTED_GROUP_IDS } from '../../utils/protectedGroups.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -862,8 +863,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Prevent deletion of core system groups
-      const protectedGroups = ['admins', 'users', 'anonymous', 'authenticated'];
-      if (protectedGroups.includes(groupId)) {
+      if (PROTECTED_GROUP_IDS.includes(groupId)) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 

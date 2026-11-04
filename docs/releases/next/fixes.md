@@ -181,3 +181,12 @@ always fits the page.
 - A word that cannot fit its column at all, such as a long URL, is broken inside the column instead
   of shrinking the whole table.
 - Tables a model lays out with its own column widths keep them.
+
+## Default Groups Can No Longer Be Deleted or Lost
+
+The built-in groups `admins`, `users`, `anonymous` and `authenticated` are required for permission
+resolution, yet the admin UI still offered Delete and an editable ID for `admins` and `users`.
+
+- The Delete action is now hidden and the ID locked for all four default groups.
+- A migration restores any default group that was already deleted, with its original inheritance.
+  Groups that still exist, including your customizations, are left untouched.
