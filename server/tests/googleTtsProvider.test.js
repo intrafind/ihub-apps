@@ -46,7 +46,7 @@ describe('registry and schema', () => {
 
   test('the example models validate', async () => {
     for (const id of ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts']) {
-      const { default: shipped } = await import(`../../examples/models/google/${id}.json`, {
+      const { default: shipped } = await import(`./fixtures/models/google/${id}.json`, {
         with: { type: 'json' }
       });
       expect(modelConfigSchema.safeParse(shipped).success).toBe(true);

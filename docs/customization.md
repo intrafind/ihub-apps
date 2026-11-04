@@ -94,12 +94,6 @@ their siblings untouched:
 Any sibling keys you omit (e.g. other entries under `chat`) keep their built-in
 values.
 
-### Ready-made examples
-
-Working example override files ship in the repository under
-[`examples/locales/`](../examples/locales/) (`en.json` and `de.json`). Copy them
-into `contents/locales/` as a starting point.
-
 ### Good to know
 
 - **Unknown keys are ignored.** If your override contains a key that does not

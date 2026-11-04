@@ -8,8 +8,8 @@ import { adminProjectSchema } from '../../../server/validators/projectSchema.js'
 const repoRoot = process.cwd();
 const defaultAppsDir = path.join(repoRoot, 'server/defaults/apps');
 const defaultModelsDir = path.join(repoRoot, 'server/defaults/models');
-const exampleAppsDir = path.join(repoRoot, 'examples/apps');
-const exampleProjectsDir = path.join(repoRoot, 'examples/projects');
+const defaultProjectsDir = path.join(repoRoot, 'server/defaults/projects');
+const fixtureModelsDir = path.join(repoRoot, 'server/tests/fixtures/models');
 
 function readDefaultConfigs(directoryPath) {
   return fs
@@ -62,25 +62,23 @@ describe('default app and model configs', () => {
   });
 });
 
-// The cloud models that used to ship as defaults live in examples/models and
-// are installed from the iHub Examples marketplace.
-describe('example model configs', () => {
-  const exampleModelsDir = path.join(repoRoot, 'examples/models');
-  const readModel = file => JSON.parse(fs.readFileSync(path.join(exampleModelsDir, file), 'utf8'));
+// The cloud models that used to ship as defaults live in the iHub marketplace;
+// server/tests/fixtures/models keeps copies for the tests that need them.
+describe('fixture model configs', () => {
+  const readModel = file => JSON.parse(fs.readFileSync(path.join(fixtureModelsDir, file), 'utf8'));
+  const fixtureFiles = fs
+    .readdirSync(fixtureModelsDir, { recursive: true })
+    .filter(file => file.endsWith('.json'));
 
-  it('every model the examples catalog lists exists and validates', () => {
-    const catalog = JSON.parse(
-      fs.readFileSync(path.join(repoRoot, 'examples/catalog.json'), 'utf8')
-    );
-    const problems = catalog.items
-      .filter(item => item.type === 'model')
-      .flatMap(item => {
-        const file = path.join(repoRoot, 'examples', item.source.path);
-        if (!fs.existsSync(file)) return [`${item.name}: missing ${item.source.path}`];
-        const parsed = modelConfigSchema.safeParse(JSON.parse(fs.readFileSync(file, 'utf8')));
-        if (!parsed.success) return [`${item.name}: ${JSON.stringify(parsed.error.issues)}`];
-        return parsed.data.id === item.name ? [] : [`${item.name}: model id ${parsed.data.id}`];
-      });
+  it('every fixture model validates and its id matches its file name', () => {
+    expect(fixtureFiles.length).toBeGreaterThan(0);
+    const problems = fixtureFiles.flatMap(file => {
+      const parsed = modelConfigSchema.safeParse(readModel(file));
+      if (!parsed.success) return [`${file}: ${JSON.stringify(parsed.error.issues)}`];
+      return `${parsed.data.id}.json` === path.basename(file)
+        ? []
+        : [`${file}: model id ${parsed.data.id}`];
+    });
     expect(problems).toEqual([]);
   });
 
@@ -96,34 +94,22 @@ describe('example model configs', () => {
   });
 });
 
-// The examples are copied into `contents/` by hand, so an outdated one only
-// fails once someone installs it. Check them like the defaults.
-function readExampleProjectIds() {
-  return new Set(
-    readDefaultConfigs(exampleProjectsDir).map(({ fileName, config }) => {
-      const parsed = adminProjectSchema.safeParse(config);
-      if (!parsed.success) {
-        throw new Error(`Invalid examples/projects/${fileName}: ${parsed.error.message}`);
-      }
-      return parsed.data.id;
-    })
-  );
-}
-
-function exampleAppProblems(fileName, config, projectIds) {
-  const parsedApp = appConfigSchema.safeParse(config);
-  if (!parsedApp.success) return [`${fileName}: ${JSON.stringify(parsedApp.error.issues)}`];
-  return (parsedApp.data.projects ?? [])
-    .map(link => (typeof link === 'string' ? link : link.id))
-    .filter(projectId => !projectIds.has(projectId))
-    .map(projectId => `${fileName}: unknown project "${projectId}"`);
-}
-
-describe('example app configs', () => {
-  it('validate against the app schema and only link example projects', () => {
-    const projectIds = readExampleProjectIds();
-    const problems = readDefaultConfigs(exampleAppsDir).flatMap(({ fileName, config }) =>
-      exampleAppProblems(fileName, config, projectIds)
+describe('default projects', () => {
+  it('validate against the project schema, and apps only link shipped projects', () => {
+    const projectIds = new Set(
+      readDefaultConfigs(defaultProjectsDir).map(({ fileName, config }) => {
+        const parsed = adminProjectSchema.safeParse(config);
+        if (!parsed.success) {
+          throw new Error(`Invalid default project ${fileName}: ${parsed.error.message}`);
+        }
+        return parsed.data.id;
+      })
+    );
+    const problems = readDefaultConfigs(defaultAppsDir).flatMap(({ fileName, config }) =>
+      (appConfigSchema.parse(config).projects ?? [])
+        .map(link => (typeof link === 'string' ? link : link.id))
+        .filter(projectId => !projectIds.has(projectId))
+        .map(projectId => `${fileName}: unknown project "${projectId}"`)
     );
     expect(problems).toEqual([]);
   });

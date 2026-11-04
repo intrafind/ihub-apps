@@ -18,12 +18,18 @@ While it is on, the **Marketplace** entry appears in the admin sidebar under **A
 
 ## Shipped registries
 
-Two registries are preconfigured in `contents/config/registries.json`:
+One registry is preconfigured in `contents/config/registries.json`:
 
 | Registry                      | Catalog                                                                                     | Content |
 | ----------------------------- | ------------------------------------------------------------------------------------------- | ------- |
-| **iHub Official Marketplace** | `https://raw.githubusercontent.com/intrafind/ihub-marketplace/main/catalog.json`           | 92 apps (22 general apps and department assistants for data, engineering, finance, HR, security, leadership, legal, marketing, operations, product, PR, sales and support), 195 skills, 30 integrations (CKAN and 29 hosted MCP servers), 19 model configurations, 6 workflows, 5 prompts |
-| **iHub Examples**             | `https://raw.githubusercontent.com/intrafind/ihub-apps/main/examples/catalog.json`         | Example apps, models (such as the [AWS Bedrock](models.md#aws-bedrock) models), prompts and skills from this repository |
+| **iHub Official Marketplace** | `https://raw.githubusercontent.com/intrafind/ihub-marketplace/main/catalog.json`           | 100 apps (30 general apps and department assistants for data, engineering, finance, HR, security, leadership, legal, marketing, operations, product, PR, sales and support), 195 skills, 30 integrations (CKAN and 29 hosted MCP servers), 36 model configurations (including the [AWS Bedrock](models.md#aws-bedrock) models and the speech models), 6 workflows, 5 prompts |
+
+Earlier versions also preconfigured an **iHub Examples** registry, served from the `examples/`
+folder of this repository. That folder is gone and its content now lives in the official
+marketplace; an update removes the registry from `registries.json` (migration V224). Apps, models
+and prompts you installed from it keep working and stay under **Installed**; they are no longer
+checked for updates, because their registry is gone. Install the same item from the official
+marketplace to get updates, or **detach** it to maintain it by hand.
 
 The official catalog can also be browsed without an iHub installation at
 [intrafind.github.io/ihub-marketplace](https://intrafind.github.io/ihub-marketplace/). Its source is
@@ -154,7 +160,7 @@ while the marketplace feature is on and a registry has been refreshed; switch it
 and last sync. **Refresh** re-fetches a catalog, **Edit** changes it, and the toggle takes a
 registry out of browsing without deleting it.
 
-![Marketplace registries: iHub Official Marketplace and iHub Examples](assets/screenshots/admin-marketplace-registries.png)
+![Marketplace registries: iHub Official Marketplace](assets/screenshots/admin-marketplace-registries.png)
 
 **Add Registry** asks for:
 
@@ -273,8 +279,8 @@ docker run -d --restart unless-stopped -p 8080:8080 ghcr.io/intrafind/ihub-marke
 ```
 
 Then add it under **Manage Registries → Add Registry** with the Catalog URL
-`http://<host>:8080/catalog.json`, press **Refresh**, and switch off **iHub Official Marketplace**
-and **iHub Examples**, which need internet access. The bundle's website shows the URL to copy.
+`http://<host>:8080/catalog.json`, press **Refresh**, and switch off **iHub Official Marketplace**,
+which needs internet access. The bundle's website shows the URL to copy.
 
 - **Nothing is left out.** The 89 skills that the official catalog links to on GitHub (the Google
   skills) are copied into the bundle at their pinned commits, with their reference files and

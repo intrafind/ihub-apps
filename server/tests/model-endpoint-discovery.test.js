@@ -297,7 +297,7 @@ test('a speech-to-text model is a transcription model, called on the audio API',
 
 /** The model configs iHub ships as examples, which an import must reproduce. */
 const exampleModel = async file =>
-  JSON.parse(await fs.readFile(new URL(`../../examples/models/${file}`, import.meta.url), 'utf8'));
+  JSON.parse(await fs.readFile(new URL(`./fixtures/models/${file}`, import.meta.url), 'utf8'));
 
 test('Google speech models are imported for the backend that runs them', async () => {
   const body = {
