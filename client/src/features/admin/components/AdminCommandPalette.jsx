@@ -40,7 +40,8 @@ const ADMIN_PAGES = [
   { label: 'Updates', href: '/admin/updates' },
   { label: 'Advanced', href: '/admin/advanced' },
   { label: 'Audit Log', href: '/admin/audit-log' },
-  { label: 'Changelog', href: '/admin/changelog' }
+  { label: 'Changelog', href: '/admin/changelog' },
+  { label: 'Documentation', href: '/admin/docs' }
 ];
 
 const ACTIONS = [

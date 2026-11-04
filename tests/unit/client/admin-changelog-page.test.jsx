@@ -7,7 +7,17 @@
  * and the translation hook are stubbed.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  buildApiUrl: p => `/api/${p}`,
+  buildPath: p => p
+}));
+
+// The page reads `?version=` and the fragment from the router.
+const render = (ui, { route = '/admin/changelog' } = {}) =>
+  rtlRender(<MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>);
 
 const mockMakeAdminApiCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -129,7 +139,8 @@ const RELEASES = {
             '| ------- | ----- |',
             '| `tools` | `["*"]` |',
             '',
-            'See [the docs](https://example.com/docs).'
+            'See [the docs](https://example.com/docs) and',
+            '[compatibility](../../integrations.md#version-compatibility-and-release-notes).'
           ].join('\n')
         }
       ],
@@ -232,6 +243,11 @@ describe('AdminChangelogPage', () => {
     expect(entry.querySelector('blockquote').textContent).toContain('could not be reached');
     expect(entry.querySelector('table td code').textContent).toBe('tools');
     expect(entry.querySelector('a[href="https://example.com/docs"]')).not.toBeNull();
+    // A repository-relative link to a doc opens Admin → Documentation, not `/integrations.md`.
+    const docLink = within(entry).getByRole('link', { name: 'compatibility' });
+    expect(docLink.getAttribute('href')).toBe(
+      '/admin/docs/integrations.md#version-compatibility-and-release-notes'
+    );
 
     // Breaking changes render their migration note.
     expect(screen.getByText('Before upgrading:').tagName).toBe('STRONG');
@@ -344,6 +360,14 @@ describe('AdminChangelogPage', () => {
     expect(
       await screen.findByRole('heading', { level: 3, name: 'Image Models Save Again' })
     ).toBeVisible();
+  });
+
+  test('opens the release a ?version= link names', async () => {
+    mockApi();
+    render(<AdminChangelogPage />, { route: '/admin/changelog?version=5.5.6#older' });
+
+    expect(await screen.findByRole('heading', { level: 3, name: 'Older Feature' })).toBeVisible();
+    expect(detailCalls()).toEqual(['/admin/changelog/5.5.6']);
   });
 
   test('says so when there are no release notes', async () => {

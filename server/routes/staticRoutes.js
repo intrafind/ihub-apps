@@ -5,11 +5,11 @@ import express from 'express';
 import { getContentsPath } from '../utils/contentsPath.js';
 import path from 'node:path';
 import config from '../config.js';
-import { authRequired } from '../middleware/authRequired.js';
 import logger from '../utils/logger.js';
 import {
   buildUploadsPath,
   buildDocsPath,
+  buildServerPath,
   getRelativeRequestPath,
   getBasePath
 } from '../utils/basePath.js';
@@ -73,14 +73,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   });
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
-  // Serve documentation with authentication
-  const docsPath = path.join(rootDir, 'docs/book');
-  logger.info('Serving documentation', {
-    component: 'StaticRoutes',
-    docsPath,
-    mountPath: buildDocsPath('/')
+  // The documentation used to be an mdBook site mounted here. It now lives in the admin UI
+  // (Admin → Documentation, rendered from the shipped Markdown); old links land there.
+  app.use(buildDocsPath('/'), (req, res) => {
+    res.redirect(302, buildServerPath('/admin/docs'));
   });
-  app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
   // Only set up SPA routing in production or packaged mode
   // In development, Vite handles all frontend routing
@@ -95,11 +92,6 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       // Don't serve SPA for API routes
       if (relativePath.startsWith('/api')) {
         return next();
-      }
-
-      // Don't serve SPA for docs routes if they weren't handled by static middleware
-      if (relativePath.startsWith('/docs')) {
-        return res.status(404).send('Documentation not found');
       }
 
       // Don't serve SPA for office add-in routes — handled by registerOfficeRoutes

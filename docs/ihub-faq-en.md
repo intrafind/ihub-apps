@@ -126,7 +126,7 @@ Depending on the chosen option:
 ## Support & Documentation
 
 ### Where can I find the complete documentation?
-- **In running iHub**: Under `/help` as mdBook
+- **In running iHub**: Under **Admin → Documentation** (`/admin/docs`), for admins
 - **GitHub repository**: [github.com/intrafind/ihub-apps](https://github.com/intrafind/ihub-apps)
 - **Files in iHub package**: `docs` folder with guides
 

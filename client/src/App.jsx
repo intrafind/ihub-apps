@@ -144,6 +144,7 @@ const AdminChatHistoryPage = lazyWithRetry(
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminAuditLogPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuditLogPage'));
 const AdminChangelogPage = lazyWithRetry(() => import('./features/admin/pages/AdminChangelogPage'));
+const AdminDocsPage = lazyWithRetry(() => import('./features/admin/pages/AdminDocsPage'));
 const AdminOfficeIntegrationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOfficeIntegrationPage')
 );
@@ -862,6 +863,7 @@ function App() {
 
             {/* Platform */}
             <Route path="changelog" element={<LazyAdminRoute component={AdminChangelogPage} />} />
+            <Route path="docs/*" element={<LazyAdminRoute component={AdminDocsPage} />} />
             {showAdminPage('features') && (
               <Route path="features" element={<LazyAdminRoute component={AdminFeaturesPage} />} />
             )}
