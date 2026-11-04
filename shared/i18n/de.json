@@ -1373,7 +1373,9 @@
       "details": {
         "messages": "Nachrichten",
         "tokens": "Token",
-        "editModel": "Modell bearbeiten"
+        "editModel": "Modell bearbeiten",
+        "requests30d": "Anfragen (30 Tage)",
+        "tokens30d": "Tokens (30 Tage)"
       },
       "edit": {
         "title": "Modell bearbeiten",
@@ -4759,37 +4761,12 @@
         "noApps": "Keine Apps konfiguriert."
       },
       "review": {
-        "unavailable": "Feedback-Statistiken sind nicht verfügbar."
+        "unavailable": "Feedback-Statistiken sind nicht verfügbar.",
+        "range": "Bewertungen der letzten 90 Tage."
       }
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen",
-      "promptCache": {
-        "title": "Prompt-Caching",
-        "subtitle": "Eingabe-Tokens, die der Anbieter aus seinem Prompt-Cache geliefert hat. Gecachte Tokens werden günstiger abgerechnet und kommen schneller zurück.",
-        "hitRatio": "Cache-Trefferquote",
-        "hitRatioHint": "Von {{tokens}} Eingabe-Tokens auf Modellen, die Caching melden",
-        "hitRatioValue": "{{ratio}} Cache-Trefferquote",
-        "notReported": "Noch kein Anbieter hat Cache-Nutzung gemeldet",
-        "notReportedShort": "nicht gemeldet",
-        "notReportedRange": "In diesem Zeitraum hat kein Anbieter Prompt-Cache-Nutzung gemeldet.",
-        "cachedTokens": "Gecachte Eingabe-Tokens",
-        "writeTokens": "Cache-Schreib-Tokens",
-        "writeToRead": "{{ratio}} der Cache-Lesezugriffe",
-        "writesOnly": "Geschrieben, aber noch nie gelesen",
-        "writesExceedReads": "Mehr Schreib- als Lesezugriffe: Wo Schreiben extra kostet, kostet Caching mehr, als es spart",
-        "breakdown": "Cache-Nutzung nach",
-        "byModel": "Modell",
-        "byApp": "App",
-        "byProvider": "Anbieter",
-        "inputTokens": "Eingabe-Tokens",
-        "noRows": "Noch keine Nutzung erfasst.",
-        "providerSince": "Die Aufschlüsselung nach Anbieter umfasst die Nutzung seit dieser Version.",
-        "inputOverTime": "Gecachte vs. ungecachte Eingabe-Tokens",
-        "cached": "Gecacht",
-        "uncached": "Ungecacht",
-        "topProviders": "Anbieter"
-      },
       "limits": {
         "status": {
           "exceeded": "Limit erreicht",
@@ -4870,7 +4847,133 @@
         }
       },
       "tabs": {
-        "limits": "Limits & Kontingente"
+        "limits": "Limits & Kontingente",
+        "overview": "Übersicht",
+        "breakdown": "Aufschlüsselung",
+        "reliability": "Zuverlässigkeit"
+      },
+      "reports": {
+        "dim": {
+          "user": "Benutzer",
+          "group": "Gruppe",
+          "app": "App",
+          "model": "Modell",
+          "provider": "Anbieter",
+          "surface": "Bereich"
+        },
+        "col": {
+          "requests": "Anfragen",
+          "input": "Eingabe",
+          "cached": "Aus Cache",
+          "output": "Ausgabe",
+          "total": "Tokens gesamt",
+          "errorRate": "Fehler",
+          "p95": "p95",
+          "lastUsed": "Zuletzt genutzt",
+          "code": "Code",
+          "count": "Anzahl",
+          "p50": "p50",
+          "ttft": "Erstes Token (Ø)"
+        },
+        "breakdown": "Aufschlüsselung",
+        "dimension": "Dimension",
+        "exportTable": "Tabelle als CSV",
+        "exportRaw": "Rohdaten als CSV",
+        "empty": {
+          "breakdown": "In diesem Zeitraum gibt es nichts aufzuschlüsseln",
+          "groupHint": "Aufrufe werden den Gruppen zugeordnet, die ein Benutzer beim Aufruf hatte; eingebaute Gruppen wie „authenticated“ werden ausgelassen.",
+          "title": "Keine Nutzung in diesem Zeitraum",
+          "errors": "Keine Fehler in diesem Zeitraum",
+          "models": "In diesem Zeitraum wurde kein Modell genutzt",
+          "hint": "Modellaufrufe aus Chats, Agenten, Workflows, geplanten Aufgaben und der API erscheinen hier, sobald sie stattfinden.",
+          "apps": "In diesem Zeitraum wurde keine App genutzt"
+        },
+        "perModel": "Pro Modell",
+        "kpi": {
+          "noChange": "Unverändert gegenüber dem Vorzeitraum",
+          "change": "{{arrow}} {{percent}} gegenüber dem Vorzeitraum",
+          "noPrevious": "Keine Daten im Vorzeitraum",
+          "requests": "Anfragen",
+          "inputTokens": "Eingabe-Tokens",
+          "cachedTokens": "Eingabe aus Cache",
+          "cacheHit": "{{percent}} Cache-Treffer",
+          "outputTokens": "Ausgabe-Tokens",
+          "errorRate": "Fehlerquote",
+          "errors": "{{count}} Fehler",
+          "latencyP95": "Latenz p95",
+          "latencyP50": "p50 {{value}}",
+          "activeUsers": "Aktive Benutzer"
+        },
+        "range": {
+          "today": "Heute",
+          "24h": "24 Stunden",
+          "7d": "7 Tage",
+          "30d": "30 Tage",
+          "90d": "90 Tage",
+          "12m": "12 Monate",
+          "custom": "Benutzerdefiniert",
+          "label": "Zeitraum",
+          "from": "Von",
+          "to": "Bis",
+          "apply": "Anwenden"
+        },
+        "autoRefresh": "Automatisch aktualisieren",
+        "utcNote": "Tage sind UTC-Tage.",
+        "errorRateOverTime": "Fehlerquote im Zeitverlauf",
+        "errorsByCode": "Fehler nach Code",
+        "errorsByProvider": "Fehler nach Anbieter",
+        "chart": {
+          "errors": "Fehler",
+          "total": "Gesamt",
+          "inputUncached": "Eingabe (ohne Cache)",
+          "inputCached": "Eingabe (aus Cache)",
+          "output": "Ausgabe",
+          "succeeded": "Anfragen"
+        },
+        "latencyByModel": "Latenz nach Modell",
+        "latencyNote": "Die Latenz umfasst den ganzen Aufruf, von der Anfrage bis zum letzten Token; von einem Nutzungslimit abgewiesene Aufrufe sind nicht enthalten.",
+        "top": {
+          "value": "{{tokens}} Tokens · {{requests}} Anfr."
+        },
+        "overTime": "Nutzung im Zeitverlauf",
+        "updated": "Aktualisiert {{when}}",
+        "metric": "Kennzahl",
+        "metricTokens": "Tokens",
+        "metricRequests": "Anfragen",
+        "topModels": "Top-Modelle",
+        "topApps": "Top-Apps",
+        "feedbackLine": "{{count}} Bewertungen, Durchschnitt {{avg}} ★",
+        "loading": "Wird geladen…",
+        "loadFailed": "Nutzungsdaten konnten nicht geladen werden",
+        "mode": {
+          "anonymousDesc": "Benutzer und Unterhaltungen werden als nicht umkehrbare Fingerabdrücke erfasst.",
+          "pseudonymousDesc": "Jede Unterhaltung wird als eigener Benutzer erfasst; Benutzer-IDs werden nicht gespeichert.",
+          "identifiedDesc": "Einträge nennen die echte Benutzer-ID.",
+          "label": "Erfassungsmodus"
+        },
+        "subtitle": "Anfragen und Tokens jedes Modellaufrufs – Chats, Agenten, Workflows, geplante Aufgaben und die API.",
+        "surface": {
+          "chat": "Chat",
+          "agent": "Agent",
+          "workflow": "Workflow",
+          "task": "Geplante Aufgabe",
+          "api": "API",
+          "magic": "Magic Prompt",
+          "system": "System"
+        },
+        "outcome": {
+          "ok": "Erfolgreich",
+          "error": "Fehlgeschlagen",
+          "aborted": "Abgebrochen",
+          "quota": "Durch Limit abgewiesen",
+          "rate_limited": "Ratenbegrenzt"
+        }
+      },
+      "title": "Nutzungsberichte",
+      "trackingModes": {
+        "anonymous": "Anonym",
+        "pseudonymous": "Pseudonym",
+        "identified": "Identifiziert"
       }
     },
     "localization": {
@@ -5080,7 +5183,8 @@
         "enabledCount": "{{count}} aktiviert"
       },
       "stats": {
-        "projects": "Projekte"
+        "projects": "Projekte",
+        "modelCalls": "Modellaufrufe"
       },
       "actions": {
         "manageProjects": "Projekte verwalten"
@@ -5089,6 +5193,9 @@
         "label": "Integrationen",
         "withUpdates": "{{enabled}} / {{total}} · {{count}} Updates verfügbar",
         "incompatible": "{{count}} Installationen laufen nicht auf dieser iHub-Version"
+      },
+      "users": {
+        "active": "{{count}} aktiv (30 T.)"
       }
     },
     "copilotAgent": {

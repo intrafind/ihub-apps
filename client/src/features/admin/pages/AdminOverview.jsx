@@ -673,7 +673,7 @@ export default function AdminOverview() {
       },
       {
         key: 'chats',
-        label: t('admin.overview.stats.conversations', 'Conversations'),
+        label: t('admin.overview.stats.modelCalls', 'Model calls'),
         icon: ChatBubbleLeftRightIcon,
         iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
         ...stats.chats

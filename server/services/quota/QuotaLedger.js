@@ -4,9 +4,9 @@
 /**
  * Live token counters for usage limits: per user × model × window.
  *
- * Kept apart from the analytics in usageTracker.js on purpose: limits need
+ * Kept apart from the usage analytics (services/usage) on purpose: limits need
  * the real user (analytics may pseudonymize it) and the current numbers
- * (analytics rollups lag up to an hour). Only counts are stored, no content.
+ * (analytics are aggregated per day). Only counts are stored, no content.
  *
  * File: `contents/data/quota-usage.json`
  * ```
@@ -21,7 +21,7 @@
  * zero, so nothing has to run at a reset.
  *
  * Every cluster worker counts into `pending` and adds it to the file under a
- * lock (utils/sharedJsonFile.js), like usageTracker.js.
+ * lock (utils/sharedJsonFile.js).
  *
  * @module services/quota/QuotaLedger
  */

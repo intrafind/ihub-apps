@@ -1300,11 +1300,11 @@ if (cluster.isPrimary && workerCount > 1) {
     // off the streaming path; drain what is still buffered, or a chat resumes
     // after the restart threaded onto a stale parent message.
     await conversationStateManager.flush();
-    // Usage counts wait in memory for the next flush to usage.json; write
-    // them now rather than losing up to one flush interval.
+    // Usage records and quota counts wait in memory for their next flush;
+    // write them now rather than losing up to one flush interval.
     try {
-      const { flushUsage } = await import('./usageTracker.js');
-      await flushUsage();
+      const { flushQueue } = await import('./services/UsageEventLog.js');
+      await flushQueue();
       const { getQuotaLedger } = await import('./services/quota/QuotaLedger.js');
       await getQuotaLedger().flush();
     } catch {

@@ -3,7 +3,6 @@
 
 import configCache from '../../configCache.js';
 import { logInteraction } from '../../utils.js';
-import { recordFeedback } from '../../usageTracker.js';
 import { recordFeedback as recordFeedbackUsage } from '../../services/usage/usageRecorder.js';
 import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
@@ -300,13 +299,6 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           baseUrl:
             (await conversationStateManager.loadState(chatId, { ownerId: req.user?.id ?? null }))
               ?.baseUrl || iAssistantService.getConfig()?.baseUrl
-        });
-        await recordFeedback({
-          userId: userSessionId,
-          appId,
-          modelId,
-          rating,
-          user: req.user
         });
         await recordFeedbackUsage({
           user: req.user,

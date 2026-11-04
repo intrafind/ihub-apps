@@ -1100,7 +1100,9 @@
       "details": {
         "messages": "Messages",
         "tokens": "Tokens",
-        "editModel": "Edit Model"
+        "editModel": "Edit Model",
+        "requests30d": "Requests (30 days)",
+        "tokens30d": "Tokens (30 days)"
       },
       "edit": {
         "title": "Edit Model",
@@ -4460,37 +4462,12 @@
         "noApps": "No apps configured."
       },
       "review": {
-        "unavailable": "Feedback statistics are not available."
+        "unavailable": "Feedback statistics are not available.",
+        "range": "Ratings of the last 90 days."
       }
     },
     "usage": {
       "reviewFeedback": "Review feedback",
-      "promptCache": {
-        "title": "Prompt caching",
-        "subtitle": "Input tokens the provider served from its prompt cache. Cached tokens are billed at a discount and return faster.",
-        "hitRatio": "Cache hit ratio",
-        "hitRatioHint": "Of {{tokens}} input tokens on models that report caching",
-        "hitRatioValue": "{{ratio}} cache hit ratio",
-        "notReported": "No provider has reported cache usage yet",
-        "notReportedShort": "not reported",
-        "notReportedRange": "No provider reported prompt-cache usage in this range.",
-        "cachedTokens": "Cached input tokens",
-        "writeTokens": "Cache write tokens",
-        "writeToRead": "{{ratio}} of cache reads",
-        "writesOnly": "Written but never read yet",
-        "writesExceedReads": "More writes than reads: where writes cost extra, caching costs more than it saves",
-        "breakdown": "Cache usage by",
-        "byModel": "Model",
-        "byApp": "App",
-        "byProvider": "Provider",
-        "inputTokens": "Input tokens",
-        "noRows": "No usage recorded yet.",
-        "providerSince": "The provider breakdown covers usage recorded since this version.",
-        "inputOverTime": "Cached vs. uncached input tokens",
-        "cached": "Cached",
-        "uncached": "Uncached",
-        "topProviders": "Providers"
-      },
       "limits": {
         "status": {
           "exceeded": "Limit reached",
@@ -4571,7 +4548,133 @@
         }
       },
       "tabs": {
-        "limits": "Limits & quotas"
+        "limits": "Limits & quotas",
+        "overview": "Overview",
+        "breakdown": "Breakdown",
+        "reliability": "Reliability"
+      },
+      "reports": {
+        "dim": {
+          "user": "User",
+          "group": "Group",
+          "app": "App",
+          "model": "Model",
+          "provider": "Provider",
+          "surface": "Surface"
+        },
+        "col": {
+          "requests": "Requests",
+          "input": "Input",
+          "cached": "Cached",
+          "output": "Output",
+          "total": "Total tokens",
+          "errorRate": "Errors",
+          "p95": "p95",
+          "lastUsed": "Last used",
+          "code": "Code",
+          "count": "Count",
+          "p50": "p50",
+          "ttft": "First token (avg.)"
+        },
+        "breakdown": "Breakdown",
+        "dimension": "Dimension",
+        "exportTable": "Table CSV",
+        "exportRaw": "Raw events CSV",
+        "empty": {
+          "breakdown": "Nothing to break down in this range",
+          "groupHint": "Calls are grouped by the groups a user had when they were made; built-in groups such as \"authenticated\" are left out.",
+          "title": "No usage in this range",
+          "errors": "No errors in this range",
+          "models": "No model was used in this range",
+          "hint": "Model calls from chats, agents, workflows, scheduled tasks and the API appear here as they happen.",
+          "apps": "No app was used in this range"
+        },
+        "perModel": "Per model",
+        "kpi": {
+          "noChange": "No change vs. previous period",
+          "change": "{{arrow}} {{percent}} vs. previous period",
+          "noPrevious": "No data in the previous period",
+          "requests": "Requests",
+          "inputTokens": "Input tokens",
+          "cachedTokens": "Cached input",
+          "cacheHit": "{{percent}} cache hit",
+          "outputTokens": "Output tokens",
+          "errorRate": "Error rate",
+          "errors": "{{count}} errors",
+          "latencyP95": "Latency p95",
+          "latencyP50": "p50 {{value}}",
+          "activeUsers": "Active users"
+        },
+        "range": {
+          "today": "Today",
+          "24h": "24 hours",
+          "7d": "7 days",
+          "30d": "30 days",
+          "90d": "90 days",
+          "12m": "12 months",
+          "custom": "Custom",
+          "label": "Time range",
+          "from": "From",
+          "to": "To",
+          "apply": "Apply"
+        },
+        "autoRefresh": "Auto-refresh",
+        "utcNote": "Days are UTC days.",
+        "errorRateOverTime": "Error rate over time",
+        "errorsByCode": "Errors by code",
+        "errorsByProvider": "Errors by provider",
+        "chart": {
+          "errors": "Errors",
+          "total": "Total",
+          "inputUncached": "Input (uncached)",
+          "inputCached": "Input (cached)",
+          "output": "Output",
+          "succeeded": "Requests"
+        },
+        "latencyByModel": "Latency by model",
+        "latencyNote": "Latency is the whole call, from the request to the last token; calls refused by a usage limit are left out.",
+        "top": {
+          "value": "{{tokens}} tokens · {{requests}} req."
+        },
+        "overTime": "Usage over time",
+        "updated": "Updated {{when}}",
+        "metric": "Metric",
+        "metricTokens": "Tokens",
+        "metricRequests": "Requests",
+        "topModels": "Top models",
+        "topApps": "Top apps",
+        "feedbackLine": "{{count}} ratings, average {{avg}} ★",
+        "loading": "Loading…",
+        "loadFailed": "Could not load usage data",
+        "mode": {
+          "anonymousDesc": "Users and conversations are recorded as irreversible fingerprints.",
+          "pseudonymousDesc": "Each conversation is recorded as its own user; no user ids are stored.",
+          "identifiedDesc": "Records name the real user id.",
+          "label": "Tracking mode"
+        },
+        "subtitle": "Requests and tokens of every model call — chats, agents, workflows, scheduled tasks and the API.",
+        "surface": {
+          "chat": "Chat",
+          "agent": "Agent",
+          "workflow": "Workflow",
+          "task": "Scheduled task",
+          "api": "API",
+          "magic": "Magic prompt",
+          "system": "System"
+        },
+        "outcome": {
+          "ok": "Succeeded",
+          "error": "Failed",
+          "aborted": "Stopped",
+          "quota": "Refused by limit",
+          "rate_limited": "Rate limited"
+        }
+      },
+      "title": "Usage Reports",
+      "trackingModes": {
+        "anonymous": "Anonymous",
+        "pseudonymous": "Pseudonymous",
+        "identified": "Identified"
       }
     },
     "localization": {
@@ -4781,7 +4884,8 @@
         "enabledCount": "{{count}} enabled"
       },
       "stats": {
-        "projects": "Projects"
+        "projects": "Projects",
+        "modelCalls": "Model calls"
       },
       "actions": {
         "manageProjects": "Manage Projects"
@@ -4790,6 +4894,9 @@
         "label": "Integrations",
         "withUpdates": "{{enabled}} / {{total}} · {{count}} updates available",
         "incompatible": "{{count}} installations cannot run on this iHub version"
+      },
+      "users": {
+        "active": "{{count}} active (30d)"
       }
     },
     "copilotAgent": {

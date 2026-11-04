@@ -21,7 +21,6 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
-import { reloadConfig } from '../../usageTracker.js';
 import { runRollups } from '../../services/UsageAggregator.js';
 import { readDayEvents, flushQueue } from '../../services/UsageEventLog.js';
 import { getUsageTrackingMode } from '../../services/usage/usageRecorder.js';
@@ -201,7 +200,6 @@ export default function registerAdminUsageRoutes(app) {
       platform.features.usageTrackingMode = trackingMode;
       await configStore.writeJson('config/platform.json', platform);
       await configCache.refreshCacheEntry('config/platform.json');
-      reloadConfig();
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'update tracking mode');
