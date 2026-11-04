@@ -9,6 +9,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchUsageLimitGroups,
   fetchUsageLimitModels,
+  fetchUsageLimitNear,
   fetchUsageLimitSettings,
   fetchUsageLimitUsers,
   resetUsageLimitUser,
@@ -77,6 +78,89 @@ function bucketLabel(bucket, t, language) {
       ? localizedName(bucket.modelName, language, bucket.modelId)
       : t('admin.usage.limits.allModels', 'All models');
   return `${scope} · ${windowLabel(bucket.window, t)}`;
+}
+
+/* ── Near limit ─────────────────────────────────────────────────────────── */
+
+/**
+ * Users above 80 % of any limit, the soonest reset first, each with its bar
+ * and reset countdown — who will be refused next, and when that stops.
+ */
+function NearLimitCard() {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchUsageLimitNear({ limit: 20 })
+      .then(result => !cancelled && setData(result))
+      .catch(e => !cancelled && setError(e));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <section className={CARD} data-testid="usage-near-limit">
+      <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {t('admin.usage.limits.near.title', 'Near a limit')}
+        </h3>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          {t(
+            'admin.usage.limits.near.subtitle',
+            'Users above 80 % of a budget, the soonest reset first.'
+          )}
+        </p>
+      </div>
+      <div className="p-4">
+        {error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {getAdminApiErrorMessage(error) ||
+              t('admin.usage.limits.loadFailed', 'Could not load usage')}
+          </p>
+        ) : !data ? (
+          <div className="h-10" />
+        ) : data.items.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('admin.usage.limits.near.none', 'Nobody is above 80 % of a limit.')}
+          </p>
+        ) : (
+          <ul className="grid gap-4 md:grid-cols-2">
+            {data.items.map(item => (
+              <li key={`${item.userKey}:${item.bucket.id}`} className="min-w-0">
+                <p className="mb-1 truncate text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {item.name}
+                  {item.email ? ` · ${item.email}` : ''}
+                </p>
+                <QuotaBar
+                  size="sm"
+                  label={bucketLabel(item.bucket, t, lang)}
+                  used={item.bucket.used}
+                  limit={item.bucket.limit}
+                  resetAt={item.bucket.resetAt}
+                  hint={sourceLabel(item.bucket.source, t)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {data && data.total > data.items.length && (
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.usage.limits.near.more',
+              '{{count}} more — filter the users below by "Near limit".',
+              {
+                count: data.total - data.items.length
+              }
+            )}
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 /* ── Settings ───────────────────────────────────────────────────────────── */
@@ -740,6 +824,7 @@ function UsageQuotasPanel() {
 
   return (
     <div className="space-y-6" data-testid="usage-quotas-panel">
+      <NearLimitCard />
       <SettingsCard />
       <div className="flex gap-2" role="tablist">
         {views.map(([id, label]) => (

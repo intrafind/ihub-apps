@@ -4545,6 +4545,12 @@
           "friday": "Friday",
           "saturday": "Saturday",
           "sunday": "Sunday"
+        },
+        "near": {
+          "title": "Near a limit",
+          "subtitle": "Users above 80 % of a budget, the soonest reset first.",
+          "none": "Nobody is above 80 % of a limit.",
+          "more": "{{count}} more — filter the users below by \"Near limit\"."
         }
       },
       "tabs": {
@@ -9036,6 +9042,15 @@
     "picker": {
       "exceeded": "Limit reached · resets in {{until}}",
       "used": "{{percent}}% of {{window}} limit used"
+    },
+    "panel": {
+      "title": "My usage",
+      "today": "Today",
+      "tokens": "{{tokens}} tokens",
+      "month": "This month",
+      "exceeded": "Limit reached — new requests wait for the reset.",
+      "remaining": "{{remaining}} tokens left",
+      "noLimits": "No token limits apply to you."
     }
   }
 }

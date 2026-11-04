@@ -221,6 +221,42 @@ export async function listQuotaUsers({
 }
 
 /**
+ * Users above `threshold` of any of their limits, one row per such bucket,
+ * soonest reset first (then fullest). For the "near limit" list.
+ *
+ * @param {Object} [options]
+ * @param {number} [options.threshold=WARNING_THRESHOLD] - share of a limit, 0..1
+ * @param {number} [options.limit=50] - at most this many rows
+ * @returns {Promise<{threshold: number, items: Object[], total: number}>}
+ */
+export async function listNearLimitUsers({ threshold = WARNING_THRESHOLD, limit = 50 } = {}) {
+  const share = Number.isFinite(Number(threshold))
+    ? Math.min(Math.max(Number(threshold), 0), 1)
+    : WARNING_THRESHOLD;
+  const items = [];
+  for (const row of await collectUsers()) {
+    const near = row.buckets.filter(b => b.limit > 0 && b.used / b.limit >= share);
+    if (!near.length) continue;
+    const display = displayOf(row.userKey, row.record, row.entry);
+    for (const bucket of near) {
+      items.push({
+        userKey: row.userKey,
+        ...display,
+        groups: row.principal.groups || [],
+        bucket
+      });
+    }
+  }
+  items.sort(
+    (a, b) =>
+      (Date.parse(a.bucket.resetAt) || Infinity) - (Date.parse(b.bucket.resetAt) || Infinity) ||
+      b.bucket.used / b.bucket.limit - a.bucket.used / a.bucket.limit
+  );
+  const size = Math.min(Math.max(Number(limit) || 50, 1), 500);
+  return { threshold: share, items: items.slice(0, size), total: items.length };
+}
+
+/**
  * One user in detail: buckets, per-model and per-app usage, file storage and
  * where each limit came from.
  */

@@ -4844,6 +4844,12 @@
           "friday": "Freitag",
           "saturday": "Samstag",
           "sunday": "Sonntag"
+        },
+        "near": {
+          "title": "Nahe am Limit",
+          "subtitle": "Benutzer über 80 % eines Budgets, das am frühesten zurückgesetzte zuerst.",
+          "none": "Niemand liegt über 80 % eines Limits.",
+          "more": "{{count}} weitere – in der Benutzerliste unten nach „Nahe am Limit“ filtern."
         }
       },
       "tabs": {
@@ -9001,6 +9007,15 @@
     "picker": {
       "exceeded": "Limit erreicht · wird in {{until}} zurückgesetzt",
       "used": "{{percent}} % des Limits ({{window}}) verbraucht"
+    },
+    "panel": {
+      "title": "Meine Nutzung",
+      "today": "Heute",
+      "tokens": "{{tokens}} Tokens",
+      "month": "Dieser Monat",
+      "exceeded": "Limit erreicht – neue Anfragen warten auf das Zurücksetzen.",
+      "remaining": "Noch {{remaining}} Tokens",
+      "noLimits": "Für Sie gelten keine Token-Limits."
     }
   }
 }

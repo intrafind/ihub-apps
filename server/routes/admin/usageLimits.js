@@ -11,6 +11,7 @@
  *   POST /api/admin/usage/limits/users/:userKey/reset
  *   GET  /api/admin/usage/limits/models            — per model
  *   GET  /api/admin/usage/limits/groups            — per group
+ *   GET  /api/admin/usage/limits/near              — users above 80 % of a limit, soonest reset first
  *
  * Model, group and user limits are edited with their own admin editors
  * (`usageLimits` on each config).
@@ -34,6 +35,7 @@ import {
   getGroupOverview,
   getModelOverview,
   getQuotaUser,
+  listNearLimitUsers,
   listQuotaUsers
 } from '../../services/quota/quotaAdmin.js';
 
@@ -279,6 +281,32 @@ export default function registerAdminUsageLimitRoutes(app) {
       res.json({ items: await getModelOverview(), resets: getCurrentWindows() });
     } catch (error) {
       return sendInternalError(res, error, 'load model usage');
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/usage/limits/near:
+   *   get:
+   *     summary: Users near a usage limit
+   *     description: One row per user and budget at or above `threshold` (default 0.8) of its limit, the soonest reset first.
+   *     tags: [Admin - Usage]
+   *     parameters:
+   *       - { in: query, name: threshold, schema: { type: number, minimum: 0, maximum: 1 } }
+   *       - { in: query, name: limit, schema: { type: integer, maximum: 500 } }
+   *     responses:
+   *       200: { description: "{ threshold, items, total }" }
+   */
+  app.get(buildServerPath('/api/admin/usage/limits/near'), adminAuth, async (req, res) => {
+    try {
+      res.json(
+        await listNearLimitUsers({
+          threshold: req.query.threshold !== undefined ? Number(req.query.threshold) : undefined,
+          limit: req.query.limit
+        })
+      );
+    } catch (error) {
+      return sendInternalError(res, error, 'load users near their limits');
     }
   });
 
