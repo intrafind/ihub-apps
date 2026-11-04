@@ -83,7 +83,6 @@ const SHORT_DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5
 let tokenUsageHistogram = null;
 let operationDurationHistogram = null;
 let appUsageCounter = null;
-let promptUsageCounter = null;
 let errorCounter = null;
 let conversationCounter = null;
 let activeUsersGauge = null;
@@ -95,8 +94,6 @@ let rateLimitHitsCounter = null;
 let streamOutcomeCounter = null;
 let uploadCounter = null;
 let uploadSizeHistogram = null;
-let sourceDurationHistogram = null;
-let sourceErrorCounter = null;
 let configReloadCounter = null;
 let configReloadDurationHistogram = null;
 let magicPromptUsageCounter = null;
@@ -136,12 +133,6 @@ export function initializeMetrics(meterSource) {
   // Create app usage counter
   appUsageCounter = meter.createCounter('ihub.app.usage', {
     description: 'Number of times each app is used',
-    unit: '{request}'
-  });
-
-  // Create prompt usage counter
-  promptUsageCounter = meter.createCounter('ihub.prompt.usage', {
-    description: 'Number of times each prompt is used',
     unit: '{request}'
   });
 
@@ -200,17 +191,6 @@ export function initializeMetrics(meterSource) {
     description: 'Size of uploaded files in bytes',
     unit: 'By',
     advice: { explicitBucketBoundaries: BYTE_SIZE_BUCKETS }
-  });
-
-  sourceDurationHistogram = meter.createHistogram('ihub.source.duration', {
-    description: 'Duration of source / RAG content loads',
-    unit: 's',
-    advice: { explicitBucketBoundaries: OPERATION_DURATION_BUCKETS }
-  });
-
-  sourceErrorCounter = meter.createCounter('ihub.source.errors', {
-    description: 'Source / RAG load errors by source type and error class',
-    unit: '{error}'
   });
 
   configReloadCounter = meter.createCounter('ihub.config.reload', {
@@ -367,21 +347,6 @@ export function recordOperationDuration(durationSeconds, attributes, error = nul
 }
 
 /**
- * Get metrics for manual recording (for backwards compatibility)
- * @returns {Object} Metrics objects
- */
-export function getMetrics() {
-  return {
-    tokenUsageHistogram,
-    operationDurationHistogram,
-    appUsageCounter,
-    promptUsageCounter,
-    errorCounter,
-    conversationCounter
-  };
-}
-
-/**
  * Record app usage metric. user.id is intentionally NOT a label - in a
  * deployment with many users it explodes Prometheus cardinality. Per-user
  * lookups belong on spans (`user.id` is set on the span attributes via
@@ -407,31 +372,6 @@ export function recordAppUsage(appId, userId = null, additionalAttributes = {}) 
   }
   // userId is intentionally unused on the metric; reference for linters
   void userId;
-}
-
-/**
- * Record prompt usage metric
- * @param {string} promptId - Prompt ID
- * @param {string} appId - Application ID
- * @param {Object} additionalAttributes - Additional attributes
- */
-export function recordPromptUsage(promptId, appId = null, additionalAttributes = {}) {
-  if (!promptUsageCounter) return;
-
-  try {
-    const attributes = {
-      'prompt.id': promptId,
-      ...additionalAttributes
-    };
-
-    if (appId) {
-      attributes['app.id'] = appId;
-    }
-
-    promptUsageCounter.add(1, attributes);
-  } catch (error) {
-    console.warn('Failed to record prompt usage:', error.message);
-  }
 }
 
 /**
@@ -564,35 +504,6 @@ export function recordUpload(kind, outcome, sizeBytes) {
     }
   } catch (error) {
     console.warn('Failed to record upload:', error.message);
-  }
-}
-
-/**
- * Record the duration of a source / RAG content load.
- * @param {string} sourceType - 'filesystem' | 'url' | 'page' | 'ifinder' | ...
- * @param {number} durationSeconds
- * @param {Error} [error]
- */
-export function recordSourceLoad(sourceType, durationSeconds, error = null) {
-  if (sourceDurationHistogram) {
-    try {
-      sourceDurationHistogram.record(
-        durationSeconds,
-        filterMetricLabels({ 'source.type': sourceType })
-      );
-    } catch (err) {
-      console.warn('Failed to record source duration:', err.message);
-    }
-  }
-  if (error && sourceErrorCounter) {
-    try {
-      sourceErrorCounter.add(
-        1,
-        filterMetricLabels({ 'source.type': sourceType, 'error.type': error.name || 'Error' })
-      );
-    } catch (err) {
-      console.warn('Failed to record source error:', err.message);
-    }
   }
 }
 

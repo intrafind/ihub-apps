@@ -3,7 +3,7 @@
 
 /**
  * Single source of truth for mapping iHub provider IDs to OpenTelemetry
- * gen-ai semantic-conventions values. Both LLMClient / llmInstrumentation and
+ * gen-ai semantic-conventions values. Both LLMClient and
  * the chat telemetry (chatTelemetry.js) import from here so the two paths
  * agree on `gen_ai.provider.name` and `gen_ai.operation.name`.
  *

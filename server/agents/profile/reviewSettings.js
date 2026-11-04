@@ -3,7 +3,7 @@
 
 /**
  * Preset strictness → concrete verifier knobs. Pure; see the design doc
- * docs/superpowers/specs/2026-06-25-configurable-agent-review-design.md.
+ * concepts/2026-06-agent-plans/2026-06-25 Configurable Agent Review Design.md.
  */
 export const REVIEW_PRESETS = {
   lenient: {

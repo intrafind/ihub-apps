@@ -28,30 +28,6 @@ class ModelError extends ChatError {
   }
 }
 
-class ToolError extends ChatError {
-  constructor(message, toolId, code = 'TOOL_ERROR', details = null) {
-    super(message, code);
-    this.toolId = toolId;
-    this.details = details;
-  }
-}
-
-class RequestTimeoutError extends ChatError {
-  constructor(timeout, code = 'REQUEST_TIMEOUT') {
-    super(`Request timed out after ${timeout / 1000} seconds`, code);
-    this.timeout = timeout;
-  }
-}
-
-class LLMApiError extends ChatError {
-  constructor(message, status, provider, code = 'LLM_API_ERROR', details = null) {
-    super(message, code);
-    this.status = status;
-    this.provider = provider;
-    this.details = details;
-  }
-}
-
 class ErrorHandler {
   constructor() {
     this.defaultLanguage = 'en';
@@ -130,35 +106,6 @@ class ErrorHandler {
     const message = await this.getLocalizedError('modelNotFound', { modelId, provider }, language);
     return new ModelError(message, modelId, provider);
   }
-
-  async createToolError(toolId, errorMessage, language, details = null) {
-    const message = await this.getLocalizedError(
-      'toolExecutionFailed',
-      { toolId, error: errorMessage },
-      language
-    );
-    return new ToolError(message, toolId, 'TOOL_EXECUTION_ERROR', details);
-  }
-
-  async createRequestTimeoutError(timeout, language) {
-    await this.getLocalizedError('requestTimeout', { timeout: timeout / 1000 }, language);
-    return new RequestTimeoutError(timeout, 'REQUEST_TIMEOUT');
-  }
-
-  async createLLMApiError(status, provider, language, details = null) {
-    let errorKey = 'llmApiError';
-    if (status === 401) {
-      errorKey = 'authenticationFailed';
-    } else if (status === 429) {
-      errorKey = 'rateLimitExceeded';
-    } else if (status >= 500) {
-      errorKey = 'serviceError';
-    }
-
-    const message = await this.getLocalizedError(errorKey, { status, provider }, language);
-    return new LLMApiError(message, status, provider, errorKey.toUpperCase(), details);
-  }
-
   /**
    * Detects if an error is related to context window/token limits
    * @param {string} errorBody - The error message body
@@ -346,37 +293,6 @@ class ErrorHandler {
       isContextWindowError: this.isContextWindowError(errorBody, llmResponse.status)
     };
   }
-
-  formatErrorResponse(error) {
-    const response = {
-      error: error.message,
-      code: error.code
-    };
-
-    if (error instanceof ApiKeyError) {
-      response.provider = error.provider;
-    } else if (error instanceof ModelError) {
-      response.modelId = error.modelId;
-      response.provider = error.provider;
-    } else if (error instanceof ToolError) {
-      response.toolId = error.toolId;
-      if (error.details) response.details = error.details;
-    } else if (error instanceof LLMApiError) {
-      response.status = error.status;
-      response.provider = error.provider;
-      if (error.details) response.details = error.details;
-    }
-
-    return response;
-  }
-
-  isRetryableError(error) {
-    if (error instanceof LLMApiError) {
-      return error.status === 429 || error.status >= 500;
-    }
-    return false;
-  }
 }
 
 export default ErrorHandler;
-export { ChatError, ApiKeyError, ModelError, ToolError, RequestTimeoutError, LLMApiError };

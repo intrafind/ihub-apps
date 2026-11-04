@@ -26,19 +26,3 @@ export function expandUserGroups(groups) {
   }
   return result;
 }
-
-/**
- * Whether a user is in one of the allowed groups, inherited groups included.
- * `*` admits every caller; an empty list admits nobody.
- *
- * @param {object|null} user - `{ groups }`
- * @param {string[]} allowed
- * @returns {boolean}
- */
-export function userInGroups(user, allowed) {
-  if (!Array.isArray(allowed) || allowed.length === 0) return false;
-  if (allowed.includes('*')) return true;
-  if (!user) return false;
-  const groups = expandUserGroups(user.groups);
-  return allowed.some(group => groups.has(group));
-}

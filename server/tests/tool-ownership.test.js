@@ -19,7 +19,7 @@
  * (an action that takes a platform tool's id, a definition that names a tool
  * a feature already generates), fails the build.
  *
- * Run: node --test server/tests/tool-ownership.test.js (part of `npm run test:tool-loading`)
+ * Run: node --test server/tests/tool-ownership.test.js (part of `npm run test:server`)
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

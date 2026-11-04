@@ -31,11 +31,6 @@ export default function registerAdminCacheRoutes(app) {
     }
   });
 
-  app.get(buildServerPath('/api/admin/cache/_refresh'), adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
-  });
-
   app.post(buildServerPath('/api/admin/cache/_clear'), adminAuth, async (req, res) => {
     try {
       configCache.clear();
@@ -47,11 +42,6 @@ export default function registerAdminCacheRoutes(app) {
     } catch (error) {
       return sendInternalError(res, error, 'clear cache');
     }
-  });
-
-  app.get(buildServerPath('/api/admin/cache/_clear'), adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
   });
 
   app.post(buildServerPath('/api/admin/client/_refresh'), adminAuth, async (req, res) => {
@@ -78,11 +68,6 @@ export default function registerAdminCacheRoutes(app) {
     } catch (error) {
       return sendInternalError(res, error, 'trigger force refresh');
     }
-  });
-
-  app.get(buildServerPath('/api/admin/client/_refresh'), adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
   });
 
   /**

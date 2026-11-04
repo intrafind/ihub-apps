@@ -13,7 +13,7 @@ import path from 'node:path';
  * redaction, the outbound request recorder, the argument check and the
  * per-action usage counter. The routes are covered in `actionRoutes.test.js`.
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 
 const { REDACTED, isSecretName, redactBody, redactDeep, redactHeaders, redactUrl, scrubSecrets } =

@@ -45,7 +45,6 @@
     "react-dom": "^19.3.1",
     "react-error-boundary": "^6.1.6",
     "react-i18next": "^17.1.9",
-    "react-markdown": "^10.1.0",
     "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.18.4",
     "svg-pan-zoom": "^3.6.2",
@@ -70,8 +69,6 @@
   },
   "devDependencies": {
     "@microsoft/office-js": "^1.1.110",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "postcss": "^8.5.28",
     "vite": "^8.3.5"

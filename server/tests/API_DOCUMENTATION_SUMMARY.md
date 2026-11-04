@@ -133,20 +133,14 @@ This document summarizes the comprehensive testing and documentation system we'v
 ## 🚀 Available Test Scripts
 
 ```bash
-# Basic adapter tests
-npm run test:openai
-npm run test:anthropic
-npm run test:google
-npm run test:mistral
-npm run test:all
+# All server tests (node:test and jest files under server/tests)
+npm run test:server
 
-# Advanced tool calling tests
-npm run test:tool-calling           # Format consistency
-npm run test:tool-integration       # High-level integration
-npm run test:real-llm              # Real API calls
-npm run test:azure-openai          # Azure OpenAI specific
-npm run test:tool-verification     # Tool call accuracy
-npm run test:api-documentation     # Comprehensive logging
+# Adapter tests only
+npm run test:adapters
+
+# A single file, or all files whose path contains a string
+node scripts/run-server-tests.js toolCalling
 ```
 
 ## 📝 Multi-Turn Conversation Testing

@@ -168,8 +168,6 @@ iHub product counters & gauges:
   token-expired counters labelled by `auth.provider`
 - `ihub.upload.requests` + `ihub.upload.size` - file upload counter and size
   histogram, labelled by `upload.kind` and `upload.outcome`
-- `ihub.source.duration` + `ihub.source.errors` - source / RAG load duration
-  histogram and error counter, labelled by `source.type`
 - `ihub.config.reload` + `ihub.config.reload.duration` - configuration cache
   reload counter and duration histogram, labelled by `config.file`
 - `ihub.magicprompt.usage` - magic-prompt invocation counter
@@ -331,7 +329,6 @@ scrape_configs:
 | `server/telemetry/metrics.js` | Histograms, counters, observable gauges |
 | `server/telemetry/exporters.js` | Console / OTLP / Prometheus exporter wiring |
 | `server/telemetry/GenAIInstrumentation.js` | Span lifecycle helper |
-| `server/telemetry/llmInstrumentation.js` | Standalone `instrumentLLMCall` wrapper for provider calls made outside `LLMClient` |
 | `server/telemetry/ActivityTracker.js` | Rolling-window active users / chats tracker |
 
 The gen-ai span around a provider call is owned by `LLMClient`

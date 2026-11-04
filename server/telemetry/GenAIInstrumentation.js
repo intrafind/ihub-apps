@@ -187,10 +187,7 @@ export class GenAIInstrumentation {
   }
 
   /**
-   * Wrap an async function with instrumentation. The actual chat call sites
-   * use server/telemetry/llmInstrumentation.js#instrumentLLMCall which keeps
-   * full control over the span lifecycle and the iHub-specific counters; this
-   * helper is kept for completeness when integrators want a one-shot wrap.
+   * Wrap an async function with instrumentation as a one-shot helper.
    *
    * @param {string} operation
    * @param {Object} model

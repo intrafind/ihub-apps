@@ -16,7 +16,7 @@
  *   back definition folder, installation entry, app bindings and manifest
  *   entry together; a failure mid-way rolls all four back.
  *
- * Run with `npm run test:integrations`.
+ * Run with `npm run test:server`.
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';

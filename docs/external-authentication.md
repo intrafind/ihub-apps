@@ -814,28 +814,6 @@ function SomeComponent() {
 }
 ```
 
-### Authentication Guard
-
-```jsx
-import { AuthGuard } from './features/auth';
-
-function ProtectedComponent() {
-  return (
-    <AuthGuard requireAuth={true}>
-      <YourProtectedContent />
-    </AuthGuard>
-  );
-}
-
-function AdminComponent() {
-  return (
-    <AuthGuard requireAdmin={true}>
-      <YourAdminContent />
-    </AuthGuard>
-  );
-}
-```
-
 ## Security Considerations
 
 1. **JWT Secrets**: Use strong, unique secrets for JWT signing
