@@ -3423,7 +3423,7 @@
             "ihubSignedHelp": "iHub signs the iFinder token itself, with a private key or the iHub OIDC key pair. iFinder trusts iHub as the issuer."
           },
           "useOidcKeyPair": "Sign with the iHub OIDC key pair",
-          "useOidcKeyPairHelp": "Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed.",
+          "useOidcKeyPairHelp": "Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed. Prerequisite: your iFinder instance must already trust iHub as a JWT issuer via its JWKS endpoint (/.well-known/jwks.json). Without this iFinder-side configuration the connection fails with a 401 error.",
           "defaultScope": "Token scope",
           "jwtSubjectField": "User identity sent to iFinder",
           "jwtSubject": {

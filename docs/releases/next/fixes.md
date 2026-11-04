@@ -181,3 +181,10 @@ always fits the page.
 - A word that cannot fit its column at all, such as a long URL, is broken inside the column instead
   of shrinking the whole table.
 - Tables a model lays out with its own column widths keep them.
+
+## iFinder: "Sign with iHub's OIDC Key Pair" States Its iFinder-Side Prerequisite
+
+The hint under **Sign with iHub's OIDC key pair** suggested the option works on its own. It does
+not: iFinder must first be configured to trust iHub as a JWT issuer through its JWKS endpoint
+(`/.well-known/jwks.json`), otherwise the connection fails with an unexplained `401`. The hint in
+the iFinder integration editor and the keyless setup guide now state this prerequisite.
