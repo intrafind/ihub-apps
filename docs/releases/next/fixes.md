@@ -188,6 +188,12 @@ always fits the page.
   of shrinking the whole table.
 - Tables a model lays out with its own column widths keep them.
 
+## Your Messages Keep Their Line Breaks in the Chat
+
+A long, structured prompt (headings, lists, indented code, blank lines) was shown as one run-on line
+in your own message bubble. Messages now keep their line breaks and indentation, also when a file or
+image is attached. The model always received the text with its structure; only the display changed.
+
 ## iFinder: "Sign with iHub's OIDC Key Pair" States Its iFinder-Side Prerequisite
 
 The hint under **Sign with iHub's OIDC key pair** suggested the option works on its own. It does
