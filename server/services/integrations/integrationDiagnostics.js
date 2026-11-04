@@ -24,6 +24,7 @@ import {
   getSSLConfig,
   shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
+import { isPrivateIP } from '../../utils/ssrfGuard.js';
 
 export const STATUS = {
   OK: 'ok',
@@ -124,21 +125,16 @@ export class DiagnosticsReport {
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '[::1]']);
 
 /**
- * True for RFC1918 / link-local / unique-local addresses, which are reachable
- * inside a network but usually not from a peer in another network segment.
+ * True for addresses that are reachable inside a network but usually not from a
+ * peer in another network segment (RFC1918, link-local, unique-local, CGNAT, ...).
+ * Classified by `utils/ssrfGuard`, the one private-address check; a hostname is
+ * never private.
  * @param {string} host
  * @returns {boolean}
  */
 export function isPrivateAddress(host) {
   if (!host) return false;
-  const value = host.replaceAll(/^\[|\]$/g, '').toLowerCase();
-  if (/^10\./.test(value)) return true;
-  if (/^192\.168\./.test(value)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(value)) return true;
-  if (/^169\.254\./.test(value)) return true;
-  if (/^f[cd][0-9a-f]{2}:/.test(value)) return true;
-  if (value.startsWith('fe80:')) return true;
-  return false;
+  return isPrivateIP(host.replaceAll(/^\[|\]$/g, ''));
 }
 
 /**

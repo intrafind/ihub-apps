@@ -195,6 +195,8 @@ Jira, Office 365, Google Drive, Nextcloud and MCP servers with per-user sign-in 
 disconnect through one connection service and one OAuth client. Connected users stay connected,
 nobody signs in again and the callback URLs registered with the vendors keep working
 (`/api/integrations/oauth/callback` handles every sign-in; the old URLs are aliases).
+A user connected before the upgrade appears in an installation's **Connections** list after
+their first use of it (the list is built as tokens are used, not at start).
 
 - **Same protection everywhere:** PKCE for every sign-in (Nextcloud included), a single-use state
   on the server bound to the user and installation, same-origin return URLs, refresh tokens sent

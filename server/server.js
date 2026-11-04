@@ -1112,24 +1112,6 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // One-time re-index of the per-user integration tokens (Jira, cloud
-  // storage, per-user MCP) into the connection index, after the MCP manager
-  // knows its servers. Idempotent, marker-guarded and run under a storage
-  // lock, so every worker may call it. After the worker is serving: nothing on
-  // the request path waits on it, because the
-  // connection service indexes a token file it meets without a record
-  // (create-only, so the two never overwrite each other).
-  try {
-    const { reindexIntegrationConnections } =
-      await import('./services/integrations/auth/connectionReindex.js');
-    await reindexIntegrationConnections();
-  } catch (error) {
-    logger.warn('Integration connection re-index failed; connections are indexed as used', {
-      component: 'Server',
-      error: error.message
-    });
-  }
-
   // Workflow recovery + trigger init on boot. Order matters:
   //   1. Attach the engine to the TriggerManager (this acquires the
   //      cross-process scheduler lock).

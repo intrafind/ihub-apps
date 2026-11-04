@@ -222,3 +222,16 @@ A migration adds the two missing links to existing installations. A group that a
 The session cookie set after an OIDC sign-in did not look at the request, so behind a TLS-terminating
 proxy it was issued without the `Secure` flag unless `USE_HTTPS=true` was set. It now follows the
 request protocol (`X-Forwarded-Proto`) like the cookie of every other sign-in method.
+
+## MCP, A2A and Integration Calls Block More Internal Addresses
+
+The private-address check used by MCP servers, A2A agents, OpenAPI tools and HTTP integrations
+missed several internal ranges, so a hostname resolving to one of them was not refused. It now uses
+the same check as workflow HTTP nodes.
+
+- Newly blocked: carrier-grade NAT (`100.64.0.0/10`, e.g. Tailscale), multicast and reserved
+  (`224.0.0.0/4`, `240.0.0.0/4`) and IPv6 forms of internal IPv4 addresses such as
+  `::ffff:7f00:1`.
+- A server that legitimately lives in one of these ranges must be listed in its `allowedHosts` or
+  in `ssrf.allowedHosts` in `platform.json`; the existing allow-lists work as before.
+- The integration diagnostics flag the same addresses as private.

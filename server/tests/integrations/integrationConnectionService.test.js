@@ -537,7 +537,7 @@ describe('review fixes (#3140)', () => {
     assert.equal(owner.ok, true, owner.redirectTo);
   });
 
-  it('the re-index writes create-only: a record written meanwhile is kept', async () => {
+  it('createConnection is create-only: a record written meanwhile is kept', async () => {
     const documents = new FilesystemDocumentStore({ baseDir: path.join(tmp, 'docs') });
     const stored = newService();
     stored._documents = documents;

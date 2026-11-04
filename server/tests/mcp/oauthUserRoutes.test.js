@@ -98,8 +98,7 @@ const safeFetch = jest.fn();
 jest.unstable_mockModule('../../services/mcp/safeFetch.js', () => ({
   safeFetch,
   assertSafeHost: jest.fn(async () => {}),
-  hostMatchesPattern: () => false,
-  isPrivateIp: () => false
+  hostMatchesPattern: () => false
 }));
 
 jest.unstable_mockModule('../../configCache.js', () => ({

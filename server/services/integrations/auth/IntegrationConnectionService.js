@@ -126,7 +126,7 @@ export function terminalRefreshRejection(error) {
 
 /**
  * The id of the connection of a principal to an installation — a pure
- * function of the two, so connect, re-index and resolve all name the same
+ * function of the two, so connect, lazy indexing and resolve all name the same
  * record, and a lookup can never land on another principal's.
  *
  * @param {string} integration - Installation id
@@ -297,7 +297,7 @@ export class IntegrationConnectionService {
 
   /**
    * Write a connection record only when none exists (create-only, atomic in
-   * the document store): the re-index uses it so a record a live connect or
+   * the document store): lazy indexing uses it so a record a live connect or
    * refresh wrote meanwhile is never overwritten.
    *
    * @param {Object} record
@@ -398,8 +398,9 @@ export class IntegrationConnectionService {
 
   /**
    * The index record for a user's tokens of an installation, created from the
-   * token file when the index does not know it yet (an upgrade whose re-index
-   * has not run, or a file another worker just wrote).
+   * token file when the index does not know it yet (a file that predates the
+   * index, or one another worker just wrote). This is the only way a token file
+   * written before the connection index existed gets a record: on its first use.
    *
    * @param {Object} descriptor
    * @param {string} userId
@@ -1458,7 +1459,7 @@ function externalAccountOf(tokens) {
 }
 
 /**
- * The index record for an existing token file (re-index and lazy indexing).
+ * The index record for an existing token file (lazy indexing, see `_ensureRecord`).
  *
  * @param {Object} params
  * @param {Object} params.descriptor

@@ -127,6 +127,34 @@ describe('isPrivateAddress', () => {
   });
 });
 
+describe('isPrivateAddress shares the ssrfGuard classifier (#3246)', () => {
+  it('detects CGNAT, multicast, reserved and hex IPv4-mapped IPv6', () => {
+    for (const address of [
+      '100.64.0.1',
+      '100.127.255.254',
+      '224.0.0.1',
+      '240.0.0.1',
+      '::ffff:7f00:1',
+      '::ffff:a9fe:a9fe',
+      '[fd12::1]'
+    ]) {
+      assert.equal(isPrivateAddress(address), true, address);
+    }
+  });
+
+  it('does not flag public addresses, boundary neighbours or hostnames', () => {
+    for (const address of [
+      '100.63.255.255',
+      '100.128.0.1',
+      '::ffff:808:808',
+      '10.example.com',
+      ''
+    ]) {
+      assert.equal(isPrivateAddress(address), false, address);
+    }
+  });
+});
+
 describe('resolveHostname', () => {
   it('short-circuits IP literals without a lookup', async () => {
     const result = await resolveHostname('127.0.0.1');
