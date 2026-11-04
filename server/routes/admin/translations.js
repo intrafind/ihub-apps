@@ -40,19 +40,33 @@ function leafAt(node, path) {
   return typeof current === 'string' ? current : undefined;
 }
 
+const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Own, enumerable, writable assignment — never reaches an inherited setter. */
+function defineOwn(target, key, value) {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true
+  });
+}
+
 function setAt(root, path, value) {
+  if (path.some(segment => FORBIDDEN_SEGMENTS.has(segment))) {
+    throw new Error('Forbidden key segment');
+  }
   let current = root;
   for (const segment of path.slice(0, -1)) {
-    if (
-      !Object.prototype.hasOwnProperty.call(current, segment) ||
-      current[segment] === null ||
-      typeof current[segment] !== 'object'
-    ) {
-      current[segment] = {};
+    const existing = Object.prototype.hasOwnProperty.call(current, segment)
+      ? current[segment]
+      : undefined;
+    if (existing === null || typeof existing !== 'object') {
+      defineOwn(current, segment, {});
     }
     current = current[segment];
   }
-  current[path[path.length - 1]] = value;
+  defineOwn(current, path[path.length - 1], value);
 }
 
 /** Delete the leaf at `path` and prune the parents that are left empty. */
@@ -77,7 +91,9 @@ const isPath = path =>
   Array.isArray(path) &&
   path.length > 0 &&
   path.length <= 20 &&
-  path.every(segment => typeof segment === 'string' && segment.length > 0);
+  path.every(
+    segment => typeof segment === 'string' && segment.length > 0 && !FORBIDDEN_SEGMENTS.has(segment)
+  );
 
 function resolveLanguage(lang) {
   const supported = configCache.getSupportedLanguages();
