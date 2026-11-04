@@ -5,7 +5,6 @@
  * Artifact routes:
  *   GET /api/agents/runs/:runId/artifacts            — list run artifacts
  *   GET /api/agents/runs/:runId/artifacts/:name      — fetch one artifact
- *   GET /api/agents/profiles/:profileId/artifacts    — list profile artifacts
  */
 
 import fs, { promises as fsp } from 'node:fs';
@@ -169,62 +168,6 @@ export default function registerAgentArtifactRoutes(app) {
         fs.createReadStream(file).pipe(res);
       } catch (error) {
         sendFailedOperationError(res, 'read artifact', error);
-      }
-    }
-  );
-
-  app.get(
-    buildServerPath('/api/agents/profiles/:profileId/artifacts'),
-    authRequired,
-    authenticatedOnly,
-    async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        // Walk every run directory and collect runs that belong to this profile.
-        const root = artifactsRootDir();
-        let runDirs = [];
-        try {
-          runDirs = await fsp.readdir(root);
-        } catch (err) {
-          if (err.code !== 'ENOENT') throw err;
-        }
-        const out = [];
-        for (const runId of runDirs) {
-          // Match runs whose state envelope ties them to this profile.
-          let state;
-          try {
-            state = await getEngine().getState(runId);
-          } catch {
-            state = null;
-          }
-          if (!state || state?.data?._agent?.profileId !== profileId) continue;
-          // runId came from fsp.readdir of the artifacts root, so it's already
-          // a sibling directory name; canonicalize anyway as belt+suspenders.
-          const dir = await resolveAndValidatePath(runId, root);
-          if (!dir) continue;
-          let entries;
-          try {
-            // lgtm[js/path-injection] -- path canonicalized via resolveAndValidatePath.
-            entries = await fsp.readdir(dir);
-          } catch {
-            entries = [];
-          }
-          for (const name of entries) {
-            const safeEntry = safeName(name);
-            if (!safeEntry) continue;
-            const entryPath = await resolveAndValidatePath(safeEntry, dir);
-            if (!entryPath) continue;
-            // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
-            const stat = await fsp.stat(entryPath).catch(() => null);
-            if (stat?.isFile()) {
-              out.push({ runId, name: safeEntry, bytes: stat.size, mtime: stat.mtime });
-            }
-          }
-        }
-        res.json(out);
-      } catch (error) {
-        sendFailedOperationError(res, 'list profile artifacts', error);
       }
     }
   );

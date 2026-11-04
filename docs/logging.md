@@ -66,42 +66,6 @@ Logging is configured in `contents/config/platform.json`:
 
 ## API Endpoints
 
-### Get Current Log Level
-
-```bash
-GET /api/admin/logging/level
-```
-
-**Response:**
-```json
-{
-  "current": "info",
-  "available": ["error", "warn", "info", "http", "verbose", "debug", "silly"]
-}
-```
-
-### Update Log Level
-
-```bash
-PUT /api/admin/logging/level
-Content-Type: application/json
-
-{
-  "level": "debug",
-  "persist": true
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "level": "debug",
-  "persisted": true,
-  "message": "Log level updated to debug and saved to configuration"
-}
-```
-
 ### Get Full Logging Configuration
 
 ```bash
@@ -491,7 +455,7 @@ cat logs/app.log | jq 'select(.type == "CHAT_REQUEST") | {modelId, user}' | jq -
 
 1. Check the current log level:
    ```bash
-   curl http://localhost:3000/api/admin/logging/level
+   curl http://localhost:3000/api/admin/logging/config
    ```
 
 2. Increase log level to `debug` or `silly`

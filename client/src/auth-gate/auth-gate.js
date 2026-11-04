@@ -85,9 +85,9 @@
     // 1. Check URL params for callbacks
     var params = new URLSearchParams(window.location.search);
 
-    // OIDC callback: ?token=...&provider=...
-    if (params.get('token')) {
-      handleOidcCallback(params);
+    // OIDC callback: ?oidc=success&provider=... (the session is the httpOnly cookie)
+    if (params.get('oidc') === 'success') {
+      handleOidcCallback();
       return;
     }
 
@@ -201,14 +201,9 @@
   // Callback Handlers
   // =========================================================================
 
-  function handleOidcCallback(params) {
-    var token = params.get('token');
-
-    // Store token
-    storeToken(token);
-
+  function handleOidcCallback() {
     // Clean URL
-    cleanUrlParams(['token', 'provider']);
+    cleanUrlParams(['oidc', 'provider']);
 
     // Verify authentication
     fetchAuthStatus()
@@ -216,8 +211,7 @@
         if (data.authenticated) {
           loadApp();
         } else {
-          // Token was invalid
-          removeToken();
+          // The cookie did not authenticate the user
           authConfig = data;
           var root = document.getElementById(ROOT_ID);
           renderAuthUI(root);
@@ -1001,14 +995,6 @@
   function storeToken(token) {
     try {
       localStorage.setItem('authToken', token);
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  function removeToken() {
-    try {
-      localStorage.removeItem('authToken');
     } catch (e) {
       /* ignore */
     }

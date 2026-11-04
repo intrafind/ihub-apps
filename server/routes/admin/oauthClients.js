@@ -11,7 +11,7 @@ import {
   findClientById,
   loadOAuthClients
 } from '../../utils/oauthClientManager.js';
-import { generateStaticApiKey, introspectOAuthToken } from '../../utils/oauthTokenService.js';
+import { generateStaticApiKey } from '../../utils/oauthTokenService.js';
 import { countByClient } from '../../services/oauth/ConnectionService.js';
 import { listCimdClientRows } from '../../services/oauth/CimdGovernanceService.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -757,90 +757,6 @@ export default function registerAdminOAuthRoutes(app) {
         res.status(500).json({
           success: false,
           error: 'Failed to generate static API key'
-        });
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/oauth/clients/{clientId}/introspect-token:
-   *   post:
-   *     summary: Introspect client token
-   *     description: Introspect a token to check its validity and claims
-   *     tags:
-   *       - Admin
-   *       - OAuth
-   *     security:
-   *       - BearerAuth: []
-   *     parameters:
-   *       - name: clientId
-   *         in: path
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - token
-   *             properties:
-   *               token:
-   *                 type: string
-   *     responses:
-   *       200:
-   *         description: Token introspection result
-   */
-  app.post(
-    buildServerPath('/api/admin/oauth/clients/:clientId/introspect-token'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
-
-        if (!oauthConfig.enabled?.clients) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth clients are not enabled on this server'
-          });
-        }
-
-        const { clientId } = req.params;
-        const { token } = req.body;
-
-        // Validate clientId
-        if (!validateIdForPath(clientId, 'client', res)) return;
-
-        if (!token || typeof token !== 'string') {
-          return res.status(400).json({
-            success: false,
-            error: 'Token is required'
-          });
-        }
-
-        const introspection = introspectOAuthToken(token);
-
-        // Verify token belongs to this client
-        if (introspection.active && introspection.client_id !== clientId) {
-          return res.status(400).json({
-            success: false,
-            error: 'Token does not belong to this client'
-          });
-        }
-
-        res.json({
-          success: true,
-          introspection
-        });
-      } catch (error) {
-        logger.error('[OAuth Admin] Introspect token error', { component: 'OAuthAdmin', error });
-        res.status(500).json({
-          success: false,
-          error: 'Failed to introspect token'
         });
       }
     }
