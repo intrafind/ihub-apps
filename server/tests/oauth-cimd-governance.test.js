@@ -87,7 +87,9 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
 
 jest.unstable_mockModule('../utils/ssrfGuard.js', () => ({
   assertPublicTarget: async () => ({ ok: true, addresses: ['203.0.113.10'] }),
-  createPinnedLookup: () => () => {}
+  createPinnedLookup: () => () => {},
+  // Imported by services/mcp/safeFetch.js; these tests never reach it.
+  isPrivateIP: () => false
 }));
 
 jest.unstable_mockModule('../utils/httpConfig.js', () => ({

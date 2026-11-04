@@ -101,6 +101,9 @@ describe('safeFetch private-IP classification matches ssrfGuard (#3246)', () => 
     await safeFetch('http://public.example.com/x');
     expect(undiciFetchMock).toHaveBeenCalledTimes(1);
     expect(undiciAgentCalls[0].connect.lookup).toEqual(expect.any(Function));
+    const lookupCallback = jest.fn();
+    undiciAgentCalls[0].connect.lookup('public.example.com', { all: true }, lookupCallback);
+    expect(lookupCallback).toHaveBeenCalledWith(null, [{ address: '8.8.8.8', family: 4 }]);
   });
 });
 
