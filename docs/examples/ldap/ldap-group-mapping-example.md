@@ -327,6 +327,6 @@ Add these to your `groups.json` if needed.
 ## Troubleshooting
 
 If group mapping isn't working, see:
-- [LDAP Group Mapping Troubleshooting Guide](../docs/LDAP-GROUP-MAPPING-TROUBLESHOOTING.md)
-- [LDAP and NTLM Authentication Documentation](../docs/ldap-ntlm-authentication.md)
-- [Concept Document](../concepts/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md)
+- [LDAP Group Mapping Troubleshooting Guide](../../LDAP-GROUP-MAPPING-TROUBLESHOOTING.md)
+- [LDAP and NTLM Authentication Documentation](../../ldap-ntlm-authentication.md)
+- [Concept Document](../../../concepts/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md)
