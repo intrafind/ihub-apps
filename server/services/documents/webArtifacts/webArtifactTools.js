@@ -251,7 +251,9 @@ export async function runCreateWebArtifact(params) {
       files: [file],
       ...(bundle?.template?.id ? { template: bundle.template.id } : {}),
       ...(warnings.length ? { warnings } : {}),
-      message: `Created the interactive ${format.toUpperCase()} artifact "${file.name}". The user can interact with it live in the Artifacts panel (Preview | Code) and sees a download card in the chat — do not paste the code or add a link.`
+      message: warnings.length
+        ? `Created the ${format.toUpperCase()} artifact "${file.name}", but it has ${warnings.length} problem(s) listed in "warnings" and the user already sees the faulty version. Do NOT answer yet: fix every warning and call create_web_artifact again with the same filename and the complete corrected content. Only then answer, without pasting the code or adding a link.`
+        : `Created the interactive ${format.toUpperCase()} artifact "${file.name}". The user can interact with it live in the Artifacts panel (Preview | Code) and sees a download card in the chat — do not paste the code or add a link.`
     };
   } catch (error) {
     return toolFailure(error, 'The web artifact could not be created.');

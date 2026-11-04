@@ -381,6 +381,20 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
     assert.match(held.data.toString('utf8'), /--brand-primary:\s*#1d4ed8/);
   });
 
+  it('tells the model to fix and resubmit when the artifact has warnings', async () => {
+    clearHeldGeneratedFiles();
+    const res = await runCreateWebArtifact({
+      filename: 'dead.html',
+      content: '<!DOCTYPE html><html><body><a href="#">Quellen</a></body></html>',
+      user: { id: 'u-dead' },
+      chatId: 'chat-dead'
+    });
+    assert.equal(res.success, true);
+    assert.equal(res.warnings.length, 1);
+    assert.match(res.message, /Do NOT answer yet/);
+    clearHeldGeneratedFiles();
+  });
+
   it('warns about links that lead nowhere in the sandboxed preview', () => {
     const dead = inspectWebArtifact(
       '<a href="#">Quellen 2</a><a href="https://example.com/x">Ext</a><a href="./detail.html">D</a>',
