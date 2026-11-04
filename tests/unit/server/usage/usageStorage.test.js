@@ -43,6 +43,7 @@ import {
   clearUsageQueryCache,
   UsageQueryError
 } from '../../../../server/services/usage/usageQuery.js';
+import { buildRollup, mergeRollups } from '../../../../server/services/usage/rollup.js';
 
 const NOW = Date.parse('2026-11-04T12:30:00.000Z');
 
@@ -197,6 +198,50 @@ describe('ranges', () => {
     age(dailyRollupFile('2026-11-01'), NOW - 1000 * 60 * 60 * 48);
     const { rollup } = await computeWindow(resolveRange({ range: '7d' }, NOW));
     expect(rollup.totals.requests).toBe(2);
+  });
+});
+
+describe('previous period and expired months', () => {
+  it('compares a partial today with an equally partial day a week earlier', async () => {
+    const week = resolveRange({ range: '7d' }, NOW);
+    // Ends at the same time of day as the current window.
+    expect(new Date(week.previous.to).toISOString()).toBe('2026-10-28T12:30:00.000Z');
+    writeDay('2026-10-28', [
+      call('2026-10-28T09:00:00.000Z'),
+      call('2026-10-28T18:00:00.000Z') // after 12:30, not in the previous window
+    ]);
+    const { rollup } = await computeWindow({ ...week.previous, granularity: 'day' });
+    expect(rollup.totals.requests).toBe(1);
+  });
+
+  function writeMonthly(month, requests, days) {
+    const dir = path.join(mockRoot, 'data', 'usage-monthly');
+    fs.mkdirSync(dir, { recursive: true });
+    const events = Array.from({ length: requests }, () => call(`${month}-15T10:00:00.000Z`));
+    fs.writeFileSync(
+      path.join(dir, `${month}.json`),
+      JSON.stringify(mergeRollups([buildRollup(events)], { month, days }))
+    );
+  }
+
+  it('counts an expired month only when the whole month is in the range', async () => {
+    writeMonthly('2024-06', 30, 20);
+    const part = resolveRange({ range: 'custom', from: '2024-06-10', to: '2024-06-12' }, NOW);
+    expect((await computeWindow(part)).rollup.totals.requests || 0).toBe(0);
+    const whole = resolveRange({ range: 'custom', from: '2024-05-20', to: '2024-07-02' }, NOW);
+    const { rollup, series } = await computeWindow(whole);
+    expect(rollup.totals.requests).toBe(30);
+    expect(series.find(p => p.t === '2024-06-01')).toMatchObject({ requests: 30, month: true });
+  });
+
+  it('prefers the monthly rollup over the few dailies that survived', async () => {
+    writeMonthly('2024-06', 30, 20);
+    writeDay('2024-06-30', [call('2024-06-30T10:00:00.000Z')]);
+    await generateDailyRollups({ now: NOW, all: true });
+    const whole = resolveRange({ range: 'custom', from: '2024-06-01', to: '2024-06-30' }, NOW);
+    const { rollup, series } = await computeWindow(whole);
+    expect(rollup.totals.requests).toBe(30);
+    expect(series.find(p => p.t === '2024-06-30').requests).toBe(0);
   });
 });
 

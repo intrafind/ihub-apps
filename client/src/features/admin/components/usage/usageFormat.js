@@ -102,14 +102,16 @@ export function changeOf(current, previous) {
   return { ratio, direction: ratio > 0.0005 ? 'up' : ratio < -0.0005 ? 'down' : 'flat' };
 }
 
-/** Rows to CSV text (fields quoted when needed). */
+/**
+ * Rows to CSV text (fields quoted when needed). A text cell that a
+ * spreadsheet would run as a formula gets a leading `'`; numbers stay numbers.
+ */
 export function toCsv(headers, rows) {
   const cell = value => {
     if (value === null || value === undefined) return '';
-    const text = String(value);
-    return /[",\n\r]/.test(text) || /^[=+\-@]/.test(text)
-      ? `"${text.replaceAll('"', '""')}"`
-      : text;
+    let text = String(value);
+    if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
   return [headers, ...rows].map(row => row.map(cell).join(',')).join('\n');
 }

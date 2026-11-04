@@ -110,12 +110,14 @@ export function resolveRange({ range = '7d', from, to } = {}, now = Date.now()) 
   const fromMs = startOfDay(firstDay);
   const toMs = Math.min(startOfDay(lastDay) + DAY_MS - 1, Math.max(now, fromMs));
   const length = startOfDay(lastDay) + DAY_MS - fromMs;
+  // The previous window ends at the same time of day as this one, so a range
+  // that ends part-way through today is compared with an equally partial day.
   return {
     range,
     granularity: 'day',
     from: fromMs,
     to: toMs,
-    previous: { from: fromMs - length, to: fromMs - 1 }
+    previous: { from: fromMs - length, to: toMs - length }
   };
 }
 
@@ -205,28 +207,74 @@ export async function computeWindow({ from, to, granularity }) {
     return { rollup: buildRollup(events), series };
   }
 
-  const rollups = [];
-  const series = [];
-  const covered = new Set();
+  const lastDay = days[days.length - 1];
+  const cutLastDay = to < startOfDay(lastDay) + DAY_MS - 1;
+  const byDay = new Map();
   for (const day of days) {
-    const rollup = await getDayRollup(day);
-    if (rollup) {
-      rollups.push(rollup);
-      covered.add(day.slice(0, 7));
+    byDay.set(
+      day,
+      cutLastDay && day === lastDay ? await partialDay(day, to) : await getDayRollup(day)
+    );
+  }
+
+  // Months whose daily rollups are gone (past daily retention) still count
+  // through their monthly rollup, but only when the whole month lies in the
+  // window: a monthly rollup cannot be split into days. It replaces the
+  // month's surviving daily rollups when it holds more days than they do.
+  const rollups = [];
+  const monthlyFor = new Map();
+  for (const month of new Set(days.map(d => d.slice(0, 7)))) {
+    if (!wholeMonthInWindow(month, from, to)) continue;
+    const dailies = days.filter(d => d.startsWith(month) && byDay.get(d)).length;
+    if (dailies === daysInMonth(month)) continue;
+    const monthly = await readMonthlyRollup(month);
+    if (monthly && (monthly.days || 0) > dailies) monthlyFor.set(month, monthly);
+  }
+
+  const series = [];
+  for (const day of days) {
+    const month = day.slice(0, 7);
+    const monthly = monthlyFor.get(month);
+    if (monthly) {
+      // The month's figures sit on its first day.
+      const first = day === `${month}-01`;
+      if (first) rollups.push(monthly);
+      series.push({
+        t: day,
+        ...lightCounters(first ? monthly.totals : null),
+        ...(first ? { month: true } : {})
+      });
+      continue;
     }
+    const rollup = byDay.get(day);
+    if (rollup) rollups.push(rollup);
     series.push({ t: day, ...lightCounters(rollup?.totals) });
   }
-  // Months whose daily rollups are gone (past daily retention) still count
-  // through their monthly rollup, on the first day of the month in range.
-  for (const month of new Set(days.map(d => d.slice(0, 7)))) {
-    if (covered.has(month)) continue;
-    const monthly = await readMonthlyRollup(month);
-    if (!monthly) continue;
-    rollups.push(monthly);
-    const point = series.find(p => p.t.startsWith(month));
-    if (point) Object.assign(point, lightCounters(monthly.totals), { t: point.t, month: true });
-  }
   return { rollup: mergeRollups(rollups), series };
+}
+
+function daysInMonth(month) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function wholeMonthInWindow(month, from, to) {
+  const start = startOfDay(`${month}-01`);
+  const end = start + daysInMonth(month) * DAY_MS - 1;
+  return start >= from && end <= to;
+}
+
+/**
+ * A day up to `to` only, built from its events. Falls back to the whole day
+ * when its events have expired.
+ */
+async function partialDay(day, to) {
+  const events = await dayEvents(day);
+  if (!events.length) return getDayRollup(day);
+  const toIso = new Date(to).toISOString();
+  const kept = events.filter(e => e.ts <= toIso);
+  if (kept.length === events.length) return getDayRollup(day);
+  return kept.length ? buildRollup(kept, { date: day }) : null;
 }
 
 function activeUsers(rollup) {

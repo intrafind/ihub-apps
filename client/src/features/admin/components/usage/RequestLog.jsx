@@ -43,9 +43,22 @@ function FilterInput({ label, value, onChange }) {
   const [draft, setDraft] = useState(value);
   const changeRef = useRef(onChange);
   changeRef.current = onChange;
+  // The value this field last applied, to tell its own echo from an outside
+  // change (such as "Clear filters"), which replaces the draft. The input
+  // stays mounted, so typing keeps focus across the debounce.
+  const appliedRef = useRef(value);
   useEffect(() => {
-    if (draft === value) return undefined;
-    const timer = setTimeout(() => changeRef.current(draft.trim()), 400);
+    if (value === appliedRef.current) return;
+    appliedRef.current = value;
+    setDraft(value);
+  }, [value]);
+  useEffect(() => {
+    const next = draft.trim();
+    if (next === value) return undefined;
+    const timer = setTimeout(() => {
+      appliedRef.current = next;
+      changeRef.current(next);
+    }, 400);
     return () => clearTimeout(timer);
   }, [draft, value]);
   return (
@@ -246,19 +259,16 @@ export default function RequestLog({ state }) {
       >
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <FilterInput
-            key={`u-${filters.user}`}
             label={t('admin.usage.reports.dim.user', 'User')}
             value={filters.user}
             onChange={v => setFilter('user', v)}
           />
           <FilterInput
-            key={`a-${filters.app}`}
             label={t('admin.usage.reports.dim.app', 'App')}
             value={filters.app}
             onChange={v => setFilter('app', v)}
           />
           <FilterInput
-            key={`m-${filters.model}`}
             label={t('admin.usage.reports.dim.model', 'Model')}
             value={filters.model}
             onChange={v => setFilter('model', v)}

@@ -83,3 +83,30 @@ test('writes filters to the URL state', async () => {
   fireEvent.change(screen.getByLabelText('Outcome'), { target: { value: 'quota' } });
   expect(state.update).toHaveBeenCalledWith({ f_outcome: 'quota' });
 });
+
+test('a text filter keeps its input (and focus) when the debounced value is applied', async () => {
+  jest.useFakeTimers();
+  try {
+    fetchUsageCalls.mockResolvedValue({ items: [], nextCursor: null });
+    const filters = { ...state.filters };
+    const update = jest.fn(patch => {
+      if ('f_user' in patch) filters.user = patch.f_user;
+    });
+    const { rerender } = render(<RequestLog state={{ ...state, filters, update }} />);
+    const input = screen.getByLabelText('User');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'ali' } });
+    act(() => jest.advanceTimersByTime(450));
+    expect(update).toHaveBeenCalledWith({ f_user: 'ali' });
+    rerender(<RequestLog state={{ ...state, filters: { ...filters }, update }} />);
+    expect(screen.getByLabelText('User')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input).toHaveValue('ali');
+
+    // An outside change (Clear filters) replaces the draft.
+    rerender(<RequestLog state={{ ...state, filters: { ...filters, user: '' }, update }} />);
+    expect(input).toHaveValue('');
+  } finally {
+    jest.useRealTimers();
+  }
+});

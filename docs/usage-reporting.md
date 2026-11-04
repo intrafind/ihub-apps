@@ -79,7 +79,9 @@ most 30 seconds old. There is no lag and nothing to generate by hand.
 
 - **KPI cards**: requests, input tokens, cached input (with the cache hit rate), output tokens,
   error rate, p95 latency (with p50) and active users. Each shows the change against the previous
-  period of the same length; for error rate and latency a rise is shown in red.
+  period of the same length, which ends at the same time of day (so a week that ends part-way
+  through today is compared with a week that ends at the same hour); for error rate and latency a
+  rise is shown in red.
 - **Usage over time**: tokens (uncached input, cached input and output, stacked) or requests (with
   errors), per hour for Today and 24 hours and per day otherwise.
 - **Top models** and **Top apps** by tokens.
@@ -129,8 +131,9 @@ Every worker appends its records to the file of the record's day (buffered for u
 Once an hour, one process rolls the days up: today, yesterday, and any day whose event file changed
 after its rollup was written. A rollup holds totals, 24 hourly buckets, the per-dimension figures
 with per-model sub-rows, outcomes, error codes, a latency histogram (for p50/p95) and feedback
-ratings. When daily rollups have expired, a range still includes those months from their monthly
-rollup.
+ratings. When daily rollups have expired, a range still includes a month from its monthly rollup,
+but only when the whole month lies in the range: a monthly rollup cannot be split into days, so an
+expired month only partly in the range is left out.
 
 `POST /api/admin/usage/_rollup` rolls up immediately (`?all=1` rebuilds every day that still has
 events).

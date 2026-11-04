@@ -129,6 +129,7 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
           runId: context?.runId || context?.executionId || state?.executionId,
           step: context?.iteration ?? 0,
           purpose: 'query-plan',
+          reportUser: context?.user || null,
           refs: { executionId: state?.executionId, nodeId: node.id }
         }
       });

@@ -57,7 +57,9 @@ describe('usage format helpers', () => {
   });
 
   test('CSV quoting guards formulas and separators', () => {
-    expect(toCsv(['a', 'b'], [['x,y', '=SUM(1)']])).toBe('a,b\n"x,y","=SUM(1)"');
+    expect(toCsv(['a', 'b'], [['x,y', '=SUM(1)']])).toBe('a,b\n"x,y",\'=SUM(1)');
+    // Formula-like text is neutralised, negative numbers stay numbers.
+    expect(toCsv(['a', 'b', 'c'], [['@cmd', '-1', -1]])).toBe("a,b,c\n'@cmd,'-1,-1");
   });
 });
 

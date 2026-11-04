@@ -150,6 +150,28 @@ test('the app comes from telemetry refs when the caller sets no appId', async ()
   assert.equal(records[0].surface, 'magic');
 });
 
+test('a workflow call names its user for reporting without enforcing a quota', async () => {
+  const { records, usage } = recorder();
+  const asserted = [];
+  const { client } = makeClient({
+    usage,
+    quota: {
+      async assert(u) {
+        asserted.push(u);
+      },
+      record() {}
+    },
+    transport: async () => sseResponse(openaiText(['ok']))
+  });
+  await client.complete({
+    modelId: 'oa',
+    messages,
+    telemetry: { purpose: 'verifier', reportUser: user, autoRun: false }
+  });
+  assert.equal(records[0].user, user);
+  assert.deepEqual(asserted, []);
+});
+
 test('tool calls are counted', async () => {
   const { records, usage } = recorder();
   const { client } = makeClient({

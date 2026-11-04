@@ -610,7 +610,8 @@ export class LLMClient {
    * @param {string} [params.language]
    * @param {number} [params.retries] - transient retry budget for this call
    * @param {Object} [params.telemetry] - { runId, step, segment, purpose, toolExecution,
-   *   appId, userId, chatId }
+   *   appId, userId, chatId, reportUser }; `reportUser` names the user on the
+   *   usage record when the call carries no `options.user` (workflows, agents)
    * @returns {Promise<LLMStream>}
    */
   async execute(params) {
@@ -667,7 +668,8 @@ export class LLMClient {
           runMeta = null;
         }
         this.usage.record({
-          user: quotaUser,
+          // Workflow and agent calls name their user for reporting only.
+          user: quotaUser || telemetry.reportUser || null,
           surface: resolveSurface(telemetry, runMeta),
           appId:
             telemetry.appId ||

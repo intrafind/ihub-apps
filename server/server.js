@@ -1300,13 +1300,24 @@ if (cluster.isPrimary && workerCount > 1) {
     await conversationStateManager.flush();
     // Usage records and quota counts wait in memory for their next flush;
     // write them now rather than losing up to one flush interval.
+    // Each flush on its own, so a failed usage write cannot cost quota counts.
     try {
       const { flushQueue } = await import('./services/UsageEventLog.js');
       await flushQueue();
+    } catch (error) {
+      logger.error('Could not flush usage records on shutdown', {
+        component: 'Server',
+        error: error?.message
+      });
+    }
+    try {
       const { getQuotaLedger } = await import('./services/quota/QuotaLedger.js');
       await getQuotaLedger().flush();
-    } catch {
-      // Failures are logged within the tracker
+    } catch (error) {
+      logger.error('Could not flush usage-limit counters on shutdown', {
+        component: 'Server',
+        error: error?.message
+      });
     }
     // Flush buffered storage writes (chat documents, append-log entries) and
     // release the provider's handles before the process goes away.

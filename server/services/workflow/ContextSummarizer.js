@@ -225,6 +225,7 @@ export class ContextSummarizer {
           runId: context.runId || context.executionId || state.executionId,
           step: context.iteration ?? 0,
           purpose: 'context-summarizer',
+          reportUser: context.user || null,
           refs: { executionId: state.executionId, nodeId: context.nodeId }
         }
       });
