@@ -24,7 +24,7 @@ A standalone example application demonstrating OAuth 2.0 Authorization Code Flow
 ### 2. Configure This App
 
 ```bash
-cd examples/oauth-client
+cd docs/examples/oauth-client
 cp .env.example .env
 # Edit .env with your CLIENT_ID and CLIENT_SECRET
 ```
@@ -88,7 +88,7 @@ CLIENT_MODE=public
 ## File Structure
 
 ```
-examples/oauth-client/
+docs/examples/oauth-client/
 ├── .env.example        # Configuration template
 ├── package.json        # Dependencies and scripts
 ├── server.js           # Express server implementing the OAuth flow

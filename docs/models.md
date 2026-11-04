@@ -325,7 +325,7 @@ models of the provider it connected. The first chat model you enable becomes the
 
 The cloud model configurations earlier versions shipped (Gemini, Claude, GPT-5, Mistral, Voxtral
 on Mistral's API, and the Gemini transcription and text-to-speech models) are in the **iHub
-Examples** registry under **Admin → Marketplace** (`examples/models/`), with the settings they
+Official Marketplace** under **Admin → Marketplace**, with the settings they
 shipped with, such as a preset voice. Existing installations keep the models they have.
 
 ### Models from the Marketplace
@@ -391,7 +391,7 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 
 #### Ready-to-import example models
 
-Example configurations for the most common Bedrock models live in `examples/models/bedrock/` and are exposed through the **iHub Examples** marketplace registry. Open Admin → Marketplace → "iHub Examples" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+Example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
 
 ### Transcription Models
 
@@ -738,7 +738,7 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
 1.  **User Selection**: A user can manually select a model from the dropdown in the app's interface. This choice is saved for the session and overrides all other settings.
 
-2.  **App-Specific Preferred Model**: You can set a specific model for an app in its configuration (e.g., in `examples/apps/chat.json`) using the `preferredModel` property. This is the default model for that specific app.
+2.  **App-Specific Preferred Model**: You can set a specific model for an app in its configuration (e.g., in `server/defaults/apps/chat.json`) using the `preferredModel` property. This is the default model for that specific app.
 
     ```json
     "preferredModel": "gpt-4"
@@ -1001,14 +1001,14 @@ These translations are defined in `shared/i18n/en.json` and `shared/i18n/de.json
 
 ### Example Models
 
-Example model configurations demonstrating all hint levels are available in `examples/models/`:
+Example model configurations demonstrating all hint levels are available in [`docs/examples/model-hints/`](examples/model-hints/):
 
 - `gpt-4-turbo-hint-example.json` - Hint level demo
 - `claude-3-info-example.json` - Info level demo
 - `gemini-warning-example.json` - Warning level demo
 - `experimental-alert-example.json` - Alert level demo
 
-See `examples/models/MODEL_HINTS_EXAMPLES.md` for detailed usage documentation.
+See [`MODEL_HINTS_EXAMPLES.md`](examples/model-hints/MODEL_HINTS_EXAMPLES.md) in that folder for detailed usage documentation.
 
 ### Technical Implementation
 

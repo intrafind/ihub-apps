@@ -280,7 +280,9 @@ an agent run is its execution id.
 
 ## Demos shipped
 
-Two demo Profiles ship disabled in `contents/agents/profiles/`:
+Two demo Profiles are in [`docs/examples/agents/`](examples/agents/profiles/); copy them into
+`contents/agents/profiles/` (and `engineering-todos.md` from `inboxes/` into
+`contents/data/agent-inboxes/`) to try them. They are disabled:
 
 1. **`todo-worker.json`** — drain-only path. Reads inbox, dynamic-tasks fan-out, writes artifact, marks done.
 2. **`research-and-summarize.json`** — Planner + drain. Plans tasks, runs them, drain handles sub-tasks.

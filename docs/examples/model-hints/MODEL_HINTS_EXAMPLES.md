@@ -85,7 +85,7 @@ The feature supports four severity levels with different behaviors:
 Copy the example file you want to use to your `contents/models/` directory:
 
 ```bash
-cp examples/models/experimental-alert-example.json contents/models/
+cp docs/examples/model-hints/experimental-alert-example.json contents/models/
 ```
 
 ### Step 2: Customize the Configuration

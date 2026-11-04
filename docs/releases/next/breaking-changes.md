@@ -104,16 +104,16 @@ client registrations stay valid.
 
 Environment-only deployments keep working: the `entra` installation is created enabled when
 `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` are set, and the variables stay the
-fallback for empty fields. Without them it exists disabled until an admin fills it in. The example
-app `examples/apps/people-search.json` binds the installation, and `examples/config/tools.json` no
-longer lists the tool; copy the example anew if you installed it by hand.
+fallback for empty fields. Without them it exists disabled until an admin fills it in. The
+`people-search` app of the official marketplace binds the installation, and the example tool file
+no longer lists the tool; install the app anew if you copied the old example by hand.
 
 ### People directories
 
 A browse-only directory (empty `groups`) keeps its people search closed, because the migration
 switches its search actions off; switch them on in the wizard to open it. The shipped `x500bund`
 entry is a disabled installation in the default `integrations.json`, and
-`examples/config/peopleDirectories.json` is gone.
+the example `peopleDirectories.json` is gone.
 
 ### Cloud storage providers
 
@@ -423,3 +423,22 @@ gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the
 **Before upgrading:** an MCP client configured for the SSE transport has to be switched to
 Streamable HTTP (`http`) on `/mcp`, or connected through a bridge such as `mcp-remote`. Outbound SSE
 to third-party MCP servers is unchanged.
+
+## iHub Examples Marketplace Registry Removed
+
+The **iHub Examples** registry under **Admin → Marketplace** is gone. It served the `examples/`
+folder of the iHub Apps repository, which no longer exists; its apps, models and prompts are now in
+the **iHub Official Marketplace**, together with the AWS Bedrock, text-to-speech and Qwen3 vLLM
+models that only the examples had. Migration V224 removes the registry from `registries.json`; a
+registry you added yourself, or one with that id that you pointed elsewhere, is not touched.
+
+- Apps, models and prompts you installed from it stay installed and keep working. They are no
+  longer checked for updates, because their registry is gone.
+- The official marketplace now carries the newer model configurations of the examples (the
+  three-state `supportsTools`) and the `{{content}}` placeholder in its prompts.
+- Reference material that was in `examples/` (locale overrides, the OAuth client sample, agent
+  profiles, the logging demo, the LDAP mapping example) is under `docs/examples/`.
+
+**Before upgrading:** to get updates for an item installed from the examples registry, install it
+again from the official marketplace (the same id replaces the local copy) or detach it. Automation
+that fetched `examples/catalog.json` from GitHub must use the marketplace catalog instead.

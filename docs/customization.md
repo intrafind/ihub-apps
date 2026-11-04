@@ -97,7 +97,7 @@ values.
 ### Ready-made examples
 
 Working example override files ship in the repository under
-[`examples/locales/`](../examples/locales/) (`en.json` and `de.json`). Copy them
+[`docs/examples/locales/`](examples/locales/) (`en.json` and `de.json`). Copy them
 into `contents/locales/` as a starting point.
 
 ### Good to know

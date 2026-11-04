@@ -257,7 +257,7 @@ For more details, see:
    - Common issues and solutions
    - Configuration examples
 
-3. **Example Configurations**: `examples/config/ldap-group-mapping-example.md`
+3. **Example Configurations**: `docs/examples/ldap/ldap-group-mapping-example.md`
    - Working configurations for different scenarios
    - Active Directory examples
    - Multi-level permissions
