@@ -169,7 +169,7 @@ function AdminIntegrationBuilderPage() {
         }
       });
     } catch (err) {
-      const details = err?.response?.data?.details;
+      const details = err?.response?.data?.details?.issues;
       setSaveError({
         message: getAdminApiErrorMessage(err),
         details: Array.isArray(details) ? details : []

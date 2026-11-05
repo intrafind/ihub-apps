@@ -3,13 +3,9 @@
 
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
-import integrationBuilderService, {
-  BuilderError,
-  IntegrationError
-} from '../../services/integrations/builder/IntegrationBuilderService.js';
+import integrationBuilderService from '../../services/integrations/builder/IntegrationBuilderService.js';
 import { builderImportSchema } from '../../validators/integrationBuilderSchema.js';
 
 /**
@@ -35,18 +31,6 @@ function languageOf(req) {
   const raw =
     req.query?.lang || req.headers['accept-language']?.split(',')[0]?.split(';')[0] || 'en';
   return /^[a-z]{2}(-[A-Z]{2})?$/.test(raw) ? raw : 'en';
-}
-
-function sendBuilderError(res, error, context) {
-  if (error instanceof BuilderError || error instanceof IntegrationError) {
-    return res.status(error.status || 400).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      details: error.details
-    });
-  }
-  return sendInternalError(res, error, context);
 }
 
 /** A tool as the admin pickers list it. */
@@ -85,13 +69,9 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    *       - sessionAuth: []
    */
   app.get(buildServerPath('/api/admin/integrations/tools'), adminAuth, async (req, res) => {
-    try {
-      const { loadTools } = await import('../../services/tools/catalog.js');
-      const tools = await loadTools(languageOf(req));
-      res.json((tools || []).map(toolCatalogEntry));
-    } catch (error) {
-      sendInternalError(res, error, 'list tools');
-    }
+    const { loadTools } = await import('../../services/tools/catalog.js');
+    const tools = await loadTools(languageOf(req));
+    res.json((tools || []).map(toolCatalogEntry));
   });
 
   /**
@@ -114,19 +94,12 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
     buildServerPath('/api/admin/integrations/builder/_import'),
     adminAuth,
     async (req, res) => {
-      const parsed = builderImportSchema.safeParse(req.body || {});
-      if (!parsed.success) {
-        return sendBadRequest(res, 'Invalid import request', parsed.error.issues);
-      }
-      try {
-        const result = await integrationBuilderService.importActions(parsed.data, {
-          user: req.user,
-          language: languageOf(req)
-        });
-        res.json(result);
-      } catch (error) {
-        sendBuilderError(res, error, 'import integration actions');
-      }
+      const parsed = { data: builderImportSchema.parse(req.body || {}) };
+      const result = await integrationBuilderService.importActions(parsed.data, {
+        user: req.user,
+        language: languageOf(req)
+      });
+      res.json(result);
     }
   );
 
@@ -152,20 +125,16 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        const pkg = await integrationBuilderService.exportPackage(id);
-        logAudit({
-          req,
-          action: 'export',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Exported custom integration "${id}"`
-        });
-        res.json(pkg);
-      } catch (error) {
-        sendBuilderError(res, error, 'export custom integration');
-      }
+      assertValidId(id, 'integration');
+      const pkg = await integrationBuilderService.exportPackage(id);
+      logAudit({
+        req,
+        action: 'export',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Exported custom integration "${id}"`
+      });
+      res.json(pkg);
     }
   );
 
@@ -185,21 +154,17 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    *       - sessionAuth: []
    */
   app.post(buildServerPath('/api/admin/integrations/builder'), adminAuth, async (req, res) => {
-    try {
-      const { instance, definition } = await integrationBuilderService.create(req.body, {
-        language: languageOf(req)
-      });
-      logAudit({
-        req,
-        action: 'create',
-        resource: 'integration',
-        resourceId: instance.id,
-        summary: `Built custom integration "${instance.id}" (${definition.protocol.type})`
-      });
-      res.status(201).json({ success: true, instance, definitionId: definition.id });
-    } catch (error) {
-      sendBuilderError(res, error, 'create custom integration');
-    }
+    const { instance, definition } = await integrationBuilderService.create(req.body, {
+      language: languageOf(req)
+    });
+    logAudit({
+      req,
+      action: 'create',
+      resource: 'integration',
+      resourceId: instance.id,
+      summary: `Built custom integration "${instance.id}" (${definition.protocol.type})`
+    });
+    res.status(201).json({ success: true, instance, definitionId: definition.id });
   });
 
   /**
@@ -215,12 +180,8 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/integrations/builder/:id'), adminAuth, async (req, res) => {
     const id = req.params.id;
-    if (!validateIdForPath(id, 'integration', res)) return;
-    try {
-      res.json(await integrationBuilderService.load(id, { language: languageOf(req) }));
-    } catch (error) {
-      sendBuilderError(res, error, 'load custom integration');
-    }
+    assertValidId(id, 'integration');
+    res.json(await integrationBuilderService.load(id, { language: languageOf(req) }));
   });
 
   /**
@@ -240,21 +201,17 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/integrations/builder/:id'), adminAuth, async (req, res) => {
     const id = req.params.id;
-    if (!validateIdForPath(id, 'integration', res)) return;
-    try {
-      const { instance, definition } = await integrationBuilderService.update(id, req.body, {
-        language: languageOf(req)
-      });
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'integration',
-        resourceId: id,
-        summary: `Saved custom integration "${id}" (${definition.version})`
-      });
-      res.json({ success: true, instance, definitionId: definition.id });
-    } catch (error) {
-      sendBuilderError(res, error, 'save custom integration');
-    }
+    assertValidId(id, 'integration');
+    const { instance, definition } = await integrationBuilderService.update(id, req.body, {
+      language: languageOf(req)
+    });
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'integration',
+      resourceId: id,
+      summary: `Saved custom integration "${id}" (${definition.version})`
+    });
+    res.json({ success: true, instance, definitionId: definition.id });
   });
 }
