@@ -9024,6 +9024,8 @@
     "ACTION_UNAVAILABLE": "The action is not available.",
     "INVALID_CONNECTION": "The connection is not valid.",
     "CONFIRMATION_REQUIRED": "This action must be confirmed first.",
-    "INVALID_ARGUMENTS": "The arguments of the action are not valid."
+    "INVALID_ARGUMENTS": "The arguments of the action are not valid.",
+    "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
+    "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name."
   }
 }

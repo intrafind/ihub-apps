@@ -139,7 +139,9 @@ export const USER_SKILL_ERROR_CODES = Object.freeze({
   MARKETPLACE_SKILL_NOT_FOUND: 404,
   MARKETPLACE_SKILL_INVALID: 422,
   MARKETPLACE_FETCH_FAILED: 502,
-  MARKETPLACE_SKILL_ERROR: 400
+  MARKETPLACE_SKILL_ERROR: 400,
+  SKILL_NAME_TAKEN: 409,
+  SKILL_NAME_RESERVED: 409
 });
 
 /** Codes of the integration administration (`InstalledIntegrationService`, migrations, action tests). */

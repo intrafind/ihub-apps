@@ -16,12 +16,6 @@ describe('skill API errors', () => {
     );
   });
 
-  it('still reads details.code, which the admin skill routes send', () => {
-    expect(skillErrorCode(failed({ error: 'x', details: { code: 'SKILL_NAME_TAKEN' } }))).toBe(
-      'SKILL_NAME_TAKEN'
-    );
-  });
-
   it('words the limit with the number from details', () => {
     const message = skillErrorMessage(
       failed({ code: 'SKILL_LIMIT_REACHED', details: { limit: 5 } }),

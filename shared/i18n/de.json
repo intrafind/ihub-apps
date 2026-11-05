@@ -8997,6 +8997,8 @@
     "ACTION_UNAVAILABLE": "Die Aktion ist nicht verfügbar.",
     "INVALID_CONNECTION": "Die Verbindung ist ungültig.",
     "CONFIRMATION_REQUIRED": "Diese Aktion muss zuerst bestätigt werden.",
-    "INVALID_ARGUMENTS": "Die Argumente der Aktion sind ungültig."
+    "INVALID_ARGUMENTS": "Die Argumente der Aktion sind ungültig.",
+    "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
+    "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen."
   }
 }

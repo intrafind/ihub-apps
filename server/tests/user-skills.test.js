@@ -729,7 +729,7 @@ describe('admin', () => {
       body: { name: 'team-weekly-report' }
     });
     assert.equal(again.statusCode, 409);
-    assert.equal(again.body.details?.code, 'SKILL_NAME_TAKEN');
+    assert.equal(again.body.code, 'SKILL_NAME_TAKEN');
   });
 
   it('lets only one of two concurrent promotions to the same name win', async () => {
@@ -744,7 +744,7 @@ describe('admin', () => {
     const results = await Promise.all([promote(first), promote(second)]);
     assert.deepEqual(results.map(res => res.statusCode).sort(), [201, 409]);
     const loser = results.find(res => res.statusCode === 409);
-    assert.equal(loser.body.details?.code, 'SKILL_NAME_TAKEN');
+    assert.equal(loser.body.code, 'SKILL_NAME_TAKEN');
     const validation = await validateSkillDirectory(
       path.join(contentsDir, 'skills', 'raced-skill')
     );
