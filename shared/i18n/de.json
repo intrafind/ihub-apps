@@ -8943,6 +8943,19 @@
     "PROMPT_FORBIDDEN": "Sie dürfen diesen Prompt nicht ändern.",
     "GLOBAL_PROMPT_READ_ONLY": "Globale Prompts werden von Administratoren verwaltet.",
     "PROMPT_ACCESS_CHANGED": "Ihr Zugriff auf diesen Prompt hat sich geändert.",
-    "REVISION_CONFLICT": "Jemand hat dieses Element zwischenzeitlich geändert. Schließen Sie den Editor und öffnen Sie es erneut, um die aktuelle Version zu sehen."
+    "REVISION_CONFLICT": "Jemand hat dieses Element zwischenzeitlich geändert. Schließen Sie den Editor und öffnen Sie es erneut, um die aktuelle Version zu sehen.",
+    "USER_SKILLS_NOT_ALLOWED": "Mit dieser Anmeldung können keine persönlichen Skills geführt werden.",
+    "USER_SKILLS_DISABLED": "Persönliche Skills sind ausgeschaltet.",
+    "USER_SKILLS_UNAVAILABLE": "Ihre Skills sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut.",
+    "SKILL_LIMIT_REACHED": "Sie haben die maximale Anzahl an Skills erreicht. Löschen Sie einen, um Platz zu schaffen.",
+    "SKILL_TOO_LARGE": "Dieser Skill ist zu groß. Kürzen Sie die Anweisungen oder entfernen Sie Dateien.",
+    "SKILL_FORBIDDEN": "Sie dürfen das mit diesem Skill nicht tun.",
+    "GLOBAL_SKILL_READ_ONLY": "Globale Skills werden von Administratoren verwaltet.",
+    "SKILL_ACCESS_CHANGED": "Ihr Zugriff auf diesen Skill hat sich geändert.",
+    "MARKETPLACE_SKILLS_DISABLED": "Das Hinzufügen von Skills aus dem Marktplatz ist ausgeschaltet.",
+    "MARKETPLACE_SKILL_NOT_FOUND": "Dieser Skill wurde im Marktplatz nicht gefunden.",
+    "MARKETPLACE_SKILL_INVALID": "Dieser Marktplatz-Eintrag ist kein gültiger Skill.",
+    "MARKETPLACE_FETCH_FAILED": "Der Marktplatz ist nicht erreichbar. Versuchen Sie es später erneut.",
+    "MARKETPLACE_SKILL_ERROR": "Der Skill konnte nicht aus dem Marktplatz übernommen werden."
   }
 }
