@@ -21,7 +21,7 @@ export function apiErrorMessage(error, t, fallback) {
   const code = data?.code;
   if (typeof code === 'string' && !Object.hasOwn(GENERIC_ERROR_CODES, code)) {
     const key = apiErrorI18nKey(code);
-    const message = t(key, { ...(data.details || {}), defaultValue: data.error || '' });
+    const message = t(key, { ...data.details, defaultValue: data.error || '' });
     if (message && message !== key) return message;
   }
   return data?.error || error?.message || fallback;
