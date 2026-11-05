@@ -14,7 +14,7 @@ import {
 } from '../services/pageCache.js';
 import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import logger from '../utils/logger.js';
-import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
+import { enhanceFetchOptions, isSsrfTrustedHost } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 import {
   ACCESS_DENIED_CODE,
@@ -43,20 +43,19 @@ function createError(message, code) {
 }
 
 /**
- * Validate a single URL hop against the SSRF guard, honoring the admin SSL
- * domain whitelist: a whitelisted host is admin-trusted (typically an
- * internal one) and skips the public-address rule. Every redirect hop is
+ * Validate a single URL hop against the SSRF guard, honoring the hosts an admin
+ * trusts (`ssl.domainWhitelist`, `ssrf.allowedHosts`): such a host (typically an
+ * internal one) skips the public-address rule. Every redirect hop is
  * revalidated independently so a public initial hostname that redirects to a
  * private/internal address after the first check is still blocked.
  *
  * @param {URL} parsedUrl - The URL for this hop
- * @param {Object} sslConfig - SSL config (for the domain whitelist bypass)
  * @returns {Promise<string[]|null>} Validated public addresses to pin the
  *   connection to, or null when the whitelist bypass applies (no DNS
  *   resolution/pinning is performed in that case)
  */
-async function assertHopIsSafe(parsedUrl, sslConfig) {
-  if (isDomainWhitelisted(parsedUrl.hostname, sslConfig.domainWhitelist)) {
+async function assertHopIsSafe(parsedUrl) {
+  if (isSsrfTrustedHost(parsedUrl.hostname)) {
     return null;
   }
   const result = await assertPublicTarget(parsedUrl);
@@ -83,7 +82,7 @@ export const DEFAULT_READER_USER_AGENT =
  */
 async function fetchPage(
   validUrl,
-  { sslConfig, shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url' }
+  { shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url' }
 ) {
   let hopUrl = validUrl;
   let response;
@@ -93,7 +92,7 @@ async function fetchPage(
     }
     if (signal?.aborted) throw createError('The request was cancelled', 'ABORTED');
 
-    const addresses = await assertHopIsSafe(hopUrl, sslConfig);
+    const addresses = await assertHopIsSafe(hopUrl);
     const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
 
     const controller = new AbortController();
@@ -179,7 +178,6 @@ export async function fetchWebPage(url, { language, signal, throttleId } = {}) {
     throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
   }
   return fetchPage(validUrl, {
-    sslConfig: getSSLConfig(),
     // null: `createAgent` decides per hop from the domain whitelist.
     shouldIgnoreSSL: null,
     acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language)),
@@ -193,9 +191,8 @@ export async function fetchWebPage(url, { language, signal, throttleId } = {}) {
  * its metadata. What the page cache stores; a window of `text` is what one
  * call returns.
  */
-async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage, progress }) {
+async function loadDocument(validUrl, { shouldIgnoreSSL, acceptLanguage, progress }) {
   const { response, finalUrl } = await fetchPage(validUrl, {
-    sslConfig,
     shouldIgnoreSSL,
     acceptLanguage
   });
@@ -376,9 +373,6 @@ export default async function webContentExtractor({
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
-  // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services
-  const sslConfig = getSSLConfig();
-
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
   const shouldIgnoreSSL =
@@ -390,7 +384,7 @@ export default async function webContentExtractor({
     const cacheKey = makePageCacheKey(validUrl.toString(), acceptLanguage);
     let doc = getCachedPage(cacheKey);
     if (!doc) {
-      doc = await loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage, progress });
+      doc = await loadDocument(validUrl, { shouldIgnoreSSL, acceptLanguage, progress });
       setCachedPage(cacheKey, doc, doc.text.length, pageCacheTtlMs());
     } else {
       logger.debug('Page reader cache hit', { component: 'WebContentExtractor' });

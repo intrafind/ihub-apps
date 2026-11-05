@@ -297,3 +297,20 @@ instead of failing page by page.
 The server log records the status, the detected service and its reference id (for example the
 Akamai `Reference Error`) for every refused page read, so the cause can be found without
 reproducing the request. Bot protection is only detected, never bypassed.
+
+## URL Test Agrees With Preview for Internal Hosts
+
+When you add a web page as a source, the **Test** button refused an internal host with "Access to
+private/internal addresses is not allowed (host did not resolve to any IP)" while **Preview** read
+the same page. Both now follow the same rule:
+
+- A host listed in `ssl.domainWhitelist` or in the platform's SSRF allowlist (`ssrf.allowedHosts`,
+  **Admin → Security**) is trusted: Test and Preview skip the private-address check for it, like
+  the other outbound features that honor the allowlist. Every redirect is still checked on its own,
+  so a trusted host cannot forward the request to an unlisted internal address.
+- A short or internal name that only the operating system can resolve (an `/etc/hosts` entry or a
+  search domain, such as `if-wiki`) is now found. Before, only the DNS servers were asked. The
+  addresses it returns are held to the same private-address rule, so this does not open anything
+  by itself.
+- A name nothing can resolve is reported as "could not be resolved" and names the two settings
+  above, instead of pointing at private addresses.

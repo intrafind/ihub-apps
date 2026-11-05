@@ -16,6 +16,7 @@
 
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { guardedLookup } from './dnsGuard.js';
 
 /**
  * Classify a 4-octet IPv4 address (as bytes) as private/sensitive.
@@ -166,6 +167,28 @@ export function isPrivateIP(ip) {
 }
 
 /**
+ * Whether one `dns.resolve*` outcome is the DNS server's definite answer that
+ * the name (or record type) does not exist, as opposed to a failure to get an
+ * answer (timeout, SERVFAIL, refused connection).
+ *
+ * @param {PromiseSettledResult<string[]>} outcome
+ * @returns {boolean}
+ */
+function isNoSuchName(outcome) {
+  return (
+    outcome.status === 'rejected' &&
+    (outcome.reason?.code === 'ENOTFOUND' || outcome.reason?.code === 'ENODATA')
+  );
+}
+
+/**
+ * `code` of an {@link assertPublicTarget} refusal when the host name has no
+ * address at all (as opposed to an address in a private range), so a caller can
+ * tell the admin to fix the name or trust the host instead of blaming the range.
+ */
+export const UNRESOLVED_HOST = 'UNRESOLVED_HOST';
+
+/**
  * SSRF guard: resolve the URL's hostname to one or more IP addresses and
  * verify every resolved IP is in a public range. Catches DNS-based
  * bypasses where an external hostname resolves to a private IP.
@@ -175,7 +198,7 @@ export function isPrivateIP(ip) {
  * DNS-rebinding window between this check and the actual fetch.
  *
  * @param {URL} parsedUrl - The parsed request URL
- * @returns {Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
+ * @returns {Promise<{ok: boolean, reason?: string, code?: string, addresses?: string[]}>}
  */
 export async function assertPublicTarget(parsedUrl) {
   // Strip IPv6 brackets that URL parsing leaves on the hostname.
@@ -210,16 +233,43 @@ export async function assertPublicTarget(parsedUrl) {
   // private IP we reject. Any unresolved family is ignored (not all hosts
   // have both records).
   let addrs = [];
+  let nameUnknownToDns = false;
   try {
     const [v4, v6] = await Promise.allSettled([dns.resolve4(host), dns.resolve6(host)]);
     if (v4.status === 'fulfilled') addrs.push(...v4.value);
     if (v6.status === 'fulfilled') addrs.push(...v6.value);
+    nameUnknownToDns = isNoSuchName(v4) && isNoSuchName(v6);
   } catch (err) {
     return { ok: false, reason: `DNS resolution failed: ${err.message}` };
   }
 
+  // resolve4/resolve6 query the DNS servers directly and ignore /etc/hosts and
+  // the search domains, so a short or internal name (`if-wiki`) is answered
+  // "no such name" although the connection itself would find it. In that case
+  // ask the OS resolver (getaddrinfo). Only then: a DNS server that times out
+  // or fails (ETIMEOUT, ESERVFAIL) would make getaddrinfo wait for the OS
+  // resolver timeout, and the guarded lookup only limits how long *this* caller
+  // waits; the libuv slot stays taken until the OS call ends. Fresh names
+  // under a dead nameserver must not be able to fill those few slots, so they
+  // are refused as unresolved without ever reaching getaddrinfo.
+  // Every address it returns goes through the same private-range check below
+  // and is pinned by the caller, so this widens what can be resolved, not what
+  // is allowed.
+  if (addrs.length === 0 && nameUnknownToDns) {
+    try {
+      const found = await new Promise((resolve, reject) => {
+        guardedLookup(host, { all: true }, (err, entries) =>
+          err ? reject(err) : resolve(entries)
+        );
+      });
+      addrs = [...new Set(found.map(entry => entry.address))];
+    } catch {
+      // Leave addrs empty: reported as unresolved below.
+    }
+  }
+
   if (addrs.length === 0) {
-    return { ok: false, reason: 'host did not resolve to any IP' };
+    return { ok: false, reason: 'host did not resolve to any IP', code: UNRESOLVED_HOST };
   }
 
   for (const addr of addrs) {
