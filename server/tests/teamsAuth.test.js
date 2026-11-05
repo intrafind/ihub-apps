@@ -72,7 +72,7 @@ jest.unstable_mockModule('../utils/tokenService.js', () => ({
 }));
 
 jest.unstable_mockModule('../utils/cookieSettings.js', () => ({
-  getAuthCookieOptions: jest.fn(() => ({}))
+  setAuthCookie: jest.fn((_req, res, token) => res.cookie('authToken', token, {}))
 }));
 
 const { teamsAuthMiddleware, teamsTokenExchange } = await import('../middleware/teamsAuth.js');

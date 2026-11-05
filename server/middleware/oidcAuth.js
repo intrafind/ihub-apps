@@ -12,7 +12,7 @@ import { generateJwt } from '../utils/tokenService.js';
 import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { setAuthCookie } from '../utils/cookieSettings.js';
 import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 import { logAudit } from '../services/AuditLogService.js';
@@ -869,7 +869,7 @@ export function createOidcCallbackHandler(providerName) {
         );
 
         // Set HTTP-only cookie for authentication
-        res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
+        setAuthCookie(req, res, token, expiresIn);
 
         // For web flows, redirect back to the app. The session is the httpOnly cookie set
         // above; the token is never put in the URL (it would end up in history, logs and

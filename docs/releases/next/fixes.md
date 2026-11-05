@@ -217,6 +217,12 @@ default is now `admins` → `users` → `authenticated` → `anonymous`, matchin
 A migration adds the two missing links to existing installations. A group that already declares
 `inherits` (even an empty list) is left as you configured it.
 
+## OIDC Sign-In Cookie Is Marked Secure Behind an HTTPS Reverse Proxy
+
+The session cookie set after an OIDC sign-in did not look at the request, so behind a TLS-terminating
+proxy it was issued without the `Secure` flag unless `USE_HTTPS=true` was set. It now follows the
+request protocol (`X-Forwarded-Proto`) like the cookie of every other sign-in method.
+
 ## MCP, A2A and Integration Calls Block More Internal Addresses
 
 The private-address check used by MCP servers, A2A agents, OpenAPI tools and HTTP integrations

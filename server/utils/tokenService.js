@@ -93,15 +93,6 @@ export function generateJwt(user, options = {}) {
   }
 
   const platform = configCache.getPlatform() || {};
-  const algorithm = getJwtAlgorithm();
-  const signingKey = getJwtSigningKey();
-
-  if (!signingKey) {
-    throw new Error(
-      `JWT signing key not configured for ${options.authMode || 'unknown'} authentication with ${algorithm}`
-    );
-  }
-
   // Default expiration: 8 hours
   const expiresInMinutes = options.expiresInMinutes || platform.auth?.sessionTimeoutMinutes || 480;
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
@@ -147,14 +138,40 @@ export function generateJwt(user, options = {}) {
     tokenPayload.domain = user.domain;
   }
 
-  const token = jwt.sign(tokenPayload, signingKey, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ihub-apps',
+  const token = signAppJwt(tokenPayload, {
+    expiresInSeconds: expiresIn,
     audience: audienceClaim || 'ihub-apps',
-    algorithm: algorithm
+    purpose: `${options.authMode || 'unknown'} authentication`
   });
 
   return { token, expiresIn };
+}
+
+/**
+ * Sign a token for this application with the configured algorithm and key.
+ * The one place that sets issuer (`ihub-apps`) and the default audience, so
+ * session, OAuth-client and API-key tokens cannot drift apart.
+ *
+ * @param {Object} payload - Claims (`aud` must not be set here; use `audience`)
+ * @param {Object} options
+ * @param {number} options.expiresInSeconds - Token lifetime
+ * @param {string} [options.audience='ihub-apps'] - Audience claim
+ * @param {string} [options.purpose='JWT'] - Names the caller in the error raised
+ *   when no signing key is configured
+ * @returns {string} The signed token
+ */
+export function signAppJwt(payload, { expiresInSeconds, audience = 'ihub-apps', purpose = 'JWT' }) {
+  const algorithm = getJwtAlgorithm();
+  const signingKey = getJwtSigningKey();
+  if (!signingKey) {
+    throw new Error(`JWT signing key not configured for ${purpose} with ${algorithm}`);
+  }
+  return jwt.sign(payload, signingKey, {
+    expiresIn: `${expiresInSeconds}s`,
+    issuer: 'ihub-apps',
+    audience,
+    algorithm
+  });
 }
 
 /**
