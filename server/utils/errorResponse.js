@@ -72,7 +72,7 @@ function httpStatusOf(error) {
 /**
  * Shapes in a message that a caller must not see on a 5xx: file paths and file names,
  * URLs, hosts, IPs and ports, stack frames, errno codes, credential words, token-like
- * runs and SQL. The list is deliberately blunt: a message that trips one of them is
+ * runs and SQL (see `looksLikeSql`). The list is deliberately blunt: a message that trips one of them is
  * replaced by the code's fixed text, never edited.
  */
 const UNSAFE_IN_MESSAGE = [
@@ -88,9 +88,16 @@ const UNSAFE_IN_MESSAGE = [
   /\bE[A-Z]{3,}\b/, // errno codes (ECONNREFUSED, ENOENT)
   /\b(?:pass(?:word|wd)?|secret|token|api[_-]?key|authori[sz]ation|bearer|cookie|credential|private[_ ]key|session)s?\b/i,
   /[A-Za-z0-9_\-+/=]{24,}/, // long token-like runs
-  /\b(?:select|insert|update|delete)\b[\s\S]*\b(?:from|into|set|where)\b/i, // SQL
   /[\u0000-\u001f\u007f]/ // control characters, newlines
 ];
+
+const SQL_VERB = /\b(?:select|insert|update|delete)\b/i;
+const SQL_CLAUSE = /\b(?:from|into|set|where)\b/i;
+
+/** A SQL verb and a SQL clause word in one message. Two plain tests, no backtracking. */
+function looksLikeSql(text) {
+  return SQL_VERB.test(text) && SQL_CLAUSE.test(text);
+}
 
 const MAX_PUBLIC_MESSAGE_LENGTH = 200;
 
@@ -104,6 +111,7 @@ export function publicMessage(message) {
   if (typeof message !== 'string') return null;
   const text = message.trim();
   if (!text || text.length > MAX_PUBLIC_MESSAGE_LENGTH) return null;
+  if (looksLikeSql(text)) return null;
   return UNSAFE_IN_MESSAGE.some(pattern => pattern.test(text)) ? null : text;
 }
 
