@@ -439,6 +439,70 @@ describe('crawlSite', () => {
     await assert.rejects(crawlSite({ url: 'ftp://x.com/' }, deps), /http\(s\)/);
   });
 
+  it('stops and reports the host when the site answers as bot protection', async () => {
+    const blockedError = () =>
+      Object.assign(new Error('Blocked by bot protection (Akamai)'), {
+        code: 'BOT_PROTECTION',
+        vendor: 'Akamai',
+        host: 'x.com'
+      });
+    const start = page('Home', ['/a', '/b']);
+    const fetched = [];
+    const deps = {
+      fetchRobots: async () => null,
+      fetchPage: async url => {
+        fetched.push(url);
+        if (url === 'https://x.com/') {
+          return { finalUrl: url, contentType: 'text/html', html: start };
+        }
+        throw blockedError();
+      }
+    };
+    const result = await crawlSite({ url: 'https://x.com/', samePath: false }, deps);
+    assert.deepEqual(result.blocked, { host: 'x.com', vendor: 'Akamai' });
+    assert.deepEqual(urlsOf(result), ['https://x.com/']);
+
+    // The start page itself blocked: the error keeps its code for the caller.
+    await assert.rejects(
+      crawlSite(
+        { url: 'https://x.com/' },
+        {
+          fetchRobots: async () => null,
+          fetchPage: async () => {
+            throw blockedError();
+          }
+        }
+      ),
+      { code: 'BOT_PROTECTION' }
+    );
+  });
+
+  it('ignores a bot-protection block from another host, such as a redirect target', async () => {
+    const foreignBlock = () =>
+      Object.assign(new Error('Blocked by bot protection (Cloudflare)'), {
+        code: 'BOT_PROTECTION',
+        vendor: 'Cloudflare',
+        host: 'login.third-party.example'
+      });
+    const deps = {
+      fetchRobots: async () => null,
+      fetchPage: async url => {
+        if (url === 'https://x.com/') {
+          return {
+            finalUrl: url,
+            contentType: 'text/html',
+            html: page('Home', ['/login', '/about'])
+          };
+        }
+        if (url === 'https://x.com/login') throw foreignBlock();
+        return { finalUrl: url, contentType: 'text/html', html: page('About', []) };
+      }
+    };
+    const result = await crawlSite({ url: 'https://x.com/', samePath: false }, deps);
+    assert.equal(result.blocked, undefined);
+    assert.deepEqual(urlsOf(result), ['https://x.com/', 'https://x.com/about']);
+  });
+
   it('lists a start URL that serves a PDF as one document', async () => {
     const { deps } = fakeSite({ 'https://x.com/file': { contentType: 'application/pdf' } });
     const result = await crawlSite({ url: 'https://x.com/file' }, deps);

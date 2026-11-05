@@ -150,11 +150,12 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
 };
 
 /**
- * Rename an item or change whether it is pinned.
+ * Rename an item, change whether it is pinned, or change what a link item
+ * (URL, page, iFinder document or search) points at.
  *
  * @param {string} projectId
  * @param {string} itemId
- * @param {{name?: string, pinned?: boolean}} changes
+ * @param {{name?: string, pinned?: boolean, ref?: Object}} changes
  * @returns {Promise<Object>} The updated item.
  */
 export const updateProjectItem = (projectId, itemId, changes) =>

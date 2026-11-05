@@ -23,12 +23,11 @@
  */
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import {
-  IntegrationRequestError,
   MAX_NOTE_LENGTH,
   REQUEST_STATUSES,
   getIntegrationRequestService,
@@ -95,38 +94,21 @@ export async function closeRequestsFor(req, definition) {
   }
 }
 
-/** The note an admin added: optional string of bounded length. Answers when invalid. */
-function noteOf(req, res) {
+/** The note an admin added: optional string of bounded length. Throws a 400 when invalid. */
+function noteOf(req) {
   const note = req.body?.note;
-  if (note === undefined || note === null) return { ok: true, note: null };
-  if (typeof note !== 'string') {
-    res.status(400).json({ error: 'note must be a string', code: 'INVALID_NOTE' });
-    return { ok: false };
-  }
+  if (note === undefined || note === null) return null;
+  if (typeof note !== 'string') throw new ServiceError('INVALID_NOTE', 'note must be a string');
   if (note.length > MAX_NOTE_LENGTH) {
-    res.status(400).json({
-      error: `note must be at most ${MAX_NOTE_LENGTH} characters`,
-      code: 'NOTE_TOO_LONG'
-    });
-    return { ok: false };
+    throw new ServiceError('NOTE_TOO_LONG', `note must be at most ${MAX_NOTE_LENGTH} characters`);
   }
-  return { ok: true, note };
+  return note;
 }
 
-function requestIdOf(req, res) {
+function requestIdOf(req) {
   const id = req.params.id;
-  if (!isRequestId(id)) {
-    res.status(404).json({ error: 'Request not found', code: 'REQUEST_NOT_FOUND' });
-    return null;
-  }
+  if (!isRequestId(id)) throw new ServiceError('REQUEST_NOT_FOUND', 'Request not found');
   return id;
-}
-
-function sendRequestError(res, error, context) {
-  if (error instanceof IntegrationRequestError) {
-    return res.status(error.status).json({ error: error.message, code: error.code });
-  }
-  return sendInternalError(res, error, context);
 }
 
 export default function registerAdminIntegrationRequestRoutes(app) {
@@ -142,30 +124,26 @@ export default function registerAdminIntegrationRequestRoutes(app) {
    *         description: "{ requests, hidden: [{ definition, name, hiddenAt, hiddenBy }], openCount }"
    */
   app.get(buildServerPath('/api/admin/integrations/requests'), adminAuth, async (req, res) => {
-    try {
-      await integrationRegistry.ensureLoaded();
-      await closeRequestsFor(req);
-      const language = languageOf(req);
-      const installations = installedIntegrationService.list();
-      const service = getIntegrationRequestService();
-      const [requests, hidden] = await Promise.all([service.list(), service.listHidden()]);
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({
-        success: true,
-        requests: requests.map(request => adminRequestView(request, language, installations)),
-        hidden: hidden.map(entry => ({
-          ...entry,
-          name: definitionNameOf(
-            integrationRegistry.get(entry.definition),
-            entry.definition,
-            language
-          )
-        })),
-        openCount: requests.filter(request => request.status === REQUEST_STATUSES.OPEN).length
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'list integration requests');
-    }
+    await integrationRegistry.ensureLoaded();
+    await closeRequestsFor(req);
+    const language = languageOf(req);
+    const installations = installedIntegrationService.list();
+    const service = getIntegrationRequestService();
+    const [requests, hidden] = await Promise.all([service.list(), service.listHidden()]);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      requests: requests.map(request => adminRequestView(request, language, installations)),
+      hidden: hidden.map(entry => ({
+        ...entry,
+        name: definitionNameOf(
+          integrationRegistry.get(entry.definition),
+          entry.definition,
+          language
+        )
+      })),
+      openCount: requests.filter(request => request.status === REQUEST_STATUSES.OPEN).length
+    });
   });
 
   /**
@@ -184,43 +162,37 @@ export default function registerAdminIntegrationRequestRoutes(app) {
     buildServerPath('/api/admin/integrations/requests/:id/_approve'),
     adminAuth,
     async (req, res) => {
-      const id = requestIdOf(req, res);
-      if (!id) return;
-      const { ok, note } = noteOf(req, res);
-      if (!ok) return;
-      try {
-        await integrationRegistry.ensureLoaded();
-        const service = getIntegrationRequestService();
-        const current = await service.get(id);
-        if (!current) {
-          return res.status(404).json({ error: 'Request not found', code: 'REQUEST_NOT_FOUND' });
-        }
-        const entry = integrationRegistry.get(current.definition);
-        if (!entry || entry.status === 'incompatible') {
-          return res.status(404).json({
-            error: 'The requested integration is no longer in the catalog',
-            code: 'DEFINITION_NOT_FOUND'
-          });
-        }
-        const { request } = await service.decide(id, {
-          decision: REQUEST_STATUSES.APPROVED,
-          admin: req.user,
-          note
-        });
-        logAudit({
-          req,
-          action: 'requestDecision',
-          resource: 'integration',
-          resourceId: request.definition,
-          summary: `Approved the request of ${request.requester.id} for "${request.definition}"`
-        });
-        res.json({
-          success: true,
-          request: adminRequestView(request, languageOf(req), installedIntegrationService.list())
-        });
-      } catch (error) {
-        sendRequestError(res, error, 'approve an integration request');
+      const id = requestIdOf(req);
+      const note = noteOf(req);
+      await integrationRegistry.ensureLoaded();
+      const service = getIntegrationRequestService();
+      const current = await service.get(id);
+      if (!current) {
+        throw new ServiceError('REQUEST_NOT_FOUND', 'Request not found');
       }
+      const entry = integrationRegistry.get(current.definition);
+      if (!entry || entry.status === 'incompatible') {
+        throw new ServiceError(
+          'DEFINITION_NOT_FOUND',
+          'The requested integration is no longer in the catalog'
+        );
+      }
+      const { request } = await service.decide(id, {
+        decision: REQUEST_STATUSES.APPROVED,
+        admin: req.user,
+        note
+      });
+      logAudit({
+        req,
+        action: 'requestDecision',
+        resource: 'integration',
+        resourceId: request.definition,
+        summary: `Approved the request of ${request.requester.id} for "${request.definition}"`
+      });
+      res.json({
+        success: true,
+        request: adminRequestView(request, languageOf(req), installedIntegrationService.list())
+      });
     }
   );
 
@@ -240,41 +212,33 @@ export default function registerAdminIntegrationRequestRoutes(app) {
     buildServerPath('/api/admin/integrations/requests/:id/_decline'),
     adminAuth,
     async (req, res) => {
-      const id = requestIdOf(req, res);
-      if (!id) return;
-      const { ok, note } = noteOf(req, res);
-      if (!ok) return;
+      const id = requestIdOf(req);
+      const note = noteOf(req);
       const hide = req.body?.hide;
       if (hide !== undefined && typeof hide !== 'boolean') {
-        return res.status(400).json({ error: 'hide must be a boolean', code: 'INVALID_HIDE' });
+        throw new ServiceError('INVALID_HIDE', 'hide must be a boolean');
       }
-      try {
-        await integrationRegistry.ensureLoaded();
-        const { request, alsoDeclined } = await getIntegrationRequestService().decide(id, {
-          decision: REQUEST_STATUSES.DECLINED,
-          admin: req.user,
-          note,
-          hide: hide === true
-        });
-        logAudit({
-          req,
-          action: 'requestDecision',
-          resource: 'integration',
-          resourceId: request.definition,
-          summary: `Declined the request of ${request.requester.id} for "${request.definition}"${
-            hide === true
-              ? ` and hid it from the catalog (${alsoDeclined.length} more declined)`
-              : ''
-          }`
-        });
-        res.json({
-          success: true,
-          request: adminRequestView(request, languageOf(req), installedIntegrationService.list()),
-          alsoDeclined: alsoDeclined.length
-        });
-      } catch (error) {
-        sendRequestError(res, error, 'decline an integration request');
-      }
+      await integrationRegistry.ensureLoaded();
+      const { request, alsoDeclined } = await getIntegrationRequestService().decide(id, {
+        decision: REQUEST_STATUSES.DECLINED,
+        admin: req.user,
+        note,
+        hide: hide === true
+      });
+      logAudit({
+        req,
+        action: 'requestDecision',
+        resource: 'integration',
+        resourceId: request.definition,
+        summary: `Declined the request of ${request.requester.id} for "${request.definition}"${
+          hide === true ? ` and hid it from the catalog (${alsoDeclined.length} more declined)` : ''
+        }`
+      });
+      res.json({
+        success: true,
+        request: adminRequestView(request, languageOf(req), installedIntegrationService.list()),
+        alsoDeclined: alsoDeclined.length
+      });
     }
   );
 
@@ -297,24 +261,20 @@ export default function registerAdminIntegrationRequestRoutes(app) {
       // Definition ids may carry one "/", so they travel URL-encoded.
       const definition = req.params.definitionId;
       if (!isDefinitionId(definition)) {
-        return res.status(400).json({ error: 'Invalid definition id', code: 'INVALID_DEFINITION' });
+        throw new ServiceError('INVALID_DEFINITION', 'Invalid definition id');
       }
-      try {
-        const shown = await getIntegrationRequestService().unhide(definition);
-        if (!shown) {
-          return res.status(404).json({ error: 'Not hidden', code: 'NOT_HIDDEN' });
-        }
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: definition,
-          summary: `Showed "${definition}" in the users' catalog again`
-        });
-        res.json({ success: true });
-      } catch (error) {
-        sendInternalError(res, error, 'show a hidden integration');
+      const shown = await getIntegrationRequestService().unhide(definition);
+      if (!shown) {
+        throw new ServiceError('NOT_HIDDEN', 'Not hidden');
       }
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: definition,
+        summary: `Showed "${definition}" in the users' catalog again`
+      });
+      res.json({ success: true });
     }
   );
 }

@@ -129,6 +129,7 @@ const USERS = {
   aliceKey: { id: 'alice', name: 'Alice', groups: ['users'], authMode: 'oauth_personal_key' }
 };
 
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 const app = express();
 app.use(express.json());
 app.use((req, _res, next) => {
@@ -137,6 +138,7 @@ app.use((req, _res, next) => {
 });
 app.use('/api/integrations/requests', integrationRequestRoutes);
 registerAdminIntegrationRequestRoutes(app);
+app.use(errorHandler);
 
 const asUser = (user, method, url) => {
   const r = request(app)[method](url);

@@ -391,7 +391,9 @@ describe('builder page', () => {
       actions: [{ name: 'a', request: { method: 'GET', url: '/a' }, sideEffect: 'read' }]
     });
     const error = Object.assign(new Error('The integration is not valid'), {
-      response: { data: { details: [{ path: ['auth', 'credentialRef'], message: 'missing' }] } }
+      response: {
+        data: { details: { issues: [{ path: ['auth', 'credentialRef'], message: 'missing' }] } }
+      }
     });
     mockApi.saveCustomIntegration.mockRejectedValue(error);
     await act(async () => {

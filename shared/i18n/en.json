@@ -8298,6 +8298,7 @@
       "crawlRobots_other": "{{count}} links were left out because the website excludes them in its robots.txt.",
       "crawlFull": "The project takes no more pages. Untick some, or remove items from the project first.",
       "crawlDocument": "PDF",
+      "crawlBlocked": "{{host}} blocks automated access, so the search stopped there. Add the pages you need by their address instead.",
       "crawlTruncated": "The search stopped at its limit; raise it or start from a deeper address to find more.",
       "crawlNoPages": "No pages found.",
       "crawlAlready": "Already added",
@@ -8400,7 +8401,8 @@
         "rename": "Rename",
         "retry": "Retry",
         "transfer": "Move or copy to…",
-        "openInIFinder": "Open in iFinder"
+        "openInIFinder": "Open in iFinder",
+        "edit": "Edit"
       },
       "add": "Add documents",
       "columns": {
@@ -8706,6 +8708,10 @@
       "renameTitle": "Rename collection",
       "renameSubtitle": "The name and the description are changed in iFinder too.",
       "renameHint": "A smart collection has no instructions: it is a list of documents."
+    },
+    "editItem": {
+      "title": "Edit item",
+      "unsupported": "This kind of item cannot be edited."
     }
   },
   "integrationScopes": {
@@ -9044,6 +9050,27 @@
     "INVALID_CONNECTION": "The connection is not valid.",
     "CONFIRMATION_REQUIRED": "This action must be confirmed first.",
     "INVALID_ARGUMENTS": "The arguments of the action are not valid.",
+    "INVALID_DRAFT": "The integration draft is not valid.",
+    "NOT_CUSTOM": "This is not a custom integration.",
+    "DUPLICATE_DEFINITION": "A definition with this ID already exists.",
+    "INVALID_DEFINITION": "The integration definition is not valid.",
+    "NOT_PUBLISHABLE": "This integration cannot be exported.",
+    "UNSUPPORTED_AUTH_KIND": "MCP servers and A2A agents take a bearer token or a header.",
+    "NOT_BUILDABLE": "This integration cannot be edited in the builder.",
+    "REQUEST_CONFLICT": "The request was changed in the meantime.",
+    "REQUEST_EXISTS": "You have already requested this integration.",
+    "REQUEST_NOT_FOUND": "The request was not found.",
+    "REQUEST_CLOSED": "The request is already decided.",
+    "INVALID_NOTE": "The note must be text.",
+    "NOTE_TOO_LONG": "The note is too long.",
+    "INVALID_HIDE": "The hide flag must be true or false.",
+    "NOT_HIDDEN": "The integration is not hidden.",
+    "DEFINITION_NOT_FOUND": "The requested integration is no longer in the catalog.",
+    "INTERACTIVE_SESSION_REQUIRED": "Only an interactive session can request integrations.",
+    "JSON_REQUIRED": "Send a JSON body.",
+    "INVALID_REASON": "The reason must be text.",
+    "REASON_TOO_LONG": "The reason is too long.",
+    "INTEGRATION_NOT_FOUND": "The integration was not found.",
     "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
     "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name."
   }

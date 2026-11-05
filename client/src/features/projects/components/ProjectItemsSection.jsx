@@ -30,6 +30,7 @@ import { canAddItem, isIFinderProject } from '../utils/projectView';
 const IFINDER_DOCUMENT_KIND = 'ifinder-document';
 const IFINDER_ALLOWED_KINDS = [IFINDER_DOCUMENT_KIND];
 import AddProjectItemDialog from './AddProjectItemDialog';
+import EditItemDialog from './EditItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
 import ProjectItemsTable from './ProjectItemsTable';
@@ -81,7 +82,7 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
  * The items of a project (spec 1 §3, spec 3 §9): the usage against the
  * quotas, the table with each item's status, and — for the owner and editors
  * — adding (every enabled kind, with the cloud pickers), pinning, renaming,
- * refreshing and removing.
+ * editing a link item, refreshing and removing.
  *
  * @param {Object} props
  * @param {Object} props.project
@@ -106,6 +107,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const [adding, setAdding] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [renaming, setRenaming] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
   const actions = useProjectItemActions({ projectId: project.id, setProject, reload });
   const documentActions = useProjectItemDocumentActions(project.id);
@@ -234,6 +236,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
                 }
           }
           onRename={isIFinder ? undefined : setRenaming}
+          onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
         />
       </div>
@@ -274,6 +277,17 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         }
         errorMessage={messageOf}
       />
+      {editing && (
+        <EditItemDialog
+          item={editing}
+          api={itemApi}
+          onClose={() => setEditing(null)}
+          onSave={changes => {
+            clearEstimate();
+            return actions.update(editing, changes);
+          }}
+        />
+      )}
       {renaming && (
         <RenameItemDialog
           item={renaming}

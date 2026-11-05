@@ -28,6 +28,7 @@ import {
 import { evictItemKeys, readText, storeText } from './ItemTextStore.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 import { ProjectError } from './projectErrors.js';
+import { PROJECT_ITEM_KIND } from './projectItemLinks.js';
 // Registering the built-in kinds is a side effect of loading them.
 import './kinds/linkKinds.js';
 import './kinds/uploadKind.js';
@@ -75,6 +76,52 @@ export function translateError(error) {
     if (error.code === 'PROJECT_EXISTS') return new ProjectError('PROJECT_EXISTS', error.message);
   }
   return error;
+}
+
+/**
+ * What a kind says about a reference: its `describe`, then the name and
+ * source its `prepare` found (a document linked from another project).
+ *
+ * @param {Object} kind
+ * @param {Object} ref
+ * @param {Object|null} prepared - The result of `kind.prepare`.
+ * @param {string} [language]
+ * @returns {{name?: string, url?: string, site?: string}}
+ */
+function describeItemRef(kind, ref, prepared, language) {
+  return {
+    ...kind.describe?.(ref, language),
+    ...(prepared?.name ? { name: prepared.name } : {}),
+    ...prepared?.source
+  };
+}
+
+/**
+ * Point a link item at a checked reference. An item still named after its old
+ * reference takes the new one's name unless `keepName` (a name came with the
+ * same request); what the item was read as is reset, since it has not been
+ * read from the new reference yet.
+ *
+ * @param {Object} item - Changed in place.
+ * @param {{kind: Object, ref: Object, prepared: Object|null}} checked
+ * @param {{keepName: boolean, language?: string}} options
+ * @returns {boolean} Whether the reference differs from the stored one.
+ */
+function applyItemRef(item, { kind, ref, prepared }, { keepName, language }) {
+  if (JSON.stringify(ref) === JSON.stringify(item.ref)) return false;
+  const before = kind.describe?.(item.ref, language);
+  const after = describeItemRef(kind, ref, prepared, language);
+  if (!keepName && (!item.name || item.name === before?.name)) {
+    item.name = String(after.name || kind.id).slice(0, 300);
+  }
+  item.ref = ref;
+  item.provenance = {
+    ...item.provenance,
+    source: after.url || after.site ? { site: after.site, url: after.url } : null
+  };
+  item.status = 'ready';
+  item.error = null;
+  return true;
 }
 
 /**
@@ -478,11 +525,7 @@ export class ProjectService {
     if (isText && !file && text === null && typeof kind.fetch !== 'function') {
       throw new ProjectError('INVALID_REF', `An item of kind ${kind.id} needs a file or text`);
     }
-    const described = {
-      ...(typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {}),
-      ...(prepared?.name ? { name: prepared.name } : {}),
-      ...(prepared?.source || {})
-    };
+    const described = describeItemRef(kind, ref, prepared, user?.language);
     const now = nowIso();
     const declaredBytes = file
       ? Number(file.bytes) || 0
@@ -754,15 +797,26 @@ export class ProjectService {
   }
 
   /**
-   * Rename or pin an item.
+   * Rename or pin an item, or — for a link item (URL, iHub page, iFinder
+   * document or search) — change what it points at. The new reference is checked
+   * like a new item's; an item still named after its old reference takes the
+   * new one's name. The kind never changes, and neither does the reference of
+   * an uploaded, written or cloud document or of a document linked from another
+   * project (`INVALID_REF`).
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{name?: string, pinned?: boolean}} patch
+   * @param {{name?: string, pinned?: boolean, ref?: Object}} patch
    * @param {{user: Object, authorize?: Function}} options
    * @returns {Promise<{project: Object, item: Object}|null>}
    */
   async updateItem(projectId, itemId, patch, { user, authorize }) {
+    // A new reference is checked (and, for iFinder, authorised) before the
+    // project is locked, like the one of a new item in `addItem`.
+    const checkedRef =
+      patch.ref === undefined
+        ? null
+        : await this._checkItemRefChange(projectId, itemId, patch.ref, user);
     let stored = null;
     try {
       stored = await this.repository.mutate(
@@ -779,11 +833,22 @@ export class ProjectService {
             item.pinned = patch.pinned;
             changed = true;
           }
+          if (patch.ref !== undefined) {
+            // The item changed kind or was replaced between the check and the lock.
+            if (!checkedRef || checkedRef.kind.id !== item.kind) {
+              throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was edited');
+            }
+            changed =
+              applyItemRef(item, checkedRef, {
+                keepName: patch.name !== undefined,
+                language: user?.language
+              }) || changed;
+          }
           if (!changed) return null;
           item.updatedAt = nowIso();
           return project;
         },
-        // Someone renaming or pinning a document is using the project:
+        // Someone renaming, pinning or editing a document is using the project:
         // retention must not count the project as abandoned.
         { actor: actorOf(user), authorize, touchActivity: true }
       );
@@ -792,6 +857,42 @@ export class ProjectService {
     }
     if (!stored) return null;
     return { project: stored, item: stored.items.find(entry => entry.id === itemId) };
+  }
+
+  /**
+   * Check a new reference for an existing item: its kind's schema, that the
+   * kind is a link kind, and the kind's `prepare` (an iFinder profile is
+   * authorised there).
+   *
+   * @param {string} projectId
+   * @param {string} itemId
+   * @param {Object} ref
+   * @param {Object} user
+   * @returns {Promise<{kind: Object, ref: Object, prepared: Object|null}|null>} `null` when
+   *   the project does not exist (the caller answers that).
+   * @throws {ProjectError} `ITEM_NOT_FOUND`, `INVALID_REF`, `SOURCE_FORBIDDEN`.
+   */
+  async _checkItemRefChange(projectId, itemId, ref, user) {
+    const current = await this.repository.get(projectId);
+    if (!current) return null;
+    const existing = (current.items || []).find(entry => entry.id === itemId);
+    if (!existing) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+    // Not `admin: true`: that exemption lets an admin re-save an item of a kind
+    // that was switched off. A new reference works like a new item and is
+    // refused the same way, or an editor could point a URL item at any host
+    // after the admin turned URL fetching off.
+    const checked = this._checkKindRef(existing.kind, ref);
+    if (checked.kind.storage.ihub !== 'link' || checked.kind.id === PROJECT_ITEM_KIND) {
+      throw new ProjectError(
+        'INVALID_REF',
+        `The reference of an item of kind "${existing.kind}" cannot be changed`
+      );
+    }
+    const prepared =
+      typeof checked.kind.prepare === 'function'
+        ? await checked.kind.prepare(checked.ref, { user, projectId })
+        : null;
+    return { kind: checked.kind, ref: prepared?.ref || checked.ref, prepared };
   }
 
   /**

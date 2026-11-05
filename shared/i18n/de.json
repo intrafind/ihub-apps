@@ -8271,6 +8271,7 @@
       "crawlRobots_other": "{{count}} Links wurden ausgelassen, weil die Website sie in ihrer robots.txt ausschließt.",
       "crawlFull": "Das Projekt nimmt keine weiteren Seiten auf. Wählen Sie Seiten ab oder entfernen Sie zuerst Elemente aus dem Projekt.",
       "crawlDocument": "PDF",
+      "crawlBlocked": "{{host}} blockiert den automatisierten Zugriff, deshalb wurde die Suche dort beendet. Fügen Sie die benötigten Seiten stattdessen über ihre Adresse hinzu.",
       "crawlTruncated": "Die Suche hat an ihrer Grenze aufgehört; erhöhen Sie sie oder beginnen Sie bei einer tieferen Adresse, um mehr zu finden.",
       "crawlNoPages": "Keine Seiten gefunden.",
       "crawlAlready": "Bereits hinzugefügt",
@@ -8373,7 +8374,8 @@
         "rename": "Umbenennen",
         "retry": "Erneut versuchen",
         "transfer": "Verschieben oder kopieren nach…",
-        "openInIFinder": "In iFinder öffnen"
+        "openInIFinder": "In iFinder öffnen",
+        "edit": "Bearbeiten"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -8679,6 +8681,10 @@
       "renameTitle": "Collection umbenennen",
       "renameSubtitle": "Name und Beschreibung werden auch in iFinder geändert.",
       "renameHint": "Eine Smart Collection hat keine Anweisungen: Sie ist eine Liste von Dokumenten."
+    },
+    "editItem": {
+      "title": "Element bearbeiten",
+      "unsupported": "Dieses Element kann nicht bearbeitet werden."
     }
   },
   "integrationScopes": {
@@ -9017,6 +9023,27 @@
     "INVALID_CONNECTION": "Die Verbindung ist ungültig.",
     "CONFIRMATION_REQUIRED": "Diese Aktion muss zuerst bestätigt werden.",
     "INVALID_ARGUMENTS": "Die Argumente der Aktion sind ungültig.",
+    "INVALID_DRAFT": "Der Integrationsentwurf ist ungültig.",
+    "NOT_CUSTOM": "Dies ist keine eigene Integration.",
+    "DUPLICATE_DEFINITION": "Eine Definition mit dieser ID existiert bereits.",
+    "INVALID_DEFINITION": "Die Integrationsdefinition ist ungültig.",
+    "NOT_PUBLISHABLE": "Diese Integration kann nicht exportiert werden.",
+    "UNSUPPORTED_AUTH_KIND": "MCP-Server und A2A-Agenten verwenden ein Bearer-Token oder einen Header.",
+    "NOT_BUILDABLE": "Diese Integration kann im Builder nicht bearbeitet werden.",
+    "REQUEST_CONFLICT": "Die Anfrage wurde zwischenzeitlich geändert.",
+    "REQUEST_EXISTS": "Sie haben diese Integration bereits angefragt.",
+    "REQUEST_NOT_FOUND": "Die Anfrage wurde nicht gefunden.",
+    "REQUEST_CLOSED": "Die Anfrage ist bereits entschieden.",
+    "INVALID_NOTE": "Die Notiz muss ein Text sein.",
+    "NOTE_TOO_LONG": "Die Notiz ist zu lang.",
+    "INVALID_HIDE": "Die Ausblenden-Option muss wahr oder falsch sein.",
+    "NOT_HIDDEN": "Die Integration ist nicht ausgeblendet.",
+    "DEFINITION_NOT_FOUND": "Die angefragte Integration ist nicht mehr im Katalog.",
+    "INTERACTIVE_SESSION_REQUIRED": "Nur eine interaktive Sitzung kann Integrationen anfragen.",
+    "JSON_REQUIRED": "Senden Sie einen JSON-Body.",
+    "INVALID_REASON": "Die Begründung muss ein Text sein.",
+    "REASON_TOO_LONG": "Die Begründung ist zu lang.",
+    "INTEGRATION_NOT_FOUND": "Die Integration wurde nicht gefunden.",
     "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
     "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen."
   }

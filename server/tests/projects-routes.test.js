@@ -165,6 +165,7 @@ const route = {
   adminDeps: handlersFor(adminRoutes, 'get', '/api/admin/projects/_dependencies/:id'),
   adminToggle: handlersFor(adminRoutes, 'post', '/api/admin/projects/_toggle'),
   adminAddItem: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/items'),
+  adminUpdateItem: handlersFor(adminRoutes, 'patch', '/api/admin/projects/:id/items/:itemId'),
   adminPut: handlersFor(adminRoutes, 'put', '/api/admin/projects/:id'),
   adminMove: handlersFor(adminRoutes, 'post', '/api/admin/projects/_move'),
   adminCopy: handlersFor(adminRoutes, 'post', '/api/admin/projects/_copy'),
@@ -1082,6 +1083,145 @@ describe('admin projects', () => {
       (await drive(route.items, { user: NOBODY, params: { projectId: 'faq' } })).body.items.length,
       1
     );
+  });
+
+  it('change what a link item points at, which a rename alone never did', async () => {
+    await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'web', name: { en: 'Web' } }
+    });
+    const added = await drive(route.adminAddItem, {
+      user: EDITOR,
+      params: { id: 'web' },
+      body: { kind: 'url', ref: { url: 'https://example.com/old', maxContentLength: 1000 } }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    const { id: itemId, name } = added.body.item;
+    assert.equal(name, 'https://example.com/old');
+
+    // An item still named after its address follows the new one.
+    const moved = await drive(route.adminUpdateItem, {
+      user: EDITOR,
+      params: { id: 'web', itemId },
+      body: { ref: { url: 'https://example.com/new' } }
+    });
+    assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+    assert.equal(moved.body.item.ref.url, 'https://example.com/new');
+    assert.equal(moved.body.item.name, 'https://example.com/new');
+    assert.equal(moved.body.item.provenance.source.url, 'https://example.com/new');
+    assert.equal(moved.body.item.status, 'ready');
+    const stored = await getProjectRepository().get('web');
+    assert.equal(stored.items[0].ref.url, 'https://example.com/new');
+    // The reference is replaced as sent: a limit that was not sent is gone.
+    assert.equal(stored.items[0].ref.maxContentLength, undefined);
+
+    // A name somebody chose stays, also when the address changes in the same request.
+    const renamed = await drive(route.adminUpdateItem, {
+      user: EDITOR,
+      params: { id: 'web', itemId },
+      body: { name: 'Handbook', ref: { url: 'https://example.com/third' } }
+    });
+    assert.equal(renamed.body.item.name, 'Handbook');
+    const kept = await drive(route.adminUpdateItem, {
+      user: EDITOR,
+      params: { id: 'web', itemId },
+      body: { ref: { url: 'https://example.com/fourth' } }
+    });
+    assert.equal(kept.body.item.name, 'Handbook');
+    assert.equal(kept.body.item.ref.url, 'https://example.com/fourth');
+
+    // The reference is checked against the item's own kind.
+    for (const ref of [{ url: 'ftp://example.com/x' }, { pageId: 'faq' }, {}]) {
+      const refused = await drive(route.adminUpdateItem, {
+        user: EDITOR,
+        params: { id: 'web', itemId },
+        body: { ref }
+      });
+      assert.equal(refused.statusCode, 400, JSON.stringify(ref));
+    }
+    assert.equal(
+      (await getProjectRepository().get('web')).items[0].ref.url,
+      'https://example.com/fourth'
+    );
+
+    // Only a content admin may.
+    const denied = await drive(route.adminUpdateItem, {
+      user: ADA,
+      params: { id: 'web', itemId },
+      body: { ref: { url: 'https://example.com/x' } }
+    });
+    assert.equal(denied.statusCode, 403);
+  });
+
+  it('refuse a new reference for a kind the admin switched off, but still rename', async () => {
+    await drive(route.adminCreate, { user: EDITOR, body: { id: 'off', name: { en: 'Off' } } });
+    const added = await drive(route.adminAddItem, {
+      user: EDITOR,
+      params: { id: 'off' },
+      body: { kind: 'url', ref: { url: 'https://example.com/a' } }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    const { id: itemId } = added.body.item;
+    setProjectSettings({ kinds: { url: false } });
+    try {
+      const refused = await drive(route.adminUpdateItem, {
+        user: EDITOR,
+        params: { id: 'off', itemId },
+        body: { ref: { url: 'https://other.example/b' } }
+      });
+      assert.ok(refused.statusCode >= 400, JSON.stringify(refused.body));
+      assert.match(JSON.stringify(refused.body), /KIND_DISABLED|not available/);
+      assert.equal(
+        (await getProjectRepository().get('off')).items[0].ref.url,
+        'https://example.com/a'
+      );
+      // A name or a pin is not a new reference.
+      const renamed = await drive(route.adminUpdateItem, {
+        user: EDITOR,
+        params: { id: 'off', itemId },
+        body: { name: 'Renamed', pinned: true }
+      });
+      assert.equal(renamed.statusCode, 200, JSON.stringify(renamed.body));
+    } finally {
+      setProjectSettings();
+    }
+  });
+
+  it('keep the reference of a text item and of a missing item', async () => {
+    await drive(route.adminCreate, { user: EDITOR, body: { id: 'notes', name: { en: 'Notes' } } });
+    // Uploads need the ingest service, which these tests do not run: store the item as it would be.
+    await getProjectRepository().mutate(
+      'notes',
+      project => {
+        project.items = [
+          {
+            id: 'itm_text000001',
+            kind: 'upload',
+            name: 'Note',
+            ref: {},
+            storage: 'text',
+            status: 'ready',
+            pinned: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        ];
+        return project;
+      },
+      { actor: EDITOR }
+    );
+    const refused = await drive(route.adminUpdateItem, {
+      user: EDITOR,
+      params: { id: 'notes', itemId: 'itm_text000001' },
+      body: { ref: {} }
+    });
+    assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+    const missing = await drive(route.adminUpdateItem, {
+      user: EDITOR,
+      params: { id: 'notes', itemId: 'itm_missing' },
+      body: { ref: { url: 'https://example.com' } }
+    });
+    assert.equal(missing.statusCode, 404, JSON.stringify(missing.body));
   });
 
   it('keep a default app that users see and an admin can clear', async () => {

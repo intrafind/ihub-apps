@@ -23,7 +23,9 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import { useProjectItemDocumentActions } from '../../projects/components/ProjectItemDocumentActions';
+import EditItemDialog from '../../projects/components/EditItemDialog';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
+import RenameItemDialog from '../../projects/components/RenameItemDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import {
@@ -113,6 +115,8 @@ function AdminProjectEditPageContent({ id }) {
   // Until the admin types an ID, a new project's ID follows its name.
   const [idEdited, setIdEdited] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const documentActions = useProjectItemDocumentActions(id);
   const [busyItemId, setBusyItemId] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
@@ -239,6 +243,28 @@ function AdminProjectEditPageContent({ id }) {
     runItemAction(item, async () =>
       replaceItem(await updateAdminProjectItem(id, item.id, { pinned: !item.pinned }))
     );
+
+  // Throws: the edit dialog shows the failure next to its form.
+  const handleEditItem = async (item, changes) => {
+    setBusyItemId(item.id);
+    try {
+      clearEstimate();
+      replaceItem(await updateAdminProjectItem(id, item.id, changes));
+      await reload();
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  // Resolves `true` when the item was renamed, which closes the dialog.
+  const handleRename = async (item, name) => {
+    let renamed = false;
+    await runItemAction(item, async () => {
+      replaceItem(await updateAdminProjectItem(id, item.id, { name }));
+      renamed = true;
+    });
+    return renamed;
+  };
 
   const handleRefresh = item =>
     runItemAction(item, async () => {
@@ -392,6 +418,8 @@ function AdminProjectEditPageContent({ id }) {
         onTogglePinned={handleTogglePinned}
         onPreview={setPreviewItem}
         onRefresh={handleRefresh}
+        onRename={setRenameTarget}
+        onEdit={setEditTarget}
         onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
         onRemove={setRemoveItem}
         onDocumentAction={documentActions.onDocumentAction}
@@ -503,6 +531,21 @@ function AdminProjectEditPageContent({ id }) {
                 clearEstimate();
                 void reload();
               }}
+            />
+          )}
+          {editTarget && (
+            <EditItemDialog
+              item={editTarget}
+              api={ADMIN_ITEM_API}
+              onClose={() => setEditTarget(null)}
+              onSave={changes => handleEditItem(editTarget, changes)}
+            />
+          )}
+          {renameTarget && (
+            <RenameItemDialog
+              item={renameTarget}
+              onClose={() => setRenameTarget(null)}
+              onRename={name => handleRename(renameTarget, name)}
             />
           )}
           <ProjectItemTextDialog

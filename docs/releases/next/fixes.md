@@ -273,6 +273,31 @@ never are, whatever groups they carry.
 - If `groups.json` cannot be read, requests now fail instead of guessing admin rights from group
   names.
 
+## Web Page Reader Reports Bot-Protection Blocks Instead of "Authentication Required"
+
+When a website blocks automated access with a bot-protection service (Akamai, Cloudflare, Imperva,
+DataDome, PerimeterX or Sucuri), the page reader (`read_url`) used to report every 401/403 as
+**Authentication required**, which pointed admins and the model in the wrong direction. It now
+tells the cases apart:
+
+- **Blocked by bot protection** (`BOT_PROTECTION`): names the service, for example _Blocked by bot
+  protection (Akamai) – the site does not allow automated access (HTTP 403)_. The model receives a
+  non-retryable result with the host and the instruction not to retry or try other URLs on that
+  host, and to tell you the page could not be read and suggest uploading it or using the search
+  snippets. A host that blocked a chat is not requested again in that chat.
+- **Authentication required** (`AUTH_REQUIRED`): only for a real login request, a 401 or a 403 that
+  carries a `WWW-Authenticate` header.
+- **Access denied** (`ACCESS_DENIED`): any other 403, with the status in the message.
+
+Web searches that read the result pages (`extractContent`) mark such a result with
+`contentExtracted: false` and `extractionErrorCode: "BOT_PROTECTION"`, so the model can still use its
+title and description. The project URL crawler stops at a host that blocks it and reports the host
+instead of failing page by page.
+
+The server log records the status, the detected service and its reference id (for example the
+Akamai `Reference Error`) for every refused page read, so the cause can be found without
+reproducing the request. Bot protection is only detected, never bypassed.
+
 ## URL Test Agrees With Preview for Internal Hosts
 
 When you add a web page as a source, the **Test** button refused an internal host with "Access to

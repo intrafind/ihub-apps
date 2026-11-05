@@ -23,6 +23,7 @@ import {
   definitionIdToDirName,
   isCustomDefinitionId
 } from '../../../validators/integrationDefinitionSchema.js';
+import { ServiceError } from '../../../utils/ServiceError.js';
 
 /** Where a `script` integration's connector module lives in its folder. */
 export const SCRIPT_MODULE_FILE = 'actions/connector.js';
@@ -37,12 +38,20 @@ export const PACKAGE_FORMAT_VERSION = 1;
 const CODE_FILE = /\.(m?js|cjs)$/i;
 
 /** A builder error the routes answer with 400 (`code`, `details`). */
-export class BuilderError extends Error {
+export class BuilderError extends ServiceError {
+  /**
+   * @param {string} message
+   * @param {Object} [options]
+   * @param {number} [options.status=400]
+   * @param {string} [options.code='INVALID_DRAFT'] - A code of `shared/apiErrors.js`
+   * @param {Object|Array} [options.details] - A list of problems is answered as `details.issues`.
+   */
   constructor(message, { status = 400, code = 'INVALID_DRAFT', details } = {}) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.details = details;
+    super(code, message, {
+      status,
+      details: Array.isArray(details) ? { issues: details } : details
+    });
+    this.name = 'BuilderError';
   }
 }
 

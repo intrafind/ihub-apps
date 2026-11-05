@@ -4,7 +4,13 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { DataTable } from '../../admin/components/data-table';
-import { hasDocumentActions, isItemReadable, kindIcon, localizedText } from '../utils/projectItems';
+import {
+  hasDocumentActions,
+  isEditableItem,
+  isItemReadable,
+  kindIcon,
+  localizedText
+} from '../utils/projectItems';
 import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
 import ProjectItemStatus from './ProjectItemStatus';
@@ -50,6 +56,8 @@ function isRetryable(item) {
  * @param {(item: Object) => void} [props.onRefresh] - Retry (failed, not an upload) or
  *   refresh (stale, picked).
  * @param {(item: Object) => void} [props.onRename]
+ * @param {(item: Object) => void} [props.onEdit] - Change what a link item points at
+ *   (offered for the kinds of `EDITABLE_ITEM_KINDS`; it covers the name too).
  * @param {(item: Object) => void} [props.onRemove]
  * @param {(item: Object) => void} [props.onTransfer] - Move or copy into another project.
  * @param {Set<string>} [props.selectedIds] - With `onSelectionChange`, a checkbox column
@@ -70,6 +78,7 @@ function ProjectItemsTable({
   onDocumentAction,
   onRefresh,
   onRename,
+  onEdit,
   onRemove,
   onTransfer,
   selectedIds,
@@ -242,9 +251,19 @@ function ProjectItemsTable({
       id: 'rename',
       label: t('projects.items.actions.rename', 'Rename'),
       icon: 'pencil',
-      hidden: () => !canChange(onRename),
+      // An item that can be edited changes its name there.
+      hidden: item => !canChange(onRename) || (canChange(onEdit) && isEditableItem(item)),
       disabled: item => busyItemId === item.id,
       onClick: item => onRename(item)
+    },
+    {
+      id: 'edit',
+      label: t('projects.items.actions.edit', 'Edit'),
+      icon: 'pencil',
+      priority: 'primary',
+      hidden: item => !canChange(onEdit) || !isEditableItem(item),
+      disabled: item => busyItemId === item.id,
+      onClick: item => onEdit(item)
     },
     {
       id: 'transfer',

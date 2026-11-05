@@ -17,6 +17,11 @@
  */
 import { JSDOM } from 'jsdom';
 import { fetchWebPage } from '../../tools/webContentExtractor.js';
+import {
+  BOT_PROTECTION_CODE,
+  blockedResponseError,
+  classifyBlockedResponse
+} from '../../tools/lib/botProtection.js';
 import { dropRawTextElements } from '../../tools/lib/pageContent.js';
 
 /** Defaults and upper bounds of a crawl request. */
@@ -349,6 +354,15 @@ export function extractPageLinks(html, pageUrl) {
   return { title, links };
 }
 
+/** Whether `hostname` is the host of `origin` (an origin URL such as `https://x.com`). */
+function sameHostname(hostname, origin) {
+  try {
+    return String(hostname).toLowerCase() === new URL(origin).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /** Stop reading a body: Node streams are destroyed, web streams cancelled. */
 function dropBody(body) {
   if (!body) return;
@@ -445,7 +459,11 @@ async function fetchHtml(url, { signal } = {}) {
     throttleId: CRAWL_THROTTLE_ID
   });
   if (!response.ok) {
+    // A bot-protection block gets its own error: the start page's message is
+    // what the user reads when a crawl finds nothing.
+    const blocked = await classifyBlockedResponse(response, finalUrl.href);
     dropBody(response.body);
+    if (blocked) throw blockedResponseError(blocked);
     throw new Error(`HTTP ${response.status}`);
   }
   const contentType = response.headers.get('content-type') || '';
@@ -525,11 +543,13 @@ function stoppedError() {
  * @param {number} [deps.deadlineMs] - Test seam
  * @returns {Promise<{pages: Array<{url: string, title: string, depth: number,
  *   type: 'page'|'document'}>, truncated: boolean, robotsExcluded: number,
- *   scope: {origin: string, path: string|null}}>}
+ *   scope: {origin: string, path: string|null}, blocked?: {host: string, vendor?: string}}>}
  *   `truncated`: the page limit or the time limit stopped the crawl before
  *   every link in scope was visited. `robotsExcluded`: links in scope that
- *   `robots.txt` disallows.
- * @throws {Error} When the start page itself cannot be read
+ *   `robots.txt` disallows. `blocked`: a page answered as bot protection, so
+ *   the crawl stopped there instead of failing page by page.
+ * @throws {Error} When the start page itself cannot be read (`code` `BOT_PROTECTION`
+ *   when the site blocks automated access)
  */
 export async function crawlSite(
   {
@@ -559,7 +579,10 @@ export async function crawlSite(
   const onCallerAbort = () => controller.abort();
   callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
   const { signal } = controller;
-  const stopped = () => signal.aborted || now() >= deadline;
+  // Set when the site starts refusing the crawler as bot protection: reading
+  // on would only fail page after page, so the crawl stops and reports the host.
+  let blocked = null;
+  const stopped = () => signal.aborted || now() >= deadline || blocked !== null;
 
   try {
     // The start page answers for the crawl: if it cannot be read, nothing can.
@@ -642,7 +665,12 @@ export async function crawlSite(
           return { finalUrl, title: fileNameOf(finalUrl), links: [], document: true };
         }
         return { finalUrl, ...extractPageLinks(page.html, finalUrl) };
-      } catch {
+      } catch (error) {
+        // Only the crawled site's own refusal ends the crawl: a link that
+        // redirects to a third-party host behind a WAF is just a dead link.
+        if (error?.code === BOT_PROTECTION_CODE && sameHostname(error.host, scope.origin)) {
+          blocked ??= { host: error.host, ...(error.vendor ? { vendor: error.vendor } : {}) };
+        }
         // A dead or unreadable link (or one cancelled at the deadline) is left out.
         return null;
       }
@@ -700,7 +728,7 @@ export async function crawlSite(
     }
     if (level.length > 0) truncated = true;
 
-    return { pages: listed, truncated, robotsExcluded, scope };
+    return { pages: listed, truncated, robotsExcluded, scope, ...(blocked ? { blocked } : {}) };
   } finally {
     clearTimeout(timer);
     callerSignal?.removeEventListener('abort', onCallerAbort);

@@ -584,6 +584,13 @@ text page. Every such response has the same body:
   the name of a system skill, 409) are top-level `code`s; deleting a system skill answers `FORBIDDEN`,
   an oversized zip `PAYLOAD_TOO_LARGE`, and the problems of an invalid skill are in `details.errors`
   instead of a bare `details` list.
+- The integration builder and request endpoints (`/api/admin/integrations/builder*`,
+  `/api/admin/integrations/requests*`, `/api/integrations/requests`) answer in this shape. Their
+  codes (`INVALID_DRAFT`, `DUPLICATE_DEFINITION`, `REQUEST_EXISTS`, `REQUEST_NOT_FOUND`,
+  `INTEGRATION_NOT_FOUND`, …) are unchanged and are now translated by the web app. The validation
+  problems of a draft or an import moved from `details` (a list) to `details.issues`, and a
+  malformed import body answers `VALIDATION_FAILED`. The `success: false` flag is gone from error
+  bodies.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
@@ -622,3 +629,19 @@ is the project or the app and the model.
   project.
 
 See [Projects](../../projects.md#try-in-chat).
+
+## Projects: Edit a Web Page, iHub Page or iFinder Item After Adding It
+
+A link item of a project — a web page (URL), an iHub page, an iFinder document or an iFinder
+search — can now be changed after it was added. Before, fixing a mistyped URL or pointing an item
+at another page meant removing it and adding it again.
+
+- **Edit** in the item's actions opens the same fields used for adding, filled with the current
+  values, together with the item's name. The change takes effect at once, without a restart. An
+  item still named after its old URL or page takes the new one's name; a name you chose stays.
+- Admins also get **Rename** in the item list of an admin project, which only user projects had.
+- Uploaded and written documents, cloud documents and documents linked from another project have no
+  address to change; they are renamed, or removed and added again.
+- API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
+  accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
+  replaces the stored one as sent.

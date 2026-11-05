@@ -619,6 +619,58 @@ export function IFinderQueryPicker({ draft, update, fetchProfiles }) {
 }
 
 /**
+ * The picker of one link kind — a web page, an iHub page, an iFinder document
+ * or an iFinder search — wired to the loaders of a `ProjectItemApi`. The add
+ * dialog and the edit dialog show the same one.
+ *
+ * @param {Object} props
+ * @param {string} props.kind - `url`, `page`, `ifinder-document` or `ifinder-query`.
+ * @param {Object} props.draft
+ * @param {(changes: Object) => void} props.update
+ * @param {import('../AddProjectItemDialog').ProjectItemApi} props.api
+ * @param {Array<Object>|null} [props.pages] - iHub pages for the page picker; `null` while loading.
+ * @param {Object} [props.urlProps] - More props of the URL picker (the add dialog's crawl).
+ * @returns {JSX.Element|null}
+ */
+export function LinkKindPicker({ kind, draft, update, api, pages = null, urlProps }) {
+  switch (kind) {
+    case 'url':
+      return (
+        <UrlPicker
+          draft={draft}
+          update={update}
+          checkUrl={api.checkUrl}
+          previewUrl={api.previewUrl}
+          errorMessage={api.errorMessage}
+          {...urlProps}
+        />
+      );
+    case 'page':
+      return <PagePicker draft={draft} update={update} pages={pages} />;
+    case 'ifinder-document':
+      return (
+        <IFinderDocumentPicker
+          draft={draft}
+          update={update}
+          searchIFinder={api.searchIFinder}
+          fetchProfiles={api.fetchIFinderProfiles}
+          errorMessage={api.errorMessage}
+        />
+      );
+    case 'ifinder-query':
+      return (
+        <IFinderQueryPicker
+          draft={draft}
+          update={update}
+          fetchProfiles={api.fetchIFinderProfiles}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
+/**
  * Why a tab cannot be used.
  *
  * @param {{reason: string|null}} props
