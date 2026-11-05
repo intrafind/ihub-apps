@@ -158,8 +158,7 @@ test('a workflow call names its user for reporting without enforcing a quota', a
     quota: {
       async assert(u) {
         asserted.push(u);
-      },
-      record() {}
+      }
     },
     transport: async () => sseResponse(openaiText(['ok']))
   });
@@ -169,7 +168,26 @@ test('a workflow call names its user for reporting without enforcing a quota', a
     telemetry: { purpose: 'verifier', reportUser: user, autoRun: false }
   });
   assert.equal(records[0].user, user);
+  // Counted against the budget like any other call, though not refused by it.
+  assert.equal(records[0].countQuota, true);
   assert.deepEqual(asserted, []);
+});
+
+test('a call exempt from the budget is still reported', async () => {
+  const { records, usage } = recorder();
+  const { client } = makeClient({
+    usage,
+    transport: async () => sseResponse(openaiText(['ok']))
+  });
+  await client.complete({
+    modelId: 'oa',
+    messages,
+    quota: false,
+    options: { user },
+    telemetry: { autoRun: false }
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].countQuota, false);
 });
 
 test('tool calls are counted', async () => {

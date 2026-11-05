@@ -62,8 +62,9 @@ Fingerprints are one-way SHA-256 hashes with a server-side pepper (`contents/.us
 "Active users" and the user breakdown count people in `anonymous` and `identified` mode, and
 conversations in `pseudonymous` mode.
 
-`features.usageTracking: false` turns recording off entirely. Usage limits still count: they keep
-their own counters (see [Usage Limits](usage-limits.md#storage-and-privacy)).
+`features.usageTracking: false` turns recording off entirely. Usage limits still count: every model
+call is captured in one place, which updates the limit counters and, when tracking is on, writes the
+call record, so both always agree (see [Usage Limits](usage-limits.md#storage-and-privacy)).
 
 ## The page
 

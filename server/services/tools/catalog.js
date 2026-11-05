@@ -12,7 +12,7 @@ import { installedIntegrationRefs } from '../integrations/installedRefs.js';
 import { markAgentIdConflicts } from '../a2a/a2aTools.js';
 import logger from '../../utils/logger.js';
 import { localizeTools } from '../../utils/toolLocalization.js';
-import { isKnowledgeTool, knowledgeToolsFor } from '../knowledge/knowledgeTools.js';
+import { isKnowledgeTool } from '../knowledge/knowledgeTools.js';
 import { platformToolDefinitions } from './platformTools.js';
 
 /**
