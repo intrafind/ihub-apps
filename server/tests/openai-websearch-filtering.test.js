@@ -7,7 +7,7 @@
  * This exercises the *generic* `provider` field filtering (an admin can mark
  * any custom tool as restricted to one provider) — it has nothing to do with
  * OpenAI's native web search anymore. That's resolved directly by
- * toolLoader.resolveNativeWebSearchProvider() and injected by
+ * webSearchResolver.resolveNativeWebSearchProvider() and injected by
  * openai-responses.js via the `nativeWebSearch` request option (see
  * native-web-search.test.js), never through this generic tools pipeline.
  *

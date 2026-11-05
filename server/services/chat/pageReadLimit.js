@@ -22,7 +22,7 @@
 /** Page reads one answer may make when the app sets no `websearch.maxPageReads`. */
 export const DEFAULT_MAX_PAGE_READS = 5;
 
-/** Tool id of the page reader (see `toolLoader.READ_URL_TOOL_ID`). */
+/** Tool id of the page reader (see `webSearchResolver.READ_URL_TOOL_ID`). */
 const PAGE_READER_TOOL_ID = 'read_url';
 
 /** Code on the result of a read the cap refused. */

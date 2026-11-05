@@ -5,7 +5,7 @@ import { isValidId } from './pathSecurity.js';
 
 /**
  * Which script in `server/tools/` runs a tool, resolved the way
- * `toolLoader.runTool` does it, so the load-time warning and the startup check
+ * `runTool` does it, so the load-time warning and the startup check
  * look at exactly the file a call would load.
  *
  * `runTool` hands MCP tools, A2A agent skills, OpenAPI tools and provider-handled

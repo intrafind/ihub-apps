@@ -96,6 +96,7 @@ export function clearNativeWebSearchFallbackMemo() {
  * @returns {Promise<Object[]>}
  */
 export async function resolveNativeWebSearchFallbackTools(directive, context = {}) {
-  const { resolveNativeWebSearchFallbackTools: resolve } = await import('../../toolLoader.js');
+  const { resolveNativeWebSearchFallbackTools: resolve } =
+    await import('../tools/webSearchResolver.js');
   return resolve(directive, context);
 }

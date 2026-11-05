@@ -86,7 +86,7 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/integrations/tools'), adminAuth, async (req, res) => {
     try {
-      const { loadTools } = await import('../../toolLoader.js');
+      const { loadTools } = await import('../../services/tools/catalog.js');
       const tools = await loadTools(languageOf(req));
       res.json((tools || []).map(toolCatalogEntry));
     } catch (error) {

@@ -27,7 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import configCache from '../configCache.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
-import { getToolsForApp } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import { setUpWebSearch, tearDownWebSearch, useWebSearch } from './helpers/webSearchEngines.js';
 

@@ -455,7 +455,7 @@ graph TB
 
     RequestBuilder --> Templates[Process Templates]
     AgentLoop --> LLMClient[LLM Client]
-    AgentLoop --> Tools[toolLoader.runTool]
+    AgentLoop --> Tools[runTool]
     LLMClient --> LLMAdapter[LLM Adapter]
     Tools --> External[External APIs]
 
@@ -603,7 +603,7 @@ export const myCustomTool = {
 };
 ```
 
-2. **Register Tool** (`server/toolLoader.js`):
+2. **Register Tool** (`server/services/tools/catalog.js`):
 ```javascript
 import { myCustomTool } from './tools/myCustomTool.js';
 

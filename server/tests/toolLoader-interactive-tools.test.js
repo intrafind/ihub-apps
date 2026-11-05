@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
 import a2aClientManager from '../services/a2a/A2aClientManager.js';
-import { getToolsForApp } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
 
 const askUser = {
   id: 'ask_user',

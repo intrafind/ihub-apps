@@ -5,7 +5,7 @@ import { jest } from '@jest/globals';
 
 /**
  * Tests for the shared App Tools Gateway (`services/chat/appToolsGateway.js`)
- * and its wiring into the chat-app tool pipeline (`toolLoader.js`):
+ * and its wiring into the chat-app tool pipeline (`services/tools/appTools.js`):
  *
  *  - synthetic `app__<id>` descriptor generation (incl. permission filtering)
  *  - invokeAppTool guard rails: nesting, feature flag, user permissions
@@ -92,7 +92,8 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 
 const { getAppAsTools, invokeAppTool, isAppInvocationAllowed } =
   await import('../services/chat/appToolsGateway.js');
-const { getToolsForApp, runTool } = await import('../toolLoader.js');
+const { getToolsForApp } = await import('../services/tools/appTools.js');
+const { runTool } = await import('../services/tools/runTool.js');
 
 const wildcardUser = () => ({ id: 'u-admin', permissions: { apps: new Set(['*']) } });
 const restrictedUser = () => ({

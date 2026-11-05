@@ -17,19 +17,25 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 const runTool = jest.fn();
 
-jest.unstable_mockModule('../../toolLoader.js', () => ({
+jest.unstable_mockModule('../../services/tools/appTools.js', () => ({
+  getToolsForApp: jest.fn(async () => []),
+  MAX_SKILL_NAME_ENUM: 100
+}));
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
   loadLocalTools: jest.fn(async () => []),
-  runTool,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
+  localizeTools: jest.fn(tools => tools),
+  // The rest of the exports: ESM link-checks every name an importer asks for.
+  discoverA2aTools: jest.fn(async () => [])
+}));
+jest.unstable_mockModule('../../services/tools/runTool.js', () => ({
+  runTool
+}));
+jest.unstable_mockModule('../../services/tools/webSearchResolver.js', () => ({
   resolveNativeWebSearchProvider: jest.fn(() => null),
   resolveAppNativeWebSearch: jest.fn(() => null),
-  getToolsForApp: jest.fn(async () => []),
-  localizeTools: jest.fn(tools => tools),
-  // The rest of toolLoader's exports: ESM link-checks every name an importer asks for.
-  discoverA2aTools: jest.fn(async () => []),
-  MAX_SKILL_NAME_ENUM: 100,
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES: 5,
   NATIVE_SEARCH_WITH_PAGE_READER: new Set(),
   NATIVE_WEB_SEARCH_FALLBACK_ENGINE: 'auto',

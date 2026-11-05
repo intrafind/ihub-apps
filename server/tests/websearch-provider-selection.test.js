@@ -19,13 +19,13 @@
 import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { loadTools } from '../services/tools/catalog.js';
 import {
   describeWebSearchAvailability,
   isWebSearchAvailableTo,
-  loadTools,
   resolveWebSearchEngine,
   resolveWebSearchEngineToolId
-} from '../toolLoader.js';
+} from '../services/tools/webSearchResolver.js';
 import { BUILT_IN_ENGINES, sortWebSearchEngines } from '../services/search/webSearchEngines.js';
 import {
   RESEARCHER,

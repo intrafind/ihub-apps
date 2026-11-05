@@ -22,7 +22,8 @@ import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
 import a2aClientManager from '../services/a2a/A2aClientManager.js';
-import { getToolsForApp, runTool } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { runTool } from '../services/tools/runTool.js';
 import { runnerAccess } from '../services/workflow/workflowAccess.js';
 
 const WORKFLOW_ID = 'summarize-report';

@@ -19,7 +19,7 @@
  *
  * @module services/scheduler/tasks/runMemory
  */
-import { loadTools } from '../../../toolLoader.js';
+import { loadTools } from '../../tools/catalog.js';
 import logger from '../../../utils/logger.js';
 import { modelSupportsTools } from '../../../../shared/modelCapabilities.js';
 import { readMemory, readMemoryForPrompt } from '../../memory/memoryService.js';
