@@ -37,6 +37,7 @@ import {
 } from '../../services/integrations/IntegrationPreferencesRepository.js';
 import {
   appCandidateRefs,
+  appDefaultEnabledTools,
   appIntegrationDefaults,
   ownerOfTool,
   pickerRowsForApp
@@ -142,6 +143,55 @@ describe('the app defaults', () => {
       enabledTools: [],
       websearchEnabled: false
     });
+  });
+
+  it('starts without the bindings that are only available', () => {
+    const app = {
+      tools: ['drawio'],
+      integrations: {
+        ifinder: {},
+        jira: { enabledByDefault: false },
+        'type:storage': { enabledByDefault: true }
+      }
+    };
+    // Still offered (the picker lists it, the user's saved default may name it) ...
+    assert.deepEqual(appCandidateRefs(app), ['drawio', 'ifinder', 'jira', 'type:storage']);
+    // ... but not on in a new chat.
+    assert.deepEqual(appIntegrationDefaults(app).enabledTools, [
+      'drawio',
+      'ifinder',
+      'type:storage'
+    ]);
+    // A chat request that names no tools starts from the same defaults.
+    assert.deepEqual(appDefaultEnabledTools(app), ['drawio', 'ifinder', 'type:storage']);
+    // No such binding: the request is not narrowed at all, as before.
+    assert.equal(appDefaultEnabledTools(APPS[0]), undefined);
+  });
+
+  it('keeps an available-only integration off for a user who saved a default earlier', () => {
+    const offered = ['drawio', 'ifinder'];
+    // `jira` was added as available only: not switched on for existing users.
+    assert.deepEqual(
+      effectivePreferences(
+        { enabledTools: ['drawio'], knownRefs: ['drawio'], integrationScopes: {} },
+        { enabledTools: offered, websearchEnabled: false }
+      ).enabledTools,
+      ['drawio', 'ifinder']
+    );
+  });
+
+  it('accepts and validates enabledByDefault on a binding', () => {
+    const app = value => ({
+      id: 'x',
+      name: { en: 'X' },
+      description: { en: 'X' },
+      color: '#4F46E5',
+      icon: 'chat',
+      integrations: { jira: { enabledByDefault: value } }
+    });
+    assert.equal(appConfigSchema.safeParse(app(false)).success, true);
+    assert.equal(appConfigSchema.safeParse(app(true)).success, true);
+    assert.equal(appConfigSchema.safeParse(app('no')).success, false);
   });
 
   it('turns on what the app added after the default was saved', () => {

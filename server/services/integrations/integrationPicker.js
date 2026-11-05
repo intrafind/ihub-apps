@@ -36,6 +36,10 @@
  * @module services/integrations/integrationPicker
  */
 import logger from '../../utils/logger.js';
+import {
+  availableOnlyBindingKeys,
+  defaultEnabledRefs
+} from '../../../shared/integrationDefaults.js';
 import { localized } from './definitions/installedValues.js';
 import { a2aAgentReference, isInteractiveTool } from '../../utils/toolSelection.js';
 import { effectsOf, listUserIntegrations } from './userIntegrations.js';
@@ -69,7 +73,8 @@ export function appCandidateRefs(app) {
 }
 
 /**
- * The app's own defaults for a new chat: every reference on, web search as
+ * The app's own defaults for a new chat: every reference on except the
+ * bindings that are available only (`enabledByDefault: false`), web search as
  * the app says.
  *
  * @param {Object} app
@@ -77,9 +82,24 @@ export function appCandidateRefs(app) {
  */
 export function appIntegrationDefaults(app) {
   return {
-    enabledTools: appCandidateRefs(app),
+    enabledTools: defaultEnabledRefs(app, appCandidateRefs(app)),
     websearchEnabled: app?.websearch?.enabled === true && app.websearch.enabledByDefault === true
   };
+}
+
+/**
+ * The references a chat request without its own tool list runs with (an API
+ * call, a task): the app's defaults, so an integration the app makes available
+ * only (`enabledByDefault: false`) is not on just because nobody switched it
+ * on. Undefined when the app has no such binding: the chat is then not
+ * narrowed at all, exactly as before the setting existed.
+ *
+ * @param {Object} app
+ * @returns {string[]|undefined}
+ */
+export function appDefaultEnabledTools(app) {
+  if (availableOnlyBindingKeys(app).size === 0) return undefined;
+  return appIntegrationDefaults(app).enabledTools;
 }
 
 /**

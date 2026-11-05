@@ -6,7 +6,7 @@ import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
 import { fetchModels, fetchStyles } from '../../api';
 import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
 import { useUIConfig } from '../contexts/UIConfigContext';
-import { appToolRefs } from '../utils/boundIntegrationRefs';
+import { appDefaultToolRefs } from '../utils/boundIntegrationRefs';
 import useIntegrationDefaults from '../../features/integrations/picker/useIntegrationDefaults';
 
 /**
@@ -198,10 +198,11 @@ function useAppSettings(
       thinkingLevel: app.thinking?.level ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
       // The user's default for the app when the server answered one, else
-      // the app's own: every tool reference on.
+      // the app's own: every tool reference on, except the integrations the
+      // app only makes available.
       enabledTools: Array.isArray(defaultPreferences?.enabledTools)
         ? defaultPreferences.enabledTools
-        : appToolRefs(app),
+        : appDefaultToolRefs(app),
       websearchEnabled:
         typeof defaultPreferences?.websearchEnabled === 'boolean'
           ? defaultPreferences.websearchEnabled

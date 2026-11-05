@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../../api/adminApi';
 import Switch from '../../../../shared/components/Switch';
 import { CHECKBOX_CLASS, HELP_CLASS, LABEL_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
-import { RequiredCheckbox } from './IntegrationBindingOptions';
+import { EnabledByDefaultCheckbox, RequiredCheckbox } from './IntegrationBindingOptions';
 import { implicitActionNames, selectedActionNames, toggleBindingAction } from './bindingActions';
 import { applyIFinderPickerMode, pickerModeOf, setStartProfile } from './iFinderBinding';
 
@@ -279,6 +279,7 @@ function IFinderSection({ binding, onBindingChange, detail, notice = null, insta
               </fieldset>
 
               <RequiredCheckbox binding={binding} onBindingChange={onBindingChange} />
+              <EnabledByDefaultCheckbox binding={binding} onBindingChange={onBindingChange} />
             </div>
           )}
         </div>
