@@ -131,6 +131,32 @@ export function isValidExtensionId(id) {
 }
 
 /**
+ * Throws a 400 `BAD_REQUEST` unless every ID of `ids` is a safe path segment. The throwing form
+ * of {@link validateIdsForPath}.
+ *
+ * @param {string|string[]} ids - Single ID, comma-separated string, array of IDs, or `'*'` (all)
+ * @param {string} idType - The type of ID for the message ("app", "model", ...)
+ * @returns {string[]} The IDs
+ * @throws {ServiceError} when the format or one of the IDs is not valid
+ */
+export function assertValidIds(ids, idType) {
+  if (ids === '*') return ['*'];
+  let idArray;
+  if (typeof ids === 'string') {
+    idArray = ids.split(',').map(id => id.trim());
+  } else if (Array.isArray(ids)) {
+    idArray = ids;
+  } else {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `Invalid ${idType} IDs format. Expected string or array.`
+    );
+  }
+  for (const id of idArray) assertValidId(id, idType);
+  return idArray;
+}
+
+/**
  * Validates multiple IDs (e.g., for batch operations).
  *
  * @param {string|string[]} ids - Single ID, comma-separated string, or array of IDs
