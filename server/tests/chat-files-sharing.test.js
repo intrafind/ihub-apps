@@ -21,6 +21,7 @@ import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getChatShareRepository } from '../services/chat/ChatShareRepository.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
+import errorHandler from '../middleware/errorHandler.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -79,11 +80,18 @@ function makeResponse() {
 async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}) {
   const req = { params, query, body, headers: {}, user, ip: '127.0.0.1', method: 'GET', url: '/' };
   const res = makeResponse();
+  // Like Express 5: a thrown error or rejected promise goes to the error middleware.
   for (let index = 0; index < handlers.length; index += 1) {
     let advanced = false;
-    await handlers[index](req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handlers[index](req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+    } catch (error) {
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -194,7 +202,7 @@ describe('uploaded files on a share', () => {
         query
       });
       assert.equal(res.statusCode, 403);
-      assert.equal(res.body.details?.code ?? res.body.code, 'FILES_NOT_SHARED');
+      assert.equal(res.body.code, 'FILES_NOT_SHARED');
     }
   });
 
@@ -234,7 +242,7 @@ describe('uploaded files on a share', () => {
       query: { download: '1' }
     });
     assert.equal(original.statusCode, 403);
-    assert.equal(original.body.details?.code ?? original.body.code, 'ORIGINAL_NOT_SHARED');
+    assert.equal(original.body.code, 'ORIGINAL_NOT_SHARED');
 
     // A file left out answers like one that does not exist.
     const hidden = await drive(fileHandlers, {
@@ -264,7 +272,7 @@ describe('uploaded files on a share', () => {
       .discardOriginal(scope, plan.id, { reason: 'ttl_expired' });
     const gone = await drive(fileHandlers, { params: { shareId: created.id, fileId: plan.id } });
     assert.equal(gone.statusCode, 410);
-    assert.equal(gone.body.details?.code ?? gone.body.code, 'ORIGINAL_DISCARDED');
+    assert.equal(gone.body.code, 'ORIGINAL_DISCARDED');
     // The text is still there.
     const text = await drive(fileHandlers, {
       params: { shareId: created.id, fileId: plan.id },

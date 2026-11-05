@@ -36,13 +36,8 @@
 import { z } from 'zod';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendFailedOperationError,
-  sendNotFound
-} from '../utils/responseHelpers.js';
+import { assertValidId } from '../utils/pathSecurity.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -73,18 +68,11 @@ import {
   resolveShareLimits,
   shareState
 } from '../services/chat/chatSharing.js';
-import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { isAdmin } from '../utils/authorization.js';
 
 const COMPONENT = 'ChatShareRoutes';
-
-/** Machine-readable code for "sharing is not answering right now". */
-const UNAVAILABLE_CODE = 'CHAT_SHARING_UNAVAILABLE';
-
-/** Machine-readable code for a sign-in the viewer can go and get. */
-const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
 
 /** Most rows the recipient picker answers. */
 const LOOKUP_LIMIT = 10;
@@ -122,21 +110,13 @@ const createArtifactShareSchema = z
   })
   .strict();
 
-function sendSharingUnavailable(res) {
-  return sendErrorResponse(res, 503, 'Chat sharing is unavailable', {
-    details: { code: UNAVAILABLE_CODE }
-  });
-}
-
-function sendStorageError(res, error, operation) {
-  if (error instanceof StorageError) {
-    const status = storageHttpStatus(error);
-    if (status) {
-      return sendErrorResponse(res, status, error.message, { details: { code: error.code } });
-    }
-  }
-  return sendFailedOperationError(res, operation, error);
-}
+/**
+ * A 404 for a share, chat, file or artifact the caller may not know about.
+ *
+ * @param {string} resource - What was not found, for the English fallback text.
+ * @returns {ServiceError}
+ */
+const notFound = resource => new ServiceError('NOT_FOUND', `${resource} not found`);
 
 /**
  * Whether sharing is switched on and both stores are up.
@@ -152,15 +132,14 @@ function sharingActive() {
 }
 
 /**
- * The repositories to serve an owner request from, or null once a 503 went out.
+ * The repositories to serve an owner request from.
  *
- * @param {import('express').Response} res - Express response.
- * @returns {{chats: Object, shares: Object, settings: Object}|null}
+ * @returns {{chats: Object, shares: Object, settings: Object}}
+ * @throws {ServiceError} 503 `CHAT_SHARING_UNAVAILABLE` while sharing is off or a store is down
  */
-function requireSharing(res) {
+function requireSharing() {
   if (!sharingActive()) {
-    sendSharingUnavailable(res);
-    return null;
+    throw new ServiceError('CHAT_SHARING_UNAVAILABLE', 'Chat sharing is unavailable');
   }
   return {
     chats: getChatRepository(),
@@ -314,30 +293,22 @@ function setViewerHeaders(res, share) {
 }
 
 /**
- * Load a share and decide whether this caller may open it. Sends the
- * response on refusal.
+ * Load a share and decide whether this caller may open it.
  *
  * @param {import('express').Request} req - Express request.
- * @param {import('express').Response} res - Express response.
- * @returns {Promise<{share: Object, access: Object}|null>}
+ * @returns {Promise<{share: Object, access: Object}>}
+ * @throws {ServiceError} 401 for an anonymous caller on a share that needs a sign-in, else 404
  */
-async function loadViewableShare(req, res, { purpose = 'transcript' } = {}) {
+async function loadViewableShare(req, { purpose = 'transcript' } = {}) {
   const { shareId } = req.params;
-  if (!isShareId(shareId) || !sharingActive()) {
-    sendNotFound(res, 'Share');
-    return null;
-  }
+  if (!isShareId(shareId) || !sharingActive()) throw notFound('Share');
   const share = await getChatShareRepository().getShare(shareId);
   const access = await authorizeShareView(share, req.user, { purpose });
   if (!access.ok) {
     if (access.status === 401) {
-      sendErrorResponse(res, 401, 'Sign in to open this shared chat', {
-        details: { code: AUTH_REQUIRED_CODE }
-      });
-    } else {
-      sendNotFound(res, 'Share');
+      throw new ServiceError('AUTH_REQUIRED', 'Sign in to open this shared chat');
     }
-    return null;
+    throw notFound('Share');
   }
   return { share, access };
 }
@@ -370,141 +341,126 @@ async function isShareOwnerOrAdmin(share, user) {
  */
 async function handleCreateShare(req, res, { artifactId = null } = {}) {
   const isArtifactShare = artifactId !== null;
-  try {
-    const { chatId } = req.params;
-    if (!validateIdForPath(chatId, 'chat', res)) return;
-    if (isArtifactShare && !validateIdForPath(artifactId, 'artifact', res)) return;
-    const deps = requireSharing(res);
-    if (!deps) return;
-    const parsed = (isArtifactShare ? createArtifactShareSchema : createShareSchema).safeParse(
-      req.body || {}
+  const { chatId } = req.params;
+  assertValidId(chatId, 'chat');
+  if (isArtifactShare) assertValidId(artifactId, 'artifact');
+  const deps = requireSharing();
+  const parsedBody = (isArtifactShare ? createArtifactShareSchema : createShareSchema).parse(
+    req.body || {}
+  );
+  const {
+    mode,
+    recipients = [],
+    expiresAt,
+    maxViews,
+    showOwnerName = false,
+    uploadedFilesAccess = 'none',
+    sharedFileIds,
+    embeddable = false
+  } = parsedBody;
+  if (isArtifactShare && deps.settings.allowArtifacts === false) {
+    throw new ServiceError(
+      'ARTIFACT_SHARING_DISABLED',
+      'Sharing single artifacts is not allowed here'
     );
-    if (!parsed.success) {
-      return sendBadRequest(
-        res,
-        `Invalid share request: ${parsed.error.issues
-          .map(issue => `${issue.path.join('.') || 'body'}: ${issue.message}`)
-          .join('; ')}`
-      );
-    }
-    const {
-      mode,
-      recipients = [],
-      expiresAt,
-      maxViews,
-      showOwnerName = false,
-      uploadedFilesAccess = 'none',
-      sharedFileIds,
-      embeddable = false
-    } = parsed.data;
-    if (isArtifactShare && deps.settings.allowArtifacts === false) {
-      return sendErrorResponse(res, 403, 'Sharing single artifacts is not allowed here', {
-        details: { code: 'ARTIFACT_SHARING_DISABLED' }
-      });
-    }
-    if (!allowedShareModes(deps.settings)[mode]) {
-      return sendErrorResponse(res, 403, `Sharing mode '${mode}' is not allowed here`, {
-        details: { code: 'SHARE_MODE_DISABLED' }
-      });
-    }
-    // Write intent: sharing hands the conversation to others, which is the
-    // owner's call and nobody else's — an admin reading a chat for
-    // support cannot publish it.
-    const auth = await authorizeChat(chatId, req.user, {
-      repository: deps.chats,
-      intent: 'write'
-    });
-    if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
-    // A temporary chat is the one its owner asked not to keep, and it is
-    // gone within a day: a link onto it would publish what was meant to
-    // stay private and then break. Keeping the chat first is the way.
-    if (auth.chat.temporary === true) {
-      return sendErrorResponse(res, 409, 'A temporary chat cannot be shared; keep it first', {
-        details: { code: 'CHAT_TEMPORARY' }
-      });
-    }
-
-    let messages = [];
-    let artifact = null;
-    if (isArtifactShare) {
-      const descriptors = await getArtifactRepository().list(deps.chats.artifactScope(chatId));
-      artifact = descriptors.find(item => item.id === artifactId) || null;
-      if (!artifact) return sendNotFound(res, 'Artifact');
-      if (embeddable) {
-        if (mode !== 'public') return sendBadRequest(res, 'Only public links can be embedded');
-        if (!deps.settings.embedEnabled) {
-          return sendErrorResponse(res, 403, 'Embedding shared artifacts is not allowed here', {
-            details: { code: 'EMBED_DISABLED' }
-          });
-        }
-        if (maxViews != null) {
-          return sendBadRequest(res, 'An embeddable link cannot have a view limit');
-        }
-      }
-    } else {
-      ({ messages } = await deps.chats.getMessages(chatId));
-      if (!messages.length) {
-        return sendBadRequest(res, 'This chat has no messages to share yet');
-      }
-    }
-
-    let recipientDetails = [];
-    if (mode === 'users') {
-      const ids = [...new Set(recipients.map(id => String(id).trim()).filter(Boolean))];
-      if (ids.length === 0) {
-        return sendBadRequest(res, 'Pick at least one user to share with');
-      }
-      const resolved = resolveRecipients(ids);
-      if (!resolved.ok) {
-        return sendBadRequest(res, 'Some recipients are not known users', {
-          unknown: resolved.unknown
-        });
-      }
-      recipientDetails = resolved.details;
-    }
-
-    const limits = resolveShareLimits({ expiresAt, maxViews }, deps.settings);
-    if (!limits.ok) return sendBadRequest(res, limits.error);
-
-    // A pseudonymized installation records no names against a chat, and
-    // a share must not become the place where one is written next to
-    // the pseudonym — not for viewers, and not for the admin list.
-    const pseudonymized = auth.chat.identityMode === 'pseudonymized';
-    const share = await deps.shares.createShare({
-      chatId,
-      ownerId: auth.chat.ownerId,
-      identityMode: auth.chat.identityMode,
-      appId: auth.chat.appId,
-      mode,
-      recipients: recipientDetails.map(entry => entry.id),
-      recipientDetails,
-      title: buildShareTitle({ chat: auth.chat, messages, artifact }),
-      ownerName: pseudonymized ? null : req.user?.name || req.user?.username || null,
-      showOwnerName: pseudonymized ? false : showOwnerName,
-      expiresAt: limits.expiresAt,
-      maxViews: limits.maxViews,
-      messages,
-      uploadedFilesAccess,
-      sharedFileIds,
-      ...(isArtifactShare ? { target: 'artifact', artifact, embeddable } : {})
-    });
-    if (!share) return sendSharingUnavailable(res);
-
-    logAudit({
-      req,
-      action: 'create',
-      resource: isArtifactShare ? 'artifactShare' : 'chatShare',
-      resourceId: share.id,
-      summary: `Shared ${isArtifactShare ? `artifact ${artifactId} of chat` : 'chat'} ${chatId} ${
-        mode === 'public'
-          ? 'publicly (no sign-in required)'
-          : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
-      }`
-    });
-    res.status(201).json({ share: ownerView(share) });
-  } catch (error) {
-    sendStorageError(res, error, isArtifactShare ? 'create artifact share' : 'create chat share');
   }
+  if (!allowedShareModes(deps.settings)[mode]) {
+    throw new ServiceError('SHARE_MODE_DISABLED', `Sharing mode '${mode}' is not allowed here`, {
+      details: { mode }
+    });
+  }
+  // Write intent: sharing hands the conversation to others, which is the
+  // owner's call and nobody else's — an admin reading a chat for
+  // support cannot publish it.
+  const auth = await authorizeChat(chatId, req.user, {
+    repository: deps.chats,
+    intent: 'write'
+  });
+  if (!auth.ok || !auth.chat) throw notFound('Chat');
+  // A temporary chat is the one its owner asked not to keep, and it is
+  // gone within a day: a link onto it would publish what was meant to
+  // stay private and then break. Keeping the chat first is the way.
+  if (auth.chat.temporary === true) {
+    throw new ServiceError('CHAT_TEMPORARY', 'A temporary chat cannot be shared; keep it first');
+  }
+
+  let messages = [];
+  let artifact = null;
+  if (isArtifactShare) {
+    const descriptors = await getArtifactRepository().list(deps.chats.artifactScope(chatId));
+    artifact = descriptors.find(item => item.id === artifactId) || null;
+    if (!artifact) throw notFound('Artifact');
+    if (embeddable) {
+      if (mode !== 'public')
+        throw new ServiceError('BAD_REQUEST', 'Only public links can be embedded');
+      if (!deps.settings.embedEnabled) {
+        throw new ServiceError('EMBED_DISABLED', 'Embedding shared artifacts is not allowed here');
+      }
+      if (maxViews != null) {
+        throw new ServiceError('BAD_REQUEST', 'An embeddable link cannot have a view limit');
+      }
+    }
+  } else {
+    ({ messages } = await deps.chats.getMessages(chatId));
+    if (!messages.length) {
+      throw new ServiceError('BAD_REQUEST', 'This chat has no messages to share yet');
+    }
+  }
+
+  let recipientDetails = [];
+  if (mode === 'users') {
+    const ids = [...new Set(recipients.map(id => String(id).trim()).filter(Boolean))];
+    if (ids.length === 0) {
+      throw new ServiceError('BAD_REQUEST', 'Pick at least one user to share with');
+    }
+    const resolved = resolveRecipients(ids);
+    if (!resolved.ok) {
+      throw new ServiceError('BAD_REQUEST', 'Some recipients are not known users', {
+        details: { unknown: resolved.unknown }
+      });
+    }
+    recipientDetails = resolved.details;
+  }
+
+  const limits = resolveShareLimits({ expiresAt, maxViews }, deps.settings);
+  if (!limits.ok) throw new ServiceError('BAD_REQUEST', limits.error);
+
+  // A pseudonymized installation records no names against a chat, and
+  // a share must not become the place where one is written next to
+  // the pseudonym — not for viewers, and not for the admin list.
+  const pseudonymized = auth.chat.identityMode === 'pseudonymized';
+  const share = await deps.shares.createShare({
+    chatId,
+    ownerId: auth.chat.ownerId,
+    identityMode: auth.chat.identityMode,
+    appId: auth.chat.appId,
+    mode,
+    recipients: recipientDetails.map(entry => entry.id),
+    recipientDetails,
+    title: buildShareTitle({ chat: auth.chat, messages, artifact }),
+    ownerName: pseudonymized ? null : req.user?.name || req.user?.username || null,
+    showOwnerName: pseudonymized ? false : showOwnerName,
+    expiresAt: limits.expiresAt,
+    maxViews: limits.maxViews,
+    messages,
+    uploadedFilesAccess,
+    sharedFileIds,
+    ...(isArtifactShare ? { target: 'artifact', artifact, embeddable } : {})
+  });
+  if (!share) throw new ServiceError('CHAT_SHARING_UNAVAILABLE', 'Chat sharing is unavailable');
+
+  logAudit({
+    req,
+    action: 'create',
+    resource: isArtifactShare ? 'artifactShare' : 'chatShare',
+    resourceId: share.id,
+    summary: `Shared ${isArtifactShare ? `artifact ${artifactId} of chat` : 'chat'} ${chatId} ${
+      mode === 'public'
+        ? 'publicly (no sign-in required)'
+        : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
+    }`
+  });
+  res.status(201).json({ share: ownerView(share) });
 }
 
 /**
@@ -529,81 +485,66 @@ export default function registerChatShareRoutes(app) {
   );
 
   app.get(buildServerPath('/api/chats/:chatId/shares'), authenticatedOnly, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const deps = requireSharing(res);
-      if (!deps) return;
-      const auth = await authorizeChat(chatId, req.user, {
-        repository: deps.chats,
-        intent: 'write'
-      });
-      if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
-      const now = Date.now();
-      const artifactId = typeof req.query.artifactId === 'string' ? req.query.artifactId : null;
-      const items = (await deps.shares.listSharesForChat(chatId))
-        .filter(
-          share => !artifactId || (share.target === 'artifact' && share.artifact?.id === artifactId)
-        )
-        .map(share => ownerView(share, now));
-      res.json({ items });
-    } catch (error) {
-      sendStorageError(res, error, 'list chat shares');
-    }
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const deps = requireSharing();
+    const auth = await authorizeChat(chatId, req.user, {
+      repository: deps.chats,
+      intent: 'write'
+    });
+    if (!auth.ok || !auth.chat) throw notFound('Chat');
+    const now = Date.now();
+    const artifactId = typeof req.query.artifactId === 'string' ? req.query.artifactId : null;
+    const items = (await deps.shares.listSharesForChat(chatId))
+      .filter(
+        share => !artifactId || (share.target === 'artifact' && share.artifact?.id === artifactId)
+      )
+      .map(share => ownerView(share, now));
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/shares/with-me'), authenticatedOnly, async (req, res) => {
-    try {
-      // Empty rather than 503 when sharing is off: this feeds a tab on the
-      // chat list, and a switched-off feature is an empty tab, not an error.
-      if (!sharingActive()) return res.json({ items: [] });
-      const userId = String(req.user.id);
-      const shares = await getChatShareRepository().listSharesForRecipient(userId);
-      const items = shares.map(share => {
-        const mine = share.recipientViews?.[userId] || null;
-        return {
-          ...viewerView(share),
-          viewed: Boolean(mine && mine.count > 0),
-          lastViewedAt: mine?.lastViewedAt || null
-        };
-      });
-      res.json({ items });
-    } catch (error) {
-      sendStorageError(res, error, 'list shares with me');
-    }
+    // Empty rather than 503 when sharing is off: this feeds a tab on the
+    // chat list, and a switched-off feature is an empty tab, not an error.
+    if (!sharingActive()) return res.json({ items: [] });
+    const userId = String(req.user.id);
+    const shares = await getChatShareRepository().listSharesForRecipient(userId);
+    const items = shares.map(share => {
+      const mine = share.recipientViews?.[userId] || null;
+      return {
+        ...viewerView(share),
+        viewed: Boolean(mine && mine.count > 0),
+        lastViewedAt: mine?.lastViewedAt || null
+      };
+    });
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/shares/:shareId'), async (req, res) => {
-    try {
-      const loaded = await loadViewableShare(req, res);
-      if (!loaded) return;
-      const { share, access } = loaded;
-      const repository = getChatShareRepository();
-      if (access.counts) {
-        // Counted under the share's lock, where the view limit is checked
-        // again: the open that reaches it is served, the next is not. The
-        // per-view log stores the viewer as the share's identity mode
-        // records people — a hash on a pseudonymized installation.
-        const recordAs = access.viewerId
-          ? (await resolvePrincipal(req.user, { mode: share.identityMode || 'default' })).id
-          : null;
-        const { counted } = await repository.recordView(share.id, access.viewerId, { recordAs });
-        if (!counted) return sendNotFound(res, 'Share');
-      }
-      const snapshot = await repository.getSnapshot(share.id);
-      if (!snapshot) {
-        logger.error('Share has no snapshot', { component: COMPONENT, shareId: share.id });
-        return sendNotFound(res, 'Share');
-      }
-      setViewerHeaders(res, share);
-      res.json({
-        share: viewerView(share),
-        messages: viewerMessages(snapshot.messages, share),
-        version: snapshot.version
-      });
-    } catch (error) {
-      sendStorageError(res, error, 'open chat share');
+    const { share, access } = await loadViewableShare(req);
+    const repository = getChatShareRepository();
+    if (access.counts) {
+      // Counted under the share's lock, where the view limit is checked
+      // again: the open that reaches it is served, the next is not. The
+      // per-view log stores the viewer as the share's identity mode
+      // records people — a hash on a pseudonymized installation.
+      const recordAs = access.viewerId
+        ? (await resolvePrincipal(req.user, { mode: share.identityMode || 'default' })).id
+        : null;
+      const { counted } = await repository.recordView(share.id, access.viewerId, { recordAs });
+      if (!counted) throw notFound('Share');
     }
+    const snapshot = await repository.getSnapshot(share.id);
+    if (!snapshot) {
+      logger.error('Share has no snapshot', { component: COMPONENT, shareId: share.id });
+      throw notFound('Share');
+    }
+    setViewerHeaders(res, share);
+    res.json({
+      share: viewerView(share),
+      messages: viewerMessages(snapshot.messages, share),
+      version: snapshot.version
+    });
   });
 
   // The uploaded files of a shared chat. Hidden unless the owner opted in when
@@ -611,217 +552,172 @@ export default function registerChatShareRoutes(app) {
   // left ticked: the transcript names every attachment, these routes serve
   // the shared ones.
   app.get(buildServerPath('/api/shares/:shareId/files'), async (req, res) => {
-    try {
-      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
-      if (!loaded) return;
-      const { share } = loaded;
-      const access = share.uploadedFilesAccess || 'none';
-      const allowed = new Set(access === 'none' ? [] : share.fileIds || []);
-      const scope = getChatRepository().fileScope(share.chatId);
-      // Viewers get what describes a file, never where it came from (the
-      // mailbox user, an e-mail's addresses, a connector path).
-      const items =
-        allowed.size > 0
-          ? (await getChatRepository().fileStore().list(scope))
-              .filter(item => allowed.has(item.id))
-              .map(({ meta: _meta, source: _source, ...visible }) => ({
-                ...visible,
-                hasOriginal: visible.hasOriginal && access === 'original'
-              }))
-          : [];
-      setViewerHeaders(res, share);
-      res.json({ uploadedFilesAccess: access, items });
-    } catch (error) {
-      sendStorageError(res, error, 'list shared files');
-    }
+    const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+    const access = share.uploadedFilesAccess || 'none';
+    const allowed = new Set(access === 'none' ? [] : share.fileIds || []);
+    const scope = getChatRepository().fileScope(share.chatId);
+    // Viewers get what describes a file, never where it came from (the
+    // mailbox user, an e-mail's addresses, a connector path).
+    const items =
+      allowed.size > 0
+        ? (await getChatRepository().fileStore().list(scope))
+            .filter(item => allowed.has(item.id))
+            .map(({ meta: _meta, source: _source, ...visible }) => ({
+              ...visible,
+              hasOriginal: visible.hasOriginal && access === 'original'
+            }))
+        : [];
+    setViewerHeaders(res, share);
+    res.json({ uploadedFilesAccess: access, items });
   });
 
   app.get(buildServerPath('/api/shares/:shareId/files/:fileId'), async (req, res) => {
-    try {
-      const { fileId } = req.params;
-      if (!validateIdForPath(fileId, 'file', res)) return;
-      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
-      if (!loaded) return;
-      const { share } = loaded;
-      const access = share.uploadedFilesAccess || 'none';
-      if (access === 'none') {
-        return sendErrorResponse(res, 403, 'The owner did not share the attached files', {
-          details: { code: 'FILES_NOT_SHARED' }
-        });
-      }
-      // A file the owner left out answers like one that does not exist.
-      if (!(share.fileIds || []).includes(fileId)) return sendNotFound(res, 'File');
-      const store = getChatRepository().fileStore();
-      const scope = getChatRepository().fileScope(share.chatId);
-      setViewerHeaders(res, share);
-
-      if (req.query.format === 'text') {
-        const textFile = await store.getText(scope, fileId);
-        if (!textFile) return sendNotFound(res, 'File');
-        // The viewer gets the text and what describes it, nothing of the
-        // owner's storage bookkeeping.
-        return res.json({
-          file: {
-            id: textFile.id,
-            name: textFile.name,
-            mimeType: textFile.mimeType,
-            formatLabel: textFile.formatLabel,
-            bytes: textFile.bytes,
-            pages: textFile.pages,
-            origin: textFile.origin,
-            text: textFile.text,
-            hasOriginal: textFile.hasOriginal && access === 'original'
-          }
-        });
-      }
-
-      if (access !== 'original') {
-        return sendErrorResponse(
-          res,
-          403,
-          'The owner shared the text of this file, not the original',
-          {
-            details: { code: 'ORIGINAL_NOT_SHARED' }
-          }
-        );
-      }
-      const original = await store.getOriginal(scope, fileId);
-      if (!original) return sendNotFound(res, 'File');
-      if (original.discarded) {
-        return sendErrorResponse(res, 410, 'The original file is no longer available', {
-          details: { code: 'ORIGINAL_DISCARDED' }
-        });
-      }
-      const download = req.query.download === '1' || req.query.download === 'true';
-      res.setHeader('Content-Type', servedMediaType(original.mimeType));
-      res.setHeader('Content-Length', String(original.data.length));
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-      res.setHeader(
-        'Content-Disposition',
-        download ? buildContentDisposition(original.name) : 'inline'
-      );
-      return res.send(original.data);
-    } catch (error) {
-      return sendStorageError(res, error, 'get shared file');
+    const { fileId } = req.params;
+    assertValidId(fileId, 'file');
+    const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+    const access = share.uploadedFilesAccess || 'none';
+    if (access === 'none') {
+      throw new ServiceError('FILES_NOT_SHARED', 'The owner did not share the attached files');
     }
+    // A file the owner left out answers like one that does not exist.
+    if (!(share.fileIds || []).includes(fileId)) throw notFound('File');
+    const store = getChatRepository().fileStore();
+    const scope = getChatRepository().fileScope(share.chatId);
+    setViewerHeaders(res, share);
+
+    if (req.query.format === 'text') {
+      const textFile = await store.getText(scope, fileId);
+      if (!textFile) throw notFound('File');
+      // The viewer gets the text and what describes it, nothing of the
+      // owner's storage bookkeeping.
+      return res.json({
+        file: {
+          id: textFile.id,
+          name: textFile.name,
+          mimeType: textFile.mimeType,
+          formatLabel: textFile.formatLabel,
+          bytes: textFile.bytes,
+          pages: textFile.pages,
+          origin: textFile.origin,
+          text: textFile.text,
+          hasOriginal: textFile.hasOriginal && access === 'original'
+        }
+      });
+    }
+
+    if (access !== 'original') {
+      throw new ServiceError(
+        'ORIGINAL_NOT_SHARED',
+        'The owner shared the text of this file, not the original'
+      );
+    }
+    const original = await store.getOriginal(scope, fileId);
+    if (!original) throw notFound('File');
+    if (original.discarded) {
+      throw new ServiceError('ORIGINAL_DISCARDED', 'The original file is no longer available');
+    }
+    const download = req.query.download === '1' || req.query.download === 'true';
+    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    res.setHeader('Content-Length', String(original.data.length));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader(
+      'Content-Disposition',
+      download ? buildContentDisposition(original.name) : 'inline'
+    );
+    return res.send(original.data);
   });
 
   app.get(buildServerPath('/api/shares/:shareId/artifacts'), async (req, res) => {
-    try {
-      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
-      if (!loaded) return;
-      const { share } = loaded;
-      const allowed = new Set(share.artifactIds || []);
-      const scope = getChatRepository().artifactScope(share.chatId);
-      const items = (await getArtifactRepository().list(scope)).filter(item =>
-        allowed.has(item.id)
-      );
-      setViewerHeaders(res, share);
-      res.json({ items });
-    } catch (error) {
-      sendStorageError(res, error, 'list shared artifacts');
-    }
+    const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+    const allowed = new Set(share.artifactIds || []);
+    const scope = getChatRepository().artifactScope(share.chatId);
+    const items = (await getArtifactRepository().list(scope)).filter(item => allowed.has(item.id));
+    setViewerHeaders(res, share);
+    res.json({ items });
   });
 
   // Several of the share's artifacts as one ZIP: `{ artifactIds?: string[] }`,
   // every one the snapshot named when omitted. Nothing outside the share's
   // allow-list can be packed — an id beyond it answers 404 like an unknown one.
   app.post(buildServerPath('/api/shares/:shareId/artifacts/zip'), async (req, res) => {
-    try {
-      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
-      if (!loaded) return;
-      const { share } = loaded;
-      const allowed = new Set(share.artifactIds || []);
-      const scope = getChatRepository().artifactScope(share.chatId);
-      const artifacts = getArtifactRepository();
-      const descriptors = (await artifacts.list(scope)).filter(item => allowed.has(item.id));
-      return await sendArtifactsZip(res, {
-        repository: artifacts,
-        scope,
-        descriptors,
-        artifactIds: req.body?.artifactIds,
-        archiveName: 'shared-chat-artifacts.zip',
-        beforeSend: response => setViewerHeaders(response, share)
-      });
-    } catch (error) {
-      if (res.headersSent) return res.destroy(error);
-      return sendStorageError(res, error, 'zip shared artifacts');
-    }
+    const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+    const allowed = new Set(share.artifactIds || []);
+    const scope = getChatRepository().artifactScope(share.chatId);
+    const artifacts = getArtifactRepository();
+    const descriptors = (await artifacts.list(scope)).filter(item => allowed.has(item.id));
+    return await sendArtifactsZip(res, {
+      repository: artifacts,
+      scope,
+      descriptors,
+      artifactIds: req.body?.artifactIds,
+      archiveName: 'shared-chat-artifacts.zip',
+      beforeSend: response => setViewerHeaders(response, share)
+    });
   });
 
   app.get(buildServerPath('/api/shares/:shareId/artifacts/:artifactId'), async (req, res) => {
-    try {
-      const { artifactId } = req.params;
-      if (!validateIdForPath(artifactId, 'artifact', res)) return;
-      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
-      if (!loaded) return;
-      const { share } = loaded;
-      // The allow-list is what the snapshot named. Everything else in the
-      // chat's scope — an image from a turn after the share, one from an
-      // edited-away exchange — answers 404 exactly like an unknown id.
-      if (!(share.artifactIds || []).includes(artifactId)) return sendNotFound(res, 'Artifact');
-      const artifact = await getArtifactRepository().get(
-        getChatRepository().artifactScope(share.chatId),
-        artifactId
-      );
-      if (!artifact) return sendNotFound(res, 'Artifact');
-      const body = artifact.data;
-      const download = req.query.download === '1' || req.query.download === 'true';
-      res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
-      res.setHeader('Content-Length', String(body.length));
-      // Written once, keyed by a fresh uuid: the bytes behind this URL cannot
-      // change. `private`, because the link may be revoked and a shared cache
-      // must not keep serving what the owner took back.
-      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-      if (download) {
-        const name = downloadName(artifact);
-        const ascii = name.replace(/[^\x20-\x7e]/g, '_');
-        let encoded;
-        try {
-          encoded = encodeURIComponent(name);
-        } catch {
-          encoded = encodeURIComponent(ascii);
-        }
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`
-        );
-      } else {
-        res.setHeader('Content-Disposition', 'inline');
+    const { artifactId } = req.params;
+    assertValidId(artifactId, 'artifact');
+    const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+    // The allow-list is what the snapshot named. Everything else in the
+    // chat's scope — an image from a turn after the share, one from an
+    // edited-away exchange — answers 404 exactly like an unknown id.
+    if (!(share.artifactIds || []).includes(artifactId)) throw notFound('Artifact');
+    const artifact = await getArtifactRepository().get(
+      getChatRepository().artifactScope(share.chatId),
+      artifactId
+    );
+    if (!artifact) throw notFound('Artifact');
+    const body = artifact.data;
+    const download = req.query.download === '1' || req.query.download === 'true';
+    res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
+    res.setHeader('Content-Length', String(body.length));
+    // Written once, keyed by a fresh uuid: the bytes behind this URL cannot
+    // change. `private`, because the link may be revoked and a shared cache
+    // must not keep serving what the owner took back.
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    if (download) {
+      const name = downloadName(artifact);
+      const ascii = name.replace(/[^\x20-\x7e]/g, '_');
+      let encoded;
+      try {
+        encoded = encodeURIComponent(name);
+      } catch {
+        encoded = encodeURIComponent(ascii);
       }
-      return res.send(body);
-    } catch (error) {
-      return sendStorageError(res, error, 'get shared artifact');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`
+      );
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
     }
+    return res.send(body);
   });
 
   app.delete(buildServerPath('/api/shares/:shareId'), authenticatedOnly, async (req, res) => {
-    try {
-      const { shareId } = req.params;
-      const repository = getChatShareRepository();
-      if (!isShareId(shareId) || !repository.isAvailable()) return sendNotFound(res, 'Share');
-      const share = await repository.getShare(shareId);
-      // 404 for both unknown and not-yours, as everywhere else in this API.
-      if (!share || !(await isShareOwnerOrAdmin(share, req.user))) {
-        return sendNotFound(res, 'Share');
-      }
-      const revoked = await repository.revokeShare(shareId);
-      if (!revoked) return sendNotFound(res, 'Share');
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'chatShare',
-        resourceId: shareId,
-        summary: `Revoked share of chat ${share.chatId} (${share.mode})`
-      });
-      res.json({ share: ownerView(revoked) });
-    } catch (error) {
-      sendStorageError(res, error, 'revoke chat share');
+    const { shareId } = req.params;
+    const repository = getChatShareRepository();
+    if (!isShareId(shareId) || !repository.isAvailable()) throw notFound('Share');
+    const share = await repository.getShare(shareId);
+    // 404 for both unknown and not-yours, as everywhere else in this API.
+    if (!share || !(await isShareOwnerOrAdmin(share, req.user))) {
+      throw notFound('Share');
     }
+    const revoked = await repository.revokeShare(shareId);
+    if (!revoked) throw notFound('Share');
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'chatShare',
+      resourceId: shareId,
+      summary: `Revoked share of chat ${share.chatId} (${share.mode})`
+    });
+    res.json({ share: ownerView(revoked) });
   });
 
   app.get(
@@ -829,37 +725,33 @@ export default function registerChatShareRoutes(app) {
     requireFeature(CHAT_SHARING_FEATURE),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        // The picker exists for one thing: addressing a share to users. It
-        // answers nothing while that is not on offer — sharing off, user
-        // links switched off, storage down — and nothing to a principal that
-        // could never be handed a share: a machine token or an agent.
-        const settings = chatSharingSettings(configCache.getPlatform() || {});
-        if (!sharingActive() || !allowedShareModes(settings).users) {
-          return res.json({ items: [] });
-        }
-        if (req.user?.isOAuthClient || req.user?.isAgent === true) {
-          return res.json({ items: [] });
-        }
-        const raw = typeof req.query.q === 'string' ? req.query.q : '';
-        const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
-        if (q.length < LOOKUP_MIN_CHARS) return res.json({ items: [] });
-        const { users = {} } = usersDb();
-        const me = String(req.user.id);
-        const items = Object.values(users)
-          .filter(user => user && user.active !== false && String(user.id) !== me)
-          .filter(user =>
-            [user.name, user.username, user.email].some(
-              field => typeof field === 'string' && field.toLowerCase().includes(q)
-            )
-          )
-          .map(userSummary)
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .slice(0, LOOKUP_LIMIT);
-        res.json({ items });
-      } catch (error) {
-        sendFailedOperationError(res, 'look up users', error);
+      // The picker exists for one thing: addressing a share to users. It
+      // answers nothing while that is not on offer — sharing off, user
+      // links switched off, storage down — and nothing to a principal that
+      // could never be handed a share: a machine token or an agent.
+      const settings = chatSharingSettings(configCache.getPlatform() || {});
+      if (!sharingActive() || !allowedShareModes(settings).users) {
+        return res.json({ items: [] });
       }
+      if (req.user?.isOAuthClient || req.user?.isAgent === true) {
+        return res.json({ items: [] });
+      }
+      const raw = typeof req.query.q === 'string' ? req.query.q : '';
+      const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
+      if (q.length < LOOKUP_MIN_CHARS) return res.json({ items: [] });
+      const { users = {} } = usersDb();
+      const me = String(req.user.id);
+      const items = Object.values(users)
+        .filter(user => user && user.active !== false && String(user.id) !== me)
+        .filter(user =>
+          [user.name, user.username, user.email].some(
+            field => typeof field === 'string' && field.toLowerCase().includes(q)
+          )
+        )
+        .map(userSummary)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, LOOKUP_LIMIT);
+      res.json({ items });
     }
   );
 }
