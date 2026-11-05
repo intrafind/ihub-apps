@@ -60,7 +60,9 @@ function ChatMessageList({
   onOpenSourceInApp = null,
   // Page a message's copy-link action points at — see ChatMessage.
   linkPath = null,
-  showAvatars = true,
+  // Off by default: a two-party chat needs no sender marks, and on a phone
+  // or in a task pane they cost the answer 40-60 px of width.
+  showAvatars = false,
   // A shared, read-only transcript — see ChatMessage.
   readOnly = false,
   // What MCP App views may do in the composer — see ChatMessage.
@@ -186,7 +188,9 @@ function ChatMessageList({
       aria-label={t('chat.messageList', 'Chat messages')}
     >
       {displayedMessages.map((message, index) => (
-        <div key={message.id} data-message-role={message.role}>
+        // One reading column, about 70 characters per line, centred; the
+        // composer uses the same width (AppChat).
+        <div key={message.id} data-message-role={message.role} className="w-full max-w-3xl mx-auto">
           <div
             className={`flex ${showAvatars ? 'gap-3' : 'gap-1'} ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
@@ -204,7 +208,8 @@ function ChatMessageList({
             )}
 
             {/* Message content */}
-            <div className="max-w-[80%]">
+            {/* The answer takes the column; the user's bubble at most 85% of it. */}
+            <div className={message.role === 'user' ? 'max-w-[85%]' : 'min-w-0 flex-1'}>
               <ChatMessage
                 message={message}
                 outputFormat={outputFormat}

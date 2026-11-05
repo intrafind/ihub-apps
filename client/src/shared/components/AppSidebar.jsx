@@ -555,7 +555,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // ---- Collapsed rail (desktop only) ----
   const rail = (
     <aside
-      className="hidden md:flex w-18 flex-none flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
+      className="hidden md:flex w-18 flex-none flex-col items-center gap-1.5 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
       aria-label={sidebarLabel}
     >
       <Link
@@ -624,7 +624,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             <Icon name="clock" size="md" />
             {unseenChatCount > 0 && (
               <span
-                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-900"
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-gray-50 dark:ring-gray-900"
                 aria-hidden="true"
               />
             )}
@@ -642,7 +642,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             <Icon name="calendar" size="md" />
             {unseenTaskRuns > 0 && (
               <span
-                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-900"
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-gray-50 dark:ring-gray-900"
                 aria-hidden="true"
               />
             )}
@@ -817,7 +817,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               placeholder={searchLabel}
               aria-label={searchLabel}
               autoFocus
-              className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-gray-50 dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100"
             />
           </div>
         </div>
@@ -1110,7 +1110,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           rail
         ) : (
           <aside
-            className="hidden md:flex w-71 flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
+            className="hidden md:flex w-71 flex-none flex-col bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
             aria-label={sidebarLabel}
           >
             {expandedContent}
@@ -1132,7 +1132,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           />
           <aside
             ref={drawerRef}
-            className="absolute inset-y-0 left-0 w-71 max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
+            className="absolute inset-y-0 left-0 w-71 max-w-[85vw] flex flex-col bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
             aria-label={sidebarLabel}
           >
             {expandedContent}

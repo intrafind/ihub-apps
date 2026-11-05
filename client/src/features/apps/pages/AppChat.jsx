@@ -3276,7 +3276,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   </div>
                   {!showStartForm && (
                     <div className="shrink-0 px-4 pt-2">
-                      <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                      <div className="w-full max-w-3xl mx-auto">{renderChatInput()}</div>
                     </div>
                   )}
                 </>
@@ -3284,7 +3284,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                 /* Start form, in place of the transcript and the composer */
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   {projectContextOfChat?.containerProjectId && (
-                    <div className="w-full max-w-4xl mx-auto px-4 pt-2">
+                    <div className="w-full max-w-3xl mx-auto px-4 pt-2">
                       <ChatProjectChips projectContext={projectContextOfChat} />
                     </div>
                   )}
@@ -3297,7 +3297,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   <div className="flex flex-col h-full md:hidden">
                     <div className="flex-1 overflow-hidden flex flex-col">
                       {messages.length > 0 ? (
-                        <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
+                        <div className="w-full h-full overflow-y-auto flex flex-col">
                           <ChatMessageList
                             scheduleEnabledTools={effectiveEnabledTools}
                             scheduleIntegrationScopes={integrationScopes}
@@ -3328,7 +3328,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       ) : (
                         <div className="w-full h-full overflow-y-auto">
                           <div className="min-h-full flex items-center justify-center p-4">
-                            <div className="w-full max-w-4xl">
+                            <div className="w-full max-w-3xl">
                               {renderStartupState(
                                 app,
                                 welcomeMessage,
@@ -3344,13 +3344,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       )}
                     </div>
                     <div className="shrink-0 px-4 pt-2">
-                      <div className="w-full max-w-4xl mx-auto">{renderChatInput('mobile')}</div>
+                      <div className="w-full max-w-3xl mx-auto">{renderChatInput('mobile')}</div>
                     </div>
                   </div>
 
                   {/* Desktop layout: everything centered together */}
                   <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
-                    <div className="w-full max-w-4xl">
+                    <div className="w-full max-w-3xl">
                       {messages.length > 0 ? (
                         <div className="mb-8">
                           <ChatMessageList
@@ -3470,7 +3470,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       linkPath={appPagePath}
                     />
 
-                    {renderChatInput('desktop')}
+                    {/* The composer shares the messages' reading column. */}
+                    <div className="w-full max-w-3xl mx-auto">{renderChatInput('desktop')}</div>
                   </div>
                 </>
               )}

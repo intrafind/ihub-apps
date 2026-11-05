@@ -3,58 +3,59 @@
  * SPDX-License-Identifier: LicenseRef-iHub-Apps
  */
 
-/* Chat Message Bubble Styles */
+/*
+ * Message surfaces.
+ *
+ * The user's turn is a neutral bubble on the right. The answer has no
+ * container: it is body text on the page background, as wide as the reading
+ * column (ChatMessageList caps that column), so tables, code and diagrams get
+ * the full width. Errors keep a tinted callout so they stand out.
+ */
 
-/* Fix for the chat message alignment issue */
 .chat-widget-message.user {
   align-self: flex-end;
   align-items: flex-end;
   justify-content: flex-end;
-  width: 100%; /* Ensures the message container takes full width */
+  width: 100%;
 }
 
 .chat-widget-message.assistant {
   align-self: flex-start;
   align-items: flex-start;
   justify-content: flex-start;
-  width: 100%; /* Ensures the message container takes full width */
+  width: 100%;
 }
 
-/* Message bubble content styling */
 .chat-widget-message-content {
-  max-width: 95%; /* Increased from 80% to allow more width for diagrams and content */
-  /*width: auto;*/ /* Allow content to determine width up to max-width */
+  max-width: 95%;
   white-space: normal;
   display: inline-block;
   box-sizing: content-box;
   word-break: break-word;
-  padding: 10px 14px;
-  border-radius: 18px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 10px 16px;
+  border-radius: 20px;
 }
 
-/* User message styling */
+/* User turn: neutral bubble, dark text. */
 .chat-widget-message.user .chat-widget-message-content {
-  margin-left: auto; /* Push user messages to the right */
-  background-color: rgb(79, 70, 229);
-  color: white;
-  border-bottom-right-radius: 4px;
+  margin-left: auto;
+  background-color: #eef0f4;
+  color: #0f172a; /* slate-900 */
 }
 
-/* Assistant message styling */
-.chat-widget-message.assistant .chat-widget-message-content {
-  margin-right: auto; /* Push assistant messages to the left */
-  background-color: white;
-  color: #1e293b;
-  border: 1px solid #e2e8f0;
-  border-bottom-left-radius: 4px;
-}
-
-/* Dark mode: Assistant message styling */
-[data-theme='dark'] .chat-widget-message.assistant .chat-widget-message-content {
-  background-color: #374151; /* gray-700 */
+[data-theme='dark'] .chat-widget-message.user .chat-widget-message-content {
+  background-color: #2b303b;
   color: #e5e7eb; /* gray-200 */
-  border-color: #4b5563; /* gray-600 */
+}
+
+/* Answer: no bubble. */
+.chat-widget-message.assistant .chat-widget-message-content:not(.error) {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
 }
 
 /* Error message styling */
