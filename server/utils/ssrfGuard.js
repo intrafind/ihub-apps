@@ -166,6 +166,13 @@ export function isPrivateIP(ip) {
 }
 
 /**
+ * `code` of an {@link assertPublicTarget} refusal when the host name has no
+ * address at all (as opposed to an address in a private range), so a caller can
+ * tell the admin to fix the name or trust the host instead of blaming the range.
+ */
+export const UNRESOLVED_HOST = 'UNRESOLVED_HOST';
+
+/**
  * SSRF guard: resolve the URL's hostname to one or more IP addresses and
  * verify every resolved IP is in a public range. Catches DNS-based
  * bypasses where an external hostname resolves to a private IP.
@@ -175,7 +182,7 @@ export function isPrivateIP(ip) {
  * DNS-rebinding window between this check and the actual fetch.
  *
  * @param {URL} parsedUrl - The parsed request URL
- * @returns {Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
+ * @returns {Promise<{ok: boolean, reason?: string, code?: string, addresses?: string[]}>}
  */
 export async function assertPublicTarget(parsedUrl) {
   // Strip IPv6 brackets that URL parsing leaves on the hostname.
@@ -218,8 +225,23 @@ export async function assertPublicTarget(parsedUrl) {
     return { ok: false, reason: `DNS resolution failed: ${err.message}` };
   }
 
+  // resolve4/resolve6 query the DNS servers directly and ignore /etc/hosts and
+  // the search domains, so a short or internal name (`if-wiki`) comes back
+  // empty although the connection itself would find it. Ask the OS resolver
+  // (getaddrinfo) before giving up. Every address it returns goes through the
+  // same private-range check below and is pinned by the caller, so this widens
+  // what can be resolved, not what is allowed.
   if (addrs.length === 0) {
-    return { ok: false, reason: 'host did not resolve to any IP' };
+    try {
+      const found = await dns.lookup(host, { all: true });
+      addrs = [...new Set(found.map(entry => entry.address))];
+    } catch {
+      // Leave addrs empty: reported as unresolved below.
+    }
+  }
+
+  if (addrs.length === 0) {
+    return { ok: false, reason: 'host did not resolve to any IP', code: UNRESOLVED_HOST };
   }
 
   for (const addr of addrs) {
