@@ -9049,6 +9049,20 @@
     "EXECUTION_NOT_FINISHED": "Die Workflow-Ausführung ist noch nicht abgeschlossen.",
     "EXECUTION_ACTIVE": "Brechen Sie den Workflow ab, bevor Sie ihn löschen.",
     "IMPORT_IN_PROGRESS": "Es läuft bereits ein Konfigurationsimport. Versuchen Sie es erneut, sobald dieser beendet ist.",
-    "IMPORT_FAILED": "Die Konfiguration konnte nicht importiert werden."
+    "IMPORT_FAILED": "Die Konfiguration konnte nicht importiert werden.",
+    "CONTENT_VALIDATION_FAILED": "Der Inhalt des Eintrags ist ungültig.",
+    "UNSUPPORTED_DEFINITION_SCHEMA": "Dieser Server kennt das Definitionsformat des Eintrags nicht.",
+    "INVALID_VERSION": "Die Version ist keine gültige Versionsangabe.",
+    "LOCAL_CONTENT_EXISTS": "Auf dieser Instanz existiert bereits ein Eintrag mit diesem Namen. Bestätigen Sie das Ersetzen, um ihn zu installieren.",
+    "INTEGRATION_IN_USE": "Die Integration ist noch installiert. Entfernen Sie zuerst ihre Installationen.",
+    "VERSION_NOT_LISTED": "Das Register listet diese Version nicht.",
+    "VERSION_NOT_OFFERED": "Das Register bietet diese Version nicht an.",
+    "NO_VERSION_OFFERED": "Keine gelistete Version passt zu Kanal und Pin des Registers.",
+    "VERSION_NOT_NEWER": "Ein Update geht nur vorwärts; die Version ist nicht neuer als die installierte.",
+    "VERSION_DESCRIPTOR_INVALID": "Die Versionsbeschreibung des Registers ist ungültig.",
+    "INCOMPATIBLE_IHUB_VERSION": "Diese iHub-Version ist mit dem Eintrag nicht kompatibel.",
+    "CODE_NOT_TRUSTED": "Dem Register wird für Code nicht vertraut. Markieren Sie es als vertrauenswürdig für Code, um diesen Eintrag zu installieren.",
+    "CODE_INTEGRITY_REQUIRED": "Der Katalog nennt keinen Hash für eine Code-Datei des Eintrags.",
+    "INTEGRITY_MISMATCH": "Eine Datei des Eintrags passt nicht zum Hash des Katalogs."
   }
 }

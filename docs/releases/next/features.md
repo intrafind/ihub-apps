@@ -609,6 +609,18 @@ text page. Every such response has the same body:
   "Request failed". A failed export that has not started streaming answers JSON, not a response
   with a ZIP content type. An unexpected import failure no longer answers the fixed text "Internal
   server error" when its message is safe to show.
+- The marketplace administration endpoints (`/api/admin/marketplace*`) answer in this shape. The status
+  and code no longer come from the wording of a message: an unknown registry or item answers
+  `NOT_FOUND`, a registry that already exists or an item that is already installed `CONFLICT`, an
+  invalid registry config `BAD_REQUEST`, and an item that fails validation `422
+  CONTENT_VALIDATION_FAILED`. The codes the install, update and uninstall already answered
+  (`LOCAL_CONTENT_EXISTS`, `VERSION_NOT_LISTED`, `INCOMPATIBLE_IHUB_VERSION`,
+  `UNSUPPORTED_DEFINITION_SCHEMA`, `INTEGRATION_IN_USE`, `MIGRATION_LOCKED`, …) are unchanged and are now
+  translated by the web app, which also shows them when an install from the catalog tile fails. The
+  refusals of an integration that brings code (`CODE_NOT_TRUSTED`, `CODE_INTEGRITY_REQUIRED`,
+  `INTEGRITY_MISMATCH`) used to answer `500` without a code; they now carry their code and answer `403`
+  and `422`. A registry that cannot be created for another reason than a duplicate or an invalid config
+  (for example a storage failure) answers `500` instead of `400`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

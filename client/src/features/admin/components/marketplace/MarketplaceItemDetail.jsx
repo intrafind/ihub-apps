@@ -18,6 +18,7 @@ import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 import MarketplaceIntegrationSection from './MarketplaceIntegrationFacts';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
+import { apiErrorMessage } from '../../../../utils/apiErrorMessage';
 import { UPDATE_RETRY_CODES, previewLabels } from './updateMigrationRows';
 
 /**
@@ -191,7 +192,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           message: data?.error || err?.message || ''
         });
       } else {
-        alert(err.message || `${action} failed`);
+        alert(apiErrorMessage(err, t, `${action} failed`));
       }
     } finally {
       setActionLoading(null);

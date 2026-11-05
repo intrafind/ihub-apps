@@ -200,8 +200,7 @@ describe('ContentInstaller: integration versioning', () => {
     await expect(contentInstaller.install('reg', 'integration', FOLDER)).rejects.toMatchObject({
       code: 'INCOMPATIBLE_IHUB_VERSION',
       message: expect.stringMatching(/needs iHub >=6\.0\.0, this server runs 5\.7\.2/),
-      requires: '>=6.0.0',
-      serverVersion: '5.7.2'
+      details: { requires: '>=6.0.0', serverVersion: '5.7.2' }
     });
     expect(state.fetches).toEqual([]);
     await expect(fs.access(definitionDir())).rejects.toThrow();
@@ -212,7 +211,7 @@ describe('ContentInstaller: integration versioning', () => {
     publish(definition('1.0.0'), { item: { minVersion: '6.0' } });
     await expect(contentInstaller.install('reg', 'integration', FOLDER)).rejects.toMatchObject({
       code: 'INCOMPATIBLE_IHUB_VERSION',
-      requires: '>=6.0.0'
+      details: { requires: '>=6.0.0' }
     });
     publish(definition('1.0.0'), { item: { minVersion: '5.7' } });
     await expect(contentInstaller.install('reg', 'integration', FOLDER)).resolves.toMatchObject({
@@ -252,7 +251,7 @@ describe('ContentInstaller: integration versioning', () => {
     publish({ ...definition('1.0.0'), compatibility: { schema: 2 }, newField: true });
     await expect(contentInstaller.install('reg', 'integration', FOLDER)).rejects.toMatchObject({
       code: 'UNSUPPORTED_DEFINITION_SCHEMA',
-      revision: 2
+      details: { revision: 2 }
     });
     await expect(fs.access(definitionDir())).rejects.toThrow();
 

@@ -17,6 +17,7 @@
  * @module services/marketplace/RegistryService
  */
 
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { catalogItemVersionSchema, validateCatalog } from '../../validators/catalogSchema.js';
 import {
@@ -924,7 +925,7 @@ class RegistryService {
     const { registries } = await this._getRegistriesData();
     const registry = registries.find(r => r.id === registryId);
 
-    if (!registry) throw new Error(`Registry '${registryId}' not found`);
+    if (!registry) throw new ServiceError('NOT_FOUND', `Registry '${registryId}' not found`);
     if (!registry.enabled) throw new Error(`Registry '${registryId}' is disabled`);
 
     const catalog = await this.fetchCatalog(registry);
@@ -1115,7 +1116,11 @@ class RegistryService {
     if (!cached) throw new Error(`No cached catalog for registry '${registryId}'`);
 
     const item = (cached.catalog?.items || []).find(i => i.type === type && i.name === name);
-    if (!item) throw new Error(`Item '${type}:${name}' not found in registry '${registryId}'`);
+    if (!item)
+      throw new ServiceError(
+        'NOT_FOUND',
+        `Item '${type}:${name}' not found in registry '${registryId}'`
+      );
 
     const key = `${type}:${name}`;
     const installation = installations[key];
@@ -1220,13 +1225,16 @@ class RegistryService {
   async createRegistry(registryData) {
     const validation = validateRegistryConfig(registryData);
     if (!validation.success) {
-      throw new Error(`Invalid registry config: ${validation.errors.join(', ')}`);
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid registry config: ${validation.errors.join(', ')}`
+      );
     }
 
     const data = await this._getRegistriesData();
 
     if (data.registries.find(r => r.id === registryData.id)) {
-      throw new Error(`Registry with id '${registryData.id}' already exists`);
+      throw new ServiceError('CONFLICT', `Registry with id '${registryData.id}' already exists`);
     }
 
     const registry = {
@@ -1256,7 +1264,7 @@ class RegistryService {
   async updateRegistry(id, updates) {
     const data = await this._getRegistriesData();
     const idx = data.registries.findIndex(r => r.id === id);
-    if (idx === -1) throw new Error(`Registry '${id}' not found`);
+    if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
 
     const existing = data.registries[idx];
 
@@ -1280,7 +1288,10 @@ class RegistryService {
     // these two fields: an edit has never re-validated the rest.
     const validation = validateRegistryVersionPolicy(updated);
     if (!validation.success) {
-      throw new Error(`Invalid registry config: ${validation.errors.join(', ')}`);
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid registry config: ${validation.errors.join(', ')}`
+      );
     }
     for (const field of ['channel', 'pins']) {
       if (validation.data[field] === undefined) delete updated[field];
@@ -1303,7 +1314,7 @@ class RegistryService {
   async deleteRegistry(id) {
     const data = await this._getRegistriesData();
     const idx = data.registries.findIndex(r => r.id === id);
-    if (idx === -1) throw new Error(`Registry '${id}' not found`);
+    if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
 
     data.registries.splice(idx, 1);
     await this._saveRegistries(data);
@@ -1406,11 +1417,10 @@ class RegistryService {
       entry => entry?.version === version
     );
     if (!listed) {
-      const error = new Error(
+      throw new ServiceError(
+        'VERSION_NOT_LISTED',
         `Version ${version} of ${item.type} '${item.name}' is not listed by registry '${registry.id}'`
       );
-      error.code = 'VERSION_NOT_LISTED';
-      throw error;
     }
     const url = versionDescriptorUrl(item, listed, registry);
     const authHeaders = sharesCredentialScope(url, [registry.source])
@@ -1424,11 +1434,10 @@ class RegistryService {
       parsed.data.name !== item.name ||
       parsed.data.version !== version
     ) {
-      const error = new Error(
+      throw new ServiceError(
+        'VERSION_DESCRIPTOR_INVALID',
         `The descriptor of ${item.type} '${item.name}' ${version} from registry '${registry.id}' is not a catalog item of that version`
       );
-      error.code = 'VERSION_DESCRIPTOR_INVALID';
-      throw error;
     }
     return parsed.data;
   }
@@ -1444,7 +1453,7 @@ class RegistryService {
   async getRegistryWithAuth(id) {
     const { registries } = await this._getRegistriesData();
     const registry = registries.find(r => r.id === id);
-    if (!registry) throw new Error(`Registry '${id}' not found`);
+    if (!registry) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
     return { ...registry, auth: decryptRegistryAuth(registry.auth) };
   }
 }
