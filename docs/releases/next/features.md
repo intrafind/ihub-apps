@@ -550,6 +550,12 @@ text page. Every such response has the same body:
   unknown or foreign share, chat or file answers `NOT_FOUND`, and a share link that needs a sign-in
   answers `AUTH_REQUIRED`. A malformed share request answers `VALIDATION_FAILED` with `details.issues`
   instead of one joined `error` text. The ZIP download of several artifacts (`POST /api/shares/:shareId/artifacts/zip` and `POST /api/chats/:chatId/artifacts/zip`) answers `BAD_REQUEST`, `NOT_FOUND` or `PAYLOAD_TOO_LARGE`; the former body codes `empty`, `too-many-files` and `too-large` are now `details.reason` (`too-many-files`, `too-large`) of `PAYLOAD_TOO_LARGE`, and "no files" is `NOT_FOUND`.
+- The scheduled task endpoints (`/api/scheduled-tasks/*`, `/api/admin/scheduled-tasks/*`) and the
+  scheduling tools of the agents answer in this shape. Their codes (`TASK_DISABLED`,
+  `RUN_IN_PROGRESS`, `VERSION_CONFLICT`, …) are unchanged; a sign-in that is missing answers
+  `AUTH_REQUIRED` instead of `AUTHENTICATION_REQUIRED`. The field problems of a rejected task
+  (`INVALID_TASK`) moved from `details` (a list) to `details.issues`, also in the tool results the
+  model sees. A malformed settings body answers `VALIDATION_FAILED` with `details.issues`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

@@ -556,8 +556,10 @@ describe('message/send', () => {
     );
     expect(['submitted', 'working']).toContain(pending.result.status.state);
     const taskId = pending.result.id;
-    // The run continues in the background; give it a tick to reach the model.
-    await new Promise(resolve => setTimeout(resolve, 10));
+    // The run continues in the background: wait until it has reached the model.
+    for (let waited = 0; !release && waited < 5000; waited += 10) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
     release();
     // The result is stored with a document write; poll rather than guess how long it takes.
     let got;
@@ -607,21 +609,27 @@ describe('tasks/get and tasks/cancel', () => {
   });
 
   it('cancels a running task through its abort signal', async () => {
+    const abortError = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
     invokeApp.mockImplementationOnce(
       ({ abortSignal }) =>
         new Promise((_, reject) => {
-          abortSignal.addEventListener('abort', () =>
-            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
-          );
+          // A cancel that lands before the listener is attached must still end the call.
+          if (abortSignal.aborted) return reject(abortError());
+          abortSignal.addEventListener('abort', () => reject(abortError()));
         })
     );
+    const callsBefore = invokeApp.mock.calls.length;
     const pending = dispatchA2A(
       rpc('message/send', { message: textMessage('hi', { metadata: { skillId: 'app__chat' } }) }),
       ctx()
     );
-    // Let the task start (it is stored first, which takes a document write), then
-    // cancel it by id.
-    for (let waited = 0; store.runs.size === 0 && waited < 2000; waited += 10) {
+    // Let the task start (it is stored first, which takes a document write) and the app
+    // be invoked, then cancel it by id.
+    for (
+      let waited = 0;
+      (store.runs.size === 0 || invokeApp.mock.calls.length === callsBefore) && waited < 5000;
+      waited += 10
+    ) {
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     const [taskId] = [...store.runs.keys()];

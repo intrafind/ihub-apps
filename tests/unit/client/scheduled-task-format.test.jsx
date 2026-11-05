@@ -117,11 +117,13 @@ describe('API error helpers', () => {
       response: {
         data: {
           code: 'INVALID_TASK',
-          details: [
-            { field: 'name', message: 'A name is required' },
-            { field: 'name', message: 'second message is ignored' },
-            { field: 'schedule.every', message: 'Runs must be at least 15 minutes apart' }
-          ]
+          details: {
+            issues: [
+              { field: 'name', message: 'A name is required' },
+              { field: 'name', message: 'second message is ignored' },
+              { field: 'schedule.every', message: 'Runs must be at least 15 minutes apart' }
+            ]
+          }
         }
       }
     }

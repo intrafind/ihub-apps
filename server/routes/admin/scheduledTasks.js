@@ -21,8 +21,8 @@
 import { z } from 'zod';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -36,9 +36,7 @@ import {
 import * as tasks from '../../services/scheduler/tasks/taskService.js';
 import { getScheduler } from '../../services/scheduler/SchedulerService.js';
 import { getScheduledTaskRepository } from '../../services/scheduler/tasks/ScheduledTaskRepository.js';
-import { sendTaskError, requestLanguage } from '../scheduledTasks.js';
-
-const COMPONENT = 'AdminScheduledTasks';
+import { requestLanguage } from '../scheduledTasks.js';
 
 const int = (min, max) => z.number().int().min(min).max(max);
 
@@ -113,26 +111,22 @@ export default function registerAdminScheduledTaskRoutes(app) {
    *         description: Admin access required
    */
   app.get(base, adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      const features = configCache.getFeatures() || {};
-      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-      const items = getScheduledTaskRepository().isAvailable()
-        ? await tasks.adminListTasks({ status, language: requestLanguage(req) })
-        : [];
-      const scheduler = getScheduler();
-      res.json({
-        items,
-        settings: scheduledTaskSettings(platform),
-        status: resolveStatus(platform, features),
-        scheduler: {
-          owner: scheduler.isActiveOwner(),
-          ...(scheduler.isActiveOwner() ? { sources: scheduler.describe() } : {})
-        }
-      });
-    } catch (error) {
-      sendTaskError(res, error, 'admin list tasks');
-    }
+    const platform = configCache.getPlatform() || {};
+    const features = configCache.getFeatures() || {};
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const items = getScheduledTaskRepository().isAvailable()
+      ? await tasks.adminListTasks({ status, language: requestLanguage(req) })
+      : [];
+    const scheduler = getScheduler();
+    res.json({
+      items,
+      settings: scheduledTaskSettings(platform),
+      status: resolveStatus(platform, features),
+      scheduler: {
+        owner: scheduler.isActiveOwner(),
+        ...(scheduler.isActiveOwner() ? { sources: scheduler.describe() } : {})
+      }
+    });
   });
 
   /**
@@ -159,55 +153,39 @@ export default function registerAdminScheduledTaskRoutes(app) {
    *         description: Invalid settings
    */
   app.put(`${base}/settings`, adminAuth, async (req, res) => {
-    const parsed = settingsBodySchema.safeParse(req.body || {});
-    if (!parsed.success) {
-      return sendBadRequest(
-        res,
-        `Invalid scheduled task settings: ${parsed.error.issues
-          .map(issue => `${issue.path.join('.') || 'body'}: ${issue.message}`)
-          .join('; ')}`
-      );
+    const parsed = { data: settingsBodySchema.parse(req.body || {}) };
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
+    const current = scheduledTaskSettings(platformConfig);
+    const changed = [];
+    for (const [key, value] of Object.entries(parsed.data)) {
+      if (current[key] === value) continue;
+      platformConfig.scheduledTasks = { ...platformConfig.scheduledTasks, [key]: value };
+      changed.push(`scheduledTasks.${key}`);
     }
-    try {
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
-      const current = scheduledTaskSettings(platformConfig);
-      const changed = [];
-      for (const [key, value] of Object.entries(parsed.data)) {
-        if (current[key] === value) continue;
-        platformConfig.scheduledTasks = { ...platformConfig.scheduledTasks, [key]: value };
-        changed.push(`scheduledTasks.${key}`);
-      }
-      if (changed.length > 0) {
-        await configStore.writeJson('config/platform.json', platformConfig);
-        await configCache.refreshCacheEntry('config/platform.json');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'platform',
-          resourceId: 'scheduled-tasks',
-          summary: `Updated ${changed.join(', ')}`
-        });
-      }
-      const platform = configCache.getPlatform() || platformConfig;
-      res.json({
-        ok: true,
-        changed,
-        settings: scheduledTaskSettings(platform),
-        status: resolveStatus(platform, configCache.getFeatures() || {})
+    if (changed.length > 0) {
+      await configStore.writeJson('config/platform.json', platformConfig);
+      await configCache.refreshCacheEntry('config/platform.json');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'scheduled-tasks',
+        summary: `Updated ${changed.join(', ')}`
       });
-    } catch (error) {
-      sendInternalError(res, error, `${COMPONENT}: update settings`);
     }
+    const platform = configCache.getPlatform() || platformConfig;
+    res.json({
+      ok: true,
+      changed,
+      settings: scheduledTaskSettings(platform),
+      status: resolveStatus(platform, configCache.getFeatures() || {})
+    });
   });
 
   app.get(`${base}/:taskId`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      res.json(await tasks.adminGetTask(req.params.taskId, { language: requestLanguage(req) }));
-    } catch (error) {
-      sendTaskError(res, error, 'admin get task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    res.json(await tasks.adminGetTask(req.params.taskId, { language: requestLanguage(req) }));
   });
 
   /**
@@ -263,47 +241,42 @@ export default function registerAdminScheduledTaskRoutes(app) {
    *         description: "`{ deleted, chatsDeleted }`"
    */
   app.patch(`${base}/:taskId`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      const parsed = statusBodySchema.safeParse(req.body || {});
-      if (!parsed.success) {
-        return sendBadRequest(res, 'Body must be { status: paused|active|disabled, reason? }');
-      }
-      const task = await tasks.adminSetTaskStatus(
-        req.user,
-        req.params.taskId,
-        parsed.data.status,
-        parsed.data.reason
+    assertValidId(req.params.taskId, 'task');
+    const parsed = statusBodySchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      throw new ServiceError(
+        'INVALID_BODY',
+        'Body must be { status: paused|active|disabled, reason? }'
       );
-      logAudit({
-        req,
-        action: 'toggle',
-        resource: 'scheduledTask',
-        resourceId: task.id,
-        summary: `Set scheduled task of ${task.owner?.username || task.ownerId} to ${parsed.data.status}`
-      });
-      res.json(tasks.toPublicTask(task, { language: requestLanguage(req), admin: true }));
-    } catch (error) {
-      sendTaskError(res, error, 'admin set task status');
     }
+    const task = await tasks.adminSetTaskStatus(
+      req.user,
+      req.params.taskId,
+      parsed.data.status,
+      parsed.data.reason
+    );
+    logAudit({
+      req,
+      action: 'toggle',
+      resource: 'scheduledTask',
+      resourceId: task.id,
+      summary: `Set scheduled task of ${task.owner?.username || task.ownerId} to ${parsed.data.status}`
+    });
+    res.json(tasks.toPublicTask(task, { language: requestLanguage(req), admin: true }));
   });
 
   app.delete(`${base}/:taskId`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      const deleteChats = ['1', 'true'].includes(String(req.query.deleteChats || ''));
-      const result = await tasks.adminDeleteTask(req.params.taskId, { deleteChats });
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'scheduledTask',
-        resourceId: req.params.taskId,
-        summary: `Deleted a scheduled task${deleteChats ? ` and ${result.chatsDeleted} run chats` : ''}`
-      });
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'admin delete task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const deleteChats = ['1', 'true'].includes(String(req.query.deleteChats || ''));
+    const result = await tasks.adminDeleteTask(req.params.taskId, { deleteChats });
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'scheduledTask',
+      resourceId: req.params.taskId,
+      summary: `Deleted a scheduled task${deleteChats ? ` and ${result.chatsDeleted} run chats` : ''}`
+    });
+    res.json(result);
   });
 
   /**
@@ -346,64 +319,48 @@ export default function registerAdminScheduledTaskRoutes(app) {
    *         description: "`{ version }`"
    */
   app.get(`${base}/:taskId/memory`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      res.json(await tasks.adminGetTaskMemory(req.params.taskId));
-    } catch (error) {
-      sendTaskError(res, error, 'admin get task memory');
-    }
+    assertValidId(req.params.taskId, 'task');
+    res.json(await tasks.adminGetTaskMemory(req.params.taskId));
   });
 
   app.delete(`${base}/:taskId/memory`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      const result = await tasks.adminClearTaskMemory(req.params.taskId);
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'scheduledTaskMemory',
-        resourceId: req.params.taskId,
-        summary: 'Cleared the notes of a scheduled task'
-      });
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'admin clear task memory');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const result = await tasks.adminClearTaskMemory(req.params.taskId);
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'scheduledTaskMemory',
+      resourceId: req.params.taskId,
+      summary: 'Cleared the notes of a scheduled task'
+    });
+    res.json(result);
   });
 
   app.get(`${base}/:taskId/runs`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      res.json(
-        await tasks.adminListRuns(req.params.taskId, {
-          limit: req.query.limit,
-          cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
-        })
-      );
-    } catch (error) {
-      sendTaskError(res, error, 'admin list runs');
-    }
+    assertValidId(req.params.taskId, 'task');
+    res.json(
+      await tasks.adminListRuns(req.params.taskId, {
+        limit: req.query.limit,
+        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
+      })
+    );
   });
 
   app.post(`${base}/:taskId/runs/delete`, adminAuth, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.taskId, 'task', res)) return;
-      const body = req.body || {};
-      const result = await tasks.adminDeleteRuns(req.params.taskId, {
-        runIds: body.runIds,
-        all: body.all === true,
-        deleteChats: body.deleteChats !== false
-      });
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'scheduledTask',
-        resourceId: req.params.taskId,
-        summary: `Admin deleted ${result.deleted} run${result.deleted === 1 ? '' : 's'}`
-      });
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'admin delete runs');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const body = req.body || {};
+    const result = await tasks.adminDeleteRuns(req.params.taskId, {
+      runIds: body.runIds,
+      all: body.all === true,
+      deleteChats: body.deleteChats !== false
+    });
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'scheduledTask',
+      resourceId: req.params.taskId,
+      summary: `Admin deleted ${result.deleted} run${result.deleted === 1 ? '' : 's'}`
+    });
+    res.json(result);
   });
 }

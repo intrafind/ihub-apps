@@ -42,6 +42,7 @@ import {
 } from '../services/scheduler/schedule.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { MEMORY_SCOPE_TASK, resolveMemoryScope } from '../services/memory/memoryService.js';
 import { listEarlierRuns, readEarlierRun } from '../services/scheduler/tasks/runHistory.js';
 import { logAudit } from '../services/AuditLogService.js';
@@ -50,12 +51,12 @@ import { logAudit } from '../services/AuditLogService.js';
 const SELF_UPDATE_FIELDS = ['schedule'];
 
 function failure(error) {
-  if (error instanceof tasks.ScheduledTaskError) {
+  if (error instanceof ServiceError) {
     return {
       error: true,
       code: error.code,
       message: error.message,
-      ...(Array.isArray(error.details) ? { details: error.details } : {})
+      ...(error.details ? { details: error.details } : {})
     };
   }
   return {
