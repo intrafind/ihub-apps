@@ -128,6 +128,21 @@ export function requestLanguage(req) {
   return (query || header || configCache.getPlatform()?.defaultLanguage || 'en').slice(0, 10);
 }
 
+/** The file store for a request; throws a 503 while it is down. */
+function taskFileStore() {
+  const store = getChatFileRepository();
+  if (!store.isAvailable()) {
+    throw new ServiceError('STORAGE_UNAVAILABLE', 'File storage is unavailable');
+  }
+  return store;
+}
+
+/** Chat-file failures keep their own answer; everything else goes to the error middleware. */
+function sendTaskFileError(res, error, next) {
+  if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
+  return next(error);
+}
+
 function requestTimezone(req) {
   const value = req.body?.timezone ?? req.query?.timezone;
   return typeof value === 'string' ? value.slice(0, 64) : undefined;
@@ -471,21 +486,6 @@ export default function registerScheduledTaskRoutes(app) {
   // ── attached files ─────────────────────────────────────────────────────────
   // Files of the task definition, in the `task` scope of the chat-file store:
   // they stay until the task (or the file) is deleted and every run sees them.
-
-  /** The file store for a request; throws a 503 while it is down. */
-  function taskFileStore() {
-    const store = getChatFileRepository();
-    if (!store.isAvailable()) {
-      throw new ServiceError('STORAGE_UNAVAILABLE', 'File storage is unavailable');
-    }
-    return store;
-  }
-
-  /** Chat-file failures keep their own answer; everything else goes to the error middleware. */
-  function sendTaskFileError(res, error, next) {
-    if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
-    return next(error);
-  }
 
   app.get(`${base}/:taskId/files`, ...guard, async (req, res, next) => {
     try {
