@@ -286,6 +286,10 @@ affected.
 - **Test** (`POST /api/admin/projects/:id/test`) reads every item the way a chat would, with your
   own credentials for iFinder items, and reports per item whether it was readable, its size and
   how long it took.
+- **Try in chat** (on the editor, `/admin/projects/:id/edit`) opens a scratch chat beside it that
+  has this project and nothing else in scope, to see whether the project works and, when an
+  answer is wrong, whether the cause is the project or the app and the model. See
+  [Try in chat](#try-in-chat).
 - **Estimate tokens** (`POST /api/admin/projects/:id/estimate`, on the project's view and edit
   pages) loads every item, link items included, and counts its tokens. It recommends for each
   document whether it is small enough to pin into the prompt (up to 20 % of the load-all budget)
@@ -301,6 +305,36 @@ affected.
 - `GET /api/admin/projects/_tokens` reports each admin project's size in tokens, items and bytes,
   together with the load-all budget (`loadAllBudgetTokens`) and the tool result budget. The app
   editor uses it to explain whether a linked project will be loaded in full.
+
+#### Try in chat
+
+**Try in chat** on the project's editor opens the real chat of an app next to it, so an admin can
+ask the questions the project is for before linking or publishing it. A disabled or unpublished
+project can be tried too.
+
+- **Only this project.** The chat uses this project's items and instructions. The projects the app
+  links itself, the chat's own container and attached projects are left out, so a wrong answer
+  cannot come from other knowledge. The app's own instructions and tools still apply, except that
+  it cannot call other apps or workflows (they would run with their own projects), and an
+  `@workflow` mention stays plain text.
+- **App and model.** The app picker lists the enabled chat apps, the general chat first. The model
+  is picked in the chat, whatever the app says about model selection.
+- **Sources for every answer.** The chat is the normal one: each answer shows the answer badge, the
+  knowledge searches and reads that were made and the **Sources** panel with the hits. A retrieval
+  problem shows there, together with errors such as an unreachable host.
+- **Saved state.** The chat reads the project as saved. The editor saves every change at once, so
+  a change counts from the next question on; **Restart** starts a new chat. Items that are
+  waiting, being extracted or failed are not searched, and the panel says how many.
+- **As you.** The chat runs as the signed-in admin. How other users reach the project (app links,
+  publishing, groups) is not tested; the panel says so.
+- **Nothing is kept.** The chat is temporary: it is not listed in the admin's chat history, expires
+  on its own and adds nothing to the project. The incognito switch is not offered, and the chat is
+  marked as a test chat (`origin.createdVia: "project-test"`), so it cannot be kept through the API
+  either: `PATCH /api/chats/:id` with `{ "temporary": false }` answers
+  `409 PROJECT_TEST_CHAT_NOT_KEEPABLE`.
+
+Only content admins can try an admin project; the chat request carries `testProjectId` (see the
+[Admin API](#admin-api)).
 
 ## How the model reaches a project
 
@@ -1137,3 +1171,13 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |
 | `POST`   | `/api/admin/projects/:id/test`              | Read every item the way a chat would.                                                       |
+
+A project is tried in chat with the ordinary chat request, `POST /api/apps/:appId/chat/:chatId`,
+plus `testProjectId` (the id of an admin project). The turn runs with that project as the only one
+in scope, as a temporary chat, whatever `ephemeral`, `projectId` and `projects` say. A caller who is
+not a content admin is refused with `403 PROJECT_TEST_FORBIDDEN`; an unknown project, one that is
+not an admin project, or the whole `projects` feature being off answer `404 PROJECT_NOT_FOUND`. A
+A test turn on a chat that was kept answers `409 PROJECT_TEST_CHAT_KEPT`, and one on a chat that
+no test of this project started (a conversation with messages, or the scratch chat of another
+project) answers `409 PROJECT_TEST_CHAT_MISMATCH`. The messages of all these refusals are in the
+caller's language.

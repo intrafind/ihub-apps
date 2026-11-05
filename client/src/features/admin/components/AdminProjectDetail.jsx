@@ -86,15 +86,24 @@ export const FILLED_HEADER_BUTTON =
   'bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg border border-transparent text-sm font-medium flex items-center';
 
 /**
- * The header buttons: History, Estimate tokens, Test, and what the page adds.
+ * The header buttons: History, Estimate tokens, Test, Try in chat (where the
+ * page offers it), and what the page adds.
  *
  * @param {Object} props
  * @param {ReturnType<typeof useAdminProjectChecks>} props.checks
  * @param {() => void} props.onHistory
+ * @param {() => void} [props.onTryInChat] - Toggles the chat beside the page; no button without it.
+ * @param {boolean} [props.tryInChatOpen] - Whether that chat is open.
  * @param {import('react').ReactNode} [props.children] - Further buttons (Edit).
  * @returns {JSX.Element}
  */
-export function AdminProjectHeaderActions({ checks, onHistory, children = null }) {
+export function AdminProjectHeaderActions({
+  checks,
+  onHistory,
+  onTryInChat = null,
+  tryInChatOpen = false,
+  children = null
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -116,6 +125,23 @@ export function AdminProjectHeaderActions({ checks, onHistory, children = null }
           ? t('admin.projects.test.running', 'Testing...')
           : t('admin.projects.test.button', 'Test')}
       </button>
+      {onTryInChat && (
+        <button
+          type="button"
+          onClick={onTryInChat}
+          aria-expanded={tryInChatOpen}
+          title={t(
+            'admin.projects.tryInChat.hint',
+            'Chat with this project and nothing else, next to the editor'
+          )}
+          className={`${OUTLINE_BUTTON} flex items-center ${tryInChatOpen ? 'ring-2 ring-indigo-500' : ''}`}
+        >
+          <Icon name="chat" className="h-4 w-4 mr-2" />
+          {tryInChatOpen
+            ? t('admin.projects.tryInChat.hide', 'Hide chat')
+            : t('admin.projects.tryInChat.open', 'Try in chat')}
+        </button>
+      )}
       {children}
     </div>
   );

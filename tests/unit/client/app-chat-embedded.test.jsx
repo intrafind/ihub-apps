@@ -287,11 +287,20 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
 }));
 // A real <form> bound to `formRef`, because the auto-send path dispatches a
 // submit event on it — that is how the start-page handoff sends its message.
+const mockComposer = { props: null };
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
   __esModule: true,
-  default: ({ formRef, onSubmit, value }) => (
-    <form ref={formRef} onSubmit={onSubmit} data-testid="composer" data-value={value} />
-  )
+  default: props => {
+    mockComposer.props = props;
+    return (
+      <form
+        ref={props.formRef}
+        onSubmit={props.onSubmit}
+        data-testid="composer"
+        data-value={props.value}
+      />
+    );
+  }
 }));
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
@@ -318,14 +327,16 @@ function LocationProbe() {
 // The host page's own URL carries parameters the app page would act on.
 const HOST_URL = '/admin/apps/acme?prefill=from-the-host&model=other&var_topic=x';
 
-function renderEmbedded(app = APP) {
+function renderEmbedded(app = APP, { testProjectId } = {}) {
   window.history.replaceState({}, '', HOST_URL);
   return render(
     <MemoryRouter initialEntries={[HOST_URL]}>
       <Routes>
         <Route
           path="/admin/apps/:appId"
-          element={<AppChat embedded appId="acme" preloadedApp={app} />}
+          element={
+            <AppChat embedded appId="acme" preloadedApp={app} testProjectId={testProjectId} />
+          }
         />
       </Routes>
       <LocationProbe />
@@ -349,6 +360,7 @@ beforeEach(() => {
   mockAppSettingsCalls.length = 0;
   mockHeader.props = null;
   mockMessageList.props = null;
+  mockComposer.props = null;
   mockCapability.persistence = true;
   mockCapability.resolving = false;
   jest.clearAllMocks();
@@ -407,6 +419,55 @@ describe('AppChat embedded in a host page', () => {
     expect(open).toHaveBeenCalledWith('/ihub/apps/acme/canvas', '_blank', 'noopener,noreferrer');
     expect(screen.getByTestId('location')).toHaveTextContent(HOST_URL);
     open.mockRestore();
+  });
+});
+
+describe('AppChat embedded to test an admin project (#3309)', () => {
+  const SECOND_MODEL = { id: 'model-y', name: { en: 'Model Y' }, contextWindow: 8192 };
+
+  /** Run with the compare-mode feature on and two models to compare. */
+  async function withCompareAvailable(run) {
+    const { isEnabled } = mockFeatureFlags;
+    const { models } = mockBaseSettings;
+    mockFeatureFlags.isEnabled = flag => flag === 'compareMode';
+    mockBaseSettings.models = [...models, SECOND_MODEL];
+    try {
+      await run();
+    } finally {
+      mockFeatureFlags.isEnabled = isEnabled;
+      mockBaseSettings.models = models;
+    }
+  }
+
+  test('offers no project picker: the test has its project, and a pick would be dropped', async () => {
+    renderEmbedded(APP, { testProjectId: 'handbook' });
+    await waitFor(() => expect(mockComposer.props).not.toBeNull());
+    expect(mockComposer.props.projectContext).toBeUndefined();
+  });
+
+  test('offers compare mode like any chat when no project is tested', async () => {
+    await withCompareAvailable(async () => {
+      renderEmbedded();
+      await waitFor(() => expect(mockHeader.props).not.toBeNull());
+      expect(mockHeader.props.showCompareModeToggle).toBe(true);
+    });
+  });
+
+  test('offers none while a project is tested: its panels resend without the project', async () => {
+    await withCompareAvailable(async () => {
+      renderEmbedded(APP, { testProjectId: 'handbook' });
+      await waitFor(() => expect(mockHeader.props).not.toBeNull());
+      expect(mockHeader.props.showCompareModeToggle).toBe(false);
+    });
+  });
+});
+
+describe('AppChat on its own route: the project picker is offered (control)', () => {
+  test('hands the composer a project context, so the test above says something', async () => {
+    mockComposer.props = null;
+    renderOnRoute();
+    await waitFor(() => expect(mockComposer.props).not.toBeNull());
+    expect(mockComposer.props.projectContext).toBeDefined();
   });
 });
 

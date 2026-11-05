@@ -88,6 +88,8 @@ import {
   settleInterruptedChats
 } from '../services/chat/chatRecovery.js';
 import { SCHEDULED_TASK_ORIGIN } from '../services/scheduler/tasks/taskPolicy.js';
+import { isProjectTestChat } from '../services/knowledge/projectTestScope.js';
+import { getLocalizedError } from '../serverHelpers.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
 
@@ -708,6 +710,21 @@ export default function registerChatRoutes(app) {
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
       let chat = access.chat;
+      // The scratch chat of a project test (#3309) is never kept: it may have
+      // answered from a project that is disabled, and would continue in the
+      // history without it.
+      if (keep && isProjectTestChat(chat)) {
+        return sendErrorResponse(
+          res,
+          409,
+          await getLocalizedError(
+            'projectTestChatNotKeepable',
+            {},
+            req.headers['accept-language']?.split(',')[0]
+          ),
+          { details: { code: 'PROJECT_TEST_CHAT_NOT_KEEPABLE' } }
+        );
+      }
       if (keep && chat.temporary === true) {
         // `authenticatedOnly` already keeps guests out; the policy is asked
         // anyway so the one rule for "who has a history" stays in one place.

@@ -116,9 +116,11 @@ const { validateCatalog } = await import('../../validators/catalogSchema.js');
 const { checkScriptCodeFiles } =
   await import('../../services/integrations/definitions/scriptModule.js');
 
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 registerAdminIntegrationBuilderRoutes(app);
+app.use(errorHandler);
 const admin = r => r.set('X-Admin', 'yes');
 
 const httpDraft = {
@@ -203,7 +205,7 @@ describe('create, load, save', () => {
       .send({ ...httpDraft, actions: [] })
       .expect(400);
     expect(res.body.code).toBe('INVALID_DRAFT');
-    expect(res.body.details.some(d => d.path.join('.') === 'actions')).toBe(true);
+    expect(res.body.details.issues.some(d => d.path.join('.') === 'actions')).toBe(true);
   });
 
   it('creates the definition folder and the installation', async () => {
@@ -488,7 +490,7 @@ describe('create, load, save', () => {
       .expect(400);
     expect(refused.body.code).toBe('INVALID_DRAFT');
     expect(
-      refused.body.details.some(d => d.path.join('.').startsWith('actions.0.description'))
+      refused.body.details.issues.some(d => d.path.join('.').startsWith('actions.0.description'))
     ).toBe(true);
     await admin(request(app).put('/api/admin/integrations/builder/orders'))
       .send(withDescription('x'.repeat(4000)))
