@@ -567,6 +567,12 @@ text page. Every such response has the same body:
   already exists) and `VALIDATION_FAILED` with `details.issues` for the user prompt settings. A
   failed model call of `/api/completions` that is not a provider error answers `INTERNAL_ERROR`
   without the technical reason, which is only logged.
+- The integration administration endpoints (`/api/admin/integrations*`) answer in this shape. Their
+  codes (`INVALID_VALUES`, `DUPLICATE_ID`, `MIGRATION_LOCKED`, `BACKUP_REQUIRED`,
+  `CONFIRMATION_REQUIRED`, …) are unchanged and are now translated by the web app. The `success:
+  false` flag is gone from error bodies. The validation problems of an installation moved from
+  `details` (a list) to `details.issues`, and a failed migration (`422 MIGRATION_FAILED`) carries its
+  `reason`, `logEntry` and `instance` in `details` instead of at the top level of the body.
 - The personal skill library endpoints (`/api/user-skills*`, including the marketplace) answer in
   this shape. The codes they already had (`USER_SKILLS_DISABLED`, `SKILL_LIMIT_REACHED`,
   `SKILL_TOO_LARGE`, `MARKETPLACE_SKILL_NOT_FOUND`, `REVISION_CONFLICT`, …) moved from

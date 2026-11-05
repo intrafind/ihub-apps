@@ -21,6 +21,7 @@ import {
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
 import { installationMigrationState } from './definitions/migrationPlanner.js';
 import { compareCodeUnits } from '../../../shared/toolApproval.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
 /**
  * Installed integrations (04-architecture §1.3): the admin's instances of
@@ -43,13 +44,21 @@ const RESERVED_INSTANCE_IDS = new Set(['a2a', 'app', 'workflow', 'knowledge']);
  */
 const RESERVED_INSTANCE_ID_PREFIX = /^(workflow|knowledge|source)_/i;
 
-export class IntegrationError extends Error {
+export class IntegrationError extends ServiceError {
+  /**
+   * @param {string} message
+   * @param {Object} [options]
+   * @param {number} [options.status=400]
+   * @param {string} [options.code='INTEGRATION_ERROR'] - A code of `shared/apiErrors.js`
+   * @param {Object|Array} [options.details] - Interpolation parameters. A list of problems (the
+   *   validation errors) is answered as `details.issues`.
+   */
   constructor(message, { status = 400, code = 'INTEGRATION_ERROR', details } = {}) {
-    super(message);
+    super(code, message, {
+      status,
+      details: Array.isArray(details) ? { issues: details } : details
+    });
     this.name = 'IntegrationError';
-    this.status = status;
-    this.code = code;
-    if (details) this.details = details;
   }
 }
 

@@ -156,10 +156,12 @@ registryModule.default.readCompanion = registry.readCompanion.bind(registry);
 
 const { default: registerAdminIntegrationsRoutes } =
   await import('../../routes/admin/integrations.js');
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 
 const app = express();
 app.use(express.json());
 registerAdminIntegrationsRoutes(app);
+app.use(errorHandler);
 const admin = r => r.set('X-Admin', 'yes');
 
 afterAll(async () => {
@@ -355,7 +357,7 @@ describe('installed instances', () => {
         .send({ ...payload, id: 'y', values: { baseUrl: 'ftp://x', maxRows: 99 } })
     ).expect(400);
     expect(bad.body.code).toBe('INVALID_VALUES');
-    expect(bad.body.details.map(d => d.key).sort()).toEqual(['baseUrl', 'maxRows']);
+    expect(bad.body.details.issues.map(d => d.key).sort()).toEqual(['baseUrl', 'maxRows']);
     const reserved = await admin(
       request(app)
         .post('/api/admin/integrations/installed')
@@ -376,7 +378,7 @@ describe('installed instances', () => {
         .post('/api/admin/integrations/installed')
         .send({ ...payload, id: 'z', values: { baseUrl: 'https://x.org', apiToken: 'leak' } })
     ).expect(400);
-    expect(sensitive.body.details[0].key).toBe('apiToken');
+    expect(sensitive.body.details.issues[0].key).toBe('apiToken');
   });
 
   it('refuses allowedGroups on install, update and test, naming the group page (#3093)', async () => {
@@ -442,7 +444,7 @@ describe('installed instances', () => {
         .post('/api/admin/integrations/installed')
         .send({ ...payload, id: 'nosecret', auth: { mode: 'service-account' } })
     ).expect(400);
-    expect(missing.body.details[0].key).toBe('apiToken');
+    expect(missing.body.details.issues[0].key).toBe('apiToken');
     // updating without a new secret keeps the stored credential
     await admin(
       request(app)
