@@ -386,8 +386,15 @@ export function draftFromItem(item) {
  */
 export function buildItemChanges(item, draft) {
   const { body, error } = buildItemRequest(item.kind, { ...draft, name: '' });
-  if (error) return { changes: null, error };
-  const picked = body.ref;
+  // A search migrated from a source that let the model supply the query has an
+  // empty one, which the server accepts: it stays empty unless one is typed.
+  const keepsEmptyQuery =
+    error === 'queryRequired' && item.kind === 'ifinder-query' && !item.ref?.query;
+  if (error && !keepsEmptyQuery) return { changes: null, error };
+  const searchProfile = (draft.searchProfile || '').trim();
+  const picked = keepsEmptyQuery
+    ? { query: '', ...(searchProfile ? { searchProfile } : {}) }
+    : body.ref;
   // The profile and the language are optional: an emptied one is dropped.
   const kept = { ...item.ref };
   delete kept.searchProfile;

@@ -877,7 +877,11 @@ export class ProjectService {
     if (!current) return null;
     const existing = (current.items || []).find(entry => entry.id === itemId);
     if (!existing) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
-    const checked = this._checkKindRef(existing.kind, ref, { admin: true });
+    // Not `admin: true`: that exemption lets an admin re-save an item of a kind
+    // that was switched off. A new reference works like a new item and is
+    // refused the same way, or an editor could point a URL item at any host
+    // after the admin turned URL fetching off.
+    const checked = this._checkKindRef(existing.kind, ref);
     if (checked.kind.storage.ihub !== 'link' || checked.kind.id === PROJECT_ITEM_KIND) {
       throw new ProjectError(
         'INVALID_REF',

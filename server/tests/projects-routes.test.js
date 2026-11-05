@@ -1153,6 +1153,40 @@ describe('admin projects', () => {
     assert.equal(denied.statusCode, 403);
   });
 
+  it('refuse a new reference for a kind the admin switched off, but still rename', async () => {
+    await drive(route.adminCreate, { user: EDITOR, body: { id: 'off', name: { en: 'Off' } } });
+    const added = await drive(route.adminAddItem, {
+      user: EDITOR,
+      params: { id: 'off' },
+      body: { kind: 'url', ref: { url: 'https://example.com/a' } }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    const { id: itemId } = added.body.item;
+    setProjectSettings({ kinds: { url: false } });
+    try {
+      const refused = await drive(route.adminUpdateItem, {
+        user: EDITOR,
+        params: { id: 'off', itemId },
+        body: { ref: { url: 'https://other.example/b' } }
+      });
+      assert.ok(refused.statusCode >= 400, JSON.stringify(refused.body));
+      assert.match(JSON.stringify(refused.body), /KIND_DISABLED|not available/);
+      assert.equal(
+        (await getProjectRepository().get('off')).items[0].ref.url,
+        'https://example.com/a'
+      );
+      // A name or a pin is not a new reference.
+      const renamed = await drive(route.adminUpdateItem, {
+        user: EDITOR,
+        params: { id: 'off', itemId },
+        body: { name: 'Renamed', pinned: true }
+      });
+      assert.equal(renamed.statusCode, 200, JSON.stringify(renamed.body));
+    } finally {
+      setProjectSettings();
+    }
+  });
+
   it('keep the reference of a text item and of a missing item', async () => {
     await drive(route.adminCreate, { user: EDITOR, body: { id: 'notes', name: { en: 'Notes' } } });
     // Uploads need the ingest service, which these tests do not run: store the item as it would be.
