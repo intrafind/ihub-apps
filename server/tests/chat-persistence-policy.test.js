@@ -52,6 +52,7 @@ import {
   markChatDurable
 } from '../sse.js';
 import validate from '../validators/validate.js';
+import { toErrorResponse } from '../utils/errorResponse.js';
 import { chatPostSchema } from '../validators/index.js';
 
 /** Feature flags with durable chats switched on. */
@@ -619,8 +620,15 @@ describe('POST protocol: what the client may assert', () => {
     };
     const req = { body, params: { appId: 'chat', chatId: 'chat-1' }, query: {} };
     let ok = false;
-    validate(chatPostSchema)(req, res, () => {
-      ok = true;
+    validate(chatPostSchema)(req, res, error => {
+      if (!error) {
+        ok = true;
+        return;
+      }
+      // A rejection goes to the global error middleware; map it as that does.
+      const response = toErrorResponse(error);
+      status = response.status;
+      payload = response.body;
     });
     return { ok, body: req.body, status, payload };
   }
