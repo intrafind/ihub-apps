@@ -134,37 +134,75 @@ export function detectBotProtection({ status, headers, body = '' } = {}) {
   return { vendor: match.vendor, reference };
 }
 
+/** Longest an error body may take to arrive before the classification goes on without it. */
+export const BODY_READ_TIMEOUT_MS = 3000;
+
+/** Stop reading a body: Node streams are destroyed, web streams cancelled. */
+function releaseBody(body) {
+  try {
+    if (typeof body?.destroy === 'function') body.destroy();
+    else if (typeof body?.cancel === 'function') void body.cancel().catch(() => {});
+  } catch {
+    // Already closed.
+  }
+}
+
 /**
  * The first {@link BODY_PREFIX_CHARS} characters of a response body, without
- * downloading the rest of a large one. Never throws: an unreadable body is ''.
+ * downloading the rest of a large one or waiting on a slow one. Reads a web
+ * stream (`getReader`) or a Node stream (what node-fetch, the page reader's
+ * HTTP client, returns) and falls back to `text()` for a body that is neither.
+ * Never throws: an unreadable body is whatever arrived, or ''.
  *
  * @param {Object} response - A fetch response
+ * @param {Object} [options]
+ * @param {number} [options.timeoutMs] - Give up waiting after this long
  * @returns {Promise<string>}
  */
-export async function readBodyPrefix(response) {
-  try {
-    const reader = response?.body?.getReader?.();
-    if (reader) {
-      const decoder = new TextDecoder('utf-8');
-      let text = '';
+export async function readBodyPrefix(response, { timeoutMs = BODY_READ_TIMEOUT_MS } = {}) {
+  const body = response?.body;
+  const decoder = new TextDecoder('utf-8');
+  let text = '';
+  /** @returns {boolean} true once enough has been read */
+  const append = chunk => {
+    text += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+    return text.length >= BODY_PREFIX_CHARS;
+  };
+  const read = async () => {
+    if (typeof body?.getReader === 'function') {
+      const reader = body.getReader();
       try {
-        while (text.length < BODY_PREFIX_CHARS) {
+        for (;;) {
           const { done, value } = await reader.read();
-          if (done) break;
-          text += decoder.decode(value, { stream: true });
+          if (done || append(value)) break;
         }
       } finally {
         await reader.cancel().catch(() => {});
       }
-      return text.slice(0, BODY_PREFIX_CHARS);
+    } else if (body && typeof body[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of body) {
+        if (append(chunk)) break;
+      }
+    } else if (typeof response?.text === 'function') {
+      append(String(await response.text()));
     }
-    if (typeof response?.text === 'function') {
-      return String(await response.text()).slice(0, BODY_PREFIX_CHARS);
-    }
+  };
+  let timer;
+  try {
+    await Promise.race([
+      read(),
+      new Promise(resolve => {
+        timer = setTimeout(resolve, timeoutMs);
+      })
+    ]);
   } catch {
     // An unreadable error body only means no vendor can be named.
+  } finally {
+    clearTimeout(timer);
+    // Stops a read that is still waiting (timeout) or has the rest to send.
+    releaseBody(body);
   }
-  return '';
+  return text.slice(0, BODY_PREFIX_CHARS);
 }
 
 /**

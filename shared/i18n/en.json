@@ -8279,6 +8279,7 @@
       "crawlRobots_other": "{{count}} links were left out because the website excludes them in its robots.txt.",
       "crawlFull": "The project takes no more pages. Untick some, or remove items from the project first.",
       "crawlDocument": "PDF",
+      "crawlBlocked": "{{host}} blocks automated access, so the search stopped there. Add the pages you need by their address instead.",
       "crawlTruncated": "The search stopped at its limit; raise it or start from a deeper address to find more.",
       "crawlNoPages": "No pages found.",
       "crawlAlready": "Already added",

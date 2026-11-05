@@ -284,7 +284,7 @@ function SiteCrawlPanel({
 
         {crawl?.ok && (
           <>
-            {(crawl.scope || crawl.truncated || crawl.robotsExcluded > 0) && (
+            {(crawl.scope || crawl.truncated || crawl.blocked || crawl.robotsExcluded > 0) && (
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 {crawl.scope &&
                   t('projects.addItem.crawlScope', 'Searched {{scope}}', {
@@ -298,7 +298,14 @@ function SiteCrawlPanel({
                     defaultValue_other:
                       '{{count}} links were left out because the website excludes them in its robots.txt.'
                   })}`}
+                {crawl.blocked &&
+                  ` ${t(
+                    'projects.addItem.crawlBlocked',
+                    '{{host}} blocks automated access, so the search stopped there. Add the pages you need by their address instead.',
+                    { host: crawl.blocked.host }
+                  )}`}
                 {crawl.truncated &&
+                  !crawl.blocked &&
                   ` ${t(
                     'projects.addItem.crawlTruncated',
                     'The search stopped at its limit; raise it or start from a deeper address to find more.'

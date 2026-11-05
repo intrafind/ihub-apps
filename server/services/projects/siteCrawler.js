@@ -354,6 +354,15 @@ export function extractPageLinks(html, pageUrl) {
   return { title, links };
 }
 
+/** Whether `hostname` is the host of `origin` (an origin URL such as `https://x.com`). */
+function sameHostname(hostname, origin) {
+  try {
+    return String(hostname).toLowerCase() === new URL(origin).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /** Stop reading a body: Node streams are destroyed, web streams cancelled. */
 function dropBody(body) {
   if (!body) return;
@@ -657,8 +666,10 @@ export async function crawlSite(
         }
         return { finalUrl, ...extractPageLinks(page.html, finalUrl) };
       } catch (error) {
-        if (error?.code === BOT_PROTECTION_CODE) {
-          blocked ??= { host: error.host || '', ...(error.vendor ? { vendor: error.vendor } : {}) };
+        // Only the crawled site's own refusal ends the crawl: a link that
+        // redirects to a third-party host behind a WAF is just a dead link.
+        if (error?.code === BOT_PROTECTION_CODE && sameHostname(error.host, scope.origin)) {
+          blocked ??= { host: error.host, ...(error.vendor ? { vendor: error.vendor } : {}) };
         }
         // A dead or unreadable link (or one cancelled at the deadline) is left out.
         return null;

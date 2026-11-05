@@ -477,6 +477,32 @@ describe('crawlSite', () => {
     );
   });
 
+  it('ignores a bot-protection block from another host, such as a redirect target', async () => {
+    const foreignBlock = () =>
+      Object.assign(new Error('Blocked by bot protection (Cloudflare)'), {
+        code: 'BOT_PROTECTION',
+        vendor: 'Cloudflare',
+        host: 'login.third-party.example'
+      });
+    const deps = {
+      fetchRobots: async () => null,
+      fetchPage: async url => {
+        if (url === 'https://x.com/') {
+          return {
+            finalUrl: url,
+            contentType: 'text/html',
+            html: page('Home', ['/login', '/about'])
+          };
+        }
+        if (url === 'https://x.com/login') throw foreignBlock();
+        return { finalUrl: url, contentType: 'text/html', html: page('About', []) };
+      }
+    };
+    const result = await crawlSite({ url: 'https://x.com/', samePath: false }, deps);
+    assert.equal(result.blocked, undefined);
+    assert.deepEqual(urlsOf(result), ['https://x.com/', 'https://x.com/about']);
+  });
+
   it('lists a start URL that serves a PDF as one document', async () => {
     const { deps } = fakeSite({ 'https://x.com/file': { contentType: 'application/pdf' } });
     const result = await crawlSite({ url: 'https://x.com/file' }, deps);

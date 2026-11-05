@@ -3,6 +3,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 
 import {
   classifyBlockedResponse,
@@ -92,6 +93,47 @@ describe('classifyBlockedResponse', () => {
     assert.equal(text.length, 4096);
     assert.equal(cancelled, true);
     assert.equal(reads, 2);
+  });
+
+  it('reads a Node stream body (node-fetch) only up to the prefix, then destroys it', async () => {
+    // What the page reader's HTTP client returns: no getReader, no text() call wanted.
+    const body = Readable.from(
+      (function* () {
+        for (let i = 0; i < 1000; i += 1) yield Buffer.from('x'.repeat(1000));
+      })()
+    );
+    let textCalled = false;
+    const response = {
+      status: 403,
+      headers: headers({ server: 'nginx' }),
+      body,
+      text: async () => {
+        textCalled = true;
+        return 'x'.repeat(1_000_000);
+      }
+    };
+    const text = await readBodyPrefix(response);
+    assert.equal(text.length, 4096);
+    assert.equal(textCalled, false);
+    assert.equal(body.destroyed, true);
+  });
+
+  it('stops waiting for a body that stalls and keeps what arrived', async () => {
+    const body = Readable.from(
+      (async function* () {
+        yield Buffer.from('partial ');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        yield Buffer.from('never read');
+      })()
+    );
+    const started = Date.now();
+    const text = await readBodyPrefix(
+      { status: 403, headers: headers({}), body },
+      { timeoutMs: 50 }
+    );
+    assert.equal(text, 'partial ');
+    assert.ok(Date.now() - started < 400);
+    assert.equal(body.destroyed, true);
   });
 
   it('returns null for a plain 429, and ACCESS_DENIED for a plain 403', async () => {

@@ -183,6 +183,35 @@ describe('read_url refused pages', () => {
     expect(throttledFetchMock).toHaveBeenCalledTimes(2);
   });
 
+  test('a block reached through a redirect is remembered for the requested host too', async () => {
+    throttledFetchMock.mockImplementation(async (_id, url) =>
+      url.startsWith('https://8.8.8.8')
+        ? {
+            ok: false,
+            status: 301,
+            statusText: 'Moved',
+            headers: { get: n => (n.toLowerCase() === 'location' ? 'https://1.1.1.1/' : null) }
+          }
+        : blockedResponse(403, { server: 'AkamaiNetStorage' }, AKAMAI_BODY)
+    );
+    const first = await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-r' });
+    expect(first.error).toMatchObject({ code: 'BOT_PROTECTION', host: '1.1.1.1' });
+    const calls = throttledFetchMock.mock.calls.length;
+    const second = await extractForTool({ url: 'https://8.8.8.8/b', chatId: 'chat-r' });
+    expect(second.error.code).toBe('BOT_PROTECTION');
+    expect(throttledFetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  test('a 429 from a protection layer is reported but not remembered', async () => {
+    throttledFetchMock.mockResolvedValue(
+      blockedResponse(429, { server: 'cloudflare', 'cf-mitigated': 'challenge' }, '')
+    );
+    const first = await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
+    expect(first.error).toMatchObject({ code: 'BOT_PROTECTION', retryable: false, status: 429 });
+    await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
+    expect(throttledFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   describe('search with content extraction', () => {
     beforeEach(async () => {
       ({ default: webSearchService } = await import('../services/WebSearchService.js'));

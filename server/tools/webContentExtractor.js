@@ -460,8 +460,16 @@ function hostnameOf(url) {
 }
 
 /** Remember that a host blocked this chat's page reads. */
-function rememberBlockedHost(chatId, error) {
-  const key = blockedHostKey(chatId, error.host);
+function rememberBlockedHost(chatId, error, requestedHost) {
+  // A 429 is a rate limit that passes; only a block that stays is remembered.
+  if (error.status === 429) return;
+  // Under the host that answered (after redirects) and the one that was asked.
+  for (const host of new Set([error.host, requestedHost])) {
+    rememberBlockedHostKey(blockedHostKey(chatId, host), error);
+  }
+}
+
+function rememberBlockedHostKey(key, error) {
   if (!key) return;
   const now = Date.now();
   if (blockedHosts.size >= MAX_BLOCKED_HOSTS) {
@@ -537,7 +545,7 @@ export async function extractForTool({ url, uri, link, maxLength, offset, langua
     if (error.code !== BOT_PROTECTION_CODE) throw error;
     // Handed to the model as a result it cannot misread as "try again", not
     // as a thrown error string.
-    rememberBlockedHost(chatId, error);
+    rememberBlockedHost(chatId, error, hostnameOf(targetUrl));
     return botProtectionToolResult(error, targetUrl);
   }
 }
