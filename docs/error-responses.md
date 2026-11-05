@@ -14,7 +14,7 @@ Every error response of the API has one shape, except the OAuth endpoints.
 | --------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `code`    | yes    | A code from the registry in `shared/apiErrors.js`. The client picks its message with the i18n key `apiErrors.<code>` (`shared/i18n`).    |
 | `details` | no     | A plain object. Its members are the interpolation parameters of that message. It never holds `code`.                                    |
-| `error`   | yes    | English fallback text for callers without i18n. A 4xx carries the message that was thrown; a 5xx a fixed text (the real one is logged). |
+| `error`   | yes    | English fallback text for callers without i18n. A 4xx carries the message that was thrown. A 5xx carries it too when it is safe to show, else a fixed text; the real message is always logged. |
 
 Validation failures use `code: "VALIDATION_FAILED"` and `details.issues`, a list of `{ path, code, message }`.
 A rate limit sets the `Retry-After` header and `details.retryAfterMs`.
@@ -36,3 +36,7 @@ global error middleware (`server/middleware/errorHandler.js`), which maps it wit
 | anything else                                               | 500 `INTERNAL_ERROR`                                                                                     |
 
 A new code goes into `shared/apiErrors.js` and into `apiErrors` of both `shared/i18n/en.json` and `de.json`; a test fails otherwise.
+
+### What a 5xx message may contain
+
+A 5xx message is shown only if it is short (up to 200 characters), one line, and holds none of: a file path or file name, a URL, an IP address or host:port, a stack frame, an errno code (`ECONNREFUSED`), a credential word (`password`, `token`, `secret`, `api key`, `session`, ...), a long token-like string or SQL. Messages of runtime bugs (`TypeError` and kin), system errors and model providers are never shown. When a message is held back the client gets the fixed text of the code, and `error` and the log still tell an operator what happened. Write messages of `ServiceError`s with that in mind: say what failed, not where or with what.

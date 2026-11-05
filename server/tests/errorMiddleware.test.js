@@ -8,7 +8,7 @@ import express from 'express';
 import { z } from 'zod';
 import errorHandler from '../middleware/errorHandler.js';
 import { ServiceError } from '../utils/ServiceError.js';
-import { toErrorResponse } from '../utils/errorResponse.js';
+import { toErrorResponse, publicMessage } from '../utils/errorResponse.js';
 import { EtagMismatchError, StorageError, InvalidKeyError } from '../storage/errors.js';
 import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
 import { API_ERROR_CODES, apiErrorI18nKey } from '../../shared/apiErrors.js';
@@ -36,15 +36,57 @@ describe('toErrorResponse', () => {
     assert.equal(new ServiceError('CONFLICT', 'x', { status: 412 }).status, 412);
   });
 
-  it('never sends the message of a 5xx', () => {
+  it('sends the message of a 5xx when it is safe', () => {
     const { status, body } = toErrorResponse(
-      new ServiceError('SERVICE_UNAVAILABLE', 'connect ECONNREFUSED 10.0.0.5:5432')
+      new ServiceError('SERVICE_UNAVAILABLE', 'The search index is being rebuilt, try again soon')
     );
     assert.equal(status, 503);
-    assert.equal(body.error, en.apiErrors.SERVICE_UNAVAILABLE);
-    const plain = toErrorResponse(new Error('secret /etc/passwd'));
+    assert.equal(body.error, 'The search index is being rebuilt, try again soon');
+    const plain = toErrorResponse(new Error('Export queue is full'));
     assert.equal(plain.status, 500);
-    assert.deepEqual(plain.body, { error: en.apiErrors.INTERNAL_ERROR, code: 'INTERNAL_ERROR' });
+    assert.deepEqual(plain.body, { error: 'Export queue is full', code: 'INTERNAL_ERROR' });
+  });
+
+  it('replaces the message of a 5xx with the fixed text when it could help an attacker', () => {
+    const unsafe = [
+      'connect ECONNREFUSED 10.0.0.5:5432',
+      'ENOENT: no such file or directory, open /var/app/contents/config/platform.json',
+      'Failed to fetch https://internal.corp.example/api/v1/users',
+      'Invalid token for user admin',
+      'password authentication failed for user "ihub"',
+      'SELECT * FROM users WHERE id = 1 failed',
+      'Error at Object.run (/srv/app/server/x.js:10:5)',
+      'value QWxhZGRpbjpvcGVuU2VzYW1lVGhpc0lzTG9uZw rejected',
+      'line one\nline two',
+      'x'.repeat(201),
+      'config.json is unreadable',
+      'C:\\app\\data\\x'
+    ];
+    for (const message of unsafe) {
+      const { body } = toErrorResponse(new ServiceError('SERVICE_UNAVAILABLE', message));
+      assert.equal(body.error, en.apiErrors.SERVICE_UNAVAILABLE, message);
+      assert.equal(publicMessage(message), null, message);
+    }
+  });
+
+  it('never shows the message of a runtime bug, a system error or a provider', () => {
+    for (const error of [
+      new TypeError("Cannot read properties of undefined (reading 'x')"),
+      new ReferenceError('foo is not defined'),
+      Object.assign(new Error('socket hang up'), { syscall: 'read', errno: -104 }),
+      new LLMError('Anthropic said: your prompt contained X', { code: 'PROVIDER_ERROR' })
+    ]) {
+      const { body } = toErrorResponse(error);
+      assert.match(body.error, /^[A-Z]/);
+      assert.ok(Object.values(en.apiErrors).includes(body.error), body.error);
+    }
+  });
+
+  it('shows the message of a 4xx as thrown, and the filter does not apply to it', () => {
+    const { body } = toErrorResponse(
+      new ServiceError('NOT_FOUND', 'Task t-1 not found in /tasks/')
+    );
+    assert.equal(body.error, 'Task t-1 not found in /tasks/');
   });
 
   it('maps storage errors by their status, keeping the storage code', () => {
@@ -90,7 +132,7 @@ describe('toErrorResponse', () => {
   });
 
   it('answers the RFC 6749 shape for OAuth', () => {
-    assert.deepEqual(toErrorResponse(new Error('x'), { rfc: true }).body, {
+    assert.deepEqual(toErrorResponse(new TypeError('x'), { rfc: true }).body, {
       error: 'server_error',
       error_description: en.apiErrors.INTERNAL_ERROR
     });
