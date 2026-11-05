@@ -507,7 +507,7 @@ several pages of a website:
 ![Find more pages of this website: the pages found on the site, ticked to be added as separate items](assets/screenshots/project-add-web-crawl.png)
 
 The search runs on the server with the same protections as the page reader: no private or internal
-addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, certificate checks
+addresses (unless the host is in `ssl.domainWhitelist` or `ssrf.allowedHosts`), every redirect checked, certificate checks
 skipped only for hosts in `ssl.domainWhitelist`, and at most 2 MB read per page. It reads on its own
 request queue (`project_crawl`, `requestConcurrency` slots), so a search does not hold up the page
 reads of chats. A user runs one search at a time, and a search stops when the browser stops

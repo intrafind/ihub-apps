@@ -144,6 +144,26 @@ export function isDomainWhitelisted(hostname, whitelist) {
 }
 
 /**
+ * Whether an admin has marked a host as trusted, so the private-address rule of
+ * the SSRF guard does not apply to it. A host is trusted when it is on
+ * `ssl.domainWhitelist` or on the platform-wide `ssrf.allowedHosts` (same
+ * pattern rules as {@link isDomainWhitelisted}). This is the one place the
+ * page reader (Preview) and the URL test agree on that question.
+ *
+ * Trust is per host: every redirect hop must be checked on its own.
+ *
+ * @param {string} hostname - Host name of the URL about to be requested
+ * @returns {boolean} True when the host may bypass the private-address check
+ */
+export function isSsrfTrustedHost(hostname) {
+  const platformConfig = configCache.getPlatform() || {};
+  return (
+    isDomainWhitelisted(hostname, platformConfig.ssl?.domainWhitelist) ||
+    isDomainWhitelisted(hostname, platformConfig.ssrf?.allowedHosts)
+  );
+}
+
+/**
  * Determine if SSL certificate validation should be ignored for a specific URL
  * @param {string} url - The URL to check
  * @param {Object} sslConfig - SSL configuration object

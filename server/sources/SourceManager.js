@@ -5,8 +5,8 @@ import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
-import { httpFetch } from '../utils/httpConfig.js';
-import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
+import { httpFetch, isSsrfTrustedHost } from '../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup, UNRESOLVED_HOST } from '../utils/ssrfGuard.js';
 
 /**
  * The registry of the link handlers (URL, iFinder, page) the project items
@@ -41,6 +41,23 @@ export async function countBodyBytes(body, maxBytes) {
 }
 
 /**
+ * The per-hop target check of {@link probeUrl}, held to the same line as the
+ * page reader behind Preview: a host an admin trusts (`ssl.domainWhitelist` or
+ * `ssrf.allowedHosts`, typically an internal wiki) skips the public-address
+ * rule, anything else must resolve to public addresses only.
+ *
+ * For a trusted host no address is checked or pinned (`addresses: null`); the
+ * connection resolves the name itself, the way Preview's does.
+ *
+ * @param {URL} url - The URL of this hop
+ * @returns {Promise<{ok: boolean, reason?: string, code?: string, addresses?: string[]|null}>}
+ */
+export async function checkProbeTarget(url) {
+  if (isSsrfTrustedHost(url.hostname)) return { ok: true, addresses: null };
+  return assertPublicTarget(url);
+}
+
+/**
  * Probe a URL the way the URL source would read it, without keeping the body.
  *
  * Any signed-in user may probe a URL from the project picker, so the probe is
@@ -60,14 +77,14 @@ export async function countBodyBytes(body, maxBytes) {
  * @param {number} [config.maxBytes=URL_TEST_MAX_BYTES] - Body bytes counted at most
  * @param {Object} [options]
  * @param {(url: URL) => Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
- *   [options.checkTarget=assertPublicTarget] - The per-hop target check; a
+ *   [options.checkTarget=checkProbeTarget] - The per-hop target check; a
  *   test substitutes one that admits a loopback server
  * @returns {Promise<Object>} `{accessible, status, statusText, contentType,
  *   contentLength, contentTruncated?, headerContentLength, duration}`
  * @throws {Error} On a blocked target, a failed request, a non-2xx answer or
  *   the timeout
  */
-export async function probeUrl(config, { checkTarget = assertPublicTarget } = {}) {
+export async function probeUrl(config, { checkTarget = checkProbeTarget } = {}) {
   const {
     url,
     method = 'GET',
@@ -90,6 +107,12 @@ export async function probeUrl(config, { checkTarget = assertPublicTarget } = {}
       }
       const target = await checkTarget(hop);
       if (!target.ok) {
+        if (target.code === UNRESOLVED_HOST) {
+          throw new Error(
+            `The host ${hop.hostname} could not be resolved. Check the name; an internal host ` +
+              'that is not public must be added to ssl.domainWhitelist or ssrf.allowedHosts'
+          );
+        }
         throw new Error(`Access to private/internal addresses is not allowed (${target.reason})`);
       }
       response = await httpFetch(hop.href, {
@@ -97,7 +120,8 @@ export async function probeUrl(config, { checkTarget = assertPublicTarget } = {}
         headers: hop.origin === origin ? headers : {},
         signal: controller.signal,
         redirect: 'manual',
-        lookup: createPinnedLookup(target.addresses)
+        // A trusted host has no checked address to pin to.
+        ...(target.addresses ? { lookup: createPinnedLookup(target.addresses) } : {})
       });
       const location = response.headers.get('location');
       if (response.status >= 300 && response.status < 400 && location) {
