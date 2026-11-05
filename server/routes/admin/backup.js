@@ -14,11 +14,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
-import {
-  sendInternalError,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
@@ -252,9 +248,20 @@ function extractZip(zipPath, extractPath) {
 }
 
 /**
+ * Drop the ZIP headers set before streaming, so an error answered before any byte was sent is
+ * JSON like every other error.
+ *
+ * @param {import('express').Response} res
+ */
+function removeArchiveHeaders(res) {
+  res.removeHeader('Content-Type');
+  res.removeHeader('Content-Disposition');
+}
+
+/**
  * Export configuration as ZIP file
  */
-export async function exportConfig(req, res) {
+export async function exportConfig(req, res, next) {
   try {
     logger.info('Starting configuration export', { component: 'AdminBackup' });
 
@@ -271,7 +278,10 @@ export async function exportConfig(req, res) {
     archive.on('error', err => {
       logger.error('Archive error', { component: 'AdminBackup', error: err });
       if (!res.headersSent) {
-        sendInternalError(res, err, 'create backup archive');
+        removeArchiveHeaders(res);
+        next(
+          new ServiceError('INTERNAL_ERROR', 'Failed to create the backup archive', { cause: err })
+        );
       }
     });
 
@@ -333,7 +343,8 @@ export async function exportConfig(req, res) {
   } catch (error) {
     logger.error('Export error', { component: 'AdminBackup', error });
     if (!res.headersSent) {
-      return sendInternalError(res, error, 'export configuration');
+      removeArchiveHeaders(res);
+      next(error);
     }
   }
 }
@@ -360,23 +371,25 @@ const IMPORT_FS_ERROR_HINTS = {
 };
 
 /**
- * An import step failed on the filesystem: an error whose message says what
- * happened to the live configuration and, where known, how to fix the cause.
+ * An import step failed on the filesystem: an `IMPORT_FAILED` error whose message says what
+ * happened to the live configuration and whose `details.hint` says, where known, how to fix
+ * the cause (`details.reason` is the filesystem error code). The hint is a fixed text, safe
+ * to show to an admin.
  *
  * @param {string} outcome - What the failure means for the live configuration.
  * @param {Error} cause - The underlying filesystem error.
  * @param {string} [mountPoint] - Folder (relative to the contents directory) the
  *   failure came from, when that folder is a separate mount point.
- * @returns {Error} Error carrying `adminMessage`, safe to show to an admin.
+ * @returns {ServiceError} `IMPORT_FAILED`, with the hint and the reason in `details`.
  */
 function importStepError(outcome, cause, mountPoint) {
   const hint = mountPoint
     ? `The folder "${mountPoint}" in the contents directory is a separate mount point, which cannot be replaced. Mount the volume on the contents directory itself (or its parent), not on folders inside it.`
     : IMPORT_FS_ERROR_HINTS[cause?.code];
-  const adminMessage = hint ? `${outcome}. ${hint} (${cause.code})` : `${outcome}.`;
-  const error = new Error(`${outcome}: ${cause?.message ?? cause}`, { cause });
-  error.adminMessage = adminMessage;
-  return error;
+  return new ServiceError('IMPORT_FAILED', outcome, {
+    details: hint ? { hint, reason: cause.code } : undefined,
+    cause
+  });
 }
 
 /**
@@ -684,17 +697,6 @@ function findExpiredBackups(entries) {
 }
 
 /**
- * Answer a failed import: with the explanation when the failure carries one an
- * admin can act on (see importStepError), otherwise with the generic error.
- */
-function sendImportError(res, error) {
-  if (error.adminMessage) {
-    return sendErrorResponse(res, error.status ?? 500, error.adminMessage);
-  }
-  return sendInternalError(res, error, 'import configuration');
-}
-
-/**
  * Take the import lock, so only one import at a time works on the contents
  * directory. Two imports swapping entries at once would interleave their moves
  * and could split the replaced configuration (and its encryption key) across
@@ -704,7 +706,7 @@ function sendImportError(res, error) {
  *
  * @param {string} contentsPath - Live contents directory.
  * @returns {Promise<string>} Path of the lock file, to pass to releaseImportLock.
- * @throws {Error} With status 409 and `adminMessage` while another import runs.
+ * @throws {ServiceError} `IMPORT_IN_PROGRESS` (409) while another import runs.
  */
 export async function acquireImportLock(contentsPath) {
   const lockPath = path.join(contentsPath, IMPORT_BACKUPS_DIR, IMPORT_LOCK_FILE);
@@ -720,11 +722,10 @@ export async function acquireImportLock(contentsPath) {
       return lockPath;
     }
   }
-  const error = new Error('Another configuration import is in progress');
-  error.status = 409;
-  error.adminMessage =
-    'Another configuration import is in progress. Try again once it has finished.';
-  throw error;
+  throw new ServiceError(
+    'IMPORT_IN_PROGRESS',
+    'Another configuration import is in progress. Try again once it has finished.'
+  );
 }
 
 /**
@@ -757,7 +758,7 @@ export async function importConfig(req, res) {
 
     // Check if file was uploaded
     if (!req.file) {
-      return sendBadRequest(res, 'No ZIP file uploaded');
+      throw new ServiceError('BAD_REQUEST', 'No ZIP file uploaded');
     }
 
     // Held until the response is sent: staging, swap, pruning, migrations and
@@ -784,7 +785,7 @@ export async function importConfig(req, res) {
     // Verify the ZIP actually contained contents/ files
     const extractedContentsPath = path.join(tempExtractPath, ARCHIVE_CONTENTS_DIR);
     if (extractedCount === 0) {
-      return sendBadRequest(res, 'Invalid backup file: No contents directory found');
+      throw new ServiceError('BAD_REQUEST', 'Invalid backup file: No contents directory found');
     }
 
     // Get backup metadata if available
@@ -877,9 +878,6 @@ export async function importConfig(req, res) {
       component: 'AdminBackup',
       importedCount: importedFiles.length
     });
-  } catch (error) {
-    logger.error('Import error', { component: 'AdminBackup', error });
-    sendImportError(res, error);
   } finally {
     await releaseImportLock(importLock);
 

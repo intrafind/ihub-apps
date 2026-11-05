@@ -601,6 +601,14 @@ text page. Every such response has the same body:
   problems of a draft or an import moved from `details` (a list) to `details.issues`, and a
   malformed import body answers `VALIDATION_FAILED`. The `success: false` flag is gone from error
   bodies.
+- The configuration backup endpoints (`/api/admin/backup/export`, `/api/admin/backup/import`) answer
+  in this shape. An import without a file answers `BAD_REQUEST`; a second import while one runs
+  answers `409 IMPORT_IN_PROGRESS`; a failed swap answers `500 IMPORT_FAILED` with what happened to
+  the live configuration in `error` and how to fix the cause in `details.hint` (and the filesystem
+  error code in `details.reason`). The admin page now shows that text instead of the generic
+  "Request failed". A failed export that has not started streaming answers JSON, not a response
+  with a ZIP content type. An unexpected import failure no longer answers the fixed text "Internal
+  server error" when its message is safe to show.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

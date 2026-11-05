@@ -9074,6 +9074,8 @@
     "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
     "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name.",
     "EXECUTION_NOT_FINISHED": "The workflow execution has not finished yet.",
-    "EXECUTION_ACTIVE": "Cancel the workflow before deleting it."
+    "EXECUTION_ACTIVE": "Cancel the workflow before deleting it.",
+    "IMPORT_IN_PROGRESS": "Another configuration import is in progress. Try again once it has finished.",
+    "IMPORT_FAILED": "The configuration could not be imported."
   }
 }

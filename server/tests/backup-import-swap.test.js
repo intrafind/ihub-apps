@@ -211,8 +211,9 @@ describe('stageAndSwapContents', () => {
       e => e
     );
     assert.match(error.message, /rolled back to the previous configuration/);
-    assert.match(error.adminMessage, /separate mount point/);
-    assert.match(error.adminMessage, /\(EBUSY\)$/);
+    assert.strictEqual(error.code, 'IMPORT_FAILED');
+    assert.match(error.details.hint, /separate mount point/);
+    assert.strictEqual(error.details.reason, 'EBUSY');
 
     assert.deepStrictEqual((await fs.readdir(contentsPath)).sort(), [
       IMPORT_BACKUPS_DIR,
@@ -247,9 +248,9 @@ describe('stageAndSwapContents', () => {
       () => assert.fail('expected the swap to fail'),
       e => e
     );
-    assert.match(error.adminMessage, /rolled back to the previous configuration/);
-    assert.match(error.adminMessage, /The folder "apps" in the contents directory is a separate/);
-    assert.doesNotMatch(error.adminMessage, /not allowed to write/);
+    assert.match(error.message, /rolled back to the previous configuration/);
+    assert.match(error.details.hint, /The folder "apps" in the contents directory is a separate/);
+    assert.doesNotMatch(error.details.hint, /not allowed to write/);
     assert.deepStrictEqual(await fs.readdir(appsPath), ['old.json']);
   });
 
@@ -350,7 +351,8 @@ describe('import lock', () => {
       e => e
     );
     assert.strictEqual(busy.status, 409);
-    assert.match(busy.adminMessage, /Another configuration import is in progress/);
+    assert.strictEqual(busy.code, 'IMPORT_IN_PROGRESS');
+    assert.match(busy.message, /Another configuration import is in progress/);
 
     await releaseImportLock(held);
     await assert.rejects(() => fs.access(lockPath));
