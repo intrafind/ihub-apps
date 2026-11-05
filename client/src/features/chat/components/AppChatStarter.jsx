@@ -11,7 +11,7 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { loadAppSettings } from '../../../utils/appSettings';
-import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
+import { appDefaultToolRefs } from '../../../shared/utils/boundIntegrationRefs';
 import useIntegrationDefaults from '../../integrations/picker/useIntegrationDefaults';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
@@ -206,7 +206,7 @@ export default function AppChatStarter({
     setEnabledTools(
       Array.isArray(defaultPreferences?.enabledTools)
         ? defaultPreferences.enabledTools
-        : appToolRefs(appDetails)
+        : appDefaultToolRefs(appDetails)
     );
     setWebsearchEnabled(
       typeof defaultPreferences?.websearchEnabled === 'boolean'

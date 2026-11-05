@@ -2962,6 +2962,8 @@
           "notInstalledOptionalHelp": "Diese Installation gibt es nicht mehr. Die App bleibt ohne sie verfügbar; entferne die Einbindung zum Aufräumen.",
           "required": "Erforderlich",
           "requiredHelp": "Blendet die App aus, solange diese Integration deaktiviert ist oder fehlt. Aus: Die App bleibt ohne ihre Aktionen verfügbar.",
+          "enabledByDefault": "Standardmäßig an",
+          "enabledByDefaultHelp": "Neue Chats starten mit eingeschalteter Integration. Aus: Sie ist nur verfügbar, und Nutzer schalten sie bei Bedarf im „+“-Menü des Chats ein.",
           "unbind": "Einbindung entfernen",
           "defaultScope": "Standard-{{scope}}",
           "pinnedScope": "Fester {{scope}}",

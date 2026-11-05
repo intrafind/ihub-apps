@@ -9,6 +9,7 @@
  * the chat sent `enabledTools: []`: the model got none of the iFinder tools.
  */
 import {
+  appDefaultToolRefs,
   appToolRefs,
   boundIntegrationRefs
 } from '../../../client/src/shared/utils/boundIntegrationRefs';
@@ -63,5 +64,29 @@ describe('appToolRefs', () => {
   it('is empty for an app without tools or bindings', () => {
     expect(appToolRefs({ id: 'chat' })).toEqual([]);
     expect(appToolRefs(undefined)).toEqual([]);
+  });
+});
+
+describe('appDefaultToolRefs', () => {
+  it('starts with everything the app offers when no binding is available only', () => {
+    const app = {
+      tools: ['ask_user'],
+      integrations: { ifinder: {}, jira: { enabledByDefault: true } }
+    };
+    expect(appDefaultToolRefs(app)).toEqual(appToolRefs(app));
+  });
+
+  it('leaves out the integrations a binding makes available only', () => {
+    const app = {
+      tools: ['ask_user'],
+      integrations: { ifinder: {}, jira: { enabledByDefault: false } }
+    };
+    expect(appToolRefs(app)).toEqual(['ask_user', 'ifinder', 'jira']);
+    expect(appDefaultToolRefs(app)).toEqual(['ask_user', 'ifinder']);
+  });
+
+  it('is empty for an app without tools', () => {
+    expect(appDefaultToolRefs({})).toEqual([]);
+    expect(appDefaultToolRefs(null)).toEqual([]);
   });
 });

@@ -510,7 +510,11 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
     // Whether the app is hidden while the installation is missing or disabled
     // (absent = true). `false`: the app stays available without the
     // installation's actions, scopes and sources.
-    required: z.boolean().optional()
+    required: z.boolean().optional(),
+    // Whether a new chat starts with the integration switched on (absent =
+    // true). `false`: it is only available, offered in the chat's "+" menu and
+    // off until the user switches it on, like `websearch.enabledByDefault`.
+    enabledByDefault: z.boolean().optional()
   })
   .strict();
 

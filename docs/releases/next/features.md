@@ -22,6 +22,9 @@ configuration moves into installations on the first start (see Breaking Changes)
   installation it binds as **Required** (the default) exists and is enabled; **Admin → Apps**
   names a missing one. Switch **Required** off and the app stays available without that
   integration's actions. Web search is optional by default.
+  Each binding also says whether the integration is **On by default** or only available: an
+  integration that is useful but not needed in every chat can stay off in new chats and be
+  switched on from the chat's "+" menu, as web search always could.
   **iAssistant** and **iFinder** have panels of their own instead of free-text scope boxes:
   choose whether users may switch iAssistant or search profile (in the menu, in the chat input, or
   not at all), pick the start search profile with **Load from iFinder**, and let other models ask

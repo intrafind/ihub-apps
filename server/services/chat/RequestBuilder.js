@@ -14,6 +14,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { getScopeProvider } from '../integrations/scopes/index.js';
+import { appDefaultEnabledTools } from '../integrations/appIntegrationRefs.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
@@ -702,11 +703,15 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
+      // A request that names no tools (an API call) starts from the app's
+      // defaults: an integration the app only makes available stays off.
+      const requestTools = Array.isArray(enabledTools) ? enabledTools : appDefaultEnabledTools(app);
+
       const context = {
         user,
         chatId,
         language,
-        enabledTools,
+        enabledTools: requestTools,
         modelProvider: model.provider,
         model,
         websearchEnabled,
