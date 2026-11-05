@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
-    "@hyzyla/pdfium": "^2.1.13",
+    "@hyzyla/pdfium": "^3.0.0",
     "@kenjiuno/decompressrtf": "^0.1.4",
     "@kenjiuno/msgreader": "^1.29.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
