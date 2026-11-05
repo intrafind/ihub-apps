@@ -580,7 +580,13 @@ export function registerProjectPickerRoutes(app) {
       const result = await crawlSite({ ...parsed.data, signal: controller.signal });
       if (!controller.signal.aborted) res.json({ ok: true, ...result });
     } catch (error) {
-      if (!controller.signal.aborted) res.status(200).json({ ok: false, error: error.message });
+      if (!controller.signal.aborted) {
+        res.status(200).json({
+          ok: false,
+          error: error.message,
+          ...(error.code ? { errorCode: error.code } : {})
+        });
+      }
     } finally {
       crawlsRunning.delete(userId);
     }
