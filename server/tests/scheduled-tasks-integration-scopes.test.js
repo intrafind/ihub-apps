@@ -230,7 +230,8 @@ async function cleanup(user) {
   for (const task of await tasks.listTasks(user)) await tasks.deleteTask(user, task.id);
 }
 
-const fieldErrorOf = error => error.details?.find(detail => detail.field === 'integrationScopes');
+const fieldErrorOf = error =>
+  error.details?.issues?.find(detail => detail.field === 'integrationScopes');
 
 describe('saving a task with integration scopes', () => {
   it('stores the scopes the owner may use, and returns them', async () => {

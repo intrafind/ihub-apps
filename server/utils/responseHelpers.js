@@ -96,35 +96,3 @@ export function sendNotFound(res, resource) {
 export function sendBadRequest(res, message, details) {
   return sendErrorResponse(res, 400, message, { details });
 }
-
-/**
- * Wrap an async route handler with standard error handling
- * @param {Function} handler - Async route handler
- * @param {string} context - Context for error logging
- * @returns {Function} Wrapped handler
- */
-export function asyncHandler(handler, context) {
-  return async (req, res, next) => {
-    try {
-      await handler(req, res, next);
-    } catch (error) {
-      sendInternalError(res, error, context);
-    }
-  };
-}
-
-/**
- * Create a route handler with standard try-catch error handling
- * @param {string} context - Context for error logging
- * @param {Function} handler - Handler function
- * @returns {Function} Route handler
- */
-export function createRouteHandler(context, handler) {
-  return async (req, res) => {
-    try {
-      await handler(req, res);
-    } catch (error) {
-      sendInternalError(res, error, context);
-    }
-  };
-}

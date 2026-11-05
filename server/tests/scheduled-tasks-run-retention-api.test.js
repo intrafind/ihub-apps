@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { runHandler } from './helpers/runHandler.js';
 
 const ROOT = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-memory-api-')));
 fsSync.mkdirSync(path.join(ROOT, 'contents', 'config'), { recursive: true });
@@ -86,7 +87,7 @@ async function call(routes, method, suffix, { params = {}, body = {}, query = {}
     originalUrl: url || '/api/scheduled-tasks'
   };
   const res = makeResponse();
-  await handlers[handlers.length - 1](req, res);
+  await runHandler(handlers[handlers.length - 1], req, res);
   return res;
 }
 

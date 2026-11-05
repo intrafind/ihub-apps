@@ -192,13 +192,15 @@ describe('TaskEditorPage: where the task searches', () => {
 
   it('shows the server’s refusal of a scope', async () => {
     updateScheduledTask.mockRejectedValue({
-      details: [
-        {
-          field: 'integrationScopes',
-          code: 'INTEGRATION_SCOPE_NOT_ALLOWED',
-          message: 'The iFinder search profile "contracts" is not available to you.'
-        }
-      ]
+      details: {
+        issues: [
+          {
+            field: 'integrationScopes',
+            code: 'INTEGRATION_SCOPE_NOT_ALLOWED',
+            message: 'The iFinder search profile "contracts" is not available to you.'
+          }
+        ]
+      }
     });
     await renderEditor('/tasks/st-1/edit');
     await submit('Save');

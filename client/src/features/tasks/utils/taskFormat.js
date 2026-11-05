@@ -338,12 +338,12 @@ export function errorCode(error) {
   return error?.code || responseData(error)?.code || null;
 }
 
-/** The per-field problems of a 400 from the task API. */
+/** The per-field problems of a 400 `INVALID_TASK` from the task API (`details.issues`). */
 export function fieldErrors(error) {
-  const details = responseData(error)?.details || error?.details;
-  if (!Array.isArray(details)) return {};
+  const issues = (responseData(error)?.details || error?.details)?.issues;
+  if (!Array.isArray(issues)) return {};
   const out = {};
-  for (const entry of details) {
+  for (const entry of issues) {
     if (entry?.field && !out[entry.field]) out[entry.field] = entry.message;
   }
   return out;

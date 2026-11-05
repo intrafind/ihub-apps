@@ -72,11 +72,53 @@ export const LLM_API_ERROR_CODES = Object.freeze({
   QUOTA_EXCEEDED: 429
 });
 
+/**
+ * Codes of one feature that the client already tells apart today (a specific
+ * message, or a branch on the code). Everything else uses a generic code.
+ */
+export const FEATURE_ERROR_CODES = Object.freeze({
+  CHAT_SHARING_UNAVAILABLE: 503,
+  ARTIFACT_SHARING_DISABLED: 403,
+  SHARE_MODE_DISABLED: 403,
+  EMBED_DISABLED: 403,
+  CHAT_TEMPORARY: 409,
+  FILES_NOT_SHARED: 403,
+  ORIGINAL_NOT_SHARED: 403,
+  ORIGINAL_DISCARDED: 410
+});
+
+/** Codes of the scheduled-task routes and tools (`server/services/scheduler/tasks`). */
+export const SCHEDULED_TASK_ERROR_CODES = Object.freeze({
+  SCHEDULED_TASKS_UNAVAILABLE: 503,
+  INTERACTIVE_USER_REQUIRED: 403,
+  PERMISSION_DENIED: 403,
+  TASK_NOT_FOUND: 404,
+  RUN_NOT_FOUND: 404,
+  TASK_LIMIT_REACHED: 409,
+  TASK_DISABLED: 409,
+  RUN_IN_PROGRESS: 409,
+  RUN_NOT_ACTIVE: 409,
+  NO_PENDING_APPROVAL: 409,
+  APPROVAL_FAILED: 409,
+  PROPOSAL_ALREADY_SAVED: 409,
+  VERSION_CONFLICT: 409,
+  MEMORY_TOO_LONG: 400,
+  MEMORY_UNAVAILABLE: 503,
+  INVALID_TASK: 400,
+  INVALID_BODY: 400,
+  INVALID_RUNS: 400,
+  INVALID_DECISION: 400,
+  INVALID_STATUS: 400,
+  UPLOADS_DISABLED: 503
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
   ...STORAGE_ERROR_CODES,
-  ...LLM_API_ERROR_CODES
+  ...LLM_API_ERROR_CODES,
+  ...FEATURE_ERROR_CODES,
+  ...SCHEDULED_TASK_ERROR_CODES
 });
 
 /**

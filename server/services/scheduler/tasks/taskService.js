@@ -75,6 +75,7 @@ import { SCHEDULING_TOOLS } from './toolGate.js';
 import { validateTaskScopes } from './taskScopes.js';
 import { copyTaskFiles, deleteTaskFiles, taskFileScope } from '../../chatFiles/taskFiles.js';
 import { requiresApproval } from './runSeams.js';
+import { ServiceError } from '../../../utils/ServiceError.js';
 
 const COMPONENT = 'ScheduledTaskService';
 
@@ -82,24 +83,7 @@ export const MAX_NAME_LENGTH = 120;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_TOOLS = 100;
 
-/** An error the routes turn into an HTTP response and the tools into a result. */
-export class ScheduledTaskError extends Error {
-  /**
-   * @param {number} status
-   * @param {string} code
-   * @param {string} message
-   * @param {Object} [details]
-   */
-  constructor(status, code, message, details) {
-    super(message);
-    this.name = 'ScheduledTaskError';
-    this.status = status;
-    this.code = code;
-    if (details !== undefined) this.details = details;
-  }
-}
-
-const notFound = () => new ScheduledTaskError(404, 'TASK_NOT_FOUND', 'Scheduled task not found');
+const notFound = () => new ServiceError('TASK_NOT_FOUND', 'Scheduled task not found');
 
 /** The live settings and gates. */
 export function currentPolicy() {
@@ -121,14 +105,13 @@ export function currentPolicy() {
 export function assertAvailable() {
   const policy = currentPolicy();
   if (!policy.configured) {
-    throw new ScheduledTaskError(
-      503,
+    throw new ServiceError(
       'SCHEDULED_TASKS_UNAVAILABLE',
       'Scheduled tasks are not available on this installation'
     );
   }
   if (!getScheduledTaskRepository().isAvailable()) {
-    throw new ScheduledTaskError(503, 'STORAGE_UNAVAILABLE', 'Task storage is not available');
+    throw new ServiceError('STORAGE_UNAVAILABLE', 'Task storage is not available');
   }
   return policy;
 }
@@ -142,9 +125,9 @@ export function assertPrincipal(user) {
   const check = checkTaskPrincipal(user);
   if (check.ok) return;
   if (check.code === 'AUTHENTICATION_REQUIRED') {
-    throw new ScheduledTaskError(401, check.code, 'Sign in to use scheduled tasks');
+    throw new ServiceError('AUTH_REQUIRED', 'Sign in to use scheduled tasks');
   }
-  throw new ScheduledTaskError(403, check.code, 'You are not allowed to use scheduled tasks');
+  throw new ServiceError(check.code, 'You are not allowed to use scheduled tasks');
 }
 
 /**
@@ -165,7 +148,7 @@ export async function ownerIdentity(user) {
  * @param {Object} user
  * @param {string} taskId
  * @returns {Promise<{task: Object, ownerId: string, scope: {type: 'task', id: string}}>}
- * @throws {ScheduledTaskError} 404 for an unknown task or one that is not the caller's.
+ * @throws {ServiceError} 404 for an unknown task or one that is not the caller's.
  */
 export async function authorizeTaskFiles(user, taskId) {
   assertAvailable();
@@ -296,7 +279,7 @@ function trimmedString(value) {
  * @param {string} [options.timezone] - Default timezone (the browser's).
  * @param {number} [options.now=Date.now()]
  * @returns {Promise<Object>} The validated fields.
- * @throws {ScheduledTaskError} 400 with `details` listing every problem.
+ * @throws {ServiceError} 400 `INVALID_TASK` with `details.issues` listing every problem.
  */
 export async function validateTaskFields(
   input,
@@ -505,7 +488,7 @@ export async function validateTaskFields(
   out.schedule = preview.schedule;
 
   if (errors.length > 0) {
-    throw new ScheduledTaskError(400, 'INVALID_TASK', errors[0].message, errors);
+    throw new ServiceError('INVALID_TASK', errors[0].message, { details: { issues: errors } });
   }
   return out;
 }
@@ -621,8 +604,7 @@ export async function createTask(
   const stored = await repository.withOwnerLock(identity.id, async () => {
     const existing = await repository.listTasksByOwner(identity.id);
     if (settings.maxTasksPerUser > 0 && existing.length >= settings.maxTasksPerUser) {
-      throw new ScheduledTaskError(
-        409,
+      throw new ServiceError(
         'TASK_LIMIT_REACHED',
         `You can have at most ${settings.maxTasksPerUser} scheduled tasks`
       );
@@ -630,8 +612,10 @@ export async function createTask(
     if (cleanProposalId) {
       const saved = existing.find(task => task.proposalId === cleanProposalId);
       if (saved) {
-        throw new ScheduledTaskError(409, 'PROPOSAL_ALREADY_SAVED', 'This task was already saved', {
-          taskId: saved.id
+        throw new ServiceError('PROPOSAL_ALREADY_SAVED', 'This task was already saved', {
+          details: {
+            taskId: saved.id
+          }
         });
       }
     }
@@ -748,8 +732,7 @@ export async function setTaskStatus(user, taskId, status) {
   const { task } = await getScheduledTaskRepository().mutateTask(taskId, stored => {
     if (stored.ownerId !== ownerId) throw notFound();
     if (stored.status === 'disabled') {
-      throw new ScheduledTaskError(
-        409,
+      throw new ServiceError(
         'TASK_DISABLED',
         stored.statusReason?.message || 'This task is disabled and cannot run'
       );
@@ -958,14 +941,13 @@ export async function requestRun(user, taskId) {
   await repository.mutateTask(taskId, stored => {
     if (stored.ownerId !== ownerId) throw notFound();
     if (stored.status === 'disabled') {
-      throw new ScheduledTaskError(
-        409,
+      throw new ServiceError(
         'TASK_DISABLED',
         stored.statusReason?.message || 'This task is disabled and cannot run'
       );
     }
     if (stored.activeRun) {
-      throw new ScheduledTaskError(409, 'RUN_IN_PROGRESS', 'The task is already running');
+      throw new ServiceError('RUN_IN_PROGRESS', 'The task is already running');
     }
     queued = newRunDocument(stored, { trigger: 'manual', status: 'queued', now });
     attachQueuedRun(stored, queued);
@@ -988,7 +970,7 @@ export async function cancelRun(user, taskId, runId) {
   assertAvailable();
   const { task } = await loadOwnedTask(user, taskId);
   if (!isRunId(runId) || task.activeRun?.id !== runId) {
-    throw new ScheduledTaskError(409, 'RUN_NOT_ACTIVE', 'This run is not in progress');
+    throw new ServiceError('RUN_NOT_ACTIVE', 'This run is not in progress');
   }
   await stopActiveRun(
     task,
@@ -1031,7 +1013,7 @@ export async function getRun(user, taskId, runId) {
   assertAvailable();
   await loadOwnedTask(user, taskId);
   const run = isRunId(runId) ? await getScheduledTaskRepository().getRun(taskId, runId) : null;
-  if (!run) throw new ScheduledTaskError(404, 'RUN_NOT_FOUND', 'Run not found');
+  if (!run) throw new ServiceError('RUN_NOT_FOUND', 'Run not found');
   return run;
 }
 
@@ -1197,23 +1179,19 @@ async function deleteSelectedRuns(task, { runIds, all = false, deleteChats = tru
     runs = await allRunsOf(task.id);
   } else {
     if (!Array.isArray(runIds) || runIds.length === 0 || runIds.length > MAX_RUN_PAGE) {
-      throw new ScheduledTaskError(
-        400,
-        'INVALID_RUNS',
-        `Name between 1 and ${MAX_RUN_PAGE} runs to delete`
-      );
+      throw new ServiceError('INVALID_RUNS', `Name between 1 and ${MAX_RUN_PAGE} runs to delete`);
     }
     if (!runIds.every(isRunId)) {
-      throw new ScheduledTaskError(400, 'INVALID_RUNS', 'Invalid run id');
+      throw new ServiceError('INVALID_RUNS', 'Invalid run id');
     }
     runs = (
       await Promise.all([...new Set(runIds)].map(id => repository.getRun(task.id, id)))
     ).filter(Boolean);
-    if (runs.length === 0) throw new ScheduledTaskError(404, 'RUN_NOT_FOUND', 'Run not found');
+    if (runs.length === 0) throw new ServiceError('RUN_NOT_FOUND', 'Run not found');
   }
   const result = await removeRuns(task, runs, { deleteChats });
   if (!all && result.deleted === 0 && result.skipped > 0 && result.failed === 0) {
-    throw new ScheduledTaskError(409, 'RUN_IN_PROGRESS', 'A run in progress cannot be deleted');
+    throw new ServiceError('RUN_IN_PROGRESS', 'A run in progress cannot be deleted');
   }
   return result;
 }
@@ -1283,14 +1261,10 @@ export async function answerApproval(user, taskId, runId, { decision, alwaysAllo
   await loadOwnedTask(user, taskId);
   const run = isRunId(runId) ? await getScheduledTaskRepository().getRun(taskId, runId) : null;
   if (!run || run.status !== 'awaiting_approval' || !run.approval?.interactionId) {
-    throw new ScheduledTaskError(
-      409,
-      'NO_PENDING_APPROVAL',
-      'This run is not waiting for approval'
-    );
+    throw new ServiceError('NO_PENDING_APPROVAL', 'This run is not waiting for approval');
   }
   if (decision !== 'approve' && decision !== 'reject') {
-    throw new ScheduledTaskError(400, 'INVALID_DECISION', 'Decision must be approve or reject');
+    throw new ServiceError('INVALID_DECISION', 'Decision must be approve or reject');
   }
   try {
     await interactionService.answer(
@@ -1304,12 +1278,10 @@ export async function answerApproval(user, taskId, runId, { decision, alwaysAllo
       { user, channel: 'run_page' }
     );
   } catch (error) {
-    if (error instanceof ScheduledTaskError) throw error;
-    throw new ScheduledTaskError(
-      Number.isInteger(error.status) ? error.status : 409,
-      error.code || 'APPROVAL_FAILED',
-      error.message
-    );
+    if (error instanceof ServiceError) throw error;
+    throw new ServiceError('APPROVAL_FAILED', error.message, {
+      status: Number.isInteger(error.status) ? error.status : 409
+    });
   }
   return getScheduledTaskRepository().getRun(taskId, runId);
 }
@@ -1336,11 +1308,7 @@ export async function applyApprovalAnswer(interaction) {
       stored.status !== 'awaiting_approval' ||
       stored.approval?.interactionId !== interaction.id
     ) {
-      throw new ScheduledTaskError(
-        409,
-        'NO_PENDING_APPROVAL',
-        'This run is not waiting for approval'
-      );
+      throw new ServiceError('NO_PENDING_APPROVAL', 'This run is not waiting for approval');
     }
     stored.approval = {
       ...stored.approval,
@@ -1359,7 +1327,7 @@ export async function applyApprovalAnswer(interaction) {
     return stored;
   });
   if (!run) {
-    throw new ScheduledTaskError(404, 'RUN_NOT_FOUND', 'The run no longer exists');
+    throw new ServiceError('RUN_NOT_FOUND', 'The run no longer exists');
   }
   await repository.mutateTask(taskId, stored => {
     if (alwaysAllow && toolId) {
@@ -1588,11 +1556,7 @@ export async function adminGetTask(taskId, { language = 'en' } = {}) {
  */
 export async function adminSetTaskStatus(admin, taskId, status, message) {
   if (!['paused', 'active', 'disabled'].includes(status)) {
-    throw new ScheduledTaskError(
-      400,
-      'INVALID_STATUS',
-      'Status must be paused, active or disabled'
-    );
+    throw new ServiceError('INVALID_STATUS', 'Status must be paused, active or disabled');
   }
   if (!isTaskId(taskId)) throw notFound();
   const { settings } = currentPolicy();
@@ -1710,18 +1674,22 @@ function memoryFailure(error) {
   if (!(error instanceof TaskMemoryError)) return error;
   switch (error.code) {
     case 'VERSION_CONFLICT':
-      return new ScheduledTaskError(409, 'VERSION_CONFLICT', error.message, {
-        currentVersion: error.currentVersion
+      return new ServiceError('VERSION_CONFLICT', error.message, {
+        details: {
+          currentVersion: error.currentVersion
+        }
       });
     case 'MEMORY_TOO_LONG':
-      return new ScheduledTaskError(400, 'MEMORY_TOO_LONG', error.message, {
-        chars: error.chars,
-        maxChars: error.maxChars
+      return new ServiceError('MEMORY_TOO_LONG', error.message, {
+        details: {
+          chars: error.chars,
+          maxChars: error.maxChars
+        }
       });
     case 'TASK_NOT_FOUND':
       return notFound();
     default:
-      return new ScheduledTaskError(503, error.code || 'MEMORY_UNAVAILABLE', error.message);
+      return new ServiceError('MEMORY_UNAVAILABLE', error.message);
   }
 }
 
@@ -1767,15 +1735,11 @@ export async function setTaskMemory(user, taskId, { content, expectedVersion } =
   assertPrincipal(user);
   const { task } = await loadOwnedTask(user, taskId);
   if (typeof content !== 'string') {
-    throw new ScheduledTaskError(400, 'INVALID_BODY', 'content must be a string');
+    throw new ServiceError('INVALID_BODY', 'content must be a string');
   }
   const versioned = expectedVersion != null;
   if (versioned && !(Number.isInteger(expectedVersion) && expectedVersion >= 0)) {
-    throw new ScheduledTaskError(
-      400,
-      'INVALID_BODY',
-      'expectedVersion must be a non-negative integer'
-    );
+    throw new ServiceError('INVALID_BODY', 'expectedVersion must be a non-negative integer');
   }
   try {
     const result = await writeTaskMemory(task, {
