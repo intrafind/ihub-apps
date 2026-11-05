@@ -32,14 +32,8 @@ import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import configStore from '../../services/config/ConfigStore.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import {
-  sendNotFound,
-  sendBadRequest,
-  sendFailedOperationError,
-  sendInsufficientPermissions,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { filterByPermissions } from '../../services/workflow/workflowAccess.js';
 import { isAdmin } from '../../utils/authorization.js';
 import { createExecutionChat } from '../../services/workflow/executionChat.js';
@@ -99,28 +93,25 @@ startInactiveClientSweep(workflowClients, { component: 'WorkflowRoutes' });
  * specific *execution* (or is an admin), so per-execution endpoints don't
  * leak or accept control input from anyone who merely learns an executionId.
  *
- * Returns the execution record when access is allowed. When denied, the
- * response has already been sent (404 if the execution doesn't exist, 403
- * otherwise) and the caller must return immediately.
+ * Returns the execution record when access is allowed. When denied it throws a
+ * `ServiceError` (404 if the execution doesn't exist, 403 otherwise).
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
  * @param {string} executionId
- * @returns {Promise<object|null>}
+ * @returns {Promise<object>}
+ * @throws {ServiceError}
  */
-async function authorizeExecutionAccess(req, res, executionId) {
+async function loadOwnedExecution(req, executionId) {
   const registry = getExecutionRegistry();
   const execution = await registry.get(executionId);
 
   if (!execution) {
-    sendNotFound(res, 'Execution');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'Execution not found');
   }
 
   const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
   if (execution.userId !== currentUserId && !isAdmin(req.user)) {
-    sendInsufficientPermissions(res, 'access execution');
-    return null;
+    throw new ServiceError('FORBIDDEN', 'Insufficient permissions: access execution required');
   }
 
   return execution;
@@ -387,14 +378,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const workflows = await loadWorkflows();
-        const filtered = filterByPermissions(workflows, req.user);
+      const workflows = await loadWorkflows();
+      const filtered = filterByPermissions(workflows, req.user);
 
-        res.json(filtered);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch workflows', error);
-      }
+      res.json(filtered);
     }
   );
 
@@ -444,22 +431,18 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-        const { status, limit = 20, offset = 0, includeArchived } = req.query;
+      const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
+      const { status, limit = 20, offset = 0, includeArchived } = req.query;
 
-        const registry = getExecutionRegistry();
-        const executions = await registry.getByUser(userId, {
-          status,
-          includeArchived: includeArchived === 'true' || includeArchived === '1',
-          limit: Number.parseInt(limit, 10),
-          offset: Number.parseInt(offset, 10)
-        });
+      const registry = getExecutionRegistry();
+      const executions = await registry.getByUser(userId, {
+        status,
+        includeArchived: includeArchived === 'true' || includeArchived === '1',
+        limit: Number.parseInt(limit, 10),
+        offset: Number.parseInt(offset, 10)
+      });
 
-        res.json(executions);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch user executions', error);
-      }
+      res.json(executions);
     }
   );
 
@@ -500,31 +483,25 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const { id } = req.params;
+      const { id } = req.params;
 
-        // Validate ID for security
-        if (!validateIdForPath(id, 'workflow', res)) {
-          return;
-        }
+      // Validate ID for security
+      assertValidId(id, 'workflow');
 
-        const workflows = await loadWorkflows();
-        const workflow = findByIdCaseInsensitive(workflows, id);
+      const workflows = await loadWorkflows();
+      const workflow = findByIdCaseInsensitive(workflows, id);
 
-        if (!workflow) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Check if user has permission to access this workflow
-        const accessible = filterByPermissions([workflow], req.user);
-        if (accessible.length === 0) {
-          return sendInsufficientPermissions(res, 'workflow access');
-        }
-
-        res.json(workflow);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch workflow', error);
+      if (!workflow) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
       }
+
+      // Check if user has permission to access this workflow
+      const accessible = filterByPermissions([workflow], req.user);
+      if (accessible.length === 0) {
+        throw new ServiceError('FORBIDDEN', 'Insufficient permissions: workflow access required');
+      }
+
+      res.json(workflow);
     }
   );
 
@@ -570,44 +547,40 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const workflowData = req.body;
+      const workflowData = req.body;
 
-        // Validate workflow schema
-        const validation = validateWorkflow(workflowData);
-        if (!validation.success) {
-          return sendBadRequest(res, 'Invalid workflow definition', validation.errors);
-        }
-
-        // Validate ID for security
-        if (!validateIdForPath(workflowData.id, 'workflow', res)) {
-          return;
-        }
-
-        // Check if workflow already exists
-        const existingFile = await findWorkflowFile(workflowData.id);
-        if (existingFile) {
-          return sendErrorResponse(res, 409, 'Workflow with this ID already exists');
-        }
-
-        // Write workflow file
-        await configStore.writeJson(workflowPathFor(workflowData.id), validation.data);
-
-        logger.info('Workflow created', {
-          component: 'WorkflowRoutes',
-          workflowId: workflowData.id
+      // Validate workflow schema
+      const validation = validateWorkflow(workflowData);
+      if (!validation.success) {
+        throw new ServiceError('VALIDATION_FAILED', 'Invalid workflow definition', {
+          details: { issues: validation.errors }
         });
-
-        res.status(201).json({
-          message: 'Workflow created successfully',
-          workflow: validation.data
-        });
-
-        // Refresh workflow cache after successful creation
-        configCache.refreshWorkflowsCache?.();
-      } catch (error) {
-        sendFailedOperationError(res, 'create workflow', error);
       }
+
+      // Validate ID for security
+      assertValidId(workflowData.id, 'workflow');
+
+      // Check if workflow already exists
+      const existingFile = await findWorkflowFile(workflowData.id);
+      if (existingFile) {
+        throw new ServiceError('CONFLICT', 'Workflow with this ID already exists');
+      }
+
+      // Write workflow file
+      await configStore.writeJson(workflowPathFor(workflowData.id), validation.data);
+
+      logger.info('Workflow created', {
+        component: 'WorkflowRoutes',
+        workflowId: workflowData.id
+      });
+
+      res.status(201).json({
+        message: 'Workflow created successfully',
+        workflow: validation.data
+      });
+
+      // Refresh workflow cache after successful creation
+      configCache.refreshWorkflowsCache?.();
     }
   );
 
@@ -659,51 +632,47 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const { id } = req.params;
-        const workflowData = req.body;
+      const { id } = req.params;
+      const workflowData = req.body;
 
-        // Validate ID for security
-        if (!validateIdForPath(id, 'workflow', res)) {
-          return;
-        }
+      // Validate ID for security
+      assertValidId(id, 'workflow');
 
-        // Validate workflow schema
-        const validation = validateWorkflow(workflowData);
-        if (!validation.success) {
-          return sendBadRequest(res, 'Invalid workflow definition', validation.errors);
-        }
-
-        // Ensure ID cannot be changed
-        if (workflowData.id !== id) {
-          return sendBadRequest(res, 'Workflow ID cannot be changed');
-        }
-
-        // Find existing workflow file
-        const workflowPath = await findWorkflowFile(id);
-
-        if (!workflowPath) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Update workflow file
-        await configStore.writeJson(workflowPath, validation.data);
-
-        logger.info('Workflow updated', {
-          component: 'WorkflowRoutes',
-          workflowId: id
+      // Validate workflow schema
+      const validation = validateWorkflow(workflowData);
+      if (!validation.success) {
+        throw new ServiceError('VALIDATION_FAILED', 'Invalid workflow definition', {
+          details: { issues: validation.errors }
         });
-
-        res.json({
-          message: 'Workflow updated successfully',
-          workflow: validation.data
-        });
-
-        // Refresh workflow cache after successful update
-        configCache.refreshWorkflowsCache?.();
-      } catch (error) {
-        sendFailedOperationError(res, 'update workflow', error);
       }
+
+      // Ensure ID cannot be changed
+      if (workflowData.id !== id) {
+        throw new ServiceError('BAD_REQUEST', 'Workflow ID cannot be changed');
+      }
+
+      // Find existing workflow file
+      const workflowPath = await findWorkflowFile(id);
+
+      if (!workflowPath) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
+      }
+
+      // Update workflow file
+      await configStore.writeJson(workflowPath, validation.data);
+
+      logger.info('Workflow updated', {
+        component: 'WorkflowRoutes',
+        workflowId: id
+      });
+
+      res.json({
+        message: 'Workflow updated successfully',
+        workflow: validation.data
+      });
+
+      // Refresh workflow cache after successful update
+      configCache.refreshWorkflowsCache?.();
     }
   );
 
@@ -745,39 +714,33 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const { id } = req.params;
+      const { id } = req.params;
 
-        // Validate ID for security
-        if (!validateIdForPath(id, 'workflow', res)) {
-          return;
-        }
+      // Validate ID for security
+      assertValidId(id, 'workflow');
 
-        // Find workflow file
-        const workflowPath = await findWorkflowFile(id);
+      // Find workflow file
+      const workflowPath = await findWorkflowFile(id);
 
-        if (!workflowPath) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Delete workflow file
-        await configStore.remove(workflowPath);
-
-        logger.info('Workflow deleted', {
-          component: 'WorkflowRoutes',
-          workflowId: id
-        });
-
-        res.json({
-          message: 'Workflow deleted successfully'
-        });
-
-        // Refresh workflow cache after successful deletion
-        configCache.refreshWorkflowsCache?.();
-        await removeMarketplaceInstallation('workflow', id);
-      } catch (error) {
-        sendFailedOperationError(res, 'delete workflow', error);
+      if (!workflowPath) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
       }
+
+      // Delete workflow file
+      await configStore.remove(workflowPath);
+
+      logger.info('Workflow deleted', {
+        component: 'WorkflowRoutes',
+        workflowId: id
+      });
+
+      res.json({
+        message: 'Workflow deleted successfully'
+      });
+
+      // Refresh workflow cache after successful deletion
+      configCache.refreshWorkflowsCache?.();
+      await removeMarketplaceInstallation('workflow', id);
     }
   );
 
@@ -861,16 +824,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { initialData = {}, options = {} } = req.body || {};
 
         // Validate ID for security
-        if (!validateIdForPath(id, 'workflow', res)) {
-          return;
-        }
+        assertValidId(id, 'workflow');
 
         // Load and validate workflow access
         const workflows = await loadWorkflows();
         const workflow = findByIdCaseInsensitive(workflows, id);
 
         if (!workflow) {
-          return sendNotFound(res, 'Workflow');
+          throw new ServiceError('NOT_FOUND', 'Workflow not found');
         }
 
         // Check if user has permission to execute this workflow. Executions
@@ -880,7 +841,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           ? []
           : filterByPermissions([workflow], req.user);
         if (accessible.length === 0) {
-          return sendInsufficientPermissions(res, 'workflow execution');
+          throw new ServiceError(
+            'FORBIDDEN',
+            'Insufficient permissions: workflow execution required'
+          );
         }
 
         // A project input must name a project the caller may use (#1036).
@@ -888,12 +852,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           await assertProjectInputs(workflow, initialData, req.user);
         } catch (error) {
           if (error?.code === 'PROJECT_NOT_FOUND') {
-            sendNotFound(res, 'Project');
-            return;
+            throw new ServiceError('NOT_FOUND', 'Project not found', { cause: error });
           }
           if (error?.code === 'INVALID_REF') {
-            sendBadRequest(res, error.message, error.details);
-            return;
+            throw new ServiceError('BAD_REQUEST', error.message, {
+              details: error.details,
+              cause: error
+            });
           }
           throw error;
         }
@@ -943,10 +908,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       } catch (error) {
         // Handle specific workflow errors
         if (error.code === 'WORKFLOW_CYCLE_DETECTED' || error.code === 'WORKFLOW_NO_START_NODE') {
-          return sendBadRequest(res, error.message);
+          throw new ServiceError('BAD_REQUEST', error.message, { cause: error });
         }
-
-        sendFailedOperationError(res, 'start workflow execution', error);
+        throw error;
       }
     }
   );
@@ -987,57 +951,51 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const { executionId } = req.params;
+      const { executionId } = req.params;
 
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
+      if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+      await loadOwnedExecution(req, executionId);
 
-        const state = await workflowEngine.getState(executionId);
+      const state = await workflowEngine.getState(executionId);
 
-        if (!state) {
-          return sendNotFound(res, 'Execution');
-        }
-
-        // Determine if execution can be reconnected (streaming)
-        const canReconnect = state.status === 'running' || state.status === 'paused';
-
-        // Get pending human checkpoint if any
-        const pendingCheckpoint = state.data?.pendingCheckpoint || null;
-
-        // Get workflow name if available
-        const workflowName = state.data?._workflowDefinition?.name || null;
-
-        // Return state with reconnection info
-        res.json({
-          executionId: state.executionId,
-          workflowId: state.workflowId,
-          workflowName,
-          status: state.status,
-          currentNodes: state.currentNodes,
-          completedNodes: state.completedNodes,
-          failedNodes: state.failedNodes,
-          createdAt: state.createdAt,
-          startedAt: state.startedAt,
-          completedAt: state.completedAt,
-          history: state.history,
-          errors: state.errors,
-          checkpoints: state.checkpoints?.map(cp => ({
-            id: cp.id,
-            timestamp: cp.timestamp
-          })),
-          // Include full data for node results display
-          data: state.data,
-          // Reconnection info
-          canReconnect,
-          pendingCheckpoint
-        });
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch execution state', error);
+      if (!state) {
+        throw new ServiceError('NOT_FOUND', 'Execution not found');
       }
+
+      // Determine if execution can be reconnected (streaming)
+      const canReconnect = state.status === 'running' || state.status === 'paused';
+
+      // Get pending human checkpoint if any
+      const pendingCheckpoint = state.data?.pendingCheckpoint || null;
+
+      // Get workflow name if available
+      const workflowName = state.data?._workflowDefinition?.name || null;
+
+      // Return state with reconnection info
+      res.json({
+        executionId: state.executionId,
+        workflowId: state.workflowId,
+        workflowName,
+        status: state.status,
+        currentNodes: state.currentNodes,
+        completedNodes: state.completedNodes,
+        failedNodes: state.failedNodes,
+        createdAt: state.createdAt,
+        startedAt: state.startedAt,
+        completedAt: state.completedAt,
+        history: state.history,
+        errors: state.errors,
+        checkpoints: state.checkpoints?.map(cp => ({
+          id: cp.id,
+          timestamp: cp.timestamp
+        })),
+        // Include full data for node results display
+        data: state.data,
+        // Reconnection info
+        canReconnect,
+        pendingCheckpoint
+      });
     }
   );
 
@@ -1093,73 +1051,63 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authenticatedOnly,
     appAccessRequired,
     async (req, res) => {
-      try {
-        const { executionId, appId } = req.params;
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
-        if (!validateIdForPath(appId, 'app', res)) return;
-        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+      const { executionId, appId } = req.params;
+      if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
+      assertValidId(appId, 'app');
+      await loadOwnedExecution(req, executionId);
 
-        // Ids match regardless of case, as `appAccessRequired` matched it.
-        const chatApp = findByIdCaseInsensitive(configCache.getApps().data || [], appId);
-        if (!chatApp || chatApp.enabled === false) return sendNotFound(res, 'App');
+      // Ids match regardless of case, as `appAccessRequired` matched it.
+      const chatApp = findByIdCaseInsensitive(configCache.getApps().data || [], appId);
+      if (!chatApp || chatApp.enabled === false)
+        throw new ServiceError('NOT_FOUND', 'App not found');
 
-        // Always a stored chat: a temporary one for an `ephemeral` app or an
-        // installation without chat history, listed in the history otherwise.
-        const storage = resolveChatStorage({
-          features: configCache.getFeatures(),
-          platformConfig: configCache.getPlatform(),
-          user: req.user,
-          ephemeral: chatApp.ephemeral === true
-        });
-        if (!storage.stored) {
-          return res
-            .status(503)
-            .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
-        }
-
-        const state = await workflowEngine.getState(executionId);
-        if (!state) return sendNotFound(res, 'Execution');
-        const identityMode = runLog.identityMode();
-        const principal = await resolvePrincipal(req.user, { mode: identityMode });
-        const created = await createExecutionChat({
-          repository: getChatRepository(),
-          state,
-          executionId,
-          appId: chatApp.id,
-          ownerId: principal.id,
-          identityMode: principal.mode || identityMode,
-          temporary: storage.temporary,
-          language: req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en',
-          contextMessage: req.body?.contextMessage
-        });
-        if (created.error === 'NOT_FINISHED') {
-          return res.status(409).json({
-            error: 'The execution has not finished',
-            code: 'EXECUTION_NOT_FINISHED'
-          });
-        }
-        if (created.error === 'NO_RESULTS') {
-          return sendBadRequest(res, 'The execution has no results to chat about');
-        }
-        if (created.error) {
-          return res
-            .status(503)
-            .json({ error: 'The chat could not be stored', code: 'STORAGE_UNAVAILABLE' });
-        }
-        const { chatId } = created;
-
-        logger.info('Chat started from workflow results', {
-          component: 'WorkflowRoutes',
-          executionId,
-          chatId,
-          appId: chatApp.id
-        });
-        res.status(201).json({ chatId, appId: chatApp.id });
-      } catch (error) {
-        sendFailedOperationError(res, 'start chat with execution results', error);
+      // Always a stored chat: a temporary one for an `ephemeral` app or an
+      // installation without chat history, listed in the history otherwise.
+      const storage = resolveChatStorage({
+        features: configCache.getFeatures(),
+        platformConfig: configCache.getPlatform(),
+        user: req.user,
+        ephemeral: chatApp.ephemeral === true
+      });
+      if (!storage.stored) {
+        return res
+          .status(503)
+          .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
       }
+
+      const state = await workflowEngine.getState(executionId);
+      if (!state) throw new ServiceError('NOT_FOUND', 'Execution not found');
+      const identityMode = runLog.identityMode();
+      const principal = await resolvePrincipal(req.user, { mode: identityMode });
+      const created = await createExecutionChat({
+        repository: getChatRepository(),
+        state,
+        executionId,
+        appId: chatApp.id,
+        ownerId: principal.id,
+        identityMode: principal.mode || identityMode,
+        temporary: storage.temporary,
+        language: req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en',
+        contextMessage: req.body?.contextMessage
+      });
+      if (created.error === 'NOT_FINISHED') {
+        throw new ServiceError('EXECUTION_NOT_FINISHED', 'The execution has not finished');
+      }
+      if (created.error === 'NO_RESULTS') {
+        throw new ServiceError('BAD_REQUEST', 'The execution has no results to chat about');
+      }
+      if (created.error) {
+        throw new ServiceError('STORAGE_UNAVAILABLE', 'The chat could not be stored');
+      }
+      const { chatId } = created;
+
+      logger.info('Chat started from workflow results', {
+        component: 'WorkflowRoutes',
+        executionId,
+        chatId,
+        appId: chatApp.id
+      });
+      res.status(201).json({ chatId, appId: chatApp.id });
     }
   );
 
@@ -1193,11 +1141,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     async (req, res) => {
       try {
         const { executionId } = req.params;
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
+        if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+        await loadOwnedExecution(req, executionId);
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user
@@ -1216,7 +1162,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         });
       } catch (error) {
         if (error.code === 'EXECUTION_NOT_FOUND') {
-          return sendNotFound(res, 'Execution');
+          throw new ServiceError('NOT_FOUND', 'Execution not found', { cause: error });
         }
         if (
           error.code === 'INVALID_STATE_FOR_RESUME' ||
@@ -1224,9 +1170,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           error.code === 'NO_RESUME_POINT' ||
           error.code === 'USER_CANCELLED'
         ) {
-          return sendBadRequest(res, error.message);
+          throw new ServiceError('BAD_REQUEST', error.message, { cause: error });
         }
-        sendFailedOperationError(res, 'restart workflow execution', error);
+        throw error;
       }
     }
   );
@@ -1282,11 +1228,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { executionId } = req.params;
         const { reason = 'user_cancelled' } = req.body || {};
 
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
+        if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+        await loadOwnedExecution(req, executionId);
 
         // The execution may run on another worker: the engine relays the cancel.
         const state = await workflowEngine.cancelAnywhere(executionId, reason);
@@ -1305,10 +1249,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         });
       } catch (error) {
         if (error.code === 'EXECUTION_NOT_FOUND') {
-          return sendNotFound(res, 'Execution');
+          throw new ServiceError('NOT_FOUND', 'Execution not found', { cause: error });
         }
-
-        sendFailedOperationError(res, 'cancel workflow execution', error);
+        throw error;
       }
     }
   );
@@ -1353,52 +1296,41 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
+      const { executionId } = req.params;
+
+      if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
+
+      const execution = await loadOwnedExecution(req, executionId);
+
+      const registry = getExecutionRegistry();
+
+      if (execution.status === 'running') {
+        throw new ServiceError('EXECUTION_ACTIVE', 'Cancel the workflow before deleting it.');
+      }
+
       try {
-        const { executionId } = req.params;
-
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
-
-        const execution = await authorizeExecutionAccess(req, res, executionId);
-        if (!execution) return;
-
-        const registry = getExecutionRegistry();
-
-        if (execution.status === 'running') {
-          return res.status(409).json({
-            error: 'cannot_delete_running',
-            message: 'Cancel the workflow before deleting it.'
+        await workflowEngine.deleteExecution(executionId);
+      } catch (error) {
+        if (error.code === 'EXECUTION_ACTIVE') {
+          throw new ServiceError('EXECUTION_ACTIVE', 'Cancel the workflow before deleting it.', {
+            cause: error
           });
         }
-
-        try {
-          await workflowEngine.deleteExecution(executionId);
-        } catch (error) {
-          if (error.code === 'EXECUTION_ACTIVE') {
-            return res.status(409).json({
-              error: 'cannot_delete_running',
-              message: 'Cancel the workflow before deleting it.'
-            });
-          }
-          throw error;
-        }
-
-        // Awaited: the client reloads its execution list straight after this
-        // responds, and that list now reads the shared record rather than
-        // this worker's memory.
-        await registry.remove(executionId);
-
-        logger.info('Workflow execution deleted', {
-          component: 'WorkflowRoutes',
-          executionId,
-          userId: execution.userId
-        });
-
-        res.json({ success: true });
-      } catch (error) {
-        sendFailedOperationError(res, 'delete execution', error);
+        throw error;
       }
+
+      // Awaited: the client reloads its execution list straight after this
+      // responds, and that list now reads the shared record rather than
+      // this worker's memory.
+      await registry.remove(executionId);
+
+      logger.info('Workflow execution deleted', {
+        component: 'WorkflowRoutes',
+        executionId,
+        userId: execution.userId
+      });
+
+      res.json({ success: true });
     }
   );
 
@@ -1442,35 +1374,28 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const { executionId } = req.params;
-        const { archived } = req.body || {};
+      const { executionId } = req.params;
+      const { archived } = req.body || {};
 
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
+      if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        if (typeof archived !== 'boolean') {
-          return sendBadRequest(res, 'archived must be a boolean');
-        }
-
-        const execution = await authorizeExecutionAccess(req, res, executionId);
-        if (!execution) return;
-
-        const registry = getExecutionRegistry();
-        const updated = await registry.setArchived(executionId, archived);
-
-        logger.info('Workflow execution archive toggled', {
-          component: 'WorkflowRoutes',
-          executionId,
-          archived,
-          userId: execution.userId
-        });
-
-        res.json(updated);
-      } catch (error) {
-        sendFailedOperationError(res, 'update execution', error);
+      if (typeof archived !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', 'archived must be a boolean');
       }
+
+      const execution = await loadOwnedExecution(req, executionId);
+
+      const registry = getExecutionRegistry();
+      const updated = await registry.setArchived(executionId, archived);
+
+      logger.info('Workflow execution archive toggled', {
+        component: 'WorkflowRoutes',
+        executionId,
+        archived,
+        userId: execution.userId
+      });
+
+      res.json(updated);
     }
   );
 
@@ -1517,62 +1442,56 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
-      try {
-        const { executionId } = req.params;
+      const { executionId } = req.params;
 
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
+      if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+      await loadOwnedExecution(req, executionId);
 
-        const state = await workflowEngine.getState(executionId);
+      const state = await workflowEngine.getState(executionId);
 
-        if (!state) {
-          return sendNotFound(res, 'Execution');
-        }
-
-        // Build export object with all relevant state data
-        const exportData = {
-          executionId: state.executionId,
-          workflowId: state.workflowId,
-          status: state.status,
-          data: state.data,
-          history: state.history,
-          completedNodes: state.completedNodes,
-          currentNodes: state.currentNodes,
-          failedNodes: state.failedNodes,
-          errors: state.errors,
-          checkpoints: state.checkpoints,
-          timestamps: {
-            created: state.createdAt,
-            started: state.startedAt,
-            completed: state.completedAt
-          },
-          exportedAt: new Date().toISOString()
-        };
-
-        // Build a useful filename. Execution IDs are prefixed `wf-exec-`, so
-        // strip the prefix before slicing — otherwise every run's filename
-        // ends in the same literal `wf-exec-`.
-        const shortId = executionId.replace(/^wf-exec-/, '').slice(0, 8) || executionId;
-        const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename="${workflowSlug}-${shortId}.json"`
-        );
-
-        res.json(exportData);
-
-        logger.info('Workflow execution exported', {
-          component: 'WorkflowRoutes',
-          executionId,
-          userId: req.user?.id
-        });
-      } catch (error) {
-        sendFailedOperationError(res, 'export execution state', error);
+      if (!state) {
+        throw new ServiceError('NOT_FOUND', 'Execution not found');
       }
+
+      // Build export object with all relevant state data
+      const exportData = {
+        executionId: state.executionId,
+        workflowId: state.workflowId,
+        status: state.status,
+        data: state.data,
+        history: state.history,
+        completedNodes: state.completedNodes,
+        currentNodes: state.currentNodes,
+        failedNodes: state.failedNodes,
+        errors: state.errors,
+        checkpoints: state.checkpoints,
+        timestamps: {
+          created: state.createdAt,
+          started: state.startedAt,
+          completed: state.completedAt
+        },
+        exportedAt: new Date().toISOString()
+      };
+
+      // Build a useful filename. Execution IDs are prefixed `wf-exec-`, so
+      // strip the prefix before slicing — otherwise every run's filename
+      // ends in the same literal `wf-exec-`.
+      const shortId = executionId.replace(/^wf-exec-/, '').slice(0, 8) || executionId;
+      const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${workflowSlug}-${shortId}.json"`
+      );
+
+      res.json(exportData);
+
+      logger.info('Workflow execution exported', {
+        component: 'WorkflowRoutes',
+        executionId,
+        userId: req.user?.id
+      });
     }
   );
 
@@ -1637,7 +1556,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     async (req, res) => {
       const { executionId } = req.params;
 
-      if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+      await loadOwnedExecution(req, executionId);
 
       // The execution may run on another cluster worker; watching relays its
       // events here.
@@ -1787,12 +1706,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const workflows = await loadWorkflows(true); // Include disabled
-        res.json(workflows);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch workflows', error);
-      }
+      const workflows = await loadWorkflows(true); // Include disabled
+      res.json(workflows);
     }
   );
 
@@ -1832,52 +1747,46 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const { id } = req.params;
+      const { id } = req.params;
 
-        // Validate ID for security
-        if (!validateIdForPath(id, 'workflow', res)) {
-          return;
-        }
+      // Validate ID for security
+      assertValidId(id, 'workflow');
 
-        // Find workflow file
-        const workflowPath = await findWorkflowFile(id);
+      // Find workflow file
+      const workflowPath = await findWorkflowFile(id);
 
-        if (!workflowPath) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Read current workflow. It was readable a moment ago, so null here
-        // means it has just been removed.
-        const workflow = await configStore.readJson(workflowPath);
-        if (!workflow) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Toggle enabled status
-        const newEnabledState = workflow.enabled === false;
-        workflow.enabled = newEnabledState;
-
-        // Save updated workflow
-        await configStore.writeJson(workflowPath, workflow);
-
-        logger.info('Workflow toggled', {
-          component: 'WorkflowRoutes',
-          workflowId: id,
-          enabled: newEnabledState
-        });
-
-        res.json({
-          message: `Workflow ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-          workflow,
-          enabled: newEnabledState
-        });
-
-        // Refresh workflow cache after successful toggle
-        configCache.refreshWorkflowsCache?.();
-      } catch (error) {
-        sendFailedOperationError(res, 'toggle workflow', error);
+      if (!workflowPath) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
       }
+
+      // Read current workflow. It was readable a moment ago, so null here
+      // means it has just been removed.
+      const workflow = await configStore.readJson(workflowPath);
+      if (!workflow) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
+      }
+
+      // Toggle enabled status
+      const newEnabledState = workflow.enabled === false;
+      workflow.enabled = newEnabledState;
+
+      // Save updated workflow
+      await configStore.writeJson(workflowPath, workflow);
+
+      logger.info('Workflow toggled', {
+        component: 'WorkflowRoutes',
+        workflowId: id,
+        enabled: newEnabledState
+      });
+
+      res.json({
+        message: `Workflow ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        workflow,
+        enabled: newEnabledState
+      });
+
+      // Refresh workflow cache after successful toggle
+      configCache.refreshWorkflowsCache?.();
     }
   );
 
@@ -1937,46 +1846,42 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      try {
-        const { status, search, limit = 100, offset = 0 } = req.query;
-        const registry = getExecutionRegistry();
+      const { status, search, limit = 100, offset = 0 } = req.query;
+      const registry = getExecutionRegistry();
 
-        if (status === 'all' || status) {
-          const parsedOffset = Number.parseInt(offset, 10) || 0;
-          const parsedLimit = Number.parseInt(limit, 10) || 100;
+      if (status === 'all' || status) {
+        const parsedOffset = Number.parseInt(offset, 10) || 0;
+        const parsedLimit = Number.parseInt(limit, 10) || 100;
 
-          // One listing call: the registry filters, searches, orders and
-          // pages the shared execution records, and reports the statistics
-          // over all of them rather than over the page.
-          const { executions, total, stats } = await registry.list({
-            status,
-            search,
-            limit: parsedLimit,
-            offset: parsedOffset
-          });
+        // One listing call: the registry filters, searches, orders and
+        // pages the shared execution records, and reports the statistics
+        // over all of them rather than over the page.
+        const { executions, total, stats } = await registry.list({
+          status,
+          search,
+          limit: parsedLimit,
+          offset: parsedOffset
+        });
 
-          res.json({
-            executions,
-            total,
-            stats,
-            offset: parsedOffset,
-            limit: parsedLimit
-          });
-        } else {
-          // Default behavior: return only active executions from WorkflowEngine
-          const activeExecutions = await workflowEngine.listActiveExecutions();
-          const stats = await registry.getStats();
+        res.json({
+          executions,
+          total,
+          stats,
+          offset: parsedOffset,
+          limit: parsedLimit
+        });
+      } else {
+        // Default behavior: return only active executions from WorkflowEngine
+        const activeExecutions = await workflowEngine.listActiveExecutions();
+        const stats = await registry.getStats();
 
-          res.json({
-            executions: activeExecutions,
-            total: activeExecutions.length,
-            stats,
-            offset: 0,
-            limit: activeExecutions.length
-          });
-        }
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch executions', error);
+        res.json({
+          executions: activeExecutions,
+          total: activeExecutions.length,
+          stats,
+          offset: 0,
+          limit: activeExecutions.length
+        });
       }
     }
   );
@@ -2022,57 +1927,47 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     async (req, res) => {
       const { id } = req.params;
-      if (!validateIdForPath(id, 'workflow', res)) {
-        return;
+      assertValidId(id, 'workflow');
+
+      // Load current workflow
+      const workflowPath = await findWorkflowFile(id);
+      if (!workflowPath) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
       }
 
-      try {
-        // Load current workflow
-        const workflowPath = await findWorkflowFile(id);
-        if (!workflowPath) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        const workflow = await configStore.readJson(workflowPath);
-        if (!workflow) {
-          return sendNotFound(res, 'Workflow');
-        }
-
-        // Create snapshot
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const version = workflow.version || '1.0.0';
-        const snapshot = {
-          ...workflow,
-          status: 'published',
-          _publishedAt: new Date().toISOString(),
-          _publishedBy: req.user?.name || req.user?.id || 'unknown'
-        };
-
-        // Save to history. version comes from workflow.version which is
-        // schema-validated as semver, so it's a safe filename component;
-        // timestamp is generated above and id was checked by
-        // validateIdForPath. The store creates the directory on first write.
-        await configStore.writeJson(`${historyDirFor(id)}/${version}-${timestamp}.json`, snapshot);
-
-        // Update workflow status
-        workflow.status = 'published';
-        await configStore.writeJson(workflowPath, workflow);
-
-        logger.info({
-          component: 'workflowRoutes',
-          message: `Published workflow '${id}' version ${version}`,
-          workflowId: id,
-          version
-        });
-
-        res.json({ success: true, version, publishedAt: snapshot._publishedAt });
-      } catch (error) {
-        logger.error({
-          component: 'workflowRoutes',
-          message: `Failed to publish: ${error.message}`
-        });
-        res.status(500).json({ error: 'Failed to publish workflow' });
+      const workflow = await configStore.readJson(workflowPath);
+      if (!workflow) {
+        throw new ServiceError('NOT_FOUND', 'Workflow not found');
       }
+
+      // Create snapshot
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const version = workflow.version || '1.0.0';
+      const snapshot = {
+        ...workflow,
+        status: 'published',
+        _publishedAt: new Date().toISOString(),
+        _publishedBy: req.user?.name || req.user?.id || 'unknown'
+      };
+
+      // Save to history. version comes from workflow.version which is
+      // schema-validated as semver, so it's a safe filename component;
+      // timestamp is generated above and id was checked by
+      // validateIdForPath. The store creates the directory on first write.
+      await configStore.writeJson(`${historyDirFor(id)}/${version}-${timestamp}.json`, snapshot);
+
+      // Update workflow status
+      workflow.status = 'published';
+      await configStore.writeJson(workflowPath, workflow);
+
+      logger.info({
+        component: 'workflowRoutes',
+        message: `Published workflow '${id}' version ${version}`,
+        workflowId: id,
+        version
+      });
+
+      res.json({ success: true, version, publishedAt: snapshot._publishedAt });
     }
   );
 

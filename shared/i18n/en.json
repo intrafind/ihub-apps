@@ -9072,6 +9072,8 @@
     "REASON_TOO_LONG": "The reason is too long.",
     "INTEGRATION_NOT_FOUND": "The integration was not found.",
     "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
-    "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name."
+    "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name.",
+    "EXECUTION_NOT_FINISHED": "The workflow execution has not finished yet.",
+    "EXECUTION_ACTIVE": "Cancel the workflow before deleting it."
   }
 }

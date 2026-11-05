@@ -210,6 +210,12 @@ export const INTEGRATION_ERROR_CODES = Object.freeze({
   INTEGRATION_NOT_FOUND: 404
 });
 
+/** Workflow executions (`server/routes/workflow/workflowRoutes.js`). */
+export const WORKFLOW_ERROR_CODES = Object.freeze({
+  EXECUTION_NOT_FINISHED: 409,
+  EXECUTION_ACTIVE: 409
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -219,7 +225,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...SCHEDULED_TASK_ERROR_CODES,
   ...PROMPT_ERROR_CODES,
   ...USER_SKILL_ERROR_CODES,
-  ...INTEGRATION_ERROR_CODES
+  ...INTEGRATION_ERROR_CODES,
+  ...WORKFLOW_ERROR_CODES
 });
 
 /**
