@@ -314,3 +314,14 @@ the same page. Both now follow the same rule:
   by itself.
 - A name nothing can resolve is reported as "could not be resolved" and names the two settings
   above, instead of pointing at private addresses.
+
+## Admin: Test Panels Keep Keyboard Focus on Narrow Screens
+
+On a narrow window the test panel of the app editor covers the editor, but keyboard focus stayed on
+the button behind it: Tab moved through editor controls that could not be seen, and Escape did
+nothing. On narrow screens the panel is now a dialog: focus moves into it and stays there, Escape
+closes it, and focus goes back to the **Test** button.
+
+- The test panels of integrations (**Test in chat**) and of projects (**Try in chat**) behave the
+  same.
+- Beside the editor on wide screens nothing changes.

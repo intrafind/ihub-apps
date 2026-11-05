@@ -9,6 +9,7 @@ import { buildPath } from '../../../../utils/runtimeBasePath';
 import { createExampleApp, fetchExampleApps } from '../../../../api/integrationsAdminApi';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
 import { PanelMessage, TestChat } from '../AppTestPanel';
+import useOverlayPanel from '../../../../shared/hooks/useOverlayPanel';
 import {
   CALLOUT_CLASS,
   CHECKBOX_CLASS,
@@ -251,6 +252,10 @@ function ExampleAppForm({ instanceId, info, onCreated, onCancel }) {
  * It runs the saved configuration of both: the installation page restarts
  * the chat after every save through `reloadKey`.
  *
+ * Beside the page on wide screens, full screen on narrow ones. Full screen it
+ * covers the page, so it is a dialog there (see `useOverlayPanel`): focus moves
+ * in and stays in, Escape closes it, and focus goes back to the button.
+ *
  * @param {Object} props
  * @param {Object} props.instance - the installation (`id`, `label`, `enabled`)
  * @param {Array<{ id: string, name: string }>} props.boundApps - apps that use it
@@ -270,6 +275,7 @@ function IntegrationTestPanel({ instance, boundApps, apps, reloadKey, onAppCreat
   const [restarts, setRestarts] = useState(0);
   // Bumped after a create, so the next suggested id is a free one.
   const [infoVersion, setInfoVersion] = useState(0);
+  const { panelRef, closeRef, dialogProps } = useOverlayPanel({ onClose });
   const title = t('admin.integrations.testChat.title', 'Test in chat');
 
   useEffect(() => {
@@ -308,7 +314,9 @@ function IntegrationTestPanel({ instance, boundApps, apps, reloadKey, onAppCreat
 
   return (
     <aside
+      ref={panelRef}
       aria-label={title}
+      {...dialogProps}
       data-testid="integration-test-panel"
       className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900 lg:static lg:z-auto lg:h-full lg:w-[45%] lg:min-w-[26rem] lg:max-w-3xl lg:shrink-0 lg:border-l lg:border-gray-200 lg:dark:border-gray-700"
     >
@@ -349,6 +357,7 @@ function IntegrationTestPanel({ instance, boundApps, apps, reloadKey, onAppCreat
           </>
         )}
         <button
+          ref={closeRef}
           type="button"
           onClick={onClose}
           className={ICON_BUTTON}

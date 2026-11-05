@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { fetchAppDetails } from '../../../api';
 import AppChat from '../../apps/pages/AppChat';
+import useOverlayPanel from '../../../shared/hooks/useOverlayPanel';
 
 export function PanelMessage({ icon, children }) {
   return (
@@ -123,7 +124,9 @@ export function TestChat({ appId, testProjectId = null }) {
  * every save through `reloadKey`. Each start is a new chat from the app's
  * defaults (see AppChat's `embedded`).
  *
- * Beside the editor on wide screens, full screen on narrow ones.
+ * Beside the editor on wide screens, full screen on narrow ones. Full screen it
+ * covers the editor, so it is a dialog there (see `useOverlayPanel`): focus
+ * moves in and stays in, Escape closes it, and focus goes back to the button.
  *
  * @param {Object} props
  * @param {string} props.appId - Saved app id
@@ -135,6 +138,7 @@ export function TestChat({ appId, testProjectId = null }) {
 function AppTestPanel({ appId, enabled, isDirty, reloadKey, onClose }) {
   const { t } = useTranslation();
   const [restarts, setRestarts] = useState(0);
+  const { panelRef, closeRef, dialogProps } = useOverlayPanel({ onClose });
   const title = t('admin.apps.test.title', 'Test app');
 
   const iconButton =
@@ -142,7 +146,9 @@ function AppTestPanel({ appId, enabled, isDirty, reloadKey, onClose }) {
 
   return (
     <aside
+      ref={panelRef}
       aria-label={title}
+      {...dialogProps}
       className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900 lg:static lg:z-auto lg:h-full lg:w-[45%] lg:min-w-[26rem] lg:max-w-3xl lg:shrink-0 lg:border-l lg:border-gray-200 lg:dark:border-gray-700"
     >
       <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
@@ -179,6 +185,7 @@ function AppTestPanel({ appId, enabled, isDirty, reloadKey, onClose }) {
           </>
         )}
         <button
+          ref={closeRef}
           type="button"
           onClick={onClose}
           className={iconButton}

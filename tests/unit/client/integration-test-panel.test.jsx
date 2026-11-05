@@ -108,6 +108,58 @@ describe('testableApps', () => {
   });
 });
 
+describe('IntegrationTestPanel keyboard focus', () => {
+  const original = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = original;
+  });
+
+  function openedFrom() {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    return opener;
+  }
+
+  // jsdom has no matchMedia, which the hook reads as "below lg": the panel covers the page.
+  it('is a dialog where it covers the page: focus moves in, Escape closes, focus goes back', async () => {
+    const opener = openedFrom();
+    const onClose = jest.fn();
+    const { unmount } = renderPanel({ onClose });
+    const panel = screen.getByTestId('integration-test-panel');
+
+    expect(panel).toHaveAttribute('role', 'dialog');
+    expect(panel).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('button', { name: 'Close test panel' })).toHaveFocus();
+
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    unmount();
+    await waitFor(() => expect(opener).toHaveFocus());
+    opener.remove();
+  });
+
+  it('is a plain side panel beside the page: no dialog, no focus taken, Escape left alone', () => {
+    window.matchMedia = () => ({
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    });
+    const opener = openedFrom();
+    const onClose = jest.fn();
+    renderPanel({ onClose });
+    const panel = screen.getByTestId('integration-test-panel');
+
+    expect(panel).not.toHaveAttribute('role');
+    expect(panel).not.toHaveAttribute('aria-modal');
+    expect(opener).toHaveFocus();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    opener.remove();
+  });
+});
+
 describe('IntegrationTestPanel', () => {
   it('runs the first enabled app that uses the installation', async () => {
     renderPanel({
