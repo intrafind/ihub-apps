@@ -6094,7 +6094,12 @@
     "quotaExceededAllModels": "You have used your {window} token budget across all models ({limit} tokens). It resets on {resetAt}.",
     "quotaWindowDay": "daily",
     "quotaWindowWeek": "weekly",
-    "quotaWindowMonth": "monthly"
+    "quotaWindowMonth": "monthly",
+    "projectTestForbidden": "Only a content admin can test a project",
+    "projectTestNotFound": "Project not found",
+    "projectTestChatKept": "A project test runs in a temporary chat only",
+    "projectTestChatMismatch": "This chat was not started by a test of this project",
+    "projectTestChatNotKeepable": "A chat that tests a project cannot be kept"
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",

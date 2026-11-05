@@ -122,6 +122,62 @@ describe('projectItemReadiness', () => {
   });
 });
 
+describe('ProjectTestPanel on a narrow screen, where it covers the editor', () => {
+  // jsdom has no matchMedia, which the hook reads as "below lg".
+  test('is a dialog: focus moves in, Escape closes it and focus goes back to the opener', async () => {
+    mockApi.fetchAdminApps.mockResolvedValue(APPS);
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const { onClose, unmount } = renderPanel();
+    await screen.findByTestId('test-chat');
+
+    const panel = screen.getByTestId('project-test-panel');
+    expect(panel).toHaveAttribute('role', 'dialog');
+    expect(panel).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('button', { name: 'Close chat' })).toHaveFocus();
+
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    unmount();
+    await waitFor(() => expect(opener).toHaveFocus());
+    opener.remove();
+  });
+});
+
+describe('ProjectTestPanel beside the editor on a wide screen', () => {
+  const original = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = () => ({
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    });
+  });
+  afterEach(() => {
+    window.matchMedia = original;
+  });
+
+  test('is a plain side panel: no dialog, no focus taken, Escape left alone', async () => {
+    mockApi.fetchAdminApps.mockResolvedValue(APPS);
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const { onClose } = renderPanel();
+    await screen.findByTestId('test-chat');
+
+    const panel = screen.getByTestId('project-test-panel');
+    expect(panel).not.toHaveAttribute('role');
+    expect(panel).not.toHaveAttribute('aria-modal');
+    expect(opener).toHaveFocus();
+
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    opener.remove();
+  });
+});
+
 describe('ProjectTestPanel', () => {
   test('runs the general chat with the project under test and offers the other apps', async () => {
     mockApi.fetchAdminApps.mockResolvedValue(APPS);

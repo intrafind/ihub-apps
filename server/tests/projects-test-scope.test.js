@@ -15,6 +15,9 @@ let scratch;
 let configCache;
 let resolveProjectTestScope;
 let applyProjectTestScope;
+let checkProjectTestChat;
+let isProjectTestChat;
+let projectTestOrigin;
 let chatPostSchema;
 
 const ADMIN = { id: 'user-admin', isAdmin: true, isContentAdmin: true };
@@ -41,8 +44,13 @@ before(async () => {
   );
   ({ default: configCache } = await import('../configCache.js'));
   configCache.setCacheEntry('config/features.json', { projects: true });
-  ({ resolveProjectTestScope, applyProjectTestScope } =
-    await import('../services/knowledge/projectTestScope.js'));
+  ({
+    resolveProjectTestScope,
+    applyProjectTestScope,
+    checkProjectTestChat,
+    isProjectTestChat,
+    projectTestOrigin
+  } = await import('../services/knowledge/projectTestScope.js'));
   ({ chatPostSchema } = await import('../validators/index.js'));
 });
 
@@ -100,6 +108,93 @@ describe('resolveProjectTestScope', () => {
     } finally {
       configCache.setCacheEntry('config/features.json', { projects: true });
     }
+  });
+});
+
+describe('the refusals', () => {
+  const repository = repositoryOf([DOCS]);
+
+  it('name a message key for the route to localize, not an English text', async () => {
+    const forbidden = await resolveProjectTestScope({
+      user: MEMBER,
+      testProjectId: 'handbook',
+      repository
+    });
+    assert.equal(forbidden.messageKey, 'projectTestForbidden');
+    const missing = await resolveProjectTestScope({
+      user: ADMIN,
+      testProjectId: 'missing',
+      repository
+    });
+    assert.equal(missing.messageKey, 'projectTestNotFound');
+    assert.equal('message' in forbidden, false);
+  });
+});
+
+describe('the chat a project test runs in', () => {
+  const mark = (projectId, extra = {}) => ({
+    temporary: true,
+    messageCount: 4,
+    origin: projectTestOrigin(projectId),
+    ...extra
+  });
+
+  it('is stamped with the project, which is what makes it a test chat', () => {
+    assert.deepEqual(projectTestOrigin('handbook'), {
+      createdVia: 'project-test',
+      projectId: 'handbook'
+    });
+    assert.equal(isProjectTestChat({ origin: projectTestOrigin('handbook') }), true);
+    assert.equal(isProjectTestChat({ origin: { createdVia: 'ui' } }), false);
+    assert.equal(isProjectTestChat({}), false);
+    assert.equal(isProjectTestChat(null), false);
+  });
+
+  it('may be new, or the temporary chat this test already started', () => {
+    assert.equal(checkProjectTestChat(null, 'handbook'), null);
+    assert.equal(checkProjectTestChat(undefined, 'handbook'), null);
+    assert.equal(checkProjectTestChat(mark('handbook'), 'handbook'), null);
+  });
+
+  it('is never a kept chat, a marked one included', () => {
+    for (const chat of [
+      { temporary: false, messageCount: 0 },
+      { messageCount: 0 },
+      mark('handbook', { temporary: false })
+    ]) {
+      const refused = checkProjectTestChat(chat, 'handbook');
+      assert.equal(refused.status, 409);
+      assert.equal(refused.code, 'PROJECT_TEST_CHAT_KEPT');
+      assert.equal(refused.messageKey, 'projectTestChatKept');
+    }
+  });
+
+  it('is not the chat of a test of another project', () => {
+    const refused = checkProjectTestChat(mark('other'), 'handbook');
+    assert.equal(refused.status, 409);
+    assert.equal(refused.code, 'PROJECT_TEST_CHAT_MISMATCH');
+  });
+
+  it('is not a conversation the admin had elsewhere: it has messages and no test started it', () => {
+    const refused = checkProjectTestChat(
+      { temporary: true, messageCount: 2, origin: { createdVia: 'ui' } },
+      'handbook'
+    );
+    assert.equal(refused.code, 'PROJECT_TEST_CHAT_MISMATCH');
+    assert.equal(
+      checkProjectTestChat({ temporary: true, messageCount: 1 }, 'handbook').code,
+      'PROJECT_TEST_CHAT_MISMATCH'
+    );
+  });
+
+  it('may become one when nothing has been said in it: a file uploaded first created it', () => {
+    assert.equal(
+      checkProjectTestChat(
+        { temporary: true, messageCount: 0, origin: { createdVia: 'ui' } },
+        'handbook'
+      ),
+      null
+    );
   });
 });
 

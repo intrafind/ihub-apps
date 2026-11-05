@@ -328,8 +328,10 @@ project can be tried too.
 - **As you.** The chat runs as the signed-in admin. How other users reach the project (app links,
   publishing, groups) is not tested; the panel says so.
 - **Nothing is kept.** The chat is temporary: it is not listed in the admin's chat history, expires
-  on its own and adds nothing to the project. The incognito switch is not offered, so it cannot be
-  turned into a kept chat.
+  on its own and adds nothing to the project. The incognito switch is not offered, and the chat is
+  marked as a test chat (`origin.createdVia: "project-test"`), so it cannot be kept through the API
+  either: `PATCH /api/chats/:id` with `{ "temporary": false }` answers
+  `409 PROJECT_TEST_CHAT_NOT_KEEPABLE`.
 
 Only content admins can try an admin project; the chat request carries `testProjectId` (see the
 [Admin API](#admin-api)).
@@ -1174,5 +1176,8 @@ A project is tried in chat with the ordinary chat request, `POST /api/apps/:appI
 plus `testProjectId` (the id of an admin project). The turn runs with that project as the only one
 in scope, as a temporary chat, whatever `ephemeral`, `projectId` and `projects` say. A caller who is
 not a content admin is refused with `403 PROJECT_TEST_FORBIDDEN`; an unknown project, one that is
-not an admin project, or switched-off projects answer `404 PROJECT_NOT_FOUND`. A test turn on a chat
-that was kept answers `409 PROJECT_TEST_CHAT_KEPT`.
+not an admin project, or the whole `projects` feature being off answer `404 PROJECT_NOT_FOUND`. A
+A test turn on a chat that was kept answers `409 PROJECT_TEST_CHAT_KEPT`, and one on a chat that
+no test of this project started (a conversation with messages, or the scratch chat of another
+project) answers `409 PROJECT_TEST_CHAT_MISMATCH`. The messages of all these refusals are in the
+caller's language.

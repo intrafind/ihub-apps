@@ -390,9 +390,13 @@ function AppChat({
   }, [savedSkillName]);
 
   // Compare mode state
-  // Check both platform-wide feature flag AND app-level setting
+  // Check both platform-wide feature flag AND app-level setting. A project test
+  // has none: the compare panels send and resend with their own parameters, and
+  // one that left out the project would answer from the app's other knowledge.
   const compareModeFeatureEnabled =
-    featureFlags.isEnabled('compareMode', false) && app?.features?.compareMode?.enabled !== false;
+    !testProjectId &&
+    featureFlags.isEnabled('compareMode', false) &&
+    app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
   // Whether the start form has been sent to the compare panels. Entering or
   // leaving compare mode starts the panels afresh, and with them the form.

@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminApps, getAdminApiErrorMessage } from '../../../api/adminApi';
+import useFocusTrap from '../../../shared/hooks/useFocusTrap';
+import useMediaQuery from '../../../shared/hooks/useMediaQuery';
 import { localizedText } from '../../projects/utils/projectItems';
 import { PanelMessage, TestChat } from './AppTestPanel';
 import { CALLOUT_CLASS, INPUT_CLASS } from './formStyles';
@@ -68,7 +70,9 @@ export function projectItemReadiness(project) {
  *   publishing, groups) is not exercised, and the panel says so.
  * - The chat is temporary: not in the admin's history, nothing stored in the project.
  *
- * Beside the editor on wide screens, full screen on narrow ones.
+ * Beside the editor on wide screens, full screen on narrow ones. Full screen it
+ * covers the editor, so it is a dialog there: focus moves in, stays in, goes
+ * back to the button on close, and Escape closes it.
  *
  * @param {Object} props
  * @param {string} props.projectId - The admin project to test
@@ -79,6 +83,11 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const selectId = useId();
+  const panelRef = useRef(null);
+  const closeRef = useRef(null);
+  // Below the `lg` breakpoint the panel covers the editor (`lg:static` in its classes).
+  const overlay = !useMediaQuery('(min-width: 64rem)');
+  useFocusTrap(panelRef, { isActive: overlay, initialFocusRef: closeRef });
   const title = t('admin.projects.tryInChat.title', 'Try in chat');
   const [apps, setApps] = useState(null);
   const [appsError, setAppsError] = useState(null);
@@ -102,7 +111,12 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
 
   return (
     <aside
+      ref={panelRef}
       aria-label={title}
+      {...(overlay ? { role: 'dialog', 'aria-modal': true } : {})}
+      onKeyDown={event => {
+        if (overlay && event.key === 'Escape') onClose();
+      }}
       data-testid="project-test-panel"
       className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900 lg:static lg:z-auto lg:h-full lg:w-[45%] lg:min-w-[26rem] lg:max-w-3xl lg:shrink-0 lg:border-l lg:border-gray-200 lg:dark:border-gray-700"
     >
@@ -128,6 +142,7 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
           </button>
         )}
         <button
+          ref={closeRef}
           type="button"
           onClick={onClose}
           className={ICON_BUTTON}

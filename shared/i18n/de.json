@@ -701,7 +701,12 @@
     "quotaExceededAllModels": "Sie haben Ihr {window} Token-Kontingent über alle Modelle ({limit} Tokens) aufgebraucht. Es wird am {resetAt} zurückgesetzt.",
     "quotaWindowDay": "tägliches",
     "quotaWindowWeek": "wöchentliches",
-    "quotaWindowMonth": "monatliches"
+    "quotaWindowMonth": "monatliches",
+    "projectTestForbidden": "Nur Inhalts-Administratoren können ein Projekt testen",
+    "projectTestNotFound": "Projekt nicht gefunden",
+    "projectTestChatKept": "Ein Projekttest läuft nur in einem temporären Chat",
+    "projectTestChatMismatch": "Dieser Chat wurde nicht von einem Test dieses Projekts gestartet",
+    "projectTestChatNotKeepable": "Ein Chat, der ein Projekt testet, kann nicht gespeichert werden"
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",

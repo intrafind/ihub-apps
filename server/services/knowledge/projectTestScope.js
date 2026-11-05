@@ -24,8 +24,73 @@ import { getProjectRepository, isAdminProjectId } from '../projects/ProjectRepos
 import { isProjectsConfigured } from '../projects/projectSettings.js';
 
 /**
- * @typedef {{ok: true, projectId: string}|{ok: false, status: number, code: string, message: string}} ProjectTestScope
+ * A refusal: the status and code the API answers with, and the key of its
+ * message in `serverErrors` (`shared/i18n`), which the route localizes.
+ *
+ * @typedef {{ok: false, status: number, code: string, messageKey: string}} ProjectTestRefusal
  */
+
+/**
+ * @typedef {{ok: true, projectId: string}|ProjectTestRefusal} ProjectTestScope
+ */
+
+/** @returns {ProjectTestRefusal} */
+function refusal(status, code, messageKey) {
+  return { ok: false, status, code, messageKey };
+}
+
+/** `origin.createdVia` of a chat that a project test started. */
+export const PROJECT_TEST_ORIGIN = 'project-test';
+
+/**
+ * The origin a project test stamps on its chat: what makes it a test chat
+ * for good, so it cannot be kept (`PATCH /api/chats/:id`) and a test of
+ * another project cannot continue it.
+ *
+ * @param {string} projectId
+ * @returns {{createdVia: string, projectId: string}}
+ */
+export function projectTestOrigin(projectId) {
+  return { createdVia: PROJECT_TEST_ORIGIN, projectId };
+}
+
+/**
+ * Whether a stored chat is one a project test started.
+ *
+ * @param {Object|null|undefined} chat
+ * @returns {boolean}
+ */
+export function isProjectTestChat(chat) {
+  return chat?.origin?.createdVia === PROJECT_TEST_ORIGIN;
+}
+
+/**
+ * Whether a test of `projectId` may run its turn in an existing chat.
+ *
+ * Only a temporary chat that this test started, so a scratch chat is never
+ * kept and a test never reads another conversation: a chat with messages that
+ * no test started (the admin's own incognito chat) is refused. One nothing has
+ * been said in yet may become a test chat: a file uploaded before the first
+ * message creates the chat, and that is how a test chat can begin.
+ *
+ * @param {Object|null|undefined} chat - The stored chat; none for a new one.
+ * @param {string} projectId - The project under test.
+ * @returns {ProjectTestRefusal|null} Why not, or null when the turn may run.
+ */
+export function checkProjectTestChat(chat, projectId) {
+  if (!chat) return null;
+  if (chat.temporary !== true) {
+    return refusal(409, 'PROJECT_TEST_CHAT_KEPT', 'projectTestChatKept');
+  }
+  if (isProjectTestChat(chat)) {
+    return chat.origin.projectId === projectId
+      ? null
+      : refusal(409, 'PROJECT_TEST_CHAT_MISMATCH', 'projectTestChatMismatch');
+  }
+  return Number(chat.messageCount) > 0
+    ? refusal(409, 'PROJECT_TEST_CHAT_MISMATCH', 'projectTestChatMismatch')
+    : null;
+}
 
 /**
  * Check that the caller may test the project, and that it can be tested.
@@ -43,19 +108,9 @@ import { isProjectsConfigured } from '../projects/projectSettings.js';
  */
 export async function resolveProjectTestScope({ user, testProjectId, repository }) {
   if (!user || user.id === 'anonymous' || !isContentAdmin(user)) {
-    return {
-      ok: false,
-      status: 403,
-      code: 'PROJECT_TEST_FORBIDDEN',
-      message: 'Only a content admin can test a project'
-    };
+    return refusal(403, 'PROJECT_TEST_FORBIDDEN', 'projectTestForbidden');
   }
-  const notFound = {
-    ok: false,
-    status: 404,
-    code: 'PROJECT_NOT_FOUND',
-    message: 'Project not found'
-  };
+  const notFound = refusal(404, 'PROJECT_NOT_FOUND', 'projectTestNotFound');
   if (!isProjectsConfigured(configCache.getFeatures())) return notFound;
   if (typeof testProjectId !== 'string' || !isAdminProjectId(testProjectId)) return notFound;
   const project = await (repository || getProjectRepository()).get(testProjectId);

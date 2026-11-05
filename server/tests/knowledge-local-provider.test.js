@@ -1999,7 +1999,7 @@ describe('chat route and projects', () => {
       assert.equal(turns.length, 0);
     });
 
-    it('lets a test turn go on in its own temporary chat', async () => {
+    it('lets a test begin in a temporary chat nothing was said in: a file uploaded first made it', async () => {
       const chatId = 'chat-test-temporary';
       await getChatRepository().ensureChat({
         chatId,
@@ -2015,6 +2015,86 @@ describe('chat route and projects', () => {
       });
       assert.equal(prepared.length, 1);
       assert.equal(prepared[0].testProjectId, 'handbook');
+    });
+
+    /** A temporary chat with a message in it, started by `origin`. */
+    async function chatWithMessage(chatId, origin) {
+      const chats = getChatRepository();
+      await chats.ensureChat({
+        chatId,
+        ownerId: ROOT.id,
+        identityMode: 'default',
+        appId: 'chat',
+        origin,
+        temporary: true
+      });
+      await chats.appendMessage(chatId, { role: 'user', content: 'hi', runId: 'run-1' });
+    }
+
+    it('marks the chat as a test chat on every turn, so it can be neither kept nor taken over', async () => {
+      const { turns } = await postTest({
+        user: ROOT,
+        chatId: 'chat-test-marked',
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(turns.length, 1);
+      const origin = { createdVia: 'project-test', projectId: 'handbook' };
+      assert.deepEqual(turns[0].persistence.origin, origin, 'a chat the turn creates starts so');
+      assert.deepEqual(turns[0].persistence.chat, { origin }, 'one made earlier gets it now');
+    });
+
+    it('lets a test go on in the temporary chat it started', async () => {
+      await chatWithMessage('chat-test-continues', {
+        createdVia: 'project-test',
+        projectId: 'handbook'
+      });
+      const { prepared } = await postTest({
+        user: ROOT,
+        chatId: 'chat-test-continues',
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(prepared.length, 1);
+    });
+
+    it('refuses a chat with messages that no test started, and one a test of another project did', async () => {
+      await chatWithMessage('chat-test-own-chat', { createdVia: 'ui' });
+      await chatWithMessage('chat-test-other-project', {
+        createdVia: 'project-test',
+        projectId: 'other'
+      });
+      for (const chatId of ['chat-test-own-chat', 'chat-test-other-project']) {
+        const { res, prepared, turns } = await postTest({
+          user: ROOT,
+          chatId,
+          body: { testProjectId: 'handbook' }
+        });
+        assert.equal(res.statusCode, 409, chatId);
+        assert.equal(res.body.code, 'PROJECT_TEST_CHAT_MISMATCH');
+        assert.equal(prepared.length, 0);
+        assert.equal(turns.length, 0);
+      }
+    });
+
+    it('answers a refusal with the localized message of its key', async () => {
+      const forbidden = await postTest({
+        user: ADA,
+        chatId: 'chat-test-l10n-1',
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(forbidden.res.body.error, 'localized:projectTestForbidden');
+      const missing = await postTest({
+        user: ROOT,
+        chatId: 'chat-test-l10n-2',
+        body: { testProjectId: 'missing' }
+      });
+      assert.equal(missing.res.body.error, 'localized:projectTestNotFound');
+      await chatWithMessage('chat-test-l10n-3', { createdVia: 'ui' });
+      const foreign = await postTest({
+        user: ROOT,
+        chatId: 'chat-test-l10n-3',
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(foreign.res.body.error, 'localized:projectTestChatMismatch');
     });
 
     it('keeps an @mention plain text in a test, where it would start a workflow otherwise', async () => {
