@@ -206,7 +206,7 @@ function Layout() {
   // has no clipping and is meant to scroll the document.
   return (
     <div
-      className={`relative flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
+      className={`relative flex flex-col w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
     >
       {!adminProvidesOwnMain && (
         <SkipLink

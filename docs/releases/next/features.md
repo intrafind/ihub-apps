@@ -548,3 +548,18 @@ text page. Every such response has the same body:
   the following releases; each conversion is listed here.
 
 See [Error Responses](../../error-responses.md).
+
+## Chat: Answers Read Like a Document, in One Centred Column
+
+The chat now follows the layout of current AI assistants. Answers are plain text on the page
+instead of a white card, so tables, code and diagrams get the full width, and long answers are
+easier to read. The user's own messages sit in a neutral grey bubble on the right.
+
+- Messages and the message box share one centred column of about 70 characters per line, so the
+  question, the answer and the input line up.
+- Sender icons are no longer shown next to messages. On phones and in narrow panels the answer
+  gains that width. The `icons.userMessage` and `icons.assistantMessage` settings in `ui.json` no
+  longer have a visible effect.
+- The main area of the app is now white and the sidebar light grey, which was the other way round
+  before.
+- Error messages keep their red callout.
