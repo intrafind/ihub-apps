@@ -26,6 +26,7 @@ import {
   sendNotFound,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
+import { isAdminUser } from '../../services/loop/runIdentity.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
@@ -116,13 +117,6 @@ async function countRunningProfileRuns(profileId) {
   } catch {
     return 0;
   }
-}
-
-function isAdminUser(user) {
-  if (!user) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.includes('admin') || groups.includes('admins');
 }
 
 /**

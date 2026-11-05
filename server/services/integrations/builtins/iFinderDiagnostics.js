@@ -135,7 +135,7 @@ export function buildTestUser(req, override) {
     email: req.user?.email || 'admin@test.com',
     username: req.user?.username || 'admin',
     name: req.user?.name || 'Test Admin',
-    groups: req.user?.groups || ['admin']
+    groups: req.user?.groups || ['admins']
   };
   if (req.user?.domain) base.domain = req.user.domain;
   return { ...base, ...override };

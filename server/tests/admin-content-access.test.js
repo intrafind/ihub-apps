@@ -101,15 +101,13 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 // Both middlewares are exercised elsewhere; here they only decide who the
 // caller is. `contentAdminAuth` lets every test user through (each carries
-// either contentAdmin or adminAccess), and `isAdminAuthRequired` answers the
-// way the real one would for these groups.
+// either contentAdmin or adminAccess); the route asks the real `isAdmin`.
 jest.unstable_mockModule('../middleware/contentAdminAuth.js', () => ({
   contentAdminAuth: (req, res, next) => (req.user ? next() : res.status(401).end())
 }));
 
 jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
-  adminAuth: (req, res, next) => next(),
-  isAdminAuthRequired: req => !(req.user?.groups || []).includes('admins')
+  adminAuth: (req, res, next) => next()
 }));
 
 jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({

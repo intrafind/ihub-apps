@@ -26,7 +26,7 @@ export function isAdminUser(user) {
   if (!user || user.id === ANONYMOUS_USER_ID) return false;
   if (user.permissions?.adminAccess === true) return true;
   const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.includes('admin') || groups.includes('admins');
+  return groups.includes('admins');
 }
 
 export function isAnonymousUser(user) {

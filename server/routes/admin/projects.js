@@ -14,7 +14,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import configCache from '../../configCache.js';
-import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
+import { adminAuth } from '../../middleware/adminAuth.js';
+import { isAdmin } from '../../utils/authorization.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { requireFeature } from '../../featureRegistry.js';
@@ -166,7 +167,7 @@ export default function registerAdminProjectsRoutes(app) {
       if (req.query.ownership === 'user') {
         // Compliance view: full admins only, even though the page is reachable
         // by content admins.
-        if (isAdminAuthRequired(req)) {
+        if (!isAdmin(req.user)) {
           return sendErrorResponse(res, 403, 'Full admin access required to list user projects', {
             details: { code: 'PERMISSION_DENIED' }
           });
@@ -532,7 +533,7 @@ export default function registerAdminProjectsRoutes(app) {
       const project = await getProjectRepository().get(id);
       if (!project) return sendNotFound(res, 'Project');
       if (project.ownership === 'user') {
-        if (isAdminAuthRequired(req)) return sendNotFound(res, 'Project');
+        if (!isAdmin(req.user)) return sendNotFound(res, 'Project');
         return res.json(
           serializeProject(project, { ...ADMIN_PERMISSIONS, canEdit: false }, { adminView: true })
         );
@@ -623,7 +624,7 @@ export default function registerAdminProjectsRoutes(app) {
       const repo = getProjectRepository();
       const project = await repo.get(id);
       if (!project) return sendNotFound(res, 'Project');
-      if (project.ownership === 'user' && isAdminAuthRequired(req)) {
+      if (project.ownership === 'user' && !isAdmin(req.user)) {
         return sendNotFound(res, 'Project');
       }
       // A linked admin project answers PROJECT_IN_USE from the service.
