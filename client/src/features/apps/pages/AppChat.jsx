@@ -304,6 +304,11 @@ function AppChat({
   const appPagePath = embedded ? buildPath(`/apps/${encodeURIComponent(appId)}`) : null;
   // Only a host page's embedded chat tests a project; the route never does.
   const testProjectId = embedded ? embeddedTestProjectId : null;
+  // What a project test adds to every request; the same object while the project is.
+  const projectTestParams = useMemo(
+    () => (testProjectId ? { testProjectId } : {}),
+    [testProjectId]
+  );
   const openInNewTab = useCallback(path => {
     window.open(buildPath(path), '_blank', 'noopener,noreferrer');
   }, []);
@@ -1523,7 +1528,7 @@ function AppChat({
           ...(imageQuality ? { imageQuality } : {}),
           ...(Object.keys(integrationScopes).length > 0 ? { integrationScopes } : {}),
           ...(containerProjectId ? { projectId: containerProjectId } : {}),
-          ...(testProjectId ? { testProjectId } : {})
+          ...projectTestParams
         };
 
         // Prepare validated variables
@@ -1579,7 +1584,7 @@ function AppChat({
   }, [
     app,
     containerProjectId,
-    testProjectId,
+    projectTestParams,
     adoptContainerProject,
     messages.length,
     hydrating,
@@ -1911,7 +1916,7 @@ function AppChat({
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
-      ...(testProjectId ? { testProjectId } : {}),
+      ...projectTestParams,
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }
         : {}),
@@ -1923,7 +1928,7 @@ function AppChat({
       selectedOutputFormat,
       currentLanguage,
       containerProjectId,
-      testProjectId,
+      projectTestParams,
       attachedProjectIds,
       chatStoredServerSide
     ]
@@ -2605,7 +2610,7 @@ function AppChat({
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
       // A project test (#3309): the server puts this one project in scope and
       // keeps the chat temporary. Every turn says so, the server keeps no state.
-      ...(testProjectId ? { testProjectId } : {}),
+      ...projectTestParams,
       // The projects picked for this chat; the server adds them to the chat's own.
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }

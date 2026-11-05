@@ -50,6 +50,24 @@ import { localizedText } from '../../projects/utils/projectItems';
 // The chat pulls in the whole chat page: load it when an admin opens it.
 const ProjectTestPanel = lazy(() => import('../components/ProjectTestPanel'));
 
+/**
+ * The classes of the page and of its content column. With the chat open the
+ * page splits: the editor scrolls on the left, the chat sits on the right
+ * (full screen below the lg breakpoint).
+ *
+ * @param {boolean} split - The chat is open beside the editor.
+ * @returns {{page: string, column: string}}
+ */
+function pageLayoutClasses(split) {
+  const page = 'min-h-screen bg-gray-50 dark:bg-gray-900';
+  const column = 'max-w-7xl mx-auto py-6 px-4';
+  if (!split) return { page, column };
+  return {
+    page: `${page} lg:flex lg:h-full lg:min-h-0`,
+    column: `${column} lg:flex-1 lg:min-w-0 lg:overflow-y-auto`
+  };
+}
+
 /** Text loader of the shared preview dialog. */
 const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
@@ -387,17 +405,12 @@ function AdminProjectEditPageContent({ id }) {
     </section>
   );
 
-  // With the chat open the page splits: the editor scrolls on the left, the
-  // chat sits on the right (full screen below the lg breakpoint).
   const split = chatOpen && !isNew;
+  const layout = pageLayoutClasses(split);
 
   return (
-    <div
-      className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${split ? 'lg:flex lg:h-full lg:min-h-0' : ''}`}
-    >
-      <div
-        className={`max-w-7xl mx-auto py-6 px-4 ${split ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : ''}`}
-      >
+    <div className={layout.page}>
+      <div className={layout.column}>
         <AdminBreadcrumb
           crumbs={[
             { label: t('admin.nav.overview', 'Overview'), href: '/admin' },

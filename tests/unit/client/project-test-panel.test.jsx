@@ -207,6 +207,9 @@ describe('ProjectTestPanel', () => {
     const notice = screen.getByText(/runs as you/);
     expect(notice).toHaveTextContent('not tested');
     expect(notice).toHaveTextContent('temporary');
+    // A status message for assistive technology, as an <output> element.
+    expect(notice.tagName).toBe('OUTPUT');
+    expect(screen.getAllByRole('status')).toContain(notice);
   });
 
   test('warns about items that are not searched yet', async () => {
@@ -215,7 +218,9 @@ describe('ProjectTestPanel', () => {
       project: { id: 'handbook', items: [item('ready'), item('extracting'), item('failed')] }
     });
     await screen.findByTestId('test-chat');
-    expect(screen.getByText(/2 of 3 items are not ready/)).toBeInTheDocument();
+    const warning = screen.getByText(/2 of 3 items are not ready/);
+    expect(warning).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toContain(warning);
   });
 
   test('warns about a project without items, but stays quiet while it is not loaded', async () => {

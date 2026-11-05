@@ -413,17 +413,16 @@ class RequestBuilder {
       // the prompt builder and the tool loader see one scope (#1036). A
       // project test (#3309), already authorized by the route, narrows the
       // scope to the one project under test instead.
-      const app = testProjectId
-        ? applyProjectTestScope(configuredApp, testProjectId)
-        : projectId || attachedProjectIds?.length
-          ? {
-              ...configuredApp,
-              ...(projectId ? { _projectId: projectId } : {}),
-              ...(attachedProjectIds?.length
-                ? { _attachedProjectIds: [...attachedProjectIds] }
-                : {})
-            }
-          : configuredApp;
+      let app = configuredApp;
+      if (testProjectId) {
+        app = applyProjectTestScope(configuredApp, testProjectId);
+      } else if (projectId || attachedProjectIds?.length) {
+        app = {
+          ...configuredApp,
+          ...(projectId ? { _projectId: projectId } : {}),
+          ...(attachedProjectIds?.length ? { _attachedProjectIds: [...attachedProjectIds] } : {})
+        };
+      }
 
       const { data: models } = configCache.getModels();
       if (!models) {

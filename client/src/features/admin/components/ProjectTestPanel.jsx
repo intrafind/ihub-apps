@@ -121,6 +121,30 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
   const current = candidates.find(entry => entry.id === selected) || candidates[0] || null;
   const readiness = projectItemReadiness(project);
 
+  let chatBody;
+  if (appsError) {
+    chatBody = <PanelMessage icon="exclamation-triangle">{appsError}</PanelMessage>;
+  } else if (!apps) {
+    chatBody = (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  } else if (!current) {
+    chatBody = (
+      <PanelMessage icon="information-circle">
+        {t(
+          'admin.projects.tryInChat.noApps',
+          'There is no enabled chat app to try the project with. Enable one under Admin → Apps.'
+        )}
+      </PanelMessage>
+    );
+  } else {
+    chatBody = (
+      <TestChat key={`${current.id}-${restarts}`} appId={current.id} testProjectId={projectId} />
+    );
+  }
+
   return (
     <aside
       ref={panelRef}
@@ -192,48 +216,33 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
           </div>
         )}
 
-        <div role="status" className={`${CALLOUT_CLASS.info} py-2 text-xs`}>
+        <output className={`${CALLOUT_CLASS.info} block py-2 text-xs`}>
           {t(
             'admin.projects.tryInChat.adminNotice',
             'The chat runs as you, on the project as saved. How other users reach it (app links, publishing, groups) is not tested. The chat is temporary: it is not kept in your history and nothing is added to the project.'
           )}
-        </div>
+        </output>
 
         {readiness.total > 0 && readiness.waiting + readiness.failed > 0 && (
-          <div role="status" className={`${CALLOUT_CLASS.warning} py-2 text-xs`}>
+          <output className={`${CALLOUT_CLASS.warning} block py-2 text-xs`}>
             {t(
               'admin.projects.tryInChat.notReady',
               '{{count}} of {{total}} items are not ready (waiting, being extracted or failed) and are not searched yet.',
               { count: readiness.waiting + readiness.failed, total: readiness.total }
             )}
-          </div>
+          </output>
         )}
         {readiness.total === 0 && project && (
-          <div role="status" className={`${CALLOUT_CLASS.warning} py-2 text-xs`}>
+          <output className={`${CALLOUT_CLASS.warning} block py-2 text-xs`}>
             {t(
               'admin.projects.tryInChat.noItems',
               'The project has no items yet, so there is nothing to find. Add an item first.'
             )}
-          </div>
+          </output>
         )}
       </div>
 
-      {appsError ? (
-        <PanelMessage icon="exclamation-triangle">{appsError}</PanelMessage>
-      ) : !apps ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-        </div>
-      ) : !current ? (
-        <PanelMessage icon="information-circle">
-          {t(
-            'admin.projects.tryInChat.noApps',
-            'There is no enabled chat app to try the project with. Enable one under Admin → Apps.'
-          )}
-        </PanelMessage>
-      ) : (
-        <TestChat key={`${current.id}-${restarts}`} appId={current.id} testProjectId={projectId} />
-      )}
+      {chatBody}
     </aside>
   );
 }
