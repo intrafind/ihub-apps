@@ -8905,6 +8905,14 @@
     "MODEL_NOT_FOUND": "Das Modell ist nicht verfügbar.",
     "INVALID_REQUEST": "Der Modelldienst hat die Anfrage abgelehnt.",
     "ABORTED": "Die Anfrage wurde abgebrochen.",
-    "QUOTA_EXCEEDED": "Ihr Nutzungslimit ist erreicht."
+    "QUOTA_EXCEEDED": "Ihr Nutzungslimit ist erreicht.",
+    "CHAT_SHARING_UNAVAILABLE": "Das Teilen von Chats ist gerade nicht verfügbar.",
+    "ARTIFACT_SHARING_DISABLED": "Das Teilen einzelner Artefakte ist hier nicht erlaubt.",
+    "SHARE_MODE_DISABLED": "Diese Art von Link ist hier nicht erlaubt.",
+    "EMBED_DISABLED": "Das Einbetten geteilter Artefakte ist hier nicht erlaubt.",
+    "CHAT_TEMPORARY": "Ein temporärer Chat kann nicht geteilt werden. Speichern Sie ihn zuerst.",
+    "FILES_NOT_SHARED": "Der Besitzer hat die angehängten Dateien nicht freigegeben.",
+    "ORIGINAL_NOT_SHARED": "Der Besitzer hat den Text dieser Datei freigegeben, nicht das Original.",
+    "ORIGINAL_DISCARDED": "Die Originaldatei ist nicht mehr verfügbar."
   }
 }

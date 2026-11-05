@@ -19,6 +19,7 @@ import { safeArchivePath } from '../documents/generatedFiles.js';
 import { artifactPolicy } from './artifactPolicy.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
 export class ZipLimitError extends Error {
   /**
@@ -237,6 +238,8 @@ export const MAX_ZIP_REQUEST_IDS = 1000;
  * @param {string} [params.archiveName] - Download name of the archive.
  * @param {(res: import('express').Response) => void} [params.beforeSend] - Extra headers.
  * @returns {Promise<void>}
+ * @throws {ServiceError} 400, 404 or 413 before the first byte is written; the caller lets the
+ *   error middleware answer.
  */
 export async function sendArtifactsZip(
   res,
@@ -251,15 +254,11 @@ export async function sendArtifactsZip(
       artifactIds.length > MAX_ZIP_REQUEST_IDS ||
       !artifactIds.every(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id))
     ) {
-      res.status(400).json({ error: '"artifactIds" must be a list of artifact ids.' });
-      return;
+      throw new ServiceError('BAD_REQUEST', '"artifactIds" must be a list of artifact ids.');
     }
     const byId = new Map(descriptors.map(descriptor => [descriptor.id, descriptor]));
     const unique = [...new Set(artifactIds)];
-    if (unique.some(id => !byId.has(id))) {
-      res.status(404).json({ error: 'Artifact not found' });
-      return;
-    }
+    if (unique.some(id => !byId.has(id))) throw new ServiceError('NOT_FOUND', 'Artifact not found');
     selected = unique.map(id => byId.get(id));
   }
 
@@ -273,8 +272,9 @@ export async function sendArtifactsZip(
     });
   } catch (error) {
     if (!(error instanceof ZipLimitError)) throw error;
-    res.status(error.code === 'empty' ? 404 : 413).json({ error: error.message, code: error.code });
-    return;
+    throw error.code === 'empty'
+      ? new ServiceError('NOT_FOUND', error.message)
+      : new ServiceError('PAYLOAD_TOO_LARGE', error.message, { details: { reason: error.code } });
   }
 
   // Read before the first byte goes out: a payload missing now can still be
@@ -282,10 +282,7 @@ export async function sendArtifactsZip(
   const entries = [];
   for (const item of planned) {
     const artifact = await repository.get(scope, item.id);
-    if (!artifact) {
-      res.status(404).json({ error: 'Artifact not found' });
-      return;
-    }
+    if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
     entries.push({ path: item.path, data: artifact.data, date: artifact.createdAt });
   }
 

@@ -11,6 +11,7 @@
 
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
+import { ServiceError } from './ServiceError.js';
 
 /**
  * Regular expression that allows only safe characters for IDs:
@@ -88,6 +89,23 @@ export function validateIdForPath(id, idType, res) {
     return false;
   }
   return true;
+}
+
+/**
+ * Throws a 400 `BAD_REQUEST` unless `id` is a safe path segment. The throwing
+ * form of {@link validateIdForPath}: the global error middleware answers.
+ *
+ * @param {string} id - The ID to validate
+ * @param {string} idType - Name of the ID for the message ("chat", "file", ...)
+ * @throws {ServiceError} when the ID is not valid
+ */
+export function assertValidId(id, idType) {
+  if (!isValidId(id)) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
+    );
+  }
 }
 
 /**

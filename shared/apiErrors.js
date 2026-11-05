@@ -72,11 +72,27 @@ export const LLM_API_ERROR_CODES = Object.freeze({
   QUOTA_EXCEEDED: 429
 });
 
+/**
+ * Codes of one feature that the client already tells apart today (a specific
+ * message, or a branch on the code). Everything else uses a generic code.
+ */
+export const FEATURE_ERROR_CODES = Object.freeze({
+  CHAT_SHARING_UNAVAILABLE: 503,
+  ARTIFACT_SHARING_DISABLED: 403,
+  SHARE_MODE_DISABLED: 403,
+  EMBED_DISABLED: 403,
+  CHAT_TEMPORARY: 409,
+  FILES_NOT_SHARED: 403,
+  ORIGINAL_NOT_SHARED: 403,
+  ORIGINAL_DISCARDED: 410
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
   ...STORAGE_ERROR_CODES,
-  ...LLM_API_ERROR_CODES
+  ...LLM_API_ERROR_CODES,
+  ...FEATURE_ERROR_CODES
 });
 
 /**
