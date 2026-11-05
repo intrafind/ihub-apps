@@ -217,7 +217,7 @@ ihub-apps/
 Start exploring from these important files:
 
 #### Server Entry Points
-- **`server/server.js`** - Main server application
+- **`server/server.js`** - Entry point; `server/startup/` holds the primary, the worker, the ordered route table and shutdown
 - **`server/routes/chat/dataRoutes.js`** - Primary API endpoints
 - **`server/configCache.js`** - Configuration loading system
 - **`server/services/chat/ChatService.js`** - Core chat functionality

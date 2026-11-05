@@ -345,7 +345,7 @@ line number, so the exemption cannot silently widen when a genuine config write
 is added to the same file later.
 
 There is one more read that is not a violation and not an allowlist entry: the
-bootstrap load of `config/platform.json` in `server/server.js`. It goes through
+bootstrap load of `config/platform.json` in `server/startup/worker.js`. It goes through
 `ConfigStore` like everything else, and the store answers it from the contained
 filesystem path because no provider exists yet — the provider is built from
 what that read returns. Configuration therefore never depends on optional
