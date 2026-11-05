@@ -20,6 +20,7 @@ import { attachRealtimeTranscription } from '../websocket/realtimeTranscription.
 import { setDefaultLanguage } from '../../shared/localize.js';
 import { initTelemetry } from '../telemetry.js';
 import { setupMiddleware } from '../middleware/setup.js';
+import errorHandler from '../middleware/errorHandler.js';
 import { validateApiKeys, cleanupInactiveClients } from '../serverHelpers.js';
 import { getProxyConfig, redactUrlSecrets } from '../utils/httpConfig.js';
 import {
@@ -693,6 +694,9 @@ export async function startWorker({ stickyRouting }) {
     basePath,
     DEFAULT_TIMEOUT
   });
+
+  // The one place an error becomes a response. After every route.
+  app.use(errorHandler);
 
   // Cleanup inactive clients every minute
   cleanupInactiveClients();
