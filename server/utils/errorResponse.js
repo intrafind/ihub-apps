@@ -69,6 +69,55 @@ function httpStatusOf(error) {
   return Number.isInteger(status) && status >= 400 && status <= 599 ? status : null;
 }
 
+function classifyStorage(error) {
+  const status = storageHttpStatus(error) ?? API_ERROR_CODES[error.code] ?? 500;
+  const code = Object.hasOwn(API_ERROR_CODES, error.code) ? error.code : 'STORAGE_ERROR';
+  return { status, code, message: error.message };
+}
+
+function classifyLlm(error) {
+  const known = Object.hasOwn(LLM_API_ERROR_CODES, error.code) || error.code in GENERIC_ERROR_CODES;
+  const code = known ? error.code : 'PROVIDER_ERROR';
+  const details = {};
+  if (error.retryAfterMs != null) details.retryAfterMs = error.retryAfterMs;
+  if (error.provider) details.provider = error.provider;
+  if (error.modelId) details.modelId = error.modelId;
+  return {
+    status: API_ERROR_CODES[code],
+    code,
+    details: Object.keys(details).length ? details : undefined,
+    // A provider's text is not ours to show; the client has the code's message.
+    message: fallbackText(code)
+  };
+}
+
+function classifyZod(error) {
+  return {
+    status: 400,
+    code: 'VALIDATION_FAILED',
+    details: {
+      issues: error.issues.map(issue => ({
+        path: issue.path.join('.'),
+        code: issue.code,
+        message: issue.message
+      }))
+    },
+    message: fallbackText('VALIDATION_FAILED')
+  };
+}
+
+// Errors of Express and its middleware (body-parser, ...) carry only a status; their
+// messages describe the request, not the server.
+function classifyHttp(error, status) {
+  const code = CODE_BY_STATUS[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST');
+  return {
+    status,
+    code,
+    details: typeof error.type === 'string' ? { type: error.type } : undefined,
+    message: fallbackText(code)
+  };
+}
+
 /** What an error stands for: status, code, details and the thrown message. */
 function classify(error) {
   if (error instanceof ServiceError) {
@@ -79,53 +128,11 @@ function classify(error) {
       message: error.message
     };
   }
-  if (error instanceof StorageError) {
-    const status = storageHttpStatus(error) ?? API_ERROR_CODES[error.code] ?? 500;
-    const code = Object.hasOwn(API_ERROR_CODES, error.code) ? error.code : 'STORAGE_ERROR';
-    return { status, code, message: error.message };
-  }
-  if (isLLMError(error)) {
-    const known =
-      Object.hasOwn(LLM_API_ERROR_CODES, error.code) || error.code in GENERIC_ERROR_CODES;
-    const code = known ? error.code : 'PROVIDER_ERROR';
-    const details = {};
-    if (error.retryAfterMs != null) details.retryAfterMs = error.retryAfterMs;
-    if (error.provider) details.provider = error.provider;
-    if (error.modelId) details.modelId = error.modelId;
-    return {
-      status: API_ERROR_CODES[code],
-      code,
-      details: Object.keys(details).length ? details : undefined,
-      // A provider's text is not ours to show; the client has the code's message.
-      message: fallbackText(code)
-    };
-  }
-  if (error instanceof ZodError) {
-    return {
-      status: 400,
-      code: 'VALIDATION_FAILED',
-      details: {
-        issues: error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          code: issue.code,
-          message: issue.message
-        }))
-      },
-      message: fallbackText('VALIDATION_FAILED')
-    };
-  }
-  // Errors of Express and its middleware (body-parser, multer's wrappers, ...)
-  // carry only a status; their messages describe the request, not the server.
+  if (error instanceof StorageError) return classifyStorage(error);
+  if (isLLMError(error)) return classifyLlm(error);
+  if (error instanceof ZodError) return classifyZod(error);
   const status = httpStatusOf(error);
-  if (status && typeof error.expose === 'boolean') {
-    const code = CODE_BY_STATUS[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST');
-    return {
-      status,
-      code,
-      details: typeof error.type === 'string' ? { type: error.type } : undefined,
-      message: fallbackText(code)
-    };
-  }
+  if (status && typeof error.expose === 'boolean') return classifyHttp(error, status);
   return { status: 500, code: 'INTERNAL_ERROR', message: fallbackText('INTERNAL_ERROR') };
 }
 

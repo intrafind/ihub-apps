@@ -172,11 +172,11 @@ describe('errorHandler in an Express app', () => {
     }
   });
 
-  it('hands an error after the response started to Express', async () => {
-    const res = await fetch(`${base}/api/started`).catch(error => error);
-    // The connection is closed mid-body; there is no JSON error to read.
-    if (res instanceof Response) await res.text().catch(() => {});
-    assert.ok(true);
+  it('hands an error after the response started to Express, which drops the connection', async () => {
+    // Nothing may be appended to a response that has begun: no JSON error, and the body
+    // cannot complete.
+    const res = await fetch(`${base}/api/started`);
+    await assert.rejects(res.text());
   });
 });
 
