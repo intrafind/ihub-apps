@@ -16,6 +16,7 @@
 
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { guardedLookup } from './dnsGuard.js';
 
 /**
  * Classify a 4-octet IPv4 address (as bytes) as private/sensitive.
@@ -228,12 +229,18 @@ export async function assertPublicTarget(parsedUrl) {
   // resolve4/resolve6 query the DNS servers directly and ignore /etc/hosts and
   // the search domains, so a short or internal name (`if-wiki`) comes back
   // empty although the connection itself would find it. Ask the OS resolver
-  // (getaddrinfo) before giving up. Every address it returns goes through the
-  // same private-range check below and is pinned by the caller, so this widens
-  // what can be resolved, not what is allowed.
+  // (getaddrinfo) before giving up, through the guarded lookup so a slow
+  // resolver neither blocks the thread pool nor holds the request for tens of
+  // seconds (it times out into "unresolved"). Every address it returns goes
+  // through the same private-range check below and is pinned by the caller, so
+  // this widens what can be resolved, not what is allowed.
   if (addrs.length === 0) {
     try {
-      const found = await dns.lookup(host, { all: true });
+      const found = await new Promise((resolve, reject) => {
+        guardedLookup(host, { all: true }, (err, entries) =>
+          err ? reject(err) : resolve(entries)
+        );
+      });
       addrs = [...new Set(found.map(entry => entry.address))];
     } catch {
       // Leave addrs empty: reported as unresolved below.

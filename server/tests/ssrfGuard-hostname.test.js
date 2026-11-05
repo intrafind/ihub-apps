@@ -8,7 +8,15 @@ const resolve6 = jest.fn();
 const lookup = jest.fn();
 
 jest.unstable_mockModule('node:dns/promises', () => ({
-  default: { resolve4, resolve6, lookup }
+  default: { resolve4, resolve6 }
+}));
+// The OS-resolver fallback goes through the guarded (timeout-bounded) lookup.
+jest.unstable_mockModule('../utils/dnsGuard.js', () => ({
+  guardedLookup: (host, options, callback) =>
+    lookup(host, options).then(
+      entries => callback(null, entries),
+      err => callback(err)
+    )
 }));
 
 const { assertPublicTarget, UNRESOLVED_HOST } = await import('../utils/ssrfGuard.js');
