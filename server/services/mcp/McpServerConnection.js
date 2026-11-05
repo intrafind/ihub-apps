@@ -515,7 +515,7 @@ export class McpServerConnection {
         name: `${prefix}${t.name}`,
         description: t.description || '',
         parameters: t.inputSchema || { type: 'object', properties: {} },
-        // Internal markers so toolLoader.runTool knows how to dispatch.
+        // Internal markers so runTool knows how to dispatch.
         _mcp: {
           serverId: this.config.id,
           originalName: t.name,

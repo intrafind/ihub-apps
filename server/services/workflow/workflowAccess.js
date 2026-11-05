@@ -7,7 +7,7 @@
  * One rule for every way a workflow is started: the workflow pages
  * (`routes/workflow/workflowRoutes.js`), an `@mention` in a chat
  * (`routes/chat/sessionRoutes.js`) and a tool call of an app's model
- * (`toolLoader.js`, `tools/workflowRunner.js`). The chat composer only offers
+ * (`services/tools/appTools.js`, `tools/workflowRunner.js`). The chat composer only offers
  * workflows the viewer may run and the app lists; the server has to hold the
  * same line, because the mention is just text a caller can type or post, and a
  * model's tool call is only as trustworthy as the person it acts for.

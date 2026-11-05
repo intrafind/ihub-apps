@@ -8,7 +8,7 @@
  * to register an arbitrary provider-handled tool with no script (Admin →
  * Tools → "Special Tool"). It is unrelated to native web search: Google
  * Search grounding, OpenAI Web Search, and Anthropic Web Search are resolved
- * directly by toolLoader.resolveNativeWebSearchProvider() and injected by the
+ * directly by webSearchResolver.resolveNativeWebSearchProvider() and injected by the
  * adapter (see native-web-search.test.js) — they never flow through this
  * generic tools pipeline.
  *

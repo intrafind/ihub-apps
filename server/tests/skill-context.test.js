@@ -49,7 +49,8 @@ writeSkill('big', 'A skill with long instructions', BIG_BODY);
 const { default: configCache } = await import('../configCache.js');
 const { loadSkillsMetadata } = await import('../services/skillLoader.js');
 const skillAccess = await import('../services/skillAccess.js');
-const { getToolsForApp, runTool } = await import('../toolLoader.js');
+const { getToolsForApp } = await import('../services/tools/appTools.js');
+const { runTool } = await import('../services/tools/runTool.js');
 const { default: PromptService } = await import('../services/PromptService.js');
 const { PlannerNodeExecutor } =
   await import('../services/workflow/executors/PlannerNodeExecutor.js');

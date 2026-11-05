@@ -284,7 +284,7 @@ function skillTool(id, agentConfig, skill) {
       },
       required: ['message']
     },
-    // Internal marker so toolLoader.runTool and the tool pickers know the
+    // Internal marker so runTool and the tool pickers know the
     // owning agent; never sent to the model.
     _a2a: {
       agentId: agentConfig.id,

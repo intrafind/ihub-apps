@@ -20,18 +20,24 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 const runTool = jest.fn(async () => ({ ok: true }));
 const loadLocalTools = jest.fn();
 
-// Provide every named export toolLoader.js has — ESM link-checks all of them
+// Provide every named export the tool modules have — ESM link-checks all of them
 // even though only a couple are used on the tools-only code path.
-jest.unstable_mockModule('../toolLoader.js', () => ({
+jest.unstable_mockModule('../services/tools/appTools.js', () => ({
+  getToolsForApp: jest.fn(async () => [])
+}));
+jest.unstable_mockModule('../services/tools/catalog.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
   loadLocalTools,
-  runTool,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
+  localizeTools: jest.fn(tools => tools)
+}));
+jest.unstable_mockModule('../services/tools/runTool.js', () => ({
+  runTool
+}));
+jest.unstable_mockModule('../services/tools/webSearchResolver.js', () => ({
   resolveNativeWebSearchProvider: jest.fn(() => null),
   resolveAppNativeWebSearch: jest.fn(() => null),
-  getToolsForApp: jest.fn(async () => []),
-  localizeTools: jest.fn(tools => tools),
   READ_URL_TOOL_ID: 'read_url'
 }));
 

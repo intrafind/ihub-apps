@@ -313,7 +313,7 @@ graph TB
 
     subgraph "Integration"
         Adapters[LLM Adapters]
-        TL[toolLoader.runTool]
+        TL[runTool]
         AT[actionTracker / sse.js]
     end
 
@@ -355,7 +355,7 @@ sequenceDiagram
     participant RequestBuilder
     participant Loop as AgentLoop
     participant LLMClient
-    participant Tools as toolLoader.runTool
+    participant Tools as runTool
     participant Proj as chatChannel / chatSeams
     participant SSE as RunStream / sse.js
 
@@ -972,7 +972,7 @@ sequenceDiagram
     participant SourceService
     participant AgentLoop
     participant LLMClient
-    participant ToolLoader as toolLoader.runTool
+    participant ToolLoader as runTool
 
     ChatService->>RequestBuilder: prepareChatRequest()
     RequestBuilder->>ConfigCache: Load App / Model / Tool Config

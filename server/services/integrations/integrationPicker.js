@@ -237,7 +237,7 @@ export async function pickerRowsForApp({ app, user, language = 'en', deps = {} }
   if (candidates.length === 0) return [];
 
   const getToolsForApp =
-    deps.getToolsForApp || (await import('../../toolLoader.js')).getToolsForApp;
+    deps.getToolsForApp || (await import('../tools/appTools.js')).getToolsForApp;
   const isBoundToolEnabled =
     deps.isBoundToolEnabled || (await import('./integrationTools.js')).isBoundToolEnabled;
   const listIntegrations = deps.listUserIntegrations || listUserIntegrations;

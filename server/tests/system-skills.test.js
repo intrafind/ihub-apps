@@ -26,7 +26,8 @@ import {
   parseAllowedTools
 } from '../services/skillLoader.js';
 import { systemSkillToolsFor } from '../services/systemSkillTools.js';
-import { getToolsForApp, runTool } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { runTool } from '../services/tools/runTool.js';
 import { chatToolSeam } from '../services/chat/chatSeams.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import { createStreamState, getRun, reduceRunEvents } from '../../shared/run/runReducer.js';

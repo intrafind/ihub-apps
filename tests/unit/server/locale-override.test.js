@@ -13,7 +13,7 @@ jest.mock('../../../server/utils/authorization.js', () => ({
   isAnonymousAccessAllowed: () => false
 }));
 
-jest.mock('../../../server/toolLoader.js', () => ({
+jest.mock('../../../server/services/tools/catalog.js', () => ({
   loadTools: async () => []
 }));
 

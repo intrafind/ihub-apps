@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { loadTools, runTool } from '../toolLoader.js';
+import { loadTools } from '../services/tools/catalog.js';
+import { runTool } from '../services/tools/runTool.js';
 import { getToolsForUser } from '../services/tools/toolListing.js';
 import { logInteraction } from '../utils.js';
 import { authRequired } from '../middleware/authRequired.js';

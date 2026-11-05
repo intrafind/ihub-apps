@@ -24,7 +24,7 @@ const instances = {
 /** What each group's `permissions.integrations` grants, as the enhanced user carries it. */
 const INTEGRATION_GRANTS = { analysts: ['portal'], guests: [] };
 
-jest.unstable_mockModule('../../toolLoader.js', () => ({
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadTools: async () => tools
 }));
 jest.unstable_mockModule('../../services/integrations/InstalledIntegrationService.js', () => ({

@@ -1,5 +1,5 @@
 import { createCompletionRequest } from '../../../server/adapters/index.js';
-import { loadConfiguredTools } from '../../../server/toolLoader.js';
+import { loadConfiguredTools } from '../../../server/services/tools/catalog.js';
 import { TestHelper, MockDataGenerator } from '../../utils/helpers.js';
 import { testModels, testEnvironment, mockApiKeys } from '../../utils/fixtures.js';
 import dotenv from 'dotenv';

@@ -261,7 +261,7 @@ graph TB
     end
 
     subgraph "Tool System"
-        TL[toolLoader.runTool]
+        TL[runTool]
         TR[Tool Registry]
         TF[Tool Functions]
     end
@@ -1484,7 +1484,7 @@ flowchart TD
         AgentLoop[Agent Loop]
         LLMClient[LLM Client]
         Adapter[LLM Adapter]
-        ToolRunner[toolLoader.runTool]
+        ToolRunner[runTool]
         Seams[Chat Seams]
     end
 

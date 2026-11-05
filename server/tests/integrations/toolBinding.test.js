@@ -17,7 +17,9 @@ import path from 'node:path';
 const { default: configCache } = await import('../../configCache.js');
 const { default: registry } =
   await import('../../services/integrations/definitions/IntegrationRegistry.js');
-const { loadTools, getToolsForApp, runTool } = await import('../../toolLoader.js');
+const { getToolsForApp } = await import('../../services/tools/appTools.js');
+const { loadTools } = await import('../../services/tools/catalog.js');
+const { runTool } = await import('../../services/tools/runTool.js');
 const { isToolSelected } = await import('../../utils/toolSelection.js');
 const { syncIntegrationScopeProviders } =
   await import('../../services/integrations/integrationTools.js');

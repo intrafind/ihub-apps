@@ -11,7 +11,7 @@
  */
 
 import configCache from '../../configCache.js';
-import { loadTools } from '../../toolLoader.js';
+import { loadTools } from './catalog.js';
 import {
   filterResourcesByPermissions,
   isAnonymousAccessAllowed

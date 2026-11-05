@@ -25,13 +25,13 @@
 import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { getToolsForApp } from '../services/tools/appTools.js';
 import {
-  getToolsForApp,
   resolveAppNativeWebSearch,
   resolveNativeWebSearchFallbackTools,
   resolveWebSearchEngineToolId,
   READ_URL_TOOL_ID
-} from '../toolLoader.js';
+} from '../services/tools/webSearchResolver.js';
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
 import {
   RESEARCHER,
