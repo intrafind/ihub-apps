@@ -49,8 +49,12 @@ describe('assertPublicTarget hostname hardening', () => {
   });
 
   describe('names only the OS resolver knows (#3307)', () => {
+    const dnsError = code => Object.assign(new Error(code), { code });
+
     beforeEach(() => {
-      resolve4.mockRejectedValue(new Error('ENOTFOUND'));
+      // What a DNS server says about a short internal name: no such name.
+      resolve4.mockRejectedValue(dnsError('ENOTFOUND'));
+      resolve6.mockRejectedValue(dnsError('ENODATA'));
     });
 
     test('falls back to dns.lookup and returns the address for pinning', async () => {
@@ -71,6 +75,27 @@ describe('assertPublicTarget hostname hardening', () => {
       const result = await assertPublicTarget(new URL('https://if-wiki/'));
       expect(result.ok).toBe(false);
       expect(result.code).toBe(UNRESOLVED_HOST);
+    });
+
+    test.each(['ETIMEOUT', 'ESERVFAIL', 'ECONNREFUSED'])(
+      'does not reach getaddrinfo when DNS failed with %s',
+      async code => {
+        // A dead or failing nameserver is not "no such name": getaddrinfo would
+        // hold one of the few libuv slots for the OS resolver timeout.
+        resolve4.mockRejectedValue(dnsError(code));
+        resolve6.mockRejectedValue(dnsError(code));
+        lookup.mockResolvedValue([{ address: '203.0.113.20', family: 4 }]);
+        const result = await assertPublicTarget(new URL('https://r1.blackhole.example/'));
+        expect(lookup).not.toHaveBeenCalled();
+        expect(result.ok).toBe(false);
+        expect(result.code).toBe(UNRESOLVED_HOST);
+      }
+    );
+
+    test('does not reach getaddrinfo when only one family said "no such name"', async () => {
+      resolve6.mockRejectedValue(dnsError('ETIMEOUT'));
+      await assertPublicTarget(new URL('https://half.example/'));
+      expect(lookup).not.toHaveBeenCalled();
     });
 
     test('does not consult the OS resolver when DNS answered', async () => {

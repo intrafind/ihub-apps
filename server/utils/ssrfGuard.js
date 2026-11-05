@@ -167,6 +167,21 @@ export function isPrivateIP(ip) {
 }
 
 /**
+ * Whether one `dns.resolve*` outcome is the DNS server's definite answer that
+ * the name (or record type) does not exist, as opposed to a failure to get an
+ * answer (timeout, SERVFAIL, refused connection).
+ *
+ * @param {PromiseSettledResult<string[]>} outcome
+ * @returns {boolean}
+ */
+function isNoSuchName(outcome) {
+  return (
+    outcome.status === 'rejected' &&
+    (outcome.reason?.code === 'ENOTFOUND' || outcome.reason?.code === 'ENODATA')
+  );
+}
+
+/**
  * `code` of an {@link assertPublicTarget} refusal when the host name has no
  * address at all (as opposed to an address in a private range), so a caller can
  * tell the admin to fix the name or trust the host instead of blaming the range.
@@ -218,23 +233,29 @@ export async function assertPublicTarget(parsedUrl) {
   // private IP we reject. Any unresolved family is ignored (not all hosts
   // have both records).
   let addrs = [];
+  let nameUnknownToDns = false;
   try {
     const [v4, v6] = await Promise.allSettled([dns.resolve4(host), dns.resolve6(host)]);
     if (v4.status === 'fulfilled') addrs.push(...v4.value);
     if (v6.status === 'fulfilled') addrs.push(...v6.value);
+    nameUnknownToDns = isNoSuchName(v4) && isNoSuchName(v6);
   } catch (err) {
     return { ok: false, reason: `DNS resolution failed: ${err.message}` };
   }
 
   // resolve4/resolve6 query the DNS servers directly and ignore /etc/hosts and
-  // the search domains, so a short or internal name (`if-wiki`) comes back
-  // empty although the connection itself would find it. Ask the OS resolver
-  // (getaddrinfo) before giving up, through the guarded lookup so a slow
-  // resolver neither blocks the thread pool nor holds the request for tens of
-  // seconds (it times out into "unresolved"). Every address it returns goes
-  // through the same private-range check below and is pinned by the caller, so
-  // this widens what can be resolved, not what is allowed.
-  if (addrs.length === 0) {
+  // the search domains, so a short or internal name (`if-wiki`) is answered
+  // "no such name" although the connection itself would find it. In that case
+  // ask the OS resolver (getaddrinfo). Only then: a DNS server that times out
+  // or fails (ETIMEOUT, ESERVFAIL) would make getaddrinfo wait for the OS
+  // resolver timeout, and the guarded lookup only limits how long *this* caller
+  // waits; the libuv slot stays taken until the OS call ends. Fresh names
+  // under a dead nameserver must not be able to fill those few slots, so they
+  // are refused as unresolved without ever reaching getaddrinfo.
+  // Every address it returns goes through the same private-range check below
+  // and is pinned by the caller, so this widens what can be resolved, not what
+  // is allowed.
+  if (addrs.length === 0 && nameUnknownToDns) {
     try {
       const found = await new Promise((resolve, reject) => {
         guardedLookup(host, { all: true }, (err, entries) =>
