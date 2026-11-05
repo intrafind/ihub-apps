@@ -101,11 +101,21 @@ export function validateIdForPath(id, idType, res) {
  */
 export function assertValidId(id, idType) {
   if (!isValidId(id)) {
-    throw new ServiceError(
-      'BAD_REQUEST',
-      `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
-    );
+    throw new ServiceError('BAD_REQUEST', invalidIdMessage(idType));
   }
+}
+
+/**
+ * The message of the `BAD_REQUEST` an unsafe ID answers. Routes whose ID reaches a filesystem
+ * call guard it inline (`if (!isValidId(id)) throw new ServiceError('BAD_REQUEST',
+ * invalidIdMessage(...))`) rather than through {@link assertValidId}: a plain boolean guard is
+ * what static analysis recognises as a path sanitizer, a function that throws is not.
+ *
+ * @param {string} idType - Name of the ID for the message ("chat", "file", ...)
+ * @returns {string}
+ */
+export function invalidIdMessage(idType) {
+  return `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`;
 }
 
 /**

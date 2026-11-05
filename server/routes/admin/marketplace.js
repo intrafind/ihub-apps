@@ -21,7 +21,7 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
-import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
+import { invalidIdMessage, isValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import registryService from '../../services/marketplace/RegistryService.js';
 import contentInstaller, {
@@ -155,7 +155,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       const registries = await registryService.listRegistries();
       const registry = registries.find(r => r.id === registryId);
       if (!registry) throw new ServiceError('NOT_FOUND', `Registry '${registryId}' not found`);
@@ -176,7 +178,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       const updated = await registryService.updateRegistry(registryId, req.body);
       logAudit({
         req,
@@ -199,7 +203,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       await registryService.deleteRegistry(registryId);
       logAudit({
         req,
@@ -222,7 +228,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       const catalog = await registryService.refreshRegistry(registryId);
       logAudit({
         req,
@@ -269,7 +277,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       try {
         if (req.body && req.body.source) {
           // Test an unsaved / draft registry config from the request body
@@ -328,7 +338,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId, type, name } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
       const item = await registryService.getItemDetail(registryId, type, name);
       if (type === 'integration') {
@@ -364,7 +376,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId, name } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
       const relPath = typeof req.query.path === 'string' ? req.query.path : '';
       if (!relPath || relPath.length > 255) {
@@ -390,7 +404,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const { registryId, type, name } = req.params;
-      assertValidId(registryId, 'registryId');
+      if (!isValidId(registryId)) {
+        throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
       if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
       const installedBy = req.user?.email || req.user?.username || 'admin';
       // Replacing an item that already exists here must be asked for explicitly
