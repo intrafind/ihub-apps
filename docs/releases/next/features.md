@@ -533,8 +533,10 @@ text page. Every such response has the same body:
 
 - `code` is a stable, machine-readable code; the web app shows its own translated message for it
   (English and German).
-- `error` is an English text for scripts and other API callers. For a server error (5xx) it is a
-  fixed text; the real reason is only written to the log.
+- `error` is an English text for scripts and other API callers. For a server error (5xx) it carries
+  the real message only if it is safe to show (no file paths, hosts, URLs, credentials, SQL or stack
+  details, at most 200 characters); otherwise it is a fixed text. The real reason is always written
+  to the log.
 - OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep their standard `{ error, error_description }`
   body.
 - Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in
