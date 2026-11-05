@@ -4,7 +4,7 @@
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
 
 /**
- * The tool listing (`configCache.getToolsForUser`, GET /api/tools?appId=…)
+ * The tool listing (`getToolsForUser`, GET /api/tools?appId=…)
  * lists an installed integration's tools as the chat gets them: the app binds
  * the installation, the user's groups grant it (`permissions.integrations`,
  * #3093) and the binding allows the action. The instance id alone grants
@@ -40,6 +40,7 @@ jest.unstable_mockModule('../../services/integrations/protocols/index.js', () =>
 }));
 
 const { default: configCache } = await import('../../configCache.js');
+const { getToolsForUser } = await import('../../services/tools/toolListing.js');
 
 const originalGetAppsForUser = configCache.getAppsForUser;
 afterEach(() => {
@@ -56,7 +57,7 @@ const listFor = async ({ app, groups = ['analysts'], grants = [] }) => {
       integrations: new Set(groups.flatMap(group => INTEGRATION_GRANTS[group] || []))
     }
   };
-  const { data } = await configCache.getToolsForUser(user, {}, 'en', { appId: 'chat' });
+  const { data } = await getToolsForUser(user, {}, 'en', { appId: 'chat' });
   return data.map(tool => tool.id).sort();
 };
 

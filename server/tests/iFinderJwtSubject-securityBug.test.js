@@ -22,7 +22,7 @@
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveEnvVarsInObject } from '../configCache.js';
+import { resolveEnvVarsInObject } from '../utils/envVars.js';
 import { up as migrationUp } from '../migrations/V076__fix_ifinder_jwt_subject_template.js';
 
 describe('iFinder JWT subject — env var resolution skip', () => {

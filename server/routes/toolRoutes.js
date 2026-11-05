@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { loadTools, runTool } from '../toolLoader.js';
+import { getToolsForUser } from '../services/tools/toolListing.js';
 import { logInteraction } from '../utils.js';
 import { authRequired } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
@@ -98,7 +99,7 @@ export default function registerToolRoutes(app) {
         const appId = typeof req.query.appId === 'string' ? req.query.appId : undefined;
 
         // Use centralized method to get filtered tools with user-specific ETag
-        const { data: tools, etag: userSpecificEtag } = await configCache.getToolsForUser(
+        const { data: tools, etag: userSpecificEtag } = await getToolsForUser(
           req.user,
           platformConfig,
           userLanguage,
