@@ -8961,6 +8961,15 @@
     "INVALID_RUNS": "The list of runs is not valid.",
     "INVALID_DECISION": "The decision must be approve or reject.",
     "INVALID_STATUS": "The status must be paused, active or disabled.",
-    "UPLOADS_DISABLED": "File uploads are switched off."
+    "UPLOADS_DISABLED": "File uploads are switched off.",
+    "USER_PROMPTS_NOT_ALLOWED": "This sign-in cannot keep personal prompts.",
+    "USER_PROMPTS_DISABLED": "Personal prompts are switched off.",
+    "USER_PROMPTS_UNAVAILABLE": "Your prompts are unavailable right now. Please try again later.",
+    "PROMPT_LIMIT_REACHED": "You have reached the maximum number of prompts. Delete one to make room.",
+    "SHARE_TARGET_NOT_ALLOWED": "You are not allowed to share prompts with this audience.",
+    "PROMPT_FORBIDDEN": "You are not allowed to change this prompt.",
+    "GLOBAL_PROMPT_READ_ONLY": "Global prompts are managed by administrators.",
+    "PROMPT_ACCESS_CHANGED": "Your access to this prompt changed.",
+    "REVISION_CONFLICT": "Someone else changed this item in the meantime. Close the editor and open it again to see the latest version."
   }
 }
