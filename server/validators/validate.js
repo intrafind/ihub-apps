@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { ZodError } from 'zod';
-
 /**
  * Creates an Express middleware that validates request data against Zod schemas.
  * Validates body, query, and params if corresponding schemas are provided.
- * Replaces request data with parsed/validated data on success.
+ * Replaces request data with parsed/validated data on success. A failure goes to the
+ * global error middleware: `400 { error, code: 'VALIDATION_FAILED', details: { issues } }`.
  * @param {Object} schemas - Object containing Zod schemas for validation
  * @param {import('zod').ZodSchema} [schemas.body] - Schema for request body validation
  * @param {import('zod').ZodSchema} [schemas.query] - Schema for query parameters validation
@@ -34,9 +33,8 @@ export default function validate(schemas = {}) {
       }
       next();
     } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ error: 'Invalid request', details: error.issues });
-      }
+      // A ZodError becomes 400 VALIDATION_FAILED with `details.issues` in the global
+      // error middleware (utils/errorResponse.js); anything else is a 500 there.
       return next(error);
     }
   };

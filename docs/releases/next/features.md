@@ -537,6 +537,11 @@ text page. Every such response has the same body:
   fixed text; the real reason is only written to the log.
 - OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep their standard `{ error, error_description }`
   body.
+- Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in
+  `details.issues` (a list of `{ path, code, message }`), instead of `{ error: "Invalid request",
+  details: [...] }`. This covers the chat, tool-run, feedback, session-start, magic-prompt and MCP
+  app endpoints; `error` now reads "Some of the entered data is not valid." and `details` is an
+  object, not a list.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
