@@ -884,9 +884,15 @@ async function driveZip(handlers, { params = {}, body = {}, user } = {}) {
   const req = { params, query: {}, body, headers: {}, user, ip: '127.0.0.1', method: 'POST' };
   for (const handler of handlers) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handler(req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+    } catch (error) {
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   if (!sink.writableEnded) sink.end();
@@ -970,6 +976,7 @@ describe('artifacts as one ZIP', () => {
       user: ADA
     });
     assert.equal(foreign.statusCode, 404);
+    assert.equal(foreign.body.code, 'NOT_FOUND');
 
     const malformed = await driveZip(chatZipHandlers, {
       params: { chatId },
@@ -977,6 +984,7 @@ describe('artifacts as one ZIP', () => {
       user: ADA
     });
     assert.equal(malformed.statusCode, 400);
+    assert.equal(malformed.body.code, 'BAD_REQUEST');
   });
 
   it('is the owner’s alone, like every chat route', async () => {
@@ -995,7 +1003,8 @@ describe('artifacts as one ZIP', () => {
     try {
       const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
       assert.equal(res.statusCode, 413);
-      assert.equal(res.body.code, 'too-many-files');
+      assert.equal(res.body.code, 'PAYLOAD_TOO_LARGE');
+      assert.equal(res.body.details.reason, 'too-many-files');
     } finally {
       delete platform.artifacts;
       configCache.setCacheEntry('config/platform.json', platform);
@@ -1022,6 +1031,7 @@ describe('artifacts as one ZIP', () => {
       user: ANONYMOUS
     });
     assert.equal(beyond.statusCode, 404);
+    assert.deepEqual(beyond.body, { error: 'Artifact not found', code: 'NOT_FOUND' });
   });
 
   it('serves a source file as plain text, never as script', async () => {
