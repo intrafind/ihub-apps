@@ -5,7 +5,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 
 /**
  * Group `tools` grants in groups.json read like an app's tool references in
- * the tool listing (`configCache.getToolsForUser`, GET /api/tools): the agent
+ * the tool listing (`getToolsForUser`, GET /api/tools): the agent
  * id grants all its skills, as docs/a2a-agents.md says — the same way the MCP
  * gateway reads grants (`getVisibleToolIds`).
  */
@@ -38,6 +38,7 @@ jest.unstable_mockModule('../../toolLoader.js', () => ({
 }));
 
 const { default: configCache } = await import('../../configCache.js');
+const { getToolsForUser } = await import('../../services/tools/toolListing.js');
 
 // The listing drops an integration tool whose installation is missing,
 // disabled or not granted to the user's groups; both agents are installed,
@@ -56,7 +57,7 @@ const listFor = async grants => {
     groups: ['g'],
     permissions: { tools: new Set(grants), integrations: new Set(['*']) }
   };
-  const { data } = await configCache.getToolsForUser(user, {}, 'en');
+  const { data } = await getToolsForUser(user, {}, 'en');
   return data.map(tool => tool.id).sort();
 };
 
