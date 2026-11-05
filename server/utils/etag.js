@@ -44,6 +44,8 @@ export function etagWithSuffix(etag, suffix) {
  * @returns {string}
  */
 export function etagForIds(baseEtag, ids, prefix = '') {
-  const sorted = [...ids].sort();
+  // Plain code-unit order, on purpose: `localeCompare` would make the ETag depend on the
+  // server's locale, and workers of one cluster must agree on it.
+  const sorted = [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return etagWithSuffix(baseEtag, `${prefix}${shortHash(JSON.stringify(sorted))}`);
 }
