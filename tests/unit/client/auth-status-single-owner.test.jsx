@@ -120,3 +120,21 @@ test('an expired token drops the cached status before re-checking it', async () 
   );
   expect(apiClient.get).not.toHaveBeenCalled();
 });
+
+test('an OIDC callback drops the stored token before it asks who is signed in', async () => {
+  // The callback set the httpOnly cookie; a token from an earlier session would be sent in
+  // front of it (the server reads the Authorization header first) and hide the new session.
+  localStorage.setItem('authToken', 'stale.token.from.an.earlier.session');
+  window.history.replaceState({}, '', '/?oidc=success&provider=corp');
+  let tokenWhenAsked;
+  fetchAuthStatus.mockImplementation(async () => {
+    tokenWhenAsked = localStorage.getItem('authToken');
+    return SIGNED_IN;
+  });
+
+  await renderProbe();
+
+  await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('admin'));
+  expect(tokenWhenAsked).toBeNull();
+  window.history.replaceState({}, '', '/');
+});
