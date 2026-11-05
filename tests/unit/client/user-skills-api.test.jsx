@@ -202,14 +202,14 @@ describe('writes', () => {
       Promise.reject({
         response: {
           status: 409,
-          data: { error: 'Conflict', details: { code: 'REVISION_CONFLICT' } }
+          data: { error: 'Conflict', code: 'REVISION_CONFLICT' }
         },
         config: {}
       })
     );
     const error = await updateUserSkill('usk_1', body).catch(err => err);
     expect(error.status).toBe(409);
-    expect(error.originalError.response.data.details.code).toBe('REVISION_CONFLICT');
+    expect(error.originalError.response.data.code).toBe('REVISION_CONFLICT');
     expect(cache.get('skills')).toBeNull();
   });
 

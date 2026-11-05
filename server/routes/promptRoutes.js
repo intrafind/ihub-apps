@@ -425,7 +425,7 @@ export function resolveShares(requested, { prompt, allowed, users, groups, noun 
  * @param {{status: number, error: string, details?: Object}} resolved - The failed result.
  * @returns {ServiceError}
  */
-function shareRefusal({ error, details = {} }) {
+export function shareRefusal({ error, details = {} }) {
   const { code = 'BAD_REQUEST', ...rest } = details;
   return new ServiceError(code, error, Object.keys(rest).length ? { details: rest } : undefined);
 }
