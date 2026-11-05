@@ -44,6 +44,7 @@ jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
 }));
 
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { default: configCache } = await import('../configCache.js');
 
 beforeAll(() => {
@@ -59,6 +60,7 @@ afterAll(() => {
 const app = express();
 app.use(express.json());
 registerAdminModelsRoutes(app);
+app.use(errorHandler);
 
 const url = '/api/admin/models/voxtral-mini-realtime/test';
 
@@ -80,8 +82,10 @@ test('a failing endpoint is a 502 carrying the reason', async () => {
   const res = await request(app).post(url);
   expect(res.status).toBe(502);
   expect(res.body).toEqual({
-    error: 'Connection failed: connect ECONNREFUSED',
-    details: 'Connection failed: connect ECONNREFUSED',
-    code: 'upstream-error'
+    // The headline of a 5xx is shown only when it is safe to show (it may name a host); the
+    // reason stays in `details.remediation`, which is what the admin UI shows.
+    error: 'A connected service failed. Please try again later.',
+    code: 'UPSTREAM_ERROR',
+    details: { remediation: 'Connection failed: connect ECONNREFUSED' }
   });
 });

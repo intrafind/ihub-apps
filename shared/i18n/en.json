@@ -9090,6 +9090,12 @@
     "INCOMPATIBLE_IHUB_VERSION": "This iHub version is not compatible with the item.",
     "CODE_NOT_TRUSTED": "The registry is not trusted for code. Mark it as trusted for code to install this item.",
     "CODE_INTEGRITY_REQUIRED": "The catalog lists no hash for a code file of the item.",
-    "INTEGRITY_MISMATCH": "A file of the item does not match the hash the catalog lists."
+    "INTEGRITY_MISMATCH": "A file of the item does not match the hash the catalog lists.",
+    "DISCOVERY_FAILED": "The model list of the endpoint could not be read.",
+    "NOT_TTS_MODEL": "The model is not a text-to-speech model.",
+    "VOICES_UNSUPPORTED": "The provider of this model does not manage voices.",
+    "INVALID_AUDIO": "The audio is missing or not valid.",
+    "UNSUPPORTED_TTS_PROVIDER": "The text-to-speech provider is not supported.",
+    "NO_AUDIO": "The model answered without any audio."
   }
 }

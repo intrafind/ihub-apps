@@ -218,10 +218,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       setDiscoveryError({
         message: translateDiscoveryError(
           t,
-          body.messageKey,
+          body.details?.messageKey,
           body.error || getAdminApiErrorMessage(err)
         ),
-        details: body.details
+        details: body.details?.remediation
       });
     } finally {
       setDiscovering(false);
