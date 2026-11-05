@@ -23,6 +23,7 @@ const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-dir-browse-'))
 process.env.CONTENTS_DIR = contentsDir;
 
 const { default: configCache } = await import('../../configCache.js');
+const { getToolsForUser } = await import('../../services/tools/toolListing.js');
 await import('../../services/integrations/protocols/native/connectors/register.js');
 const { getToolsForApp, loadTools } = await import('../../toolLoader.js');
 const { mayRunTool } = await import('../../routes/toolRoutes.js');
@@ -331,12 +332,12 @@ describe('LDAP browser', () => {
 
     it('narrows the /api/tools listing, even with a "*" tool grant', async () => {
       const platform = { defaultLanguage: 'en' };
-      const forAdmin = await configCache.getToolsForUser(admin, platform, 'en');
+      const forAdmin = await getToolsForUser(admin, platform, 'en');
       assert.deepEqual(browseIds(forAdmin.data), CORP_BROWSE_IDS);
-      const forMember = await configCache.getToolsForUser(member, platform, 'en');
+      const forMember = await getToolsForUser(member, platform, 'en');
       assert.deepEqual(browseIds(forMember.data), []);
       assert.ok(forMember.data.some(tool => tool.id === 'corp__search_people'));
-      const forOperator = await configCache.getToolsForUser(operator, platform, 'en');
+      const forOperator = await getToolsForUser(operator, platform, 'en');
       assert.deepEqual(browseIds(forOperator.data), INFRA_BROWSE_IDS);
     });
 
