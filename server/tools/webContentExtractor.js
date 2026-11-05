@@ -17,6 +17,14 @@ import logger from '../utils/logger.js';
 import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 import {
+  ACCESS_DENIED_CODE,
+  AUTH_REQUIRED_CODE,
+  BOT_PROTECTION_CODE,
+  blockedResponseError,
+  botProtectionToolResult,
+  classifyBlockedResponse
+} from './lib/botProtection.js';
+import {
   acceptLanguageFor,
   countWords,
   extractHtmlPage,
@@ -198,11 +206,22 @@ async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLangua
     if (response.status === 404) {
       throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
     }
-    if (response.status === 401 || response.status === 403) {
-      throw createError(
-        `Authentication required to access this page (HTTP ${response.status})`,
-        'AUTH_REQUIRED'
-      );
+    // 401/403 and the challenge statuses 429/503: a bot-protection block (WAF)
+    // is told apart from a real login request and from a plain refusal, so the
+    // model and the admin are not pointed at "authentication" for a site that
+    // simply does not allow automated access.
+    const blocked = await classifyBlockedResponse(response, finalUrl.toString());
+    if (blocked) {
+      logger.warn('Page read refused by the site', {
+        component: 'WebContentExtractor',
+        host: blocked.host,
+        status: blocked.status,
+        code: blocked.code,
+        ...(blocked.vendor ? { vendor: blocked.vendor } : {}),
+        ...(blocked.reference ? { reference: blocked.reference } : {}),
+        server: response.headers?.get?.('server') || undefined
+      });
+      throw blockedResponseError(blocked);
     }
     throw createError(
       `Failed to fetch webpage: ${response.status} ${response.statusText}`,
@@ -256,6 +275,9 @@ async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLangua
     thin: page.thin
   };
 }
+
+/** Codes of a page the site refused to serve; they reach the caller unchanged. */
+const SITE_REFUSAL_CODES = new Set([BOT_PROTECTION_CODE, AUTH_REQUIRED_CODE, ACCESS_DENIED_CODE]);
 
 /** How long an extracted page stays cached (the web search cache TTL). */
 function pageCacheTtlMs() {
@@ -404,6 +426,8 @@ export default async function webContentExtractor({
     if (error.name === 'AbortError') {
       throw createError('Request timed out while fetching webpage', 'TIMEOUT');
     }
+    // The site's own answer, already worded and coded: not an extraction failure.
+    if (SITE_REFUSAL_CODES.has(error.code)) throw error;
     if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
       throw createError(
         `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates or enable global SSL ignore in platform configuration.`,
@@ -415,6 +439,58 @@ export default async function webContentExtractor({
       'EXTRACTION_FAILED'
     );
   }
+}
+
+/** How long a host that blocked a chat stays remembered for that chat. */
+const BLOCKED_HOST_TTL_MS = 60 * 60 * 1000;
+const MAX_BLOCKED_HOSTS = 1000;
+/** `chatId + host` → { error, expires }. In memory: a restart only costs one more request. */
+const blockedHosts = new Map();
+
+function blockedHostKey(chatId, hostname) {
+  return chatId && hostname ? `${chatId}\u0000${String(hostname).toLowerCase()}` : null;
+}
+
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** Remember that a host blocked this chat's page reads. */
+function rememberBlockedHost(chatId, error) {
+  const key = blockedHostKey(chatId, error.host);
+  if (!key) return;
+  const now = Date.now();
+  if (blockedHosts.size >= MAX_BLOCKED_HOSTS) {
+    for (const [entryKey, entry] of blockedHosts) {
+      if (entry.expires <= now) blockedHosts.delete(entryKey);
+    }
+    // Still full: drop the oldest entries (Map keeps insertion order).
+    while (blockedHosts.size >= MAX_BLOCKED_HOSTS) {
+      blockedHosts.delete(blockedHosts.keys().next().value);
+    }
+  }
+  blockedHosts.set(key, { error, expires: now + BLOCKED_HOST_TTL_MS });
+}
+
+/** The block error for a host that already blocked this chat, or null. */
+function recallBlockedHost(chatId, url) {
+  const key = blockedHostKey(chatId, hostnameOf(url));
+  const entry = key ? blockedHosts.get(key) : null;
+  if (!entry) return null;
+  if (entry.expires <= Date.now()) {
+    blockedHosts.delete(key);
+    return null;
+  }
+  return entry.error;
+}
+
+/** Forget every remembered block (for tests). */
+export function clearBlockedHosts() {
+  blockedHosts.clear();
 }
 
 /** Bounds of the model-facing `maxLength` (mirrors tools/webContentExtractor.json). */
@@ -441,13 +517,27 @@ export async function extractForTool({ url, uri, link, maxLength, offset, langua
   if (!Number.isFinite(length)) length = TOOL_DEFAULT_LENGTH;
   length = Math.min(TOOL_MAX_LENGTH, Math.max(TOOL_MIN_LENGTH, Math.floor(length)));
   const start = Number(offset);
-  return webContentExtractor({
-    url,
-    uri,
-    link,
-    maxLength: length,
-    offset: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0,
-    language,
-    chatId
-  });
+  const targetUrl = url || uri || link;
+
+  // A host that already blocked this chat is not asked again.
+  const known = recallBlockedHost(chatId, targetUrl);
+  if (known) return botProtectionToolResult(known, targetUrl);
+
+  try {
+    return await webContentExtractor({
+      url,
+      uri,
+      link,
+      maxLength: length,
+      offset: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0,
+      language,
+      chatId
+    });
+  } catch (error) {
+    if (error.code !== BOT_PROTECTION_CODE) throw error;
+    // Handed to the model as a result it cannot misread as "try again", not
+    // as a thrown error string.
+    rememberBlockedHost(chatId, error);
+    return botProtectionToolResult(error, targetUrl);
+  }
 }
