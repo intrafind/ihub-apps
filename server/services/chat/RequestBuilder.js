@@ -14,7 +14,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { getScopeProvider } from '../integrations/scopes/index.js';
-import { availableOnlyBindingKeys } from '../../../shared/integrationDefaults.js';
+import { appDefaultEnabledTools } from '../integrations/appIntegrationRefs.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
@@ -705,11 +705,7 @@ class RequestBuilder {
 
       // A request that names no tools (an API call) starts from the app's
       // defaults: an integration the app only makes available stays off.
-      let requestTools = enabledTools;
-      if (!Array.isArray(requestTools) && availableOnlyBindingKeys(app).size > 0) {
-        const { appDefaultEnabledTools } = await import('../integrations/integrationPicker.js');
-        requestTools = appDefaultEnabledTools(app);
-      }
+      const requestTools = Array.isArray(enabledTools) ? enabledTools : appDefaultEnabledTools(app);
 
       const context = {
         user,

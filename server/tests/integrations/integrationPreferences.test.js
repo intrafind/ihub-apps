@@ -168,6 +168,25 @@ describe('the app defaults', () => {
     assert.equal(appDefaultEnabledTools(APPS[0]), undefined);
   });
 
+  it('keeps a ticked iAssistant action in the defaults of a request without tools', () => {
+    const integrations = (iassistant, jira = { enabledByDefault: false }) => ({
+      tools: ['drawio'],
+      integrations: { iassistant, jira }
+    });
+    // `ask` ticked: the model's `iassistant__ask` must survive the narrowing.
+    assert.deepEqual(appDefaultEnabledTools(integrations({ actions: ['ask'] })), [
+      'drawio',
+      'iassistant'
+    ]);
+    // Scope settings only, or itself available-only: not offered as a tool.
+    assert.deepEqual(appDefaultEnabledTools(integrations({ actions: [] })), ['drawio']);
+    assert.deepEqual(appDefaultEnabledTools(integrations({})), ['drawio']);
+    assert.deepEqual(
+      appDefaultEnabledTools(integrations({ actions: ['ask'], enabledByDefault: false })),
+      ['drawio']
+    );
+  });
+
   it('keeps an available-only integration off for a user who saved a default earlier', () => {
     const offered = ['drawio', 'ifinder'];
     // `jira` was added as available only: not switched on for existing users.
