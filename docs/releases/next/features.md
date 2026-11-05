@@ -562,6 +562,11 @@ text page. Every such response has the same body:
   `details.code` to the top-level `code`; a prompt the caller may not see answers `NOT_FOUND`, an
   unknown share target `BAD_REQUEST` with `details.unknown`, and a malformed body
   `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
+- The prompt administration endpoints (`/api/admin/prompts*`, `/api/completions`) answer in this shape
+  as well: `NOT_FOUND`, `BAD_REQUEST` (a missing field or an unsafe id), `CONFLICT` (a prompt id that
+  already exists) and `VALIDATION_FAILED` with `details.issues` for the user prompt settings. A
+  failed model call of `/api/completions` that is not a provider error answers `INTERNAL_ERROR`
+  without the technical reason, which is only logged.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
