@@ -19,6 +19,7 @@ import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
 import { chatContextInventory } from './chatContextTools.js';
+import { applyProjectTestScope } from '../knowledge/projectTestScope.js';
 import {
   isVoiceTurn,
   resolveVoiceInstruction,
@@ -390,7 +391,8 @@ class RequestBuilder {
     preparationId = null,
     projectId = null,
     integrationScopes = null,
-    attachedProjectIds = []
+    attachedProjectIds = [],
+    testProjectId = null
   }) {
     try {
       const { data: apps } = configCache.getApps();
@@ -408,9 +410,12 @@ class RequestBuilder {
       }
       // The chat's container project and the projects attached from the
       // picker travel on the app object, the way the active skills do, so
-      // the prompt builder and the tool loader see one scope (#1036).
-      const app =
-        projectId || attachedProjectIds?.length
+      // the prompt builder and the tool loader see one scope (#1036). A
+      // project test (#3309), already authorized by the route, narrows the
+      // scope to the one project under test instead.
+      const app = testProjectId
+        ? applyProjectTestScope(configuredApp, testProjectId)
+        : projectId || attachedProjectIds?.length
           ? {
               ...configuredApp,
               ...(projectId ? { _projectId: projectId } : {}),

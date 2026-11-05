@@ -280,8 +280,16 @@ const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/Usage
  *   settings, variables, recent apps, the iAssistant conversation. Every mount is a
  *   new chat that starts from the app's own defaults, as a new user would see it.
  * @param {string|null} [props.appId] - The app to show when `embedded`
+ * @param {string|null} [props.testProjectId] - When `embedded`: the admin project this chat
+ *   tests (Admin → Projects → Try in chat, #3309). Every turn names it, and the server runs
+ *   it with that project as the only one in scope, as a temporary chat.
  */
-function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId = null }) {
+function AppChat({
+  preloadedApp = null,
+  embedded = false,
+  appId: embeddedAppId = null,
+  testProjectId: embeddedTestProjectId = null
+}) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const routeParams = useParams();
@@ -294,6 +302,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // Embedded: where this app's own page lives, for links that must not point
   // at the host page.
   const appPagePath = embedded ? buildPath(`/apps/${encodeURIComponent(appId)}`) : null;
+  // Only a host page's embedded chat tests a project; the route never does.
+  const testProjectId = embedded ? embeddedTestProjectId : null;
   const openInNewTab = useCallback(path => {
     window.open(buildPath(path), '_blank', 'noopener,noreferrer');
   }, []);
@@ -1508,7 +1518,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {}),
           ...(Object.keys(integrationScopes).length > 0 ? { integrationScopes } : {}),
-          ...(containerProjectId ? { projectId: containerProjectId } : {})
+          ...(containerProjectId ? { projectId: containerProjectId } : {}),
+          ...(testProjectId ? { testProjectId } : {})
         };
 
         // Prepare validated variables
@@ -1564,6 +1575,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [
     app,
     containerProjectId,
+    testProjectId,
     adoptContainerProject,
     messages.length,
     hydrating,
@@ -1895,6 +1907,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      ...(testProjectId ? { testProjectId } : {}),
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }
         : {}),
@@ -1906,6 +1919,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       selectedOutputFormat,
       currentLanguage,
       containerProjectId,
+      testProjectId,
       attachedProjectIds,
       chatStoredServerSide
     ]
@@ -2585,6 +2599,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // chat afterwards; the same id on later turns is accepted too, which
       // keeps a chat that is not stored server-side inside its project.
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      // A project test (#3309): the server puts this one project in scope and
+      // keeps the chat temporary. Every turn says so, the server keeps no state.
+      ...(testProjectId ? { testProjectId } : {}),
       // The projects picked for this chat; the server adds them to the chat's own.
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }

@@ -37,7 +37,8 @@ jest.mock('../../../client/src/utils/debugLog', () => ({
 }));
 jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
   __esModule: true,
-  buildApiUrl: path => `/api/${path}`
+  buildApiUrl: path => `/api/${path}`,
+  buildPath: path => path
 }));
 
 jest.mock('../../../client/src/api', () => ({
@@ -355,6 +356,24 @@ function renderChat({ path = '/apps/acme', app = APP } = {}) {
   );
 }
 
+/** The page embedded in a host page, as the admin project editor's chat is. */
+function renderEmbedded({ app = APP, testProjectId } = {}) {
+  const path = '/admin/projects/handbook/edit';
+  window.history.replaceState({}, '', path);
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path="/admin/projects/:id/edit"
+          element={
+            <AppChat embedded appId="acme" preloadedApp={app} testProjectId={testProjectId} />
+          }
+        />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
 /** A `fetchChat` that stays out until the test resolves it. */
 function deferredChat(chat = {}) {
   let settle;
@@ -604,6 +623,63 @@ describe('a chat started from a project page', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('a chat that tests an admin project (#3309)', () => {
+  /** Let the auto-started first turn out and return what it posted. */
+  async function firstTurnParams() {
+    await act(async () => {});
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(mockStreams).toHaveLength(1);
+    await act(async () => {
+      await mockEventSource.onEvent({
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        envelope: { type: SSE_V2_EVENTS.STREAM_CONNECTED, seq: 0, data: {} }
+      });
+    });
+    expect(sendAppChatMessage).toHaveBeenCalledTimes(1);
+    return sendAppChatMessage.mock.calls[0][3];
+  }
+
+  beforeEach(() => {
+    sendAppChatMessage.mockClear();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('names the project on its turn, and no container or attached project', async () => {
+    renderEmbedded({ app: { ...APP, autoStart: true }, testProjectId: 'handbook' });
+    const params = await firstTurnParams();
+    expect(params.testProjectId).toBe('handbook');
+    expect(params).not.toHaveProperty('projectId');
+    expect(params).not.toHaveProperty('projects');
+  });
+
+  test('sends nothing of the kind from an embedded chat that tests no project', async () => {
+    renderEmbedded({ app: { ...APP, autoStart: true } });
+    expect(await firstTurnParams()).not.toHaveProperty('testProjectId');
+  });
+
+  test("never tests a project on the app's own route, whatever the prop says", async () => {
+    window.history.replaceState({}, '', '/apps/acme');
+    render(
+      <MemoryRouter initialEntries={['/apps/acme']}>
+        <Routes>
+          <Route
+            path="/apps/:appId"
+            element={
+              <AppChat preloadedApp={{ ...APP, autoStart: true }} testProjectId="handbook" />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await firstTurnParams()).not.toHaveProperty('testProjectId');
   });
 });
 

@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import {
   createAdminProject,
   deleteAdminProjectItem,
@@ -46,6 +47,9 @@ import {
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
 
+// The chat pulls in the whole chat page: load it when an admin opens it.
+const ProjectTestPanel = lazy(() => import('../components/ProjectTestPanel'));
+
 /** Text loader of the shared preview dialog. */
 const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
@@ -58,7 +62,8 @@ const adminErrorMessage = err => getAdminApiErrorMessage(err);
  * remove, and a test of every item; the settings sit beside them as rows
  * that each open a dialog and save at once, as on a user's project page.
  * While an item is being extracted the page re-reads the project every two
- * seconds.
+ * seconds. **Try in chat** opens a scratch chat beside the page that has this
+ * project and nothing else in scope (#3309).
  *
  * @param {{id: string}} props - The project id, or `new`.
  * @returns {JSX.Element}
@@ -94,6 +99,8 @@ function AdminProjectEditPageContent({ id }) {
   const [busyItemId, setBusyItemId] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The scratch chat beside the page (Try in chat).
+  const [chatOpen, setChatOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState(() => new Set());
   // The items a move or copy dialog is open for, and its starting mode.
   const [transfer, setTransfer] = useState(null);
@@ -380,9 +387,17 @@ function AdminProjectEditPageContent({ id }) {
     </section>
   );
 
+  // With the chat open the page splits: the editor scrolls on the left, the
+  // chat sits on the right (full screen below the lg breakpoint).
+  const split = chatOpen && !isNew;
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto py-6 px-4">
+    <div
+      className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${split ? 'lg:flex lg:h-full lg:min-h-0' : ''}`}
+    >
+      <div
+        className={`max-w-7xl mx-auto py-6 px-4 ${split ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : ''}`}
+      >
         <AdminBreadcrumb
           crumbs={[
             { label: t('admin.nav.overview', 'Overview'), href: '/admin' },
@@ -397,7 +412,12 @@ function AdminProjectEditPageContent({ id }) {
             {title}
           </h1>
           {!isNew && (
-            <AdminProjectHeaderActions checks={checks} onHistory={() => setHistoryOpen(true)} />
+            <AdminProjectHeaderActions
+              checks={checks}
+              onHistory={() => setHistoryOpen(true)}
+              onTryInChat={() => setChatOpen(open => !open)}
+              tryInChatOpen={chatOpen}
+            />
           )}
         </div>
 
@@ -524,6 +544,18 @@ function AdminProjectEditPageContent({ id }) {
         onConfirm={() => blocker.proceed?.()}
         onDeny={() => blocker.reset?.()}
       />
+
+      {split && (
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-16 lg:w-[45%] lg:max-w-3xl">
+              <LoadingSpinner size="lg" />
+            </div>
+          }
+        >
+          <ProjectTestPanel projectId={id} project={project} onClose={() => setChatOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

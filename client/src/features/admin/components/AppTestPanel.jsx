@@ -20,12 +20,32 @@ export function PanelMessage({ icon, children }) {
 }
 
 /**
+ * The app a project test runs: the app as saved, but with the model picker
+ * on whatever the app says (the point is to compare models) and the chat
+ * incognito, so the scratch chat is never listed in the admin's history.
+ */
+function projectTestApp(app) {
+  return {
+    ...app,
+    ephemeral: true,
+    disallowModelSelection: false,
+    settings: { ...app.settings, model: { ...app.settings?.model, enabled: true } }
+  };
+}
+
+/**
  * One run of the test: loads the saved app the way the chat page does and
  * renders the real chat for it. Keyed by the reload counter, so every reload
  * refetches the app and starts a new chat. Also the chat of the integration
- * test panel (`integrations/IntegrationTestPanel.jsx`).
+ * test panel (`integrations/IntegrationTestPanel.jsx`) and of the project
+ * test panel (`ProjectTestPanel.jsx`).
+ *
+ * @param {Object} props
+ * @param {string} props.appId - The saved app to run
+ * @param {string} [props.testProjectId] - An admin project to test: it is the only
+ *   one in scope and the chat is temporary (#3309)
  */
-export function TestChat({ appId }) {
+export function TestChat({ appId, testProjectId = null }) {
   const { t } = useTranslation();
   const [state, setState] = useState({ status: 'loading', app: null });
 
@@ -75,7 +95,12 @@ export function TestChat({ appId }) {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <AppChat embedded appId={appId} preloadedApp={state.app} />
+      <AppChat
+        embedded
+        appId={appId}
+        preloadedApp={testProjectId ? projectTestApp(state.app) : state.app}
+        testProjectId={testProjectId}
+      />
     </div>
   );
 }

@@ -5333,6 +5333,20 @@
         "noItems": "Das Projekt hat keine Elemente zum Testen.",
         "itemOk": "{{chars}} Zeichen, ~{{tokens}} Tokens"
       },
+      "tryInChat": {
+        "open": "Im Chat ausprobieren",
+        "hide": "Chat ausblenden",
+        "hint": "Neben dem Editor mit diesem Projekt und sonst nichts chatten",
+        "title": "Im Chat ausprobieren",
+        "subtitle": "Ein Probe-Chat nur mit diesem Projekt",
+        "close": "Chat schließen",
+        "app": "App",
+        "appHelp": "Die Anweisungen und Werkzeuge der App gelten; die anderen Projekte, die sie verknüpft, bleiben außen vor. Das Modell wählen Sie im Chat.",
+        "adminNotice": "Der Chat läuft als Sie, auf dem gespeicherten Stand des Projekts. Wie andere Nutzer das Projekt erreichen (App-Verknüpfungen, Veröffentlichung, Gruppen), wird nicht geprüft. Der Chat ist temporär: Er landet nicht in Ihrem Verlauf und dem Projekt wird nichts hinzugefügt.",
+        "notReady": "{{count}} von {{total}} Elementen sind nicht bereit (wartend, in Extraktion oder fehlgeschlagen) und werden noch nicht durchsucht.",
+        "noItems": "Das Projekt hat noch keine Elemente, es gibt also nichts zu finden. Fügen Sie zuerst ein Element hinzu.",
+        "noApps": "Es gibt keine aktivierte Chat-App, mit der sich das Projekt ausprobieren lässt. Aktivieren Sie eine unter Admin → Apps."
+      },
       "scanWarning": "Uploads werden nicht auf Schadsoftware geprüft. Konfigurieren Sie platform.projects.scan, um sie zu prüfen.",
       "fields": {
         "id": "Projekt-ID",

@@ -65,6 +65,18 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: () => null
 }));
 jest.mock('../../../client/src/features/admin/components/ChangeHistoryDrawer', () => () => null);
+// The chat is the app editor's; here it only shows what the page hands it.
+jest.mock('../../../client/src/features/admin/components/ProjectTestPanel', () => ({
+  __esModule: true,
+  default: ({ projectId, project, onClose }) => (
+    <aside data-testid="project-test-panel" data-project={projectId}>
+      {project?.items?.length} items
+      <button type="button" onClick={onClose}>
+        close panel
+      </button>
+    </aside>
+  )
+}));
 // A plain English input stands in for the multi-language editor.
 jest.mock('../../../client/src/shared/components/DynamicLanguageEditor', () => ({
   __esModule: true,
@@ -555,5 +567,50 @@ describe('AdminProjectEditPage – create availability', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make available' })
     );
     expect(everyone).toBeChecked();
+  });
+});
+
+describe('AdminProjectEditPage – try in chat', () => {
+  async function openPage() {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([READY]));
+    renderAt('/admin/projects/handbook/edit');
+    return screen.findByRole('button', { name: 'Try in chat' });
+  }
+
+  test('opens the chat beside the page for this project and closes it again', async () => {
+    const button = await openPage();
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('project-test-panel')).toBeNull();
+
+    fireEvent.click(button);
+    const panel = await screen.findByTestId('project-test-panel');
+    expect(panel).toHaveAttribute('data-project', 'handbook');
+    expect(panel).toHaveTextContent('1 items');
+    expect(screen.getByRole('button', { name: 'Hide chat' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'close panel' }));
+    await waitFor(() => expect(screen.queryByTestId('project-test-panel')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Try in chat' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try in chat' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide chat' }));
+    await waitFor(() => expect(screen.queryByTestId('project-test-panel')).toBeNull());
+  });
+
+  test('keeps the item checks apart: Test still tests the items, not the chat', async () => {
+    mockApi.testAdminProject.mockResolvedValue({ success: true, duration: 5, items: [] });
+    await openPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(mockApi.testAdminProject).toHaveBeenCalledWith('handbook'));
+    expect(screen.queryByTestId('project-test-panel')).toBeNull();
+  });
+
+  test('offers no chat while the project does not exist yet', async () => {
+    renderAt('/admin/projects/new');
+    await screen.findByRole('button', { name: 'Create and add items' });
+    expect(screen.queryByRole('button', { name: 'Try in chat' })).toBeNull();
   });
 });

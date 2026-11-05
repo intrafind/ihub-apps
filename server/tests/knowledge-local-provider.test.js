@@ -58,6 +58,7 @@ import PromptService from '../services/PromptService.js';
 import { processMessageTemplates } from '../serverHelpers.js';
 import { chatPostSchema } from '../validators/index.js';
 import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
+import { applyProjectTestScope } from '../services/knowledge/projectTestScope.js';
 import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMaterializer.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import ChatService from '../services/chat/ChatService.js';
@@ -70,6 +71,13 @@ import { resolveCitations } from '../../shared/sources/citations.js';
 
 const ADA = { id: 'user-ada', name: 'Ada', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace', groups: ['authenticated'] };
+const ROOT = {
+  id: 'user-root',
+  name: 'Root',
+  groups: ['authenticated'],
+  isAdmin: true,
+  isContentAdmin: true
+};
 
 let scratch;
 let repo;
@@ -1804,8 +1812,8 @@ describe('chat route and projects', () => {
   ).handlers;
 
   /** Drive the POST chain from `validate()` on; `req.user` stands in for the auth middleware. */
-  async function post({ appId, chatId, body }) {
-    const req = { params: { appId, chatId }, body, headers: {}, query: {}, user: { ...ADA } };
+  async function post({ appId, chatId, body, user = ADA }) {
+    const req = { params: { appId, chatId }, body, headers: {}, query: {}, user: { ...user } };
     const res = { statusCode: 200, body: null };
     res.status = code => {
       res.statusCode = code;
@@ -1868,6 +1876,131 @@ describe('chat route and projects', () => {
         { id: 'chat', name: { en: 'Chat' }, enabled: true }
       ]);
     }
+  });
+
+  describe('project test (#3309)', () => {
+    const refusal = { code: 'PROJECT_MISMATCH', message: 'stop here' };
+    const message = [{ role: 'user', content: 'What does the handbook say?' }];
+
+    /** Post a turn and keep what the route handed to the request builder and the turn. */
+    async function postTest({ user, body, chatId }) {
+      const prepared = [];
+      const turns = [];
+      let res;
+      await withStubs(
+        {
+          prepare: async params => {
+            prepared.push(params);
+            return {
+              success: true,
+              data: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] }
+            };
+          },
+          runTurn: async params => {
+            turns.push(params);
+            return { status: 'error', errorInfo: refusal, refusal };
+          }
+        },
+        async () => {
+          res = await post({ appId: 'chat', chatId, user, body: { messages: message, ...body } });
+        }
+      );
+      return { res, prepared, turns };
+    }
+
+    before(async () => {
+      await repo.createAdmin(
+        { id: 'handbook', name: { en: 'Handbook' }, enabled: false, items: [] },
+        { actor: ADA }
+      );
+    });
+    after(async () => {
+      await repo.delete('handbook');
+    });
+
+    it('refuses a user who is not a content admin before anything is prepared', async () => {
+      const { res, prepared, turns } = await postTest({
+        user: ADA,
+        chatId: 'chat-test-forbidden',
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(res.statusCode, 403);
+      assert.equal(res.body.code, 'PROJECT_TEST_FORBIDDEN');
+      assert.equal(prepared.length, 0);
+      assert.equal(turns.length, 0);
+    });
+
+    it('answers 404 for a project that is not an admin project', async () => {
+      for (const [index, testProjectId] of ['missing', textProject.id].entries()) {
+        const { res, prepared } = await postTest({
+          user: ROOT,
+          chatId: `chat-test-missing-${index}`,
+          body: { testProjectId }
+        });
+        assert.equal(res.statusCode, 404, testProjectId);
+        assert.equal(res.body.code, 'PROJECT_NOT_FOUND');
+        assert.equal(prepared.length, 0);
+      }
+    });
+
+    it('scopes the turn to the project and keeps the chat temporary', async () => {
+      const { prepared, turns } = await postTest({
+        user: ROOT,
+        chatId: 'chat-test-scoped',
+        // The picker's fields and a stored-chat flag do not widen or keep a test chat.
+        body: {
+          testProjectId: 'handbook',
+          projectId: textProject.id,
+          projects: [textProject.id],
+          ephemeral: false
+        }
+      });
+      assert.equal(prepared.length, 1);
+      assert.equal(prepared[0].testProjectId, 'handbook');
+      assert.equal(prepared[0].projectId, null, 'no container');
+      assert.deepEqual(prepared[0].attachedProjectIds, [], 'nothing attached');
+      assert.equal(turns.length, 1);
+      assert.equal(turns[0].persistence.temporary, true, 'never listed, expires on its own');
+      assert.equal(turns[0].persistence.projectId, null);
+      assert.equal(turns[0].persistence.projects, undefined, 'nothing is written to a project');
+    });
+
+    it('does not send the field when the request has none', async () => {
+      const { prepared } = await postTest({ user: ROOT, chatId: 'chat-test-none', body: {} });
+      assert.equal(prepared.length, 1);
+      assert.equal('testProjectId' in prepared[0], false);
+    });
+
+    it('reaches a disabled, unlinked project and nothing else through the narrowed app', async () => {
+      // The app links another project, a container and an attachment, and
+      // switched projects off for itself: none of that is in a test's scope.
+      const configured = {
+        id: 'chat',
+        projects: ['kb'],
+        features: { projects: false },
+        _projectId: textProject.id,
+        _attachedProjectIds: [textProject.id]
+      };
+      const reader = { ...ROOT, permissions: { apps: new Set(['*']) } };
+      const scope = await resolveProjectScope({
+        appConfig: applyProjectTestScope(configured, 'handbook'),
+        user: reader
+      });
+      assert.deepEqual(
+        scope.map(entry => [entry.project.id, entry.origin, entry.instructions]),
+        [['handbook', 'app', true]]
+      );
+      assert.equal(scope[0].write, false, 'a test only reads');
+      // The same project reaches nobody else: it is disabled and not published.
+      const other = { ...ADA, permissions: { apps: new Set(['*']) } };
+      assert.deepEqual(
+        await resolveProjectScope({
+          appConfig: applyProjectTestScope(configured, 'handbook'),
+          user: other
+        }),
+        []
+      );
+    });
   });
 
   it('answers a turn refused at persistence with 409 PROJECT_MISMATCH', async () => {

@@ -3,6 +3,7 @@
 
 import configCache from '../../configCache.js';
 import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
+import { resolveProjectTestScope } from '../../services/knowledge/projectTestScope.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -879,6 +880,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
+          testProjectId: requestedTestProjectId,
           integrationScopes: requestedScopes,
           toolApprovalCapable
         } = req.body;
@@ -902,14 +904,28 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
         // on the request to the prompt builder, persisted with the chat.
+        // A project test (#3309) puts one admin project in scope for this turn
+        // and keeps the chat temporary; the picker's fields do not apply to it.
+        let projectTest = null;
+        if (requestedTestProjectId !== undefined) {
+          projectTest = await resolveProjectTestScope({
+            user: req.user,
+            testProjectId: requestedTestProjectId
+          });
+          if (!projectTest.ok) {
+            return res
+              .status(projectTest.status)
+              .json({ error: projectTest.message, code: projectTest.code });
+          }
+        }
         const chatProjects = await resolveChatProjects({
           req,
           chat: access.chat,
           // Case-insensitive like the request builder, which accepts the id
           // in any case: a missed app would skip its `userProjects` gate.
           app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
-          projectId: requestedProjectId,
-          projects: requestedProjects
+          projectId: projectTest ? undefined : requestedProjectId,
+          projects: projectTest ? undefined : requestedProjects
         });
         if (!chatProjects.ok) {
           return res
@@ -973,7 +989,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           features: configCache.getFeatures(),
           platformConfig: configCache.getPlatform(),
           user: req.user,
-          ephemeral
+          // A scratch chat of a project test is never kept (#3309).
+          ephemeral: projectTest ? true : ephemeral
         });
         // An id the store cannot key cannot be a chat any more.
         if (!isPersistableChatId(chatId)) return sendBadRequest(res, 'Invalid chat id');
@@ -1286,6 +1303,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           chatId,
           projectId: chatProjects.containerId,
           attachedProjectIds: chatProjects.attachedIds,
+          ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
           integrationScopes
         };
 
