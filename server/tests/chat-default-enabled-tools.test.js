@@ -45,8 +45,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
 jest.unstable_mockModule('../adapters/index.js', () => ({
   createCompletionRequest: async () => ({ url: 'http://example.test', method: 'POST', body: {} })
 }));
-jest.unstable_mockModule('../toolLoader.js', () => ({
-  getToolsForApp,
+jest.unstable_mockModule('../services/tools/appTools.js', () => ({ getToolsForApp }));
+jest.unstable_mockModule('../services/tools/webSearchResolver.js', () => ({
   resolveAppNativeWebSearch: () => false,
   READ_URL_TOOL_ID: 'read_url'
 }));
