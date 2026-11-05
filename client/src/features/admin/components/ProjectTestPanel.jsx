@@ -88,6 +88,18 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
   // Below the `lg` breakpoint the panel covers the editor (`lg:static` in its classes).
   const overlay = !useMediaQuery('(min-width: 64rem)');
   useFocusTrap(panelRef, { isActive: overlay, initialFocusRef: closeRef });
+  // Escape closes the dialog. Listened for on the element, as the focus trap
+  // does, rather than with a handler on the JSX element: a non-interactive
+  // element must not carry one (jsx-a11y/no-noninteractive-element-interactions).
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!overlay || !panel) return undefined;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    panel.addEventListener('keydown', closeOnEscape);
+    return () => panel.removeEventListener('keydown', closeOnEscape);
+  }, [overlay, onClose]);
   const title = t('admin.projects.tryInChat.title', 'Try in chat');
   const [apps, setApps] = useState(null);
   const [appsError, setAppsError] = useState(null);
@@ -114,9 +126,6 @@ function ProjectTestPanel({ projectId, project = null, onClose }) {
       ref={panelRef}
       aria-label={title}
       {...(overlay ? { role: 'dialog', 'aria-modal': true } : {})}
-      onKeyDown={event => {
-        if (overlay && event.key === 'Escape') onClose();
-      }}
       data-testid="project-test-panel"
       className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900 lg:static lg:z-auto lg:h-full lg:w-[45%] lg:min-w-[26rem] lg:max-w-3xl lg:shrink-0 lg:border-l lg:border-gray-200 lg:dark:border-gray-700"
     >
