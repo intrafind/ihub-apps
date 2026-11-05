@@ -18,7 +18,7 @@ The configuration validation system uses [Zod](https://github.com/colinhacks/zod
 
 1. **Schema Definitions** (`/server/validators/`): Individual schema files for each configuration type
 2. **Validation Middleware** (`/server/validators/validate.js`): Express middleware for API request validation
-3. **Configuration Loaders** (`/server/*Loader.js`): Apply validation during configuration loading
+3. **Resource Table** (`/server/resourceLoaders.js`): Which resources load from a directory of `contents/` and how each is validated
 4. **Resource Loader Factory** (`/server/utils/resourceLoader.js`): Generic validation framework
 
 ### Validation Flow
@@ -408,16 +408,18 @@ export const newConfigSchema = z.object({
 export const knownNewConfigKeys = Object.keys(newConfigSchema.shape);
 ```
 
-2. **Integrate with resource loader:**
+2. **Add an entry to the resource table** in `server/resourceLoaders.js`:
 ```javascript
-import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
 import { newConfigSchema, knownNewConfigKeys } from './validators/newConfigSchema.js';
 
-const newConfigLoader = createResourceLoader({
-  resourceName: 'NewConfig',
-  individualPath: 'newconfigs',
-  validateItem: createSchemaValidator(newConfigSchema, knownNewConfigKeys)
-});
+export const RESOURCE_LOADERS = {
+  // ...
+  newconfigs: {
+    resourceName: 'NewConfig',
+    directory: 'newconfigs',
+    validateItem: createSchemaValidator(newConfigSchema, knownNewConfigKeys)
+  }
+};
 ```
 
 ### Custom Validation Rules
