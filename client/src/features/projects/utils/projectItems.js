@@ -389,16 +389,19 @@ export function buildItemChanges(item, draft) {
   if (error) return { changes: null, error };
   const picked = body.ref;
   // The profile and the language are optional: an emptied one is dropped.
-  const kept = { ...(item.ref || {}) };
+  const kept = { ...item.ref };
   delete kept.searchProfile;
   delete kept.language;
   const ref = { ...kept, ...picked };
   const changes = {};
   const name = (draft.name || '').trim();
   if (name && name !== item.name) changes.name = name;
-  const same = (a, b) =>
-    JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
-  if (!same(ref, item.ref || {})) changes.ref = ref;
+  // The values of a reference are scalars: equal keys with equal values.
+  const stored = item.ref || {};
+  const keys = Object.keys(ref);
+  const same =
+    keys.length === Object.keys(stored).length && keys.every(key => ref[key] === stored[key]);
+  if (!same) changes.ref = ref;
   return { changes: Object.keys(changes).length > 0 ? changes : null, error: null };
 }
 

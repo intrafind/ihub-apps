@@ -7,12 +7,7 @@ import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import { MAX_ITEM_NAME_LENGTH } from '../utils/projectView';
 import { buildItemChanges, draftFromItem } from '../utils/projectItems';
-import {
-  IFinderDocumentPicker,
-  IFinderQueryPicker,
-  PagePicker,
-  UrlPicker
-} from './item-dialog/ItemPickers';
+import { LinkKindPicker } from './item-dialog/ItemPickers';
 import {
   INPUT_CLASS,
   LABEL_CLASS,
@@ -89,44 +84,6 @@ function EditItemDialog({ item, onClose, onSave, api }) {
     }
   };
 
-  const renderPicker = () => {
-    switch (item.kind) {
-      case 'url':
-        // No crawl: it adds pages, and this edits one.
-        return (
-          <UrlPicker
-            draft={draft}
-            update={update}
-            checkUrl={api.checkUrl}
-            previewUrl={api.previewUrl}
-            errorMessage={api.errorMessage}
-          />
-        );
-      case 'page':
-        return <PagePicker draft={draft} update={update} pages={pages} />;
-      case 'ifinder-document':
-        return (
-          <IFinderDocumentPicker
-            draft={draft}
-            update={update}
-            searchIFinder={api.searchIFinder}
-            fetchProfiles={api.fetchIFinderProfiles}
-            errorMessage={api.errorMessage}
-          />
-        );
-      case 'ifinder-query':
-        return (
-          <IFinderQueryPicker
-            draft={draft}
-            update={update}
-            fetchProfiles={api.fetchIFinderProfiles}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <Modal
       isOpen
@@ -142,7 +99,8 @@ function EditItemDialog({ item, onClose, onSave, api }) {
           >
             {t('projects.editItem.title', 'Edit item')}
           </h2>
-          {renderPicker()}
+          {/* No crawl: it adds pages, and this edits one. */}
+          <LinkKindPicker kind={item.kind} draft={draft} update={update} api={api} pages={pages} />
           <div>
             <label htmlFor="edit-item-name" className={LABEL_CLASS}>
               {t('projects.addItem.name', 'Name')}
