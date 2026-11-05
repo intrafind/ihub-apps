@@ -27,7 +27,7 @@ import {
   runChatContextTool,
   turnsOf
 } from '../services/chat/chatContextTools.js';
-import { getToolsForApp } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
 import { extractToolSources } from '../services/sources/index.js';
 import { knowledgeSourceSeam } from '../services/loop/seams/knowledgeSourceSeam.js';
 import RequestBuilder from '../services/chat/RequestBuilder.js';

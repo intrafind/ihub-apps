@@ -22,12 +22,12 @@ import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { loadTools } from '../services/tools/catalog.js';
 import {
-  getToolsForApp,
-  loadTools,
   resolveNativeWebSearchFallbackTools,
   READ_URL_TOOL_ID
-} from '../toolLoader.js';
+} from '../services/tools/webSearchResolver.js';
 import * as extractorModule from '../tools/webContentExtractor.js';
 import { isPlatformTool } from '../services/tools/platformTools.js';
 import { RETIRED_IHUB_TOOL_FILES } from '../utils/setupUtils.js';

@@ -202,7 +202,7 @@ Chat policies:
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
 
 Tools execute through
-`toolLoader.runTool(toolId, { language, ...args, chatId, user, appConfig })`:
+`runTool(toolId, { language, ...args, chatId, user, appConfig })`:
 model-provided arguments may override `language` but never `chatId`, `user` or
 `appConfig`. Before the tools are offered, `markInteractiveTools()` flags
 `ask_user` (and any tool with `requiresUserInput: true`) as `interactive: true`,

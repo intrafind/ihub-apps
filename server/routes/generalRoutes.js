@@ -11,7 +11,7 @@ import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
-import { describeWebSearchAvailability } from '../toolLoader.js';
+import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
 import {
   sendInternalError,

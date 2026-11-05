@@ -8,7 +8,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfiguredTools } from '../toolLoader.js';
+import { loadConfiguredTools } from '../services/tools/catalog.js';
 import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
 
 describe('Google Gemini Tool Schema Validation', () => {

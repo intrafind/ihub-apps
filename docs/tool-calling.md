@@ -85,7 +85,7 @@ graph LR
     Chat --> Loop[AgentLoop]
     Loop --> Model[AI Model via LLMClient]
     Model --> ToolRequest[Tool Call]
-    ToolRequest --> Runner[toolLoader.runTool]
+    ToolRequest --> Runner[runTool]
     Runner --> ExternalService[External Service]
     ExternalService --> Runner
     Runner --> Loop
@@ -97,7 +97,7 @@ graph LR
 The round trip between model and tools is the shared [Agent Loop](agent-loop.md):
 chat, workflow nodes, app-as-tool and MCP all run tool calls through it (tool
 matching, argument repair, circuit breakers, round budgets), and the tool itself
-is executed by `toolLoader.runTool()`. In chat, one tool runs at a time and each
+is executed by `runTool()` (`server/services/tools/runTool.js`). In chat, one tool runs at a time and each
 call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frames
 (see [SSE v2 Streaming](sse-v2.md)).
 
@@ -1070,7 +1070,7 @@ These tools do not have a `script` file because no server-side code runs.
 
 ## Native Web Search Resolution
 
-Native (provider-handled) web search is resolved directly by `toolLoader.resolveNativeWebSearchProvider()` / `resolveAppNativeWebSearch()` from the app's unified `websearch` config (see [Web Tools](web-tools.md)) or a workflow node's generic `webSearch` tool id — it is never a tool file in `contents/tools/` and never flows through the generic tool-calling converters. When native search applies, the adapter (`anthropic.js`, `google.js`, or `openai-responses.js`) injects the provider's native tool block directly into the request:
+Native (provider-handled) web search is resolved directly by `webSearchResolver.resolveNativeWebSearchProvider()` / `resolveAppNativeWebSearch()` from the app's unified `websearch` config (see [Web Tools](web-tools.md)) or a workflow node's generic `webSearch` tool id — it is never a tool file in `contents/tools/` and never flows through the generic tool-calling converters. When native search applies, the adapter (`anthropic.js`, `google.js`, or `openai-responses.js`) injects the provider's native tool block directly into the request:
 
 | Provider | Native tool injected |
 |----------|----------------------|

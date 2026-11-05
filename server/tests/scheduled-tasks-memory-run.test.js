@@ -26,7 +26,7 @@ import {
 } from './helpers/scheduledTaskHarness.js';
 import configCache from '../configCache.js';
 import { openaiText } from './loop/helpers/llmFixtures.js';
-import { runTool } from '../toolLoader.js';
+import { runTool } from '../services/tools/runTool.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
 import { executeTaskRun } from '../services/scheduler/tasks/taskExecution.js';

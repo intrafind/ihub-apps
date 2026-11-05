@@ -3,7 +3,7 @@
 
 import assert from 'assert';
 import { getAdapter, createCompletionRequest } from '../adapters/index.js';
-import { loadConfiguredTools } from '../toolLoader.js';
+import { loadConfiguredTools } from '../services/tools/catalog.js';
 import logger from '../utils/logger.js';
 
 // Mock environment variables for testing

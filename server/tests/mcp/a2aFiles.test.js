@@ -39,10 +39,12 @@ jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({
   invokeAppNonStreaming: jest.fn()
 }));
 const runTool = jest.fn();
-jest.unstable_mockModule('../../toolLoader.js', () => ({
-  runTool,
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
   loadLocalTools: jest.fn(async () => [])
+}));
+jest.unstable_mockModule('../../services/tools/runTool.js', () => ({
+  runTool
 }));
 jest.unstable_mockModule('../../utils/versionHelper.js', () => ({ getAppVersion: () => '9.9.9' }));
 jest.unstable_mockModule('../../utils/logger.js', () => ({
