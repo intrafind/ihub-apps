@@ -5,6 +5,22 @@ import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
+
+/**
+ * The text of a failed import: what the server says happened to the live configuration, plus
+ * how to fix the cause (`details.hint`, `details.reason`) when it knows.
+ *
+ * @param {Error} error - The failed request
+ * @param {Function} t - i18next `t`
+ * @returns {string}
+ */
+function importErrorText(error, t) {
+  const data = error?.response?.data;
+  if (data?.code !== 'IMPORT_FAILED') return apiErrorMessage(error, t, error?.message);
+  const { hint, reason } = data.details || {};
+  return [data.error, hint, reason && `(${reason})`].filter(Boolean).join(' ');
+}
 
 function AdminBackupPage() {
   const { t } = useTranslation();
@@ -90,7 +106,7 @@ function AdminBackupPage() {
       setImportMessage({
         type: 'error',
         text: t('admin.system.importError', 'Failed to import configuration: {{error}}', {
-          error: error.message
+          error: importErrorText(error, t)
         })
       });
     } finally {

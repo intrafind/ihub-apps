@@ -216,6 +216,12 @@ export const WORKFLOW_ERROR_CODES = Object.freeze({
   EXECUTION_ACTIVE: 409
 });
 
+/** Configuration backup and import (`server/routes/admin/backup.js`). */
+export const BACKUP_ERROR_CODES = Object.freeze({
+  IMPORT_IN_PROGRESS: 409,
+  IMPORT_FAILED: 500
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -226,7 +232,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...PROMPT_ERROR_CODES,
   ...USER_SKILL_ERROR_CODES,
   ...INTEGRATION_ERROR_CODES,
-  ...WORKFLOW_ERROR_CODES
+  ...WORKFLOW_ERROR_CODES,
+  ...BACKUP_ERROR_CODES
 });
 
 /**
