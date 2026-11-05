@@ -544,6 +544,12 @@ text page. Every such response has the same body:
   details: [...] }`. This covers the chat, tool-run, feedback, session-start, magic-prompt and MCP
   app endpoints; `error` now reads "Some of the entered data is not valid." and `details` is an
   object, not a list.
+- The chat sharing endpoints (`/api/chats/:chatId/shares`, `/api/shares/*`, `/api/users/lookup`) answer
+  in this shape. The codes they already had (`CHAT_SHARING_UNAVAILABLE`, `SHARE_MODE_DISABLED`,
+  `CHAT_TEMPORARY`, `ORIGINAL_DISCARDED`, …) moved from `details.code` to the top-level `code`; an
+  unknown or foreign share, chat or file answers `NOT_FOUND`, and a share link that needs a sign-in
+  answers `AUTH_REQUIRED`. A malformed share request answers `VALIDATION_FAILED` with `details.issues`
+  instead of one joined `error` text.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

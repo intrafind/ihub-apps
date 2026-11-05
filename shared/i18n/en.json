@@ -8932,6 +8932,14 @@
     "MODEL_NOT_FOUND": "The model is not available.",
     "INVALID_REQUEST": "The model service rejected the request.",
     "ABORTED": "The request was cancelled.",
-    "QUOTA_EXCEEDED": "Your usage limit is reached."
+    "QUOTA_EXCEEDED": "Your usage limit is reached.",
+    "CHAT_SHARING_UNAVAILABLE": "Chat sharing is not available right now.",
+    "ARTIFACT_SHARING_DISABLED": "Sharing single artifacts is not allowed here.",
+    "SHARE_MODE_DISABLED": "This kind of link is not allowed here.",
+    "EMBED_DISABLED": "Embedding shared artifacts is not allowed here.",
+    "CHAT_TEMPORARY": "A temporary chat cannot be shared. Keep it first.",
+    "FILES_NOT_SHARED": "The owner did not share the attached files.",
+    "ORIGINAL_NOT_SHARED": "The owner shared the text of this file, not the original.",
+    "ORIGINAL_DISCARDED": "The original file is no longer available."
   }
 }

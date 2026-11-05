@@ -287,7 +287,11 @@ one up). The dialog then gives an `<iframe>` embed code pointing at
 | `DELETE /api/admin/chat-history/shares/:shareId` | admin      | Revoke any share                                          |
 
 The owner routes answer `503 CHAT_SHARING_UNAVAILABLE` while sharing is off or
-storage is down; the viewer routes answer 404. Creating a share authorizes the
+storage is down; the viewer routes answer 404. Errors use the shared shape
+`{ error, code, details? }` (see [Error Responses](error-responses.md)); the share
+codes are `CHAT_SHARING_UNAVAILABLE`, `SHARE_MODE_DISABLED`, `ARTIFACT_SHARING_DISABLED`,
+`EMBED_DISABLED`, `CHAT_TEMPORARY`, `FILES_NOT_SHARED`, `ORIGINAL_NOT_SHARED` and
+`ORIGINAL_DISCARDED`. Creating a share authorizes the
 chat with **write** intent, so an administrator reading a chat for support
 cannot publish it.
 

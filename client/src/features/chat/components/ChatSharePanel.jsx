@@ -14,6 +14,7 @@ import {
   lookupUsers,
   revokeChatShare
 } from '../../../api';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import ShareLinkResult, {
   CopyLinkButton,
@@ -418,8 +419,9 @@ export default function ChatSharePanel({ chatId, artifact = null }) {
       setAcknowledged(false);
       await loadShares();
     } catch (error) {
-      const detail = error?.response?.data?.error || error?.message;
-      setCreateError(detail || t('chatSharing.createFailed', 'The link could not be created.'));
+      setCreateError(
+        apiErrorMessage(error, t, t('chatSharing.createFailed', 'The link could not be created.'))
+      );
     } finally {
       setCreating(false);
     }

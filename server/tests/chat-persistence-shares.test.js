@@ -41,6 +41,7 @@ import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { fingerprint } from '../services/UserFingerprint.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
+import errorHandler from '../middleware/errorHandler.js';
 import registerShareEmbedPageRoutes from '../routes/shareEmbedPage.js';
 import { downloadName } from '../services/artifacts/artifactZip.js';
 import registerChatRoutes from '../routes/chats.js';
@@ -121,11 +122,18 @@ function makeResponse() {
 async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}) {
   const req = { params, query, body, headers: {}, user, ip: '127.0.0.1', method: 'GET', url: '/' };
   const res = makeResponse();
+  // Like Express 5: a thrown error or rejected promise goes to the error middleware.
   for (let index = 0; index < handlers.length; index += 1) {
     let advanced = false;
-    await handlers[index](req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handlers[index](req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+    } catch (error) {
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -382,6 +390,7 @@ describe('creating a share', () => {
     const chatId = await seedChat(ADA);
     const stranger = await createShare(GRACE, chatId, { mode: 'authenticated' });
     assert.equal(stranger.statusCode, 404);
+    assert.deepEqual(stranger.body, { error: 'Chat not found', code: 'NOT_FOUND' });
     const admin = await createShare(ROOT, chatId, { mode: 'authenticated' });
     assert.equal(admin.statusCode, 404, 'the admin read bypass does not extend to publishing');
   });
@@ -405,14 +414,19 @@ describe('creating a share', () => {
     setSharing({ allowPublic: false });
     const res = await createShare(ADA, chatId, { mode: 'public' });
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details.code, 'SHARE_MODE_DISABLED');
+    assert.equal(res.body.code, 'SHARE_MODE_DISABLED');
   });
 
   it('refuses an empty chat and a malformed body', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
-    assert.equal((await createShare(ADA, chatId, { mode: 'authenticated' })).statusCode, 400);
+    const empty = await createShare(ADA, chatId, { mode: 'authenticated' });
+    assert.equal(empty.statusCode, 400);
+    assert.equal(empty.body.code, 'BAD_REQUEST');
     const full = await seedChat(ADA);
-    assert.equal((await createShare(ADA, full, { mode: 'everyone' })).statusCode, 400);
+    const badMode = await createShare(ADA, full, { mode: 'everyone' });
+    assert.equal(badMode.statusCode, 400);
+    assert.equal(badMode.body.code, 'VALIDATION_FAILED');
+    assert.equal(badMode.body.details.issues[0].path, 'mode');
     assert.equal(
       (await createShare(ADA, full, { mode: 'authenticated', surprise: true })).statusCode,
       400
@@ -427,7 +441,7 @@ describe('creating a share', () => {
     await repository.appendMessage(chatId, { role: 'user', content: 'off the record' });
     const refused = await createShare(ADA, chatId, { mode: 'authenticated' });
     assert.equal(refused.statusCode, 409);
-    assert.equal(refused.body.details.code, 'CHAT_TEMPORARY');
+    assert.equal(refused.body.code, 'CHAT_TEMPORARY');
 
     await repository.keepChat(chatId);
     assert.equal((await createShare(ADA, chatId, { mode: 'authenticated' })).statusCode, 201);
@@ -489,7 +503,7 @@ describe('who may open a link', () => {
     const { share } = (await createShare(ADA, chatId, { mode: 'authenticated' })).body;
     const anon = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(anon.statusCode, 401);
-    assert.equal(anon.body.details.code, 'AUTH_REQUIRED');
+    assert.equal(anon.body.code, 'AUTH_REQUIRED');
     const named = await drive(openHandlers, {
       params: { shareId: share.id },
       user: { id: 'anonymous' }
@@ -1301,7 +1315,7 @@ describe('sharing a single artifact', () => {
     setSharing({ allowArtifacts: false });
     const off = await shareArtifact(ADA, chatId, page.id, { mode: 'public' });
     assert.equal(off.statusCode, 403);
-    assert.equal(off.body.details?.code ?? off.body.code, 'ARTIFACT_SHARING_DISABLED');
+    assert.equal(off.body.code, 'ARTIFACT_SHARING_DISABLED');
     // Sharing the chat itself is unaffected by the artifact switch.
     assert.equal((await createShare(ADA, chatId, { mode: 'public' })).statusCode, 201);
   });
