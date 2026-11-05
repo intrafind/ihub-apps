@@ -245,7 +245,7 @@ describe('runStartupToolCheck', () => {
 
 describe('the shipped default tools', () => {
   it('every enabled default tool script loads and exports what its definition declares', async () => {
-    // Read straight from server/defaults: loadAllTools() reads contents/tools,
+    // Read straight from server/defaults: loadResources('tools') reads contents/tools,
     // which a fresh checkout does not have until the server has run once.
     const defaultsDir = path.join(getRootDir(), 'server', 'defaults', 'tools');
     const tools = fs

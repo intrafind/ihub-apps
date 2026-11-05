@@ -14,7 +14,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
-import { warnAboutMissingToolScripts, loadAllTools } from '../toolsLoader.js';
+import { warnAboutMissingToolScripts } from '../services/tools/toolScriptCheck.js';
+import { loadResources } from '../resourceLoaders.js';
 
 describe('warnAboutMissingToolScripts', () => {
   const originalWarn = logger.warn;
@@ -100,7 +101,7 @@ describe('warnAboutMissingToolScripts', () => {
 
   it('does not warn about any shipped default tool', () => {
     logger.warn = (...args) => warnings.push(args);
-    // Read straight from server/defaults: loadAllTools() reads contents/tools,
+    // Read straight from server/defaults: loadResources('tools') reads contents/tools,
     // which a fresh checkout does not have until the server has run once, so a
     // check on its result would pass with no tools at all.
     const defaultsDir = path.join(getRootDir(), 'server', 'defaults', 'tools');
@@ -115,10 +116,10 @@ describe('warnAboutMissingToolScripts', () => {
     assert.deepStrictEqual(warnings, []);
   });
 
-  it('loadAllTools runs the check on whatever it loads', async () => {
+  it('loadResources(tools) runs the check on whatever it loads', async () => {
     logger.warn = (...args) => warnings.push(args);
 
-    await loadAllTools(true, false);
+    await loadResources('tools', { includeDisabled: true, verbose: false });
 
     const missingScriptWarnings = warnings.filter(([message]) => /does not exist/i.test(message));
     assert.deepStrictEqual(missingScriptWarnings, []);

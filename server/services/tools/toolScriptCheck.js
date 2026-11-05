@@ -34,6 +34,40 @@ import logger from '../../utils/logger.js';
 
 const COMPONENT = 'ToolScriptCheck';
 
+/**
+ * Warn (without throwing) about tools whose script file doesn't exist under
+ * server/tools/. Catches typos or hand-edited contents/tools/*.json entries at
+ * load time instead of failing silently with ERR_MODULE_NOT_FOUND the first
+ * time the tool is invoked. The file checked is the one `runTool` would load
+ * (`script`, else `<id>.js`), and tools it hands to other dispatchers (MCP,
+ * A2A, OpenAPI, provider-handled) are skipped. A script value that is not a
+ * plain file name is reported like a missing one and never stops the others
+ * from being checked.
+ * @param {Array} tools - Loaded tool definitions
+ */
+export function warnAboutMissingToolScripts(tools) {
+  const scriptsDir = path.join(getRootDir(), 'server', 'tools');
+  for (const tool of tools) {
+    const target = describeToolScript(tool);
+    if (!target) continue;
+    if (!target.valid) {
+      logger.warn('Tool has a script value that is not a plain file name', {
+        component: COMPONENT,
+        toolId: tool?.id,
+        script: String(target.script).slice(0, 200)
+      });
+      continue;
+    }
+    if (!fs.existsSync(path.join(scriptsDir, target.script))) {
+      logger.warn('Tool references a script file that does not exist', {
+        component: COMPONENT,
+        toolId: tool.id,
+        script: target.script
+      });
+    }
+  }
+}
+
 /** Reasons a script-backed tool cannot work. */
 export const TOOL_SCRIPT_PROBLEMS = Object.freeze({
   INVALID_NAME: 'invalid-script-name',
@@ -194,7 +228,7 @@ export async function checkToolScripts(tools, options = {}) {
 /**
  * Run the check against the configured tools and log the outcome. A script
  * that does not exist, or whose name is not a plain file name, was already
- * reported when the tools were loaded (`warnAboutMissingToolScripts`), so it
+ * reported when the tools were loaded (`warnAboutMissingToolScripts` in this module), so it
  * only counts towards the summary here.
  *
  * @param {Object} [options]

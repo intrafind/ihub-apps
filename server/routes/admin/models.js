@@ -276,7 +276,7 @@ function applyProviderLink(model) {
 export { applyProviderLink };
 
 /**
- * Only a chat model can be the default (see `modelsLoader.js`): a TTS or
+ * Only a chat model can be the default (see `resourceLoaders.js`): a TTS or
  * transcription model never takes the flag, nor the flag from the chat model
  * it would replace.
  */

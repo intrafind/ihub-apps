@@ -1,14 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { loadResources } from './resourceLoaders.js';
 import { loadJson, loadBuiltinLocaleJson, listBuiltinLocales } from './configLoader.js';
-import { loadAllApps } from './appsLoader.js';
-import { loadAllModels } from './modelsLoader.js';
-import { loadAllPrompts } from './promptsLoader.js';
-import { loadAllWorkflows } from './workflowsLoader.js';
-import { loadAllAgentProfiles } from './agentsLoader.js';
-import { loadAllTools } from './toolsLoader.js';
-import { loadAllProjects } from './projectsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -164,32 +158,33 @@ function cacheKeyForStorageChange(event) {
 const CONFIG_LOADERS = {
   'config/apps.json': {
     label: 'apps',
-    load: ({ verbose }) => loadAllApps(true, verbose)
+    load: ({ verbose }) => loadResources('apps', { includeDisabled: true, verbose })
   },
   'config/models.json': {
     label: 'models',
-    load: ({ verbose }) => loadAllModels(true, verbose)
+    load: ({ verbose }) => loadResources('models', { includeDisabled: true, verbose })
   },
   'config/prompts.json': {
     label: 'prompts',
-    load: ({ verbose }) => loadAllPrompts(true, verbose)
+    load: ({ verbose }) => loadResources('prompts', { includeDisabled: true, verbose })
   },
   'config/workflows.json': {
     label: 'workflows',
-    load: ({ verbose }) => loadAllWorkflows(true, verbose)
+    load: ({ verbose }) => loadResources('workflows', { includeDisabled: true, verbose })
   },
   'config/agents.json': {
     label: 'agent profiles',
-    load: ({ verbose }) => loadAllAgentProfiles(true, verbose),
+    load: ({ verbose }) => loadResources('agents', { includeDisabled: true, verbose }),
     emptyOnError: []
   },
   'config/tools.json': {
     label: 'tools',
-    load: async ({ verbose }) => expandToolFunctions(await loadAllTools(true, verbose))
+    load: async ({ verbose }) =>
+      expandToolFunctions(await loadResources('tools', { includeDisabled: true, verbose }))
   },
   'config/projects.json': {
     label: 'admin projects',
-    load: ({ verbose }) => loadAllProjects(true, verbose),
+    load: ({ verbose }) => loadResources('projects', { includeDisabled: true, verbose }),
     emptyOnError: []
   },
   'config/groups.json': {
