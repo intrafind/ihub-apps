@@ -57,6 +57,7 @@ const { loadSkillsMetadata, validateSkillDirectory } = await import('../services
 const skillAccess = await import('../services/skillAccess.js');
 const { runTool } = await import('../services/tools/runTool.js');
 const { default: registerUserSkillRoutes } = await import('../routes/userSkillRoutes.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { default: registerSkillRoutes } = await import('../routes/skillRoutes.js');
 const { default: registerAdminSkillsRoutes, skillMarkdownFromUserSkill } =
   await import('../routes/admin/skills.js');
@@ -143,11 +144,18 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, heade
     url: '/'
   };
   const res = makeResponse();
+  // Like Express 5: a thrown error or rejected promise goes to the error middleware.
   for (const handler of handlers) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handler(req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+    } catch (error) {
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -326,7 +334,7 @@ describe('creating and reading', () => {
       body: { ...SKILL, body: 'x'.repeat(2048) }
     });
     assert.equal(big.statusCode, 400);
-    assert.equal(big.body.details?.code, 'SKILL_TOO_LARGE');
+    assert.equal(big.body.code, 'SKILL_TOO_LARGE');
     const many = await drive(route.create, {
       user: GRACE,
       body: {
@@ -337,20 +345,20 @@ describe('creating and reading', () => {
         ]
       }
     });
-    assert.equal(many.body.details?.code, 'SKILL_TOO_LARGE');
+    assert.equal(many.body.code, 'SKILL_TOO_LARGE');
 
     setUserSkillSettings({ maxSkillsPerUser: 1 });
     await create(GRACE);
     const second = await drive(route.create, { user: GRACE, body: SKILL });
     assert.equal(second.statusCode, 409);
-    assert.equal(second.body.details?.code, 'SKILL_LIMIT_REACHED');
+    assert.equal(second.body.code, 'SKILL_LIMIT_REACHED');
   });
 
   it('turns away anonymous callers, third-party tokens and agents', async () => {
     for (const user of [THIRD_PARTY, AGENT]) {
       const res = await drive(route.create, { user, body: SKILL });
       assert.equal(res.statusCode, 403, JSON.stringify(user));
-      assert.equal(res.body.details?.code, 'USER_SKILLS_NOT_ALLOWED');
+      assert.equal(res.body.code, 'USER_SKILLS_NOT_ALLOWED');
     }
     const anonymous = await drive(route.create, {
       user: { id: 'anonymous', groups: ['anonymous'] },
@@ -366,7 +374,7 @@ describe('creating and reading', () => {
     setFeatures({ skills: true });
     setUserSkillSettings({ enabled: false });
     const disabled = await drive(route.create, { user: ADA, body: SKILL });
-    assert.equal(disabled.body.details?.code, 'USER_SKILLS_DISABLED');
+    assert.equal(disabled.body.code, 'USER_SKILLS_DISABLED');
   });
 });
 
@@ -414,7 +422,7 @@ describe('sharing', () => {
     const skill = await create(ADA, { name: 'no-everyone' });
     const res = await share(ADA, skill.id, [{ type: 'everyone', permission: 'use' }]);
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details?.code, 'SHARE_TARGET_NOT_ALLOWED');
+    assert.equal(res.body.code, 'SHARE_TARGET_NOT_ALLOWED');
   });
 
   it('lists share targets', async () => {
@@ -721,7 +729,7 @@ describe('admin', () => {
       body: { name: 'team-weekly-report' }
     });
     assert.equal(again.statusCode, 409);
-    assert.equal(again.body.details?.code, 'SKILL_NAME_TAKEN');
+    assert.equal(again.body.code, 'SKILL_NAME_TAKEN');
   });
 
   it('lets only one of two concurrent promotions to the same name win', async () => {
@@ -736,7 +744,7 @@ describe('admin', () => {
     const results = await Promise.all([promote(first), promote(second)]);
     assert.deepEqual(results.map(res => res.statusCode).sort(), [201, 409]);
     const loser = results.find(res => res.statusCode === 409);
-    assert.equal(loser.body.details?.code, 'SKILL_NAME_TAKEN');
+    assert.equal(loser.body.code, 'SKILL_NAME_TAKEN');
     const validation = await validateSkillDirectory(
       path.join(contentsDir, 'skills', 'raced-skill')
     );
@@ -875,19 +883,19 @@ describe('from the marketplace', () => {
     setFeatures({ skills: true, marketplace: false });
     const featureOff = await browse(ADA);
     assert.equal(featureOff.statusCode, 403);
-    assert.equal(featureOff.body.details?.code, 'MARKETPLACE_SKILLS_DISABLED');
+    assert.equal(featureOff.body.code, 'MARKETPLACE_SKILLS_DISABLED');
 
     setFeatures({ skills: true, marketplace: true });
     setUserSkillSettings({ allowMarketplace: false });
     const settingOff = await add(ADA, 'test-reg', 'plain');
     assert.equal(settingOff.statusCode, 403);
-    assert.equal(settingOff.body.details?.code, 'MARKETPLACE_SKILLS_DISABLED');
+    assert.equal(settingOff.body.code, 'MARKETPLACE_SKILLS_DISABLED');
 
     for (const user of [THIRD_PARTY, AGENT]) {
       setUserSkillSettings();
       const refused = await browse(user);
       assert.equal(refused.statusCode, 403);
-      assert.equal(refused.body.details?.code, 'USER_SKILLS_NOT_ALLOWED');
+      assert.equal(refused.body.code, 'USER_SKILLS_NOT_ALLOWED');
     }
   });
 
@@ -1022,13 +1030,13 @@ describe('from the marketplace', () => {
     setUserSkillSettings({ maxSkillsPerUser: owned });
     const full = await add(CAROL, 'test-reg', 'plain');
     assert.equal(full.statusCode, 409);
-    assert.equal(full.body.details?.code, 'SKILL_LIMIT_REACHED');
+    assert.equal(full.body.code, 'SKILL_LIMIT_REACHED');
   });
 
   it('refuses switched-off registries, unknown items, bad names and unreachable sources', async () => {
     const off = await add(ADA, 'off-reg', 'plain');
     assert.equal(off.statusCode, 404);
-    assert.equal(off.body.details?.code, 'MARKETPLACE_SKILL_NOT_FOUND');
+    assert.equal(off.body.code, 'MARKETPLACE_SKILL_NOT_FOUND');
     const unknown = await add(ADA, 'test-reg', 'nope');
     assert.equal(unknown.statusCode, 404);
     const notASkill = await add(ADA, 'test-reg', 'not-a-skill');
@@ -1039,6 +1047,6 @@ describe('from the marketplace', () => {
     assert.equal(badName.statusCode, 400);
     const gone = await add(ADA, 'test-reg', 'gone');
     assert.equal(gone.statusCode, 502);
-    assert.equal(gone.body.details?.code, 'MARKETPLACE_FETCH_FAILED');
+    assert.equal(gone.body.code, 'MARKETPLACE_FETCH_FAILED');
   });
 });

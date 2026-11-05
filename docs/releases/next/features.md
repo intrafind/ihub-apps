@@ -556,6 +556,34 @@ text page. Every such response has the same body:
   `AUTH_REQUIRED` instead of `AUTHENTICATION_REQUIRED`. The field problems of a rejected task
   (`INVALID_TASK`) moved from `details` (a list) to `details.issues`, also in the tool results the
   model sees. A malformed settings body answers `VALIDATION_FAILED` with `details.issues`.
+- The personal prompt library endpoints (`/api/prompts*`) answer in this shape. The codes they
+  already had (`USER_PROMPTS_DISABLED`, `USER_PROMPTS_UNAVAILABLE`, `PROMPT_LIMIT_REACHED`,
+  `SHARE_TARGET_NOT_ALLOWED`, …) and the stale-edit code `REVISION_CONFLICT` moved from
+  `details.code` to the top-level `code`; a prompt the caller may not see answers `NOT_FOUND`, an
+  unknown share target `BAD_REQUEST` with `details.unknown`, and a malformed body
+  `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
+- The prompt administration endpoints (`/api/admin/prompts*`, `/api/completions`) answer in this shape
+  as well: `NOT_FOUND`, `BAD_REQUEST` (a missing field or an unsafe id), `CONFLICT` (a prompt id that
+  already exists) and `VALIDATION_FAILED` with `details.issues` for the user prompt settings. A
+  failed model call of `/api/completions` that is not a provider error answers `INTERNAL_ERROR`
+  without the technical reason, which is only logged.
+- The integration administration endpoints (`/api/admin/integrations*`) answer in this shape. Their
+  codes (`INVALID_VALUES`, `DUPLICATE_ID`, `MIGRATION_LOCKED`, `BACKUP_REQUIRED`,
+  `CONFIRMATION_REQUIRED`, …) are unchanged and are now translated by the web app. The `success:
+  false` flag is gone from error bodies. The validation problems of an installation moved from
+  `details` (a list) to `details.issues`, and a failed migration (`422 MIGRATION_FAILED`) carries its
+  `reason`, `logEntry` and `instance` in `details` instead of at the top level of the body.
+- The personal skill library endpoints (`/api/user-skills*`, including the marketplace) answer in
+  this shape. The codes they already had (`USER_SKILLS_DISABLED`, `SKILL_LIMIT_REACHED`,
+  `SKILL_TOO_LARGE`, `MARKETPLACE_SKILL_NOT_FOUND`, `REVISION_CONFLICT`, …) moved from
+  `details.code` to the top-level `code`; the limits that were reported next to them stay in
+  `details` (`limit`, `maxFilesPerSkill`, `maxSkillSizeKB`). A malformed body answers
+  `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
+- The skill administration endpoints (`/api/admin/skills*`, `/api/admin/user-skills*`) answer in this
+  shape too. `SKILL_NAME_TAKEN` and the new `SKILL_NAME_RESERVED` (importing or promoting a skill under
+  the name of a system skill, 409) are top-level `code`s; deleting a system skill answers `FORBIDDEN`,
+  an oversized zip `PAYLOAD_TOO_LARGE`, and the problems of an invalid skill are in `details.errors`
+  instead of a bare `details` list.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

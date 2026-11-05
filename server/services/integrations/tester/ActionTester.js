@@ -47,6 +47,7 @@ import {
 } from '../actionDetail.js';
 import { recordActionEvent } from '../actionUsage.js';
 import { INTEGRATION_AUTH_REQUIRED } from '../auth/integrationAuthRequired.js';
+import { ServiceError } from '../../../utils/ServiceError.js';
 
 const COMPONENT = 'ActionTester';
 
@@ -82,19 +83,16 @@ export function testTimeoutMs(...candidates) {
 }
 
 /** A refusal with an HTTP status and a code the route answers with. */
-export class ActionTestError extends Error {
+export class ActionTestError extends ServiceError {
   /**
    * @param {string} message
-   * @param {string} code
+   * @param {string} code - A code of `shared/apiErrors.js`
    * @param {number} status
    * @param {Object} [details]
    */
   constructor(message, code, status, details = undefined) {
-    super(message);
+    super(code, message, { status, details });
     this.name = 'ActionTestError';
-    this.code = code;
-    this.status = status;
-    this.details = details;
   }
 }
 

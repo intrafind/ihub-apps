@@ -14,14 +14,14 @@ function responseData(error) {
 }
 
 /**
- * The error code the skills API put in `details.code`, if any.
+ * The error code of the skills API (`code` of the response body), if any.
  *
  * @param {Error} error - Error thrown by an API call.
  * @returns {string|null}
  */
 export function skillErrorCode(error) {
   const data = responseData(error);
-  return data?.details?.code || data?.code || error?.code || null;
+  return data?.code || error?.code || null;
 }
 
 /**

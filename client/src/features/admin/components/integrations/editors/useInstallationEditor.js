@@ -20,9 +20,9 @@ function groupsOf(groupsResult) {
 
 /** The server's validation details as one line, e.g. `baseUrl: must be a URL`. */
 function detailText(err) {
-  const details = err?.response?.data?.details;
-  if (!Array.isArray(details)) return '';
-  return details
+  const issues = err?.response?.data?.details?.issues;
+  if (!Array.isArray(issues)) return '';
+  return issues
     .map(d => (d?.key ? `${d.key}: ${d.message}` : d?.message))
     .filter(Boolean)
     .join('; ');
@@ -117,9 +117,9 @@ export default function useInstallationEditor({ instance, definition, onSaved })
 
   const applyError = err => {
     const data = err?.response?.data;
-    if (Array.isArray(data?.details) && data.code === 'INVALID_VALUES') {
+    if (Array.isArray(data?.details?.issues) && data.code === 'INVALID_VALUES') {
       const errors = {};
-      for (const d of data.details) if (d?.key) errors[d.key] = d.message;
+      for (const d of data.details.issues) if (d?.key) errors[d.key] = d.message;
       setFieldErrors(errors);
     }
     const detail = detailText(err);

@@ -268,9 +268,9 @@ export function outcomeFromResponse(action, instance, data) {
 
 /**
  * What a failed migration action answered, for the outcome message: the
- * error `code` and the server's `reason`, the log entry of a failed
- * migration and its `details` (`collisions` and `errors` of
- * `MIGRATION_FAILED`, the list of problems of `ADOPT_INVALID`).
+ * error `code`, and from `details` the server's `reason`, the log entry of a failed
+ * migration and its problems (`collisions` and `errors` of `MIGRATION_FAILED`, the
+ * `issues` of `ADOPT_INVALID`).
  *
  * @param {string} action - a {@link MIGRATION_ACTION} value
  * @param {Object} instance - the installation the action ran on
@@ -286,8 +286,8 @@ export function outcomeFromError(action, instance, error) {
     label: instance.label || instance.id,
     status: error?.response?.status ?? null,
     code: data.code || null,
-    reason: data.reason || data.error || error?.message || '',
-    logEntry: data.logEntry || null,
+    reason: data.details?.reason || data.error || error?.message || '',
+    logEntry: data.details?.logEntry || null,
     problems: problemsOf(data)
   };
 }
@@ -301,9 +301,11 @@ export function outcomeFromError(action, instance, error) {
  */
 function problemsOf(data) {
   const details = data?.details;
-  const list = Array.isArray(details)
-    ? details
-    : [...(details?.collisions || []), ...(details?.errors || [])];
+  const list = [
+    ...(details?.issues || []),
+    ...(details?.collisions || []),
+    ...(details?.errors || [])
+  ];
   return list
     .map(problem =>
       typeof problem === 'string' ? { message: problem } : { ...problem, message: problem?.message }

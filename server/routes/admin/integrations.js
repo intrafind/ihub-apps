@@ -3,8 +3,8 @@
 
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
 import installedIntegrationService, {
@@ -123,13 +123,11 @@ function instructionsView(resolved, instance, language) {
   };
 }
 
-function definitionIdOf(req, res) {
+function definitionIdOf(req) {
   // Definition ids may carry one "/", so they travel URL-encoded.
   const id = req.params.definitionId || '';
-  if (!INTEGRATION_ID_PATTERN.test(id)) {
-    sendBadRequest(res, 'Invalid definition id');
-    return null;
-  }
+  if (!INTEGRATION_ID_PATTERN.test(id))
+    throw new ServiceError('BAD_REQUEST', 'Invalid definition id');
   return id;
 }
 
@@ -359,37 +357,21 @@ async function migrationViews(instances) {
 }
 
 /** A companion path from the query string, or null when it is not one. */
-function companionPathOf(req, res) {
+function companionPathOf(req) {
   const relPath = typeof req.query.path === 'string' ? req.query.path : '';
   if (!relPath || relPath.length > 255) {
-    sendBadRequest(res, 'Missing or invalid path');
-    return null;
+    throw new ServiceError('BAD_REQUEST', 'Missing or invalid path');
   }
   return relPath;
 }
 
-async function adapterFor(id, res) {
+async function adapterFor(id) {
   const resolved = await installedIntegrationService.resolve(id);
-  if (!resolved) {
-    sendNotFound(res, 'Integration');
-    return null;
-  }
+  if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
   const adapter = resolved.definition
     ? getProtocolAdapter(resolved.definition.protocol.type)
     : null;
   return { resolved, adapter };
-}
-
-function sendIntegrationError(res, error, context) {
-  if (error instanceof IntegrationError) {
-    return res.status(error.status).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      details: error.details
-    });
-  }
-  return sendInternalError(res, error, context);
 }
 
 function adminName(req) {
@@ -414,75 +396,66 @@ async function migratedView(id, req) {
   );
 }
 
-/** Answer a failed migration action: 422 with the reason and the state it left. */
-async function sendMigrationError(res, req, id, error, context) {
-  if (error instanceof IntegrationError && error.code === 'MIGRATION_FAILED') {
-    let instance = null;
-    try {
-      instance = await migratedView(id, req);
-    } catch {
-      instance = null;
-    }
-    return res.status(422).json({
-      success: false,
-      error: error.message,
-      code: error.code,
+/**
+ * A failed migration answers 422 `MIGRATION_FAILED` with the reason, the log entry of the failed
+ * run and the state it left the installation in, all in `details`; every other error passes
+ * through.
+ *
+ * @param {unknown} error
+ * @param {string} id - The installation the action ran on
+ * @param {import('express').Request} req
+ * @returns {Promise<unknown>}
+ */
+async function migrationFailure(error, id, req) {
+  if (!(error instanceof IntegrationError) || error.code !== 'MIGRATION_FAILED') return error;
+  let instance = null;
+  try {
+    instance = await migratedView(id, req);
+  } catch {
+    instance = null;
+  }
+  return new IntegrationError(error.message, {
+    status: 422,
+    code: 'MIGRATION_FAILED',
+    details: {
+      ...error.details,
       reason: error.details?.reason || error.message,
       logEntry: error.details?.logEntry || null,
-      details: error.details,
       instance
-    });
-  }
-  if (error instanceof IntegrationError) {
-    return res.status(error.status).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      reason: error.message,
-      details: error.details
-    });
-  }
-  return sendInternalError(res, error, context);
+    }
+  });
 }
 
 export default function registerAdminIntegrationsRoutes(app) {
   // --- Catalog ------------------------------------------------------------
 
   app.get(buildServerPath('/api/admin/integrations/catalog'), adminAuth, async (req, res) => {
-    try {
-      await integrationRegistry.ensureLoaded();
-      const language = languageOf(req);
-      const instances = installedIntegrationService.list();
-      const updates = await definitionUpdates();
-      const entries = integrationRegistry.list();
-      const marketplace = await marketplaceDefinitions(entries, language);
-      const items = [
-        ...entries.map(entry => catalogEntryView(entry, language, instances, updates)),
-        ...marketplace.items
-      ].sort((a, b) => a.name.localeCompare(b.name));
-      res.json({
-        success: true,
-        items,
-        /** Whether the marketplace feeds the catalog, and which registries' catalogs are cached. */
-        marketplace: { enabled: marketplace.enabled, registries: marketplace.registries },
-        supportedProtocols: supportedProtocols(),
-        serverVersion: serverVersion()
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'list integration catalog');
-    }
+    await integrationRegistry.ensureLoaded();
+    const language = languageOf(req);
+    const instances = installedIntegrationService.list();
+    const updates = await definitionUpdates();
+    const entries = integrationRegistry.list();
+    const marketplace = await marketplaceDefinitions(entries, language);
+    const items = [
+      ...entries.map(entry => catalogEntryView(entry, language, instances, updates)),
+      ...marketplace.items
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    res.json({
+      success: true,
+      items,
+      /** Whether the marketplace feeds the catalog, and which registries' catalogs are cached. */
+      marketplace: { enabled: marketplace.enabled, registries: marketplace.registries },
+      supportedProtocols: supportedProtocols(),
+      serverVersion: serverVersion()
+    });
   });
 
   app.post(
     buildServerPath('/api/admin/integrations/catalog/_reload'),
     adminAuth,
     async (req, res) => {
-      try {
-        await integrationRegistry.reload();
-        res.json({ success: true, count: integrationRegistry.list().length });
-      } catch (error) {
-        sendInternalError(res, error, 'reload integration catalog');
-      }
+      await integrationRegistry.reload();
+      res.json({ success: true, count: integrationRegistry.list().length });
     }
   );
 
@@ -490,24 +463,19 @@ export default function registerAdminIntegrationsRoutes(app) {
     buildServerPath('/api/admin/integrations/catalog/:definitionId'),
     adminAuth,
     async (req, res) => {
-      const id = definitionIdOf(req, res);
-      if (!id) return;
-      try {
-        await integrationRegistry.ensureLoaded();
-        const entry = integrationRegistry.get(id);
-        if (!entry) return sendNotFound(res, 'Integration definition');
-        res.json({
-          success: true,
-          definition: definitionDetailView(
-            entry,
-            languageOf(req),
-            installedIntegrationService.list(),
-            await definitionUpdates()
-          )
-        });
-      } catch (error) {
-        sendInternalError(res, error, 'read integration definition');
-      }
+      const id = definitionIdOf(req);
+      await integrationRegistry.ensureLoaded();
+      const entry = integrationRegistry.get(id);
+      if (!entry) throw new ServiceError('NOT_FOUND', 'Integration definition not found');
+      res.json({
+        success: true,
+        definition: definitionDetailView(
+          entry,
+          languageOf(req),
+          installedIntegrationService.list(),
+          await definitionUpdates()
+        )
+      });
     }
   );
 
@@ -519,200 +487,170 @@ export default function registerAdminIntegrationsRoutes(app) {
     buildServerPath('/api/admin/integrations/catalog/:definitionId/_file'),
     adminAuth,
     async (req, res) => {
-      const id = definitionIdOf(req, res);
-      if (!id) return;
-      const relPath = companionPathOf(req, res);
-      if (!relPath) return;
-      try {
-        await integrationRegistry.ensureLoaded();
-        if (!integrationRegistry.get(id)) return sendNotFound(res, 'Integration definition');
-        const text = await integrationRegistry.readCompanion(id, relPath);
-        if (text === null) return sendNotFound(res, 'Companion file');
-        res.type('text/markdown; charset=utf-8').send(text);
-      } catch (error) {
-        sendInternalError(res, error, 'read integration companion file');
-      }
+      const id = definitionIdOf(req);
+      const relPath = companionPathOf(req);
+      await integrationRegistry.ensureLoaded();
+      if (!integrationRegistry.get(id))
+        throw new ServiceError('NOT_FOUND', 'Integration definition not found');
+      const text = await integrationRegistry.readCompanion(id, relPath);
+      if (text === null) throw new ServiceError('NOT_FOUND', 'Companion file not found');
+      res.type('text/markdown; charset=utf-8').send(text);
     }
   );
 
   // Installations whose definition has a newer version in the marketplace
   // catalog it came from (the dashboard counter and the badges).
   app.get(buildServerPath('/api/admin/integrations/updates'), adminAuth, async (req, res) => {
-    try {
-      await integrationRegistry.ensureLoaded();
-      const updates = await definitionUpdates();
-      const definitions = [...updates.entries()].map(([id, update]) => ({ id, ...update }));
-      const installations = installedIntegrationService
-        .list()
-        .filter(instance => updates.get(instance.definition)?.compatible)
-        .map(instance => ({
-          id: instance.id,
-          definition: instance.definition,
-          definitionVersion: instance.definitionVersion || null,
-          latestVersion: updates.get(instance.definition).latestVersion
-        }));
-      res.json({ success: true, definitions, installations, count: installations.length });
-    } catch (error) {
-      sendInternalError(res, error, 'check integration updates');
-    }
+    await integrationRegistry.ensureLoaded();
+    const updates = await definitionUpdates();
+    const definitions = [...updates.entries()].map(([id, update]) => ({ id, ...update }));
+    const installations = installedIntegrationService
+      .list()
+      .filter(instance => updates.get(instance.definition)?.compatible)
+      .map(instance => ({
+        id: instance.id,
+        definition: instance.definition,
+        definitionVersion: instance.definitionVersion || null,
+        latestVersion: updates.get(instance.definition).latestVersion
+      }));
+    res.json({ success: true, definitions, installations, count: installations.length });
   });
 
   app.post(
     buildServerPath('/api/admin/integrations/catalog/:definitionId/_test'),
     adminAuth,
     async (req, res) => {
-      const id = definitionIdOf(req, res);
-      if (!id) return;
-      try {
-        const { testInput, ...body } = req.body || {};
-        const payload = { ...body, definition: id, id: body.id || 'draft' };
-        const result = await installedIntegrationService.test(payload, {
-          language: languageOf(req),
-          user: req.user,
-          req,
-          testInput
-        });
-        logAudit({
-          req,
-          action: 'execute',
-          resource: 'integration',
-          resourceId: payload.id,
-          summary: `Tested integration draft of ${id} (${result.success ? 'ok' : 'failed'})`,
-          result: result.success ? 'success' : 'failure'
-        });
-        res.json({ success: true, result });
-      } catch (error) {
-        sendIntegrationError(res, error, 'test integration draft');
-      }
+      const id = definitionIdOf(req);
+      const { testInput, ...body } = req.body || {};
+      const payload = { ...body, definition: id, id: body.id || 'draft' };
+      const result = await installedIntegrationService.test(payload, {
+        language: languageOf(req),
+        user: req.user,
+        req,
+        testInput
+      });
+      logAudit({
+        req,
+        action: 'execute',
+        resource: 'integration',
+        resourceId: payload.id,
+        summary: `Tested integration draft of ${id} (${result.success ? 'ok' : 'failed'})`,
+        result: result.success ? 'success' : 'failure'
+      });
+      res.json({ success: true, result });
     }
   );
 
   // --- Installed instances -------------------------------------------------
 
   app.get(buildServerPath('/api/admin/integrations/installed'), adminAuth, async (req, res) => {
-    try {
-      const language = languageOf(req);
-      await integrationRegistry.ensureLoaded();
-      const updates = await definitionUpdates();
-      const instances = installedIntegrationService.list();
-      const migrations = await migrationViews(instances);
-      const items = [];
-      for (const instance of instances) {
-        const resolved = await installedIntegrationService.resolve(instance, language);
-        items.push(
-          instanceView(instance, resolved, language, updates, migrations.get(instance.id) || null)
-        );
-      }
-      res.json({
-        success: true,
-        items,
-        security: installedIntegrationService.security(),
-        updatesAvailable: items.filter(item => item.updateAvailable).length
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'list installed integrations');
+    const language = languageOf(req);
+    await integrationRegistry.ensureLoaded();
+    const updates = await definitionUpdates();
+    const instances = installedIntegrationService.list();
+    const migrations = await migrationViews(instances);
+    const items = [];
+    for (const instance of instances) {
+      const resolved = await installedIntegrationService.resolve(instance, language);
+      items.push(
+        instanceView(instance, resolved, language, updates, migrations.get(instance.id) || null)
+      );
     }
+    res.json({
+      success: true,
+      items,
+      security: installedIntegrationService.security(),
+      updatesAvailable: items.filter(item => item.updateAvailable).length
+    });
   });
 
   app.post(buildServerPath('/api/admin/integrations/installed'), adminAuth, async (req, res) => {
-    try {
-      const instance = await installedIntegrationService.create(req.body, {
-        language: languageOf(req)
-      });
-      logAudit({
-        req,
-        action: 'create',
-        resource: 'integration',
-        resourceId: instance.id,
-        summary: `Installed integration "${instance.id}" from ${instance.definition}`
-      });
-      logger.info('Integration installed', {
-        component: COMPONENT,
-        instanceId: instance.id,
-        definition: instance.definition,
-        admin: adminName(req)
-      });
-      // Users who asked for this definition and whose groups now allow it.
-      await closeRequestsFor(req, instance.definition);
-      res.status(201).json({ success: true, instance });
-    } catch (error) {
-      sendIntegrationError(res, error, 'install integration');
-    }
+    const instance = await installedIntegrationService.create(req.body, {
+      language: languageOf(req)
+    });
+    logAudit({
+      req,
+      action: 'create',
+      resource: 'integration',
+      resourceId: instance.id,
+      summary: `Installed integration "${instance.id}" from ${instance.definition}`
+    });
+    logger.info('Integration installed', {
+      component: COMPONENT,
+      instanceId: instance.id,
+      definition: instance.definition,
+      admin: adminName(req)
+    });
+    // Users who asked for this definition and whose groups now allow it.
+    await closeRequestsFor(req, instance.definition);
+    res.status(201).json({ success: true, instance });
   });
 
   app.get(buildServerPath('/api/admin/integrations/installed/:id'), adminAuth, async (req, res) => {
     const id = req.params.id;
-    if (!validateIdForPath(id, 'integration', res)) return;
-    try {
-      const language = languageOf(req);
-      const resolved = await installedIntegrationService.resolve(id, language);
-      if (!resolved) return sendNotFound(res, 'Integration');
-      // An incompatible definition offers no tools; asking its adapter for
-      // actions would run it. Neither does an installation whose migration
-      // state withholds them: its values are not for the loaded definition.
-      // (`currentActionsOf` lists nothing for those.)
-      const { actions, fingerprints } = await currentActionsOf(resolved, language);
-      // The complete list: takes the fingerprint baseline once (#2916).
-      await observeFingerprints(id, fingerprints);
-      const instance = installedIntegrationService.get(id) || resolved.instance;
-      const review = reviewStatesOf(instance, fingerprints);
-      const updates = await definitionUpdates();
-      const migrations = await migrationViews([instance]);
-      res.json({
-        success: true,
-        instance: instanceView(
-          instance,
-          resolved,
-          language,
-          updates,
-          migrations.get(instance.id) || null
-        ),
-        values: resolved.values,
-        // The model guidance of the installation (#2974): the admin's own, the
-        // definition's or what the system sent (MCP `instructions`).
-        instructions: instructionsView(resolved, instance, language),
-        actions: actions.map(a => ({
-          // The admin's texts (#2974): the description the model reads.
-          ...withActionOverrides(a, instance, language),
-          defaults: undefined,
-          parameters: a.parameters,
-          sources: undefined,
-          // `new` or `changed` since the last admin review, else null (#2916).
-          review: review[a.name] || null
-        })),
-        definition: resolved.definition
-          ? definitionDetailView(
-              integrationRegistry.get(resolved.definition.id),
-              language,
-              installedIntegrationService.list(),
-              updates
-            )
-          : null
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'read installed integration');
-    }
+    assertValidId(id, 'integration');
+    const language = languageOf(req);
+    const resolved = await installedIntegrationService.resolve(id, language);
+    if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
+    // An incompatible definition offers no tools; asking its adapter for
+    // actions would run it. Neither does an installation whose migration
+    // state withholds them: its values are not for the loaded definition.
+    // (`currentActionsOf` lists nothing for those.)
+    const { actions, fingerprints } = await currentActionsOf(resolved, language);
+    // The complete list: takes the fingerprint baseline once (#2916).
+    await observeFingerprints(id, fingerprints);
+    const instance = installedIntegrationService.get(id) || resolved.instance;
+    const review = reviewStatesOf(instance, fingerprints);
+    const updates = await definitionUpdates();
+    const migrations = await migrationViews([instance]);
+    res.json({
+      success: true,
+      instance: instanceView(
+        instance,
+        resolved,
+        language,
+        updates,
+        migrations.get(instance.id) || null
+      ),
+      values: resolved.values,
+      // The model guidance of the installation (#2974): the admin's own, the
+      // definition's or what the system sent (MCP `instructions`).
+      instructions: instructionsView(resolved, instance, language),
+      actions: actions.map(a => ({
+        // The admin's texts (#2974): the description the model reads.
+        ...withActionOverrides(a, instance, language),
+        defaults: undefined,
+        parameters: a.parameters,
+        sources: undefined,
+        // `new` or `changed` since the last admin review, else null (#2916).
+        review: review[a.name] || null
+      })),
+      definition: resolved.definition
+        ? definitionDetailView(
+            integrationRegistry.get(resolved.definition.id),
+            language,
+            installedIntegrationService.list(),
+            updates
+          )
+        : null
+    });
   });
 
   app.put(buildServerPath('/api/admin/integrations/installed/:id'), adminAuth, async (req, res) => {
     const id = req.params.id;
-    if (!validateIdForPath(id, 'integration', res)) return;
-    try {
-      const instance = await installedIntegrationService.update(id, req.body, {
-        language: languageOf(req)
-      });
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'integration',
-        resourceId: id,
-        summary: `Updated installed integration "${id}"`
-      });
-      await closeRequestsFor(req, instance.definition);
-      res.json({ success: true, instance });
-    } catch (error) {
-      sendIntegrationError(res, error, 'update installed integration');
-    }
+    assertValidId(id, 'integration');
+    const instance = await installedIntegrationService.update(id, req.body, {
+      language: languageOf(req)
+    });
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'integration',
+      resourceId: id,
+      summary: `Updated installed integration "${id}"`
+    });
+    await closeRequestsFor(req, instance.definition);
+    res.json({ success: true, instance });
   });
 
   /**
@@ -724,39 +662,35 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        // A body without `approval` is a mistake, not "remove it": only an
-        // explicit `null` clears the gate.
-        if (!req.body || typeof req.body !== 'object' || !Object.hasOwn(req.body, 'approval')) {
-          return res.status(400).json({
-            error: 'The body needs "approval": { default?, actions?, newOrChanged? } or null',
-            code: 'APPROVAL_REQUIRED_FIELD'
-          });
-        }
-        let instance = await installedIntegrationService.setApproval(id, req.body.approval);
-        // Turning approval on takes the fingerprint baseline when there is none
-        // yet (#2916): the actions the admin sees now count as reviewed.
-        if (instance.approval && !instance.actions?.fingerprints) {
-          const language = languageOf(req);
-          const resolved = await installedIntegrationService.resolve(id, language);
-          const { fingerprints } = await currentActionsOf(resolved, language).catch(() => ({
-            fingerprints: {}
-          }));
-          await observeFingerprints(id, fingerprints);
-          instance = installedIntegrationService.get(id) || instance;
-        }
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Updated the tool approval of integration "${id}"`
-        });
-        res.json({ success: true, instance });
-      } catch (error) {
-        sendIntegrationError(res, error, 'update integration approval');
+      assertValidId(id, 'integration');
+      // A body without `approval` is a mistake, not "remove it": only an
+      // explicit `null` clears the gate.
+      if (!req.body || typeof req.body !== 'object' || !Object.hasOwn(req.body, 'approval')) {
+        throw new ServiceError(
+          'APPROVAL_REQUIRED_FIELD',
+          'The body needs "approval": { default?, actions?, newOrChanged? } or null'
+        );
       }
+      let instance = await installedIntegrationService.setApproval(id, req.body.approval);
+      // Turning approval on takes the fingerprint baseline when there is none
+      // yet (#2916): the actions the admin sees now count as reviewed.
+      if (instance.approval && !instance.actions?.fingerprints) {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        const { fingerprints } = await currentActionsOf(resolved, language).catch(() => ({
+          fingerprints: {}
+        }));
+        await observeFingerprints(id, fingerprints);
+        instance = installedIntegrationService.get(id) || instance;
+      }
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Updated the tool approval of integration "${id}"`
+      });
+      res.json({ success: true, instance });
     }
   );
 
@@ -771,7 +705,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       const names = req.body?.actions;
       if (
         names !== undefined &&
@@ -780,40 +714,35 @@ export default function registerAdminIntegrationsRoutes(app) {
           names.length === 0 ||
           names.some(n => typeof n !== 'string' || !n || n.length > 128))
       ) {
-        return sendBadRequest(res, 'actions must be a non-empty list of action names');
+        throw new ServiceError('BAD_REQUEST', 'actions must be a non-empty list of action names');
       }
-      try {
-        const language = languageOf(req);
-        const resolved = await installedIntegrationService.resolve(id, language);
-        if (!resolved) return sendNotFound(res, 'Integration');
-        const { fingerprints } = await currentActionsOf(resolved, language);
-        const { instance, reviewed } = await installedIntegrationService.markActionsReviewed(
-          id,
-          fingerprints,
-          Array.isArray(names) ? names : null
-        );
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Marked ${Array.isArray(names) ? 'actions' : 'all actions'} of integration "${id}" as reviewed: ${reviewed.join(', ') || '(none listed)'}`
-        });
-        res.json({ success: true, instance, reviewed });
-      } catch (error) {
-        sendIntegrationError(res, error, 'mark integration actions as reviewed');
-      }
+      const language = languageOf(req);
+      const resolved = await installedIntegrationService.resolve(id, language);
+      if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
+      const { fingerprints } = await currentActionsOf(resolved, language);
+      const { instance, reviewed } = await installedIntegrationService.markActionsReviewed(
+        id,
+        fingerprints,
+        Array.isArray(names) ? names : null
+      );
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Marked ${Array.isArray(names) ? 'actions' : 'all actions'} of integration "${id}" as reviewed: ${reviewed.join(', ') || '(none listed)'}`
+      });
+      res.json({ success: true, instance, reviewed });
     }
   );
 
   // --- Action detail, guidance and the test runner (#2974) -----------------
 
-  /** The action name of the route, or null after answering 400. */
-  function actionNameOf(req, res) {
+  /** The action name of the route; throws a 400 for an invalid one. */
+  function actionNameOf(req) {
     const name = String(req.params.action || '');
     if (!ACTION_NAME_PATTERN.test(name)) {
-      sendBadRequest(res, 'Invalid action name');
-      return null;
+      throw new ServiceError('BAD_REQUEST', 'Invalid action name');
     }
     return name;
   }
@@ -860,23 +789,19 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      const actionName = actionNameOf(req, res);
-      if (!actionName) return;
-      try {
-        const language = languageOf(req);
-        const resolved = await installedIntegrationService.resolve(id, language);
-        if (!resolved) return sendNotFound(res, 'Integration');
-        if (!resolved.definition) return sendNotFound(res, 'Integration definition');
-        const detail = await describeAction(resolved, actionName, {
-          language,
-          platform: configCache.getPlatform() || {}
-        });
-        if (!detail) return sendNotFound(res, 'Action');
-        res.json({ success: true, detail });
-      } catch (error) {
-        sendInternalError(res, error, 'read integration action');
-      }
+      assertValidId(id, 'integration');
+      const actionName = actionNameOf(req);
+      const language = languageOf(req);
+      const resolved = await installedIntegrationService.resolve(id, language);
+      if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
+      if (!resolved.definition)
+        throw new ServiceError('NOT_FOUND', 'Integration definition not found');
+      const detail = await describeAction(resolved, actionName, {
+        language,
+        platform: configCache.getPlatform() || {}
+      });
+      if (!detail) throw new ServiceError('NOT_FOUND', 'Action not found');
+      res.json({ success: true, detail });
     }
   );
 
@@ -943,39 +868,34 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      const actionName = actionNameOf(req, res);
-      if (!actionName) return;
-      try {
-        const language = languageOf(req);
-        const resolved = await installedIntegrationService.resolve(id, language);
-        if (!resolved) return sendNotFound(res, 'Integration');
-        // Only an action the installation lists can carry an override.
-        const before = resolved.definition
-          ? await describeAction(resolved, actionName, { language })
-          : null;
-        if (!before) return sendNotFound(res, 'Action');
-        const { override } = await installedIntegrationService.setActionOverride(
-          id,
-          actionName,
-          req.body || {}
-        );
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: id,
-          summary: `action.policyChange: override of action "${actionName}" of integration "${id}" set to ${Object.keys(override || {}).join(', ') || '(none)'}`
-        });
-        const after = await installedIntegrationService.resolve(id, language);
-        const detail = await describeAction(after, actionName, {
-          language,
-          platform: configCache.getPlatform() || {}
-        });
-        res.json({ success: true, override, detail });
-      } catch (error) {
-        sendIntegrationError(res, error, 'update integration action override');
-      }
+      assertValidId(id, 'integration');
+      const actionName = actionNameOf(req);
+      const language = languageOf(req);
+      const resolved = await installedIntegrationService.resolve(id, language);
+      if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
+      // Only an action the installation lists can carry an override.
+      const before = resolved.definition
+        ? await describeAction(resolved, actionName, { language })
+        : null;
+      if (!before) throw new ServiceError('NOT_FOUND', 'Action not found');
+      const { override } = await installedIntegrationService.setActionOverride(
+        id,
+        actionName,
+        req.body || {}
+      );
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `action.policyChange: override of action "${actionName}" of integration "${id}" set to ${Object.keys(override || {}).join(', ') || '(none)'}`
+      });
+      const after = await installedIntegrationService.resolve(id, language);
+      const detail = await describeAction(after, actionName, {
+        language,
+        platform: configCache.getPlatform() || {}
+      });
+      res.json({ success: true, override, detail });
     }
   );
 
@@ -1043,16 +963,15 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      const actionName = actionNameOf(req, res);
-      if (!actionName) return;
+      assertValidId(id, 'integration');
+      const actionName = actionNameOf(req);
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const args = body.args === undefined ? {} : body.args;
       const connection = typeof body.connection === 'string' ? body.connection : undefined;
       try {
         const language = languageOf(req);
         const resolved = await installedIntegrationService.resolve(id, language);
-        if (!resolved) return sendNotFound(res, 'Integration');
+        if (!resolved) throw new ServiceError('NOT_FOUND', 'Integration not found');
         const result = await testAction({
           resolved,
           actionName,
@@ -1083,14 +1002,8 @@ export default function registerAdminIntegrationsRoutes(app) {
             summary: `action.test: "${actionName}" of integration "${id}" refused (${error.code}); args ${auditArgs(args)}`,
             result: 'failure'
           });
-          return res.status(error.status).json({
-            success: false,
-            error: error.message,
-            code: error.code,
-            details: error.details
-          });
         }
-        sendIntegrationError(res, error, 'test integration action');
+        throw error;
       }
     }
   );
@@ -1140,23 +1053,19 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        const instance = await installedIntegrationService.setInstructions(
-          id,
-          req.body?.instructions ?? null
-        );
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: id,
-          summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
-        });
-        res.json({ success: true, instance });
-      } catch (error) {
-        sendIntegrationError(res, error, 'update integration instructions');
-      }
+      assertValidId(id, 'integration');
+      const instance = await installedIntegrationService.setInstructions(
+        id,
+        req.body?.instructions ?? null
+      );
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
+      });
+      res.json({ success: true, instance });
     }
   );
 
@@ -1165,20 +1074,16 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        await installedIntegrationService.remove(id);
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Uninstalled integration "${id}"`
-        });
-        res.status(204).end();
-      } catch (error) {
-        sendIntegrationError(res, error, 'uninstall integration');
-      }
+      assertValidId(id, 'integration');
+      await installedIntegrationService.remove(id);
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Uninstalled integration "${id}"`
+      });
+      res.status(204).end();
     }
   );
 
@@ -1191,21 +1096,17 @@ export default function registerAdminIntegrationsRoutes(app) {
       adminAuth,
       async (req, res) => {
         const id = req.params.id;
-        if (!validateIdForPath(id, 'integration', res)) return;
-        try {
-          const instance = await installedIntegrationService.setEnabled(id, enabled);
-          logAudit({
-            req,
-            action: 'toggle',
-            resource: 'integration',
-            resourceId: id,
-            summary: `${enabled ? 'Enabled' : 'Disabled'} integration "${id}"`
-          });
-          if (enabled) await closeRequestsFor(req, instance.definition);
-          res.json({ success: true, instance });
-        } catch (error) {
-          sendIntegrationError(res, error, 'toggle integration');
-        }
+        assertValidId(id, 'integration');
+        const instance = await installedIntegrationService.setEnabled(id, enabled);
+        logAudit({
+          req,
+          action: 'toggle',
+          resource: 'integration',
+          resourceId: id,
+          summary: `${enabled ? 'Enabled' : 'Disabled'} integration "${id}"`
+        });
+        if (enabled) await closeRequestsFor(req, instance.definition);
+        res.json({ success: true, instance });
       }
     );
   }
@@ -1255,7 +1156,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       try {
         const outcome = await definitionMigrationRunner.migrate(id, {
           by: adminName(req),
@@ -1285,7 +1186,7 @@ export default function registerAdminIntegrationsRoutes(app) {
             result: 'failure'
           });
         }
-        await sendMigrationError(res, req, id, error, 'migrate installed integration');
+        throw await migrationFailure(error, id, req);
       }
     }
   );
@@ -1340,11 +1241,9 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       const backup = req.body?.backup;
-      if (backup !== undefined && backup !== null && !validateIdForPath(backup, 'backup', res)) {
-        return;
-      }
+      if (backup !== undefined && backup !== null) assertValidId(backup, 'backup');
       try {
         const outcome = await definitionMigrationRunner.restore(id, {
           backup: backup || undefined,
@@ -1364,7 +1263,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           instance: await migratedView(id, req)
         });
       } catch (error) {
-        await sendMigrationError(res, req, id, error, 'restore installed integration');
+        throw await migrationFailure(error, id, req);
       }
     }
   );
@@ -1423,16 +1322,12 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       const backup = req.body?.backup;
       if (backup === undefined || backup === null || backup === '') {
-        return res.status(400).json({
-          success: false,
-          error: 'A revert names the backup to go back to',
-          code: 'BACKUP_REQUIRED'
-        });
+        throw new ServiceError('BACKUP_REQUIRED', 'A revert names the backup to go back to');
       }
-      if (!validateIdForPath(backup, 'backup', res)) return;
+      assertValidId(backup, 'backup');
       try {
         const outcome = await definitionMigrationRunner.revert(id, {
           backup,
@@ -1452,7 +1347,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           instance: await migratedView(id, req)
         });
       } catch (error) {
-        await sendMigrationError(res, req, id, error, 'revert installed integration');
+        throw await migrationFailure(error, id, req);
       }
     }
   );
@@ -1493,7 +1388,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       try {
         const outcome = await definitionMigrationRunner.adopt(id, { by: adminName(req) });
         logAudit({
@@ -1509,7 +1404,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           instance: await migratedView(id, req)
         });
       } catch (error) {
-        await sendMigrationError(res, req, id, error, 'adopt definition version');
+        throw await migrationFailure(error, id, req);
       }
     }
   );
@@ -1521,17 +1416,12 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        const found = await adapterFor(id, res);
-        if (!found) return;
-        const connections = found.adapter?.listConnections
-          ? await found.adapter.listConnections(found.resolved.instance)
-          : [];
-        res.json({ success: true, connections });
-      } catch (error) {
-        sendInternalError(res, error, 'list integration connections');
-      }
+      assertValidId(id, 'integration');
+      const found = await adapterFor(id);
+      const connections = found.adapter?.listConnections
+        ? await found.adapter.listConnections(found.resolved.instance)
+        : [];
+      res.json({ success: true, connections });
     }
   );
 
@@ -1540,32 +1430,27 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
+      assertValidId(id, 'integration');
       // A store key, never a path: the token store maps ids outside its
       // file-name allowlist to a hashed storage id itself.
       const userId = String(req.params.userId || '');
-      if (!userId || userId.length > 256) return sendBadRequest(res, 'Invalid userId');
-      try {
-        const found = await adapterFor(id, res);
-        if (!found) return;
-        if (!found.adapter?.disconnectUser) {
-          return sendBadRequest(res, 'This integration has no per-user connections');
-        }
-        const result = await found.adapter.disconnectUser(found.resolved.instance, userId, {
-          req
-        });
-        if (!result?.removed) return sendNotFound(res, 'Connection');
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Disconnected user "${userId}" from integration "${id}"`
-        });
-        res.json({ success: true, ...result });
-      } catch (error) {
-        sendInternalError(res, error, 'disconnect integration user');
+      if (!userId || userId.length > 256) throw new ServiceError('BAD_REQUEST', 'Invalid userId');
+      const found = await adapterFor(id);
+      if (!found.adapter?.disconnectUser) {
+        throw new ServiceError('BAD_REQUEST', 'This integration has no per-user connections');
       }
+      const result = await found.adapter.disconnectUser(found.resolved.instance, userId, {
+        req
+      });
+      if (!result?.removed) throw new ServiceError('NOT_FOUND', 'Connection not found');
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Disconnected user "${userId}" from integration "${id}"`
+      });
+      res.json({ success: true, ...result });
     }
   );
 
@@ -1578,25 +1463,21 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        const found = await adapterFor(id, res);
-        if (!found) return;
-        const done = found.adapter?.resetRegistration
-          ? await found.adapter.resetRegistration(found.resolved.instance)
-          : false;
-        if (!done) return sendBadRequest(res, 'This integration has no OAuth client registration');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Reset the OAuth client registration of integration "${id}"`
-        });
-        res.json({ success: true });
-      } catch (error) {
-        sendInternalError(res, error, 'reset integration registration');
-      }
+      assertValidId(id, 'integration');
+      const found = await adapterFor(id);
+      const done = found.adapter?.resetRegistration
+        ? await found.adapter.resetRegistration(found.resolved.instance)
+        : false;
+      if (!done)
+        throw new ServiceError('BAD_REQUEST', 'This integration has no OAuth client registration');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Reset the OAuth client registration of integration "${id}"`
+      });
+      res.json({ success: true });
     }
   );
 
@@ -1605,30 +1486,26 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       const id = req.params.id;
-      if (!validateIdForPath(id, 'integration', res)) return;
-      try {
-        const existing = installedIntegrationService.get(id);
-        if (!existing) return sendNotFound(res, 'Integration');
-        const { testInput, ...body } = req.body || {};
-        const payload = Object.keys(body).length ? { ...body, id } : existing;
-        const result = await installedIntegrationService.test(payload, {
-          language: languageOf(req),
-          user: req.user,
-          req,
-          testInput
-        });
-        logAudit({
-          req,
-          action: 'execute',
-          resource: 'integration',
-          resourceId: id,
-          summary: `Tested integration "${id}" (${result.success ? 'ok' : 'failed'})`,
-          result: result.success ? 'success' : 'failure'
-        });
-        res.json({ success: true, result });
-      } catch (error) {
-        sendIntegrationError(res, error, 'test installed integration');
-      }
+      assertValidId(id, 'integration');
+      const existing = installedIntegrationService.get(id);
+      if (!existing) throw new ServiceError('NOT_FOUND', 'Integration not found');
+      const { testInput, ...body } = req.body || {};
+      const payload = Object.keys(body).length ? { ...body, id } : existing;
+      const result = await installedIntegrationService.test(payload, {
+        language: languageOf(req),
+        user: req.user,
+        req,
+        testInput
+      });
+      logAudit({
+        req,
+        action: 'execute',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Tested integration "${id}" (${result.success ? 'ok' : 'failed'})`,
+        result: result.success ? 'success' : 'failure'
+      });
+      res.json({ success: true, result });
     }
   );
 }
