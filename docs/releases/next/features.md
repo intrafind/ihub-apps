@@ -603,3 +603,19 @@ easier to read. The user's own messages sit in a neutral grey bubble on the righ
 - The main area of the app is now white and the sidebar light grey, which was the other way round
   before.
 - Error messages keep their red callout.
+
+## Projects: Edit a Web Page, iHub Page or iFinder Item After Adding It
+
+A link item of a project — a web page (URL), an iHub page, an iFinder document or an iFinder
+search — can now be changed after it was added. Before, fixing a mistyped URL or pointing an item
+at another page meant removing it and adding it again.
+
+- **Edit** in the item's actions opens the same fields used for adding, filled with the current
+  values, together with the item's name. The change takes effect at once, without a restart. An
+  item still named after its old URL or page takes the new one's name; a name you chose stays.
+- Admins also get **Rename** in the item list of an admin project, which only user projects had.
+- Uploaded and written documents, cloud documents and documents linked from another project have no
+  address to change; they are renamed, or removed and added again.
+- API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
+  accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
+  replaces the stored one as sent.

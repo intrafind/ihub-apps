@@ -372,11 +372,16 @@ export const ifinderAddItemsSchema = z
   })
   .strict();
 
-/** What `PATCH /api/projects/:id/items/:itemId` accepts. */
+/**
+ * What `PATCH /api/projects/:id/items/:itemId` accepts. `ref` replaces the
+ * reference of a link item (a URL, a page, an iFinder document or search); the
+ * server checks it against the item's own kind, which cannot change.
+ */
 export const itemUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
-    pinned: z.boolean().optional()
+    pinned: z.boolean().optional(),
+    ref: z.record(z.string(), z.unknown()).optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');

@@ -12,15 +12,7 @@ import {
   validateItemCount,
   validateUploads
 } from '../../utils/projectItems';
-import {
-  DisabledTabNotice,
-  IFinderDocumentPicker,
-  IFinderQueryPicker,
-  PagePicker,
-  TextPicker,
-  UploadPicker,
-  UrlPicker
-} from './ItemPickers';
+import { DisabledTabNotice, LinkKindPicker, TextPicker, UploadPicker } from './ItemPickers';
 import { INPUT_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from './dialogStyles';
 
 /** A fresh draft: shared fields plus each picker's input. */
@@ -279,42 +271,22 @@ function ItemFormBody({
         );
       case 'text':
         return <TextPicker draft={draft} update={update} />;
-      case 'url':
-        return (
-          <UrlPicker
-            draft={draft}
-            update={update}
-            checkUrl={api.checkUrl}
-            previewUrl={api.previewUrl}
-            crawlUrl={api.crawlUrl}
-            existingUrls={existingUrls}
-            remaining={remainingItemSlots(config, usage)}
-            busy={submitting}
-            errorMessage={api.errorMessage}
-          />
-        );
-      case 'page':
-        return <PagePicker draft={draft} update={update} pages={pages} />;
-      case 'ifinder-document':
-        return (
-          <IFinderDocumentPicker
-            draft={draft}
-            update={update}
-            searchIFinder={api.searchIFinder}
-            fetchProfiles={api.fetchIFinderProfiles}
-            errorMessage={api.errorMessage}
-          />
-        );
-      case 'ifinder-query':
-        return (
-          <IFinderQueryPicker
-            draft={draft}
-            update={update}
-            fetchProfiles={api.fetchIFinderProfiles}
-          />
-        );
       default:
-        return null;
+        return (
+          <LinkKindPicker
+            kind={tab.id}
+            draft={draft}
+            update={update}
+            api={api}
+            pages={pages}
+            urlProps={{
+              crawlUrl: api.crawlUrl,
+              existingUrls,
+              remaining: remainingItemSlots(config, usage),
+              busy: submitting
+            }}
+          />
+        );
     }
   };
 

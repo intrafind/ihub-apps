@@ -30,7 +30,7 @@ export function replaceItem(project, item) {
 
 /**
  * The item actions of the user project page: pin, refresh (or retry),
- * rename and remove. Each answers in the shown project right away and
+ * rename, edit (change a link item's reference) and remove. Each answers in the shown project right away and
  * reconciles with the server; a failure is reported in `error`.
  *
  * @param {Object} options
@@ -40,6 +40,7 @@ export function replaceItem(project, item) {
  * @returns {{busyItemId: string|null, error: string|null, clearError: () => void,
  *   togglePinned: (item: Object) => Promise<void>, refresh: (item: Object) => Promise<void>,
  *   rename: (item: Object, name: string) => Promise<boolean>,
+ *   update: (item: Object, changes: {name?: string, ref?: Object}) => Promise<Object|undefined>,
  *   editText: (item: Object, text: string) => Promise<Object|undefined>,
  *   remove: (item: Object) => Promise<void>}}
  */
@@ -93,6 +94,24 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [projectId, run, setProject]
   );
 
+  // Throws like `editText`: the edit dialog shows the failure next to the form.
+  // Changing what an item points at changes what the project holds, so the
+  // usage counters are read again.
+  const update = useCallback(
+    async (item, changes) => {
+      setBusyItemId(item.id);
+      try {
+        const updated = await updateProjectItem(projectId, item.id, changes);
+        if (updated) setProject(prev => replaceItem(prev, updated));
+        await reload();
+        return updated;
+      } finally {
+        setBusyItemId(null);
+      }
+    },
+    [projectId, setProject, reload]
+  );
+
   // Unlike the others, this one throws: the text dialog shows the failure
   // next to the text being edited, not in the page's banner.
   const editText = useCallback(
@@ -131,6 +150,7 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     togglePinned,
     refresh,
     rename,
+    update,
     editText,
     remove
   };

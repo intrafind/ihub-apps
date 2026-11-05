@@ -8355,7 +8355,8 @@
         "rename": "Umbenennen",
         "retry": "Erneut versuchen",
         "transfer": "Verschieben oder kopieren nach…",
-        "openInIFinder": "In iFinder öffnen"
+        "openInIFinder": "In iFinder öffnen",
+        "edit": "Bearbeiten"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -8661,6 +8662,10 @@
       "renameTitle": "Collection umbenennen",
       "renameSubtitle": "Name und Beschreibung werden auch in iFinder geändert.",
       "renameHint": "Eine Smart Collection hat keine Anweisungen: Sie ist eine Liste von Dokumenten."
+    },
+    "editItem": {
+      "title": "Element bearbeiten",
+      "unsupported": "Dieses Element kann nicht bearbeitet werden."
     }
   },
   "integrationScopes": {
