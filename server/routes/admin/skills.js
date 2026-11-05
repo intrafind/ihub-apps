@@ -7,7 +7,7 @@ import JSZip from 'jszip';
 import { ZipArchive } from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { assertValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { requireFeature } from '../../featureRegistry.js';
 import configCache from '../../configCache.js';
 import registryService from '../../services/marketplace/RegistryService.js';
@@ -24,12 +24,7 @@ import {
   validateSkillName
 } from '../../services/skillLoader.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -145,24 +140,20 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        const { data: skills, etag } = configCache.getSkills();
+      const { data: skills, etag } = configCache.getSkills();
 
-        if (etag) {
-          const clientEtag = req.headers['if-none-match'];
-          if (clientEtag && clientEtag === etag) {
-            return res.status(304).end();
-          }
-          res.setHeader('ETag', etag);
+      if (etag) {
+        const clientEtag = req.headers['if-none-match'];
+        if (clientEtag && clientEtag === etag) {
+          return res.status(304).end();
         }
-
-        const platformConfig = configCache.getPlatform();
-        const settings = platformConfig?.skills || {};
-
-        res.json({ skills, settings });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch admin skills');
+        res.setHeader('ETag', etag);
       }
+
+      const platformConfig = configCache.getPlatform();
+      const settings = platformConfig?.skills || {};
+
+      res.json({ skills, settings });
     }
   );
 
@@ -174,39 +165,35 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        const { data: skills } = configCache.getSkills();
-        const skill = skills.find(s => s.name === req.params.name);
+      const { data: skills } = configCache.getSkills();
+      const skill = skills.find(s => s.name === req.params.name);
 
-        if (!skill) {
-          return sendNotFound(res, 'Skill');
-        }
-
-        const content = await getSkillContent(req.params.name);
-        const files = await listSkillFiles(skill.path);
-
-        // Look up marketplace source URL from installation manifest for relative link rewriting
-        const { data: installationsData } = configCache.getInstallations();
-        const installations = installationsData?.installations || {};
-        const installation = installations[`skill:${req.params.name}`];
-        const sourceUrl = installation?.sourceUrl || null;
-
-        const body = registryService.rewriteSkillLinks(content?.body || '', sourceUrl);
-
-        res.json({
-          ...skill,
-          body,
-          frontmatter: content?.frontmatter || {},
-          references: content?.references || [],
-          scripts: content?.scripts || [],
-          assets: content?.assets || [],
-          files
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch admin skill detail');
+      if (!skill) {
+        throw new ServiceError('NOT_FOUND', 'Skill not found');
       }
+
+      const content = await getSkillContent(req.params.name);
+      const files = await listSkillFiles(skill.path);
+
+      // Look up marketplace source URL from installation manifest for relative link rewriting
+      const { data: installationsData } = configCache.getInstallations();
+      const installations = installationsData?.installations || {};
+      const installation = installations[`skill:${req.params.name}`];
+      const sourceUrl = installation?.sourceUrl || null;
+
+      const body = registryService.rewriteSkillLinks(content?.body || '', sourceUrl);
+
+      res.json({
+        ...skill,
+        body,
+        frontmatter: content?.frontmatter || {},
+        references: content?.references || [],
+        scripts: content?.scripts || [],
+        assets: content?.assets || [],
+        files
+      });
     }
   );
 
@@ -218,41 +205,36 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        // System skills ship with iHub; they are not an installation's to remove.
-        if (isSystemSkill(req.params.name)) {
-          return sendErrorResponse(
-            res,
-            403,
-            `'${req.params.name}' is a system skill and cannot be deleted`
-          );
-        }
-
-        const skillsDir = getSkillsDirectory();
-        const skillPathResolved = await resolveAndValidatePath(req.params.name, skillsDir);
-        if (!skillPathResolved) {
-          logger.warn('Path traversal attempt blocked when deleting skill', {
-            component: 'AdminSkills',
-            name: req.params.name
-          });
-          return sendBadRequest(res, 'Invalid skill path');
-        }
-
-        if (!existsSync(skillPathResolved)) {
-          return sendNotFound(res, 'Skill directory');
-        }
-
-        await fs.rm(skillPathResolved, { recursive: true, force: true });
-        await configCache.refreshSkillsCache();
-
-        await removeMarketplaceInstallation('skill', req.params.name);
-
-        res.json({ success: true });
-      } catch (error) {
-        return sendInternalError(res, error, 'delete skill');
+      // System skills ship with iHub; they are not an installation's to remove.
+      if (isSystemSkill(req.params.name)) {
+        throw new ServiceError(
+          'FORBIDDEN',
+          `'${req.params.name}' is a system skill and cannot be deleted`
+        );
       }
+
+      const skillsDir = getSkillsDirectory();
+      const skillPathResolved = await resolveAndValidatePath(req.params.name, skillsDir);
+      if (!skillPathResolved) {
+        logger.warn('Path traversal attempt blocked when deleting skill', {
+          component: 'AdminSkills',
+          name: req.params.name
+        });
+        throw new ServiceError('BAD_REQUEST', 'Invalid skill path');
+      }
+
+      if (!existsSync(skillPathResolved)) {
+        throw new ServiceError('NOT_FOUND', 'Skill directory not found');
+      }
+
+      await fs.rm(skillPathResolved, { recursive: true, force: true });
+      await configCache.refreshSkillsCache();
+
+      await removeMarketplaceInstallation('skill', req.params.name);
+
+      res.json({ success: true });
     }
   );
 
@@ -264,38 +246,34 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        const skillName = req.params.name;
-        if (!validateIdForPath(skillName, 'skill', res)) return;
+      const skillName = req.params.name;
+      assertValidId(skillName, 'skill');
 
-        const skillsRoot = isSystemSkill(skillName)
-          ? getSystemSkillsDirectory()
-          : getSkillsDirectory();
-        const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
-        if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
-          logger.warn('Skill export blocked for invalid path', {
-            component: 'AdminSkills',
-            skillName
-          });
-          return sendBadRequest(res, 'Invalid skill path');
-        }
-
-        if (!existsSync(resolvedSkillPath)) {
-          return sendNotFound(res, 'Skill');
-        }
-
-        const archive = new ZipArchive({ zlib: { level: 9 } });
-        const fileName = `${skillName}.zip`;
-
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-        archive.pipe(res);
-        archive.directory(resolvedSkillPath, skillName);
-        await archive.finalize();
-      } catch (error) {
-        return sendInternalError(res, error, 'export skill');
+      const skillsRoot = isSystemSkill(skillName)
+        ? getSystemSkillsDirectory()
+        : getSkillsDirectory();
+      const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
+      if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
+        logger.warn('Skill export blocked for invalid path', {
+          component: 'AdminSkills',
+          skillName
+        });
+        throw new ServiceError('BAD_REQUEST', 'Invalid skill path');
       }
+
+      if (!existsSync(resolvedSkillPath)) {
+        throw new ServiceError('NOT_FOUND', 'Skill not found');
+      }
+
+      const archive = new ZipArchive({ zlib: { level: 9 } });
+      const fileName = `${skillName}.zip`;
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+      archive.pipe(res);
+      archive.directory(resolvedSkillPath, skillName);
+      await archive.finalize();
     }
   );
 
@@ -313,16 +291,15 @@ export default function registerAdminSkillsRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       if (!req.files || !req.files.skill) {
-        return sendBadRequest(res, 'No skill file uploaded');
+        throw new ServiceError('BAD_REQUEST', 'No skill file uploaded');
       }
 
       const file = req.files.skill;
 
       // Enforce upload size limit before any extraction
       if (file.size > MAX_SKILL_ZIP_SIZE) {
-        return sendErrorResponse(
-          res,
-          413,
+        throw new ServiceError(
+          'PAYLOAD_TOO_LARGE',
           `Skill zip must not exceed ${MAX_SKILL_ZIP_SIZE / 1024 / 1024} MB`
         );
       }
@@ -341,27 +318,31 @@ export default function registerAdminSkillsRoutes(app) {
         const dirs = entries.filter(e => e.isDirectory() && !e.isSymbolicLink());
 
         if (dirs.length !== 1) {
-          return sendBadRequest(res, 'Zip must contain exactly one top-level skill directory');
+          throw new ServiceError(
+            'BAD_REQUEST',
+            'Zip must contain exactly one top-level skill directory'
+          );
         }
 
         const skillDir = path.join(tempDir, dirs[0].name);
         const validation = await validateSkillDirectory(skillDir);
 
         if (!validation.valid) {
-          return sendBadRequest(res, 'Invalid skill', validation.errors);
+          throw new ServiceError('BAD_REQUEST', 'Invalid skill', {
+            details: { errors: validation.errors }
+          });
         }
 
         const skillName = dirs[0].name;
         const nameValidation = validateSkillName(skillName);
         if (!nameValidation.valid) {
-          return sendBadRequest(res, nameValidation.error);
+          throw new ServiceError('BAD_REQUEST', nameValidation.error);
         }
 
         // A system skill's name is reserved, overwrite or not.
         if (isSystemSkill(skillName)) {
-          return sendErrorResponse(
-            res,
-            409,
+          throw new ServiceError(
+            'SKILL_NAME_RESERVED',
             `'${skillName}' is the name of a system skill. Rename the skill directory to import it.`
           );
         }
@@ -369,9 +350,8 @@ export default function registerAdminSkillsRoutes(app) {
         const targetPath = getSkillPath(skillName);
 
         if (existsSync(targetPath) && !req.body.overwrite) {
-          return sendErrorResponse(
-            res,
-            409,
+          throw new ServiceError(
+            'CONFLICT',
             `Skill '${skillName}' already exists. Set overwrite=true to replace.`
           );
         }
@@ -384,8 +364,6 @@ export default function registerAdminSkillsRoutes(app) {
         await configCache.refreshSkillsCache();
 
         res.json({ success: true, skillName, metadata: validation.metadata });
-      } catch (error) {
-        sendInternalError(res, error, 'import skill');
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
@@ -400,26 +378,22 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        // Express 5 named wildcards arrive as an array of path segments
-        const filePath = Array.isArray(req.params.filePath)
-          ? req.params.filePath.join('/')
-          : req.params.filePath;
-        if (!filePath) {
-          return sendBadRequest(res, 'File path is required');
-        }
-
-        const content = await getSkillResource(req.params.name, filePath);
-        if (content === null) {
-          return sendNotFound(res, 'Resource');
-        }
-
-        res.type('text/plain').send(content);
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch skill resource');
+      // Express 5 named wildcards arrive as an array of path segments
+      const filePath = Array.isArray(req.params.filePath)
+        ? req.params.filePath.join('/')
+        : req.params.filePath;
+      if (!filePath) {
+        throw new ServiceError('BAD_REQUEST', 'File path is required');
       }
+
+      const content = await getSkillResource(req.params.name, filePath);
+      if (content === null) {
+        throw new ServiceError('NOT_FOUND', 'Resource not found');
+      }
+
+      res.type('text/plain').send(content);
     }
   );
 
@@ -436,12 +410,8 @@ export default function registerAdminSkillsRoutes(app) {
     contentAdminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        res.setHeader('Cache-Control', 'private, no-store');
-        res.json(await listSharedUserSkills(req));
-      } catch (error) {
-        sendInternalError(res, error, 'list user skills');
-      }
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json(await listSharedUserSkills(req));
     }
   );
 
@@ -458,50 +428,39 @@ export default function registerAdminSkillsRoutes(app) {
    *       - Admin - Skills
    */
   app.get(buildServerPath('/api/admin/user-skills/settings'), adminAuth, async (req, res) => {
-    try {
-      res.json({
-        settings: userSkillSettings(configCache.getPlatform() || {}),
-        storageAvailable: getUserSkillRepository().isAvailable()
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'read user skill settings');
-    }
+    res.json({
+      settings: userSkillSettings(configCache.getPlatform() || {}),
+      storageAvailable: getUserSkillRepository().isAvailable()
+    });
   });
 
   app.put(buildServerPath('/api/admin/user-skills/settings'), adminAuth, async (req, res) => {
-    const parsed = userSkillSettingsSchema.safeParse(req.body || {});
-    if (!parsed.success) {
-      return sendBadRequest(res, `Invalid user skill settings: ${describeIssues(parsed.error)}`);
-    }
-    try {
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
-      const { sharing, ...rest } = parsed.data;
-      const stored = platformConfig.userSkills || {};
-      platformConfig.userSkills = {
-        ...stored,
-        ...rest,
-        sharing: { ...stored.sharing, ...sharing }
-      };
-      await configStore.writeJson('config/platform.json', platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'user-skills',
-        summary: `Updated user skill settings (${[
-          ...Object.keys(rest),
-          ...Object.keys(sharing || {}).map(key => `sharing.${key}`)
-        ].join(', ')})`
-      });
-      res.json({
-        settings: userSkillSettings(configCache.getPlatform() || platformConfig),
-        storageAvailable: getUserSkillRepository().isAvailable()
-      });
-    } catch (error) {
-      sendInternalError(res, error, 'update user skill settings');
-    }
+    const settings = userSkillSettingsSchema.parse(req.body || {});
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
+    const { sharing, ...rest } = settings;
+    const stored = platformConfig.userSkills || {};
+    platformConfig.userSkills = {
+      ...stored,
+      ...rest,
+      sharing: { ...stored.sharing, ...sharing }
+    };
+    await configStore.writeJson('config/platform.json', platformConfig);
+    await configCache.refreshCacheEntry('config/platform.json');
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'user-skills',
+      summary: `Updated user skill settings (${[
+        ...Object.keys(rest),
+        ...Object.keys(sharing || {}).map(key => `sharing.${key}`)
+      ].join(', ')})`
+    });
+    res.json({
+      settings: userSkillSettings(configCache.getPlatform() || platformConfig),
+      storageAvailable: getUserSkillRepository().isAvailable()
+    });
   });
 
   /**
@@ -528,45 +487,42 @@ export default function registerAdminSkillsRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'User skill');
+      assertValidId(skillId, 'skill');
+      if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'User skill not found');
       const repo = getUserSkillRepository();
       if (!repo.isAvailable()) {
-        return sendErrorResponse(res, 503, 'User skills are unavailable', {
-          details: { code: 'USER_SKILLS_UNAVAILABLE' }
-        });
+        throw new ServiceError('USER_SKILLS_UNAVAILABLE', 'User skills are unavailable');
       }
       const parsed = skillPromoteSchema.safeParse(req.body || {});
       if (!parsed.success) {
-        return sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+        throw new ServiceError('BAD_REQUEST', `Invalid request: ${describeIssues(parsed.error)}`);
       }
       let created = false;
       let targetPath = null;
       try {
         const skill = await repo.get(skillId);
-        if (!skill) return sendNotFound(res, 'User skill');
+        if (!skill) throw new ServiceError('NOT_FOUND', 'User skill not found');
         const name = parsed.data.name || skill.name;
         const nameValidation = validateSkillName(name);
-        if (!nameValidation.valid) return sendBadRequest(res, nameValidation.error);
+        if (!nameValidation.valid) throw new ServiceError('BAD_REQUEST', nameValidation.error);
         // A system skill's name is reserved.
         if (isSystemSkill(name)) {
-          return sendErrorResponse(
-            res,
-            409,
-            `'${name}' is the name of a system skill. Promote the skill under another name.`,
-            { details: { code: 'SKILL_NAME_RESERVED' } }
+          throw new ServiceError(
+            'SKILL_NAME_RESERVED',
+            `'${name}' is the name of a system skill. Promote the skill under another name.`
           );
         }
 
         targetPath = await resolveAndValidatePath(name, getSkillsDirectory());
-        if (!targetPath) return sendBadRequest(res, 'Invalid skill name');
+        if (!targetPath) throw new ServiceError('BAD_REQUEST', 'Invalid skill name');
         const taken =
           existsSync(targetPath) ||
           (configCache.getSkills().data || []).some(entry => entry.name === name);
         if (taken) {
-          return sendErrorResponse(res, 409, `A global skill named '${name}' already exists`, {
-            details: { code: 'SKILL_NAME_TAKEN' }
-          });
+          throw new ServiceError(
+            'SKILL_NAME_TAKEN',
+            `A global skill named '${name}' already exists`
+          );
         }
 
         // Claim the name with a non-recursive mkdir: of two promotions to the
@@ -577,9 +533,10 @@ export default function registerAdminSkillsRoutes(app) {
           await fs.mkdir(targetPath);
         } catch (err) {
           if (err.code !== 'EEXIST') throw err;
-          return sendErrorResponse(res, 409, `A global skill named '${name}' already exists`, {
-            details: { code: 'SKILL_NAME_TAKEN' }
-          });
+          throw new ServiceError(
+            'SKILL_NAME_TAKEN',
+            `A global skill named '${name}' already exists`
+          );
         }
         created = true;
         const files = [
@@ -596,7 +553,9 @@ export default function registerAdminSkillsRoutes(app) {
         if (!validation.valid) {
           await fs.rm(targetPath, { recursive: true, force: true });
           created = false;
-          return sendBadRequest(res, 'This skill cannot become a global skill', validation.errors);
+          throw new ServiceError('BAD_REQUEST', 'This skill cannot become a global skill', {
+            details: { errors: validation.errors }
+          });
         }
 
         await configCache.refreshSkillsCache();
@@ -620,7 +579,7 @@ export default function registerAdminSkillsRoutes(app) {
         if (created && targetPath) {
           await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
         }
-        sendInternalError(res, error, 'promote skill');
+        throw error;
       }
     }
   );

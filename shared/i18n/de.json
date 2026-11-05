@@ -8956,6 +8956,8 @@
     "MARKETPLACE_SKILL_NOT_FOUND": "Dieser Skill wurde im Marktplatz nicht gefunden.",
     "MARKETPLACE_SKILL_INVALID": "Dieser Marktplatz-Eintrag ist kein gültiger Skill.",
     "MARKETPLACE_FETCH_FAILED": "Der Marktplatz ist nicht erreichbar. Versuchen Sie es später erneut.",
-    "MARKETPLACE_SKILL_ERROR": "Der Skill konnte nicht aus dem Marktplatz übernommen werden."
+    "MARKETPLACE_SKILL_ERROR": "Der Skill konnte nicht aus dem Marktplatz übernommen werden.",
+    "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
+    "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen."
   }
 }

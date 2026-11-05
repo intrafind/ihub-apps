@@ -573,6 +573,11 @@ text page. Every such response has the same body:
   `details.code` to the top-level `code`; the limits that were reported next to them stay in
   `details` (`limit`, `maxFilesPerSkill`, `maxSkillSizeKB`). A malformed body answers
   `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
+- The skill administration endpoints (`/api/admin/skills*`, `/api/admin/user-skills*`) answer in this
+  shape too. `SKILL_NAME_TAKEN` and the new `SKILL_NAME_RESERVED` (importing or promoting a skill under
+  the name of a system skill, 409) are top-level `code`s; deleting a system skill answers `FORBIDDEN`,
+  an oversized zip `PAYLOAD_TOO_LARGE`, and the problems of an invalid skill are in `details.errors`
+  instead of a bare `details` list.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

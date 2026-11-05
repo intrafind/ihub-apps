@@ -14,15 +14,14 @@ function responseData(error) {
 }
 
 /**
- * The error code of the skills API (`code` of the response body), if any. `details.code` is
- * still read for the admin skill routes, which have not moved to the shared error shape yet.
+ * The error code of the skills API (`code` of the response body), if any.
  *
  * @param {Error} error - Error thrown by an API call.
  * @returns {string|null}
  */
 export function skillErrorCode(error) {
   const data = responseData(error);
-  return data?.code || data?.details?.code || error?.code || null;
+  return data?.code || error?.code || null;
 }
 
 /**
