@@ -74,10 +74,13 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 
 const { default: registerMcpAppRoutes, resolveMcpApp } =
   await import('../../routes/mcpAppRoutes.js');
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 
 const app = express();
 app.use(express.json());
 registerMcpAppRoutes(app);
+// As in the server: a validation failure reaches the global error middleware.
+app.use(errorHandler);
 
 const RESOURCE = {
   uri: 'ui://excalidraw/mcp-app.html',
