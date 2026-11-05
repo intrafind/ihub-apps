@@ -101,7 +101,7 @@ startInactiveClientSweep(workflowClients, { component: 'WorkflowRoutes' });
  * @returns {Promise<object>}
  * @throws {ServiceError}
  */
-async function authorizeExecutionAccess(req, executionId) {
+async function loadOwnedExecution(req, executionId) {
   const registry = getExecutionRegistry();
   const execution = await registry.get(executionId);
 
@@ -955,7 +955,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
       if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-      await authorizeExecutionAccess(req, executionId);
+      await loadOwnedExecution(req, executionId);
 
       const state = await workflowEngine.getState(executionId);
 
@@ -1054,7 +1054,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       const { executionId, appId } = req.params;
       if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
       assertValidId(appId, 'app');
-      await authorizeExecutionAccess(req, executionId);
+      await loadOwnedExecution(req, executionId);
 
       // Ids match regardless of case, as `appAccessRequired` matched it.
       const chatApp = findByIdCaseInsensitive(configCache.getApps().data || [], appId);
@@ -1143,7 +1143,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { executionId } = req.params;
         if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        await authorizeExecutionAccess(req, executionId);
+        await loadOwnedExecution(req, executionId);
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user
@@ -1230,7 +1230,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-        await authorizeExecutionAccess(req, executionId);
+        await loadOwnedExecution(req, executionId);
 
         // The execution may run on another worker: the engine relays the cancel.
         const state = await workflowEngine.cancelAnywhere(executionId, reason);
@@ -1300,7 +1300,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
       if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-      const execution = await authorizeExecutionAccess(req, executionId);
+      const execution = await loadOwnedExecution(req, executionId);
 
       const registry = getExecutionRegistry();
 
@@ -1383,7 +1383,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         throw new ServiceError('BAD_REQUEST', 'archived must be a boolean');
       }
 
-      const execution = await authorizeExecutionAccess(req, executionId);
+      const execution = await loadOwnedExecution(req, executionId);
 
       const registry = getExecutionRegistry();
       const updated = await registry.setArchived(executionId, archived);
@@ -1446,7 +1446,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
       if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
-      await authorizeExecutionAccess(req, executionId);
+      await loadOwnedExecution(req, executionId);
 
       const state = await workflowEngine.getState(executionId);
 
@@ -1556,7 +1556,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     async (req, res) => {
       const { executionId } = req.params;
 
-      await authorizeExecutionAccess(req, executionId);
+      await loadOwnedExecution(req, executionId);
 
       // The execution may run on another cluster worker; watching relays its
       // events here.
