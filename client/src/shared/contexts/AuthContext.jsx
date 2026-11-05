@@ -316,6 +316,11 @@ export function AuthProvider({ children }) {
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
 
+        // The session is the cookie the callback just set. A token left in localStorage by
+        // an earlier session would be sent in front of it (the server reads the
+        // Authorization header first), so drop it before asking who is signed in.
+        localStorage.removeItem('authToken');
+
         // Pick the session up from the cookie, then return to the page the user came from
         await loadAuthStatus();
         redirectToReturnUrl('oidc login');

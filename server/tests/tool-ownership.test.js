@@ -10,7 +10,7 @@
  *   - a platform tool of workflows and agents (`services/tools/platformTools.js`);
  *   - a feature: the project knowledge tools (`services/knowledge/knowledgeTools.js`),
  *     the chat context tools (`services/chat/chatContextTools.js`),
- *     the skill tools (`toolLoader.js`, `services/systemSkillTools.js`), apps
+ *     the skill tools (`services/tools/runTool.js`, `services/systemSkillTools.js`), apps
  *     as tools (`app__<appId>`) and workflows as tools (`workflow_<id>`).
  *
  * Nothing here lists the expected tools: the shipped files come from
@@ -31,7 +31,7 @@ import { PLATFORM_TOOL_IDS } from '../services/tools/platformTools.js';
 import { KNOWLEDGE_TOOL_IDS } from '../services/knowledge/knowledgeTools.js';
 import { CHAT_CONTEXT_TOOL_IDS } from '../services/chat/chatContextToolIds.js';
 import { SYSTEM_SKILL_TOOL_IDS } from '../services/systemSkillTools.js';
-import { SKILL_TOOL_IDS, WORKFLOW_TOOL_ID_PREFIX } from '../toolLoader.js';
+import { SKILL_TOOL_IDS, WORKFLOW_TOOL_ID_PREFIX } from '../services/tools/catalog.js';
 import { APP_TOOL_ID_PREFIX } from '../services/chat/appToolsGateway.js';
 import { toolIdFor } from '../services/integrations/protocols/common.js';
 import '../services/integrations/protocols/native/connectors/register.js';

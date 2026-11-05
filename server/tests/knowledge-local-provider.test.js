@@ -41,7 +41,8 @@ import {
   scopeSummary
 } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeToolsFor } from '../services/knowledge/knowledgeTools.js';
-import { getToolsForApp, runTool } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { runTool } from '../services/tools/runTool.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
 import { list, read, search } from '../tools/knowledge.js';
 import { projectSource, projectSourceProducer } from '../services/sources/producers/project.js';

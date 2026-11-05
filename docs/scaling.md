@@ -146,7 +146,8 @@ affinity.
 
 Relevant code: [`server/clusterBus.js`](../server/clusterBus.js),
 [`server/clusterSticky.js`](../server/clusterSticky.js) and the primary/worker
-branches in [`server/server.js`](../server/server.js).
+branches in [`server/startup/primary.js`](../server/startup/primary.js) and
+[`server/startup/worker.js`](../server/startup/worker.js).
 
 ## Configuration
 

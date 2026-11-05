@@ -20,7 +20,7 @@ import {
   resolveNativeWebSearchProvider,
   resolveAppNativeWebSearch,
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES
-} from '../toolLoader.js';
+} from '../services/tools/webSearchResolver.js';
 
 // Native search is the app's own web search, run by the model's provider: it
 // needs no engine installation and no integration grant. The tests prove it

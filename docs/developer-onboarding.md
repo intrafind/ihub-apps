@@ -217,7 +217,7 @@ ihub-apps/
 Start exploring from these important files:
 
 #### Server Entry Points
-- **`server/server.js`** - Main server application
+- **`server/server.js`** - Entry point; `server/startup/` holds the primary, the worker, the ordered route table and shutdown
 - **`server/routes/chat/dataRoutes.js`** - Primary API endpoints
 - **`server/configCache.js`** - Configuration loading system
 - **`server/services/chat/ChatService.js`** - Core chat functionality
@@ -455,7 +455,7 @@ graph TB
 
     RequestBuilder --> Templates[Process Templates]
     AgentLoop --> LLMClient[LLM Client]
-    AgentLoop --> Tools[toolLoader.runTool]
+    AgentLoop --> Tools[runTool]
     LLMClient --> LLMAdapter[LLM Adapter]
     Tools --> External[External APIs]
 
@@ -603,7 +603,7 @@ export const myCustomTool = {
 };
 ```
 
-2. **Register Tool** (`server/toolLoader.js`):
+2. **Register Tool** (`server/services/tools/catalog.js`):
 ```javascript
 import { myCustomTool } from './tools/myCustomTool.js';
 

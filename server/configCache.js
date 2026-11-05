@@ -1,243 +1,30 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { loadResources } from './resourceLoaders.js';
 import { loadJson, loadBuiltinLocaleJson, listBuiltinLocales } from './configLoader.js';
-import { loadAllApps } from './appsLoader.js';
-import { loadAllModels } from './modelsLoader.js';
-import { loadAllPrompts } from './promptsLoader.js';
-import { loadAllWorkflows } from './workflowsLoader.js';
-import { loadAllAgentProfiles } from './agentsLoader.js';
-import { loadAllTools } from './toolsLoader.js';
-import { loadAllProjects } from './projectsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
   getPermissionsForUser,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
-import { loadTools } from './toolLoader.js';
 import { announceConfigChange, announceFullConfigReload, setConfigReloader } from './configSync.js';
 import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
-import tokenStorageService from './services/TokenStorageService.js';
-import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { areAppIntegrationsEnabled } from './integrationRegistry.js';
 import { getDefinitionTypes } from './services/integrations/integrationTypes.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
-import { isToolSelected } from './utils/toolSelection.js';
-import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
-import { filterBrowserToolsForUser } from './services/peopleDirectory/LdapBrowserService.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
-
-// Re-exported under the name it has always had here: `telemetry.js` and the
-// server tests import it from this module.
-export { resolveEnvVarsInObject };
-
-/**
- * Decrypt a single value if it has the ENC[...] format
- */
-/**
- * An ETag for a variant of a cached list: `suffix` goes inside the quotes, so
- * `"abc"` becomes `"abc-suffix"` — still one valid entity tag.
- *
- * @param {string} etag - The list's ETag
- * @param {string} suffix - What tells the variant apart
- * @returns {string}
- */
-function etagWithSuffix(etag, suffix) {
-  if (typeof etag === 'string' && etag.length > 1 && etag.endsWith('"')) {
-    return `${etag.slice(0, -1)}-${suffix}"`;
-  }
-  return `${etag}-${suffix}`;
-}
-
-function decryptIfEncrypted(value) {
-  if (!value || typeof value !== 'string') return value;
-  if (tokenStorageService.isEncrypted(value)) {
-    try {
-      return tokenStorageService.decryptString(value);
-    } catch (error) {
-      logger.error('Failed to decrypt config secret', {
-        component: 'ConfigCache',
-        keySource: tokenStorageService.keySource,
-        keyFingerprint: tokenStorageService.getKeyFingerprint(),
-        error
-      });
-      return value; // Return encrypted value as-is on failure
-    }
-  }
-  return value;
-}
-
-/**
- * Decrypt secret fields in the central credential store so CredentialService
- * consumers receive plaintext. Operates in-place on the credentials map.
- */
-function decryptCredentials(config) {
-  if (!config || typeof config !== 'object' || !config.credentials) return config;
-  for (const profile of Object.values(config.credentials)) {
-    if (!profile || typeof profile !== 'object') continue;
-    const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
-    for (const field of secretFields) {
-      if (profile[field]) {
-        profile[field] = decryptIfEncrypted(profile[field]);
-      }
-    }
-  }
-  return config;
-}
-
-/**
- * Convert an UPPER_SNAKE_CASE segment to camelCase
- * Example: SESSION_TIMEOUT_MINUTES → sessionTimeoutMinutes
- */
-function toCamelCase(segment) {
-  return segment.toLowerCase().replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
-}
-
-/**
- * Parse an environment variable string value to the most appropriate type.
- * Numbers and booleans are coerced; JSON arrays/objects are parsed; otherwise string.
- */
-function parseEnvValue(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-/**
- * Set a value at a nested path inside an object.
- * Intermediate objects are created as needed.
- */
-function setNestedValue(obj, pathParts, value) {
-  if (!obj || typeof obj !== 'object' || pathParts.length === 0) return;
-
-  let current = obj;
-  for (let i = 0; i < pathParts.length - 1; i++) {
-    const key = pathParts[i];
-    if (current[key] === undefined || typeof current[key] !== 'object') {
-      current[key] = {};
-    }
-    current = current[key];
-  }
-  current[pathParts[pathParts.length - 1]] = value;
-}
-
-/**
- * Mapping from config cache keys to IHUB_* environment variable prefixes.
- * Double underscores (__) separate nested path segments.
- * Each segment is UPPER_SNAKE_CASE and is converted to camelCase before use.
- *
- * Examples:
- *   IHUB_PLATFORM__AUTH__MODE=anonymous         → platform.json  auth.mode
- *   IHUB_PLATFORM__DEFAULT_LANGUAGE=de          → platform.json  defaultLanguage
- *   IHUB_PLATFORM__RATE_LIMIT__DEFAULT__LIMIT=200 → platform.json rateLimit.default.limit
- *   IHUB_UI__THEME__PRIMARY_COLOR=#ff0000       → ui.json        theme.primaryColor
- */
-const IHUB_ENV_PREFIXES = {
-  'config/platform.json': 'IHUB_PLATFORM__',
-  'config/ui.json': 'IHUB_UI__'
-};
-
-/**
- * Per-cache-key config paths that must NOT be passed through env var
- * substitution. Used by `setCacheEntry` to opt specific fields out.
- *
- * Add an entry here when a config field is a *user-data* template
- * (e.g. `${user.username}` placeholder) rather than an env var reference.
- * Without this, `${name}` would be eaten by `resolveEnvVars` when an OS
- * env var of the same name exists (notably Windows `process.env.username`
- * = the OS user running the server) — silently leaking that value into
- * the templated field.
- */
-const ENV_VAR_SKIP_PATHS_BY_KEY = {
-  // The iFinder installation's JWT subject may be a `${user.x}` template.
-  'config/integrations.json': ['installed[].values.jwtSubjectField']
-};
-
-/**
- * Scan process.env for IHUB_* overrides and apply them to the given config object.
- * Only configs listed in IHUB_ENV_PREFIXES are processed.
- * Returns the (potentially mutated) data object.
- */
-function applyIhubEnvOverrides(configPath, data) {
-  const prefix = IHUB_ENV_PREFIXES[configPath];
-  if (!prefix || !data || typeof data !== 'object' || Array.isArray(data)) return data;
-
-  for (const [envKey, envValue] of Object.entries(process.env)) {
-    const pathParts = envOverridePath(envKey, prefix);
-    if (!pathParts) continue;
-
-    const parsedValue = parseEnvValue(envValue);
-    setNestedValue(data, pathParts, parsedValue);
-
-    logger.info(
-      `Applied IHUB env override: ${envKey} → ${pathParts.join('.')} = ${JSON.stringify(parsedValue)}`,
-      { component: 'ConfigCache' }
-    );
-  }
-
-  return data;
-}
-
-/**
- * The config path an `IHUB_*` variable overrides, in camelCase segments:
- * `IHUB_PLATFORM__AUTH__MODE` with the prefix `IHUB_PLATFORM__` gives
- * `['auth', 'mode']`. Null for a variable of another prefix, one with
- * nothing after the prefix, or a malformed one (an empty segment).
- *
- * @param {string} envKey - the variable's name
- * @param {string} prefix - the config's prefix (`IHUB_ENV_PREFIXES`)
- * @returns {string[]|null}
- */
-function envOverridePath(envKey, prefix) {
-  if (!envKey.startsWith(prefix)) return null;
-  const pathStr = envKey.slice(prefix.length);
-  if (!pathStr) return null;
-  const pathParts = pathStr.split('__').map(toCamelCase);
-  return pathParts.some(p => !p) ? null : pathParts;
-}
-
-/**
- * The tool grants the tools listing filters by: the user's
- * `permissions.tools`, an empty set for anyone without them when anonymous
- * access is on (no default tools for anonymous), or null (no filtering).
- *
- * @param {Object|undefined} user - user with resolved permissions
- * @param {Object} platformConfig - platform configuration
- * @returns {Set<string>|null}
- */
-function allowedToolsFor(user, platformConfig) {
-  if (user?.permissions?.tools) return user.permissions.tools;
-  if (isAnonymousAccessAllowed(platformConfig)) return new Set();
-  return null;
-}
-
-/**
- * Whether a tool no group grant covers is listed because the app the chat
- * runs in offers it: an installed integration's tool the app gets
- * (`getIntegrationToolsForApp`), a built-in action under its old tool id
- * (`ask_user`, `read_url`) the app's `tools` name, as `getToolsForApp`
- * offers it, or any other tool the app's `tools` reference.
- *
- * @param {Object} tool
- * @param {Set<Object>} appIntegrationTools - the app's integration tools
- * @param {Array<string>} appToolRefs - the app's `tools`
- * @returns {boolean}
- */
-function isListedThroughApp(tool, appIntegrationTools, appToolRefs) {
-  if (!tool._integration) return isToolSelected(tool, appToolRefs);
-  if (appIntegrationTools.has(tool)) return true;
-  return Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs);
-}
+import { applyIhubEnvOverrides, ENV_VAR_SKIP_PATHS_BY_KEY } from './utils/configOverrides.js';
+import { decryptCredentials, decryptPlatformSecrets } from './utils/configSecrets.js';
+import { etagForIds } from './utils/etag.js';
 
 /**
  * The approval fields of one expanded tool function: the function's own value
@@ -350,25 +137,6 @@ function cacheKeyForStorageChange(event) {
 }
 
 /**
- * Decrypt the speech secret platform.json stores encrypted at rest, in place.
- *
- * The Azure token broker (`/api/voice/azure/token`) reads it from the cache and
- * expects plaintext. Env-var placeholders are resolved later, when the entry is
- * stored. Transcription and TTS endpoints keep their keys on their models.
- *
- * @param {Object} platformData - Parsed platform.json
- * @returns {Object} The same object
- */
-function decryptPlatformSecrets(platformData) {
-  if (platformData.speech?.azure?.subscriptionKey) {
-    platformData.speech.azure.subscriptionKey = decryptIfEncrypted(
-      platformData.speech.azure.subscriptionKey
-    );
-  }
-  return platformData;
-}
-
-/**
  * How each cache key is loaded, in one place.
  *
  * `initialize()` and `_reloadEntry()` both read this table, so a type's
@@ -390,32 +158,33 @@ function decryptPlatformSecrets(platformData) {
 const CONFIG_LOADERS = {
   'config/apps.json': {
     label: 'apps',
-    load: ({ verbose }) => loadAllApps(true, verbose)
+    load: ({ verbose }) => loadResources('apps', { includeDisabled: true, verbose })
   },
   'config/models.json': {
     label: 'models',
-    load: ({ verbose }) => loadAllModels(true, verbose)
+    load: ({ verbose }) => loadResources('models', { includeDisabled: true, verbose })
   },
   'config/prompts.json': {
     label: 'prompts',
-    load: ({ verbose }) => loadAllPrompts(true, verbose)
+    load: ({ verbose }) => loadResources('prompts', { includeDisabled: true, verbose })
   },
   'config/workflows.json': {
     label: 'workflows',
-    load: ({ verbose }) => loadAllWorkflows(true, verbose)
+    load: ({ verbose }) => loadResources('workflows', { includeDisabled: true, verbose })
   },
   'config/agents.json': {
     label: 'agent profiles',
-    load: ({ verbose }) => loadAllAgentProfiles(true, verbose),
+    load: ({ verbose }) => loadResources('agents', { includeDisabled: true, verbose }),
     emptyOnError: []
   },
   'config/tools.json': {
     label: 'tools',
-    load: async ({ verbose }) => expandToolFunctions(await loadAllTools(true, verbose))
+    load: async ({ verbose }) =>
+      expandToolFunctions(await loadResources('tools', { includeDisabled: true, verbose }))
   },
   'config/projects.json': {
     label: 'admin projects',
-    load: ({ verbose }) => loadAllProjects(true, verbose),
+    load: ({ verbose }) => loadResources('projects', { includeDisabled: true, verbose }),
     emptyOnError: []
   },
   'config/groups.json': {
@@ -1035,60 +804,49 @@ class ConfigCache {
   }
 
   /**
+   * The entries of a list entry (`apps`, `models`, ...) with their ETag, the
+   * disabled ones left out unless asked for. An entry the cache does not hold
+   * yet is an empty list.
+   *
+   * @param {string} key - Cache key of an array entry, e.g. `'config/models.json'`
+   * @param {boolean} includeDisabled - Keep entries with `enabled: false`
+   * @param {string} [warnLabel] - Log a warning under this name when the entry is not cached yet
+   * @returns {{data: Object[], etag: string|null}}
+   */
+  _enabledList(key, includeDisabled, warnLabel) {
+    const cached = this.get(key);
+    if (!cached.data) {
+      if (warnLabel) {
+        logger.warn(`${warnLabel} cache not initialized - returning empty array`, {
+          component: 'ConfigCache'
+        });
+      }
+      return { data: [], etag: null };
+    }
+    if (includeDisabled) return cached;
+    return { data: cached.data.filter(item => item.enabled !== false), etag: cached.etag };
+  }
+
+  /**
    * Get models configuration (most frequently accessed)
    */
   getModels(includeDisabled = false) {
-    // After cache simplification, all models (including disabled) are now stored in config/models.json
-    const models = this.get('config/models.json');
-    if (models === null || !models.data) {
-      logger.warn('Models cache not initialized - returning empty object', {
-        component: 'ConfigCache'
-      });
-      return { data: [], etag: null };
-    }
-
-    if (includeDisabled) {
-      return models;
-    }
-
-    // Filter to only enabled models
-    return {
-      data: models.data.filter(model => model.enabled !== false),
-      etag: models.etag
-    };
+    return this._enabledList('config/models.json', includeDisabled, 'Models');
   }
 
   /**
    * Get agent profiles configuration
    */
   getAgentProfiles(includeDisabled = false) {
-    const profiles = this.get('config/agents.json');
-    if (profiles === null || !profiles.data) {
-      return { data: [], etag: null };
-    }
-    if (includeDisabled) return profiles;
-    return {
-      data: profiles.data.filter(p => p.enabled !== false),
-      etag: profiles.etag
-    };
+    return this._enabledList('config/agents.json', includeDisabled);
   }
 
   /**
    * Get apps configuration
    */
   getApps(includeDisabled = false) {
-    // After cache simplification, all apps (including disabled) are now stored in config/apps.json
-    const apps = this.get('config/apps.json');
-    if (apps === null || !apps.data) {
-      logger.warn('Apps cache not initialized - returning empty array', {
-        component: 'ConfigCache'
-      });
-      return { data: [], etag: null };
-    }
-
-    if (includeDisabled) {
-      return apps;
-    }
+    const all = this._enabledList('config/apps.json', true, 'Apps');
+    if (includeDisabled) return all;
 
     // Only enabled apps whose required features and integrations are all on
     // (`requiredIntegrations`, and every installation bound under
@@ -1100,44 +858,20 @@ class ConfigCache {
     const integrationContext = this.getIntegrationContext();
     const isAvailable = app =>
       areAppFeaturesEnabled(app, features) && areAppIntegrationsEnabled(app, integrationContext);
-    const enabled = apps.data.filter(app => app.enabled !== false);
+    const enabled = all.data.filter(app => app.enabled !== false);
     const available = enabled.filter(isAvailable);
     if (available.length === enabled.length) {
-      return { data: available, etag: apps.etag };
+      return { data: available, etag: all.etag };
     }
-    const hiddenIds = enabled
-      .filter(app => !isAvailable(app))
-      .map(app => app.id)
-      .sort();
-    const hiddenHash = createHash('md5')
-      .update(JSON.stringify(hiddenIds))
-      .digest('hex')
-      .substring(0, 8);
-    return { data: available, etag: etagWithSuffix(apps.etag, `f${hiddenHash}`) };
+    const hiddenIds = enabled.filter(app => !isAvailable(app)).map(app => app.id);
+    return { data: available, etag: etagForIds(all.etag, hiddenIds, 'f') };
   }
 
   /**
    * Get tools configuration
    */
   getTools(includeDisabled = false) {
-    // After cache simplification, all tools (including disabled) are now stored in config/tools.json
-    const tools = this.get('config/tools.json');
-    if (tools === null || !tools.data) {
-      logger.warn('Tools cache not initialized - returning empty array', {
-        component: 'ConfigCache'
-      });
-      return { data: [], etag: null };
-    }
-
-    if (includeDisabled) {
-      return tools;
-    }
-
-    // Filter to only enabled tools
-    return {
-      data: tools.data.filter(tool => tool.enabled !== false),
-      etag: tools.etag
-    };
+    return this._enabledList('config/tools.json', includeDisabled, 'Tools');
   }
 
   /**
@@ -1147,13 +881,7 @@ class ConfigCache {
    * @returns {{data: Object[], etag: string|null}}
    */
   getProjects(includeDisabled = false) {
-    const projects = this.get('config/projects.json');
-    if (projects === null || !projects.data) return { data: [], etag: null };
-    if (includeDisabled) return projects;
-    return {
-      data: projects.data.filter(project => project.enabled !== false),
-      etag: projects.etag
-    };
+    return this._enabledList('config/projects.json', includeDisabled);
   }
 
   /**
@@ -1167,25 +895,7 @@ class ConfigCache {
    * Get prompts configuration
    */
   getPrompts(includeDisabled = false) {
-    const cacheKey = 'config/prompts.json';
-    const prompts = this.get(cacheKey);
-
-    if (prompts === null || !prompts.data) {
-      logger.warn('Prompts cache not initialized - returning empty array', {
-        component: 'ConfigCache'
-      });
-      return { data: [], etag: null };
-    }
-
-    if (includeDisabled) {
-      return prompts;
-    }
-
-    // Filter to only enabled prompts
-    return {
-      data: prompts.data.filter(prompt => prompt.enabled !== false),
-      etag: prompts.etag
-    };
+    return this._enabledList('config/prompts.json', includeDisabled, 'Prompts');
   }
 
   /**
@@ -1194,25 +904,7 @@ class ConfigCache {
    * @returns {{ data: Array, etag: string }} Workflows with ETag
    */
   getWorkflows(includeDisabled = false) {
-    const cacheKey = 'config/workflows.json';
-    const workflows = this.get(cacheKey);
-
-    if (workflows === null || !workflows.data) {
-      logger.warn('Workflows cache not initialized - returning empty array', {
-        component: 'ConfigCache'
-      });
-      return { data: [], etag: null };
-    }
-
-    if (includeDisabled) {
-      return workflows;
-    }
-
-    // Filter to only enabled workflows
-    return {
-      data: workflows.data.filter(workflow => workflow.enabled !== false),
-      etag: workflows.etag
-    };
+    return this._enabledList('config/workflows.json', includeDisabled, 'Workflows');
   }
 
   /**
@@ -1243,18 +935,16 @@ class ConfigCache {
       return workflow.allowedGroups.some(group => user.groups.includes(group));
     });
 
-    // Generate user-specific ETag if workflows were filtered
-    let userSpecificEtag = etag;
-    if (filtered.length < data.length) {
-      const workflowIds = filtered.map(w => w.id).sort();
-      const contentHash = createHash('md5')
-        .update(JSON.stringify(workflowIds))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = `${etag}-${contentHash}`;
-    }
-
-    return { data: filtered, etag: userSpecificEtag };
+    return {
+      data: filtered,
+      etag:
+        filtered.length < data.length
+          ? etagForIds(
+              etag,
+              filtered.map(w => w.id)
+            )
+          : etag
+    };
   }
 
   /**
@@ -1444,124 +1134,66 @@ class ConfigCache {
   }
 
   /**
-   * Refresh models cache (both enabled and all models)
-   * Should be called when models are modified (create, update, delete, toggle)
+   * Reload one cache entry from storage and tell the rest of the cluster to do
+   * the same, logging the outcome. A failure is logged, never thrown: the admin
+   * route that saved the change has already answered its caller by then.
+   *
+   * @param {string} key - Cache key, e.g. `'config/apps.json'`
+   * @returns {Promise<boolean>} Whether the reload went through
    */
-  async refreshModelsCache() {
-    logger.info('Refreshing models cache', { component: 'ConfigCache' });
-
+  async refresh(key) {
+    const loader = loaderFor(key);
+    logger.info(`Refreshing ${loader.label} cache`, { component: 'ConfigCache' });
     try {
-      await this.refreshCacheEntry('config/models.json');
-      const { data: models } = this.getModels(true);
-      logger.info('Models cache refreshed', { component: 'ConfigCache', count: models.length });
-    } catch (error) {
-      logger.error('Error refreshing models cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh agent profiles cache.
-   * Call when profiles are created, updated, or deleted.
-   */
-  async refreshAgentProfilesCache() {
-    logger.info('Refreshing agent profiles cache', { component: 'ConfigCache' });
-    try {
-      await this.refreshCacheEntry('config/agents.json');
-      const { data: profiles } = this.getAgentProfiles(true);
-      logger.info('Agent profiles cache refreshed', {
+      await this.refreshCacheEntry(key);
+      const count = loadedItemCount(loader, this.get(key).data);
+      logger.info(`Refreshed ${loader.label} cache`, {
         component: 'ConfigCache',
-        count: profiles.length
-      });
-    } catch (error) {
-      logger.error('Error refreshing agent profiles cache', {
-        component: 'ConfigCache',
-        error
-      });
-    }
-  }
-
-  /**
-   * Refresh apps cache (both enabled and all apps)
-   * Should be called when apps are modified (create, update, delete, toggle)
-   */
-  async refreshAppsCache() {
-    logger.info('Refreshing apps cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/apps.json');
-      const { data: apps } = this.getApps(true);
-      logger.info('Apps cache refreshed', { component: 'ConfigCache', count: apps.length });
-    } catch (error) {
-      logger.error('Error refreshing apps cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh prompts cache (both enabled and all prompts)
-   * Should be called when prompts are modified (create, update, delete, toggle)
-   */
-  async refreshPromptsCache() {
-    logger.info('Refreshing prompts cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/prompts.json');
-      const { data: prompts } = this.getPrompts(true);
-      logger.info('Prompts cache refreshed', { component: 'ConfigCache', count: prompts.length });
-    } catch (error) {
-      logger.error('Error refreshing prompts cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh the admin projects cache. Called after an admin project was
-   * created, changed or deleted through the admin API or a cascade.
-   */
-  async refreshProjectsCache() {
-    try {
-      await this.refreshCacheEntry('config/projects.json');
-    } catch (error) {
-      logger.error('Error refreshing projects cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh workflows cache (both enabled and all workflows)
-   * Should be called when workflows are modified (create, update, delete, toggle)
-   */
-  async refreshWorkflowsCache() {
-    logger.info('Refreshing workflows cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/workflows.json');
-      const { data: workflows } = this.getWorkflows(true);
-      logger.info('Workflows cache refreshed', {
-        component: 'ConfigCache',
-        count: workflows.length
-      });
-    } catch (error) {
-      logger.error('Error refreshing workflows cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh providers cache
-   * Should be called when providers are modified (create, update, delete, toggle)
-   */
-  async refreshProvidersCache() {
-    logger.info('Refreshing providers cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/providers.json');
-      const { data: providers } = this.getProviders(true);
-      logger.info('Providers cache refreshed', {
-        component: 'ConfigCache',
-        count: providers.length
+        ...(count !== undefined && { count })
       });
       return true;
     } catch (error) {
-      logger.error('Failed to refresh providers cache', { component: 'ConfigCache', error });
+      logger.error(`Failed to refresh ${loader.label} cache`, { component: 'ConfigCache', error });
       return false;
     }
+  }
+
+  /** Refresh the models cache; call when a model is created, changed, deleted or toggled. */
+  async refreshModelsCache() {
+    await this.refresh('config/models.json');
+  }
+
+  /** Refresh the agent profiles cache; call when a profile is created, changed or deleted. */
+  async refreshAgentProfilesCache() {
+    await this.refresh('config/agents.json');
+  }
+
+  /** Refresh the apps cache; call when an app is created, changed, deleted or toggled. */
+  async refreshAppsCache() {
+    await this.refresh('config/apps.json');
+  }
+
+  /** Refresh the prompts cache; call when a prompt is created, changed, deleted or toggled. */
+  async refreshPromptsCache() {
+    await this.refresh('config/prompts.json');
+  }
+
+  /** Refresh the admin projects cache; call when a project is created, changed or deleted. */
+  async refreshProjectsCache() {
+    await this.refresh('config/projects.json');
+  }
+
+  /** Refresh the workflows cache; call when a workflow is created, changed, deleted or toggled. */
+  async refreshWorkflowsCache() {
+    await this.refresh('config/workflows.json');
+  }
+
+  /**
+   * Refresh the providers cache; call when a provider is changed.
+   * @returns {Promise<boolean>} Whether the reload went through
+   */
+  refreshProvidersCache() {
+    return this.refresh('config/providers.json');
   }
 
   /**
@@ -1604,43 +1236,20 @@ class ConfigCache {
   }
 
   /**
-   * Refresh registries cache from disk.
-   * Should be called when registries are added, updated, or removed.
-   * @returns {Promise<boolean>} True on success, false on failure
+   * Refresh the registries cache; call when a registry is added, changed or removed.
+   * @returns {Promise<boolean>} Whether the reload went through
    */
-  async refreshRegistriesCache() {
-    logger.info('Refreshing registries cache', { component: 'ConfigCache' });
-    try {
-      await this.refreshCacheEntry('config/registries.json');
-      const { data } = this.getRegistries();
-      logger.info('Registries cache refreshed', {
-        component: 'ConfigCache',
-        count: (data?.registries || []).length
-      });
-      return true;
-    } catch (error) {
-      logger.error('Failed to refresh registries cache', { component: 'ConfigCache', error });
-      return false;
-    }
+  refreshRegistriesCache() {
+    return this.refresh('config/registries.json');
   }
 
   /**
-   * Refresh installations cache from disk.
-   * Should be called when items are installed, updated, or removed via the marketplace.
-   * @returns {Promise<boolean>} True on success, false on failure
+   * Refresh the installations cache; call when marketplace content is installed,
+   * updated or removed.
+   * @returns {Promise<boolean>} Whether the reload went through
    */
-  async refreshInstallationsCache() {
-    logger.info('Refreshing installations cache', { component: 'ConfigCache' });
-    try {
-      await this.refreshCacheEntry('config/installations.json');
-      const { data } = this.getInstallations();
-      const count = Object.keys(data?.installations || {}).length;
-      logger.info('Installations cache refreshed', { component: 'ConfigCache', count });
-      return true;
-    } catch (error) {
-      logger.error('Failed to refresh installations cache', { component: 'ConfigCache', error });
-      return false;
-    }
+  refreshInstallationsCache() {
+    return this.refresh('config/installations.json');
   }
 
   /**
@@ -1752,7 +1361,6 @@ class ConfigCache {
     }
 
     const originalAppsCount = apps.length;
-    let userSpecificEtag = appsEtag;
 
     // Apply filtering based on user permissions
     if (user && user.permissions) {
@@ -1766,17 +1374,17 @@ class ConfigCache {
       }
     }
 
-    // Generate user-specific ETag if apps were filtered
-    if (apps.length < originalAppsCount) {
-      const appIds = apps.map(app => app.id).sort();
-      const contentHash = createHash('md5')
-        .update(JSON.stringify(appIds))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = etagWithSuffix(appsEtag, contentHash);
-    }
-
-    return { data: apps, etag: userSpecificEtag };
+    // A user-specific ETag if apps were filtered
+    return {
+      data: apps,
+      etag:
+        apps.length < originalAppsCount
+          ? etagForIds(
+              appsEtag,
+              apps.map(app => app.id)
+            )
+          : appsEtag
+    };
   }
 
   /**
@@ -1794,7 +1402,6 @@ class ConfigCache {
     }
 
     const originalModelsCount = models.length;
-    let userSpecificEtag = modelsEtag;
 
     // Apply filtering based on user permissions
     if (user && user.permissions) {
@@ -1802,135 +1409,12 @@ class ConfigCache {
       models = filterResourcesByPermissions(models, allowedModels, 'models');
     }
 
-    // Generate user-specific ETag if models were filtered
+    // A user-specific ETag if models were filtered
     if (models.length < originalModelsCount) {
-      const modelIds = models.map(model => model.id || model.modelId || model.name).sort();
-      const contentHash = createHash('md5')
-        .update(JSON.stringify(modelIds))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = `${modelsEtag}-${contentHash}`;
+      const modelIds = models.map(model => model.id || model.modelId || model.name);
+      return { data: models, etag: etagForIds(modelsEtag, modelIds) };
     }
-
-    return { data: models, etag: userSpecificEtag };
-  }
-
-  /**
-   * Get tools filtered by user permissions with user-specific ETag
-   * @param {Object} user - User object with permissions
-   * @param {Object} platformConfig - Platform configuration
-   * @param {string} language - User language for localization
-   * @returns {Promise<Object>} Filtered tools with user-specific ETag
-   */
-  async getToolsForUser(user, platformConfig, language = 'en', { appId } = {}) {
-    // Get all tools (including MCP discovered ones) with localization
-    let tools = await loadTools(language);
-    const { etag: toolsEtag } = this.getTools();
-
-    if (!tools) {
-      return { data: [], etag: null };
-    }
-
-    // Workflows are first-class citizens (app.workflows). They are NOT mixed
-    // into the tools list returned to the chat UI.
-
-    const originalToolsCount = tools.length;
-    let userSpecificEtag = this._toolsEtagWithIntegrations(toolsEtag);
-
-    // Apply filtering based on user permissions
-    const allowedTools = allowedToolsFor(user, platformConfig);
-    if (allowedTools) {
-      tools = await this._filterToolsByGrants(tools, allowedTools, {
-        user,
-        platformConfig,
-        appId
-      });
-    }
-
-    // The group grant of an installation (`permissions.integrations`) holds
-    // on top of every tool grant, `*` included: a tool the user could not run
-    // is not listed.
-    if (tools.some(tool => tool._integration)) {
-      const { filterIntegrationToolsForUser } =
-        await import('./services/integrations/integrationTools.js');
-      tools = filterIntegrationToolsForUser(tools, user);
-    }
-
-    // A people directory's grant, and an LDAP browser's own rules (signed-in,
-    // non-delegated users, its directory enabled), hold on top of every
-    // grant, `*` included.
-    tools = filterBrowserToolsForUser(filterDirectoryToolsForUser(tools, user), user);
-
-    // Generate user-specific ETag if tools were filtered
-    if (tools.length < originalToolsCount) {
-      const toolIds = tools.map(tool => tool.id).sort();
-      const contentHash = createHash('md5')
-        .update(JSON.stringify(toolIds))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = etagWithSuffix(userSpecificEtag, contentHash);
-    }
-
-    return { data: tools, etag: userSpecificEtag };
-  }
-
-  /**
-   * The tools ETag extended by the integrations ETag. The tools of installed
-   * integrations come from integrations.json, which the tools ETag does not
-   * cover: a renamed or re-enabled installation must not be answered with a
-   * 304 for the old list.
-   *
-   * @param {string|null|undefined} toolsEtag - the ETag of the tools config
-   * @returns {string}
-   */
-  _toolsEtagWithIntegrations(toolsEtag) {
-    const etag = toolsEtag || 'no-etag';
-    const { etag: integrationsEtag } = this.getIntegrations();
-    if (!integrationsEtag) return etag;
-    const integrationsHash = createHash('md5')
-      .update(String(integrationsEtag))
-      .digest('hex')
-      .substring(0, 8);
-    return etagWithSuffix(etag, `i${integrationsHash}`);
-  }
-
-  /**
-   * The tools a user's group grants list, plus the tools of the app the chat
-   * runs in. A group grant reads like an app's `tools` reference, as it does
-   * for the MCP gateway (`getVisibleToolIds`): besides the exact tool id
-   * (case-insensitive), a base id covers a function-style tool's functions,
-   * an MCP server id that server's tools and an A2A agent id that agent's
-   * skills.
-   *
-   * @param {Array<object>} tools - every tool, localized
-   * @param {Set<string>} allowedTools - the user's tool grants (`allowedToolsFor`)
-   * @param {{ user: object, platformConfig: object, appId?: string }} context
-   * @returns {Promise<Array<object>>} the listed tools, in their original order
-   */
-  async _filterToolsByGrants(tools, allowedTools, { user, platformConfig, appId }) {
-    const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
-    for (const tool of tools) {
-      if (isToolSelected(tool, allowedTools)) granted.add(tool);
-    }
-    // The chat's tools menu asks for the tools of the app it runs in. Those
-    // are callable in that app whatever the group grants say, so they are
-    // listed too — otherwise the menu cannot name them or tell which MCP
-    // server they belong to.
-    const app = appId ? await this.getAppForUserById(user, platformConfig, appId) : null;
-    const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
-    // An installed integration's tools are listed as the chat gets them
-    // (`getIntegrationToolsForApp`): only when the app binds the
-    // installation, the user's groups grant it (`permissions.integrations`)
-    // and the binding allows the action — never through the instance id alone.
-    let appIntegrationTools = new Set();
-    if (app?.integrations && typeof app.integrations === 'object') {
-      const { getIntegrationToolsForApp } =
-        await import('./services/integrations/integrationTools.js');
-      appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
-    }
-    return tools.filter(
-      tool => granted.has(tool) || isListedThroughApp(tool, appIntegrationTools, appToolRefs)
-    );
+    return { data: models, etag: modelsEtag };
   }
 
   /**
@@ -1972,7 +1456,6 @@ class ConfigCache {
     }
 
     const originalCount = skills.length;
-    let userSpecificEtag = skillsEtag || 'no-etag';
 
     // Every principal sees only the skills its groups grant. An expanded user
     // carries the grant in `permissions.skills`; a bare principal (an agent's
@@ -1987,17 +1470,18 @@ class ConfigCache {
     }
     const filteredSkills = filterResourcesByPermissions([...skills], allowedSkills);
 
-    // Generate user-specific ETag if skills were filtered
-    if (filteredSkills.length < originalCount) {
-      const skillNames = filteredSkills.map(s => s.name).sort();
-      const contentHash = createHash('md5')
-        .update(JSON.stringify(skillNames))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = `${skillsEtag}-${contentHash}`;
-    }
-
-    return { data: filteredSkills, etag: userSpecificEtag };
+    // A user-specific ETag if skills were filtered
+    const baseEtag = skillsEtag || 'no-etag';
+    return {
+      data: filteredSkills,
+      etag:
+        filteredSkills.length < originalCount
+          ? etagForIds(
+              baseEtag,
+              filteredSkills.map(s => s.name)
+            )
+          : baseEtag
+    };
   }
 
   /**

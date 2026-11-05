@@ -22,7 +22,8 @@ import integrationRegistry from '../../services/integrations/definitions/Integra
 import connector, {
   IHUB_TOOL_IDS
 } from '../../services/integrations/protocols/native/connectors/ihub/index.js';
-import { getToolsForApp, loadTools } from '../../toolLoader.js';
+import { getToolsForApp } from '../../services/tools/appTools.js';
+import { loadTools } from '../../services/tools/catalog.js';
 import { isToolSelected } from '../../utils/toolSelection.js';
 
 const everything = { tools: new Set(['*']), apps: new Set(['*']) };

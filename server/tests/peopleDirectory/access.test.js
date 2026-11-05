@@ -16,7 +16,9 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import configCache from '../../configCache.js';
 import '../../services/integrations/protocols/native/connectors/register.js';
-import { getToolsForApp, loadTools, runTool } from '../../toolLoader.js';
+import { getToolsForApp } from '../../services/tools/appTools.js';
+import { loadTools } from '../../services/tools/catalog.js';
+import { runTool } from '../../services/tools/runTool.js';
 import { mayRunTool } from '../../routes/toolRoutes.js';
 import { buildMcpServer } from '../../services/mcp/McpServerService.js';
 import { MCP_SCOPES } from '../../services/mcp/scopes.js';
@@ -27,6 +29,7 @@ import {
   resolveDirectory
 } from '../../services/peopleDirectory/PeopleDirectoryService.js';
 import { DEFINITION_ID, installDirectories } from './installations.js';
+import { getToolsForUser } from '../../services/tools/toolListing.js';
 
 const DIRECTORIES = [
   {
@@ -202,7 +205,7 @@ describe('people directory access', () => {
     });
 
     it('narrow the /api/tools listing, even with a "*" tool grant', async () => {
-      const forMember = await configCache.getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
+      const forMember = await getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
       assert.deepEqual(directoryToolIds(forMember.data), [
         'corp__get_person',
         'corp__search_people',
@@ -211,24 +214,20 @@ describe('people directory access', () => {
         'x500bund__search_people'
       ]);
       assert.ok(forMember.data.some(tool => tool.id === 'braveSearch'));
-      const forOutsider = await configCache.getToolsForUser(
-        outsider,
-        { defaultLanguage: 'en' },
-        'en'
-      );
+      const forOutsider = await getToolsForUser(outsider, { defaultLanguage: 'en' }, 'en');
       assert.deepEqual(directoryToolIds(forOutsider.data), []);
     });
 
     it('change the /api/tools ETag when the directories change, even with the same tool ids', async () => {
       const platform = { defaultLanguage: 'en' };
-      const before = await configCache.getToolsForUser(member, platform, 'en');
+      const before = await getToolsForUser(member, platform, 'en');
       installDirectories(
         configCache,
         DIRECTORIES.map(directory =>
           directory.id === 'x500bund' ? { ...directory, name: { en: 'Renamed' } } : directory
         )
       );
-      const after = await configCache.getToolsForUser(member, platform, 'en');
+      const after = await getToolsForUser(member, platform, 'en');
       assert.deepEqual(
         after.data.map(tool => tool.id),
         before.data.map(tool => tool.id)
@@ -240,7 +239,7 @@ describe('people directory access', () => {
       const getTools = configCache.getTools;
       configCache.getTools = () => ({ data: state.tools, etag: '"tools-1"' });
       try {
-        const { etag } = await configCache.getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
+        const { etag } = await getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
         assert.match(etag, /^"[^"]+"$/);
       } finally {
         configCache.getTools = getTools;

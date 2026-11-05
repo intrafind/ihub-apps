@@ -22,7 +22,9 @@ import path from 'node:path';
 import configCache from '../configCache.js';
 import '../services/integrations/protocols/native/connectors/register.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
-import { getToolsForApp, loadLocalTools, loadTools, runTool } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { loadLocalTools, loadTools } from '../services/tools/catalog.js';
+import { runTool } from '../services/tools/runTool.js';
 import {
   PLATFORM_TOOL_FILE_IDS,
   PLATFORM_TOOL_IDS,
@@ -33,6 +35,7 @@ import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExe
 import { getAgentToolIds } from '../agents/runtime/agentToolRegistrar.js';
 import { addMemoryTools } from '../services/scheduler/tasks/runMemory.js';
 import { copyDefaultConfiguration } from '../utils/setupUtils.js';
+import { getToolsForUser } from '../services/tools/toolListing.js';
 
 const AGENT_WORKSPACE = [
   'create_task',
@@ -197,7 +200,7 @@ describe('resolving the platform tools by id', () => {
 
   it('a group grant lists them by exact or base id', async () => {
     const grantee = { id: 'g', groups: ['users'], permissions: { tools: new Set(['evidence']) } };
-    const { data } = await configCache.getToolsForUser(grantee, { defaultLanguage: 'en' }, 'en');
+    const { data } = await getToolsForUser(grantee, { defaultLanguage: 'en' }, 'en');
     assert.deepEqual(ids(data), [...EVIDENCE].sort());
   });
 

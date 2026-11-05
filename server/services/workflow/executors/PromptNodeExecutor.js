@@ -23,12 +23,12 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
 import { applyIntegrationScopes } from '../../chat/RequestBuilder.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { getToolsForApp } from '../../tools/appTools.js';
+import { runTool } from '../../tools/runTool.js';
 import {
-  getToolsForApp,
-  runTool,
   resolveNativeWebSearchProvider,
   resolveWebSearchEngineToolId
-} from '../../../toolLoader.js';
+} from '../../tools/webSearchResolver.js';
 import configCache from '../../../configCache.js';
 import llmClient from '../../loop/LLMClient.js';
 import { AgentLoop } from '../../loop/AgentLoop.js';

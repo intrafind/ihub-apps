@@ -8,7 +8,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfiguredTools } from '../toolLoader.js';
+import { loadConfiguredTools } from '../services/tools/catalog.js';
 
 describe('Tool Localization', () => {
   beforeEach(() => {

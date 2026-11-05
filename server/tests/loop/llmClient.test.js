@@ -609,20 +609,18 @@ test('snapshots: secrets are dropped at any depth and the acting user is reduced
   );
 });
 
-test('execute — usage limits: checked before the call, counted after it', async () => {
+test('execute — usage limits: checked before the call, captured after it', async () => {
   const user = { id: 'u1', groups: ['users'] };
   const asserted = [];
   const recorded = [];
   const quota = {
     async assert(principal, model) {
       asserted.push({ principal, model: model.id });
-    },
-    record(principal, call) {
-      recorded.push({ principal, ...call });
     }
   };
   const { client } = makeClient({
     quota,
+    usage: { record: call => recorded.push(call) },
     transport: async () =>
       sseResponse(
         openaiText(['ok'], { usage: { prompt_tokens: 9, completion_tokens: 2, total_tokens: 11 } })
@@ -636,7 +634,8 @@ test('execute — usage limits: checked before the call, counted after it', asyn
   });
   assert.deepEqual(asserted, [{ principal: user, model: 'oa' }]);
   assert.equal(recorded.length, 1);
-  assert.equal(recorded[0].principal, user);
+  assert.equal(recorded[0].user, user);
+  assert.equal(recorded[0].countQuota, true);
   assert.equal(recorded[0].appId, 'chat');
   assert.equal(recorded[0].usage.promptTokens, 9);
   assert.equal(recorded[0].usage.completionTokens, 2);
@@ -649,9 +648,6 @@ test('execute — a used-up budget refuses the call before anything is sent', as
     quota: {
       async assert() {
         throw refusal;
-      },
-      record() {
-        throw new Error('nothing to count');
       }
     },
     transport: async () => sseResponse([])
@@ -663,14 +659,11 @@ test('execute — a used-up budget refuses the call before anything is sent', as
   assert.equal(calls.length, 0);
 });
 
-test('execute — calls without a user are neither checked nor counted', async () => {
+test('execute — calls without a user are not checked against a budget', async () => {
   let touched = false;
   const { client } = makeClient({
     quota: {
       async assert() {
-        touched = true;
-      },
-      record() {
         touched = true;
       }
     },
@@ -683,7 +676,8 @@ test('execute — calls without a user are neither checked nor counted', async (
 test('execute — a provider without usage is counted by estimate', async () => {
   const recorded = [];
   const { client } = makeClient({
-    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    quota: { async assert() {} },
+    usage: { record: call => recorded.push(call) },
     transport: async () => sseResponse(openaiText(['x'.repeat(40)]))
   });
   await client.complete({
@@ -700,7 +694,8 @@ test('execute — a provider without usage is counted by estimate', async () => 
 test('execute — a call that fails after the answer started is counted by estimate', async () => {
   const recorded = [];
   const { client } = makeClient({
-    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    quota: { async assert() {} },
+    usage: { record: call => recorded.push(call) },
     transport: async () => {
       const encoder = new TextEncoder();
       const chunk = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'x'.repeat(40) } }] })}\n\n`;
@@ -733,10 +728,11 @@ test('execute — a call that fails after the answer started is counted by estim
   assert.equal(recorded[0].usage.completionTokens, 10);
 });
 
-test('execute — a call that fails before any answer is not counted', async () => {
+test('execute — a call that fails before any answer carries no usage', async () => {
   const recorded = [];
   const { client } = makeClient({
-    quota: { async assert() {}, record: (_u, call) => recorded.push(call) },
+    quota: { async assert() {} },
+    usage: { record: call => recorded.push(call) },
     maxRetries: 0,
     transport: async () => {
       throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
@@ -750,5 +746,6 @@ test('execute — a call that fails before any answer is not counted', async () 
       telemetry: { autoRun: false }
     })
   );
-  assert.equal(recorded.length, 0);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].usage, null);
 });

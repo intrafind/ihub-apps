@@ -18,7 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
-import { runTool as defaultRunTool } from '../../toolLoader.js';
+import { runTool as defaultRunTool } from '../tools/runTool.js';
 import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {

@@ -16,7 +16,7 @@ import logger from '../../utils/logger.js';
 import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import memoryFile from '../../agents/memory/memoryFile.js';
-import { runTool } from '../../toolLoader.js';
+import { runTool } from '../../services/tools/runTool.js';
 import { resolveModelId } from '../../utils.js';
 import llmClient from '../../services/loop/LLMClient.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';

@@ -9,7 +9,7 @@ import logger from './logger.js';
  *
  * Creates a resource loader that loads resources from individual files.
  *
- * This eliminates the duplication between appsLoader, modelsLoader, and promptsLoader.
+ * `server/resourceLoaders.js` holds the table of what is loaded this way.
  *
  * The files are read through {@link module:services/config/ConfigStore}, so
  * apps, models, prompts and the rest go through the storage provider like every
@@ -20,6 +20,35 @@ import logger from './logger.js';
  */
 
 /**
+ * The display name of a resource: its `name` (the English text of a localized
+ * one, else the first), else its id.
+ *
+ * @param {Object} item
+ * @returns {string}
+ */
+export function nameOf(item) {
+  if (item.name && typeof item.name === 'object') {
+    return item.name.en || item.name[Object.keys(item.name)[0]] || '';
+  }
+  return item.name || item.id || '';
+}
+
+/**
+ * The default order of a resource list: by `order` (items without one last),
+ * then by name.
+ *
+ * @param {Object} a
+ * @param {Object} b
+ * @returns {number}
+ */
+export function compareByOrderThenName(a, b) {
+  const orderA = a.order ?? 999;
+  const orderB = b.order ?? 999;
+  if (orderA !== orderB) return orderA - orderB;
+  return nameOf(a).localeCompare(nameOf(b));
+}
+
+/**
  * Create a resource loader with the specified configuration
  * @param {Object} config - Loader configuration
  * @param {string} config.resourceName - Name of the resource (for logging)
@@ -28,7 +57,8 @@ import logger from './logger.js';
  * @param {Function} config.validateItem - Optional item validation function
  * @param {Function} config.processItem - Optional item processing function
  * @param {Function} config.postProcess - Optional post-processing function for all items
- * @param {Function} config.sortComparator - Optional custom sort function
+ * @param {Function} config.sortComparator - Optional custom sort function (default: `order`, then name)
+ * @param {Function} config.inspect - Optional diagnostic run on every loaded item list; must not throw
  * @returns {Object} Resource loader object with loadAll() method
  */
 export function createResourceLoader({
@@ -37,7 +67,8 @@ export function createResourceLoader({
   validateItem,
   processItem,
   postProcess,
-  sortComparator
+  sortComparator,
+  inspect
 }) {
   if (!resourceName || !individualPath) {
     throw new Error('resourceName and individualPath are required');
@@ -130,33 +161,6 @@ export function createResourceLoader({
   }
 
   /**
-   * Default sort comparator
-   * @param {Object} a - First item
-   * @param {Object} b - Second item
-   * @returns {number} Sort comparison result
-   */
-  function defaultSort(a, b) {
-    // Sort by order field first (items without order go to the end)
-    const orderA = a.order ?? 999;
-    const orderB = b.order ?? 999;
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
-
-    // Then by name (handle both string and object names)
-    const getNameString = item => {
-      if (typeof item.name === 'object' && item.name) {
-        return item.name.en || item.name[Object.keys(item.name)[0]] || '';
-      }
-      return item.name || item.id || '';
-    };
-
-    const nameA = getNameString(a);
-    const nameB = getNameString(b);
-    return nameA.localeCompare(nameB);
-  }
-
-  /**
    * Load all resources from the individual files
    * @param {boolean} includeDisabled - Whether to include disabled resources
    * @param {boolean} verbose - Whether to log verbose output
@@ -164,8 +168,9 @@ export function createResourceLoader({
    */
   async function loadAll(includeDisabled = false, verbose = true) {
     const allResources = await loadFromFiles(verbose);
+    if (inspect) inspect(allResources);
     let filteredResources = allResources.filter(
-      resource => resource.enabled === true || includeDisabled
+      resource => includeDisabled || resource.enabled !== false
     );
 
     // Apply post-processing if provided
@@ -174,7 +179,7 @@ export function createResourceLoader({
     }
 
     // Sort resources
-    const sortFunction = sortComparator || defaultSort;
+    const sortFunction = sortComparator || compareByOrderThenName;
     filteredResources.sort(sortFunction);
 
     if (verbose) {

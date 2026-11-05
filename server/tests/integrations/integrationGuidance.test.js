@@ -21,7 +21,7 @@ import path from 'node:path';
 const { default: configCache } = await import('../../configCache.js');
 const { default: registry } =
   await import('../../services/integrations/definitions/IntegrationRegistry.js');
-const { getToolsForApp } = await import('../../toolLoader.js');
+const { getToolsForApp } = await import('../../services/tools/appTools.js');
 const { appendIntegrationGuidance, buildIntegrationGuidance, withActionOverrides } =
   await import('../../services/integrations/actionGuidance.js');
 

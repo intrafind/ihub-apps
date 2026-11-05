@@ -20,7 +20,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import { runTool } from '../../../toolLoader.js';
+import { runTool } from '../../tools/runTool.js';
 import { getAssignedSkillIds } from '../../skillAccess.js';
 import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
 

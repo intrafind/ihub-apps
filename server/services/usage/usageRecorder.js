@@ -21,7 +21,7 @@ import logger from '../../utils/logger.js';
 import { recordFeedbackEvent as recordFeedbackMetric } from '../../telemetry/metrics.js';
 import { fingerprint, fingerprintConversation } from '../UserFingerprint.js';
 import { appendUsageRecord } from '../UsageEventLog.js';
-import { quotaUserKey } from '../quota/quotaService.js';
+import { quotaUserKey, recordModelUsage } from '../quota/quotaService.js';
 import { buildCallRecord, buildFeedbackRecord, reportGroupsOf } from './callRecord.js';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
@@ -71,12 +71,26 @@ export async function resolveIdentity({ user, conversationId, mode }, deps = FIN
 /**
  * Record one finished model call. Never throws.
  *
+ * The one place a call is captured: the tokens it used are counted against the
+ * user's limits (by the real user, whatever the tracking mode, and also when
+ * tracking is off — a limit must hold either way), then the call record is
+ * stored for the reports. Both come from the same `call.usage`, so the limits
+ * and the reports cannot drift apart.
+ *
  * @param {Object} call - see `buildCallRecord`, with `user` instead of `uid`
  *   and `groups`
+ * @param {boolean} [call.countQuota=true] - false: keep it off the user's budget
  * @returns {Promise<Object|null>} the record written, or null
  */
 export async function recordLlmCall(call) {
   try {
+    if (call?.countQuota !== false) {
+      recordModelUsage(call?.user || null, {
+        model: { id: call?.modelId },
+        usage: call?.usage,
+        appId: call?.appId
+      });
+    }
     if (!isUsageTrackingEnabled()) return null;
     const mode = getUsageTrackingMode();
     const { uid, cid } = await resolveIdentity({

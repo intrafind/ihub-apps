@@ -1,5 +1,20 @@
 # Fixes — Unreleased
 
+## Usage Menu, Limits & Quotas and Usage Reports Show the Same Numbers
+
+Each model call is now captured in one place, which both counts it against the user's limits and
+stores the usage record. Before, the two were written separately and could differ: calls made by
+agent steps and workflow nodes appeared in the usage reports but never in the **My usage** menu or
+on the **Limits & quotas** tab, and a read at the wrong moment could miss counts that were just
+being saved. The menu and the limits page still show pre-summed numbers, so they stay fast.
+
+Their "today" follows the reset schedule configured for limits, while the reports use UTC days.
+
+**One-time reset:** on the first start with this version, every user's usage-limit counters are set
+to zero (`data/quota-usage.json` is deleted), because the old counters missed calls the reports had
+and cannot be reconciled with them. Budgets and limits are unchanged, and the usage reports keep
+their history.
+
 ## Deadlocked Workflow Runs Now Fail Instead of Hanging
 
 A workflow run whose remaining steps can never start (for example a step that depends on one that

@@ -107,7 +107,9 @@ jest.unstable_mockModule('../../services/a2a/A2aClientManager.js', () => ({
   default: { callTool: a2aCallTool, listAllTools: async () => a2aTools }
 }));
 
-const { loadTools, getToolsForApp, runTool } = await import('../../toolLoader.js');
+const { getToolsForApp } = await import('../../services/tools/appTools.js');
+const { loadTools } = await import('../../services/tools/catalog.js');
+const { runTool } = await import('../../services/tools/runTool.js');
 
 beforeEach(() => a2aCallTool.mockClear());
 

@@ -4,7 +4,8 @@
 import { appendIntegrationGuidance } from '../integrations/actionGuidance.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { getToolsForApp, resolveAppNativeWebSearch, READ_URL_TOOL_ID } from '../../toolLoader.js';
+import { getToolsForApp } from '../tools/appTools.js';
+import { resolveAppNativeWebSearch, READ_URL_TOOL_ID } from '../tools/webSearchResolver.js';
 import { prepareActiveSkills } from '../skillAccess.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';

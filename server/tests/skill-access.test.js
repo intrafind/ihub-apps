@@ -42,7 +42,7 @@ writeSkill('gamma', 'Gamma skill', 'GAMMA BODY');
 const { default: configCache } = await import('../configCache.js');
 const { loadSkillsMetadata } = await import('../services/skillLoader.js');
 const skillAccess = await import('../services/skillAccess.js');
-const { runTool } = await import('../toolLoader.js');
+const { runTool } = await import('../services/tools/runTool.js');
 const { default: PromptService } = await import('../services/PromptService.js');
 const { PlannerNodeExecutor } =
   await import('../services/workflow/executors/PlannerNodeExecutor.js');

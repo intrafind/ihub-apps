@@ -157,7 +157,7 @@ its own cache by the time the event arrives.
 ## Boot order
 
 The provider is configured from `platform.json`, so the read of `platform.json`
-cannot go through the provider. `server/server.js` does it through
+cannot go through the provider. `server/startup/worker.js` does it through
 `ConfigStore` like everything else, and the store answers from the contained
 filesystem path because no provider exists yet; `bootstrapStorage()` runs on
 the result. `server/migrations/runner.js` makes the same exception for the same
