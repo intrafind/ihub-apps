@@ -314,7 +314,9 @@ project can be tried too.
 
 - **Only this project.** The chat uses this project's items and instructions. The projects the app
   links itself, the chat's own container and attached projects are left out, so a wrong answer
-  cannot come from other knowledge. The app's own instructions and tools still apply.
+  cannot come from other knowledge. The app's own instructions and tools still apply, except that
+  it cannot call other apps or workflows (they would run with their own projects), and an
+  `@workflow` mention stays plain text.
 - **App and model.** The app picker lists the enabled chat apps, the general chat first. The model
   is picked in the chat, whatever the app says about model selection.
 - **Sources for every answer.** The chat is the normal one: each answer shows the answer badge, the
@@ -326,7 +328,8 @@ project can be tried too.
 - **As you.** The chat runs as the signed-in admin. How other users reach the project (app links,
   publishing, groups) is not tested; the panel says so.
 - **Nothing is kept.** The chat is temporary: it is not listed in the admin's chat history, expires
-  on its own and adds nothing to the project.
+  on its own and adds nothing to the project. The incognito switch is not offered, so it cannot be
+  turned into a kept chat.
 
 Only content admins can try an admin project; the chat request carries `testProjectId` (see the
 [Admin API](#admin-api)).
@@ -1171,4 +1174,5 @@ A project is tried in chat with the ordinary chat request, `POST /api/apps/:appI
 plus `testProjectId` (the id of an admin project). The turn runs with that project as the only one
 in scope, as a temporary chat, whatever `ephemeral`, `projectId` and `projects` say. A caller who is
 not a content admin is refused with `403 PROJECT_TEST_FORBIDDEN`; an unknown project, one that is
-not an admin project, or switched-off projects answer `404 PROJECT_NOT_FOUND`.
+not an admin project, or switched-off projects answer `404 PROJECT_NOT_FOUND`. A test turn on a chat
+that was kept answers `409 PROJECT_TEST_CHAT_KEPT`.

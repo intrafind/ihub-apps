@@ -917,6 +917,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               .status(projectTest.status)
               .json({ error: projectTest.message, code: projectTest.code });
           }
+          // A test chat is created temporary and stays so. One that was kept
+          // (through the API: the editor offers no way to) would put answers
+          // from a project that may be disabled into the admin's history.
+          if (access.chat && access.chat.temporary !== true) {
+            return res.status(409).json({
+              error: 'A project test runs in a temporary chat only',
+              code: 'PROJECT_TEST_CHAT_KEPT'
+            });
+          }
         }
         const chatProjects = await resolveChatProjects({
           req,
@@ -1262,17 +1271,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
 
-        const mention = await tryHandleMentionWorkflow({
-          messages,
-          conversation,
-          chatId,
-          appId,
-          messageId,
-          modelId,
-          user: req.user,
-          clientLanguage,
-          persistence
-        });
+        // A project test hands nothing on: an @mention stays plain text, for
+        // the workflow would run with its own projects (#3309).
+        const mention = projectTest
+          ? { handled: false }
+          : await tryHandleMentionWorkflow({
+              messages,
+              conversation,
+              chatId,
+              appId,
+              messageId,
+              modelId,
+              user: req.user,
+              clientLanguage,
+              persistence
+            });
         if (mention.handled) {
           return mention.statusCode
             ? res.status(mention.statusCode).json(mention.response)

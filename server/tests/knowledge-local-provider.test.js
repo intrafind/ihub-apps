@@ -1883,7 +1883,7 @@ describe('chat route and projects', () => {
     const message = [{ role: 'user', content: 'What does the handbook say?' }];
 
     /** Post a turn and keep what the route handed to the request builder and the turn. */
-    async function postTest({ user, body, chatId }) {
+    async function postTest({ user, body, chatId, content }) {
       const prepared = [];
       const turns = [];
       let res;
@@ -1902,7 +1902,15 @@ describe('chat route and projects', () => {
           }
         },
         async () => {
-          res = await post({ appId: 'chat', chatId, user, body: { messages: message, ...body } });
+          res = await post({
+            appId: 'chat',
+            chatId,
+            user,
+            body: {
+              messages: content ? [{ role: 'user', content }] : message,
+              ...body
+            }
+          });
         }
       );
       return { res, prepared, turns };
@@ -1969,6 +1977,79 @@ describe('chat route and projects', () => {
       const { prepared } = await postTest({ user: ROOT, chatId: 'chat-test-none', body: {} });
       assert.equal(prepared.length, 1);
       assert.equal('testProjectId' in prepared[0], false);
+    });
+
+    it('refuses a test turn on a chat that was kept, before anything is prepared', async () => {
+      const chatId = 'chat-test-kept';
+      await getChatRepository().ensureChat({
+        chatId,
+        ownerId: ROOT.id,
+        identityMode: 'default',
+        appId: 'chat',
+        temporary: false
+      });
+      const { res, prepared, turns } = await postTest({
+        user: ROOT,
+        chatId,
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.body.code, 'PROJECT_TEST_CHAT_KEPT');
+      assert.equal(prepared.length, 0);
+      assert.equal(turns.length, 0);
+    });
+
+    it('lets a test turn go on in its own temporary chat', async () => {
+      const chatId = 'chat-test-temporary';
+      await getChatRepository().ensureChat({
+        chatId,
+        ownerId: ROOT.id,
+        identityMode: 'default',
+        appId: 'chat',
+        temporary: true
+      });
+      const { prepared } = await postTest({
+        user: ROOT,
+        chatId,
+        body: { testProjectId: 'handbook' }
+      });
+      assert.equal(prepared.length, 1);
+      assert.equal(prepared[0].testProjectId, 'handbook');
+    });
+
+    it('keeps an @mention plain text in a test, where it would start a workflow otherwise', async () => {
+      const workflow = { id: 'wf-disabled', name: { en: 'Disabled' }, enabled: false };
+      configCache.setCacheEntry('config/workflows.json', [workflow]);
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true, workflows: [workflow.id] }
+      ]);
+      const user = { ...ROOT, permissions: { workflows: new Set([workflow.id]) } };
+      try {
+        // Without a test the mention is taken: the workflow is refused here, and
+        // nothing is prepared for the model.
+        const mentioned = await postTest({
+          user,
+          chatId: 'chat-mention-taken',
+          content: '@wf-disabled summarize',
+          body: {}
+        });
+        assert.equal(mentioned.prepared.length, 0, 'the mention was handled');
+        assert.equal(mentioned.res.statusCode, 400);
+
+        const tested = await postTest({
+          user,
+          chatId: 'chat-mention-test',
+          content: '@wf-disabled summarize',
+          body: { testProjectId: 'handbook' }
+        });
+        assert.equal(tested.prepared.length, 1, 'the message goes to the model as text');
+        assert.equal(tested.prepared[0].testProjectId, 'handbook');
+      } finally {
+        configCache.setCacheEntry('config/workflows.json', []);
+        configCache.setCacheEntry('config/apps.json', [
+          { id: 'chat', name: { en: 'Chat' }, enabled: true }
+        ]);
+      }
     });
 
     it('reaches a disabled, unlinked project and nothing else through the narrowed app', async () => {

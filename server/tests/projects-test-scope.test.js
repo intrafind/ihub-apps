@@ -113,7 +113,9 @@ describe('applyProjectTestScope', () => {
     features: { projects: false, userProjects: false, shortLinks: true },
     _projectId: 'prj_container',
     _attachedProjectIds: ['prj_attached'],
-    _workflowProjects: [{ id: 'wf-docs' }]
+    _workflowProjects: [{ id: 'wf-docs' }],
+    apps: ['translator'],
+    workflows: ['summarize-report']
   };
 
   it('leaves the project under test as the only one in scope', () => {
@@ -122,6 +124,12 @@ describe('applyProjectTestScope', () => {
     assert.equal(scoped._projectId, undefined);
     assert.equal(scoped._attachedProjectIds, undefined);
     assert.equal(scoped._workflowProjects, undefined);
+  });
+
+  it('hands nothing on: no other apps or workflows to call, whose projects would count', () => {
+    const scoped = applyProjectTestScope(APP, 'handbook');
+    assert.equal('apps' in scoped, false);
+    assert.equal('workflows' in scoped, false);
   });
 
   it('switches projects on for the app but keeps its other features', () => {

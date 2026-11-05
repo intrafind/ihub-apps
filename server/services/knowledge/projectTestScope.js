@@ -59,30 +59,43 @@ export async function resolveProjectTestScope({ user, testProjectId, repository 
   if (!isProjectsConfigured(configCache.getFeatures())) return notFound;
   if (typeof testProjectId !== 'string' || !isAdminProjectId(testProjectId)) return notFound;
   const project = await (repository || getProjectRepository()).get(testProjectId);
-  if (!project || project.ownership !== 'admin') return notFound;
+  if (project?.ownership !== 'admin') return notFound;
   return { ok: true, projectId: project.id };
 }
 
 /**
- * The app as a project test runs it: this project is the only one in scope.
- * The app's own links, the chat's container and anything attached are left
- * out, and the app's switch for projects is overridden — the test is about
- * the project, not about whether this app is set up to use projects.
+ * What a project test takes off the app: the projects it reaches by other
+ * means than its own links (the chat's container, the attached ones, a
+ * workflow's) and everything it can hand a question on to — other apps and
+ * workflows called as tools. Those run with their own configuration, which
+ * would bring other knowledge into a test of one project.
+ */
+const OMITTED_FIELDS = [
+  '_projectId',
+  '_attachedProjectIds',
+  '_workflowProjects',
+  'apps',
+  'workflows'
+];
+
+/**
+ * The app as a project test runs it: this project is the only one in scope
+ * and the app hands nothing on. The app's own links, the chat's container and
+ * anything attached are left out, so are the other apps and workflows it can
+ * call (`OMITTED_FIELDS`), and the app's switch for projects is overridden —
+ * the test is about the project, not about whether this app is set up to use
+ * projects.
  *
  * @param {Object} app - The configured app.
  * @param {string} projectId - An id {@link resolveProjectTestScope} accepted.
  * @returns {Object} A copy of the app; the configured one is never touched.
  */
 export function applyProjectTestScope(app, projectId) {
-  const {
-    _projectId: _container,
-    _attachedProjectIds: _attached,
-    _workflowProjects: _workflow,
-    ...rest
-  } = app;
+  const scoped = { ...app };
+  for (const field of OMITTED_FIELDS) delete scoped[field];
   return {
-    ...rest,
+    ...scoped,
     projects: [{ id: projectId, mode: 'auto' }],
-    features: { ...(app.features || {}), projects: true }
+    features: { ...app.features, projects: true }
   };
 }

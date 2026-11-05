@@ -612,7 +612,7 @@ and files work without building an app first. When an answer is wrong it shows w
 is the project or the app and the model.
 
 - Pick the app (the general chat by default) and, in the chat, the model. The other projects the
-  app links are left out.
+  app links are left out, and during the test it cannot call other apps or workflows.
 - Each answer shows its sources, the knowledge searches that were made and what they found, as in
   any chat.
 - The chat runs as you, on the project as saved, and a disabled or unpublished project can be

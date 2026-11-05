@@ -5012,7 +5012,7 @@
         "subtitle": "A scratch chat with this project only",
         "close": "Close chat",
         "app": "App",
-        "appHelp": "The app's own instructions and tools apply; the other projects it links are left out. Pick the model in the chat.",
+        "appHelp": "The app's own instructions and tools apply. The other projects it links are left out, and it cannot call other apps or workflows. Pick the model in the chat.",
         "adminNotice": "The chat runs as you, on the project as saved. How other users reach it (app links, publishing, groups) is not tested. The chat is temporary: it is not kept in your history and nothing is added to the project.",
         "notReady": "{{count}} of {{total}} items are not ready (waiting, being extracted or failed) and are not searched yet.",
         "noItems": "The project has no items yet, so there is nothing to find. Add an item first.",

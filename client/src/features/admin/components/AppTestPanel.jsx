@@ -22,14 +22,22 @@ export function PanelMessage({ icon, children }) {
 /**
  * The app a project test runs: the app as saved, but with the model picker
  * on whatever the app says (the point is to compare models) and the chat
- * incognito, so the scratch chat is never listed in the admin's history.
+ * incognito, so the scratch chat is never listed in the admin's history. The
+ * incognito toggle is taken away: switching it off would keep the chat.
+ *
+ * @param {Object} app - The saved app.
+ * @returns {Object} A copy for the embedded chat.
  */
-function projectTestApp(app) {
+export function projectTestApp(app) {
   return {
     ...app,
     ephemeral: true,
     disallowModelSelection: false,
-    settings: { ...app.settings, model: { ...app.settings?.model, enabled: true } }
+    settings: {
+      ...app.settings,
+      model: { ...app.settings?.model, enabled: true },
+      ephemeral: { ...app.settings?.ephemeral, enabled: false }
+    }
   };
 }
 
