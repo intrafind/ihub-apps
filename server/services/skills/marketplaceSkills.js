@@ -27,6 +27,7 @@ import registryService from '../marketplace/RegistryService.js';
 import { fetchItemContent } from '../marketplace/ContentInstaller.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { SKILL_FILE_PATH_PATTERN, SKILL_NAME_PATTERN } from '../../validators/userSkillSchema.js';
 
 const COMPONENT = 'MarketplaceSkills';
@@ -51,12 +52,10 @@ export const SKIPPED_REASONS = Object.freeze({
 /**
  * A refusal with the HTTP status and `details.code` the routes send.
  */
-export class MarketplaceSkillError extends Error {
-  constructor(message, { status = 400, code = 'MARKETPLACE_SKILL_ERROR' } = {}) {
-    super(message);
+export class MarketplaceSkillError extends ServiceError {
+  constructor(message, { status, code = 'MARKETPLACE_SKILL_ERROR' } = {}) {
+    super(code, message, { status });
     this.name = 'MarketplaceSkillError';
-    this.status = status;
-    this.code = code;
   }
 }
 

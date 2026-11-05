@@ -18,7 +18,7 @@ import cache from '../../utils/cache';
  * drops its cached copy — a skill someone just created, shared or revoked
  * shows up (or goes) the next time the picker opens.
  *
- * Errors keep the server's `details.code` (`REVISION_CONFLICT`,
+ * Errors keep the server's `code` (`REVISION_CONFLICT`,
  * `SKILL_LIMIT_REACHED`, …); `features/skills/utils/skillErrors.js` turns them
  * into messages.
  */

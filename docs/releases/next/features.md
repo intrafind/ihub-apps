@@ -567,6 +567,12 @@ text page. Every such response has the same body:
   already exists) and `VALIDATION_FAILED` with `details.issues` for the user prompt settings. A
   failed model call of `/api/completions` that is not a provider error answers `INTERNAL_ERROR`
   without the technical reason, which is only logged.
+- The personal skill library endpoints (`/api/user-skills*`, including the marketplace) answer in
+  this shape. The codes they already had (`USER_SKILLS_DISABLED`, `SKILL_LIMIT_REACHED`,
+  `SKILL_TOO_LARGE`, `MARKETPLACE_SKILL_NOT_FOUND`, `REVISION_CONFLICT`, …) moved from
+  `details.code` to the top-level `code`; the limits that were reported next to them stay in
+  `details` (`limit`, `maxFilesPerSkill`, `maxSkillSizeKB`). A malformed body answers
+  `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

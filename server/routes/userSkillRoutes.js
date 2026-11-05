@@ -25,28 +25,18 @@ import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { isValidId, validateIdForPath } from '../utils/pathSecurity.js';
+import { isValidId, assertValidId } from '../utils/pathSecurity.js';
 import {
   enhanceUserWithPermissions,
   isContentAdmin,
   loadGroupsConfiguration
 } from '../utils/authorization.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendFailedOperationError,
-  sendNotFound
-} from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
-import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
-import {
-  ACCESS_CHANGED,
-  getUserSkillRepository,
-  isUserSkillId
-} from '../services/skills/UserSkillRepository.js';
+import { getUserSkillRepository, isUserSkillId } from '../services/skills/UserSkillRepository.js';
 import {
   UNSHAREABLE_GROUPS,
   canHoldUserPrompts as canHoldUserSkills,
@@ -64,7 +54,6 @@ import {
 } from '../services/skills/userSkillSettings.js';
 import { serializeUserSkill, skillSize } from '../services/skills/userSkillView.js';
 import {
-  MarketplaceSkillError,
   buildUserSkillFromMarketplace,
   getMarketplaceSkill,
   listMarketplaceSkills,
@@ -82,7 +71,7 @@ import {
   userSkillContentSchema,
   userSkillUpdateSchema
 } from '../validators/userSkillSchema.js';
-import { resolveShares } from './promptRoutes.js';
+import { resolveShares, shareRefusal } from './promptRoutes.js';
 
 /** Scopes `GET /api/user-skills?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'mine', 'shared']);
@@ -136,141 +125,100 @@ function callerContext(user) {
 }
 
 /**
- * Gate for every route that reads or writes user skills. Sends the refusal
- * itself and returns null when the request cannot go on. With user skills
- * switched off, admins still look after the ones that exist (`manage`).
+ * Gate for every route that reads or writes user skills. Throws the refusal when the request
+ * cannot go on. With user skills switched off, admins still look after the ones that exist
+ * (`manage`).
+ *
+ * @throws {ServiceError} `USER_SKILLS_NOT_ALLOWED`, `USER_SKILLS_DISABLED` or `USER_SKILLS_UNAVAILABLE`
  */
-function requireUserSkills(req, res, { manage = false } = {}) {
+function requireUserSkills(req, { manage = false } = {}) {
   if (!canHoldUserSkills(req.user)) {
-    sendErrorResponse(res, 403, 'This sign-in cannot hold user skills', {
-      details: { code: 'USER_SKILLS_NOT_ALLOWED' }
-    });
-    return null;
+    throw new ServiceError('USER_SKILLS_NOT_ALLOWED', 'This sign-in cannot hold user skills');
   }
   ensurePrincipal(req);
   if (!isUserSkillsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
     if (!manage || !isContentAdmin(req.user)) {
-      sendErrorResponse(res, 403, 'User skills are switched off', {
-        details: { code: 'USER_SKILLS_DISABLED' }
-      });
-      return null;
+      throw new ServiceError('USER_SKILLS_DISABLED', 'User skills are switched off');
     }
   }
   const repo = getUserSkillRepository();
   if (!repo.isAvailable()) {
-    sendErrorResponse(res, 503, 'User skills are unavailable', {
-      details: { code: 'USER_SKILLS_UNAVAILABLE' }
-    });
-    return null;
+    throw new ServiceError('USER_SKILLS_UNAVAILABLE', 'User skills are unavailable');
   }
   return { repo, settings: userSkillSettings(configCache.getPlatform() || {}) };
 }
 
-function sendStorageError(res, error, operation) {
-  if (error instanceof StorageError) {
-    if (error.code === 'REVISION_CONFLICT') {
-      return sendErrorResponse(res, 409, error.message, { details: { code: error.code } });
-    }
-    if (error.code === ACCESS_CHANGED) {
-      return sendErrorResponse(res, 403, error.message, { details: { code: error.code } });
-    }
-    const status = storageHttpStatus(error);
-    if (status) {
-      return sendErrorResponse(res, status, error.message, { details: { code: error.code } });
-    }
-  }
-  return sendFailedOperationError(res, operation, error);
+/** The parsed body; a body that does not match the schema is a 400 `VALIDATION_FAILED`. */
+function parseBody(schema, req) {
+  return schema.parse(req.body || {});
 }
 
-function parseBody(schema, req, res) {
-  const parsed = schema.safeParse(req.body || {});
-  if (!parsed.success) {
-    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
-    return null;
-  }
-  return parsed.data;
-}
-
-/** Refuse content beyond the size and file limits; true when refused. */
-function refuseTooLarge(res, content, settings) {
+/** Throw `SKILL_TOO_LARGE` for content beyond the size and file limits. */
+function assertNotTooLarge(content, settings) {
   const files = content.files || [];
   if (files.length > settings.maxFilesPerSkill) {
-    sendErrorResponse(res, 400, `A skill can have at most ${settings.maxFilesPerSkill} files`, {
-      details: { code: 'SKILL_TOO_LARGE', maxFilesPerSkill: settings.maxFilesPerSkill }
-    });
-    return true;
+    throw new ServiceError(
+      'SKILL_TOO_LARGE',
+      `A skill can have at most ${settings.maxFilesPerSkill} files`,
+      { details: { maxFilesPerSkill: settings.maxFilesPerSkill } }
+    );
   }
   if (skillSize(content) > settings.maxSkillSizeKB * 1024) {
-    sendErrorResponse(
-      res,
-      400,
+    throw new ServiceError(
+      'SKILL_TOO_LARGE',
       `A skill can be at most ${settings.maxSkillSizeKB} KB, instructions and files together`,
-      { details: { code: 'SKILL_TOO_LARGE', maxSkillSizeKB: settings.maxSkillSizeKB } }
+      { details: { maxSkillSizeKB: settings.maxSkillSizeKB } }
     );
-    return true;
   }
-  return false;
 }
 
-/** Refuse one more skill for a user past the per-user limit; true when refused. */
-async function refuseOverLimit(res, repo, settings, ownerId, message) {
-  if (settings.maxSkillsPerUser <= 0) return false;
-  if ((await repo.countOwned(ownerId)) < settings.maxSkillsPerUser) return false;
-  sendErrorResponse(
-    res,
-    409,
+/** Throw `SKILL_LIMIT_REACHED` for one more skill past the per-user limit. */
+async function assertUnderLimit(repo, settings, ownerId, message) {
+  if (settings.maxSkillsPerUser <= 0) return;
+  if ((await repo.countOwned(ownerId)) < settings.maxSkillsPerUser) return;
+  throw new ServiceError(
+    'SKILL_LIMIT_REACHED',
     message || `You can keep at most ${settings.maxSkillsPerUser} skills — delete one to make room`,
-    { details: { code: 'SKILL_LIMIT_REACHED', limit: settings.maxSkillsPerUser } }
+    { details: { limit: settings.maxSkillsPerUser } }
   );
-  return true;
 }
 
-function refuse(res, message, code = 'SKILL_FORBIDDEN') {
-  return sendErrorResponse(res, 403, message, { details: { code } });
+/** The refusal of a write the caller's permissions do not cover. */
+function refusal(message, code = 'SKILL_FORBIDDEN') {
+  return new ServiceError(code, message);
 }
 
 /**
  * Gate for the marketplace routes: everything `requireUserSkills` asks, plus
- * the `marketplace` feature and `userSkills.allowMarketplace`. Sends the
- * refusal itself and returns null when the request cannot go on.
+ * the `marketplace` feature and `userSkills.allowMarketplace`. Throws the refusal
+ * when the request cannot go on.
  */
-function requireMarketplace(req, res) {
-  const deps = requireUserSkills(req, res);
-  if (!deps) return null;
+function requireMarketplace(req) {
+  const deps = requireUserSkills(req);
   if (
     !isUserSkillMarketplaceConfigured(configCache.getFeatures(), configCache.getPlatform() || {})
   ) {
-    sendErrorResponse(res, 403, 'Adding skills from the marketplace is switched off', {
-      details: { code: 'MARKETPLACE_SKILLS_DISABLED' }
-    });
-    return null;
+    throw new ServiceError(
+      'MARKETPLACE_SKILLS_DISABLED',
+      'Adding skills from the marketplace is switched off'
+    );
   }
   return deps;
 }
 
-/** A registry id and a catalog name from the path, both path-safe; false when refused. */
-function marketplaceItemParams(req, res) {
+/** A registry id and a catalog name from the path, both path-safe; throws a 400 or 404 otherwise. */
+function marketplaceItemParams(req) {
   const { registryId, name } = req.params;
-  if (!validateIdForPath(registryId, 'registry', res)) return false;
-  if (!isValidId(name)) {
-    sendNotFound(res, 'Skill');
-    return false;
-  }
+  assertValidId(registryId, 'registry');
+  if (!isValidId(name)) throw new ServiceError('NOT_FOUND', 'Skill not found');
   return { registryId, name };
 }
 
-function sendMarketplaceError(res, error, operation) {
-  if (error instanceof MarketplaceSkillError) {
-    return sendErrorResponse(res, error.status, error.message, { details: { code: error.code } });
-  }
-  return sendStorageError(res, error, operation);
-}
-
 /**
- * Load one user skill and what the caller may do with it. Sends a 404 —
+ * Load one user skill and what the caller may do with it. Throws a 404 —
  * never a 403, so an id nobody shared with the caller confirms nothing.
  */
-async function loadUserSkill(req, res, repo) {
+async function loadUserSkill(req, repo) {
   const skill = await repo.get(req.params.skillId);
   const context = callerContext(req.user);
   const ownerActive = skill ? isActiveUser(usersDb(), skill.ownerId) : true;
@@ -279,10 +227,7 @@ async function loadUserSkill(req, res, repo) {
     isAdmin: context.isAdmin,
     ownerActive
   });
-  if (!skill || !permissions.canView) {
-    sendNotFound(res, 'Skill');
-    return null;
-  }
+  if (!skill || !permissions.canView) throw new ServiceError('NOT_FOUND', 'Skill not found');
   return { skill, permissions, context, ownerActive };
 }
 
@@ -385,23 +330,19 @@ async function contentOfGlobalSkill(name, settings) {
 }
 
 /**
- * Copy of a skill, owned by the caller; sends the response itself. `extra`
+ * Copy of a skill, owned by the caller; sends the success response itself. `extra`
  * is added to the response body (e.g. the files a marketplace copy left out).
  */
 async function createCopy(req, res, deps, content, copiedFrom, auditSummary, extra = {}) {
-  if (refuseTooLarge(res, content, deps.settings)) return;
-  if (await refuseOverLimit(res, deps.repo, deps.settings, String(req.user.id))) return;
+  assertNotTooLarge(content, deps.settings);
+  await assertUnderLimit(deps.repo, deps.settings, String(req.user.id));
   const skill = await deps.repo.create({
     owner: actorOf(req.user),
     content,
     copiedFrom,
     maxVersions: deps.settings.maxVersions
   });
-  if (!skill) {
-    return sendErrorResponse(res, 503, 'User skills are unavailable', {
-      details: { code: 'USER_SKILLS_UNAVAILABLE' }
-    });
-  }
+  if (!skill) throw new ServiceError('USER_SKILLS_UNAVAILABLE', 'User skills are unavailable');
   logAudit({
     req,
     action: 'create',
@@ -440,35 +381,24 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.get(buildServerPath('/api/user-skills'), ...gate, async (req, res) => {
-    try {
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const scope = LIST_SCOPES.includes(req.query.scope) ? req.query.scope : 'all';
-      const items = await listUserSkills(req.user, deps.repo);
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.json(scope === 'all' ? items : items.filter(item => item.scope === scope));
-    } catch (error) {
-      sendStorageError(res, error, 'list user skills');
-    }
+    const deps = requireUserSkills(req, { manage: true });
+    const scope = LIST_SCOPES.includes(req.query.scope) ? req.query.scope : 'all';
+    const items = await listUserSkills(req.user, deps.repo);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(scope === 'all' ? items : items.filter(item => item.scope === scope));
   });
 
   app.post(buildServerPath('/api/user-skills'), ...gate, async (req, res) => {
-    try {
-      const deps = requireUserSkills(req, res);
-      if (!deps) return;
-      const body = parseBody(userSkillContentSchema, req, res);
-      if (!body) return;
-      await createCopy(
-        req,
-        res,
-        deps,
-        normalizeContent(body),
-        null,
-        skill => `Created user skill "${skill.name}"`
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'create skill');
-    }
+    const deps = requireUserSkills(req);
+    const body = parseBody(userSkillContentSchema, req);
+    await createCopy(
+      req,
+      res,
+      deps,
+      normalizeContent(body),
+      null,
+      skill => `Created user skill "${skill.name}"`
+    );
   });
 
   /**
@@ -480,53 +410,47 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.get(buildServerPath('/api/user-skills/share-targets'), ...gate, (req, res) => {
-    try {
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const context = callerContext(req.user);
-      const allowed = allowedTargetsFor(deps.settings, context);
-      const raw = typeof req.query.q === 'string' ? req.query.q : '';
-      const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
+    const deps = requireUserSkills(req, { manage: true });
+    const context = callerContext(req.user);
+    const allowed = allowedTargetsFor(deps.settings, context);
+    const raw = typeof req.query.q === 'string' ? req.query.q : '';
+    const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
 
-      let users = [];
-      if (allowed.user && q.length >= LOOKUP_MIN_CHARS) {
-        const me = String(req.user.id);
-        users = Object.entries(usersDb())
-          .map(([id, user]) => ({ ...user, id: String(user?.id ?? id) }))
-          .filter(user => user && user.active !== false && user.id !== me)
-          .filter(user =>
-            [user.name, user.username, user.email].some(
-              field => typeof field === 'string' && field.toLowerCase().includes(q)
-            )
+    let users = [];
+    if (allowed.user && q.length >= LOOKUP_MIN_CHARS) {
+      const me = String(req.user.id);
+      users = Object.entries(usersDb())
+        .map(([id, user]) => ({ ...user, id: String(user?.id ?? id) }))
+        .filter(user => user && user.active !== false && user.id !== me)
+        .filter(user =>
+          [user.name, user.username, user.email].some(
+            field => typeof field === 'string' && field.toLowerCase().includes(q)
           )
-          .map(user => ({
-            id: user.id,
-            name: displayName(user),
-            email: user.email ? String(user.email) : null
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .slice(0, LOOKUP_LIMIT);
-      }
-
-      let groups = [];
-      if (allowed.group) {
-        groups = Object.entries(context.config.groups || {})
-          .filter(([id]) => !UNSHAREABLE_GROUPS.includes(id))
-          .map(([id, group]) => ({
-            id,
-            name: String(group?.name || id),
-            description: group?.description ? String(group.description) : ''
-          }))
-          .filter(
-            group =>
-              !q || group.name.toLowerCase().includes(q) || group.id.toLowerCase().includes(q)
-          )
-          .sort((a, b) => a.name.localeCompare(b.name));
-      }
-      res.json({ allowed, users, groups });
-    } catch (error) {
-      sendFailedOperationError(res, 'look up share targets', error);
+        )
+        .map(user => ({
+          id: user.id,
+          name: displayName(user),
+          email: user.email ? String(user.email) : null
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, LOOKUP_LIMIT);
     }
+
+    let groups = [];
+    if (allowed.group) {
+      groups = Object.entries(context.config.groups || {})
+        .filter(([id]) => !UNSHAREABLE_GROUPS.includes(id))
+        .map(([id, group]) => ({
+          id,
+          name: String(group?.name || id),
+          description: group?.description ? String(group.description) : ''
+        }))
+        .filter(
+          group => !q || group.name.toLowerCase().includes(q) || group.id.toLowerCase().includes(q)
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    res.json({ allowed, users, groups });
   });
 
   /**
@@ -567,32 +491,27 @@ export default function registerUserSkillRoutes(app) {
    *           maximum: 60
    */
   app.get(buildServerPath('/api/user-skills/marketplace'), ...gate, async (req, res) => {
-    try {
-      const deps = requireMarketplace(req, res);
-      if (!deps) return;
-      const query = req.query || {};
-      const result = await listMarketplaceSkills({
-        search: typeof query.search === 'string' ? query.search.slice(0, 200) : '',
-        registry: typeof query.registry === 'string' ? query.registry : '',
-        category: typeof query.category === 'string' ? query.category : '',
-        page: query.page,
-        limit: query.limit
-      });
-      const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
-      const { data: visible } = await configCache.getSkillsForUser(req.user);
-      const globalNames = new Set((visible || []).map(skill => skill.name));
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.json({
-        ...result,
-        items: result.items.map(item => ({
-          ...marketplaceSkillView(item),
-          added: copies.get(`${item.registryId}:${item.name}`) || null,
-          availableAsGlobal: globalNames.has(item.name)
-        }))
-      });
-    } catch (error) {
-      sendMarketplaceError(res, error, 'browse marketplace skills');
-    }
+    const deps = requireMarketplace(req);
+    const query = req.query || {};
+    const result = await listMarketplaceSkills({
+      search: typeof query.search === 'string' ? query.search.slice(0, 200) : '',
+      registry: typeof query.registry === 'string' ? query.registry : '',
+      category: typeof query.category === 'string' ? query.category : '',
+      page: query.page,
+      limit: query.limit
+    });
+    const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
+    const { data: visible } = await configCache.getSkillsForUser(req.user);
+    const globalNames = new Set((visible || []).map(skill => skill.name));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      ...result,
+      items: result.items.map(item => ({
+        ...marketplaceSkillView(item),
+        added: copies.get(`${item.registryId}:${item.name}`) || null,
+        availableAsGlobal: globalNames.has(item.name)
+      }))
+    });
   });
 
   /**
@@ -607,23 +526,17 @@ export default function registerUserSkillRoutes(app) {
     buildServerPath('/api/user-skills/marketplace/:registryId/:name'),
     ...gate,
     async (req, res) => {
-      try {
-        const params = marketplaceItemParams(req, res);
-        if (!params) return;
-        const deps = requireMarketplace(req, res);
-        if (!deps) return;
-        const skill = await getMarketplaceSkill(params.registryId, params.name);
-        const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
-        const { data: visible } = await configCache.getSkillsForUser(req.user);
-        res.setHeader('Cache-Control', 'private, no-store');
-        res.json({
-          ...skill,
-          added: copies.get(`${params.registryId}:${params.name}`) || null,
-          availableAsGlobal: (visible || []).some(global => global.name === params.name)
-        });
-      } catch (error) {
-        sendMarketplaceError(res, error, 'read marketplace skill');
-      }
+      const params = marketplaceItemParams(req);
+      const deps = requireMarketplace(req);
+      const skill = await getMarketplaceSkill(params.registryId, params.name);
+      const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
+      const { data: visible } = await configCache.getSkillsForUser(req.user);
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json({
+        ...skill,
+        added: copies.get(`${params.registryId}:${params.name}`) || null,
+        availableAsGlobal: (visible || []).some(global => global.name === params.name)
+      });
     }
   );
 
@@ -655,44 +568,35 @@ export default function registerUserSkillRoutes(app) {
     buildServerPath('/api/user-skills/marketplace/:registryId/:name/add'),
     ...gate,
     async (req, res) => {
-      try {
-        const params = marketplaceItemParams(req, res);
-        if (!params) return;
-        const deps = requireMarketplace(req, res);
-        if (!deps) return;
-        const body = parseBody(skillDuplicateSchema, req, res);
-        if (!body) return;
-        // Refuse before fetching anything when there is no room for one more.
-        if (await refuseOverLimit(res, deps.repo, deps.settings, String(req.user.id))) return;
-        const built = await buildUserSkillFromMarketplace(
-          params.registryId,
-          params.name,
-          deps.settings,
-          { requestedName: body.name }
+      const params = marketplaceItemParams(req);
+      const deps = requireMarketplace(req);
+      const body = parseBody(skillDuplicateSchema, req);
+      // Refuse before fetching anything when there is no room for one more.
+      await assertUnderLimit(deps.repo, deps.settings, String(req.user.id));
+      const built = await buildUserSkillFromMarketplace(
+        params.registryId,
+        params.name,
+        deps.settings,
+        { requestedName: body.name }
+      );
+      const parsed = userSkillContentSchema.safeParse(built.content);
+      if (!parsed.success) {
+        throw new ServiceError(
+          'MARKETPLACE_SKILL_INVALID',
+          `This skill cannot be added: ${describeIssues(parsed.error)}`
         );
-        const parsed = userSkillContentSchema.safeParse(built.content);
-        if (!parsed.success) {
-          return sendErrorResponse(
-            res,
-            422,
-            `This skill cannot be added: ${describeIssues(parsed.error)}`,
-            { details: { code: 'MARKETPLACE_SKILL_INVALID' } }
-          );
-        }
-        await createCopy(
-          req,
-          res,
-          deps,
-          normalizeContent(parsed.data),
-          marketplaceCopiedFrom(built.item),
-          copy =>
-            `Added marketplace skill "${params.name}" from registry ${params.registryId} ` +
-            `as user skill "${copy.name}"`,
-          { skippedFiles: built.skipped }
-        );
-      } catch (error) {
-        sendMarketplaceError(res, error, 'add marketplace skill');
       }
+      await createCopy(
+        req,
+        res,
+        deps,
+        normalizeContent(parsed.data),
+        marketplaceCopiedFrom(built.item),
+        copy =>
+          `Added marketplace skill "${params.name}" from registry ${params.registryId} ` +
+          `as user skill "${copy.name}"`,
+        { skippedFiles: built.skipped }
+      );
     }
   );
 
@@ -713,92 +617,73 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.get(buildServerPath('/api/user-skills/:skillId'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.json(
-        serializeUserSkill(loaded.skill, loaded.permissions, {
-          ownerActive: loaded.ownerActive,
-          includeContent: true
-        })
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'read skill');
-    }
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req, { manage: true });
+    const loaded = await loadUserSkill(req, deps.repo);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(
+      serializeUserSkill(loaded.skill, loaded.permissions, {
+        ownerActive: loaded.ownerActive,
+        includeContent: true
+      })
+    );
   });
 
   app.put(buildServerPath('/api/user-skills/:skillId'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) {
-        return refuse(res, 'Global skills are managed by admins', 'GLOBAL_SKILL_READ_ONLY');
-      }
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      if (!loaded.permissions.canEdit) return refuse(res, 'You cannot change this skill');
-      const body = parseBody(userSkillUpdateSchema, req, res);
-      if (!body) return;
-      const { expectedRevision, ...rest } = body;
-      const content = normalizeContent(rest);
-      if (refuseTooLarge(res, content, deps.settings)) return;
-      const skill = await deps.repo.update(skillId, content, {
-        actor: actorOf(req.user),
-        expectedRevision,
-        maxVersions: deps.settings.maxVersions,
-        authorize: stillAllowed(req, loaded.context, 'canEdit')
-      });
-      if (!skill) return sendNotFound(res, 'Skill');
-      if (skill.revision !== loaded.skill.revision) {
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'userSkill',
-          resourceId: skillId,
-          summary: `Updated user skill "${skill.name}" (revision ${skill.revision})`
-        });
-      }
-      res.json(
-        view(skill, req, loaded.context, { ownerActive: loaded.ownerActive, includeContent: true })
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'update skill');
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) {
+      throw refusal('Global skills are managed by admins', 'GLOBAL_SKILL_READ_ONLY');
     }
+    const deps = requireUserSkills(req, { manage: true });
+    const loaded = await loadUserSkill(req, deps.repo);
+    if (!loaded.permissions.canEdit) throw refusal('You cannot change this skill');
+    const body = parseBody(userSkillUpdateSchema, req);
+    const { expectedRevision, ...rest } = body;
+    const content = normalizeContent(rest);
+    assertNotTooLarge(content, deps.settings);
+    const skill = await deps.repo.update(skillId, content, {
+      actor: actorOf(req.user),
+      expectedRevision,
+      maxVersions: deps.settings.maxVersions,
+      authorize: stillAllowed(req, loaded.context, 'canEdit')
+    });
+    if (!skill) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    if (skill.revision !== loaded.skill.revision) {
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'userSkill',
+        resourceId: skillId,
+        summary: `Updated user skill "${skill.name}" (revision ${skill.revision})`
+      });
+    }
+    res.json(
+      view(skill, req, loaded.context, { ownerActive: loaded.ownerActive, includeContent: true })
+    );
   });
 
   app.delete(buildServerPath('/api/user-skills/:skillId'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      if (!loaded.permissions.canDelete) return refuse(res, 'You cannot delete this skill');
-      const removed = await deps.repo.delete(skillId, {
-        authorize: stillAllowed(req, loaded.context, 'canDelete')
-      });
-      if (!removed) return sendNotFound(res, 'Skill');
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'userSkill',
-        resourceId: skillId,
-        summary: `Deleted user skill "${removed.name}"`
-      });
-      res.json({ success: true });
-    } catch (error) {
-      sendStorageError(res, error, 'delete skill');
-    }
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req, { manage: true });
+    const loaded = await loadUserSkill(req, deps.repo);
+    if (!loaded.permissions.canDelete) throw refusal('You cannot delete this skill');
+    const removed = await deps.repo.delete(skillId, {
+      authorize: stillAllowed(req, loaded.context, 'canDelete')
+    });
+    if (!removed) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'userSkill',
+      resourceId: skillId,
+      summary: `Deleted user skill "${removed.name}"`
+    });
+    res.json({ success: true });
   });
 
   /**
@@ -814,55 +699,44 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.put(buildServerPath('/api/user-skills/:skillId/shares'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) {
-        return refuse(res, 'Global skills are shared through groups', 'GLOBAL_SKILL_READ_ONLY');
-      }
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      if (!loaded.permissions.canShare) {
-        return refuse(res, 'You cannot change who this skill is shared with');
-      }
-      const body = parseBody(skillSharesUpdateSchema, req, res);
-      if (!body) return;
-      const resolved = resolveShares(body.shares, {
-        prompt: loaded.skill,
-        allowed: allowedTargetsFor(deps.settings, loaded.context),
-        users: usersDb(),
-        groups: loaded.context.config.groups || {},
-        noun: 'skills'
-      });
-      if (!resolved.ok) {
-        return sendErrorResponse(res, resolved.status, resolved.error, {
-          details: resolved.details
-        });
-      }
-      const result = await deps.repo.setShares(skillId, resolved.shares, {
-        actor: actorOf(req.user),
-        authorize: stillAllowed(req, loaded.context, 'canShare')
-      });
-      if (!result) return sendNotFound(res, 'Skill');
-      if (result.added.length || result.removed.length) {
-        const everyone = result.skill.shares.some(share => share.type === 'everyone');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'userSkillShare',
-          resourceId: skillId,
-          summary:
-            `Changed sharing of user skill "${result.skill.name}": ` +
-            `${result.added.length} added, ${result.removed.length} removed` +
-            `${everyone ? ' (shared with everyone)' : ''}`
-        });
-      }
-      res.json(view(result.skill, req, loaded.context, { ownerActive: loaded.ownerActive }));
-    } catch (error) {
-      sendStorageError(res, error, 'share skill');
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) {
+      throw refusal('Global skills are shared through groups', 'GLOBAL_SKILL_READ_ONLY');
     }
+    const deps = requireUserSkills(req, { manage: true });
+    const loaded = await loadUserSkill(req, deps.repo);
+    if (!loaded.permissions.canShare) {
+      throw refusal('You cannot change who this skill is shared with');
+    }
+    const body = parseBody(skillSharesUpdateSchema, req);
+    const resolved = resolveShares(body.shares, {
+      prompt: loaded.skill,
+      allowed: allowedTargetsFor(deps.settings, loaded.context),
+      users: usersDb(),
+      groups: loaded.context.config.groups || {},
+      noun: 'skills'
+    });
+    if (!resolved.ok) throw shareRefusal(resolved);
+    const result = await deps.repo.setShares(skillId, resolved.shares, {
+      actor: actorOf(req.user),
+      authorize: stillAllowed(req, loaded.context, 'canShare')
+    });
+    if (!result) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    if (result.added.length || result.removed.length) {
+      const everyone = result.skill.shares.some(share => share.type === 'everyone');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'userSkillShare',
+        resourceId: skillId,
+        summary:
+          `Changed sharing of user skill "${result.skill.name}": ` +
+          `${result.added.length} added, ${result.removed.length} removed` +
+          `${everyone ? ' (shared with everyone)' : ''}`
+      });
+    }
+    res.json(view(result.skill, req, loaded.context, { ownerActive: loaded.ownerActive }));
   });
 
   /**
@@ -874,55 +748,43 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.put(buildServerPath('/api/user-skills/:skillId/owner'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      if (!loaded.permissions.canTransfer) {
-        return refuse(res, 'You cannot hand this skill to someone else');
-      }
-      const body = parseBody(skillTransferSchema, req, res);
-      if (!body) return;
-      const users = usersDb();
-      const target = findUser(users, body.ownerId);
-      if (!target || target.active === false) {
-        return sendBadRequest(res, 'The new owner must be an active user');
-      }
-      if (String(body.ownerId) === String(loaded.skill.ownerId)) {
-        return res.json(view(loaded.skill, req, loaded.context, { ownerActive: true }));
-      }
-      if (
-        await refuseOverLimit(
-          res,
-          deps.repo,
-          deps.settings,
-          String(body.ownerId),
-          'The new owner already keeps the most skills allowed'
-        )
-      ) {
-        return;
-      }
-      const skill = await deps.repo.transfer(
-        skillId,
-        { id: String(body.ownerId), name: displayName({ ...target, id: body.ownerId }) },
-        { actor: actorOf(req.user), authorize: stillAllowed(req, loaded.context, 'canTransfer') }
-      );
-      if (!skill) return sendNotFound(res, 'Skill');
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'userSkill',
-        resourceId: skillId,
-        summary: `Handed user skill "${skill.name}" to ${skill.ownerName || skill.ownerId}`
-      });
-      res.json(view(skill, req, loaded.context, { ownerActive: true }));
-    } catch (error) {
-      sendStorageError(res, error, 'transfer skill');
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req, { manage: true });
+    const loaded = await loadUserSkill(req, deps.repo);
+    if (!loaded.permissions.canTransfer) {
+      throw refusal('You cannot hand this skill to someone else');
     }
+    const body = parseBody(skillTransferSchema, req);
+    const users = usersDb();
+    const target = findUser(users, body.ownerId);
+    if (!target || target.active === false) {
+      throw new ServiceError('BAD_REQUEST', 'The new owner must be an active user');
+    }
+    if (String(body.ownerId) === String(loaded.skill.ownerId)) {
+      return res.json(view(loaded.skill, req, loaded.context, { ownerActive: true }));
+    }
+    await assertUnderLimit(
+      deps.repo,
+      deps.settings,
+      String(body.ownerId),
+      'The new owner already keeps the most skills allowed'
+    );
+    const skill = await deps.repo.transfer(
+      skillId,
+      { id: String(body.ownerId), name: displayName({ ...target, id: body.ownerId }) },
+      { actor: actorOf(req.user), authorize: stillAllowed(req, loaded.context, 'canTransfer') }
+    );
+    if (!skill) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'userSkill',
+      resourceId: skillId,
+      summary: `Handed user skill "${skill.name}" to ${skill.ownerName || skill.ownerId}`
+    });
+    res.json(view(skill, req, loaded.context, { ownerActive: true }));
   });
 
   /**
@@ -934,33 +796,26 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.post(buildServerPath('/api/user-skills/:skillId/duplicate'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res);
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      const body = parseBody(skillDuplicateSchema, req, res);
-      if (!body) return;
-      const { skill } = loaded;
-      await createCopy(
-        req,
-        res,
-        deps,
-        {
-          name: body.name || skill.name,
-          description: skill.description,
-          body: skill.body,
-          files: skill.files || []
-        },
-        { scope: 'user', id: skill.id },
-        copy => `Copied user skill "${skill.name}" to "${copy.name}"`
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'copy skill');
-    }
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req);
+    const loaded = await loadUserSkill(req, deps.repo);
+    const body = parseBody(skillDuplicateSchema, req);
+    const { skill } = loaded;
+    await createCopy(
+      req,
+      res,
+      deps,
+      {
+        name: body.name || skill.name,
+        description: skill.description,
+        body: skill.body,
+        files: skill.files || []
+      },
+      { scope: 'user', id: skill.id },
+      copy => `Copied user skill "${skill.name}" to "${copy.name}"`
+    );
   });
 
   /**
@@ -972,29 +827,25 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.post(buildServerPath('/api/skills/:name/duplicate'), ...gate, async (req, res) => {
-    try {
-      const { name } = req.params;
-      if (!SKILL_NAME_PATTERN.test(name || '')) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res);
-      if (!deps) return;
-      const { data: visible } = await configCache.getSkillsForUser(req.user);
-      if (!visible.some(skill => skill.name === name)) return sendNotFound(res, 'Skill');
-      const body = parseBody(skillDuplicateSchema, req, res);
-      if (!body) return;
-      const content = await contentOfGlobalSkill(name, deps.settings);
-      if (!content) return sendNotFound(res, 'Skill');
-      if (body.name) content.name = body.name;
-      await createCopy(
-        req,
-        res,
-        deps,
-        content,
-        { scope: 'global', id: name },
-        copy => `Copied global skill "${name}" to user skill "${copy.name}"`
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'copy skill');
-    }
+    const { name } = req.params;
+    if (!SKILL_NAME_PATTERN.test(name || ''))
+      throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req);
+    const { data: visible } = await configCache.getSkillsForUser(req.user);
+    if (!visible.some(skill => skill.name === name))
+      throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const body = parseBody(skillDuplicateSchema, req);
+    const content = await contentOfGlobalSkill(name, deps.settings);
+    if (!content) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    if (body.name) content.name = body.name;
+    await createCopy(
+      req,
+      res,
+      deps,
+      content,
+      { scope: 'global', id: name },
+      copy => `Copied global skill "${name}" to user skill "${copy.name}"`
+    );
   });
 
   /**
@@ -1006,57 +857,45 @@ export default function registerUserSkillRoutes(app) {
    *       - Skills
    */
   app.get(buildServerPath('/api/user-skills/:skillId/versions'), ...gate, async (req, res) => {
-    try {
-      const { skillId } = req.params;
-      if (!validateIdForPath(skillId, 'skill', res)) return;
-      if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-      const deps = requireUserSkills(req, res, { manage: true });
-      if (!deps) return;
-      const loaded = await loadUserSkill(req, res, deps.repo);
-      if (!loaded) return;
-      const versions = await deps.repo.listVersions(skillId);
-      res.json(
-        versions.map(version => ({
-          revision: version.revision,
-          name: version.name,
-          description: version.description,
-          savedAt: version.savedAt,
-          savedBy: version.savedBy,
-          ...(version.restoredFrom ? { restoredFrom: version.restoredFrom } : {})
-        }))
-      );
-    } catch (error) {
-      sendStorageError(res, error, 'list skill versions');
-    }
+    const { skillId } = req.params;
+    assertValidId(skillId, 'skill');
+    if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+    const deps = requireUserSkills(req, { manage: true });
+    await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+    const versions = await deps.repo.listVersions(skillId);
+    res.json(
+      versions.map(version => ({
+        revision: version.revision,
+        name: version.name,
+        description: version.description,
+        savedAt: version.savedAt,
+        savedBy: version.savedBy,
+        ...(version.restoredFrom ? { restoredFrom: version.restoredFrom } : {})
+      }))
+    );
   });
 
   app.get(
     buildServerPath('/api/user-skills/:skillId/versions/:revision'),
     ...gate,
     async (req, res) => {
-      try {
-        const { skillId } = req.params;
-        if (!validateIdForPath(skillId, 'skill', res)) return;
-        if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-        const deps = requireUserSkills(req, res, { manage: true });
-        if (!deps) return;
-        const loaded = await loadUserSkill(req, res, deps.repo);
-        if (!loaded) return;
-        const version = await deps.repo.getVersion(skillId, Number(req.params.revision));
-        if (!version) return sendNotFound(res, 'Version');
-        res.json({
-          revision: version.revision,
-          name: version.name,
-          description: version.description,
-          body: version.body,
-          files: version.files || [],
-          savedAt: version.savedAt,
-          savedBy: version.savedBy,
-          ...(version.restoredFrom ? { restoredFrom: version.restoredFrom } : {})
-        });
-      } catch (error) {
-        sendStorageError(res, error, 'read skill version');
-      }
+      const { skillId } = req.params;
+      assertValidId(skillId, 'skill');
+      if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+      const deps = requireUserSkills(req, { manage: true });
+      await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+      const version = await deps.repo.getVersion(skillId, Number(req.params.revision));
+      if (!version) throw new ServiceError('NOT_FOUND', 'Version not found');
+      res.json({
+        revision: version.revision,
+        name: version.name,
+        description: version.description,
+        body: version.body,
+        files: version.files || [],
+        savedAt: version.savedAt,
+        savedBy: version.savedBy,
+        ...(version.restoredFrom ? { restoredFrom: version.restoredFrom } : {})
+      });
     }
   );
 
@@ -1072,41 +911,35 @@ export default function registerUserSkillRoutes(app) {
     buildServerPath('/api/user-skills/:skillId/versions/:revision/restore'),
     ...gate,
     async (req, res) => {
-      try {
-        const { skillId } = req.params;
-        if (!validateIdForPath(skillId, 'skill', res)) return;
-        if (!isUserSkillId(skillId)) return sendNotFound(res, 'Skill');
-        const deps = requireUserSkills(req, res, { manage: true });
-        if (!deps) return;
-        const loaded = await loadUserSkill(req, res, deps.repo);
-        if (!loaded) return;
-        if (!loaded.permissions.canEdit) return refuse(res, 'You cannot change this skill');
-        const revision = Number(req.params.revision);
-        const version = await deps.repo.getVersion(skillId, revision);
-        if (!version) return sendNotFound(res, 'Version');
-        const skill = await deps.repo.update(skillId, version, {
-          actor: actorOf(req.user),
-          restoredFrom: revision,
-          maxVersions: deps.settings.maxVersions,
-          authorize: stillAllowed(req, loaded.context, 'canEdit')
-        });
-        if (!skill) return sendNotFound(res, 'Skill');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'userSkill',
-          resourceId: skillId,
-          summary: `Restored user skill "${skill.name}" to revision ${revision}`
-        });
-        res.json(
-          view(skill, req, loaded.context, {
-            ownerActive: loaded.ownerActive,
-            includeContent: true
-          })
-        );
-      } catch (error) {
-        sendStorageError(res, error, 'restore skill version');
-      }
+      const { skillId } = req.params;
+      assertValidId(skillId, 'skill');
+      if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
+      const deps = requireUserSkills(req, { manage: true });
+      const loaded = await loadUserSkill(req, deps.repo);
+      if (!loaded.permissions.canEdit) throw refusal('You cannot change this skill');
+      const revision = Number(req.params.revision);
+      const version = await deps.repo.getVersion(skillId, revision);
+      if (!version) throw new ServiceError('NOT_FOUND', 'Version not found');
+      const skill = await deps.repo.update(skillId, version, {
+        actor: actorOf(req.user),
+        restoredFrom: revision,
+        maxVersions: deps.settings.maxVersions,
+        authorize: stillAllowed(req, loaded.context, 'canEdit')
+      });
+      if (!skill) throw new ServiceError('NOT_FOUND', 'Skill not found');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'userSkill',
+        resourceId: skillId,
+        summary: `Restored user skill "${skill.name}" to revision ${revision}`
+      });
+      res.json(
+        view(skill, req, loaded.context, {
+          ownerActive: loaded.ownerActive,
+          includeContent: true
+        })
+      );
     }
   );
 }
