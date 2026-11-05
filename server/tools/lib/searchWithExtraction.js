@@ -3,6 +3,7 @@
 
 import webSearchService from '../../services/WebSearchService.js';
 import webContentExtractor from '../webContentExtractor.js';
+import { BOT_PROTECTION_CODE } from './botProtection.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -267,7 +268,11 @@ export default async function searchWithExtraction({
         ...result,
         extractedContent: null,
         contentExtracted: false,
-        extractionError: error.message
+        extractionError: error.message,
+        // Which kind of failure it was, so the model can still use the title
+        // and description and say the page content was unavailable.
+        ...(error.code ? { extractionErrorCode: error.code } : {}),
+        ...(error.code === BOT_PROTECTION_CODE ? { extractionRetryable: false } : {})
       };
     }
   });
@@ -280,17 +285,31 @@ export default async function searchWithExtraction({
           ...resultsToProcess[i],
           extractedContent: null,
           contentExtracted: false,
-          extractionError: r.reason?.message || 'Unknown error'
+          extractionError: r.reason?.message || 'Unknown error',
+          ...(r.reason?.code ? { extractionErrorCode: r.reason.code } : {})
         }
   );
 
   const successCount = extractedContent.filter(r => r.contentExtracted).length;
+  const blockedHosts = [
+    ...new Set(
+      extractedContent
+        .filter(r => r.extractionErrorCode === BOT_PROTECTION_CODE)
+        .map(r => r.hostname)
+        .filter(Boolean)
+    )
+  ];
+  const blockedNote = blockedHosts.length
+    ? ` ${blockedHosts.join(', ')} block automated access (extractionErrorCode ${BOT_PROTECTION_CODE}): ` +
+      'the page content of those results is unavailable, so use only their title and description. ' +
+      'Do not retry or open other URLs on those hosts; tell the user the content could not be read.'
+    : '';
 
   return {
     query,
     results,
     extractedContent,
-    summary: `Found ${results.length} results for "${query}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.`,
+    summary: `Found ${results.length} results for "${query}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.${blockedNote}`,
     stats: {
       totalSearchResults: results.length,
       processedResults: resultsToProcess.length,
