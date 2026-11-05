@@ -29,6 +29,24 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+// The server tests need the Node version the package declares (`engines.node`):
+// on an older Node a few suites cannot even load (ESM `require`), which shows up
+// as unrelated loader errors. Stop with one clear message instead. Set
+// ALLOW_UNSUPPORTED_NODE=1 to run anyway, knowing those suites will fail.
+{
+  const required = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).engines
+    ?.node;
+  const requiredMajor = Number(/\d+/.exec(required || '')?.[0]);
+  const currentMajor = Number(process.versions.node.split('.')[0]);
+  if (requiredMajor && currentMajor < requiredMajor && process.env.ALLOW_UNSUPPORTED_NODE !== '1') {
+    console.error(
+      `[server tests] Node ${process.versions.node} is too old: package.json requires ${required}. ` +
+        `Use Node ${requiredMajor} (see .nvmrc), or set ALLOW_UNSUPPORTED_NODE=1 to run anyway.`
+    );
+    process.exit(1);
+  }
+}
+
 // Tests that fail today. They are listed here (not silently skipped) so the
 // failures stay visible and a fixed test is removed from the list. Do not add
 // to this list to get a red build green; fix the test or the code instead.
