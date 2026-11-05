@@ -33,13 +33,12 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { sanitizeLanguageCode } from '../../utils/pathSecurity.js';
-import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import configCache from '../../configCache.js';
 import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import {
-  IntegrationRequestError,
   MAX_REASON_LENGTH,
   getIntegrationRequestService,
   isDefinitionId
@@ -126,14 +125,10 @@ async function catalogFor(user, language) {
  *         description: Not signed in
  */
 router.get('/', requireFeature('integrations'), authRequired, async (req, res) => {
-  if (isAnonymous(req.user)) return sendAuthRequired(res);
-  try {
-    const items = await catalogFor(req.user, languageOf(req));
-    res.setHeader('Cache-Control', 'no-store');
-    return res.json({ items });
-  } catch (error) {
-    return sendInternalError(res, error, 'list the requestable integrations');
-  }
+  if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
+  const items = await catalogFor(req.user, languageOf(req));
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({ items });
 });
 
 /**
@@ -168,33 +163,33 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
  *         description: The caller already has an open request for it (REQUEST_EXISTS)
  */
 router.post('/', requireFeature('integrations'), authRequired, async (req, res) => {
-  if (isAnonymous(req.user)) return sendAuthRequired(res);
+  if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   if (isDelegated(req.user)) {
-    return res.status(403).json({
-      error: 'Only an interactive session can request integrations',
-      code: 'INTERACTIVE_SESSION_REQUIRED'
-    });
+    throw new ServiceError(
+      'INTERACTIVE_SESSION_REQUIRED',
+      'Only an interactive session can request integrations'
+    );
   }
   if (!req.is('application/json')) {
-    return res.status(415).json({ error: 'Send a JSON body', code: 'JSON_REQUIRED' });
+    throw new ServiceError('JSON_REQUIRED', 'Send a JSON body');
   }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const { definition, reason } = body;
   if (!isDefinitionId(definition)) {
-    return res.status(400).json({ error: 'Invalid definition id', code: 'INVALID_DEFINITION' });
+    throw new ServiceError('INVALID_DEFINITION', 'Invalid definition id');
   }
   if (reason !== undefined && reason !== null && typeof reason !== 'string') {
-    return res.status(400).json({ error: 'reason must be a string', code: 'INVALID_REASON' });
+    throw new ServiceError('INVALID_REASON', 'reason must be a string');
   }
   if (typeof reason === 'string' && reason.length > MAX_REASON_LENGTH) {
-    return res.status(400).json({
-      error: `reason must be at most ${MAX_REASON_LENGTH} characters`,
-      code: 'REASON_TOO_LONG'
-    });
+    throw new ServiceError(
+      'REASON_TOO_LONG',
+      `reason must be at most ${MAX_REASON_LENGTH} characters`
+    );
   }
 
-  try {
-    await integrationRegistry.ensureLoaded();
+  await integrationRegistry.ensureLoaded();
+  {
     const service = getIntegrationRequestService();
     const entry = integrationRegistry.get(definition);
     const requestable =
@@ -205,9 +200,7 @@ router.post('/', requireFeature('integrations'), authRequired, async (req, res) 
         hidden: await service.hiddenDefinitions()
       });
     if (!requestable) {
-      return res
-        .status(404)
-        .json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+      throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
     }
     const request = await service.create({ user: req.user, definition, reason });
     logAudit({
@@ -218,11 +211,6 @@ router.post('/', requireFeature('integrations'), authRequired, async (req, res) 
       summary: `Requested integration "${definition}"${request.reason ? ' with a reason' : ''}`
     });
     return res.status(201).json({ request: userRequestView(request) });
-  } catch (error) {
-    if (error instanceof IntegrationRequestError) {
-      return res.status(error.status).json({ error: error.message, code: error.code });
-    }
-    return sendInternalError(res, error, 'request an integration');
   }
 });
 

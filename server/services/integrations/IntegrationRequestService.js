@@ -50,6 +50,7 @@ import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSchema.js';
 import { mayUseIntegration } from './integrationAccess.js';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
 const COMPONENT = 'IntegrationRequestService';
 
@@ -75,17 +76,15 @@ const STANDING = new Set([REQUEST_STATUSES.OPEN, REQUEST_STATUSES.APPROVED]);
 export const REQUEST_ID_PATTERN = /^ireq_[a-f0-9]{32}$/;
 
 /** An error with a stable code and the HTTP status the routes answer with. */
-export class IntegrationRequestError extends Error {
+export class IntegrationRequestError extends ServiceError {
   /**
    * @param {string} code - REQUEST_EXISTS | REQUEST_NOT_FOUND | REQUEST_CLOSED | REQUEST_CONFLICT
    * @param {string} message
    * @param {number} status
    */
   constructor(code, message, status) {
-    super(message);
+    super(code, message, { status });
     this.name = 'IntegrationRequestError';
-    this.code = code;
-    this.status = status;
   }
 }
 

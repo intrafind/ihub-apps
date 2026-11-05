@@ -584,6 +584,13 @@ text page. Every such response has the same body:
   the name of a system skill, 409) are top-level `code`s; deleting a system skill answers `FORBIDDEN`,
   an oversized zip `PAYLOAD_TOO_LARGE`, and the problems of an invalid skill are in `details.errors`
   instead of a bare `details` list.
+- The integration builder and request endpoints (`/api/admin/integrations/builder*`,
+  `/api/admin/integrations/requests*`, `/api/integrations/requests`) answer in this shape. Their
+  codes (`INVALID_DRAFT`, `DUPLICATE_DEFINITION`, `REQUEST_EXISTS`, `REQUEST_NOT_FOUND`,
+  `INTEGRATION_NOT_FOUND`, …) are unchanged and are now translated by the web app. The validation
+  problems of a draft or an import moved from `details` (a list) to `details.issues`, and a
+  malformed import body answers `VALIDATION_FAILED`. The `success: false` flag is gone from error
+  bodies.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
