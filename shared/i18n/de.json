@@ -8913,6 +8913,27 @@
     "CHAT_TEMPORARY": "Ein temporärer Chat kann nicht geteilt werden. Speichern Sie ihn zuerst.",
     "FILES_NOT_SHARED": "Der Besitzer hat die angehängten Dateien nicht freigegeben.",
     "ORIGINAL_NOT_SHARED": "Der Besitzer hat den Text dieser Datei freigegeben, nicht das Original.",
-    "ORIGINAL_DISCARDED": "Die Originaldatei ist nicht mehr verfügbar."
+    "ORIGINAL_DISCARDED": "Die Originaldatei ist nicht mehr verfügbar.",
+    "SCHEDULED_TASKS_UNAVAILABLE": "Geplante Aufgaben sind auf dieser Installation nicht verfügbar.",
+    "INTERACTIVE_USER_REQUIRED": "Geplante Aufgaben erfordern eine angemeldete Person, kein Token und keinen Agenten.",
+    "PERMISSION_DENIED": "Sie dürfen geplante Aufgaben nicht verwenden.",
+    "TASK_NOT_FOUND": "Die geplante Aufgabe wurde nicht gefunden.",
+    "RUN_NOT_FOUND": "Der Lauf wurde nicht gefunden.",
+    "TASK_LIMIT_REACHED": "Sie haben die maximale Anzahl geplanter Aufgaben erreicht.",
+    "TASK_DISABLED": "Diese Aufgabe ist deaktiviert und kann nicht ausgeführt werden.",
+    "RUN_IN_PROGRESS": "Ein Lauf dieser Aufgabe ist bereits in Arbeit.",
+    "RUN_NOT_ACTIVE": "Dieser Lauf ist nicht in Arbeit.",
+    "NO_PENDING_APPROVAL": "Dieser Lauf wartet nicht auf eine Freigabe.",
+    "APPROVAL_FAILED": "Die Freigabe konnte nicht gespeichert werden.",
+    "PROPOSAL_ALREADY_SAVED": "Diese Aufgabe wurde bereits gespeichert.",
+    "VERSION_CONFLICT": "Die Notizen wurden zwischenzeitlich geändert. Laden Sie neu und versuchen Sie es erneut.",
+    "MEMORY_TOO_LONG": "Die Notizen sind zu lang.",
+    "MEMORY_UNAVAILABLE": "Aufgabennotizen sind gerade nicht verfügbar.",
+    "INVALID_TASK": "Einige Einstellungen der Aufgabe sind ungültig.",
+    "INVALID_BODY": "Der Anfrageinhalt ist ungültig.",
+    "INVALID_RUNS": "Die Liste der Läufe ist ungültig.",
+    "INVALID_DECISION": "Die Entscheidung muss „approve“ oder „reject“ sein.",
+    "INVALID_STATUS": "Der Status muss „paused“, „active“ oder „disabled“ sein.",
+    "UPLOADS_DISABLED": "Datei-Uploads sind ausgeschaltet."
   }
 }

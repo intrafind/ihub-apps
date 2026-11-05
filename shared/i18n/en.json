@@ -8940,6 +8940,27 @@
     "CHAT_TEMPORARY": "A temporary chat cannot be shared. Keep it first.",
     "FILES_NOT_SHARED": "The owner did not share the attached files.",
     "ORIGINAL_NOT_SHARED": "The owner shared the text of this file, not the original.",
-    "ORIGINAL_DISCARDED": "The original file is no longer available."
+    "ORIGINAL_DISCARDED": "The original file is no longer available.",
+    "SCHEDULED_TASKS_UNAVAILABLE": "Scheduled tasks are not available on this installation.",
+    "INTERACTIVE_USER_REQUIRED": "Scheduled tasks need a signed-in person, not a token or agent.",
+    "PERMISSION_DENIED": "You are not allowed to use scheduled tasks.",
+    "TASK_NOT_FOUND": "The scheduled task was not found.",
+    "RUN_NOT_FOUND": "The run was not found.",
+    "TASK_LIMIT_REACHED": "You have reached the maximum number of scheduled tasks.",
+    "TASK_DISABLED": "This task is disabled and cannot run.",
+    "RUN_IN_PROGRESS": "A run of this task is already in progress.",
+    "RUN_NOT_ACTIVE": "This run is not in progress.",
+    "NO_PENDING_APPROVAL": "This run is not waiting for approval.",
+    "APPROVAL_FAILED": "The approval could not be recorded.",
+    "PROPOSAL_ALREADY_SAVED": "This task was already saved.",
+    "VERSION_CONFLICT": "The notes were changed in the meantime. Reload and try again.",
+    "MEMORY_TOO_LONG": "The notes are too long.",
+    "MEMORY_UNAVAILABLE": "Task notes are not available right now.",
+    "INVALID_TASK": "Some of the task settings are not valid.",
+    "INVALID_BODY": "The request body is not valid.",
+    "INVALID_RUNS": "The list of runs is not valid.",
+    "INVALID_DECISION": "The decision must be approve or reject.",
+    "INVALID_STATUS": "The status must be paused, active or disabled.",
+    "UPLOADS_DISABLED": "File uploads are switched off."
   }
 }

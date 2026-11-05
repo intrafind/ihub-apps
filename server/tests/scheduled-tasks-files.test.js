@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { runHandler } from './helpers/runHandler.js';
 
 const ROOT = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-task-files-')));
 fsSync.mkdirSync(path.join(ROOT, 'contents', 'config'), { recursive: true });
@@ -78,7 +79,7 @@ async function call(method, suffix, { params = {}, body = {}, query = {}, user }
   assert.ok(found, `${method.toUpperCase()} ${suffix} must be registered`);
   const req = { params, body, query, headers: {}, user, ip: '127.0.0.1', originalUrl: '/x' };
   const res = makeResponse();
-  await found.handlers[found.handlers.length - 1](req, res);
+  await runHandler(found.handlers[found.handlers.length - 1], req, res);
   return res;
 }
 

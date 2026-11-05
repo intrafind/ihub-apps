@@ -46,8 +46,8 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import { sendErrorResponse, sendInternalError, sendNotFound } from '../utils/responseHelpers.js';
+import { assertValidId } from '../utils/pathSecurity.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
@@ -64,14 +64,11 @@ import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { canUserAccessResource } from '../utils/authorization.js';
 import configCache from '../configCache.js';
 import { logAudit } from '../services/AuditLogService.js';
-import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import {
   SCHEDULED_TASKS_FEATURE,
   checkTaskPrincipal
 } from '../services/scheduler/tasks/taskPolicy.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
-
-const COMPONENT = 'ScheduledTaskRoutes';
 
 const checkFeature = requireFeature(SCHEDULED_TASKS_FEATURE);
 
@@ -134,30 +131,6 @@ export function requestLanguage(req) {
 function requestTimezone(req) {
   const value = req.body?.timezone ?? req.query?.timezone;
   return typeof value === 'string' ? value.slice(0, 64) : undefined;
-}
-
-/** Send a service error as JSON. */
-export function sendTaskError(res, error, operation) {
-  if (error instanceof tasks.ScheduledTaskError) {
-    return res.status(error.status).json({
-      error: error.message,
-      code: error.code,
-      ...(error.details !== undefined ? { details: error.details } : {})
-    });
-  }
-  if (error instanceof StorageError) {
-    const status = storageHttpStatus(error) || 503;
-    return res.status(status).json({ error: error.message, code: error.code || 'STORAGE_ERROR' });
-  }
-  return sendInternalError(res, error, `${COMPONENT}: ${operation}`);
-}
-
-function validTaskId(req, res) {
-  return validateIdForPath(req.params.taskId, 'task', res);
-}
-
-function validRunId(req, res) {
-  return validateIdForPath(req.params.runId, 'run', res);
 }
 
 function audit(req, action, taskId, summary) {
@@ -231,48 +204,35 @@ export default function registerScheduledTaskRoutes(app) {
    *         description: Task limit reached, or the proposal was already saved
    */
   app.get(base, ...guard, async (req, res) => {
-    try {
-      const language = requestLanguage(req);
-      const items = await tasks.listTasks(req.user, { language });
-      const { settings } = tasks.currentPolicy();
-      res.json({
-        items,
-        limits: {
-          maxTasksPerUser: settings.maxTasksPerUser,
-          minIntervalMinutes: settings.minIntervalMinutes,
-          staggerMinutes: settings.staggerMinutes,
-          maxInstructionLength: settings.maxInstructionLength,
-          maxRunChatsPerTask: settings.maxRunChatsPerTask,
-          maxRunsPerTask: settings.maxRunsPerTask,
-          runRetentionDays: settings.runRetentionDays
-        },
-        canCreate: checkTaskPrincipal(req.user).ok
-      });
-    } catch (error) {
-      sendTaskError(res, error, 'list tasks');
-    }
+    const language = requestLanguage(req);
+    const items = await tasks.listTasks(req.user, { language });
+    const { settings } = tasks.currentPolicy();
+    res.json({
+      items,
+      limits: {
+        maxTasksPerUser: settings.maxTasksPerUser,
+        minIntervalMinutes: settings.minIntervalMinutes,
+        staggerMinutes: settings.staggerMinutes,
+        maxInstructionLength: settings.maxInstructionLength,
+        maxRunChatsPerTask: settings.maxRunChatsPerTask,
+        maxRunsPerTask: settings.maxRunsPerTask,
+        runRetentionDays: settings.runRetentionDays
+      },
+      canCreate: checkTaskPrincipal(req.user).ok
+    });
   });
 
   app.post(base, ...guard, createLimiter, async (req, res) => {
-    try {
-      const body = req.body || {};
-      const task = await tasks.createTask(req.user, body, {
-        language: requestLanguage(req),
-        timezone: requestTimezone(req),
-        createdVia: body.proposalId ? 'tool' : 'ui',
-        proposalId: body.proposalId,
-        sourceChatId: body.sourceChatId
-      });
-      audit(
-        req,
-        'create',
-        task.id,
-        `Created scheduled task "${task.name}" (${task.schedule.type})`
-      );
-      res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
-    } catch (error) {
-      sendTaskError(res, error, 'create task');
-    }
+    const body = req.body || {};
+    const task = await tasks.createTask(req.user, body, {
+      language: requestLanguage(req),
+      timezone: requestTimezone(req),
+      createdVia: body.proposalId ? 'tool' : 'ui',
+      proposalId: body.proposalId,
+      sourceChatId: body.sourceChatId
+    });
+    audit(req, 'create', task.id, `Created scheduled task "${task.name}" (${task.schedule.type})`);
+    res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
   });
 
   /**
@@ -301,129 +261,95 @@ export default function registerScheduledTaskRoutes(app) {
    *         description: "`{ schedule, valid, errors, description, nextRuns, nextRunsLocal }`"
    */
   app.post(`${base}/_preview`, ...guard, (req, res) => {
-    try {
-      tasks.assertAvailable();
-      const count = Math.max(1, Math.min(10, Number(req.body?.count) || 5));
-      res.json(
-        tasks.previewTaskSchedule(req.body?.schedule || {}, {
-          language: requestLanguage(req),
-          timezone: requestTimezone(req),
-          count
-        })
-      );
-    } catch (error) {
-      sendTaskError(res, error, 'preview schedule');
-    }
+    tasks.assertAvailable();
+    const count = Math.max(1, Math.min(10, Number(req.body?.count) || 5));
+    res.json(
+      tasks.previewTaskSchedule(req.body?.schedule || {}, {
+        language: requestLanguage(req),
+        timezone: requestTimezone(req),
+        count
+      })
+    );
   });
 
   app.get(`${base}/_notifications`, ...guard, async (req, res) => {
-    try {
-      res.json({ items: await tasks.listNotifications(req.user) });
-    } catch (error) {
-      sendTaskError(res, error, 'list notifications');
-    }
+    res.json({ items: await tasks.listNotifications(req.user) });
   });
 
   app.post(`${base}/_notifications/seen`, ...guard, async (req, res) => {
-    try {
-      const runIds = Array.isArray(req.body?.runIds)
-        ? req.body.runIds.filter(id => typeof id === 'string').slice(0, 200)
-        : undefined;
-      const cleared = await tasks.markNotificationsSeen(req.user, { runIds });
-      res.json({ cleared });
-    } catch (error) {
-      sendTaskError(res, error, 'mark notifications seen');
-    }
+    const runIds = Array.isArray(req.body?.runIds)
+      ? req.body.runIds.filter(id => typeof id === 'string').slice(0, 200)
+      : undefined;
+    const cleared = await tasks.markNotificationsSeen(req.user, { runIds });
+    res.json({ cleared });
   });
 
   app.get(`${base}/_apps/:appId/tools`, ...guard, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.appId, 'app', res)) return;
-      tasks.assertAvailable();
-      const { data: apps = [] } = configCache.getApps() || {};
-      const appConfig = findByIdCaseInsensitive(apps, req.params.appId);
-      if (!appConfig || !canUserAccessResource(req.user, 'apps', appConfig.id)) {
-        return res.status(404).json({ error: 'App not found' });
-      }
-      const language = requestLanguage(req);
-      // `select`: a chat's `enabledTools` (references such as `ifinder` or an
-      // MCP server id); each item then says whether they select it.
-      const rawSelect = req.query.select;
-      const select =
-        rawSelect === undefined
-          ? undefined
-          : (Array.isArray(rawSelect) ? rawSelect : [rawSelect])
-              .filter(ref => typeof ref === 'string')
-              .slice(0, 200);
-      // `requiresApproval` is the resolved policy of the tool as this app
-      // offers it (platform default, tool or installation, action, app; #2945).
-      const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language, { select });
-      res.json({
-        items: offered.map(({ selectedByApp, ...tool }) => ({
-          ...tool,
-          // Tools the app lists itself can be toggled; injected ones
-          // (web search, sources, workflows, skills) always come along.
-          toggleable: selectedByApp
-        }))
-      });
-    } catch (error) {
-      sendTaskError(res, error, 'list app tools');
+    assertValidId(req.params.appId, 'app');
+    tasks.assertAvailable();
+    const { data: apps = [] } = configCache.getApps() || {};
+    const appConfig = findByIdCaseInsensitive(apps, req.params.appId);
+    if (!appConfig || !canUserAccessResource(req.user, 'apps', appConfig.id)) {
+      throw new ServiceError('NOT_FOUND', 'App not found');
     }
+    const language = requestLanguage(req);
+    // `select`: a chat's `enabledTools` (references such as `ifinder` or an
+    // MCP server id); each item then says whether they select it.
+    const rawSelect = req.query.select;
+    const select =
+      rawSelect === undefined
+        ? undefined
+        : (Array.isArray(rawSelect) ? rawSelect : [rawSelect])
+            .filter(ref => typeof ref === 'string')
+            .slice(0, 200);
+    // `requiresApproval` is the resolved policy of the tool as this app
+    // offers it (platform default, tool or installation, action, app; #2945).
+    const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language, { select });
+    res.json({
+      items: offered.map(({ selectedByApp, ...tool }) => ({
+        ...tool,
+        // Tools the app lists itself can be toggled; injected ones
+        // (web search, sources, workflows, skills) always come along.
+        toggleable: selectedByApp
+      }))
+    });
   });
 
   app.get(`${base}/:taskId`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      res.json(
-        await tasks.getTask(req.user, req.params.taskId, { language: requestLanguage(req) })
-      );
-    } catch (error) {
-      sendTaskError(res, error, 'get task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    res.json(await tasks.getTask(req.user, req.params.taskId, { language: requestLanguage(req) }));
   });
 
   const update = async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const task = await tasks.updateTask(req.user, req.params.taskId, req.body || {}, {
-        language: requestLanguage(req),
-        timezone: requestTimezone(req)
-      });
-      audit(req, 'update', task.id, `Updated scheduled task "${task.name}"`);
-      res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
-    } catch (error) {
-      sendTaskError(res, error, 'update task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const task = await tasks.updateTask(req.user, req.params.taskId, req.body || {}, {
+      language: requestLanguage(req),
+      timezone: requestTimezone(req)
+    });
+    audit(req, 'update', task.id, `Updated scheduled task "${task.name}"`);
+    res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
   };
   app.put(`${base}/:taskId`, ...guard, update);
   app.patch(`${base}/:taskId`, ...guard, update);
 
   app.delete(`${base}/:taskId`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const deleteChats = ['1', 'true'].includes(String(req.query.deleteChats || ''));
-      const result = await tasks.deleteTask(req.user, req.params.taskId, { deleteChats });
-      audit(
-        req,
-        'delete',
-        req.params.taskId,
-        `Deleted scheduled task${deleteChats ? ` and ${result.chatsDeleted} run chats` : ''}`
-      );
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'delete task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const deleteChats = ['1', 'true'].includes(String(req.query.deleteChats || ''));
+    const result = await tasks.deleteTask(req.user, req.params.taskId, { deleteChats });
+    audit(
+      req,
+      'delete',
+      req.params.taskId,
+      `Deleted scheduled task${deleteChats ? ` and ${result.chatsDeleted} run chats` : ''}`
+    );
+    res.json(result);
   });
 
   app.post(`${base}/:taskId/run`, ...guard, runLimiter, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const run = await tasks.requestRun(req.user, req.params.taskId);
-      audit(req, 'execute', req.params.taskId, 'Started a scheduled task run manually');
-      res.status(202).json(run);
-    } catch (error) {
-      sendTaskError(res, error, 'run task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const run = await tasks.requestRun(req.user, req.params.taskId);
+    audit(req, 'execute', req.params.taskId, 'Started a scheduled task run manually');
+    res.status(202).json(run);
   });
 
   for (const [action, status] of [
@@ -431,34 +357,21 @@ export default function registerScheduledTaskRoutes(app) {
     ['resume', 'active']
   ]) {
     app.post(`${base}/:taskId/${action}`, ...guard, async (req, res) => {
-      try {
-        if (!validTaskId(req, res)) return;
-        if (status === 'active') tasks.assertPrincipal(req.user);
-        const task = await tasks.setTaskStatus(req.user, req.params.taskId, status);
-        audit(
-          req,
-          'toggle',
-          task.id,
-          `${action === 'pause' ? 'Paused' : 'Resumed'} scheduled task`
-        );
-        res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
-      } catch (error) {
-        sendTaskError(res, error, `${action} task`);
-      }
+      assertValidId(req.params.taskId, 'task');
+      if (status === 'active') tasks.assertPrincipal(req.user);
+      const task = await tasks.setTaskStatus(req.user, req.params.taskId, status);
+      audit(req, 'toggle', task.id, `${action === 'pause' ? 'Paused' : 'Resumed'} scheduled task`);
+      res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
     });
   }
 
   app.post(`${base}/:taskId/duplicate`, ...guard, createLimiter, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const task = await tasks.duplicateTask(req.user, req.params.taskId, {
-        language: requestLanguage(req)
-      });
-      audit(req, 'create', task.id, `Duplicated scheduled task ${req.params.taskId}`);
-      res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
-    } catch (error) {
-      sendTaskError(res, error, 'duplicate task');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const task = await tasks.duplicateTask(req.user, req.params.taskId, {
+      language: requestLanguage(req)
+    });
+    audit(req, 'create', task.id, `Duplicated scheduled task ${req.params.taskId}`);
+    res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
   });
 
   /**
@@ -534,85 +447,67 @@ export default function registerScheduledTaskRoutes(app) {
    *         description: "`{ version }`"
    */
   app.get(`${base}/:taskId/memory`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      res.json(await tasks.getTaskMemory(req.user, req.params.taskId));
-    } catch (error) {
-      sendTaskError(res, error, 'get task memory');
-    }
+    assertValidId(req.params.taskId, 'task');
+    res.json(await tasks.getTaskMemory(req.user, req.params.taskId));
   });
 
   app.put(`${base}/:taskId/memory`, ...guard, memoryLimiter, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const result = await tasks.setTaskMemory(req.user, req.params.taskId, {
-        content: req.body?.content,
-        expectedVersion: req.body?.expectedVersion
-      });
-      auditMemory(req, 'update', req.params.taskId, 'Edited the notes of a scheduled task');
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'set task memory');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const result = await tasks.setTaskMemory(req.user, req.params.taskId, {
+      content: req.body?.content,
+      expectedVersion: req.body?.expectedVersion
+    });
+    auditMemory(req, 'update', req.params.taskId, 'Edited the notes of a scheduled task');
+    res.json(result);
   });
 
   app.delete(`${base}/:taskId/memory`, ...guard, memoryLimiter, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const result = await tasks.deleteTaskMemory(req.user, req.params.taskId);
-      auditMemory(req, 'delete', req.params.taskId, 'Cleared the notes of a scheduled task');
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'clear task memory');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const result = await tasks.deleteTaskMemory(req.user, req.params.taskId);
+    auditMemory(req, 'delete', req.params.taskId, 'Cleared the notes of a scheduled task');
+    res.json(result);
   });
 
   // ── attached files ─────────────────────────────────────────────────────────
   // Files of the task definition, in the `task` scope of the chat-file store:
   // they stay until the task (or the file) is deleted and every run sees them.
 
-  /** The file store for a request, or null once a 503 has been sent. */
-  function taskFileStore(res) {
+  /** The file store for a request; throws a 503 while it is down. */
+  function taskFileStore() {
     const store = getChatFileRepository();
     if (!store.isAvailable()) {
-      sendErrorResponse(res, 503, 'File storage is unavailable', {
-        details: { code: 'STORAGE_UNAVAILABLE' }
-      });
-      return null;
+      throw new ServiceError('STORAGE_UNAVAILABLE', 'File storage is unavailable');
     }
     return store;
   }
 
-  function sendTaskFileError(res, error, operation) {
+  /** Chat-file failures keep their own answer; everything else goes to the error middleware. */
+  function sendTaskFileError(res, error, next) {
     if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
-    return sendTaskError(res, error, operation);
+    return next(error);
   }
 
-  app.get(`${base}/:taskId/files`, ...guard, async (req, res) => {
+  app.get(`${base}/:taskId/files`, ...guard, async (req, res, next) => {
     try {
-      if (!validTaskId(req, res)) return;
+      assertValidId(req.params.taskId, 'task');
       const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore(res);
-      if (!store) return;
+      const store = taskFileStore();
       res.json({ items: await store.list(scope) });
     } catch (error) {
-      sendTaskFileError(res, error, 'list task files');
+      sendTaskFileError(res, error, next);
     }
   });
 
-  app.post(`${base}/:taskId/files`, ...guard, fileLimiter, async (req, res) => {
+  app.post(`${base}/:taskId/files`, ...guard, fileLimiter, async (req, res, next) => {
     try {
-      if (!validTaskId(req, res)) return;
+      assertValidId(req.params.taskId, 'task');
       tasks.assertPrincipal(req.user);
       const { task, ownerId, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore(res);
-      if (!store) return;
+      const store = taskFileStore();
       const taskApp = findByIdCaseInsensitive(configCache.getApps()?.data || [], task.appId);
       const policy = withUserFileLimit(chatFilePolicy(taskApp), req.user);
       if (!policy.enabled) {
-        return sendErrorResponse(res, 503, 'File uploads are disabled', {
-          details: { code: 'UPLOADS_DISABLED' }
-        });
+        throw new ServiceError('UPLOADS_DISABLED', 'File uploads are disabled');
       }
       if (isMultipartRequest(req)) {
         if (!(await parseChatFileMultipart(req, res, policy.quotas?.maxFileBytes))) return;
@@ -629,33 +524,28 @@ export default function registerScheduledTaskRoutes(app) {
       audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
       res.status(201).json({ file });
     } catch (error) {
-      sendTaskFileError(res, error, 'attach task file');
+      sendTaskFileError(res, error, next);
     }
   });
 
-  app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+  app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res, next) => {
     try {
-      if (!validTaskId(req, res)) return;
-      if (!validateIdForPath(req.params.fileId, 'file', res)) return;
+      assertValidId(req.params.taskId, 'task');
+      assertValidId(req.params.fileId, 'file');
       const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore(res);
-      if (!store) return;
+      const store = taskFileStore();
       const { fileId } = req.params;
       if (req.query.format === 'text') {
         const text = await store.getText(scope, fileId);
-        if (!text) return sendNotFound(res, 'File');
+        if (!text) throw new ServiceError('NOT_FOUND', 'File not found');
         return res.json({ file: text });
       }
       const original = await store.getOriginal(scope, fileId);
-      if (!original) return sendNotFound(res, 'File');
+      if (!original) throw new ServiceError('NOT_FOUND', 'File not found');
       if (original.discarded) {
-        return sendErrorResponse(
-          res,
-          410,
-          'The original file is not stored; its extracted text is',
-          {
-            details: { code: 'ORIGINAL_DISCARDED' }
-          }
+        throw new ServiceError(
+          'ORIGINAL_DISCARDED',
+          'The original file is not stored; its extracted text is'
         );
       }
       const download = req.query.download === '1' || req.query.download === 'true';
@@ -669,125 +559,100 @@ export default function registerScheduledTaskRoutes(app) {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.send(original.data);
     } catch (error) {
-      sendTaskFileError(res, error, 'get task file');
+      sendTaskFileError(res, error, next);
     }
   });
 
-  app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+  app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res, next) => {
     try {
-      if (!validTaskId(req, res)) return;
-      if (!validateIdForPath(req.params.fileId, 'file', res)) return;
+      assertValidId(req.params.taskId, 'task');
+      assertValidId(req.params.fileId, 'file');
       const { task, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore(res);
-      if (!store) return;
+      const store = taskFileStore();
       const deleted = await store.delete(scope, req.params.fileId);
-      if (!deleted) return sendNotFound(res, 'File');
+      if (!deleted) throw new ServiceError('NOT_FOUND', 'File not found');
       audit(req, 'file-remove', task.id, 'Removed a file from scheduled task');
       res.json({ deleted: true });
     } catch (error) {
-      sendTaskFileError(res, error, 'delete task file');
+      sendTaskFileError(res, error, next);
     }
   });
 
   app.get(`${base}/:taskId/runs`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const page = await tasks.listRuns(req.user, req.params.taskId, {
-        limit: req.query.limit,
-        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
-      });
-      res.json(page);
-    } catch (error) {
-      sendTaskError(res, error, 'list runs');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const page = await tasks.listRuns(req.user, req.params.taskId, {
+      limit: req.query.limit,
+      cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
+    });
+    res.json(page);
   });
 
   app.get(`${base}/:taskId/runs/:runId`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res) || !validRunId(req, res)) return;
-      res.json(await tasks.getRun(req.user, req.params.taskId, req.params.runId));
-    } catch (error) {
-      sendTaskError(res, error, 'get run');
-    }
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.runId, 'run');
+    res.json(await tasks.getRun(req.user, req.params.taskId, req.params.runId));
   });
 
   app.delete(`${base}/:taskId/runs/:runId`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res) || !validRunId(req, res)) return;
-      const result = await tasks.deleteRuns(req.user, req.params.taskId, {
-        runIds: [req.params.runId],
-        deleteChats: req.query.deleteChats !== '0'
-      });
-      audit(req, 'delete', req.params.taskId, `Deleted run ${req.params.runId}`);
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'delete run');
-    }
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.runId, 'run');
+    const result = await tasks.deleteRuns(req.user, req.params.taskId, {
+      runIds: [req.params.runId],
+      deleteChats: req.query.deleteChats !== '0'
+    });
+    audit(req, 'delete', req.params.taskId, `Deleted run ${req.params.runId}`);
+    res.json(result);
   });
 
   app.post(`${base}/:taskId/runs/delete`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      const body = req.body || {};
-      const result = await tasks.deleteRuns(req.user, req.params.taskId, {
-        runIds: body.runIds,
-        all: body.all === true,
-        deleteChats: body.deleteChats !== false
-      });
-      audit(
-        req,
-        'delete',
-        req.params.taskId,
-        `Deleted ${result.deleted} run${result.deleted === 1 ? '' : 's'}`
-      );
-      res.json(result);
-    } catch (error) {
-      sendTaskError(res, error, 'delete runs');
-    }
+    assertValidId(req.params.taskId, 'task');
+    const body = req.body || {};
+    const result = await tasks.deleteRuns(req.user, req.params.taskId, {
+      runIds: body.runIds,
+      all: body.all === true,
+      deleteChats: body.deleteChats !== false
+    });
+    audit(
+      req,
+      'delete',
+      req.params.taskId,
+      `Deleted ${result.deleted} run${result.deleted === 1 ? '' : 's'}`
+    );
+    res.json(result);
   });
 
   app.post(`${base}/:taskId/runs/:runId/cancel`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res) || !validRunId(req, res)) return;
-      const run = await tasks.cancelRun(req.user, req.params.taskId, req.params.runId);
-      audit(req, 'update', req.params.taskId, `Cancelled run ${req.params.runId}`);
-      res.json(run);
-    } catch (error) {
-      sendTaskError(res, error, 'cancel run');
-    }
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.runId, 'run');
+    const run = await tasks.cancelRun(req.user, req.params.taskId, req.params.runId);
+    audit(req, 'update', req.params.taskId, `Cancelled run ${req.params.runId}`);
+    res.json(run);
   });
 
   app.post(`${base}/:taskId/runs/:runId/approval`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res) || !validRunId(req, res)) return;
-      const decision = req.body?.decision;
-      const run = await tasks.answerApproval(req.user, req.params.taskId, req.params.runId, {
-        decision,
-        alwaysAllow: req.body?.alwaysAllow === true
-      });
-      audit(
-        req,
-        'update',
-        req.params.taskId,
-        `${decision === 'approve' ? 'Approved' : 'Rejected'} a tool call in run ${req.params.runId}${
-          req.body?.alwaysAllow === true && decision === 'approve' ? ' (always allow)' : ''
-        }`
-      );
-      res.json(run);
-    } catch (error) {
-      sendTaskError(res, error, 'answer approval');
-    }
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.runId, 'run');
+    const decision = req.body?.decision;
+    const run = await tasks.answerApproval(req.user, req.params.taskId, req.params.runId, {
+      decision,
+      alwaysAllow: req.body?.alwaysAllow === true
+    });
+    audit(
+      req,
+      'update',
+      req.params.taskId,
+      `${decision === 'approve' ? 'Approved' : 'Rejected'} a tool call in run ${req.params.runId}${
+        req.body?.alwaysAllow === true && decision === 'approve' ? ' (always allow)' : ''
+      }`
+    );
+    res.json(run);
   });
 
   app.delete(`${base}/:taskId/allowed-tools/:toolId`, ...guard, async (req, res) => {
-    try {
-      if (!validTaskId(req, res)) return;
-      if (!validateIdForPath(req.params.toolId, 'tool', res)) return;
-      const task = await tasks.revokeAllowedTool(req.user, req.params.taskId, req.params.toolId);
-      audit(req, 'update', req.params.taskId, `Revoked "always allow" for ${req.params.toolId}`);
-      res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
-    } catch (error) {
-      sendTaskError(res, error, 'revoke allowed tool');
-    }
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.toolId, 'tool');
+    const task = await tasks.revokeAllowedTool(req.user, req.params.taskId, req.params.toolId);
+    audit(req, 'update', req.params.taskId, `Revoked "always allow" for ${req.params.toolId}`);
+    res.json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
   });
 }

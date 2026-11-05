@@ -246,13 +246,15 @@ describe('TaskEditorPage: remember between runs', () => {
           data: {
             error: 'Validation failed',
             code: 'VALIDATION_FAILED',
-            details: [
-              {
-                field: 'notify',
-                code: 'NOTIFY_CHANGES_NEEDS_MEMORY',
-                message: 'Notifying only when something changed needs "Remember between runs"'
-              }
-            ]
+            details: {
+              issues: [
+                {
+                  field: 'notify',
+                  code: 'NOTIFY_CHANGES_NEEDS_MEMORY',
+                  message: 'Notifying only when something changed needs "Remember between runs"'
+                }
+              ]
+            }
           }
         }
       }

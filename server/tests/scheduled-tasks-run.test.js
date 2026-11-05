@@ -279,13 +279,14 @@ describe('task service authorization and limits', () => {
         ada(),
         taskInput({ schedule: { type: 'interval', every: 5, unit: 'minutes' } })
       ),
-      error => error.status === 400 && error.details.some(d => d.code === 'BELOW_MIN_INTERVAL')
+      error =>
+        error.status === 400 && error.details.issues.some(d => d.code === 'BELOW_MIN_INTERVAL')
     );
   });
 
   it('refuses an app the user cannot use', async () => {
     await assert.rejects(tasks.createTask(ada(), taskInput({ appId: 'secret' })), error =>
-      error.details.some(d => d.code === 'APP_NOT_ACCESSIBLE')
+      error.details.issues.some(d => d.code === 'APP_NOT_ACCESSIBLE')
     );
   });
 

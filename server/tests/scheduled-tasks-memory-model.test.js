@@ -189,10 +189,10 @@ describe('notifying only when something changed', () => {
     assert.rejects(promise, error => {
       assert.equal(error.status, 400);
       assert.ok(
-        error.details.some(
+        error.details.issues.some(
           detail => detail.field === 'notify' && detail.code === 'NOTIFY_CHANGES_NEEDS_MEMORY'
         ),
-        JSON.stringify(error.details)
+        JSON.stringify(error.details.issues)
       );
       return true;
     });

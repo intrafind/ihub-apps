@@ -37,7 +37,11 @@ groups are left alone, and a value an admin already set is never overwritten.
 The permission inherits like every other group permission. Independent of the
 groups, a task always needs a signed-in, interactive user: anonymous visitors,
 OAuth clients, agents and delegated tokens are refused (`401
-AUTHENTICATION_REQUIRED` / `403 INTERACTIVE_USER_REQUIRED`).
+AUTH_REQUIRED` / `403 INTERACTIVE_USER_REQUIRED`).
+
+The task endpoints and the scheduling tools report errors with the shared shape
+`{ error, code, details? }` (see [Error Responses](error-responses.md)). A failed validation of a task
+is `400 INVALID_TASK` with the problems in `details.issues`, a list of `{ field, code, message }`.
 
 A user whose permission is withdrawn can still **read, pause and delete** the
 tasks they own; they can no longer create, edit, run or resume them, and their
