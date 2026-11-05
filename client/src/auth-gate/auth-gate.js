@@ -202,6 +202,12 @@
   // =========================================================================
 
   function handleOidcCallback() {
+    // The provider callback set the httpOnly session cookie. A token left in
+    // localStorage by an earlier session would shadow it: the server reads the
+    // Authorization header before the cookie, so an expired or other user's
+    // token makes this sign-in look like it never happened.
+    removeToken();
+
     // Clean URL
     cleanUrlParams(['oidc', 'provider']);
 
@@ -223,6 +229,10 @@
   }
 
   function handleNtlmCallback() {
+    // Same as the OIDC callback: the new session is the cookie, so a stored
+    // token from an earlier session must not be sent in front of it.
+    removeToken();
+
     // Clean URL
     cleanUrlParams(['ntlm']);
 
@@ -995,6 +1005,14 @@
   function storeToken(token) {
     try {
       localStorage.setItem('authToken', token);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function removeToken() {
+    try {
+      localStorage.removeItem('authToken');
     } catch (e) {
       /* ignore */
     }
