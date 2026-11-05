@@ -8983,6 +8983,8 @@
     "MARKETPLACE_SKILL_NOT_FOUND": "This skill was not found in the marketplace.",
     "MARKETPLACE_SKILL_INVALID": "This marketplace item is not a valid skill.",
     "MARKETPLACE_FETCH_FAILED": "The marketplace could not be reached. Try again later.",
-    "MARKETPLACE_SKILL_ERROR": "The skill could not be taken from the marketplace."
+    "MARKETPLACE_SKILL_ERROR": "The skill could not be taken from the marketplace.",
+    "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
+    "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name."
   }
 }
