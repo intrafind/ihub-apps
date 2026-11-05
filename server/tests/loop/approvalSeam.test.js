@@ -250,7 +250,7 @@ test('every runTool caller is listed with a reason (no unnoticed bypass of the a
   const callers = new Set();
   for await (const file of jsFiles(serverRoot)) {
     const rel = path.relative(serverRoot, file).split(path.sep).join('/');
-    if (rel === 'toolLoader.js') continue; // the definition
+    if (rel === 'services/tools/runTool.js') continue; // the definition
     const source = await fs.readFile(file, 'utf8');
     const code = source
       .split('\n')
@@ -270,7 +270,7 @@ test('every runTool caller is listed with a reason (no unnoticed bypass of the a
  * the approval seam — and why that is not a bypass.
  */
 const KNOWN_REMOTE_TOOL_CALLERS = {
-  'toolLoader.js': 'runTool dispatch, reached through the seams',
+  'services/tools/runTool.js': 'runTool dispatch, reached through the seams',
   'services/integrations/protocols/a2a/A2aAdapter.js': 'adapter.run, reached through runTool',
   'services/integrations/protocols/mcp/McpAdapter.js': 'adapter.run, reached through runTool',
   'services/mcp/McpClientManager.js': 'the client manager itself',

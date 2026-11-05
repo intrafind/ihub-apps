@@ -33,7 +33,7 @@ const tools = [
   { id: 'braveSearch' }
 ];
 
-jest.unstable_mockModule('../../toolLoader.js', () => ({
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadTools: async () => tools
 }));
 

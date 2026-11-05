@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeApp } from './appInvoker.js';
-import { runTool } from '../../toolLoader.js';
+import { runTool } from '../tools/runTool.js';
 import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';

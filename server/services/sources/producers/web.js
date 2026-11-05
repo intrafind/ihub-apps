@@ -77,7 +77,7 @@ export function isWebSearchTool(toolId) {
  */
 const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
-/** Tool ids `toolLoader.runTool` dispatches by id, before it looks at a script. */
+/** Tool ids `runTool` dispatches by id, before it looks at a script. */
 const DISPATCHED_BY_ID =
   /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource|find_skill)$/;
 
@@ -85,7 +85,7 @@ const DISPATCHED_BY_ID =
  * Whether the call ran one of the platform's own web search scripts: the
  * `search` action of a shipped engine (`com.intrafind/brave-search`, … — the
  * way they ship), or a tool file that still runs one of the scripts. Decided by what the
- * definition runs, the way `toolLoader.runTool` dispatches it, and never by
+ * definition runs, the way `runTool` dispatches it, and never by
  * the tool's id or name: a custom, OpenAPI, MCP or A2A tool called
  * `braveSearch` runs something else.
  *

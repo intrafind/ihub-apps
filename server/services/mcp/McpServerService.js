@@ -8,7 +8,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { loadLocalTools, runTool } from '../../toolLoader.js';
+import { loadLocalTools } from '../tools/catalog.js';
+import { runTool } from '../tools/runTool.js';
 import {
   filterDirectoryToolsForUser,
   mayUseDirectory

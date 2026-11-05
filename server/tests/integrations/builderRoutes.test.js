@@ -60,7 +60,7 @@ jest.unstable_mockModule('../../services/integrations/integrationTools.js', () =
   syncIntegrationScopeProviders: async () => []
 }));
 jest.unstable_mockModule('../../configSync.js', () => ({ announceConfigChange: () => {} }));
-jest.unstable_mockModule('../../toolLoader.js', () => ({
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadTools: async () => [
     { id: 'write_memory', name: 'Write memory', description: 'Agent memory' },
     {

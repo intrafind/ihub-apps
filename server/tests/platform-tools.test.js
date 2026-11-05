@@ -22,7 +22,9 @@ import path from 'node:path';
 import configCache from '../configCache.js';
 import '../services/integrations/protocols/native/connectors/register.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
-import { getToolsForApp, loadLocalTools, loadTools, runTool } from '../toolLoader.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { loadLocalTools, loadTools } from '../services/tools/catalog.js';
+import { runTool } from '../services/tools/runTool.js';
 import {
   PLATFORM_TOOL_FILE_IDS,
   PLATFORM_TOOL_IDS,

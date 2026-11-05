@@ -55,7 +55,7 @@ const { USER_SKILL_SHARES_NAMESPACE, isUserSkillId, shareMarkerKey } =
   await import('../services/skills/UserSkillRepository.js');
 const { loadSkillsMetadata, validateSkillDirectory } = await import('../services/skillLoader.js');
 const skillAccess = await import('../services/skillAccess.js');
-const { runTool } = await import('../toolLoader.js');
+const { runTool } = await import('../services/tools/runTool.js');
 const { default: registerUserSkillRoutes } = await import('../routes/userSkillRoutes.js');
 const { default: registerSkillRoutes } = await import('../routes/skillRoutes.js');
 const { default: registerAdminSkillsRoutes, skillMarkdownFromUserSkill } =

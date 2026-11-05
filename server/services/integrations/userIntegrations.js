@@ -328,7 +328,7 @@ export function sharedWithOf(instance, user, language) {
 
 /**
  * The enabled actions of each installation, from the tool list the models
- * are offered (`toolLoader.loadTools`), grouped by installation id, and the
+ * are offered (`catalog.loadTools`), grouped by installation id, and the
  * tools themselves (to find the apps that name them in `app.tools`).
  *
  * @param {string} language
@@ -339,7 +339,7 @@ async function actionsByInstallation(language) {
   const toolsById = new Map();
   let tools = [];
   try {
-    const { loadTools } = await import('../../toolLoader.js');
+    const { loadTools } = await import('../tools/catalog.js');
     tools = await loadTools(language);
   } catch (error) {
     logger.warn('Could not load the tools for the integrations listing', {

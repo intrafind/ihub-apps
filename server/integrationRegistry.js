@@ -30,7 +30,7 @@
  * required feature is off. An optional binding (`required: false`) keeps the
  * app available: its actions, scopes and sources are simply not there while
  * the installation is off (`integrationTools.filterIntegrationToolsForApp`,
- * `toolLoader.resolveWebSearchEngine`).
+ * `webSearchResolver.resolveWebSearchEngine`).
  *
  * Each check reads a context of the config files it depends on, so it stays a
  * pure function: `{ platform, installedIntegrations, definitionTypes }` as

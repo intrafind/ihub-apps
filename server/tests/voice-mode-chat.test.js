@@ -33,8 +33,10 @@ jest.unstable_mockModule('../adapters/index.js', () => ({
   createCompletionRequest: async () => ({ url: 'http://example.test', method: 'POST', body: {} })
 }));
 
-jest.unstable_mockModule('../toolLoader.js', () => ({
-  getToolsForApp: async () => [],
+jest.unstable_mockModule('../services/tools/appTools.js', () => ({
+  getToolsForApp: async () => []
+}));
+jest.unstable_mockModule('../services/tools/webSearchResolver.js', () => ({
   resolveAppNativeWebSearch: () => false,
   READ_URL_TOOL_ID: 'read_url'
 }));

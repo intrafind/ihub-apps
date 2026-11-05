@@ -199,7 +199,7 @@ function localizedName(value, language) {
  * @returns {Promise<Object[]>}
  */
 async function offeredToolsOf(app, user, language) {
-  const { getToolsForApp } = await import('../../../toolLoader.js');
+  const { getToolsForApp } = await import('../../tools/appTools.js');
   const tools = await getToolsForApp(app, language, { user, language });
   const seen = new Set();
   const out = [];
