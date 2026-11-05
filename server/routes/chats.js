@@ -60,6 +60,7 @@ import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatReposi
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { withUserFileLimit } from '../services/quota/quotaService.js';
 import {
@@ -436,6 +437,7 @@ export default function registerChatRoutes(app) {
         archiveName: zipNameFor(access.chat)
       });
     } catch (error) {
+      if (error instanceof ServiceError) throw error;
       if (res.headersSent) return res.destroy(error);
       return sendChatStorageError(res, error, 'zip chat artifacts');
     }
