@@ -9076,6 +9076,20 @@
     "EXECUTION_NOT_FINISHED": "The workflow execution has not finished yet.",
     "EXECUTION_ACTIVE": "Cancel the workflow before deleting it.",
     "IMPORT_IN_PROGRESS": "Another configuration import is in progress. Try again once it has finished.",
-    "IMPORT_FAILED": "The configuration could not be imported."
+    "IMPORT_FAILED": "The configuration could not be imported.",
+    "CONTENT_VALIDATION_FAILED": "The item content is not valid.",
+    "UNSUPPORTED_DEFINITION_SCHEMA": "This server does not know the definition format of the item.",
+    "INVALID_VERSION": "The version is not a valid version string.",
+    "LOCAL_CONTENT_EXISTS": "An item with this name already exists on this instance. Confirm the replacement to install it.",
+    "INTEGRATION_IN_USE": "The integration is still installed. Remove its installations first.",
+    "VERSION_NOT_LISTED": "The registry does not list this version.",
+    "VERSION_NOT_OFFERED": "The registry does not offer this version.",
+    "NO_VERSION_OFFERED": "No listed version matches the registry channel and pin.",
+    "VERSION_NOT_NEWER": "An update only moves forward; the version is not newer than the installed one.",
+    "VERSION_DESCRIPTOR_INVALID": "The version descriptor of the registry is not valid.",
+    "INCOMPATIBLE_IHUB_VERSION": "This iHub version is not compatible with the item.",
+    "CODE_NOT_TRUSTED": "The registry is not trusted for code. Mark it as trusted for code to install this item.",
+    "CODE_INTEGRITY_REQUIRED": "The catalog lists no hash for a code file of the item.",
+    "INTEGRITY_MISMATCH": "A file of the item does not match the hash the catalog lists."
   }
 }

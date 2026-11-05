@@ -21,7 +21,8 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
-import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
+import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import registryService from '../../services/marketplace/RegistryService.js';
 import contentInstaller, {
   fetchIntegrationCompanion
@@ -34,39 +35,6 @@ import { previewDefinitionUpdate } from '../../services/integrations/definitions
 import { isUpdate, offeredVersion } from '../../services/marketplace/versionPolicy.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
-
-/**
- * Send a structured JSON error response.
- *
- * @param {import('express').Response} res - Express response object
- * @param {number} status - HTTP status code
- * @param {string} message - Human-readable error description
- * @param {string} [code] - Optional machine-readable error code
- * @returns {import('express').Response}
- */
-function sendError(res, status, message, code) {
-  return res.status(status).json({ error: message, ...(code ? { code } : {}) });
-}
-
-/** Codes of the definition migration runner that mean "try again" (409). */
-const MIGRATION_CONFLICT_CODES = new Set([
-  'MIGRATION_LOCKED',
-  'MIGRATION_LOCK_LOST',
-  'MIGRATION_CONFLICT'
-]);
-
-/**
- * Codes of a version the registry does not offer (409): not listed, outside
- * the registry's channel or the item's pin, no version left to offer, or an
- * update that is not newer than the installed version.
- */
-const VERSION_POLICY_CODES = new Set([
-  'VERSION_NOT_LISTED',
-  'VERSION_NOT_OFFERED',
-  'NO_VERSION_OFFERED',
-  'VERSION_NOT_NEWER',
-  'VERSION_DESCRIPTOR_INVALID'
-]);
 
 /** A version the client may name on install or update: up to 64 characters of a version. */
 const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/;
@@ -138,13 +106,8 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const registries = await registryService.listRegistries();
-        res.json(registries);
-      } catch (error) {
-        logger.error('Error listing registries', { component: COMPONENT, error: error.message });
-        sendError(res, 500, error.message);
-      }
+      const registries = await registryService.listRegistries();
+      res.json(registries);
     }
   );
 
@@ -158,33 +121,27 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
+      const registry = await registryService.createRegistry(req.body);
+
+      // Attempt initial catalog refresh — failure is non-fatal
       try {
-        const registry = await registryService.createRegistry(req.body);
-
-        // Attempt initial catalog refresh — failure is non-fatal
-        try {
-          await registryService.refreshRegistry(registry.id);
-        } catch (refreshError) {
-          logger.warn('Initial registry refresh failed', {
-            component: COMPONENT,
-            error: refreshError.message
-          });
-        }
-
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'marketplaceRegistry',
-          resourceId: registry.id,
-          summary: `Created marketplace registry ${registry.id}`
+        await registryService.refreshRegistry(registry.id);
+      } catch (refreshError) {
+        logger.warn('Initial registry refresh failed', {
+          component: COMPONENT,
+          error: refreshError.message
         });
-
-        res.status(201).json(registry);
-      } catch (error) {
-        logger.error('Error creating registry', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('already exists') ? 409 : 400;
-        sendError(res, status, error.message);
       }
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'marketplaceRegistry',
+        resourceId: registry.id,
+        summary: `Created marketplace registry ${registry.id}`
+      });
+
+      res.status(201).json(registry);
     }
   );
 
@@ -197,19 +154,14 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        const registries = await registryService.listRegistries();
-        const registry = registries.find(r => r.id === registryId);
-        if (!registry) return sendError(res, 404, `Registry '${registryId}' not found`);
+      const { registryId } = req.params;
+      assertValidId(registryId, 'registryId');
+      const registries = await registryService.listRegistries();
+      const registry = registries.find(r => r.id === registryId);
+      if (!registry) throw new ServiceError('NOT_FOUND', `Registry '${registryId}' not found`);
 
-        const cached = await registryService.getCachedCatalogAsync(registryId);
-        res.json({ ...registry, catalog: cached?.catalog || null });
-      } catch (error) {
-        logger.error('Error getting registry', { component: COMPONENT, error: error.message });
-        sendError(res, 500, error.message);
-      }
+      const cached = await registryService.getCachedCatalogAsync(registryId);
+      res.json({ ...registry, catalog: cached?.catalog || null });
     }
   );
 
@@ -223,23 +175,17 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        const updated = await registryService.updateRegistry(registryId, req.body);
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'marketplaceRegistry',
-          resourceId: registryId,
-          summary: `Updated marketplace registry ${registryId}`
-        });
-        res.json(updated);
-      } catch (error) {
-        logger.error('Error updating registry', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('not found') ? 404 : 400;
-        sendError(res, status, error.message);
-      }
+      const { registryId } = req.params;
+      assertValidId(registryId, 'registryId');
+      const updated = await registryService.updateRegistry(registryId, req.body);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'marketplaceRegistry',
+        resourceId: registryId,
+        summary: `Updated marketplace registry ${registryId}`
+      });
+      res.json(updated);
     }
   );
 
@@ -252,23 +198,17 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        await registryService.deleteRegistry(registryId);
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'marketplaceRegistry',
-          resourceId: registryId,
-          summary: `Deleted marketplace registry ${registryId}`
-        });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error deleting registry', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('not found') ? 404 : 500;
-        sendError(res, status, error.message);
-      }
+      const { registryId } = req.params;
+      assertValidId(registryId, 'registryId');
+      await registryService.deleteRegistry(registryId);
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'marketplaceRegistry',
+        resourceId: registryId,
+        summary: `Deleted marketplace registry ${registryId}`
+      });
+      res.json({ success: true });
     }
   );
 
@@ -281,23 +221,17 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        const catalog = await registryService.refreshRegistry(registryId);
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'marketplaceRegistryCatalog',
-          resourceId: registryId,
-          summary: `Refreshed catalog for marketplace registry ${registryId}`
-        });
-        res.json({ success: true, itemCount: (catalog.items || []).length });
-      } catch (error) {
-        logger.error('Error refreshing registry', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('not found') ? 404 : 500;
-        sendError(res, status, error.message);
-      }
+      const { registryId } = req.params;
+      assertValidId(registryId, 'registryId');
+      const catalog = await registryService.refreshRegistry(registryId);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'marketplaceRegistryCatalog',
+        resourceId: registryId,
+        summary: `Refreshed catalog for marketplace registry ${registryId}`
+      });
+      res.json({ success: true, itemCount: (catalog.items || []).length });
     }
   );
 
@@ -334,9 +268,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
+      const { registryId } = req.params;
+      assertValidId(registryId, 'registryId');
       try {
-        const { registryId } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
         if (req.body && req.body.source) {
           // Test an unsaved / draft registry config from the request body
           const result = await registryService.testRegistry(req.body);
@@ -365,22 +299,17 @@ export default function registerAdminMarketplaceRoutes(app) {
    * Query params: type, search, category, registry, status, page, limit
    */
   app.get(buildServerPath('/api/admin/marketplace'), adminAuth, featureGuard, async (req, res) => {
-    try {
-      const filters = {
-        type: req.query.type,
-        search: req.query.search,
-        category: req.query.category,
-        registry: req.query.registry,
-        status: req.query.status,
-        page: req.query.page,
-        limit: req.query.limit
-      };
-      const result = await registryService.getAllItems(filters);
-      res.json(result);
-    } catch (error) {
-      logger.error('Error browsing marketplace', { component: COMPONENT, error: error.message });
-      sendError(res, 500, error.message);
-    }
+    const filters = {
+      type: req.query.type,
+      search: req.query.search,
+      category: req.query.category,
+      registry: req.query.registry,
+      status: req.query.status,
+      page: req.query.page,
+      limit: req.query.limit
+    };
+    const result = await registryService.getAllItems(filters);
+    res.json(result);
   });
 
   /**
@@ -398,34 +327,28 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId, type, name } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        const item = await registryService.getItemDetail(registryId, type, name);
-        if (type === 'integration') {
-          try {
-            // Planned to the version the update installs: the offered one
-            // (channel and pin applied), which may be older than the current.
-            item.migrationPreview = await integrationUpdatePreview(name, {
-              ...item,
-              version: item.offeredVersion || item.version
-            });
-          } catch (error) {
-            logger.warn('Could not plan the migrations of an integration update', {
-              component: COMPONENT,
-              name,
-              error: error.message
-            });
-            item.migrationPreview = null;
-          }
+      const { registryId, type, name } = req.params;
+      assertValidId(registryId, 'registryId');
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      const item = await registryService.getItemDetail(registryId, type, name);
+      if (type === 'integration') {
+        try {
+          // Planned to the version the update installs: the offered one
+          // (channel and pin applied), which may be older than the current.
+          item.migrationPreview = await integrationUpdatePreview(name, {
+            ...item,
+            version: item.offeredVersion || item.version
+          });
+        } catch (error) {
+          logger.warn('Could not plan the migrations of an integration update', {
+            component: COMPONENT,
+            name,
+            error: error.message
+          });
+          item.migrationPreview = null;
         }
-        res.json(item);
-      } catch (error) {
-        logger.error('Error getting item detail', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('not found') ? 404 : 500;
-        sendError(res, status, error.message);
       }
+      res.json(item);
     }
   );
 
@@ -440,23 +363,16 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId, name } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        const relPath = typeof req.query.path === 'string' ? req.query.path : '';
-        if (!relPath || relPath.length > 255) return sendError(res, 400, 'Missing or invalid path');
-        const text = await fetchIntegrationCompanion(registryId, name, relPath);
-        if (text === null) return sendError(res, 404, 'Companion file not found');
-        res.type('text/markdown; charset=utf-8').send(text);
-      } catch (error) {
-        logger.error('Error reading item companion file', {
-          component: COMPONENT,
-          error: error.message
-        });
-        const status = error.message.includes('not found') ? 404 : 500;
-        sendError(res, status, error.message);
+      const { registryId, name } = req.params;
+      assertValidId(registryId, 'registryId');
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      const relPath = typeof req.query.path === 'string' ? req.query.path : '';
+      if (!relPath || relPath.length > 255) {
+        throw new ServiceError('BAD_REQUEST', 'Missing or invalid path');
       }
+      const text = await fetchIntegrationCompanion(registryId, name, relPath);
+      if (text === null) throw new ServiceError('NOT_FOUND', 'Companion file not found');
+      res.type('text/markdown; charset=utf-8').send(text);
     }
   );
 
@@ -473,48 +389,26 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { registryId, type, name } = req.params;
-        if (!validateIdForPath(registryId, 'registryId', res)) return;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        const installedBy = req.user?.email || req.user?.username || 'admin';
-        // Replacing an item that already exists here must be asked for explicitly
-        const replaceLocal = req.body?.replaceLocal === true;
-        const version = versionFromBody(req.body);
-        if (version === false) return sendError(res, 400, 'Invalid version', 'INVALID_VERSION');
-        const manifest = await contentInstaller.install(registryId, type, name, installedBy, {
-          replaceLocal,
-          version
-        });
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'marketplaceItem',
-          resourceId: `${type}/${name}`,
-          summary: `Installed marketplace item ${type}/${name} from registry ${registryId}`
-        });
-        res.status(201).json(manifest);
-      } catch (error) {
-        logger.error('Error installing item', { component: COMPONENT, error: error.message });
-        if (error.code === 'LOCAL_CONTENT_EXISTS') {
-          return sendError(res, 409, error.message, error.code);
-        }
-        if (VERSION_POLICY_CODES.has(error.code)) {
-          return sendError(res, 409, error.message, error.code);
-        }
-        if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
-          return sendError(res, 409, error.message, error.code);
-        }
-        if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
-          return sendError(res, 422, error.message, error.code);
-        }
-        const status = error.message.includes('already installed')
-          ? 409
-          : error.message.startsWith('Content validation failed')
-            ? 422
-            : 500;
-        sendError(res, status, error.message);
-      }
+      const { registryId, type, name } = req.params;
+      assertValidId(registryId, 'registryId');
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      const installedBy = req.user?.email || req.user?.username || 'admin';
+      // Replacing an item that already exists here must be asked for explicitly
+      const replaceLocal = req.body?.replaceLocal === true;
+      const version = versionFromBody(req.body);
+      if (version === false) throw new ServiceError('INVALID_VERSION', 'Invalid version');
+      const manifest = await contentInstaller.install(registryId, type, name, installedBy, {
+        replaceLocal,
+        version
+      });
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'marketplaceItem',
+        resourceId: `${type}/${name}`,
+        summary: `Installed marketplace item ${type}/${name} from registry ${registryId}`
+      });
+      res.status(201).json(manifest);
     }
   );
 
@@ -531,39 +425,20 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { type, name } = req.params;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        const updatedBy = req.user?.email || req.user?.username || 'admin';
-        const version = versionFromBody(req.body);
-        if (version === false) return sendError(res, 400, 'Invalid version', 'INVALID_VERSION');
-        const manifest = await contentInstaller.update(type, name, updatedBy, { version });
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'marketplaceItem',
-          resourceId: `${type}/${name}`,
-          summary: `Updated marketplace item ${type}/${name}`
-        });
-        res.json(manifest);
-      } catch (error) {
-        logger.error('Error updating item', { component: COMPONENT, error: error.message });
-        if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
-          return sendError(res, 409, error.message, error.code);
-        }
-        if (MIGRATION_CONFLICT_CODES.has(error.code) || VERSION_POLICY_CODES.has(error.code)) {
-          return sendError(res, 409, error.message, error.code);
-        }
-        if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
-          return sendError(res, 422, error.message, error.code);
-        }
-        const status = error.message.includes('not installed')
-          ? 404
-          : error.message.startsWith('Content validation failed')
-            ? 422
-            : 500;
-        sendError(res, status, error.message);
-      }
+      const { type, name } = req.params;
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      const updatedBy = req.user?.email || req.user?.username || 'admin';
+      const version = versionFromBody(req.body);
+      if (version === false) throw new ServiceError('INVALID_VERSION', 'Invalid version');
+      const manifest = await contentInstaller.update(type, name, updatedBy, { version });
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'marketplaceItem',
+        resourceId: `${type}/${name}`,
+        summary: `Updated marketplace item ${type}/${name}`
+      });
+      res.json(manifest);
     }
   );
 
@@ -576,26 +451,17 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { type, name } = req.params;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        await contentInstaller.uninstall(type, name);
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'marketplaceItem',
-          resourceId: `${type}/${name}`,
-          summary: `Uninstalled marketplace item ${type}/${name}`
-        });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error uninstalling item', { component: COMPONENT, error: error.message });
-        if (error.code === 'INTEGRATION_IN_USE') {
-          return sendError(res, 409, error.message, error.code);
-        }
-        const status = error.message.includes('not installed') ? 404 : 500;
-        sendError(res, status, error.message);
-      }
+      const { type, name } = req.params;
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      await contentInstaller.uninstall(type, name);
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'marketplaceItem',
+        resourceId: `${type}/${name}`,
+        summary: `Uninstalled marketplace item ${type}/${name}`
+      });
+      res.json({ success: true });
     }
   );
 
@@ -608,22 +474,17 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const { type, name } = req.params;
-        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
-        await contentInstaller.detach(type, name);
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'marketplaceItem',
-          resourceId: `${type}/${name}`,
-          summary: `Detached marketplace item ${type}/${name} from tracking`
-        });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error detaching item', { component: COMPONENT, error: error.message });
-        sendError(res, 500, error.message);
-      }
+      const { type, name } = req.params;
+      if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
+      await contentInstaller.detach(type, name);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'marketplaceItem',
+        resourceId: `${type}/${name}`,
+        summary: `Detached marketplace item ${type}/${name} from tracking`
+      });
+      res.json({ success: true });
     }
   );
 
@@ -640,14 +501,9 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const cc = (await import('../../configCache.js')).default;
-        const { data } = cc.getInstallations();
-        res.json(data?.installations || {});
-      } catch (error) {
-        logger.error('Error getting installations', { component: COMPONENT, error: error.message });
-        sendError(res, 500, error.message);
-      }
+      const cc = (await import('../../configCache.js')).default;
+      const { data } = cc.getInstallations();
+      res.json(data?.installations || {});
     }
   );
 
@@ -665,41 +521,36 @@ export default function registerAdminMarketplaceRoutes(app) {
     adminAuth,
     featureGuard,
     async (req, res) => {
-      try {
-        const cc = (await import('../../configCache.js')).default;
-        const { data: installationsData } = cc.getInstallations();
-        const installations = installationsData?.installations || {};
-        const registries = cc.getRegistries()?.data?.registries || [];
+      const cc = (await import('../../configCache.js')).default;
+      const { data: installationsData } = cc.getInstallations();
+      const installations = installationsData?.installations || {};
+      const registries = cc.getRegistries()?.data?.registries || [];
 
-        const updates = [];
+      const updates = [];
 
-        for (const [key, manifest] of Object.entries(installations)) {
-          const cached = await registryService.getCachedCatalogAsync(manifest.registryId);
-          if (!cached) continue;
+      for (const [key, manifest] of Object.entries(installations)) {
+        const cached = await registryService.getCachedCatalogAsync(manifest.registryId);
+        if (!cached) continue;
 
-          const item = (cached.catalog?.items || []).find(
-            i => i.type === manifest.type && i.name === manifest.itemId
-          );
-          if (!item) continue;
+        const item = (cached.catalog?.items || []).find(
+          i => i.type === manifest.type && i.name === manifest.itemId
+        );
+        if (!item) continue;
 
-          // Only flag as updateable when the offered version is newer than the installed one
-          const registry = registries.find(r => r.id === manifest.registryId) || null;
-          const offered = offeredVersion(item, registry);
-          if (isUpdate(offered, manifest.version)) {
-            updates.push({
-              key,
-              ...manifest,
-              latestVersion: offered,
-              updateAvailable: true
-            });
-          }
+        // Only flag as updateable when the offered version is newer than the installed one
+        const registry = registries.find(r => r.id === manifest.registryId) || null;
+        const offered = offeredVersion(item, registry);
+        if (isUpdate(offered, manifest.version)) {
+          updates.push({
+            key,
+            ...manifest,
+            latestVersion: offered,
+            updateAvailable: true
+          });
         }
-
-        res.json(updates);
-      } catch (error) {
-        logger.error('Error checking updates', { component: COMPONENT, error: error.message });
-        sendError(res, 500, error.message);
       }
+
+      res.json(updates);
     }
   );
 }

@@ -31,6 +31,7 @@
  * @module services/marketplace/ContentInstaller
  */
 
+import { ServiceError } from '../../utils/ServiceError.js';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import configStore from '../../services/config/ConfigStore.js';
@@ -210,7 +211,10 @@ function assertValidContent(type, name, content, typeConfig) {
     errors.push(`id: '${content.id}' does not match the catalog name '${name}'`);
   }
   if (errors.length > 0) {
-    throw new Error(`Content validation failed: ${errors.join(', ')}`);
+    throw new ServiceError(
+      'CONTENT_VALIDATION_FAILED',
+      `Content validation failed: ${errors.join(', ')}`
+    );
   }
 }
 
@@ -286,7 +290,11 @@ export async function fetchItemContent(registryId, type, name, { version } = {})
   }
 
   const current = (cached.catalog?.items || []).find(i => i.type === type && i.name === name);
-  if (!current) throw new Error(`Item '${type}:${name}' not found in registry '${registryId}'`);
+  if (!current)
+    throw new ServiceError(
+      'NOT_FOUND',
+      `Item '${type}:${name}' not found in registry '${registryId}'`
+    );
   const item =
     version && version !== current.version
       ? await registryService.fetchItemVersion(registry, current, version)
@@ -367,21 +375,19 @@ export function verifyIntegrationCode(item, content, registry) {
   const integrity = item.source?.integrity || {};
   if (isScript || codeFiles.length) {
     if (registry?.trustCode !== true) {
-      const error = new Error(
+      throw new ServiceError(
+        'CODE_NOT_TRUSTED',
         `Integration '${item.name}' brings code that runs on this server; the registry ` +
           `'${registry?.id || ''}' is not trusted for code. Mark the registry as trusted ` +
           'for code to install it.'
       );
-      error.code = 'CODE_NOT_TRUSTED';
-      throw error;
     }
     const unhashed = codeFiles.filter(file => !integrity[file]);
     if (unhashed.length) {
-      const error = new Error(
+      throw new ServiceError(
+        'CODE_INTEGRITY_REQUIRED',
         `Integration '${item.name}': the catalog lists no hash for the code file(s) ${unhashed.join(', ')}`
       );
-      error.code = 'CODE_INTEGRITY_REQUIRED';
-      throw error;
     }
     if (isScript) checkScriptCodeFiles(definition, content.files);
   }
@@ -392,11 +398,10 @@ export function verifyIntegrationCode(item, content, registry) {
     const text = content.files[file];
     if (typeof text !== 'string') continue;
     if (!matchesIntegrity(text, expected)) {
-      const error = new Error(
+      throw new ServiceError(
+        'INTEGRITY_MISMATCH',
         `Integration '${item.name}': the file ${file} does not match the hash the catalog lists`
       );
-      error.code = 'INTEGRITY_MISMATCH';
-      throw error;
     }
   }
 }
@@ -537,7 +542,11 @@ export async function fetchIntegrationCompanion(registryId, name, relativePath) 
     );
   }
   const item = (cached.catalog?.items || []).find(i => i.type === 'integration' && i.name === name);
-  if (!item) throw new Error(`Item 'integration:${name}' not found in registry '${registryId}'`);
+  if (!item)
+    throw new ServiceError(
+      'NOT_FOUND',
+      `Item 'integration:${name}' not found in registry '${registryId}'`
+    );
   const listed = new Set([
     ...(Array.isArray(item.source?.companions) ? item.source.companions : []),
     ...releaseNotePaths(item)
@@ -691,12 +700,11 @@ async function buildSkillContent(item, itemUrl, skillMd, authHeaders, registry) 
 export function assertKnownDefinitionSchema(raw) {
   const revision = definitionSchemaRevision(raw);
   if (revision.supported) return;
-  const error = new Error(
-    `Content validation failed: ${unsupportedSchemaMessage(revision.revision)}`
+  throw new ServiceError(
+    'UNSUPPORTED_DEFINITION_SCHEMA',
+    `Content validation failed: ${unsupportedSchemaMessage(revision.revision)}`,
+    { details: { revision: revision.revision } }
   );
-  error.code = 'UNSUPPORTED_DEFINITION_SCHEMA';
-  error.revision = revision.revision;
-  throw error;
 }
 
 /**
@@ -714,11 +722,11 @@ export function assertKnownDefinitionSchema(raw) {
 export function assertCompatible(type, name, subject) {
   const { compatible, requires, serverVersion } = checkCompatibility(subject);
   if (compatible) return;
-  const error = new Error(`${type} '${name}' ${describeIncompatibility(requires, serverVersion)}`);
-  error.code = 'INCOMPATIBLE_IHUB_VERSION';
-  error.requires = requires;
-  error.serverVersion = serverVersion;
-  throw error;
+  throw new ServiceError(
+    'INCOMPATIBLE_IHUB_VERSION',
+    `${type} '${name}' ${describeIncompatibility(requires, serverVersion)}`,
+    { details: { requires, serverVersion } }
+  );
 }
 
 /**
@@ -759,27 +767,26 @@ export function resolveRequestedVersion(registry, item, requested) {
   const label = `${item.type} '${item.name}'`;
   if (requested) {
     if (!listed.includes(requested)) {
-      const error = new Error(`${label}: version ${requested} is not listed by the registry`);
-      error.code = 'VERSION_NOT_LISTED';
-      throw error;
+      throw new ServiceError(
+        'VERSION_NOT_LISTED',
+        `${label}: version ${requested} is not listed by the registry`
+      );
     }
     if (!passesPolicy(requested, policy)) {
-      const error = new Error(
+      throw new ServiceError(
+        'VERSION_NOT_OFFERED',
         `${label}: version ${requested} is outside what the registry offers (channel ${policy.channel}${policy.pin ? `, pin ${policy.pin}` : ''})`
       );
-      error.code = 'VERSION_NOT_OFFERED';
-      throw error;
     }
     return requested;
   }
   if (listed.length === 0) return undefined;
   const offered = offeredVersion(item, registry);
   if (!offered) {
-    const error = new Error(
+    throw new ServiceError(
+      'NO_VERSION_OFFERED',
       `${label}: no listed version passes the registry's channel ${policy.channel}${policy.pin ? ` and the pin ${policy.pin}` : ''}`
     );
-    error.code = 'NO_VERSION_OFFERED';
-    throw error;
   }
   return offered;
 }
@@ -895,7 +902,10 @@ class ContentInstaller {
     const installations = await readInstallations();
     const key = `${type}:${name}`;
     if (installations.installations[key]) {
-      throw new Error(`${type} '${name}' is already installed. Use update to upgrade.`);
+      throw new ServiceError(
+        'CONFLICT',
+        `${type} '${name}' is already installed. Use update to upgrade.`
+      );
     }
 
     // The same id may already exist here without the marketplace knowing it,
@@ -903,12 +913,11 @@ class ContentInstaller {
     // explicit confirmation.
     const localIds = getLocalContentIds(await getConfigCache());
     if (localIds[type]?.has(name) && !replaceLocal) {
-      const error = new Error(
+      throw new ServiceError(
+        'LOCAL_CONTENT_EXISTS',
         `${type} '${name}' already exists on this instance and was not installed from the ` +
           'marketplace. Installing replaces it; confirm the replacement to continue.'
       );
-      error.code = 'LOCAL_CONTENT_EXISTS';
-      throw error;
     }
 
     // An item this server version cannot run is refused before anything is
@@ -938,7 +947,8 @@ class ContentInstaller {
       // inside must agree, or two registries could fight over one folder.
       const definitionId = content.files['integration.json']?.id;
       if (definitionIdToDirName(definitionId || '') !== name) {
-        throw new Error(
+        throw new ServiceError(
+          'CONTENT_VALIDATION_FAILED',
           `Content validation failed: definition id '${definitionId}' does not match the catalog name '${name}'`
         );
       }
@@ -1007,7 +1017,7 @@ class ContentInstaller {
     const key = `${type}:${name}`;
 
     if (!installations.installations[key]) {
-      throw new Error(`${type} '${name}' is not installed`);
+      throw new ServiceError('NOT_FOUND', `${type} '${name}' is not installed`);
     }
 
     if (type === 'integration') {
@@ -1015,11 +1025,10 @@ class ContentInstaller {
         await import('../integrations/InstalledIntegrationService.js');
       const instances = installedIntegrationService.instancesOf(dirNameToDefinitionId(name));
       if (instances.length > 0) {
-        const error = new Error(
+        throw new ServiceError(
+          'INTEGRATION_IN_USE',
           `integration '${name}' is still installed as ${instances.map(i => `'${i.id}'`).join(', ')}; remove those first`
         );
-        error.code = 'INTEGRATION_IN_USE';
-        throw error;
       }
     }
 
@@ -1060,7 +1069,7 @@ class ContentInstaller {
     const key = `${type}:${name}`;
     const existing = installations.installations[key];
 
-    if (!existing) throw new Error(`${type} '${name}' is not installed`);
+    if (!existing) throw new ServiceError('NOT_FOUND', `${type} '${name}' is not installed`);
 
     const config = CONTENT_CONFIG[type];
     if (!config) throw new Error(`Unknown content type: ${type}`);
@@ -1084,11 +1093,10 @@ class ContentInstaller {
       semver.valid(existing.version) &&
       semver.lt(version, existing.version)
     ) {
-      const error = new Error(
+      throw new ServiceError(
+        'VERSION_NOT_NEWER',
         `${type} '${name}' is installed at ${existing.version}; ${version} is older. An update only moves forward: revert the installation to a backup of ${version} instead`
       );
-      error.code = 'VERSION_NOT_NEWER';
-      throw error;
     }
     if (catalogItem && (!version || version === catalogItem.version)) {
       assertCompatible(type, name, catalogItem);

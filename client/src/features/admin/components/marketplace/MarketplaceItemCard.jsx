@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { installMarketplaceItem } from '../../../../api/adminApi';
+import { apiErrorMessage } from '../../../../utils/apiErrorMessage';
 import { MarketplaceIntegrationFacts } from './MarketplaceIntegrationFacts';
 
 /**
@@ -85,7 +86,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
       await installMarketplaceItem(item.registryId, item.type, item.name);
       onAction?.();
     } catch (err) {
-      setError(err.message || 'Install failed');
+      setError(apiErrorMessage(err, t, 'Install failed'));
     } finally {
       setInstalling(false);
     }
