@@ -2633,6 +2633,8 @@
           "notInstalledOptionalHelp": "This installation no longer exists. The app stays available without it; unbind it to tidy up.",
           "required": "Required",
           "requiredHelp": "Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.",
+          "enabledByDefault": "On by default",
+          "enabledByDefaultHelp": "New chats start with this integration switched on. Off: it is only available, and users switch it on in the chat's \"+\" menu when they need it.",
           "unbind": "Unbind",
           "defaultScope": "Default {{scope}}",
           "pinnedScope": "Pinned {{scope}}",

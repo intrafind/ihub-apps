@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { defaultEnabledRefs } from '../../../../shared/integrationDefaults.js';
+
 /**
  * Whether a binding asks for no actions at all (`actions: []`): it binds the
  * integration for its scope settings only, and gives the model no tools.
@@ -33,8 +35,8 @@ export function boundIntegrationRefs(app) {
 
 /**
  * Every tool reference an app offers a chat: the ids in its `tools` and the
- * integrations it binds for their tools. A new chat starts with all of them
- * enabled, and the chat's tools menu toggles among them.
+ * integrations it binds for their tools. The chat's tools menu toggles among
+ * them; which of them a new chat starts with is {@link appDefaultToolRefs}.
  *
  * @param {Object} app
  * @returns {string[]}
@@ -42,4 +44,16 @@ export function boundIntegrationRefs(app) {
 export function appToolRefs(app) {
   const listed = Array.isArray(app?.tools) ? app.tools : [];
   return [...new Set([...listed, ...boundIntegrationRefs(app)])];
+}
+
+/**
+ * The references a new chat starts with: everything the app offers except the
+ * integrations its bindings make available only (`enabledByDefault: false`),
+ * which the user switches on in the "+" menu.
+ *
+ * @param {Object} app
+ * @returns {string[]}
+ */
+export function appDefaultToolRefs(app) {
+  return defaultEnabledRefs(app, appToolRefs(app));
 }

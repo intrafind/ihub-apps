@@ -45,8 +45,47 @@ export function RequiredCheckbox({ binding, onBindingChange, requiredHelp }) {
 }
 
 /**
+ * The "On by default" checkbox of a binding: absent `enabledByDefault` means
+ * a new chat starts with the integration on, only an explicit `false` makes it
+ * available only (offered in the chat's "+" menu, off until the user switches
+ * it on), the way web search's "Enabled by default" works.
+ *
+ * @param {Object} props
+ * @param {Object|undefined} props.binding - the binding (`app.integrations[key]`)
+ * @param {(binding: Object) => void} props.onBindingChange - receives the changed binding
+ */
+export function EnabledByDefaultCheckbox({ binding, onBindingChange }) {
+  const { t } = useTranslation();
+  const current = binding || {};
+  const setEnabledByDefault = enabled => {
+    const rest = { ...current };
+    delete rest.enabledByDefault;
+    onBindingChange(enabled ? rest : { ...rest, enabledByDefault: false });
+  };
+  return (
+    <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+      <input
+        type="checkbox"
+        className={`${CHECKBOX_CLASS} mt-0.5`}
+        checked={current.enabledByDefault !== false}
+        onChange={e => setEnabledByDefault(e.target.checked)}
+      />
+      <span>
+        {t('admin.apps.edit.integrations.enabledByDefault', 'On by default')}
+        <span className={`${HELP_CLASS} block`}>
+          {t(
+            'admin.apps.edit.integrations.enabledByDefaultHelp',
+            'New chats start with this integration switched on. Off: it is only available, and users switch it on in the chat\'s "+" menu when they need it.'
+          )}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
  * The settings of one bound integration in the app editor: the Required
- * switch and, when the integration has scopes, the default scope, the pinned
+ * and On-by-default switches and, when the integration has scopes, the default scope, the pinned
  * scope and the scope picker. Used by every generic binding row and by the
  * panels that bind an integration with a switch of their own (people
  * directories). The iAssistant and iFinder panels have purpose-built scope
@@ -78,6 +117,7 @@ function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes,
         onBindingChange={onBindingChange}
         requiredHelp={requiredHelp}
       />
+      <EnabledByDefaultCheckbox binding={current} onBindingChange={onBindingChange} />
       {scopes && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>

@@ -36,51 +36,20 @@
  * @module services/integrations/integrationPicker
  */
 import logger from '../../utils/logger.js';
+import { appCandidateRefs } from './appIntegrationRefs.js';
 import { localized } from './definitions/installedValues.js';
 import { a2aAgentReference, isInteractiveTool } from '../../utils/toolSelection.js';
 import { effectsOf, listUserIntegrations } from './userIntegrations.js';
 
+// The app's references and defaults live in a module of their own (no service
+// behind it), so the chat request builder can use them without loading this one.
+export {
+  appCandidateRefs,
+  appDefaultEnabledTools,
+  appIntegrationDefaults
+} from './appIntegrationRefs.js';
+
 const COMPONENT = 'IntegrationPicker';
-
-/** Binding keys that bind no tools: iAssistant is reached through the model. */
-const SCOPE_ONLY_BINDINGS = new Set(['iassistant']);
-
-/**
- * Every tool reference an app offers a chat: its `tools` and the keys of the
- * integrations it binds for their tools (`app.integrations`), the same list
- * the chat has always started with. A binding with `actions: []` binds an
- * integration for its scopes only and is left out.
- *
- * @param {Object} app
- * @returns {string[]}
- */
-export function appCandidateRefs(app) {
-  const listed = Array.isArray(app?.tools) ? app.tools.filter(ref => typeof ref === 'string') : [];
-  const bindings =
-    app?.integrations && typeof app.integrations === 'object' ? app.integrations : {};
-  const bound = Object.entries(bindings)
-    .filter(
-      ([key, binding]) =>
-        !SCOPE_ONLY_BINDINGS.has(key) &&
-        !(Array.isArray(binding?.actions) && binding.actions.length === 0)
-    )
-    .map(([key]) => key);
-  return [...new Set([...listed, ...bound])];
-}
-
-/**
- * The app's own defaults for a new chat: every reference on, web search as
- * the app says.
- *
- * @param {Object} app
- * @returns {{enabledTools: string[], websearchEnabled: boolean}}
- */
-export function appIntegrationDefaults(app) {
-  return {
-    enabledTools: appCandidateRefs(app),
-    websearchEnabled: app?.websearch?.enabled === true && app.websearch.enabledByDefault === true
-  };
-}
 
 /**
  * Who a tool belongs to, as a row key, the reference that selects all of it
