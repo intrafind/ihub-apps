@@ -46,6 +46,8 @@ const ROOT = {
   id: 'user-root',
   name: 'Root',
   email: 'root@example.com',
+  isAdmin: true,
+  isContentAdmin: true,
   groups: ['admins'],
   permissions: { adminAccess: true }
 };

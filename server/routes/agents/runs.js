@@ -26,12 +26,11 @@ import {
   sendNotFound,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
-import { isAdminUser } from '../../services/loop/runIdentity.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import { getWorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
-import { buildAgentPrincipal } from '../../utils/authorization.js';
+import { buildAgentPrincipal, isAdmin } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
@@ -132,7 +131,7 @@ async function countRunningProfileRuns(profileId) {
  * caller must return immediately.
  */
 async function authorizeRunAccess(req, res, runId) {
-  if (isAdminUser(req.user)) return true;
+  if (isAdmin(req.user)) return true;
   try {
     const state = await getEngine().getState(runId);
     if (!state) {
@@ -428,7 +427,7 @@ export default function registerAgentRunRoutes(app) {
         // we keep it on the registry too via the register payload below —
         // legacy entries from before this commit may not have it, so we
         // fall back to a state lookup for those.
-        if (!isAdminUser(req.user)) {
+        if (!isAdmin(req.user)) {
           const myId = req.user?.id;
           const filtered = [];
           let unknownMetadataSkipped = 0;

@@ -55,8 +55,11 @@ import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers
 import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
-import { isAdminUser } from '../../services/loop/runIdentity.js';
-import { isAdminEligiblePrincipal, canUserAccessResource } from '../../utils/authorization.js';
+import {
+  isAdmin,
+  isAdminEligiblePrincipal,
+  canUserAccessResource
+} from '../../utils/authorization.js';
 import { describeInstallation } from '../../services/integrations/auth/connectionProviders.js';
 import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import {
@@ -210,10 +213,7 @@ async function startConnect(req, res, { reconnect }) {
   // The user's groups decide; admins may always connect (they configure and
   // test the integrations). The installation's own rule (an MCP server's app
   // bindings, a storage provider's grant) is checked again when the flow starts.
-  const allowed =
-    Boolean(instance) &&
-    (mayUseIntegration(instance, req.user) ||
-      (isAdminUser(req.user) && isAdminEligiblePrincipal(req.user)));
+  const allowed = Boolean(instance) && (mayUseIntegration(instance, req.user) || isAdmin(req.user));
   if (!instance || instance.enabled === false || !allowed) {
     return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
   }

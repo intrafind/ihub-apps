@@ -35,12 +35,8 @@ import {
   interactionAnswerRequestSchema,
   humanEventRequestSchema
 } from '../services/loop/contracts/interaction.js';
-import {
-  resolvePrincipal,
-  resolveActorId,
-  isAnonymousUser,
-  isAdminUser
-} from '../services/loop/runIdentity.js';
+import { resolvePrincipal, resolveActorId, isAnonymousUser } from '../services/loop/runIdentity.js';
+import { isAdmin } from '../utils/authorization.js';
 import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
 import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
 import { isViewToolApproval } from '../services/mcp/mcpViewToolApproval.js';
@@ -477,7 +473,7 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/interactions/pending'), authRequired, async (req, res) => {
     try {
       if (isAnonymousUser(req.user)) return sendInsufficientPermissions(res, 'list interactions');
-      const admin = isAdminUser(req.user);
+      const admin = isAdmin(req.user);
       const all = await interactionService.listPending({
         kind: typeof req.query.kind === 'string' ? req.query.kind : undefined
       });

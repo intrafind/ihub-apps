@@ -632,65 +632,33 @@ export function isAdminEligiblePrincipal(user) {
 }
 
 /**
- * Group names that count as admin when `groups.json` cannot be loaded (`admins` is the only admin group).
- * Only the fallback: with a loaded configuration admin rights come from the
- * `adminAccess` / `contentAdmin` group permissions.
- */
-const FALLBACK_ADMIN_GROUPS = new Set(['admins']);
-
-/**
- * Whether any of the user's groups grants one of `permissionNames`, read from
- * groups.json; without it, whether the user is in a fallback admin group.
+ * Whether the request principal is a full administrator.
  *
- * @param {Object} user - Request user
- * @param {string[]} permissionNames - Group permission flags that grant the right
- * @param {string} component - Logger component for a failed configuration load
- * @returns {boolean}
- */
-function groupsGrantAdminRight(user, permissionNames, component) {
-  const userGroups = user.groups || [];
-  try {
-    const groupsConfig = loadGroupsConfiguration();
-    return userGroups.some(groupName => {
-      const permissions = groupsConfig.groups?.[groupName]?.permissions;
-      return permissionNames.some(name => permissions?.[name] === true);
-    });
-  } catch (error) {
-    logger.warn('Failed to load groups configuration for admin check', { component, error });
-    return userGroups.some(group => FALLBACK_ADMIN_GROUPS.has(group));
-  }
-}
-
-/**
- * Whether the user is a full administrator: an interactive, non-anonymous
- * principal in a group with `adminAccess`. The anonymous principal is never an
- * admin, whatever groups it carries, and delegated or machine principals (API
- * keys, OAuth clients, agents) never are either.
+ * The one admin rule of the application. It is decided once per request, in
+ * {@link enhanceUserWithPermissions}, and read here: an interactive,
+ * non-anonymous principal in a group with `adminAccess`. The anonymous
+ * principal, OAuth clients, delegated tokens (including personal API keys) and
+ * agents are never administrators, whatever groups they carry.
  *
- * Reads group membership, not `user.permissions`; it is what `adminAuth` gates on.
+ * A user that did not pass through `enhanceUserWithPermissions` is not an admin.
  *
  * @param {Object} [user] - Request user
  * @returns {boolean}
  */
 export function isAdmin(user) {
-  if (!user || user.id === ANONYMOUS_PRINCIPAL_ID || !isAdminEligiblePrincipal(user)) {
-    return false;
-  }
-  return groupsGrantAdminRight(user, ['adminAccess'], 'Authorization');
+  return user?.isAdmin === true;
 }
 
 /**
- * Whether the user may edit content (apps, prompts, sources): a full admin or a
- * content admin (`contentAdmin`), under the same principal rules as {@link isAdmin}.
+ * Whether the request principal may edit content (apps, prompts, sources): a
+ * full administrator or a content admin (`contentAdmin`), under the same
+ * principal rules as {@link isAdmin}. Decided in {@link enhanceUserWithPermissions}.
  *
  * @param {Object} [user] - Request user
  * @returns {boolean}
  */
 export function isContentAdmin(user) {
-  if (!user || user.id === ANONYMOUS_PRINCIPAL_ID || !isAdminEligiblePrincipal(user)) {
-    return false;
-  }
-  return groupsGrantAdminRight(user, ['adminAccess', 'contentAdmin'], 'Authorization');
+  return user?.isContentAdmin === true;
 }
 
 /**
@@ -852,22 +820,19 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     }
   }
 
-  // Check admin access. Both OAuth client-credentials and OAuth authorization-code tokens
-  // are denied admin access regardless of the underlying user's groups.
-  // Agent service-account principals also never get admin: they are
-  // identified solely by `isAgent === true`.
-  const isOAuthDelegated =
-    user.authMode === 'oauth_authorization_code' || user.authMode === 'oauth_personal_key';
-  user.isAdmin =
-    user.isOAuthClient || isOAuthDelegated || user.isAgent === true
-      ? false
-      : hasAdminAccess(user.groups) || user.permissions.adminAccess;
+  // Admin rights. The single place the rule is applied (see isAdmin): the
+  // anonymous principal and delegated or machine principals (OAuth clients,
+  // authorization-code and personal API key tokens, agents) never administer,
+  // whatever groups they carry; everyone else does through a group with
+  // `adminAccess` (content admins: or `contentAdmin`).
+  const mayAdminister = user.id !== ANONYMOUS_PRINCIPAL_ID && isAdminEligiblePrincipal(user);
+  user.isAdmin = Boolean(
+    mayAdminister && (hasAdminAccess(user.groups) || user.permissions.adminAccess)
+  );
+  user.isContentAdmin = user.isAdmin || (mayAdminister && user.permissions.contentAdmin === true);
 
-  // The anonymous principal is never an administrator, whatever groups
-  // `anonymousAuth.defaultGroups` lists: adminAuth and contentAdminAuth already
-  // refuse it, and checks that read these flags directly must agree.
+  // The anonymous principal's permission flags agree with its flags above.
   if (user.id === ANONYMOUS_PRINCIPAL_ID) {
-    user.isAdmin = false;
     user.permissions.adminAccess = false;
     user.permissions.contentAdmin = false;
   }

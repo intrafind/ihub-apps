@@ -14,20 +14,8 @@
  *
  * @module services/workflow/workflowAccess
  */
-import { filterResourcesByPermissions } from '../../utils/authorization.js';
+import { filterResourcesByPermissions, isAdmin } from '../../utils/authorization.js';
 import { hasIdCaseInsensitive } from '../../utils/resourceLookup.js';
-
-/**
- * Checks if a user has admin privileges.
- *
- * @param {Object} user - User object from request
- * @returns {boolean} True if user has admin access
- */
-export function isAdmin(user) {
-  // The anonymous principal is never an admin, whatever groups it carries.
-  if (!user || user.id === 'anonymous') return false;
-  return user.groups?.includes('admins') || user.permissions?.adminAccess === true;
-}
 
 /**
  * Filters workflows based on user permissions from groups.json.

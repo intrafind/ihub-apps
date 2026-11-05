@@ -19,7 +19,9 @@
 import configCache from '../configCache.js';
 import {
   enhanceUserWithPermissions,
+  isAdmin,
   isAnonymousAccessAllowed,
+  isContentAdmin,
   loadGroupsConfiguration
 } from '../utils/authorization.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
@@ -32,8 +34,6 @@ import { loadProjectFor } from '../services/projects/projectLoader.js';
 import {
   ACCESS_LEVELS,
   effectiveGroups,
-  isProjectAdmin,
-  isProjectContentAdmin,
   projectPermissions,
   satisfiesLevel
 } from '../services/projects/projectAccess.js';
@@ -92,8 +92,8 @@ export function callerContext(user) {
   return {
     config,
     groups: effectiveGroups(user, config),
-    isAdmin: isProjectAdmin(user, config),
-    isContentAdmin: isProjectContentAdmin(user, config),
+    isAdmin: isAdmin(user),
+    isContentAdmin: isContentAdmin(user),
     linked: linkedProjectIds(user),
     users: usersDb(),
     catalog: projectSettings(configCache.getPlatform() || {}).sharing.allowCatalog,

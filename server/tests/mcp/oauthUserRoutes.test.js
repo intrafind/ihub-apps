@@ -115,9 +115,11 @@ jest.unstable_mockModule('../../configCache.js', () => ({
 
 function testUser(req, _res, next) {
   const id = req.headers['x-test-user'];
-  const groups = req.headers['x-test-admin'] ? ['admins'] : ['users'];
+  const admin = Boolean(req.headers['x-test-admin']);
+  const groups = admin ? ['admins'] : ['users'];
+  // What the request pipeline resolves for these groups (enhanceUserWithPermissions).
   req.user = id
-    ? { id, groups, permissions: {} }
+    ? { id, groups, isAdmin: admin, isContentAdmin: admin, permissions: {} }
     : { id: 'anonymous', groups: ['anonymous'], permissions: {} };
   next();
 }

@@ -16,7 +16,13 @@ let scratch;
 let configCache;
 let route;
 
-const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
+const ROOT = {
+  id: 'user-root',
+  name: 'Root',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins']
+};
 const EDITOR = { id: 'user-editor', name: 'Editor', groups: ['editors'] };
 
 async function drive(handlers, { body = {}, user } = {}) {

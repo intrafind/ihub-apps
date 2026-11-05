@@ -29,7 +29,8 @@
  *
  * @module services/chat/chatAccess
  */
-import { isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { resolveChatOwner } from './chatOwner.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 
@@ -110,7 +111,7 @@ export async function authorizeChat(
   if (isAnonymousUser(user)) return { ok: false, status: 404 };
   // An admin who is not the owner may read, never write — a write gets the
   // same 404 as anyone else.
-  if (isAdminUser(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
+  if (isAdmin(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
   // A chat inside a project is readable by the project's members (#1036,
   // spec 1 §6.4): the project page lists them, and a member opens another's
   // chat read-only. Never a write, and never the live stream: `viaProject`

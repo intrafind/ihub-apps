@@ -44,7 +44,8 @@ import crypto from 'node:crypto';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { requireStorage } from '../../storage/bootstrap.js';
-import { resolveActorId, isAdminUser } from './runIdentity.js';
+import { resolveActorId } from './runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -644,7 +645,7 @@ export class InteractionService extends EventEmitter {
     }
     // Admins see every interaction in the queue and may answer every one of
     // them — the same access rule the run routes apply.
-    if (isAdminUser(user)) return;
+    if (isAdmin(user)) return;
     const userGroups = user.groups || [];
     if (!groups.some(g => userGroups.includes(g))) {
       throw new InteractionError(
@@ -1064,10 +1065,7 @@ export class InteractionService extends EventEmitter {
     const matched = approverGroups.filter(g => userGroups.includes(g));
     let via = 'owner';
     if (matched.length) via = 'approverGroups';
-    else if (
-      isAdminUser(user) &&
-      (approverGroups.length || interaction.source?.principalId !== by)
-    ) {
+    else if (isAdmin(user) && (approverGroups.length || interaction.source?.principalId !== by)) {
       via = 'admin';
     }
     // A display name is personal data: only the `full` mode records it

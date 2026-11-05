@@ -45,7 +45,12 @@ const PERMITTED = { id: 'user-1', permissions: { workflows: new Set([WORKFLOW_ID
 const WILDCARD = { id: 'user-2', permissions: { workflows: new Set(['*']) } };
 const OTHER_WORKFLOW_ONLY = { id: 'user-3', permissions: { workflows: new Set(['other']) } };
 const NO_PERMISSIONS = { id: 'user-4', permissions: { workflows: new Set() } };
-const ADMIN = { id: 'admin-1', groups: ['admins'], permissions: { adminAccess: true } };
+const ADMIN = {
+  id: 'admin-1',
+  isAdmin: true,
+  groups: ['admins'],
+  permissions: { adminAccess: true }
+};
 const ANONYMOUS = { id: 'anonymous', groups: ['admins'], permissions: { workflows: new Set() } };
 
 configCache.getTools = () => ({ data: [] });

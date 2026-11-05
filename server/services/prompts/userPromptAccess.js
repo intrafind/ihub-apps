@@ -28,8 +28,8 @@
  *
  * @module services/prompts/userPromptAccess
  */
-import { isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
-import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../../utils/authorization.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
+import { loadGroupsConfiguration } from '../../utils/authorization.js';
 
 /** Share target types. */
 export const SHARE_TARGET_TYPES = Object.freeze(['user', 'group', 'everyone']);
@@ -80,37 +80,6 @@ export function canHoldUserPrompts(user) {
   if (user.isOAuthClient || user.isAgent === true) return false;
   if (user.authMode === 'oauth_authorization_code') return false;
   return true;
-}
-
-/**
- * Whether a principal administers the prompt library: full admin or content
- * admin, and an interactive principal — the rule `contentAdminAuth` applies
- * to the admin prompt pages.
- *
- * @param {Object|undefined} user - `req.user`.
- * @param {Object} [groupsConfig] - Resolved groups configuration; loaded when omitted.
- * @returns {boolean}
- */
-export function isPromptAdmin(user, groupsConfig) {
-  if (isAnonymousUser(user) || !isAdminEligiblePrincipal(user)) return false;
-  if (user.permissions?.adminAccess === true || user.permissions?.contentAdmin === true) {
-    return true;
-  }
-  let config = groupsConfig;
-  if (!config) {
-    try {
-      config = loadGroupsConfiguration();
-    } catch {
-      return isAdminUser(user);
-    }
-  }
-  const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.some(name => {
-    const permissions = Object.hasOwn(config?.groups || {}, name)
-      ? config.groups[name]?.permissions
-      : null;
-    return permissions?.adminAccess === true || permissions?.contentAdmin === true;
-  });
 }
 
 /**

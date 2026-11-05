@@ -75,7 +75,11 @@ function buildApp() {
   app.use((req, _res, next) => {
     const user = USERS[req.headers['x-test-user']];
     req.user = user
-      ? { ...user, permissions: { adminAccess: user.groups.includes('admins') } }
+      ? {
+          ...user,
+          isAdmin: user.groups.includes('admins'),
+          permissions: { adminAccess: user.groups.includes('admins') }
+        }
       : { id: 'anonymous', groups: ['anonymous'], permissions: {} };
     next();
   });

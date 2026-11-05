@@ -243,3 +243,17 @@ an administrator when listing workflows, reading agent runs and artifacts, answe
 as the fallback when `groups.json` cannot be read. Only `admins` and the `adminAccess` permission
 grant admin rights now. If you created a group named `admin`, give it `adminAccess` under
 **Admin → Groups** or move its members to `admins`.
+
+## An Admin's API Keys and Agents No Longer Pass Admin-Only Checks
+
+A personal API key, an OAuth token that acts for a user, or an agent that carried an administrator's
+groups was refused by the admin pages but still counted as an administrator when reading other
+users' agent runs and artifacts, chats and MCP catalogs. There is now one admin rule,
+decided once per request: only a signed-in person in a group with `adminAccess` is an
+administrator. The anonymous user, OAuth clients, API keys, tokens acting for a user and agents
+never are, whatever groups they carry.
+
+- Calls that relied on an admin's API key to read other users' runs or artifacts now get `403`;
+  use the admin sign-in instead.
+- If `groups.json` cannot be read, requests now fail instead of guessing admin rights from group
+  names.

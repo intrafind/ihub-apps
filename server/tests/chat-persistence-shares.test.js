@@ -589,7 +589,13 @@ describe('identity modes and delegated principals', () => {
     const chatId = await seedChat(ADA);
     const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
       .body;
-    const apiKey = { ...ROOT, authMode: 'oauth_personal_key' };
+    // What enhanceUserWithPermissions makes of an admin's personal API key: no admin rights.
+    const apiKey = {
+      ...ROOT,
+      authMode: 'oauth_personal_key',
+      isAdmin: false,
+      isContentAdmin: false
+    };
     const read = await drive(openHandlers, { params: { shareId: share.id }, user: apiKey });
     assert.equal(read.statusCode, 404);
     const revoke = await drive(revokeHandlers, { params: { shareId: share.id }, user: apiKey });
