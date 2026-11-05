@@ -112,6 +112,7 @@ import { setDefaultLanguage } from '../shared/localize.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from './storage/bootstrap.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
+import errorHandler from './middleware/errorHandler.js';
 import {
   getLocalizedError,
   validateApiKeys,
@@ -978,6 +979,9 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // Register static file and SPA routes after API routes
   registerStaticRoutes(app, { isPackaged, rootDir, basePath });
+
+  // The one place an error becomes a response. After every route.
+  app.use(errorHandler);
 
   // Helper function to extract messages and format them
   // Message template processing implemented in serverHelpers.js

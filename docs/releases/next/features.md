@@ -517,3 +517,24 @@ is running — also in the Docker image, which did not include the documentation
   part of the installation; it is published on GitHub Pages instead.
 
 See [Admin UI → Documentation](../../admin-ui.md#documentation).
+
+## One Error Response Shape for the API
+
+Errors that the server's routes do not answer themselves — a request body that is too large, a body
+that is not valid JSON, an unexpected failure — are now answered as JSON instead of an HTML or plain
+text page. Every such response has the same body:
+
+```json
+{ "error": "…", "code": "PAYLOAD_TOO_LARGE", "details": { "type": "entity.too.large" } }
+```
+
+- `code` is a stable, machine-readable code; the web app shows its own translated message for it
+  (English and German).
+- `error` is an English text for scripts and other API callers. For a server error (5xx) it is a
+  fixed text; the real reason is only written to the log.
+- OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep their standard `{ error, error_description }`
+  body.
+- The routes that still answer errors with their own body are converted to this shape one by one in
+  the following releases; each conversion is listed here.
+
+See [Error Responses](../../error-responses.md).
