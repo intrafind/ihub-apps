@@ -434,17 +434,16 @@ describe('installation page: migration failed', () => {
 
     mockApi.migrateInstalledIntegration.mockRejectedValue(
       httpError(422, {
-        success: false,
         code: 'MIGRATION_FAILED',
         error: 'Migration of "govdata" failed',
-        reason: 'renameValue fq → defaultFilter: "defaultFilter" already holds a value',
         details: {
+          reason: 'renameValue fq → defaultFilter: "defaultFilter" already holds a value',
           collisions: [
             { key: 'defaultFilter', message: 'renameValue fq → defaultFilter: collision' }
           ],
-          errors: []
-        },
-        logEntry: FAILED.migrationLog[0]
+          errors: [],
+          logEntry: FAILED.migrationLog[0]
+        }
       })
     );
     fireEvent.click(within(panel).getByRole('button', { name: 'Re-run migration' }));
@@ -631,11 +630,9 @@ describe('installation page: needs review', () => {
 
     mockApi.adoptInstalledIntegration.mockRejectedValue(
       httpError(422, {
-        success: false,
         code: 'ADOPT_INVALID',
         error: 'The stored values of "govdata" do not fit org.ckan/open-data-portal 1.4.0',
-        reason: 'The stored values of "govdata" do not fit org.ckan/open-data-portal 1.4.0',
-        details: [{ kind: 'value', key: 'baseUrl', message: 'baseUrl: must be a URL' }]
+        details: { issues: [{ kind: 'value', key: 'baseUrl', message: 'baseUrl: must be a URL' }] }
       })
     );
     fireEvent.click(within(panel).getByRole('button', { name: 'Adopt current version' }));

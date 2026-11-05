@@ -176,6 +176,7 @@ const { FilesystemLockManager } =
   await import('../../storage/providers/filesystem/FilesystemLockManager.js');
 const { default: registerAdminIntegrationsRoutes } =
   await import('../../routes/admin/integrations.js');
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 const { default: registerAdminMarketplaceRoutes } =
   await import('../../routes/admin/marketplace.js');
 
@@ -183,6 +184,7 @@ const app = express();
 app.use(express.json());
 registerAdminIntegrationsRoutes(app);
 registerAdminMarketplaceRoutes(app);
+app.use(errorHandler);
 const admin = r => r.set('X-Admin', 'yes');
 
 function installation(id, definition, extra = {}) {
@@ -325,14 +327,13 @@ describe('POST _migrate', () => {
     const res = await admin(
       request(app).post('/api/admin/integrations/installed/collide/_migrate')
     ).expect(422);
-    expect(res.body).toMatchObject({
-      success: false,
-      code: 'MIGRATION_FAILED',
+    expect(res.body).toMatchObject({ code: 'MIGRATION_FAILED' });
+    expect(res.body.details).toMatchObject({
       logEntry: { result: 'failed' },
       instance: { id: 'collide', status: 'migrationFailed', definitionVersion: '1.2.0' }
     });
-    expect(res.body.reason).toMatch(/collides on defaultFilter/);
-    expect(res.body.instance.migration.defaultBackup).toMatch(/^collide-1\.2\.0-/);
+    expect(res.body.details.reason).toMatch(/collides on defaultFilter/);
+    expect(res.body.details.instance.migration.defaultBackup).toMatch(/^collide-1\.2\.0-/);
   });
 
   it('answers 409 MIGRATION_LOCKED while the lock is held', async () => {
@@ -423,7 +424,7 @@ describe('POST _restore and _adopt', () => {
       request(app).post('/api/admin/integrations/installed/review/_adopt')
     ).expect(422);
     expect(res.body.code).toBe('ADOPT_INVALID');
-    expect(res.body.details.map(d => d.key)).toContain('unknownField');
+    expect(res.body.details.issues.map(d => d.key)).toContain('unknownField');
   });
 });
 

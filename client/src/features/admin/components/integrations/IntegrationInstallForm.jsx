@@ -64,9 +64,9 @@ function detailLine(detail) {
 }
 
 function detailText(err) {
-  const details = err?.response?.data?.details;
-  if (!Array.isArray(details)) return '';
-  return details.map(detailLine).filter(Boolean).join('; ');
+  const issues = err?.response?.data?.details?.issues;
+  if (!Array.isArray(issues)) return '';
+  return issues.map(detailLine).filter(Boolean).join('; ');
 }
 
 /** `GET /api/admin/groups` → `groups` (id → group), or null when it failed. */
@@ -308,9 +308,9 @@ function IntegrationInstallForm({
 
   const applyError = err => {
     const data = err?.response?.data;
-    if (Array.isArray(data?.details) && data.code === 'INVALID_VALUES') {
+    if (Array.isArray(data?.details?.issues) && data.code === 'INVALID_VALUES') {
       const errors = {};
-      for (const d of data.details) if (d?.key) errors[d.key] = d.message;
+      for (const d of data.details.issues) if (d?.key) errors[d.key] = d.message;
       setFieldErrors(errors);
     }
     const detail = detailText(err);

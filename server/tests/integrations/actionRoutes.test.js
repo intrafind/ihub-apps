@@ -206,10 +206,12 @@ await usage._setActionUsageDir(path.join(root, 'usage'));
 
 const { default: registerAdminIntegrationsRoutes } =
   await import('../../routes/admin/integrations.js');
+const { default: errorHandler } = await import('../../middleware/errorHandler.js');
 
 const app = express();
 app.use(express.json());
 registerAdminIntegrationsRoutes(app);
+app.use(errorHandler);
 const admin = r => r.set('X-Admin', 'yes');
 const base = '/api/admin/integrations/installed/portal';
 
@@ -446,7 +448,6 @@ describe('action test', () => {
         .send({ args: { note: 'hello' } })
     ).expect(409);
     expect(refused.body).toMatchObject({
-      success: false,
       code: 'CONFIRMATION_REQUIRED',
       details: { sideEffect: 'write' }
     });

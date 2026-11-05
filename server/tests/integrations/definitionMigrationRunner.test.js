@@ -585,7 +585,8 @@ describe('restore and adopt', () => {
     });
     await assert.rejects(
       () => runner().adopt('badvalues', { notify: false }),
-      error => error.code === 'ADOPT_INVALID' && error.details.some(e => e.key === 'unknownField')
+      error =>
+        error.code === 'ADOPT_INVALID' && error.details.issues.some(e => e.key === 'unknownField')
     );
     assert.equal((await entryOf('badvalues')).definitionVersion, undefined);
   });
