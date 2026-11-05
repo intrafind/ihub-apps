@@ -85,3 +85,23 @@ describe('recordLlmCall', () => {
     assert.equal(counts.models.m5, undefined);
   });
 });
+
+describe('QuotaLedger reads during flushes', () => {
+  it('a read behind a queued second flush still sees every count', async () => {
+    await fs.mkdir(path.join(dir, 'data'), { recursive: true });
+    const own = createQuotaLedger({
+      filePath: path.join(dir, 'data', 'quota-usage-queued.json'),
+      flushIntervalMs: 60_000
+    });
+    const windows = getCurrentWindows();
+    own.record('bob', { modelId: 'm1', tokens: 10, windows });
+    const first = own.flush(); // in flight
+    own.record('bob', { modelId: 'm1', tokens: 5, windows });
+    const second = own.flush(); // queued behind the first
+    const counts = await own.getUser('bob', windows); // reads while both are pending
+    assert.equal(counts.models.m1.day, 15);
+    await Promise.all([first, second]);
+    const after = await own.getUser('bob', windows);
+    assert.equal(after.models.m1.day, 15);
+  });
+});

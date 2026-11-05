@@ -201,12 +201,13 @@ export function createQuotaLedger({
    * The file's data with this worker's pending counts added.
    *
    * A flush moves its counts out of `pending` before they are in the file, so
-   * a read that overlaps one would miss them: wait for a flush in progress,
-   * and read again when one started during the read.
+   * a read that overlaps one would miss them: wait until no flush is running
+   * (a flush queued behind the one just finished starts in between, so look
+   * again), then read, and read again when one started during the read.
    */
   async function snapshot() {
     for (;;) {
-      if (inFlight) await inFlight.catch(() => {});
+      while (inFlight) await inFlight.catch(() => {});
       const startedFlushes = flushCount;
       let data;
       try {
