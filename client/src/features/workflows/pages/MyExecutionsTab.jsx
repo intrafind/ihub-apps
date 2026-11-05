@@ -10,6 +10,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Icon from '../../../shared/components/Icon';
 import { apiClient } from '../../../api/client';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { executionDownload } from '../utils/executionDownload';
 
 /**
@@ -77,7 +78,7 @@ function MyExecutionsTab({ onBrowseWorkflows }) {
         URL.revokeObjectURL(url);
       } catch (err) {
         console.error('Failed to download execution result', err);
-        setActionError(err.response?.data?.message || err.message || 'Failed to download');
+        setActionError(apiErrorMessage(err, t, 'Failed to download'));
       }
     },
     [t]
@@ -93,10 +94,10 @@ function MyExecutionsTab({ onBrowseWorkflows }) {
         refetch();
       } catch (err) {
         console.error('Failed to update archive state', err);
-        setActionError(err.response?.data?.message || err.message || 'Failed to update');
+        setActionError(apiErrorMessage(err, t, 'Failed to update'));
       }
     },
-    [refetch]
+    [refetch, t]
   );
 
   const handleDelete = useCallback(execution => {
@@ -113,13 +114,12 @@ function MyExecutionsTab({ onBrowseWorkflows }) {
       refetch();
     } catch (err) {
       console.error('Failed to delete execution', err);
-      const code = err.response?.data?.error;
-      if (code === 'cannot_delete_running') {
+      if (err.response?.data?.code === 'EXECUTION_ACTIVE') {
         setActionError(
           t('workflows.errors.cannotDeleteRunning', 'Cancel the workflow before deleting it.')
         );
       } else {
-        setActionError(err.response?.data?.message || err.message || 'Failed to delete');
+        setActionError(apiErrorMessage(err, t, 'Failed to delete'));
       }
     }
   }, [pendingDelete, refetch, t]);

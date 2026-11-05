@@ -584,6 +584,16 @@ text page. Every such response has the same body:
   the name of a system skill, 409) are top-level `code`s; deleting a system skill answers `FORBIDDEN`,
   an oversized zip `PAYLOAD_TOO_LARGE`, and the problems of an invalid skill are in `details.errors`
   instead of a bare `details` list.
+- The workflow endpoints (`/api/workflows*`, `/api/admin/workflows*`, including the webhook
+  trigger `/api/workflows/:workflowId/webhooks/:triggerId`) answer in this shape. `NOT_FOUND`
+  (workflow, execution, project, app, webhook trigger), `FORBIDDEN`, `BAD_REQUEST` and
+  `CONFLICT` replace the former plain `{ error }` bodies; an invalid workflow definition answers
+  `VALIDATION_FAILED` with the failed fields in `details.issues`. Deleting a running execution now
+  answers `409 EXECUTION_ACTIVE` (before: `{ error: "cannot_delete_running", message }`), and a chat
+  about an unfinished execution answers `409 EXECUTION_NOT_FINISHED`. The reason of a failed call
+  is now in `error` instead of `message`, and a server error no longer carries the operation name
+  ("Failed to start workflow execution") but the generic `INTERNAL_ERROR` text. A webhook call
+  without a valid signature answers `AUTH_REQUIRED`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

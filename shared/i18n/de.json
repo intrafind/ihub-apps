@@ -9005,6 +9005,8 @@
     "CONFIRMATION_REQUIRED": "Diese Aktion muss zuerst bestätigt werden.",
     "INVALID_ARGUMENTS": "Die Argumente der Aktion sind ungültig.",
     "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
-    "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen."
+    "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen.",
+    "EXECUTION_NOT_FINISHED": "Die Workflow-Ausführung ist noch nicht abgeschlossen.",
+    "EXECUTION_ACTIVE": "Brechen Sie den Workflow ab, bevor Sie ihn löschen."
   }
 }

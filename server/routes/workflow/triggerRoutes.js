@@ -15,7 +15,8 @@
 
 import express from 'express';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { getTriggerManager } from '../../services/workflow/triggers/TriggerManager.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
@@ -54,68 +55,57 @@ export function registerTriggerRoutes(app) {
     express.raw({ type: '*/*', limit: '1mb' }),
     checkWorkflowsFeature,
     async (req, res) => {
-      if (!validateIdForPath(req.params.workflowId, 'workflow', res)) {
-        return;
+      assertValidId(req.params.workflowId, 'workflow');
+      assertValidId(req.params.triggerId, 'trigger');
+
+      const triggerManager = getTriggerManager();
+      const webhookRef = triggerManager.getWebhookTrigger(
+        req.params.workflowId,
+        req.params.triggerId
+      );
+
+      if (!webhookRef) {
+        throw new ServiceError('NOT_FOUND', 'Webhook trigger not found');
       }
-      if (!validateIdForPath(req.params.triggerId, 'trigger', res)) {
-        return;
-      }
 
-      try {
-        const triggerManager = getTriggerManager();
-        const webhookRef = triggerManager.getWebhookTrigger(
-          req.params.workflowId,
-          req.params.triggerId
-        );
-
-        if (!webhookRef) {
-          return res.status(404).json({ error: 'Webhook trigger not found' });
-        }
-
-        // Require a configured secret to prevent anonymous workflow execution
-        if (!webhookRef.trigger.config.secret) {
-          logger.warn({
-            component: 'triggerRoutes',
-            message: 'Webhook trigger has no secret configured; rejecting request',
-            workflowId: req.params.workflowId,
-            triggerId: req.params.triggerId
-          });
-          return res
-            .status(401)
-            .json({ error: 'Webhook trigger requires a secret. Configure one to enable.' });
-        }
-
-        // Verify HMAC over the raw body bytes (not re-stringified JSON)
-        const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
-        const signature = req.headers['x-hub-signature-256'] || req.headers['x-signature'];
-        if (!webhookRef.trigger.verifyRawSignature(rawBody, signature)) {
-          return res.status(401).json({ error: 'Invalid signature' });
-        }
-
-        // Parse JSON now that the signature is verified
-        let initialData = {};
-        if (rawBody.length > 0) {
-          try {
-            initialData = JSON.parse(rawBody.toString('utf8'));
-          } catch {
-            return res.status(400).json({ error: 'Invalid JSON body' });
-          }
-        }
-
-        await triggerManager.fireTrigger(req.params.workflowId, {
-          id: req.params.triggerId,
-          type: 'webhook',
-          initialData
-        });
-
-        res.json({ success: true, message: 'Webhook processed' });
-      } catch (error) {
-        logger.error({
+      // Require a configured secret to prevent anonymous workflow execution
+      if (!webhookRef.trigger.config.secret) {
+        logger.warn({
           component: 'triggerRoutes',
-          message: `Webhook processing failed: ${error.message}`
+          message: 'Webhook trigger has no secret configured; rejecting request',
+          workflowId: req.params.workflowId,
+          triggerId: req.params.triggerId
         });
-        res.status(500).json({ error: 'Webhook processing failed' });
+        throw new ServiceError(
+          'AUTH_REQUIRED',
+          'Webhook trigger requires a secret. Configure one to enable.'
+        );
       }
+
+      // Verify HMAC over the raw body bytes (not re-stringified JSON)
+      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+      const signature = req.headers['x-hub-signature-256'] || req.headers['x-signature'];
+      if (!webhookRef.trigger.verifyRawSignature(rawBody, signature)) {
+        throw new ServiceError('AUTH_REQUIRED', 'Invalid signature');
+      }
+
+      // Parse JSON now that the signature is verified
+      let initialData = {};
+      if (rawBody.length > 0) {
+        try {
+          initialData = JSON.parse(rawBody.toString('utf8'));
+        } catch {
+          throw new ServiceError('BAD_REQUEST', 'Invalid JSON body');
+        }
+      }
+
+      await triggerManager.fireTrigger(req.params.workflowId, {
+        id: req.params.triggerId,
+        type: 'webhook',
+        initialData
+      });
+
+      res.json({ success: true, message: 'Webhook processed' });
     }
   );
 }
