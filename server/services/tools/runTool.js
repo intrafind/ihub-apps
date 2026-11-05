@@ -26,7 +26,6 @@ import logger from '../../utils/logger.js';
 import { isKnowledgeTool, runKnowledgeTool } from '../knowledge/knowledgeTools.js';
 import { isChatContextTool } from '../chat/chatContextToolIds.js';
 import { isSystemSkillTool, runSystemSkillTool } from '../systemSkillTools.js';
-import { getToolsForApp } from './appTools.js';
 import {
   ACTIVATE_SKILL_TOOL_ID,
   FIND_SKILL_TOOL_ID,
