@@ -30,6 +30,7 @@ import {
   enhanceUserWithPermissions,
   filterResourcesByPermissions,
   isAnonymousAccessAllowed,
+  isContentAdmin,
   loadGroupsConfiguration
 } from '../utils/authorization.js';
 import {
@@ -54,7 +55,6 @@ import {
   UNSHAREABLE_GROUPS,
   canHoldUserPrompts,
   effectiveGroups,
-  isPromptAdmin,
   principalShareKeys,
   shareTargetKey,
   sharePermissionFor,
@@ -160,7 +160,7 @@ function callerContext(user) {
   return {
     config,
     groups: effectiveGroups(user, config),
-    isAdmin: isPromptAdmin(user, config)
+    isAdmin: isContentAdmin(user)
   };
 }
 
@@ -189,7 +189,7 @@ function requireUserPrompts(req, res, { manage = false } = {}) {
   }
   if (!isUserPromptsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
     ensurePrincipal(req);
-    if (!manage || !isPromptAdmin(req.user, groupsConfig())) {
+    if (!manage || !isContentAdmin(req.user)) {
       sendErrorResponse(res, 403, 'User prompts are switched off', {
         details: { code: 'USER_PROMPTS_DISABLED' }
       });

@@ -2,24 +2,17 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Characterization tests for "is this user an admin?" (#3238).
+ * "Is this user an admin?" (#3238).
  *
- * The admin check exists in about ten places that do NOT all agree. This file
- * pins what each one answers TODAY for the same set of principals, so the
- * consolidation onto `isAdmin(user)` / `isContentAdmin(user)` can be reviewed
- * against a fixed record: a difference between two columns below is a
- * behaviour the consolidation must either keep or change on purpose.
- *
- * Nothing here states what the rule SHOULD be. Where two call sites differ, the
- * test says so in a comment next to the expectation.
- *
- * Sites: adminAuth / isAdmin, contentAdminAuth /
- * isContentAdmin, GET /api/admin/auth/status, runIdentity.isAdminUser,
- * workflowAccess.isAdmin, the agent run + artifact routes, the short link routes,
- * projectAccess (isProjectAdmin / isProjectContentAdmin), userPromptAccess
- * (isPromptAdmin) and utils/adminRescue (first-user / last-admin rescue).
- * `routes/admin/projects.js` (3 sites) and `routes/admin/contentAccess.js` call
- * `isAdmin(req.user)` and are therefore pinned by that column.
+ * One rule, decided once per request in `enhanceUserWithPermissions` and read
+ * through `isAdmin(user)` / `isContentAdmin(user)` everywhere (`adminAuth`,
+ * `contentAdminAuth`, `/api/admin/auth/status`, short links, the agent run and
+ * artifact routes, ...). The principals below are built the way a request builds
+ * them, and every site must agree about each of them. The rule: a signed-in,
+ * interactive principal in a group with `adminAccess` (content admin: or
+ * `contentAdmin`). The anonymous principal, OAuth clients, delegated tokens
+ * (including personal API keys) and agents never administer, whatever groups
+ * they carry. The only admin group is `admins`.
  */
 
 import { jest } from '@jest/globals';
@@ -58,12 +51,8 @@ const { default: request } = await import('supertest');
 const { default: configCache } = await import('../configCache.js');
 const { adminAuth } = await import('../middleware/adminAuth.js');
 const { contentAdminAuth } = await import('../middleware/contentAdminAuth.js');
-const { isAdmin, isContentAdmin } = await import('../utils/authorization.js');
-const { isAdminUser } = await import('../services/loop/runIdentity.js');
-const { isAdmin: isWorkflowAdmin } = await import('../services/workflow/workflowAccess.js');
-const { isProjectAdmin, isProjectContentAdmin } =
-  await import('../services/projects/projectAccess.js');
-const { isPromptAdmin } = await import('../services/prompts/userPromptAccess.js');
+const { isAdmin, isContentAdmin, enhanceUserWithPermissions } =
+  await import('../utils/authorization.js');
 const { hasAnyAdmin, isLastAdmin, assignAdminGroup, ensureFirstUserIsAdmin } =
   await import('../utils/adminRescue.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
@@ -80,68 +69,43 @@ const GROUPS = {
   }
 };
 
-/**
- * The principals every site is asked about. `permissions` is what
- * `enhanceUserWithPermissions` would have attached to `req.user`.
- */
-const PRINCIPALS = {
-  anonymous: { id: 'anonymous', groups: ['anonymous'], permissions: {} },
-  // CLAUDE.md: anonymous never passes adminAccess, even with admin default groups.
-  anonymousWithAdminGroups: {
-    id: 'anonymous',
+/** Raw principals; `buildPrincipals` runs them through the request pipeline. */
+const RAW = {
+  anonymous: null,
+  // Anonymous access with admin default groups: still never an admin.
+  anonymousWithAdminGroups: null,
+  admin: { id: 'admin', groups: ['admins'] },
+  // There is no group `admin` (singular): it grants nothing.
+  singularAdminGroup: { id: 'legacy', groups: ['admin'] },
+  contentAdmin: { id: 'editor', groups: ['editors'] },
+  user: { id: 'user', groups: ['users'] },
+  // Delegated and machine principals carry their owner's / their own groups but never administer.
+  personalApiKeyOfAdmin: { id: 'key', groups: ['admins'], authMode: 'oauth_personal_key' },
+  authCodeTokenOfAdmin: { id: 'code', groups: ['admins'], authMode: 'oauth_authorization_code' },
+  oauthClientCredentials: {
+    id: 'client',
     groups: ['admins'],
-    permissions: { adminAccess: true }
+    isOAuthClient: true,
+    authMode: 'oauth_client_credentials'
   },
-  admin: { id: 'admin', groups: ['admins'], permissions: { adminAccess: true } },
-  // The group `admin` (singular) does not exist and never will (the groups are `users` and
-  // `admins`): it must grant nothing anywhere.
-  legacyAdminGroup: { id: 'legacy', groups: ['admin'], permissions: {} },
-  // A user whose resolved permissions say adminAccess but whose groups do not.
-  flagOnly: { id: 'flag', groups: ['users'], permissions: { adminAccess: true } },
-  // `admins` group membership but no resolved permission flag on req.user.
-  groupOnly: { id: 'grouponly', groups: ['admins'], permissions: {} },
-  contentAdmin: { id: 'editor', groups: ['editors'], permissions: { contentAdmin: true } },
-  user: { id: 'user', groups: ['users'], permissions: {} },
-  // Delegated / machine principals never administer, whatever groups they carry.
-  personalApiKeyOfAdmin: {
-    id: 'key',
-    groups: ['admins'],
-    permissions: { adminAccess: true },
-    authMode: 'oauth_personal_key'
-  },
-  agent: {
-    id: 'agent:x',
-    groups: ['admins'],
-    permissions: { adminAccess: true },
-    isAgent: true
-  }
+  agent: { id: 'agent:x', groups: ['admins'], isAgent: true }
 };
-const NAMES = Object.keys(PRINCIPALS);
+const NAMES = Object.keys(RAW);
+const PRINCIPALS = {};
 
-/** Expected answers, one row per principal. `true` = treated as admin. */
+/** [admin, contentAdmin] every site must agree on. */
 const EXPECTED = {
-  //                          adminAuth  contentAdminAuth  isContentAdmin  runIdentity  workflow  project  projectContent  prompt
-  anonymous: [false, false, false, false, false, false, false, false],
-  anonymousWithAdminGroups: [false, false, false, false, false, false, false, false],
-  admin: [true, true, true, true, true, true, true, true],
-  legacyAdminGroup: [false, false, false, false, false, false, false, false],
-  flagOnly: [false, false, false, true, true, true, true, true],
-  groupOnly: [true, true, true, true, true, true, true, true],
-  contentAdmin: [false, true, true, false, false, false, true, true],
-  user: [false, false, false, false, false, false, false, false],
-  personalApiKeyOfAdmin: [false, false, false, true, true, false, false, false],
-  agent: [false, false, false, true, true, false, false, false]
+  anonymous: [false, false],
+  anonymousWithAdminGroups: [false, false],
+  admin: [true, true],
+  singularAdminGroup: [false, false],
+  contentAdmin: [false, true],
+  user: [false, false],
+  personalApiKeyOfAdmin: [false, false],
+  authCodeTokenOfAdmin: [false, false],
+  oauthClientCredentials: [false, false],
+  agent: [false, false]
 };
-const COLS = [
-  'adminAuth',
-  'contentAdminAuth',
-  'isContentAdmin',
-  'runIdentity',
-  'workflowAccess',
-  'projectAdmin',
-  'projectContentAdmin',
-  'promptAdmin'
-];
 
 function runMiddleware(mw, user) {
   const res = {
@@ -154,52 +118,48 @@ function runMiddleware(mw, user) {
   return { next: next.mock.calls.length > 0, status: res.statusCode };
 }
 
-const answers = name => {
-  const user = PRINCIPALS[name];
-  return [
-    isAdmin(user),
-    runMiddleware(contentAdminAuth, user).next,
-    isContentAdmin(user),
-    isAdminUser(user),
-    Boolean(isWorkflowAdmin(user)),
-    isProjectAdmin(user, GROUPS),
-    isProjectContentAdmin(user, GROUPS),
-    isPromptAdmin(user, GROUPS)
-  ];
-};
-
 const saved = new Map();
-const savedContentsDir = process.env.CONTENTS_DIR;
 beforeAll(() => {
   for (const key of ['config/platform.json', 'config/groups.json']) {
     saved.set(key, configCache.cache.get(key));
   }
-  configCache.cache.set('config/platform.json', {
-    data: {
-      anonymousAuth: { enabled: true, defaultGroups: ['anonymous'] },
-      localAuth: { enabled: true },
-      shortLinks: { allowedHosts: [] }
-    }
-  });
+  const platform = {
+    anonymousAuth: { enabled: true, defaultGroups: ['anonymous'] },
+    localAuth: { enabled: true },
+    shortLinks: { allowedHosts: [] }
+  };
+  configCache.cache.set('config/platform.json', { data: platform });
   configCache.cache.set('config/groups.json', { data: GROUPS });
+  for (const name of NAMES) {
+    PRINCIPALS[name] =
+      name === 'anonymousWithAdminGroups'
+        ? enhanceUserWithPermissions(
+            null,
+            {},
+            {
+              anonymousAuth: { enabled: true, defaultGroups: ['admins'] }
+            }
+          )
+        : enhanceUserWithPermissions(RAW[name] ? { ...RAW[name] } : null, {}, platform);
+  }
 });
 afterAll(() => {
   for (const [key, value] of saved) {
     if (value === undefined) configCache.cache.delete(key);
     else configCache.cache.set(key, value);
   }
-  if (savedContentsDir === undefined) delete process.env.CONTENTS_DIR;
-  else process.env.CONTENTS_DIR = savedContentsDir;
 });
 
-describe('admin predicates, groups.json available', () => {
+describe('the admin rule, for every kind of principal', () => {
   test.each(NAMES)('%s', name => {
-    const got = Object.fromEntries(COLS.map((c, i) => [c, answers(name)[i]]));
-    const want = Object.fromEntries(COLS.map((c, i) => [c, EXPECTED[name][i]]));
-    expect(got).toEqual(want);
+    const [admin, contentAdmin] = EXPECTED[name];
+    expect([isAdmin(PRINCIPALS[name]), isContentAdmin(PRINCIPALS[name])]).toEqual([
+      admin,
+      contentAdmin
+    ]);
   });
 
-  test('adminAuth answers 403 (never 401) to everyone who is not an admin', () => {
+  test('adminAuth lets exactly the admins through and answers 403 to everyone else', () => {
     for (const name of NAMES) {
       const out = runMiddleware(adminAuth, PRINCIPALS[name]);
       expect(out.next).toBe(EXPECTED[name][0]);
@@ -208,102 +168,39 @@ describe('admin predicates, groups.json available', () => {
     expect(runMiddleware(adminAuth, undefined)).toEqual({ next: false, status: 403 });
   });
 
-  test('contentAdminAuth answers 401 to anonymous and a missing user, 403 to the rest', () => {
+  test('contentAdminAuth lets admins and content admins through; anonymous gets 401, others 403', () => {
+    for (const name of NAMES) {
+      const out = runMiddleware(contentAdminAuth, PRINCIPALS[name]);
+      expect(out.next).toBe(EXPECTED[name][1]);
+    }
     expect(runMiddleware(contentAdminAuth, undefined).status).toBe(401);
     expect(runMiddleware(contentAdminAuth, PRINCIPALS.anonymous).status).toBe(401);
     expect(runMiddleware(contentAdminAuth, PRINCIPALS.anonymousWithAdminGroups).status).toBe(401);
     expect(runMiddleware(contentAdminAuth, PRINCIPALS.user).status).toBe(403);
-    expect(runMiddleware(contentAdminAuth, PRINCIPALS.agent).status).toBe(403);
+    expect(runMiddleware(contentAdminAuth, PRINCIPALS.personalApiKeyOfAdmin).status).toBe(403);
   });
 
-  test('anonymous never passes adminAuth, even with admin default groups', () => {
+  test('anonymous never passes, even with admin default groups; a user without the flag is no admin', () => {
+    expect(PRINCIPALS.anonymousWithAdminGroups.groups).toContain('admins');
     expect(isAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
     expect(isAdmin(null)).toBe(false);
     expect(isAdmin()).toBe(false);
-    expect(runMiddleware(adminAuth, PRINCIPALS.anonymousWithAdminGroups).next).toBe(false);
+    expect(isAdmin({ id: 'u', groups: ['admins'] })).toBe(false);
+    expect(isContentAdmin({ id: 'u', groups: ['editors'] })).toBe(false);
   });
 
-  // `isContentAdmin` replaces `isContentAdminAuthRequired`, which checked `contentAdmin` only
-  // (ignoring adminAccess, contrary to its doc) and whose only caller combined it with
-  // `isAdminAuthRequired`. The combined answer (the status route below) is unchanged.
-  test('isContentAdmin counts adminAccess as well as contentAdmin', () => {
-    expect(isContentAdmin(PRINCIPALS.admin)).toBe(true);
-    expect(isContentAdmin(PRINCIPALS.contentAdmin)).toBe(true);
-    expect(isContentAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
-    expect(isContentAdmin(null)).toBe(false);
-  });
-
-  // Where the sites disagree today (recorded, not endorsed):
-  test('sites disagree about group-only vs flag-only vs the legacy `admin` group', () => {
-    // groups only (permissions flag missing): every site says admin
-    expect(answers('groupOnly')).toEqual([true, true, true, true, true, true, true, true]);
-    // flag only: adminAuth and contentAdminAuth ignore it, every other site honours it
-    expect(answers('flagOnly')).toEqual([false, false, false, true, true, true, true, true]);
-    // `admin` (singular) is not a group: no site honours it
-    expect(answers('legacyAdminGroup')).toEqual(Array(8).fill(false));
-    // delegated / machine principals: only runIdentity and workflowAccess skip the eligibility rule
-    expect(answers('personalApiKeyOfAdmin')).toEqual([
-      false,
-      false,
-      false,
-      true,
-      true,
-      false,
-      false,
-      false
-    ]);
-    expect(answers('agent')).toEqual([false, false, false, true, true, false, false, false]);
-  });
-});
-
-describe('admin predicates when groups.json cannot be loaded', () => {
-  let cached;
-  beforeAll(() => {
-    cached = configCache.cache.get('config/groups.json');
+  test('without groups.json the request fails closed instead of guessing from group names', () => {
+    const cached = configCache.cache.get('config/groups.json');
+    const contents = process.env.CONTENTS_DIR;
     configCache.cache.delete('config/groups.json');
     process.env.CONTENTS_DIR = path.join(os.tmpdir(), 'no-such-contents-dir-3238');
-  });
-  afterAll(() => {
-    configCache.cache.set('config/groups.json', cached);
-    if (savedContentsDir === undefined) delete process.env.CONTENTS_DIR;
-    else process.env.CONTENTS_DIR = savedContentsDir;
-  });
-
-  // adminAuth and contentAdminAuth fall back to the group name `admins`.
-  const fallback = {
-    anonymous: false,
-    anonymousWithAdminGroups: false, // hard anonymous veto
-    admin: true,
-    legacyAdminGroup: false,
-    flagOnly: false,
-    groupOnly: true,
-    contentAdmin: false,
-    user: false,
-    personalApiKeyOfAdmin: false, // eligibility veto
-    agent: false
-  };
-  test.each(NAMES)('adminAuth and contentAdminAuth fall back to admins: %s', name => {
-    expect(isAdmin(PRINCIPALS[name])).toBe(fallback[name]);
-    expect(runMiddleware(contentAdminAuth, PRINCIPALS[name]).next).toBe(fallback[name]);
-  });
-
-  test.each(NAMES)('isContentAdmin falls back to admin/admins like contentAdminAuth: %s', name => {
-    expect(isContentAdmin(PRINCIPALS[name])).toBe(fallback[name]);
-  });
-
-  test('hasAdminAccess-based sites: projectAdmin/promptAdmin fall back to runIdentity.isAdminUser', () => {
-    expect(isProjectAdmin(PRINCIPALS.groupOnly)).toBe(true);
-    expect(isProjectAdmin(PRINCIPALS.legacyAdminGroup)).toBe(false);
-    expect(isProjectAdmin(PRINCIPALS.personalApiKeyOfAdmin)).toBe(false);
-    expect(isProjectAdmin(PRINCIPALS.anonymousWithAdminGroups)).toBe(false);
-    expect(isPromptAdmin(PRINCIPALS.groupOnly)).toBe(true);
-    expect(isPromptAdmin(PRINCIPALS.legacyAdminGroup)).toBe(false);
-    expect(isPromptAdmin(PRINCIPALS.personalApiKeyOfAdmin)).toBe(false);
-    // ...but a resolved `permissions.contentAdmin` / `adminAccess` flag is honoured before
-    // groups.json is consulted, so these keep answering without it.
-    expect(isPromptAdmin(PRINCIPALS.contentAdmin)).toBe(true);
-    expect(isProjectContentAdmin(PRINCIPALS.contentAdmin)).toBe(true);
-    expect(isProjectAdmin(PRINCIPALS.flagOnly)).toBe(true);
+    try {
+      expect(() => enhanceUserWithPermissions({ id: 'u', groups: ['admins'] }, {}, {})).toThrow();
+    } finally {
+      configCache.cache.set('config/groups.json', cached);
+      if (contents === undefined) delete process.env.CONTENTS_DIR;
+      else process.env.CONTENTS_DIR = contents;
+    }
   });
 });
 
@@ -313,7 +210,7 @@ function buildApp(register) {
   app.use(express.json());
   app.use((req, _res, next) => {
     const name = req.headers['x-principal'];
-    req.user = PRINCIPALS[name] ? { ...PRINCIPALS[name] } : { ...PRINCIPALS.anonymous };
+    req.user = { ...(PRINCIPALS[name] || PRINCIPALS.anonymous) };
     next();
   });
   // registerAgentRunRoutes starts a sweep interval that is meant to live as long as the
@@ -329,27 +226,15 @@ function buildApp(register) {
 }
 const as = (req, name) => (name ? req.set('x-principal', name) : req);
 
-describe('GET /api/admin/auth/status (admin OR content admin enters the admin panel)', () => {
+describe('GET /api/admin/auth/status (admin or content admin enters the admin panel)', () => {
   const app = buildApp(registerAdminAuthRoutes);
-  const ENTERS = {
-    anonymous: false,
-    anonymousWithAdminGroups: false,
-    admin: true,
-    legacyAdminGroup: false,
-    flagOnly: false,
-    groupOnly: true,
-    contentAdmin: true,
-    user: false,
-    personalApiKeyOfAdmin: false,
-    agent: false
-  };
   test.each(NAMES)('%s', async name => {
     const res = await as(request(app).get('/api/admin/auth/status'), name);
     expect(res.status).toBe(200);
-    expect(res.body.authRequired).toBe(!ENTERS[name]);
-    // `authenticated` is true for an admin; otherwise the key is omitted from the JSON
-    // (it is `undefined`, not `false`, unless the request carries a Bearer header).
-    expect(res.body.authenticated).toBe(ENTERS[name] ? true : undefined);
+    const enters = EXPECTED[name][1];
+    expect(res.body.authRequired).toBe(!enters);
+    // `authenticated` is true for those who enter; otherwise the key is omitted from the JSON.
+    expect(res.body.authenticated).toBe(enters ? true : undefined);
   });
   test('a Bearer header alone makes `authenticated` true, `authRequired` is unchanged', async () => {
     const res = await request(app).get('/api/admin/auth/status').set('Authorization', 'Bearer x');
@@ -357,35 +242,15 @@ describe('GET /api/admin/auth/status (admin OR content admin enters the admin pa
   });
 });
 
-describe('short links: admin = `isAdmin(req.user)`', () => {
+describe('short links: an admin may manage another user’s link', () => {
   const app = buildApp(registerShortLinkRoutes);
-  const MAY_MANAGE_FOREIGN = {
-    admin: true,
-    groupOnly: true,
-    legacyAdminGroup: false,
-    flagOnly: false,
-    contentAdmin: false,
-    user: false,
-    personalApiKeyOfAdmin: false,
-    agent: false
-  };
-  test.each(Object.keys(MAY_MANAGE_FOREIGN))(
-    '%s may delete another user’s link: %s',
-    async name => {
-      const created = await as(request(app).post('/api/shortlinks'), 'user').send({
-        appId: 'chat'
-      });
-      expect(created.status).toBe(200);
-      const link = created.body;
-      // Another principal (never the owner `user`), except `user` itself, who is the owner.
-      const res = await as(request(app).delete(`/api/shortlinks/${link.code}`), name);
-      if (name === 'user') {
-        expect(res.status).toBe(200);
-      } else {
-        expect(res.status === 200).toBe(MAY_MANAGE_FOREIGN[name]);
-      }
-    }
-  );
+  const others = NAMES.filter(n => !n.startsWith('anonymous') && n !== 'user');
+  test.each(others)('%s', async name => {
+    const created = await as(request(app).post('/api/shortlinks'), 'user').send({ appId: 'chat' });
+    expect(created.status).toBe(200);
+    const res = await as(request(app).delete(`/api/shortlinks/${created.body.code}`), name);
+    expect(res.status === 200).toBe(EXPECTED[name][0]);
+  });
   test('anonymous cannot use short links at all (401), whatever its groups', async () => {
     expect((await request(app).get('/api/shortlinks')).status).toBe(401);
     expect((await as(request(app).get('/api/shortlinks'), 'anonymousWithAdminGroups')).status).toBe(
@@ -394,25 +259,20 @@ describe('short links: admin = `isAdmin(req.user)`', () => {
   });
 });
 
-describe('agent run + artifact routes: admin = permissions.adminAccess OR group admins', () => {
+describe('agent run and artifact routes: only an admin reads a run that is not theirs', () => {
   const app = buildApp([registerAgentRunRoutes, registerAgentArtifactRoutes]);
   // The run belongs to `owner`; nobody in PRINCIPALS is `owner`, so only the admin rule can pass.
-  const ALLOWED = {
-    admin: true,
-    legacyAdminGroup: false,
-    flagOnly: true,
-    groupOnly: true,
-    contentAdmin: false,
-    user: false,
-    personalApiKeyOfAdmin: true, // eligibility is not applied here (adminAuth would refuse it)
-    agent: true
-  };
-  for (const url of ['/api/agents/runs/run-1/artifacts']) {
-    test.each(Object.keys(ALLOWED))(`${url}: %s`, async name => {
-      const res = await as(request(app).get(url), name);
-      expect(res.status === 403).toBe(!ALLOWED[name]);
-    });
-  }
+  const callers = NAMES.filter(n => !n.startsWith('anonymous'));
+  test.each(callers)('%s', async name => {
+    const res = await as(request(app).get('/api/agents/runs/run-1/artifacts'), name);
+    expect(res.status === 403).toBe(!EXPECTED[name][0]);
+  });
+  test('an admin’s personal API key and an agent with admin groups are refused (403)', async () => {
+    for (const name of ['personalApiKeyOfAdmin', 'authCodeTokenOfAdmin', 'agent']) {
+      const res = await as(request(app).get('/api/agents/runs/run-1/artifacts'), name);
+      expect(res.status).toBe(403);
+    }
+  });
   test('anonymous is stopped by authenticatedOnly before the admin rule is reached', async () => {
     expect((await request(app).get('/api/agents/runs/run-1/artifacts')).status).toBe(401);
     expect(

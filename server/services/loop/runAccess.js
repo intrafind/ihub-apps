@@ -25,7 +25,8 @@
  */
 import logger from '../../utils/logger.js';
 import runLog from './RunLog.js';
-import { resolvePrincipal, isAnonymousUser, isAdminUser } from './runIdentity.js';
+import { resolvePrincipal, isAnonymousUser } from './runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
 import { getRunSummaryRepository } from '../runtime/RunSummaryRepository.js';
 
@@ -109,7 +110,7 @@ export async function authorizeExecution(executionId, user) {
   const { ownerId } = execution;
   const isAgentRun = typeof ownerId === 'string' && ownerId.startsWith('agent:');
   const allowed =
-    isAdminUser(user) ||
+    isAdmin(user) ||
     ownerId === userId ||
     (execution.triggeredBy && String(execution.triggeredBy.userId) === userId);
   if (!allowed) return null;
@@ -175,7 +176,7 @@ export async function authorizeLedgerRun(runId, user) {
     /** Identity mode the run's principal was recorded in (actor ids on the run use the same). */
     identityMode: identityMode || null
   };
-  if (isAdminUser(user) || anonymous) return { ok: true, meta };
+  if (isAdmin(user) || anonymous) return { ok: true, meta };
   if (isAnonymousUser(user)) return { ok: false, status: 403 };
   // Resolve the caller in the mode the run's principal was recorded in — a run
   // written under `pseudonymized` keeps matching its owner after an admin
@@ -215,7 +216,7 @@ export async function authorizeRun(runId, user, { executionId } = {}) {
  */
 export async function authorizeInteraction(interaction, user) {
   if (!interaction || typeof interaction.runId !== 'string') return false;
-  if (isAdminUser(user)) return true;
+  if (isAdmin(user)) return true;
   const source = interaction.source || {};
   if (source.anonymous === true) return true;
   if (source.principalId && !isAnonymousUser(user)) {

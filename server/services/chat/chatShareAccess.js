@@ -24,8 +24,8 @@
  *
  * @module services/chat/chatShareAccess
  */
-import { isAdminUser, isAnonymousUser, resolvePrincipal } from '../loop/runIdentity.js';
-import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
+import { isAnonymousUser, resolvePrincipal } from '../loop/runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { isShareActive, isWithinArtifactGrace } from './chatSharing.js';
 
 /**
@@ -68,7 +68,7 @@ export async function authorizeShareView(
     // add-in token minted by an administrator carries their groups but is a
     // delegated principal, and `enhanceUserWithPermissions` denies it admin
     // rights everywhere else.
-    if (isAdminUser(user) && isAdminEligiblePrincipal(user)) {
+    if (isAdmin(user)) {
       return { ok: true, viewerId, counts: false, viaOwner: false, viaAdmin: true };
     }
   }

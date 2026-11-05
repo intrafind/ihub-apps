@@ -15,7 +15,7 @@ import {
   sendNotFound,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
-import { isAdminUser } from '../../services/loop/runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
@@ -64,7 +64,7 @@ function safeName(name) {
  * returns false; otherwise returns true.
  */
 async function authorizeArtifactAccess(req, res, runId) {
-  if (isAdminUser(req.user)) return true;
+  if (isAdmin(req.user)) return true;
   try {
     const state = await getEngine().getState(runId);
     if (!state) {

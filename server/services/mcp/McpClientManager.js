@@ -30,7 +30,8 @@ import {
   refreshUserTokens,
   serverDisplayName
 } from './mcpOAuthService.js';
-import { isAdminUser, isAnonymousUser } from '../loop/runIdentity.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
+import { isAdmin } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { stepUpScopes } from '../integrations/auth/OAuthUserClient.js';
 import { getIntegrationConnectionService } from '../integrations/auth/IntegrationConnectionService.js';
@@ -459,7 +460,7 @@ class McpClientManager {
       throw new McpAuthRequiredError(serverId);
     }
     return this._userConnection(shared.config, userId, {
-      authoritativeCatalog: isAdminUser(user)
+      authoritativeCatalog: isAdmin(user)
     }).conn;
   }
 
@@ -501,7 +502,7 @@ class McpClientManager {
     serverConfig,
     user,
     operation,
-    { connection, authoritativeCatalog = isAdminUser(user) } = {}
+    { connection, authoritativeCatalog = isAdmin(user) } = {}
   ) {
     const serverId = serverConfig.id;
     const userId = String(user.id);

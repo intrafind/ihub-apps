@@ -124,7 +124,7 @@ const USERS = {
   alice: { id: 'alice', name: 'Alice', groups: ['users'] },
   bob: { id: 'bob', name: 'Bob', groups: ['users'] },
   carol: { id: 'carol', name: 'Carol', groups: ['users', 'legal'] },
-  admin: { id: 'admin', name: 'Admin', groups: ['admins'] },
+  admin: { id: 'admin', name: 'Admin', isAdmin: true, isContentAdmin: true, groups: ['admins'] },
   client: { id: 'alice', name: 'Alice', groups: ['users'], isOAuthClient: true },
   aliceKey: { id: 'alice', name: 'Alice', groups: ['users'], authMode: 'oauth_personal_key' }
 };

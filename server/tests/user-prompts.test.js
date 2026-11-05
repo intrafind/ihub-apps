@@ -56,7 +56,13 @@ const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
 const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
 const DAN = { id: 'user-dan', name: 'Dan Former', groups: ['authenticated'] };
-const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
+const ROOT = {
+  id: 'user-root',
+  name: 'Root',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins']
+};
 const THIRD_PARTY = { ...GRACE, authMode: 'oauth_authorization_code' };
 
 let baseDir;

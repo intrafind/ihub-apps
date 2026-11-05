@@ -45,8 +45,19 @@ import { listSnapshots } from '../services/ChangeHistoryService.js';
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
 const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
-const EDITOR = { id: 'user-editor', name: 'Content Editor', groups: ['editors'] };
-const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
+const EDITOR = {
+  id: 'user-editor',
+  name: 'Content Editor',
+  isContentAdmin: true,
+  groups: ['editors']
+};
+const ROOT = {
+  id: 'user-root',
+  name: 'Root',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins']
+};
 const NOBODY = { id: 'user-nobody', name: 'No Projects', groups: ['readers'] };
 const SOLO = { id: 'user-solo', name: 'Keeps To Herself', groups: ['solo'] };
 const RUNNER = { id: 'user-runner', name: 'Workflow Runner', groups: ['runners'] };

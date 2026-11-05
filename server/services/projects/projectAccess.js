@@ -40,8 +40,7 @@
  *
  * @module services/projects/projectAccess
  */
-import { isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
-import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../../utils/authorization.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
 import {
   UNSHAREABLE_GROUPS,
   effectiveGroups,
@@ -113,61 +112,6 @@ export function canHoldProjects(user) {
   if (user.isOAuthClient || user.isAgent === true) return false;
   if (user.authMode === 'oauth_authorization_code') return false;
   return true;
-}
-
-function groupPermissionsOf(user, groupsConfig) {
-  let config = groupsConfig;
-  if (!config) {
-    try {
-      config = loadGroupsConfiguration();
-    } catch {
-      return [];
-    }
-  }
-  const groups = Array.isArray(user?.groups) ? user.groups : [];
-  return groups.map(name =>
-    Object.hasOwn(config?.groups || {}, name) ? config.groups[name]?.permissions || {} : {}
-  );
-}
-
-/**
- * Whether a principal is a full administrator who may read and delete any
- * project for compliance: `adminAccess`, through an interactive principal.
- *
- * @param {Object|undefined} user - `req.user`.
- * @param {Object} [groupsConfig] - Resolved groups configuration; loaded when omitted.
- * @returns {boolean}
- */
-export function isProjectAdmin(user, groupsConfig) {
-  if (isAnonymousUser(user) || !isAdminEligiblePrincipal(user)) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  let config = groupsConfig;
-  if (!config) {
-    try {
-      config = loadGroupsConfiguration();
-    } catch {
-      return isAdminUser(user);
-    }
-  }
-  return groupPermissionsOf(user, config).some(p => p.adminAccess === true);
-}
-
-/**
- * Whether a principal administers admin projects: full admin or content
- * admin, the rule `contentAdminAuth` applies to the admin pages.
- *
- * @param {Object|undefined} user - `req.user`.
- * @param {Object} [groupsConfig] - Resolved groups configuration; loaded when omitted.
- * @returns {boolean}
- */
-export function isProjectContentAdmin(user, groupsConfig) {
-  if (isAnonymousUser(user) || !isAdminEligiblePrincipal(user)) return false;
-  if (user.permissions?.adminAccess === true || user.permissions?.contentAdmin === true) {
-    return true;
-  }
-  return groupPermissionsOf(user, groupsConfig).some(
-    p => p.adminAccess === true || p.contentAdmin === true
-  );
 }
 
 /**

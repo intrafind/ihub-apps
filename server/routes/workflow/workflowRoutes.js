@@ -40,7 +40,8 @@ import {
   sendInsufficientPermissions,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { filterByPermissions, isAdmin } from '../../services/workflow/workflowAccess.js';
+import { filterByPermissions } from '../../services/workflow/workflowAccess.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { createExecutionChat } from '../../services/workflow/executionChat.js';
 import { assertProjectInputs } from '../../services/workflow/projectNodes.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
@@ -2082,4 +2083,4 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 }
 
 // Export helper functions for testing
-export { filterByPermissions, isAdmin, loadWorkflows, findWorkflowFile, validateWorkflow };
+export { filterByPermissions, loadWorkflows, findWorkflowFile, validateWorkflow };

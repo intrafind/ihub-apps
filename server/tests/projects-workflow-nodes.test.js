@@ -52,7 +52,13 @@ import { workflowConfigSchema } from '../validators/workflowConfigSchema.js';
 
 const ADA = { id: 'user-ada', name: 'Ada', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace', groups: ['authenticated'] };
-const ROOT = { id: 'user-root', name: 'Root', groups: ['admins', 'authenticated'] };
+const ROOT = {
+  id: 'user-root',
+  name: 'Root',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins', 'authenticated']
+};
 const GROUPS = resolveGroupInheritance({
   groups: {
     admins: {

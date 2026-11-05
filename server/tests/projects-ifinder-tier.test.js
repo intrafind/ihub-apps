@@ -769,6 +769,8 @@ describe('the permission block of a collection', () => {
     const admin = {
       ...GRACE,
       id: 'user-root',
+      isAdmin: true,
+      isContentAdmin: true,
       groups: ['admins'],
       permissions: { adminAccess: true }
     };

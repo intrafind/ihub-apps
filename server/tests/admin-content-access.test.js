@@ -73,7 +73,13 @@ const CONTENT_ADMIN = {
   username: 'carol',
   groups: ['content-admins', 'sales', 'authenticated']
 };
-const FULL_ADMIN = { id: 'alice', username: 'alice', groups: ['admins', 'authenticated'] };
+const FULL_ADMIN = {
+  id: 'alice',
+  username: 'alice',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins', 'authenticated']
+};
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {

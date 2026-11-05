@@ -1352,7 +1352,7 @@ describe('who may start a workflow by @mention', () => {
   it('lets an administrator run any workflow the app lists', () => {
     assert.deepEqual(
       mentionAccess({
-        user: { permissions: { adminAccess: true } },
+        user: { isAdmin: true, permissions: { adminAccess: true } },
         app: { workflows: ['review'] },
         workflow
       }),

@@ -479,8 +479,8 @@ async function mcpDescriptor(installationId) {
     async connectContext(req, user) {
       const { publicBase, configured } = publicUrl.resolveMcpPublicBaseInfo(req);
       if (!publicBase) return null;
-      const { isAdminUser } = await import('../../loop/runIdentity.js');
-      return { publicBase, trustedBase: Boolean(configured || isAdminUser(user)) };
+      const { isAdmin } = await import('../../../utils/authorization.js');
+      return { publicBase, trustedBase: Boolean(configured || isAdmin(user)) };
     },
     async mayConnect(user) {
       if (serverConfig.enabled === false) return false;

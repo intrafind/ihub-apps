@@ -24,9 +24,9 @@
  * @module services/mcp/mcpOAuthService
  */
 import configCache from '../../configCache.js';
-import { enhanceUserWithPermissions } from '../../utils/authorization.js';
+import { enhanceUserWithPermissions, isAdmin } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
-import { isAdminUser, isAnonymousUser } from '../loop/runIdentity.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
 import { getBoundIntegrationIds, getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { getMcpOAuthClientStore } from './mcpOAuthClientStore.js';
 import { McpAuthRequiredError, McpTokenRefreshError } from './McpUserOAuthProvider.js';
@@ -112,7 +112,7 @@ async function installationAdmitsUser(instanceId, user) {
 export async function isServerVisibleToUser(user, serverConfig, catalogTools = []) {
   if (isAnonymousUser(user) || !serverConfig?.id) return false;
   const enhanced = withPermissions(user);
-  if (isAdminUser(enhanced)) return true;
+  if (isAdmin(enhanced)) return true;
   if (!(await installationAdmitsUser(serverConfig.id, enhanced))) return false;
   const platform = configCache.getPlatform() || {};
   const bound = await getBoundIntegrationIds(enhanced, platform);

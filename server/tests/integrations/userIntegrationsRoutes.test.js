@@ -133,6 +133,7 @@ const USERS = {
   outsider: { id: 'outsider', groups: ['users'], permissions: { integrations: new Set() } },
   admin: {
     id: 'admin',
+    isAdmin: true,
     groups: ['admins'],
     permissions: { integrations: new Set(), adminAccess: true }
   },

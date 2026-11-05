@@ -25,8 +25,7 @@ import registerMagicPromptRoutes from '../routes/magicPromptRoutes.js';
 import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
 import { createJob, canAccessJob, listJobs } from '../routes/toolsService/jobStore.js';
 import { registerOcrRoutes } from '../routes/toolsService/ocrRoutes.js';
-import { isAdminUser } from '../services/loop/runIdentity.js';
-import { isAdmin as isWorkflowAdmin } from '../services/workflow/workflowAccess.js';
+import { isAdmin } from '../utils/authorization.js';
 import { InteractionService } from '../services/loop/InteractionService.js';
 import { getLocalizedError } from '../serverHelpers.js';
 import { makeClient, sseResponse, openaiText } from './loop/helpers/llmFixtures.js';
@@ -415,9 +414,9 @@ describe('code that reads the principal directly', () => {
   test('group-name admin checks never treat the anonymous principal as an admin', () => {
     const principal = anonymous();
     assert.ok(principal.groups.includes('admins'));
-    assert.equal(isAdminUser(principal), false);
-    assert.equal(isWorkflowAdmin({ ...principal, groups: ['admins'] }), false);
-    assert.equal(isAdminUser({ id: 'u1', groups: ['admins'] }), true);
+    assert.equal(isAdmin(principal), false);
+    const signedIn = enhanceUserWithPermissions({ id: 'u1', groups: ['admins'] }, {}, {});
+    assert.equal(isAdmin(signedIn), true);
   });
 
   test('the anonymous principal cannot answer an interaction that needs an approver', () => {

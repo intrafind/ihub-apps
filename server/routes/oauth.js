@@ -20,6 +20,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { touchConsentLastUsed } from '../utils/consentStore.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { isAdmin } from '../utils/authorization.js';
 import { createOAuthTokenLimiter } from '../middleware/rateLimiting.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
@@ -788,9 +789,7 @@ export default function registerOAuthRoutes(app) {
       // RFC 7662 requires the introspecting party to authenticate
       // For now, we require a valid client_id/client_secret OR an admin user token
       const { client_id: introspectClientId, client_secret: introspectClientSecret } = req.body;
-      const isAdminUser = req.user && req.user.isAdmin;
-
-      if (!isAdminUser) {
+      if (!isAdmin(req.user)) {
         if (!introspectClientId || !introspectClientSecret) {
           return sendOAuthError(
             res,

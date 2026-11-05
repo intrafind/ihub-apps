@@ -65,7 +65,7 @@ const STORAGE_UP = () => true;
 const STORAGE_DOWN = () => false;
 
 const USER = { id: 'user-1', name: 'Ada' };
-const ADMIN = { id: 'user-9', groups: ['admins'] };
+const ADMIN = { id: 'user-9', isAdmin: true, isContentAdmin: true, groups: ['admins'] };
 const ANONYMOUS = { id: 'anonymous', anonymous: true };
 
 /**

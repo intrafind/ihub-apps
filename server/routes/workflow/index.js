@@ -16,7 +16,6 @@ export { registerWorkflowRoutes };
 export { registerTriggerRoutes } from './triggerRoutes.js';
 export {
   filterByPermissions,
-  isAdmin,
   loadWorkflows,
   findWorkflowFile,
   validateWorkflow

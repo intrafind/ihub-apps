@@ -47,7 +47,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { requireFeature } from '../featureRegistry.js';
 import { logAudit } from '../services/AuditLogService.js';
-import { isAdminUser, resolvePrincipal } from '../services/loop/runIdentity.js';
+import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
@@ -76,7 +76,7 @@ import {
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
-import { isAdminEligiblePrincipal } from '../utils/authorization.js';
+import { isAdmin } from '../utils/authorization.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -352,7 +352,7 @@ async function loadViewableShare(req, res, { purpose = 'transcript' } = {}) {
 async function isShareOwnerOrAdmin(share, user) {
   // Delegated principals (personal API keys, add-in tokens) carry their
   // owner's groups but never their admin rights — same rule as the admin API.
-  if (isAdminUser(user) && isAdminEligiblePrincipal(user)) return true;
+  if (isAdmin(user)) return true;
   const me = await resolvePrincipal(user, { mode: share.identityMode || 'default' });
   return me.id === share.ownerId;
 }

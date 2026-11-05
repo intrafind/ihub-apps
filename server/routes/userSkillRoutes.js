@@ -26,7 +26,11 @@ import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { isValidId, validateIdForPath } from '../utils/pathSecurity.js';
-import { enhanceUserWithPermissions, loadGroupsConfiguration } from '../utils/authorization.js';
+import {
+  enhanceUserWithPermissions,
+  isContentAdmin,
+  loadGroupsConfiguration
+} from '../utils/authorization.js';
 import {
   sendBadRequest,
   sendErrorResponse,
@@ -47,7 +51,6 @@ import {
   UNSHAREABLE_GROUPS,
   canHoldUserPrompts as canHoldUserSkills,
   effectiveGroups,
-  isPromptAdmin as isSkillAdmin,
   principalShareKeys,
   sharePermissionFor,
   userPromptPermissions as userSkillPermissions
@@ -129,7 +132,7 @@ function actorOf(user) {
 /** The caller's effective groups and whether they administer skills. */
 function callerContext(user) {
   const config = groupsConfig();
-  return { config, groups: effectiveGroups(user, config), isAdmin: isSkillAdmin(user, config) };
+  return { config, groups: effectiveGroups(user, config), isAdmin: isContentAdmin(user) };
 }
 
 /**
@@ -146,7 +149,7 @@ function requireUserSkills(req, res, { manage = false } = {}) {
   }
   ensurePrincipal(req);
   if (!isUserSkillsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
-    if (!manage || !isSkillAdmin(req.user, groupsConfig())) {
+    if (!manage || !isContentAdmin(req.user)) {
       sendErrorResponse(res, 403, 'User skills are switched off', {
         details: { code: 'USER_SKILLS_DISABLED' }
       });
