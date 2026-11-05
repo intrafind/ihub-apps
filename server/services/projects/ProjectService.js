@@ -28,6 +28,7 @@ import {
 import { evictItemKeys, readText, storeText } from './ItemTextStore.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 import { ProjectError } from './projectErrors.js';
+import { PROJECT_ITEM_KIND } from './projectItemLinks.js';
 // Registering the built-in kinds is a side effect of loading them.
 import './kinds/linkKinds.js';
 import './kinds/uploadKind.js';
@@ -754,15 +755,43 @@ export class ProjectService {
   }
 
   /**
-   * Rename or pin an item.
+   * Rename or pin an item, or — for a link item (URL, iHub page, iFinder
+   * document or search) — change what it points at. The new reference is checked
+   * like a new item's; an item still named after its old reference takes the
+   * new one's name. The kind never changes, and neither does the reference of
+   * an uploaded, written or cloud document or of a document linked from another
+   * project (`INVALID_REF`).
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{name?: string, pinned?: boolean}} patch
+   * @param {{name?: string, pinned?: boolean, ref?: Object}} patch
    * @param {{user: Object, authorize?: Function}} options
    * @returns {Promise<{project: Object, item: Object}|null>}
    */
   async updateItem(projectId, itemId, patch, { user, authorize }) {
+    // A new reference is checked (and, for iFinder, authorised) before the
+    // project is locked, like the one of a new item in `addItem`.
+    let checkedRef = null;
+    let prepared = null;
+    if (patch.ref !== undefined) {
+      const current = await this.repository.get(projectId);
+      const existing = (current?.items || []).find(entry => entry.id === itemId);
+      if (current && !existing) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+      if (existing) {
+        const checked = this._checkKindRef(existing.kind, patch.ref, { admin: true });
+        if (checked.kind.storage.ihub !== 'link' || checked.kind.id === PROJECT_ITEM_KIND) {
+          throw new ProjectError(
+            'INVALID_REF',
+            `The reference of an item of kind "${existing.kind}" cannot be changed`
+          );
+        }
+        prepared =
+          typeof checked.kind.prepare === 'function'
+            ? await checked.kind.prepare(checked.ref, { user, projectId })
+            : null;
+        checkedRef = { kind: checked.kind, ref: prepared?.ref || checked.ref };
+      }
+    }
     let stored = null;
     try {
       stored = await this.repository.mutate(
@@ -779,11 +808,40 @@ export class ProjectService {
             item.pinned = patch.pinned;
             changed = true;
           }
+          if (patch.ref !== undefined) {
+            // The item changed kind or was replaced between the check and the lock.
+            if (!checkedRef || checkedRef.kind.id !== item.kind) {
+              throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was edited');
+            }
+            if (JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref)) {
+              const { kind, ref } = checkedRef;
+              const before =
+                typeof kind.describe === 'function' ? kind.describe(item.ref, user?.language) : {};
+              const after = {
+                ...(typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {}),
+                ...(prepared?.name ? { name: prepared.name } : {}),
+                ...(prepared?.source || {})
+              };
+              // An item still named after its old reference follows the new one;
+              // a name somebody chose (here or in the same request) stays.
+              if (patch.name === undefined && (!item.name || item.name === before.name)) {
+                item.name = String(after.name || kind.id).slice(0, 300);
+              }
+              item.ref = ref;
+              item.provenance = {
+                ...(item.provenance || {}),
+                source: after.url || after.site ? { site: after.site, url: after.url } : null
+              };
+              item.status = 'ready';
+              item.error = null;
+              changed = true;
+            }
+          }
           if (!changed) return null;
           item.updatedAt = nowIso();
           return project;
         },
-        // Someone renaming or pinning a document is using the project:
+        // Someone renaming, pinning or editing a document is using the project:
         // retention must not count the project as abandoned.
         { actor: actorOf(user), authorize, touchActivity: true }
       );

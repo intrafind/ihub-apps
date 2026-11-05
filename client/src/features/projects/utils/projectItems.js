@@ -321,6 +321,87 @@ export function buildItemRequest(tabId, draft = {}) {
   }
 }
 
+/**
+ * The kinds of item whose reference can be changed after it was added: the
+ * link kinds, whose content stays where it is (a URL, an iHub page, an iFinder
+ * document or search). An uploaded or written document has no reference to
+ * change, a cloud document and a document linked from another project are
+ * picked again instead.
+ */
+export const EDITABLE_ITEM_KINDS = Object.freeze([
+  'url',
+  'page',
+  'ifinder-document',
+  'ifinder-query'
+]);
+
+/**
+ * Whether an item can be edited (its reference changed), not only renamed.
+ *
+ * @param {{kind?: string}|null|undefined} item
+ * @returns {boolean}
+ */
+export function isEditableItem(item) {
+  return EDITABLE_ITEM_KINDS.includes(item?.kind);
+}
+
+/**
+ * The draft of the edit dialog for an item: its name and the fields of its
+ * reference, in the shape the pickers of the add dialog work on.
+ *
+ * @param {{kind: string, name?: string, ref?: Object}} item
+ * @returns {Object}
+ */
+export function draftFromItem(item) {
+  const ref = item?.ref || {};
+  return {
+    name: item?.name || '',
+    pinned: false,
+    url: ref.url || '',
+    selectedUrls: [],
+    pageId: ref.pageId || '',
+    language: ref.language || '',
+    documentId: ref.documentId || '',
+    documentTitle: item?.name || '',
+    searchProfile: ref.searchProfile || '',
+    query: ref.query || ''
+  };
+}
+
+/**
+ * What to send for an edited item: the name when it changed and the reference
+ * when it did. The server replaces the reference as sent, so the fields the
+ * pickers do not show (a content limit, a result count) are carried over from
+ * the stored reference.
+ *
+ * @param {{kind: string, name?: string, ref?: Object}} item
+ * @param {Object} draft - The edit dialog's draft.
+ * @returns {{changes: Object|null, error: string|null}} `changes` is `null` when
+ *   nothing differs; `error` is a validation code (see `buildItemRequest`).
+ *
+ * @example
+ * buildItemChanges({ kind: 'url', name: 'Docs', ref: { url: 'https://a.example' } },
+ *   { ...draftFromItem(item), url: 'https://b.example' })
+ * // => { changes: { ref: { url: 'https://b.example' } }, error: null }
+ */
+export function buildItemChanges(item, draft) {
+  const { body, error } = buildItemRequest(item.kind, { ...draft, name: '' });
+  if (error) return { changes: null, error };
+  const picked = body.ref;
+  // The profile and the language are optional: an emptied one is dropped.
+  const kept = { ...(item.ref || {}) };
+  delete kept.searchProfile;
+  delete kept.language;
+  const ref = { ...kept, ...picked };
+  const changes = {};
+  const name = (draft.name || '').trim();
+  if (name && name !== item.name) changes.name = name;
+  const same = (a, b) =>
+    JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+  if (!same(ref, item.ref || {})) changes.ref = ref;
+  return { changes: Object.keys(changes).length > 0 ? changes : null, error: null };
+}
+
 /** The longest item name the server takes. */
 const MAX_ITEM_NAME_CHARS = 300;
 

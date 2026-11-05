@@ -328,6 +328,75 @@ describe('AdminProjectEditPage – items', () => {
     expect(await screen.findByTestId('project-scan-warning')).toBeInTheDocument();
   });
 
+  test('edits the address of a web page item in the add dialog fields', async () => {
+    const link = {
+      id: 'i2',
+      kind: 'url',
+      name: 'https://intra/old',
+      status: 'ready',
+      pinned: false,
+      ref: { url: 'https://intra/old' }
+    };
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([READY, link]));
+    mockApi.updateAdminProjectItem.mockResolvedValue({
+      ...link,
+      name: 'https://intra/new',
+      ref: { url: 'https://intra/new' }
+    });
+    renderAt('/admin/projects/handbook/edit');
+
+    await screen.findByText('policies.pdf');
+    // An upload has no address to change: it is renamed instead.
+    const uploadRow = screen.getByText('policies.pdf').closest('tr');
+    expect(within(uploadRow).queryByRole('button', { name: 'Edit' })).toBeNull();
+    fireEvent.click(within(uploadRow).getByRole('button', { name: 'More actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+
+    const row = screen
+      .getByText('https://intra/old', { selector: 'div.font-medium' })
+      .closest('tr');
+    expect(within(row).queryByRole('button', { name: 'Rename' })).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+
+    const url = await screen.findByLabelText('URL');
+    expect(url).toHaveValue('https://intra/old');
+    fireEvent.change(url, { target: { value: 'ftp://nope' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Enter a valid http(s) URL.')).toBeInTheDocument();
+    expect(mockApi.updateAdminProjectItem).not.toHaveBeenCalled();
+
+    fireEvent.change(url, { target: { value: 'https://intra/new' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateAdminProjectItem).toHaveBeenCalledWith('handbook', 'i2', {
+        ref: { url: 'https://intra/new' }
+      })
+    );
+    await waitFor(() => expect(screen.queryByLabelText('URL')).toBeNull());
+  });
+
+  test('shows why an edit was refused and keeps the dialog open', async () => {
+    const link = {
+      id: 'i2',
+      kind: 'url',
+      name: 'Intranet',
+      status: 'ready',
+      ref: { url: 'https://intra/old' }
+    };
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([link]));
+    mockApi.updateAdminProjectItem.mockRejectedValue(new Error('Invalid reference for url'));
+    renderAt('/admin/projects/handbook/edit');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByLabelText('URL'), {
+      target: { value: 'https://intra/new' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Invalid reference for url')).toBeInTheDocument();
+    expect(screen.getByLabelText('URL')).toBeInTheDocument();
+  });
+
   test('polls the project while an item is being extracted', async () => {
     mockApi.fetchAdminProject
       .mockResolvedValueOnce(makeProject([{ ...READY, status: 'pending', text: null }]))
