@@ -218,6 +218,36 @@ describe('read_url refused pages', () => {
       ({ default: searchWithExtraction } = await import('../tools/lib/searchWithExtraction.js'));
     });
 
+    test('shares the per-chat blocked-host memory with read_url', async () => {
+      jest.spyOn(webSearchService, 'getProvider').mockReturnValue(null);
+      jest.spyOn(webSearchService, 'search').mockResolvedValue({
+        results: [{ title: 'Shop', url: 'https://8.8.8.8/shop', description: 'A shop' }]
+      });
+      throttledFetchMock.mockResolvedValue(
+        blockedResponse(403, { server: 'AkamaiNetStorage' }, AKAMAI_BODY)
+      );
+      const search = () =>
+        searchWithExtraction({
+          query: 'shoes',
+          provider: 'test',
+          component: 'Test',
+          extractContent: true,
+          chatId: 'chat-s'
+        });
+
+      // The search finds the host blocked and remembers it for the chat ...
+      const first = await search();
+      expect(first.extractedContent[0].extractionErrorCode).toBe('BOT_PROTECTION');
+      expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+
+      // ... so neither a later read_url nor another search asks that host again.
+      const read = await extractForTool({ url: 'https://8.8.8.8/other', chatId: 'chat-s' });
+      expect(read.error.code).toBe('BOT_PROTECTION');
+      const second = await search();
+      expect(second.extractedContent[0].extractionErrorCode).toBe('BOT_PROTECTION');
+      expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+    });
+
     test('passes BOT_PROTECTION through per result and keeps the title and description', async () => {
       jest.spyOn(webSearchService, 'getProvider').mockReturnValue(null);
       jest.spyOn(webSearchService, 'search').mockResolvedValue({

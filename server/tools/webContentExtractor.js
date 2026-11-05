@@ -380,6 +380,11 @@ export default async function webContentExtractor({
 
   const acceptLanguage = acceptLanguageFor(resolveSearchLanguage(language));
 
+  // A host that already blocked this chat is not asked again, whether the read
+  // comes from `read_url` or from a web search that reads its result pages.
+  const known = recallBlockedHost(chatId, validUrl.hostname);
+  if (known) throw known;
+
   try {
     const cacheKey = makePageCacheKey(validUrl.toString(), acceptLanguage);
     let doc = getCachedPage(cacheKey);
@@ -421,7 +426,12 @@ export default async function webContentExtractor({
       throw createError('Request timed out while fetching webpage', 'TIMEOUT');
     }
     // The site's own answer, already worded and coded: not an extraction failure.
-    if (SITE_REFUSAL_CODES.has(error.code)) throw error;
+    if (SITE_REFUSAL_CODES.has(error.code)) {
+      if (error.code === BOT_PROTECTION_CODE) {
+        rememberBlockedHost(chatId, error, validUrl.hostname);
+      }
+      throw error;
+    }
     if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
       throw createError(
         `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates or enable global SSL ignore in platform configuration.`,
@@ -443,14 +453,6 @@ const blockedHosts = new Map();
 
 function blockedHostKey(chatId, hostname) {
   return chatId && hostname ? `${chatId}\u0000${String(hostname).toLowerCase()}` : null;
-}
-
-function hostnameOf(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
-  }
 }
 
 /** Remember that a host blocked this chat's page reads. */
@@ -478,9 +480,9 @@ function rememberBlockedHostKey(key, error) {
   blockedHosts.set(key, { error, expires: now + BLOCKED_HOST_TTL_MS });
 }
 
-/** The block error for a host that already blocked this chat, or null. */
-function recallBlockedHost(chatId, url) {
-  const key = blockedHostKey(chatId, hostnameOf(url));
+/** The block error for a host (name) that already blocked this chat, or null. */
+function recallBlockedHost(chatId, hostname) {
+  const key = blockedHostKey(chatId, hostname);
   const entry = key ? blockedHosts.get(key) : null;
   if (!entry) return null;
   if (entry.expires <= Date.now()) {
@@ -521,10 +523,6 @@ export async function extractForTool({ url, uri, link, maxLength, offset, langua
   const start = Number(offset);
   const targetUrl = url || uri || link;
 
-  // A host that already blocked this chat is not asked again.
-  const known = recallBlockedHost(chatId, targetUrl);
-  if (known) return botProtectionToolResult(known, targetUrl);
-
   try {
     return await webContentExtractor({
       url,
@@ -539,7 +537,6 @@ export async function extractForTool({ url, uri, link, maxLength, offset, langua
     if (error.code !== BOT_PROTECTION_CODE) throw error;
     // Handed to the model as a result it cannot misread as "try again", not
     // as a thrown error string.
-    rememberBlockedHost(chatId, error, hostnameOf(targetUrl));
     return botProtectionToolResult(error, targetUrl);
   }
 }
