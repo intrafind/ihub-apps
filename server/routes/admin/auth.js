@@ -3,8 +3,8 @@
 
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
-import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
-import { isContentAdminAuthRequired } from '../../middleware/contentAdminAuth.js';
+import { adminAuth } from '../../middleware/adminAuth.js';
+import { isContentAdmin } from '../../utils/authorization.js';
 import { equalsIgnoreCase, hashPasswordWithUserId } from '../../utils/userManager.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -179,7 +179,7 @@ export default function registerAdminAuthRoutes(app) {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
       // Accept both full admins and content admins for admin panel entry
-      const authRequired = isAdminAuthRequired(req) && isContentAdminAuthRequired(req);
+      const authRequired = !isContentAdmin(req.user);
 
       res.json({
         authRequired,

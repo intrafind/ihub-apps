@@ -641,14 +641,14 @@ test('approval: admins may answer regardless of the approver groups; agents stil
     svc.answer(
       it.id,
       { value: 'approve' },
-      { user: { id: 'agent:p1', isAgent: true, groups: ['admin'] } }
+      { user: { id: 'agent:p1', isAgent: true, groups: ['admins'] } }
     ),
     e => e.code === 'APPROVER_REQUIRED'
   );
   const answered = await svc.answer(
     it.id,
     { value: 'approve' },
-    { user: { id: 'root', groups: ['admin'] } }
+    { user: { id: 'root', groups: ['admins'] } }
   );
   assert.equal(answered.status, 'answered');
   assert.equal(answered.answer.by, 'root');

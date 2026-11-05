@@ -416,7 +416,7 @@ describe('code that reads the principal directly', () => {
     const principal = anonymous();
     assert.ok(principal.groups.includes('admins'));
     assert.equal(isAdminUser(principal), false);
-    assert.equal(isWorkflowAdmin({ ...principal, groups: ['admin'] }), false);
+    assert.equal(isWorkflowAdmin({ ...principal, groups: ['admins'] }), false);
     assert.equal(isAdminUser({ id: 'u1', groups: ['admins'] }), true);
   });
 

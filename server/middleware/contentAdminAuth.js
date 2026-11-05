@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
+import { isContentAdmin } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -20,37 +20,8 @@ export function contentAdminAuth(req, res, next) {
 
     // Delegated and machine principals (personal API keys, OAuth clients,
     // agents) never edit content, regardless of the groups they carry.
-    if (!isAdminEligiblePrincipal(req.user)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        message: 'Content admin access required.'
-      });
-    }
-
-    const userGroups = req.user.groups || [];
-
-    try {
-      const groupsConfig = loadGroupsConfiguration();
-      const hasAccess = userGroups.some(groupName => {
-        const group = groupsConfig.groups?.[groupName];
-        return (
-          group?.permissions?.adminAccess === true || group?.permissions?.contentAdmin === true
-        );
-      });
-
-      if (hasAccess) {
-        return next();
-      }
-    } catch (error) {
-      logger.warn('Failed to load groups configuration for content admin check', {
-        component: 'ContentAdminAuth',
-        error
-      });
-      // Fallback to default admin groups
-      const defaultAdminGroups = new Set(['admin', 'admins']);
-      if (userGroups.some(group => defaultAdminGroups.has(group))) {
-        return next();
-      }
+    if (isContentAdmin(req.user)) {
+      return next();
     }
 
     return res.status(403).json({
@@ -63,33 +34,5 @@ export function contentAdminAuth(req, res, next) {
       error: 'Authentication system error',
       message: 'Internal server error during authentication'
     });
-  }
-}
-
-/**
- * Check if content admin authentication is required (used by auth status endpoint).
- * Returns true if user lacks both adminAccess and contentAdmin.
- * @param {object} req - Request object
- * @returns {boolean} Whether authentication is still required
- */
-export function isContentAdminAuthRequired(req) {
-  if (!req || !req.user || req.user.id === 'anonymous') {
-    return true;
-  }
-
-  if (!isAdminEligiblePrincipal(req.user)) {
-    return true;
-  }
-
-  const userGroups = req.user.groups || [];
-
-  try {
-    const groupsConfig = loadGroupsConfiguration();
-    return !userGroups.some(groupName => {
-      const group = groupsConfig.groups?.[groupName];
-      return group?.permissions?.contentAdmin === true;
-    });
-  } catch {
-    return true;
   }
 }

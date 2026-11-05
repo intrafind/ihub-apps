@@ -33,7 +33,7 @@ import {
 
 const ALICE = { id: 'alice', groups: ['users'] };
 const BOB = { id: 'bob', groups: ['users'] };
-const ADMIN = { id: 'root', groups: ['admin'] };
+const ADMIN = { id: 'root', groups: ['admins'] };
 
 /** Scratch directory the bootstrapped provider owns for this file. */
 let baseDir = null;

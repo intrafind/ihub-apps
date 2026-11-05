@@ -61,7 +61,7 @@ function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
-    req.user = { id: 'admin-user', username: 'admin', groups: ['admin'] };
+    req.user = { id: 'admin-user', username: 'admin', groups: ['admins'] };
     next();
   });
   registerAdminGroupRoutes(app);

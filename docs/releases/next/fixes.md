@@ -235,3 +235,11 @@ the same check as workflow HTTP nodes.
 - A server that legitimately lives in one of these ranges must be listed in its `allowedHosts` or
   in `ssrf.allowedHosts` in `platform.json`; the existing allow-lists work as before.
 - The integration diagnostics flag the same addresses as private.
+
+## A Group Named `admin` No Longer Grants Admin Rights in a Few Places
+
+The built-in administrator group is `admins`. A group called `admin` (singular) was still treated as
+an administrator when listing workflows, reading agent runs and artifacts, answering approvals and
+as the fallback when `groups.json` cannot be read. Only `admins` and the `adminAccess` permission
+grant admin rights now. If you created a group named `admin`, give it `adminAccess` under
+**Admin → Groups** or move its members to `admins`.
