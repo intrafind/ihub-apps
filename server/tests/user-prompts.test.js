@@ -47,6 +47,7 @@ import {
 import { userPromptSettings, allowedShareTargets } from '../services/prompts/userPromptSettings.js';
 import { promptConfigSchema } from '../validators/promptConfigSchema.js';
 import registerPromptRoutes from '../routes/promptRoutes.js';
+import errorHandler from '../middleware/errorHandler.js';
 import registerAdminPromptsRoutes, {
   globalPromptFromUserPrompt,
   slugifyPromptId
@@ -130,11 +131,18 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, heade
     url: '/'
   };
   const res = makeResponse();
+  // Like Express 5: a thrown error or rejected promise goes to the error middleware.
   for (const handler of handlers) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handler(req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+    } catch (error) {
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -366,7 +374,7 @@ describe('creating and listing', () => {
       body: { name: 'second', prompt: 'x' }
     });
     assert.equal(second.statusCode, 409);
-    assert.equal(second.body.details.code, 'PROMPT_LIMIT_REACHED');
+    assert.equal(second.body.code, 'PROMPT_LIMIT_REACHED');
   });
 
   it('answers 403 when user prompts are switched off, and keeps global prompts listed', async () => {
@@ -385,7 +393,7 @@ describe('creating and listing', () => {
 
     const owner = await drive(route.get, { user: ADA, params });
     assert.equal(owner.statusCode, 403, 'users do not reach their prompts while it is off');
-    assert.equal(owner.body.details.code, 'USER_PROMPTS_DISABLED');
+    assert.equal(owner.body.code, 'USER_PROMPTS_DISABLED');
 
     assert.equal((await drive(route.get, { user: ROOT, params })).statusCode, 200);
     assert.equal((await drive(route.versions, { user: ROOT, params })).statusCode, 200);
@@ -448,6 +456,7 @@ describe('sharing', () => {
       body: { name: 'Old tab', prompt: 'x', expectedRevision: 1 }
     });
     assert.equal(stale.statusCode, 409, 'a save from an outdated editor does not overwrite');
+    assert.equal(stale.body.code, 'REVISION_CONFLICT');
 
     const reshare = await share(GRACE, prompt.id, [
       { type: 'user', id: GRACE.id, permission: 'edit' },
@@ -521,7 +530,7 @@ describe('sharing', () => {
       openGate();
       const late = await pending;
       assert.equal(late.statusCode, 403, JSON.stringify(late.body));
-      assert.equal(late.body.details.code, 'PROMPT_ACCESS_CHANGED');
+      assert.equal(late.body.code, 'PROMPT_ACCESS_CHANGED');
     } finally {
       delete repo._withLock;
       openGate();
@@ -551,6 +560,7 @@ describe('sharing', () => {
       { type: 'user', id: 'nobody', permission: 'use' }
     ]);
     assert.equal(unknown.statusCode, 400);
+    assert.equal(unknown.body.code, 'BAD_REQUEST');
     assert.deepEqual(unknown.body.details.unknown, ['nobody']);
     const anon = await share(ADA, prompt.id, [
       { type: 'group', id: 'anonymous', permission: 'use' }
@@ -560,7 +570,7 @@ describe('sharing', () => {
     setUserPromptSettings({ sharing: { allowEveryone: false } });
     const everyone = await share(ADA, prompt.id, [{ type: 'everyone', permission: 'use' }]);
     assert.equal(everyone.statusCode, 403);
-    assert.equal(everyone.body.details.code, 'SHARE_TARGET_NOT_ALLOWED');
+    assert.equal(everyone.body.code, 'SHARE_TARGET_NOT_ALLOWED');
 
     setUserPromptSettings({ sharing: { restrictToGroups: ['engineers'] } });
     const group = await share(ADA, prompt.id, [
@@ -724,7 +734,7 @@ describe('ownership', () => {
       body: { ownerId: GRACE.id }
     });
     assert.equal(res.statusCode, 409, JSON.stringify(res.body));
-    assert.equal(res.body.details.code, 'PROMPT_LIMIT_REACHED');
+    assert.equal(res.body.code, 'PROMPT_LIMIT_REACHED');
     assert.ok(ids(await list(ADA, 'mine')).includes(prompt.id), 'it stays with Ada');
   });
 });
@@ -828,7 +838,7 @@ describe('duplicating', () => {
       body: { name: 'x', prompt: 'y' }
     });
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details.code, 'GLOBAL_PROMPT_READ_ONLY');
+    assert.equal(res.body.code, 'GLOBAL_PROMPT_READ_ONLY');
   });
 });
 

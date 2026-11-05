@@ -556,6 +556,12 @@ text page. Every such response has the same body:
   `AUTH_REQUIRED` instead of `AUTHENTICATION_REQUIRED`. The field problems of a rejected task
   (`INVALID_TASK`) moved from `details` (a list) to `details.issues`, also in the tool results the
   model sees. A malformed settings body answers `VALIDATION_FAILED` with `details.issues`.
+- The personal prompt library endpoints (`/api/prompts*`) answer in this shape. The codes they
+  already had (`USER_PROMPTS_DISABLED`, `USER_PROMPTS_UNAVAILABLE`, `PROMPT_LIMIT_REACHED`,
+  `SHARE_TARGET_NOT_ALLOWED`, …) and the stale-edit code `REVISION_CONFLICT` moved from
+  `details.code` to the top-level `code`; a prompt the caller may not see answers `NOT_FOUND`, an
+  unknown share target `BAD_REQUEST` with `details.unknown`, and a malformed body
+  `VALIDATION_FAILED` with `details.issues` instead of one joined `error` text.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

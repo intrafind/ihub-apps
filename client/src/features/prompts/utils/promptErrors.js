@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The error code the prompts API put in `details.code`, if any.
+ * The error code of the prompts API (`code` of the response body), if any.
  *
  * @param {Error} error - Error thrown by an API call.
  * @returns {string|null}
  */
 export function promptErrorCode(error) {
-  return error?.originalError?.response?.data?.details?.code || error?.code || null;
+  return error?.originalError?.response?.data?.code || error?.code || null;
 }
 
 /**

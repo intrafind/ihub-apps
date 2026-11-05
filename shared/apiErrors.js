@@ -112,13 +112,27 @@ export const SCHEDULED_TASK_ERROR_CODES = Object.freeze({
   UPLOADS_DISABLED: 503
 });
 
+/** Codes of the personal prompt library (`server/routes/promptRoutes.js`). */
+export const PROMPT_ERROR_CODES = Object.freeze({
+  USER_PROMPTS_NOT_ALLOWED: 403,
+  USER_PROMPTS_DISABLED: 403,
+  USER_PROMPTS_UNAVAILABLE: 503,
+  PROMPT_LIMIT_REACHED: 409,
+  SHARE_TARGET_NOT_ALLOWED: 403,
+  PROMPT_FORBIDDEN: 403,
+  GLOBAL_PROMPT_READ_ONLY: 403,
+  PROMPT_ACCESS_CHANGED: 403,
+  REVISION_CONFLICT: 409
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
   ...STORAGE_ERROR_CODES,
   ...LLM_API_ERROR_CODES,
   ...FEATURE_ERROR_CODES,
-  ...SCHEDULED_TASK_ERROR_CODES
+  ...SCHEDULED_TASK_ERROR_CODES,
+  ...PROMPT_ERROR_CODES
 });
 
 /**

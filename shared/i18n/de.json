@@ -8934,6 +8934,15 @@
     "INVALID_RUNS": "Die Liste der Läufe ist ungültig.",
     "INVALID_DECISION": "Die Entscheidung muss „approve“ oder „reject“ sein.",
     "INVALID_STATUS": "Der Status muss „paused“, „active“ oder „disabled“ sein.",
-    "UPLOADS_DISABLED": "Datei-Uploads sind ausgeschaltet."
+    "UPLOADS_DISABLED": "Datei-Uploads sind ausgeschaltet.",
+    "USER_PROMPTS_NOT_ALLOWED": "Mit dieser Anmeldung können keine persönlichen Prompts geführt werden.",
+    "USER_PROMPTS_DISABLED": "Persönliche Prompts sind ausgeschaltet.",
+    "USER_PROMPTS_UNAVAILABLE": "Ihre Prompts sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut.",
+    "PROMPT_LIMIT_REACHED": "Sie haben die maximale Anzahl an Prompts erreicht. Löschen Sie einen, um Platz zu schaffen.",
+    "SHARE_TARGET_NOT_ALLOWED": "Sie dürfen Prompts nicht mit dieser Zielgruppe teilen.",
+    "PROMPT_FORBIDDEN": "Sie dürfen diesen Prompt nicht ändern.",
+    "GLOBAL_PROMPT_READ_ONLY": "Globale Prompts werden von Administratoren verwaltet.",
+    "PROMPT_ACCESS_CHANGED": "Ihr Zugriff auf diesen Prompt hat sich geändert.",
+    "REVISION_CONFLICT": "Jemand hat dieses Element zwischenzeitlich geändert. Schließen Sie den Editor und öffnen Sie es erneut, um die aktuelle Version zu sehen."
   }
 }
