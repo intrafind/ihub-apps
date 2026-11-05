@@ -494,12 +494,14 @@ export class LLMClient {
     this.runLog = opts.runLog || runLogSingleton;
     this.sleep = opts.sleep;
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
-    // Usage limits (services/quota): `{ assert(user, model), record(user, call) }`,
-    // or null to turn them off. Every model call passes through `execute`, so
-    // this is the one place they are enforced and counted.
+    // Usage limits (services/quota): `{ assert(user, model) }`, or null to
+    // turn the check off. Every model call passes through `execute`, so this is
+    // the one place they are enforced.
     this.quota = opts.quota !== undefined ? opts.quota : defaultQuota;
-    // Usage reporting (services/usage): `{ record(call) }`, or null to turn it
-    // off. One call record per model call, whatever the surface.
+    // Usage capture (services/usage): `{ record(call) }`, or null to turn it
+    // off. The one place a model call is captured: one call record per call,
+    // whatever the surface, which the recorder counts against the user's
+    // limits and stores for the usage reports — so both show the same numbers.
     this.usage = opts.usage !== undefined ? opts.usage : defaultUsage;
     // Kept as the constructed values only; the effective ceilings are
     // resolved per call so platform.json and per-model overrides apply to the
@@ -668,7 +670,10 @@ export class LLMClient {
           runMeta = null;
         }
         this.usage.record({
-          // Workflow and agent calls name their user for reporting only.
+          // Calls that carry no `options.user` (workflows, agents) name theirs
+          // in the telemetry; the budget counts them like any other call.
+          // `quota: false` exempts a call from the budget, not from reporting.
+          countQuota: quota !== null,
           user: quotaUser || telemetry.reportUser || null,
           surface: resolveSurface(telemetry, runMeta),
           appId:
@@ -707,18 +712,6 @@ export class LLMClient {
         throw err;
       }
     }
-    const recordQuota = usage => {
-      if (!quota || !quotaUser) return;
-      try {
-        quota.record(quotaUser, {
-          model,
-          usage: usage || estimateCallUsage(messages, accumulator),
-          appId: telemetry.appId || options.appConfig?.id || null
-        });
-      } catch {
-        /* counting must never break a call */
-      }
-    };
 
     // Abort/timeout plumbing: one signal for key resolution, request
     // construction (model discovery may hit the network), the transport and
@@ -1129,7 +1122,6 @@ export class LLMClient {
           // otherwise (most providers report usage only in the last chunk, so
           // stopping an answer must not keep it off the budget).
           const started = accumulator.usage || accumulator.chunkCount > 0;
-          if (started) recordQuota(accumulator.usage);
           recordUsage({
             err: failure,
             usage: started ? accumulator.usage || estimateCallUsage(messages, accumulator) : null,
@@ -1138,7 +1130,6 @@ export class LLMClient {
           });
         } else {
           client._endSpan(span, { model, accumulator, startedAt });
-          recordQuota(accumulator.usage);
           // A consumer that stopped reading before the end (a stop button
           // that broke out of the loop) ended the call early.
           recordUsage({
@@ -1741,11 +1732,6 @@ const defaultQuota = {
   async assert(user, model) {
     const { assertWithinQuota } = await loadQuota();
     await assertWithinQuota(user, model);
-  },
-  record(user, call) {
-    loadQuota()
-      .then(({ recordModelUsage }) => recordModelUsage(user, call))
-      .catch(() => {});
   }
 };
 

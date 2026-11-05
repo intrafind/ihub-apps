@@ -6,6 +6,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 let mockPlatform = {};
 let mockFeatures = {};
 const mockAppended = [];
+const mockCounted = [];
 
 jest.mock('../../../../server/configCache.js', () => ({
   __esModule: true,
@@ -27,7 +28,8 @@ jest.mock('../../../../server/services/UsageEventLog.js', () => ({
   appendUsageRecord: record => mockAppended.push(record)
 }));
 jest.mock('../../../../server/services/quota/quotaService.js', () => ({
-  quotaUserKey: user => (user?.id && user.id !== 'anonymous' ? String(user.id) : 'anonymous')
+  quotaUserKey: user => (user?.id && user.id !== 'anonymous' ? String(user.id) : 'anonymous'),
+  recordModelUsage: (user, counted) => mockCounted.push({ user, ...counted })
 }));
 
 import {
@@ -52,6 +54,7 @@ const call = {
 
 beforeEach(() => {
   mockAppended.length = 0;
+  mockCounted.length = 0;
   mockPlatform = {};
   mockFeatures = {};
 });
@@ -101,6 +104,25 @@ describe('recordLlmCall', () => {
     mockFeatures = { usageTracking: false };
     await expect(recordLlmCall(call)).resolves.toBe(null);
     expect(mockAppended).toHaveLength(0);
+  });
+
+  it('counts the call against the limits from the same usage, also with tracking off', async () => {
+    await recordLlmCall(call);
+    mockFeatures = { usageTracking: false };
+    await recordLlmCall(call);
+    expect(mockCounted).toHaveLength(2);
+    expect(mockCounted[0]).toMatchObject({
+      user,
+      model: { id: 'gpt' },
+      usage: call.usage,
+      appId: 'chat'
+    });
+  });
+
+  it('keeps an exempt call (countQuota: false) off the limits but still records it', async () => {
+    await recordLlmCall({ ...call, countQuota: false });
+    expect(mockCounted).toHaveLength(0);
+    expect(mockAppended).toHaveLength(1);
   });
 
   it('never throws', async () => {
