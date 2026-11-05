@@ -5004,6 +5004,20 @@
         "noItems": "The project has no items to test.",
         "itemOk": "{{chars}} characters, ~{{tokens}} tokens"
       },
+      "tryInChat": {
+        "open": "Try in chat",
+        "hide": "Hide chat",
+        "hint": "Chat with this project and nothing else, next to the editor",
+        "title": "Try in chat",
+        "subtitle": "A scratch chat with this project only",
+        "close": "Close chat",
+        "app": "App",
+        "appHelp": "The app's own instructions and tools apply. The other projects it links are left out, and it cannot call other apps or workflows. Pick the model in the chat.",
+        "adminNotice": "The chat runs as you, on the project as saved. How other users reach it (app links, publishing, groups) is not tested. The chat is temporary: it is not kept in your history and nothing is added to the project.",
+        "notReady": "{{count}} of {{total}} items are not ready (waiting, being extracted or failed) and are not searched yet.",
+        "noItems": "The project has no items yet, so there is nothing to find. Add an item first.",
+        "noApps": "There is no enabled chat app to try the project with. Enable one under Admin → Apps."
+      },
       "scanWarning": "Uploads are not scanned for malware. Configure platform.projects.scan to scan them.",
       "fields": {
         "id": "Project ID",
@@ -6080,7 +6094,12 @@
     "quotaExceededAllModels": "You have used your {window} token budget across all models ({limit} tokens). It resets on {resetAt}.",
     "quotaWindowDay": "daily",
     "quotaWindowWeek": "weekly",
-    "quotaWindowMonth": "monthly"
+    "quotaWindowMonth": "monthly",
+    "projectTestForbidden": "Only a content admin can test a project",
+    "projectTestNotFound": "Project not found",
+    "projectTestChatKept": "A project test runs in a temporary chat only",
+    "projectTestChatMismatch": "This chat was not started by a test of this project",
+    "projectTestChatNotKeepable": "A chat that tests a project cannot be kept"
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",

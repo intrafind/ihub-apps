@@ -3,6 +3,11 @@
 
 import configCache from '../../configCache.js';
 import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
+import {
+  checkProjectTestChat,
+  projectTestOrigin,
+  resolveProjectTestScope
+} from '../../services/knowledge/projectTestScope.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -879,6 +884,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
+          testProjectId: requestedTestProjectId,
           integrationScopes: requestedScopes,
           toolApprovalCapable
         } = req.body;
@@ -902,14 +908,39 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
         // on the request to the prompt builder, persisted with the chat.
+        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+        const clientLanguage =
+          language || req.headers['accept-language']?.split(',')[0] || defaultLang;
+        // A project test (#3309) puts one admin project in scope for this turn
+        // and keeps the chat temporary; the picker's fields do not apply to it.
+        let projectTest = null;
+        if (requestedTestProjectId !== undefined) {
+          projectTest = await resolveProjectTestScope({
+            user: req.user,
+            testProjectId: requestedTestProjectId
+          });
+          // A test runs in a temporary chat that a test of this project started
+          // (or one nothing has been said in yet), never in a kept chat and never
+          // in another conversation: that would put answers from a project that
+          // may be disabled into the admin's history, or read an unrelated chat.
+          const refused = projectTest.ok
+            ? checkProjectTestChat(access.chat, projectTest.projectId)
+            : projectTest;
+          if (refused) {
+            return res.status(refused.status).json({
+              error: await getLocalizedError(refused.messageKey, {}, clientLanguage),
+              code: refused.code
+            });
+          }
+        }
         const chatProjects = await resolveChatProjects({
           req,
           chat: access.chat,
           // Case-insensitive like the request builder, which accepts the id
           // in any case: a missed app would skip its `userProjects` gate.
           app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
-          projectId: requestedProjectId,
-          projects: requestedProjects
+          projectId: projectTest ? undefined : requestedProjectId,
+          projects: projectTest ? undefined : requestedProjects
         });
         if (!chatProjects.ok) {
           return res
@@ -917,9 +948,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             .json({ error: chatProjects.message, code: chatProjects.code });
         }
 
-        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const clientLanguage =
-          language || req.headers['accept-language']?.split(',')[0] || defaultLang;
         let messageId = null;
         if (messages && Array.isArray(messages) && messages.length > 0) {
           const lastMessage = messages.at(-1);
@@ -973,7 +1001,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           features: configCache.getFeatures(),
           platformConfig: configCache.getPlatform(),
           user: req.user,
-          ephemeral
+          // A scratch chat of a project test is never kept (#3309).
+          ephemeral: projectTest ? true : ephemeral
         });
         // An id the store cannot key cannot be a chat any more.
         if (!isPersistableChatId(chatId)) return sendBadRequest(res, 'Invalid chat id');
@@ -1223,6 +1252,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // stored (`materializeUserTurn`), on the @workflow path too.
           ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
           projectId: chatProjects.containerId,
+          // A test chat is marked as one, on every turn: the chat a turn creates
+          // starts with it, and one a file upload created before the first
+          // message gets it now. It is what keeps the chat out of the history.
+          ...(projectTest
+            ? {
+                origin: projectTestOrigin(projectTest.projectId),
+                chat: { origin: projectTestOrigin(projectTest.projectId) }
+              }
+            : {}),
           // How this turn is being answered, so reopening the chat comes
           // back with the same setup rather than the app's defaults. Only
           // the keys this request actually carried: the repository merges
@@ -1245,17 +1283,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
 
-        const mention = await tryHandleMentionWorkflow({
-          messages,
-          conversation,
-          chatId,
-          appId,
-          messageId,
-          modelId,
-          user: req.user,
-          clientLanguage,
-          persistence
-        });
+        // A project test hands nothing on: an @mention stays plain text, for
+        // the workflow would run with its own projects (#3309).
+        const mention = projectTest
+          ? { handled: false }
+          : await tryHandleMentionWorkflow({
+              messages,
+              conversation,
+              chatId,
+              appId,
+              messageId,
+              modelId,
+              user: req.user,
+              clientLanguage,
+              persistence
+            });
         if (mention.handled) {
           return mention.statusCode
             ? res.status(mention.statusCode).json(mention.response)
@@ -1286,6 +1328,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           chatId,
           projectId: chatProjects.containerId,
           attachedProjectIds: chatProjects.attachedIds,
+          ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
           integrationScopes
         };
 

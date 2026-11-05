@@ -130,6 +130,12 @@ export const chatPostSchema = {
     projectId: z.string().max(200).nullable().optional(),
     projects: z.array(z.string().max(200)).max(20).optional(),
     /**
+     * Admin → Projects → Test (#3309): run the turn with this admin project as
+     * the only one in scope, as a temporary chat. Content admins only; checked
+     * in the route (`resolveProjectTestScope`).
+     */
+    testProjectId: z.string().min(1).max(200).optional(),
+    /**
      * The scope picked per integration for this chat (#3050), e.g.
      * `{ ifinder: 'contracts' }`. Checked against what each integration
      * offers the user in the route (`resolveChatScopes`).

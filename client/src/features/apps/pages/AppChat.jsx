@@ -280,8 +280,16 @@ const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/Usage
  *   settings, variables, recent apps, the iAssistant conversation. Every mount is a
  *   new chat that starts from the app's own defaults, as a new user would see it.
  * @param {string|null} [props.appId] - The app to show when `embedded`
+ * @param {string|null} [props.testProjectId] - When `embedded`: the admin project this chat
+ *   tests (Admin → Projects → Try in chat, #3309). Every turn names it, and the server runs
+ *   it with that project as the only one in scope, as a temporary chat.
  */
-function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId = null }) {
+function AppChat({
+  preloadedApp = null,
+  embedded = false,
+  appId: embeddedAppId = null,
+  testProjectId: embeddedTestProjectId = null
+}) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const routeParams = useParams();
@@ -294,6 +302,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // Embedded: where this app's own page lives, for links that must not point
   // at the host page.
   const appPagePath = embedded ? buildPath(`/apps/${encodeURIComponent(appId)}`) : null;
+  // Only a host page's embedded chat tests a project; the route never does.
+  const testProjectId = embedded ? embeddedTestProjectId : null;
+  // What a project test adds to every request; the same object while the project is.
+  const projectTestParams = useMemo(
+    () => (testProjectId ? { testProjectId } : {}),
+    [testProjectId]
+  );
   const openInNewTab = useCallback(path => {
     window.open(buildPath(path), '_blank', 'noopener,noreferrer');
   }, []);
@@ -380,9 +395,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [savedSkillName]);
 
   // Compare mode state
-  // Check both platform-wide feature flag AND app-level setting
+  // Check both platform-wide feature flag AND app-level setting. A project test
+  // has none: the compare panels send and resend with their own parameters, and
+  // one that left out the project would answer from the app's other knowledge.
   const compareModeFeatureEnabled =
-    featureFlags.isEnabled('compareMode', false) && app?.features?.compareMode?.enabled !== false;
+    !testProjectId &&
+    featureFlags.isEnabled('compareMode', false) &&
+    app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
   // Whether the start form has been sent to the compare panels. Entering or
   // leaving compare mode starts the panels afresh, and with them the form.
@@ -1508,7 +1527,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {}),
           ...(Object.keys(integrationScopes).length > 0 ? { integrationScopes } : {}),
-          ...(containerProjectId ? { projectId: containerProjectId } : {})
+          ...(containerProjectId ? { projectId: containerProjectId } : {}),
+          ...projectTestParams
         };
 
         // Prepare validated variables
@@ -1564,6 +1584,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [
     app,
     containerProjectId,
+    projectTestParams,
     adoptContainerProject,
     messages.length,
     hydrating,
@@ -1895,6 +1916,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      ...projectTestParams,
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }
         : {}),
@@ -1906,6 +1928,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       selectedOutputFormat,
       currentLanguage,
       containerProjectId,
+      projectTestParams,
       attachedProjectIds,
       chatStoredServerSide
     ]
@@ -2585,6 +2608,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // chat afterwards; the same id on later turns is accepted too, which
       // keeps a chat that is not stored server-side inside its project.
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      // A project test (#3309): the server puts this one project in scope and
+      // keeps the chat temporary. Every turn says so, the server keeps no state.
+      ...projectTestParams,
       // The projects picked for this chat; the server adds them to the chat's own.
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }

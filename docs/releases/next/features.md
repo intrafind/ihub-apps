@@ -611,6 +611,25 @@ easier to read. The user's own messages sit in a neutral grey bubble on the righ
   before.
 - Error messages keep their red callout.
 
+## Projects: Try a Project in a Chat Before You Link It
+
+The project editor has a new **Try in chat** button. It opens a scratch chat beside the editor
+that has this project and nothing else in scope, so an admin can check that sources, instructions
+and files work without building an app first. When an answer is wrong it shows whether the cause
+is the project or the app and the model.
+
+- Pick the app (the general chat by default) and, in the chat, the model. The other projects the
+  app links are left out, and during the test it cannot call other apps or workflows.
+- Each answer shows its sources, the knowledge searches that were made and what they found, as in
+  any chat.
+- The chat runs as you, on the project as saved, and a disabled or unpublished project can be
+  tried. How other users reach the project is not tested; the panel says so. It also says how many
+  items are not searched yet because they are still being processed or failed.
+- The chat is temporary: it is not listed in your chat history and nothing is added to the
+  project.
+
+See [Projects](../../projects.md#try-in-chat).
+
 ## Projects: Edit a Web Page, iHub Page or iFinder Item After Adding It
 
 A link item of a project — a web page (URL), an iHub page, an iFinder document or an iFinder

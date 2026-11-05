@@ -602,6 +602,38 @@ describe('temporary chats and guests', () => {
     );
   });
 
+  it('never keeps the scratch chat of a project test, which may have answered from a disabled project', async () => {
+    const chatId = 'chat-project-test';
+    await getChatRepository().ensureChat({
+      chatId,
+      ownerId: ADA.id,
+      appId: 'chat',
+      origin: { createdVia: 'project-test', projectId: 'handbook' },
+      temporary: true
+    });
+    const refused = await drive(patchHandlers, {
+      params: { chatId },
+      body: { temporary: false },
+      user: ADA
+    });
+    assert.equal(refused.statusCode, 409);
+    assert.equal(refused.body.details?.code ?? refused.body.code, 'PROJECT_TEST_CHAT_NOT_KEEPABLE');
+    assert.equal(typeof refused.body.error, 'string');
+
+    const stored = await getChatRepository().getChat(chatId);
+    assert.equal(stored.temporary, true, 'still temporary');
+    const list = await drive(listHandlers, { user: ADA });
+    assert.ok(!list.body.items.some(chat => chat.id === chatId), 'not listed');
+
+    // Renaming it is no keeping, and stays possible.
+    const renamed = await drive(patchHandlers, {
+      params: { chatId },
+      body: { title: 'Handbook check' },
+      user: ADA
+    });
+    assert.equal(renamed.statusCode, 200);
+  });
+
   it('refuses to move a chat into a project: it is in one from its first turn', async () => {
     await getChatRepository().ensureChat({
       chatId: 'chat-tmp-project',
