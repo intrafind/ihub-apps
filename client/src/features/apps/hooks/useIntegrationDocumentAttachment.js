@@ -8,6 +8,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { processCloudFile } from '../../upload/utils/cloudFileProcessing';
 import {
   appBindsIntegration,
+  boundToolRefsFor,
   documentFailureKind,
   documentKindOf,
   documentRefOf
@@ -51,6 +52,9 @@ const documentKey = pending =>
  * @param {Object|null} options.currentModel - the selected model object
  * @param {Object} options.fileUploadHandler - `useFileUploadHandler()`
  * @param {(content: string, isError?: boolean) => void} options.addSystemMessage
+ * @param {(refs: string[]) => void} [options.onIntegrationBound] - the tool references of the app's
+ *   binding for the integration the document comes from: the chat switches them on, whatever the
+ *   user's default for the app says, because the link came from that system
  * @param {() => void} options.onConsumed
  */
 export default function useIntegrationDocumentAttachment({
@@ -62,6 +66,7 @@ export default function useIntegrationDocumentAttachment({
   currentModel,
   fileUploadHandler,
   addSystemMessage,
+  onIntegrationBound,
   onConsumed
 }) {
   const { t, i18n } = useTranslation();
@@ -77,6 +82,7 @@ export default function useIntegrationDocumentAttachment({
       currentModel,
       fileUploadHandler,
       addSystemMessage,
+      onIntegrationBound,
       onConsumed,
       t,
       language: i18n.language
@@ -164,6 +170,10 @@ export default function useIntegrationDocumentAttachment({
           );
           return;
         }
+        // The link came from that system, so its tools are on in this chat even when the user's
+        // default for the app has them off (or the binding is available only).
+        const boundRefs = boundToolRefsFor(live.app, info);
+        if (boundRefs.length > 0) liveRef.current.onIntegrationBound?.(boundRefs);
         const file = await fetchIntegrationDocumentFile({
           integration: doc.integration,
           ref,

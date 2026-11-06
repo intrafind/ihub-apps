@@ -1415,6 +1415,7 @@ function AppChat({
     currentModel: currentModelObject,
     fileUploadHandler,
     addSystemMessage,
+    onIntegrationBound: refs => setEnabledTools(prev => [...new Set([...(prev || []), ...refs])]),
     onConsumed: () => {
       // Clean the link's parameters from the URL to prevent a second attach on refresh
       const newSearch = new URLSearchParams(searchParams);

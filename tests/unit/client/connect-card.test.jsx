@@ -276,6 +276,31 @@ describe('sign-in result', () => {
     }
   });
 
+  test("`integration` alone is the page's own: a document link keeps it", () => {
+    const link = '/apps?documentId=d1&integration=ifinder&keep=1';
+    window.history.replaceState(null, '', link);
+    const popstate = jest.fn();
+    window.addEventListener('popstate', popstate);
+    try {
+      consumeConnectResult();
+      expect(window.location.pathname + window.location.search).toBe(link);
+      expect(popstate).not.toHaveBeenCalled();
+      expect(currentReturnUrl()).toBe(`http://localhost${link}`);
+    } finally {
+      window.removeEventListener('popstate', popstate);
+    }
+  });
+
+  test('a sign-in error still removes its `integration` and keeps the rest', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/apps/a?documentId=d1&integration_error=access_denied&integration=jira'
+    );
+    consumeConnectResult();
+    expect(window.location.search).toBe('?documentId=d1');
+  });
+
   test('the return URL is the current page without the result parameters', () => {
     window.history.replaceState(null, '', '/apps/a/c/1?integration_error=x&integration=y&keep=1');
     expect(currentReturnUrl()).toBe('http://localhost/apps/a/c/1?keep=1');

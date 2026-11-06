@@ -27,6 +27,22 @@ export const CONNECT_RESULT_PARAMS = Object.freeze([
   'integration'
 ]);
 
+/**
+ * The result parameters a URL carries. `integration` is one only next to `integration_error`
+ * (`?integration_error=<code>&integration=<id>`): on its own it belongs to the page, as in a link
+ * that opens a document from another system (`/apps?documentId=…&integration=ifinder`), and
+ * stripping it would drop that document.
+ *
+ * @param {URLSearchParams} searchParams
+ * @returns {string[]}
+ */
+function resultParamsIn(searchParams) {
+  const hasError = searchParams.has('integration_error');
+  return CONNECT_RESULT_PARAMS.filter(
+    name => searchParams.has(name) && (name !== 'integration' || hasError)
+  );
+}
+
 /** Error codes with their own message (`integrations.connect.errors.<code>`). */
 export const CONNECT_ERROR_CODES = Object.freeze([
   'access_denied',
@@ -79,7 +95,7 @@ export function parseConnectResult(href) {
  */
 export function currentReturnUrl(href = window.location.href) {
   const url = new URL(href);
-  for (const name of CONNECT_RESULT_PARAMS) url.searchParams.delete(name);
+  for (const name of resultParamsIn(url.searchParams)) url.searchParams.delete(name);
   return url.toString();
 }
 
@@ -111,8 +127,9 @@ export function consumeConnectResult() {
   const result = readConnectResult();
   if (typeof window === 'undefined' || !window.location) return result;
   const url = new URL(window.location.href);
-  if (CONNECT_RESULT_PARAMS.some(name => url.searchParams.has(name))) {
-    for (const name of CONNECT_RESULT_PARAMS) url.searchParams.delete(name);
+  const names = resultParamsIn(url.searchParams);
+  if (names.length > 0) {
+    for (const name of names) url.searchParams.delete(name);
     try {
       window.history.replaceState(window.history.state, '', url.toString());
       window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
