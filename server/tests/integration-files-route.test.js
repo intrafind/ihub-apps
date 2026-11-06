@@ -242,6 +242,56 @@ describe('integration files routes', () => {
         .get('/api/integrations/ifinder/files/metadata')
         .query({ id: 'd1' });
       assert.equal(res.status, 404);
+      // The client tells "no details route" from "no such document" by this text.
+      assert.equal(res.body.error, 'This integration has no details');
+    });
+
+    it('a 5xx answers with a generic message, never the upstream text; a 4xx keeps its own', async () => {
+      const app = appFor(GRANTED);
+      const failed = await request(app)
+        .get('/api/integrations/ifinder/files/content')
+        .query({ id: 'boom' });
+      assert.equal(failed.status, 500);
+      assert.equal(failed.body.error, 'Integration content failed');
+      assert.doesNotMatch(JSON.stringify(failed.body), /upstream exploded/);
+
+      registerConnector({
+        id: 'ifinder',
+        actions: {},
+        files: {
+          ...fakeFiles,
+          content: async () => {
+            throw sourceProviderError(
+              502,
+              'iFinder returned 502: <html>internal host ifinder-7</html>'
+            );
+          },
+          metadata: async () => {
+            throw sourceProviderError(503, 'upstream said: connection refused to 10.0.0.7');
+          }
+        }
+      });
+      const bad = await request(app)
+        .get('/api/integrations/ifinder/files/content')
+        .query({ id: 'x' });
+      assert.equal(bad.status, 502);
+      assert.equal(bad.body.error, 'Integration content failed');
+      assert.doesNotMatch(JSON.stringify(bad.body), /ifinder-7/);
+
+      const details = await request(app)
+        .get('/api/integrations/ifinder/files/metadata')
+        .query({ id: 'x' });
+      assert.equal(details.status, 503);
+      assert.equal(details.body.error, 'Integration metadata failed');
+      assert.doesNotMatch(JSON.stringify(details.body), /10\.0\.0\.7/);
+
+      // A 4xx keeps the connector's own words (the client shows or maps them)
+      registerConnector({ id: 'ifinder', actions: {}, files: fakeFiles });
+      const gone = await request(app)
+        .get('/api/integrations/ifinder/files/content')
+        .query({ id: 'gone' });
+      assert.equal(gone.status, 404);
+      assert.equal(gone.body.error, 'Document not found');
     });
   });
 
