@@ -109,15 +109,17 @@ Everything the answer does not cite is listed under *Also considered*.
 
 *Open* and *Copy link* need only a `url`. *Preview*, *Download*, *Add to email* (Outlook), *Open in
 App* and *Details* fetch the item's content through the system that owns it. To offer them,
-register a source provider. All providers share one route:
+register a source provider. All providers share one route (`<provider>` is the id the source's
+`provider` field carries; for an installed integration it is the installation id, and the route
+applies the integration gate first):
 
 ```
-GET /api/sources/<provider>/content?id=<ref.id>[&scope=<ref.scope>][&format=original|pdf|text]
-GET /api/sources/<provider>/metadata?id=<ref.id>[&scope=<ref.scope>]
+GET /api/integrations/<provider>/files/<ref.id>/content[/<filename>][?scope=<ref.scope>&format=original|pdf|text]
+GET /api/integrations/<provider>/files/<ref.id>[?scope=<ref.scope>]
 ```
 
-The route checks the sign-in, the provider name and the length of `id` (1024 characters at most)
-and `scope` (256 at most). It also handles a stream that fails: it answers 502 before the first
+`<ref.id>` is one URL-encoded path segment. The route checks the sign-in, the provider name and the
+length of `id` (1024 characters at most) and `scope` (256 at most). It also handles a stream that fails: it answers 502 before the first
 byte, and aborts the response after it. Your provider does the rest:
 
 ```js

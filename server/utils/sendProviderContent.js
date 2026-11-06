@@ -4,8 +4,7 @@
 /**
  * Answer a request with what a document provider's `content` returned
  * (`services/sources/providers.js`): the headers, then the stream or body.
- * Shared by the source routes (`routes/sources.js`) and the integration file
- * routes (`routes/integrations/files.js`).
+ * Used by the integration file routes (`routes/integrations/files.js`).
  *
  * @module utils/sendProviderContent
  */

@@ -84,11 +84,11 @@ control characters), as are the file name (at most 255) and the scope (at most 2
 | installation disabled, or the connector says it is not configured | `404 INTEGRATION_NOT_CONFIGURED` |
 | the user's groups do not grant it (`permissions.integrations`, `mayUseIntegration`) | `403 INTEGRATION_NOT_GRANTED` |
 
-The existing `GET /api/sources/:provider/content|metadata` (preview, download, Outlook attach)
-resolves a provider id through the same function, so a provider that is an installation gets the
-same gate and the same implementation; `project` and providers registered by code are passed
-through as before (the project provider enforces membership itself). The files routes resolve ids
-the same way, so "Open in App" for a project document or a third party's provider keeps working:
+The former `GET /api/sources/:provider/content|metadata` is **removed**: Preview, Download, Add to
+email, Details and Open in App all use the routes above, so there is one gate and one
+implementation. `project` and providers registered by code are passed through (the project provider
+enforces membership itself), so "Open in App" for a project document or a third party's provider
+keeps working:
 its `integration` value is the provider id the source carries, the probe answers
 `{ id, definition: null, type: null, name: id }` for a provider that is not an installation, and no
 integration gate applies beyond the provider's own rules.
@@ -151,8 +151,8 @@ hint for the model to fetch by id.
 
 - Server (`server/tests/integration-files-route.test.js`): the gate (404 not found, 404 not
   configured, 403 not granted, 200), the probe, content headers and streaming, format and id
-  validation, status mapping, the sources route applying the gate to `ifinder`, a provider that is
-  not an installation passing through.
+  validation, status mapping (an upstream 401 answered as 403), a provider that is not an
+  installation (`project`) or registered by code passing through, streams that fail early and late.
 - Client (`tests/unit/client/pending-document.test.jsx`): the helper (`integration` validation, the
   retired `source`, forwarding, binding match, kind, eligibility), the check hook's states, the
   picker (filter by binding, forwarding, error states, dismiss), the attach hook (original image as

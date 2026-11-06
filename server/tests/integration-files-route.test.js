@@ -3,11 +3,11 @@
 
 /**
  * `GET /api/integrations/:integration/files` · `/files/:id` · `/files/:id/content[/:filename]`
- * (routes/integrations/files.js): documents by reference from an installed
- * integration that declares the `files` capability — only while the
- * installation exists, is configured and is granted to the user's groups —
- * and the same gate on `GET /api/sources/:provider/*` for a provider that is
- * an installation.
+ * (routes/integrations/files.js): documents by reference from an installed integration that
+ * declares the `files` capability — only while the installation exists, is configured and is
+ * granted to the user's groups — and, under the provider's own rules, from a source provider that
+ * is not an installation (`project`, or one registered by code). This is the one route to a
+ * source's content and details.
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,7 +21,6 @@ import configCache from '../configCache.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
 import { registerConnector } from '../services/integrations/protocols/native/connectors/index.js';
 import filesRoutes from '../routes/integrations/files.js';
-import sourceRoutes from '../routes/sources.js';
 import {
   _resetSourceProviders,
   registerSourceProvider,
@@ -55,7 +54,6 @@ function appFor(user) {
   app.use('/api/integrations', filesRoutes);
   // Mounted after the files router, as the scope and iFinder authorization routes are.
   app.get('/api/integrations/ifinder/authorization', (_req, res) => res.json({ sibling: true }));
-  app.use('/api/sources', sourceRoutes);
   return app;
 }
 
@@ -334,16 +332,41 @@ describe('integration files routes', () => {
     });
   });
 
-  describe('the integrations feature gate', () => {
-    it('closes the file routes when the feature is off, but not the routes behind this router', async () => {
+  describe('the integrations feature switch', () => {
+    it('does not close the document routes: preview, download and details of sources work with it off', async () => {
       configCache.getFeatures = () => ({ integrations: false });
       const app = appFor(GRANTED);
-      const files = await request(app).get('/api/integrations/ifinder/files');
-      assert.equal(files.status, 403);
-      assert.equal(files.body.code, 'FEATURE_DISABLED');
+      assert.equal((await request(app).get('/api/integrations/ifinder/files')).status, 200);
+      assert.equal(
+        (await request(app).get('/api/integrations/ifinder/files/d1/content')).status,
+        200
+      );
       const sibling = await request(app).get('/api/integrations/ifinder/authorization');
       assert.equal(sibling.status, 200);
-      assert.deepEqual(sibling.body, { sibling: true });
+    });
+  });
+
+  describe('an upstream 401', () => {
+    it('is a 403 for the client: the user passed iHub, and a 401 would end their iHub session', async () => {
+      registerConnector({
+        id: 'ifinder',
+        actions: {},
+        files: {
+          ...fakeFiles,
+          content: async () => {
+            throw sourceProviderError(401, 'iFinder returned 401');
+          },
+          metadata: async () => {
+            throw sourceProviderError(401, 'Unauthorized');
+          }
+        }
+      });
+      const app = appFor(GRANTED);
+      assert.equal(
+        (await request(app).get('/api/integrations/ifinder/files/d1/content')).status,
+        403
+      );
+      assert.equal((await request(app).get('/api/integrations/ifinder/files/d1')).status, 403);
     });
   });
 
@@ -383,18 +406,95 @@ describe('integration files routes', () => {
     });
   });
 
-  describe('the sources route', () => {
-    it('applies the gate to the ifinder provider: not granted, not installed', async () => {
-      let res = await request(appFor(UNGRANTED))
-        .get('/api/sources/ifinder/content')
-        .query({ id: 'd1' });
-      assert.equal(res.status, 403);
-      assert.equal(res.body.code, 'INTEGRATION_NOT_GRANTED');
+  describe('a source provider registered by code', () => {
+    const BASE = '/api/integrations/testdocs/files';
 
-      installed = [];
-      res = await request(appFor(GRANTED)).get('/api/sources/ifinder/metadata').query({ id: 'd1' });
-      assert.equal(res.status, 404);
-      assert.equal(res.body.code, 'INTEGRATION_NOT_FOUND');
+    /** A stream that sends `chunks` and then fails, like an upstream reset. */
+    function failingStream(chunks) {
+      const pending = [...chunks];
+      return new Readable({
+        read() {
+          if (pending.length) this.push(Buffer.from(pending.shift()));
+          else setImmediate(() => this.destroy(new Error('upstream reset')));
+        }
+      });
+    }
+
+    beforeEach(() => {
+      registerSourceProvider({
+        id: 'testdocs',
+        async content({ ref, user, format }) {
+          calls.push({ ref, user: user.id, format });
+          if (ref.id === 'reset-early' || ref.id === 'reset-late') {
+            return {
+              contentType: 'application/pdf',
+              contentDisposition: 'attachment; filename="doc.pdf"',
+              stream: failingStream(ref.id === 'reset-late' ? ['%PDF-1.7'] : [])
+            };
+          }
+          if (format === 'text') {
+            return { contentType: 'text/plain', fileName: 'a "b".txt', body: 'hi' };
+          }
+          return { contentType: 'text/plain', body: 'plain' };
+        },
+        async metadata({ ref }) {
+          return { title: `Doc ${ref.id}`, scope: ref.scope ?? null };
+        }
+      });
+      registerSourceProvider({ id: 'nodetails', content: async () => ({ body: 'x' }) });
+    });
+
+    it('content: a body with a file name; the format defaults to the original', async () => {
+      const text = await request(appFor(GRANTED))
+        .get(`${BASE}/doc-1/content`)
+        .query({ format: 'text' });
+      assert.equal(text.status, 200);
+      assert.equal(text.text, 'hi');
+      assert.equal(text.headers['content-disposition'], 'attachment; filename="a _b_.txt"');
+      await request(appFor(GRANTED)).get(`${BASE}/doc-2/content`);
+      assert.deepEqual(calls.at(-1), { ref: { id: 'doc-2' }, user: 'ada', format: 'original' });
+    });
+
+    it('content: a stream that fails before any byte is a 502, not a hang or a crash', async () => {
+      const res = await request(appFor(GRANTED)).get(`${BASE}/reset-early/content`);
+      assert.equal(res.status, 502);
+      assert.match(res.headers['content-type'], /application\/json/);
+      assert.equal(res.headers['content-disposition'], undefined);
+      assert.equal(res.body.error, 'Source content stream failed');
+    });
+
+    it('content: a stream that fails midway aborts the response', async () => {
+      await assert.rejects(request(appFor(GRANTED)).get(`${BASE}/reset-late/content`), error =>
+        /socket hang up|ECONNRESET|aborted/i.test(`${error.code} ${error.message}`)
+      );
+    });
+
+    it('the request shape is checked before any provider is asked', async () => {
+      const app = appFor(GRANTED);
+      const cases = [
+        [`${BASE}/${'x'.repeat(1025)}/content`, {}, 400],
+        [`${BASE}/a/content`, { scope: 's'.repeat(257) }, 400],
+        [`${BASE}/a/content`, { format: 'exe' }, 400],
+        [`${BASE}/a/content`, { scope: ['a', 'b'] }, 400],
+        ['/api/integrations/..%2Fadmin/files/a/content', {}, 400],
+        ['/api/integrations/unknown/files/a/content', {}, 404]
+      ];
+      for (const [path, query, status] of cases) {
+        const res = await request(app).get(path).query(query);
+        assert.equal(res.status, status, `${path} ${JSON.stringify(query)}`);
+      }
+      // Names of the object prototype are not providers
+      const proto = await request(app).get('/api/integrations/constructor/files/a/content');
+      assert.ok([400, 404].includes(proto.status), `constructor answered ${proto.status}`);
+      assert.equal(calls.length, 0);
+    });
+
+    it("details: the provider's own, or 404 when it has none", async () => {
+      const res = await request(appFor(GRANTED)).get(`${BASE}/doc-1`).query({ scope: 'hr' });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { title: 'Doc doc-1', scope: 'hr' });
+      const none = await request(appFor(GRANTED)).get('/api/integrations/nodetails/files/a');
+      assert.equal(none.status, 404);
     });
   });
 });

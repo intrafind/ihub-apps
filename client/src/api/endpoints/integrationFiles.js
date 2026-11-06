@@ -42,12 +42,19 @@ export const fetchIntegrationFilesProbe = async ({ integration, signal } = {}) =
  * (`GET /api/integrations/:integration/files/:id/content`), fetched with the
  * signed-in user's own permissions in that system.
  *
+ * Going through `apiClient` rather than a bare `fetch(..., { credentials:
+ * 'include' })` is what makes this work outside the web app: the Outlook task
+ * pane and the browser extension authenticate with an `Authorization: Bearer`
+ * header installed as an interceptor (plus a silent refresh on 401), and they
+ * have no session cookie to send. See `officeAuthBridge.js`.
+ *
  * @param {Object} options
- * @param {string} options.integration - installation id
+ * @param {string} options.integration - installation id (or the id of a built-in source provider)
  * @param {{id: string, scope?: string}} options.ref
  * @param {'original'|'pdf'|'text'} [options.format='original']
  * @param {string} [options.filename] - a name for the download: it is appended to the path
  *   (`…/content/:filename`) and changes nothing about what is served
+ * @param {'blob'|'arraybuffer'|'text'} [options.responseType='blob']
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<import('axios').AxiosResponse>}
  */
@@ -56,11 +63,12 @@ export const fetchIntegrationFileContent = async ({
   ref,
   format = 'original',
   filename,
+  responseType = 'blob',
   signal
 } = {}) => {
   const name = filename ? `/${encodeURIComponent(filename)}` : '';
   return apiClient.get(`${documentPath(integration, ref)}/content${name}${queryOf(ref, format)}`, {
-    responseType: 'blob',
+    responseType,
     signal,
     timeout: CONTENT_REQUEST_TIMEOUT
   });

@@ -53,7 +53,6 @@ import office365Routes from '../routes/integrations/office365.js';
 import googledriveRoutes from '../routes/integrations/googledrive.js';
 import nextcloudRoutes from '../routes/integrations/nextcloud.js';
 import ifinderRoutes from '../routes/integrations/ifinder.js';
-import sourceRoutes from '../routes/sources.js';
 import officeAddinRoutes from '../routes/integrations/officeAddin.js';
 import browserExtensionRoutes from '../routes/integrations/browserExtension.js';
 import personalApiKeyRoutes from '../routes/integrations/personalApiKeys.js';
@@ -165,7 +164,6 @@ const ROUTE_STEPS = [
   app => app.use(buildApiPath('/integrations/nextcloud'), nextcloudRoutes),
   app => app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes),
   // One route for every source provider's actions (preview, download, details).
-  app => app.use(buildApiPath('/sources'), sourceRoutes),
   app => app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes),
   app => app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes),
   app => app.use(buildApiPath('/integrations/api-keys'), personalApiKeyRoutes),

@@ -387,7 +387,7 @@ describe('useIntegrationDocumentAttachment', () => {
           appId: 'app1',
           chatId: 'chat-1',
           app: { id: 'app1', integrations: { ifinder: {} } },
-          currentModel: { id: 'm' },
+          currentModel: { id: 'm', supportsVision: true },
           fileUploadHandler: uploader,
           addSystemMessage,
           onConsumed,
@@ -398,10 +398,16 @@ describe('useIntegrationDocumentAttachment', () => {
     );
 
   beforeEach(() => {
+    // Keeps what the composer shows, as the real handler does: `selectedFile` is read live
     uploader = {
+      selectedFile: null,
       createUploadConfig: jest.fn(() => cfg()),
-      setSelectedFile: jest.fn(),
-      clearSelectedFile: jest.fn()
+      setSelectedFile: jest.fn(file => {
+        uploader.selectedFile = file;
+      }),
+      clearSelectedFile: jest.fn(() => {
+        uploader.selectedFile = null;
+      })
     };
     addSystemMessage = jest.fn();
     onConsumed = jest.fn();
@@ -493,6 +499,41 @@ describe('useIntegrationDocumentAttachment', () => {
     });
     mount({ currentModel: null, pending: { ...pending, documentId: 'd2' } });
     await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
+  });
+
+  describe("the model rules are the uploader's", () => {
+    test('a transcription model takes audio, not an image and not a document', async () => {
+      const model = { id: 'whisper', modelType: 'transcription' };
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
+      mount({ currentModel: model });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+      expect(processCloudFile).not.toHaveBeenCalled();
+      expect(addSystemMessage).toHaveBeenCalledWith(
+        expect.stringContaining('selected model cannot take this kind of file'),
+        true
+      );
+
+      jest.clearAllMocks();
+      fetchIntegrationFilesProbe.mockResolvedValue(INFO);
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'r.pdf'));
+      mount({ currentModel: model, pending: { ...pending, documentId: 'd2', prefill: 'r' } });
+      await waitFor(() => expect(addSystemMessage).toHaveBeenCalled());
+      expect(processCloudFile).not.toHaveBeenCalled();
+
+      jest.clearAllMocks();
+      fetchIntegrationFilesProbe.mockResolvedValue(INFO);
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('audio/mpeg', 'talk.mp3'));
+      processCloudFile.mockResolvedValue({ type: 'audio', fileName: 'talk.mp3' });
+      mount({ currentModel: model, pending: { ...pending, documentId: 'd3', prefill: 'talk' } });
+      await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
+    });
+
+    test('a model without vision metadata is judged by its id, as the uploader does', async () => {
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
+      processCloudFile.mockResolvedValue({ type: 'image', fileName: 'site.png' });
+      mount({ currentModel: { id: 'gpt-4o-mini' } });
+      await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
+    });
   });
 
   test('the binding decides: an app without local upload still gets the document', async () => {
@@ -641,6 +682,26 @@ describe('useIntegrationDocumentAttachment', () => {
       processCloudFile.mockRejectedValue(new Error('boom'));
       await finish();
       expect(addSystemMessage).not.toHaveBeenCalled();
+      expect(uploader.selectedFile).toBeNull();
+    });
+
+    test('a stale run takes its own loading placeholder away, so it is no endless spinner', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      expect(uploader.selectedFile).toMatchObject({ loading: true });
+      rerender({ pending: null });
+      await finish();
+      expect(uploader.selectedFile).toBeNull();
+    });
+
+    test('a file selected meanwhile is not removed by the stale run', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      const mine = { type: 'document', fileName: 'mine.txt', content: 'x' };
+      uploader.selectedFile = mine;
+      rerender({ pending: null });
+      await finish();
+      expect(uploader.selectedFile).toBe(mine);
       expect(uploader.clearSelectedFile).not.toHaveBeenCalled();
     });
 

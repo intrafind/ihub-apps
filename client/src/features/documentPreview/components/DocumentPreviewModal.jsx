@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchSourceContent } from '../../../api/endpoints/sources';
+import { fetchIntegrationFileContent } from '../../../api/endpoints/integrationFiles';
 import { downloadSource } from '../../chat/sources/sourceActions';
 import PdfPassageViewer from './PdfPassageViewer';
 import TextPassageViewer from './TextPassageViewer';
@@ -17,8 +17,8 @@ const SCALE_STEP = 0.2;
  * In-app PDF preview of a source, with the passages its producer returned
  * highlighted in the document text.
  *
- * The PDF is the provider's PDF rendition (`GET /api/sources/:provider/content
- * ?format=pdf`, `routes/sources.js`). A document kept as text only — a
+ * The PDF is the provider's PDF rendition (`GET /api/integrations/:integration/files/:id/content
+ * ?format=pdf`, `routes/integrations/files.js`). A document kept as text only — a
  * project item, whose original is discarded (`410 ORIGINAL_DISCARDED`) — is
  * shown in text mode instead (`format=text`, `TextPassageViewer`), with the
  * same passage highlighting and navigation. Fetching it as an ArrayBuffer (instead
@@ -68,8 +68,9 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
     setData(null);
     setLoadError(null);
 
-    fetchSourceContent({
-      source,
+    fetchIntegrationFileContent({
+      integration: source.provider,
+      ref: source.ref,
       format: mode,
       responseType: mode === 'text' ? 'text' : 'arraybuffer',
       signal: controller.signal

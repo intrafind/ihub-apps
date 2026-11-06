@@ -760,8 +760,12 @@ gone.
   probe), `/files/:id` (the document's details), `/files/:id/content` and
   `/files/:id/content/:filename` (the same bytes under a name for a browser or viewer). The id is a
   URL-encoded path segment; `scope` and `format` are query parameters. They answer `404` when the integration is not installed or configured and `403` when the user's
-  groups do not grant it; `GET /api/sources/:provider/*` applies the same gate to a provider that
-  is an installation. iFinder 1.2.0 is the first integration to declare it.
+  groups do not grant it (an upstream `401` is answered as `403`, so it never reads as an expired
+  iHub session). These routes are the one way to a source's content and details for Preview,
+  Download, Add to email, Details and Open in App: the old `GET /api/sources/:provider/content` and
+  `/metadata` are removed, and `project` documents answer the same routes under their own access
+  rules. The integrations feature switch does not apply to them. iFinder 1.2.0 is the first
+  integration to declare the capability.
   A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
   iFinder gets `403 SOURCE_FORBIDDEN`.
 

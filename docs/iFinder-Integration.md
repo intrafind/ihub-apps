@@ -527,7 +527,7 @@ highlighted in the source document:
   passage.
 
 Both entries appear only for documents that expose an `ACCESS` link, which is what the
-`GET /api/sources/ifinder/content` route needs to resolve the binary. The preview requests that
+`GET /api/integrations/ifinder/files/:id/content` route needs to resolve the binary. The preview requests that
 route with the PDF format, i.e. the PDF rendition iFinder generates for the document.
 
 **How passages are located.** A passage is a substring of the fulltext that the converter put into

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { fetchSourceContent } from '../../../api/endpoints/sources';
+import { fetchIntegrationFileContent } from '../../../api/endpoints/integrationFiles';
 import { downloadFormatFor, isOriginalDiscarded } from '../../documentPreview/utils/textPreview';
 import {
   filenameFromContentDisposition,
@@ -25,9 +25,9 @@ import {
  *   copyLink    its `url`, to the clipboard
  *   preview     a PDF rendition, with its passages highlighted   } its `ref`, through the
  *   download    the file                                         } provider that owns it
- *   attach      the file, to the mail being written (Outlook)    } (`GET /api/sources/
- *   openInApp   the file, into a new chat of another app         }  :provider/content`)
- *   details     the provider's metadata                          }  and `/metadata`)
+ *   attach      the file, to the mail being written (Outlook)    } (`GET /api/integrations/
+ *   openInApp   the file, into a new chat of another app         }  :integration/files/:id`
+ *   details     the provider's metadata                          }  and `…/content`)
  *
  * The server keeps a `ref` only on sources whose provider can act on it, so
  * a ref is all the client needs to know. Preview, details and "Open in App"
@@ -178,6 +178,17 @@ export function resolveSourceFilename(source, response) {
 }
 
 /**
+ * A source's content through its integration (`GET /api/integrations/:integration/files/:id/content`):
+ * the source's `provider` is the installation (or built-in provider) that holds the document.
+ *
+ * @param {{provider: string, ref: {id: string, scope?: string}}} source
+ * @param {{format?: 'original'|'pdf'|'text'}} [options]
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+const contentOf = (source, options = {}) =>
+  fetchIntegrationFileContent({ integration: source?.provider, ref: source?.ref, ...options });
+
+/**
  * The source's file for a download or an attachment: the original, or its
  * text where the provider keeps no original (a project item answers
  * `410 ORIGINAL_DISCARDED`, spec 2 §5.1).
@@ -187,12 +198,12 @@ export function resolveSourceFilename(source, response) {
  */
 export async function fetchDownloadableContent(source) {
   const asText = async () => ({
-    response: await fetchSourceContent({ source, format: 'text' }),
+    response: await contentOf(source, { format: 'text' }),
     asText: true
   });
   if (downloadFormatFor(source) === 'text') return asText();
   try {
-    return { response: await fetchSourceContent({ source }), asText: false };
+    return { response: await contentOf(source), asText: false };
   } catch (error) {
     if (!isOriginalDiscarded(error)) throw error;
     return asText();
@@ -251,36 +262,6 @@ function blobToBase64(blob) {
     };
     reader.readAsDataURL(blob);
   });
-}
-
-/**
- * The source's file, for "Open in App" to attach to a new chat: the original,
- * named as the server sent it, else — for providers with no binary of it —
- * its text as a `.txt`.
- *
- * The text is fetched only when the server answered the binary request with
- * an error: a timeout or abort must not quietly turn into a `.txt`, and a
- * sign-in or permission failure applies to the text as well.
- *
- * @param {{provider: string, ref: {id: string, scope?: string}}} source
- * @param {string} fallbackName - the name when the server sends none
- * @returns {Promise<File>}
- */
-export async function fetchSourceFile(source, fallbackName) {
-  let response;
-  try {
-    response = await fetchSourceContent({ source });
-  } catch (binaryError) {
-    const status = binaryError?.response?.status;
-    if (!status || status === 401 || status === 403) throw binaryError;
-    const text = await fetchSourceContent({ source, format: 'text' });
-    const txtName = fallbackName.endsWith('.txt') ? fallbackName : `${fallbackName}.txt`;
-    return new File([text.data], txtName, { type: 'text/plain' });
-  }
-  const fileName =
-    filenameFromContentDisposition(response.headers?.['content-disposition']) || fallbackName;
-  const contentType = response.headers?.['content-type'] || 'application/octet-stream';
-  return new File([response.data], fileName, { type: contentType });
 }
 
 /**

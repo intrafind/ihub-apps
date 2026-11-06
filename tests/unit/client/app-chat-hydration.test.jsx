@@ -58,12 +58,6 @@ jest.mock('../../../client/src/api/endpoints/apps', () => ({
 jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
   __esModule: true
 }));
-jest.mock('../../../client/src/api/endpoints/sources', () => ({
-  __esModule: true,
-  fetchSourceContent: jest.fn(),
-  fetchSourceMetadata: jest.fn()
-}));
-
 // The stream: record what was opened, deliver nothing — unless a test hands
 // an event to the surface through the captured `onEvent`.
 const mockStreams = [];

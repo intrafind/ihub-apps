@@ -396,7 +396,7 @@ one of them get `404`.
 | Area | Removed |
 | --- | --- |
 | Authentication | `POST /api/auth/users` (use `POST /api/admin/auth/users`), `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`, `GET /api/auth/ntlm/status` (the providers are in `GET /api/auth/status`), `POST /api/auth/teams/config` |
-| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/sources/ifinder/content` and `/metadata`), `GET /api/integrations/jira/test` |
+| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/integrations/ifinder/files/:id/content` and `/files/:id`), `GET /api/integrations/jira/test` |
 | Workflows | `POST /api/workflows/executions/:id/resume` (answer checkpoints through `/api/runs/:id/interactions/:id/answer`, restart with `.../restart`), `GET /api/workflows/:id/versions`, `PUT /api/workflows/:id/activate/:version`, `GET /api/workflows/triggers`, `POST /api/workflows/:id/trigger`. The webhook route `POST /api/workflows/:workflowId/webhooks/:triggerId` stays |
 | Agents | `GET /api/agents/profiles`, `GET /api/agents/profiles/:profileId`, `GET /api/agents/profiles/:profileId/artifacts` |
 | Admin | `GET /api/admin/auth/test`, `GET /api/admin/oauth/cimd-clients` (`GET /api/admin/oauth/clients` carries them), `POST /api/admin/oauth/clients/:id/introspect-token`, `GET`/`PUT /api/admin/logging/level` (use `/api/admin/logging/config`), `POST /api/admin/skills/validate`, `GET /api/admin/update/check` (use `GET /api/admin/version/check-update`) |

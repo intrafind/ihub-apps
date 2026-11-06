@@ -13,30 +13,13 @@ import {
   documentRefOf
 } from '../utils/pendingDocument';
 import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
+import { modelTakesFileKind } from '../../../shared/utils/modelInputCapabilities';
 
 /** What identifies a pending document: the system it comes from, its id and its scope. */
 const documentKey = pending =>
   pending
     ? `${pending.integration}\u0000${pending.documentId}\u0000${pending.searchProfile || ''}`
     : null;
-
-/**
- * Whether the selected model can take a file of this kind. The app's binding of the integration is
- * what lets it receive the document (its local upload settings do not veto it, as they do not veto
- * a storage provider's files); what only the model can decide is left: an image needs a model that
- * sees, audio one that hears. A document is text that any model reads.
- *
- * @param {'image'|'audio'|'document'} kind
- * @param {Object|null} model - the selected model object
- * @returns {boolean}
- */
-function modelTakes(kind, model) {
-  // No model: only text can go in.
-  if (!model) return kind === 'document';
-  if (kind === 'image') return model?.supportsVision !== false && model?.supportsImages !== false;
-  if (kind === 'audio') return model?.supportsAudio === true;
-  return true;
-}
 
 /**
  * Attaches the document a link names (`?documentId=…&integration=…`) to the chat, once the app and
@@ -131,24 +114,36 @@ export default function useIntegrationDocumentAttachment({
         );
       };
       const say = message => live.addSystemMessage?.(message, true);
+      // The loading placeholder this run put into the composer. A stale run takes it away so it does
+      // not stay as an endless spinner, but only while it is still what the composer shows: a file
+      // the user (or a newer run) selected meanwhile is not this run's to remove.
+      let placeholder = null;
+      const dropPlaceholder = () => {
+        const handler = liveRef.current.fileUploadHandler;
+        if (placeholder && handler?.selectedFile === placeholder) handler.clearSelectedFile();
+      };
       const ref = documentRefOf(doc);
       const fallbackName = doc.prefill || 'document';
 
       try {
         const uploadConfig = uploader.createUploadConfig(live.app, live.currentModel) || {};
 
-        uploader.setSelectedFile({
+        placeholder = {
           type: 'document',
           source: doc.integration,
           fileName: doc.prefill || live.t('attachedFiles.loading', 'Loading document...'),
           fileSize: 0,
           fileType: 'application/octet-stream',
           loading: true
-        });
+        };
+        uploader.setSelectedFile(placeholder);
 
         // The probe is the gate: not installed, not configured or not granted ends here.
         const info = await fetchIntegrationFilesProbe({ integration: doc.integration });
-        if (stale()) return;
+        if (stale()) {
+          dropPlaceholder();
+          return;
+        }
         // An installed integration's documents go only to an app that binds it: the binding is
         // what lets the app receive them (as with a storage provider's files), whatever its local
         // upload settings say. A provider that is not an installation (`project`) keeps its own rules.
@@ -168,9 +163,12 @@ export default function useIntegrationDocumentAttachment({
           fallbackName
         });
 
-        if (stale()) return;
+        if (stale()) {
+          dropPlaceholder();
+          return;
+        }
         const kind = documentKindOf({ contentType: file.type, filename: file.name });
-        if (!modelTakes(kind, live.currentModel)) {
+        if (!modelTakesFileKind(kind, live.currentModel)) {
           uploader.clearSelectedFile();
           say(
             live.t(
@@ -182,7 +180,10 @@ export default function useIntegrationDocumentAttachment({
         }
 
         const processed = await processCloudFile(file, uploadConfig);
-        if (stale()) return;
+        if (stale()) {
+          dropPlaceholder();
+          return;
+        }
         const label = getLocalizedContent(info?.name, live.language);
         uploader.setSelectedFile({
           ...processed,
@@ -199,7 +200,10 @@ export default function useIntegrationDocumentAttachment({
         });
       } catch (err) {
         console.error('Failed to fetch and attach the document:', err);
-        if (stale()) return;
+        if (stale()) {
+          dropPlaceholder();
+          return;
+        }
         uploader.clearSelectedFile();
         const failure =
           err?.response?.data?.code === 'INTEGRATION_NOT_GRANTED' ||

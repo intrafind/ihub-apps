@@ -167,8 +167,10 @@ The chat attaches the document the way the Nextcloud embed attaches the files yo
    found, the app does not use the integration, the selected model cannot take this kind of file,
    or the fetch failed.
 
-When sent to the backend, the document id is also passed as a `documentIds` array, so the chat
-request carries the document context (the iAssistant uses it as its retrieval scope).
+While the `documentId` parameter is still in the URL, messages sent to the backend also carry the
+document id as a `documentIds` array (the iAssistant uses it as its retrieval scope). Once the
+parameters are removed after step 5, later messages no longer include `documentIds`; the document
+stays in the chat as the attachment that was added.
 
 ### Letting the user choose the app
 
