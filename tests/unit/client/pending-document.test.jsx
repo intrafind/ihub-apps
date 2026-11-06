@@ -778,6 +778,16 @@ describe('useIntegrationDocumentAttachment', () => {
       expect(uploader.selectedFile).toBeNull();
     });
 
+    test("a new chat (incognito, history) on the same app and link clears the old run's placeholder", async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      expect(uploader.selectedFile).toMatchObject({ loading: true });
+      rerender({ chatId: 'chat-2' });
+      await finish();
+      expect(uploader.selectedFile).toBeNull();
+      expect(onConsumed).not.toHaveBeenCalled();
+    });
+
     test('a file selected meanwhile is not removed by the stale run', async () => {
       const { rerender } = mount();
       await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
