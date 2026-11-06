@@ -32,7 +32,11 @@ import {
 } from '../services/loop/contracts/interaction.js';
 import { resolvePrincipal, resolveActorId, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { isAdmin } from '../utils/authorization.js';
-import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
+// Local names: the access check is the run's own ownership rule, and the API is rate-limited as a whole.
+import {
+  authorizeRun as loadRunAccess,
+  authorizeInteraction as loadInteractionAccess
+} from '../services/loop/runAccess.js';
 import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
 import { isViewToolApproval } from '../services/mcp/mcpViewToolApproval.js';
 import { redactInteractionForViewer } from '../utils/toolApproval.js';
@@ -111,7 +115,7 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await authorizeRun(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user);
     if (!auth.ok) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
@@ -123,7 +127,7 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs/:runId/events'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await authorizeRun(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user);
     if (!auth.ok) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
@@ -160,7 +164,7 @@ export default function registerRunRoutes(app) {
   app.delete(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await authorizeRun(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user);
     if (!auth.ok) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
@@ -173,13 +177,13 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs/:runId/interactions'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await authorizeRun(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user);
     const interactions = await interactionService.listPending({ runId });
     // The run may be gone from memory (persistence off, restart) while its
     // interactions are still on record: the principal recorded on them decides.
     if (
       !auth.ok &&
-      !(interactions.length && (await authorizeInteraction(interactions[0], req.user)))
+      !(interactions.length && (await loadInteractionAccess(interactions[0], req.user)))
     ) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
@@ -286,7 +290,7 @@ export default function registerRunRoutes(app) {
       const hasApproverPolicy =
         Array.isArray(interaction.policy?.approverGroups) &&
         interaction.policy.approverGroups.length > 0;
-      if (!hasApproverPolicy && !(await authorizeInteraction(interaction, req.user))) {
+      if (!hasApproverPolicy && !(await loadInteractionAccess(interaction, req.user))) {
         throw new ServiceError(
           'FORBIDDEN',
           'Insufficient permissions: answer interaction required'
@@ -363,7 +367,7 @@ export default function registerRunRoutes(app) {
     if (!parsed.success) {
       throw parsed.error;
     }
-    const auth = await authorizeRun(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user);
     if (!auth.ok) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
