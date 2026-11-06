@@ -15,6 +15,7 @@
  * @module features/apps/utils/pendingDocument
  */
 import { contentTypeFromExtension } from '../../nextcloud-embed/utilities/nextcloudFileMeta';
+import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
 
 export const DOCUMENT_ID_PARAM = 'documentId';
 export const DOCUMENT_INTEGRATION_PARAM = 'integration';
@@ -119,6 +120,23 @@ export function appBindsIntegration(app, info) {
   }
   return [info.id, info.definition, info.type ? `type:${info.type}` : null].some(
     key => typeof key === 'string' && Object.hasOwn(bindings, key)
+  );
+}
+
+/**
+ * The keys of an app's bindings that stand for the integration a document comes from, and that
+ * give the chat tools (a binding with `actions: []` or iAssistant binds none). They are the tool
+ * references the chat's integration switch toggles.
+ *
+ * @param {Object} app - an entry of `GET /api/apps`
+ * @param {{id: string, definition?: string, type?: string|null}} info - the probe's answer
+ * @returns {string[]}
+ */
+export function boundToolRefsFor(app, info) {
+  if (!appBindsIntegration(app, info)) return [];
+  const toolRefs = new Set(boundIntegrationRefs(app));
+  return [info.id, info.definition, info.type ? `type:${info.type}` : null].filter(
+    key => typeof key === 'string' && Object.hasOwn(app.integrations, key) && toolRefs.has(key)
   );
 }
 

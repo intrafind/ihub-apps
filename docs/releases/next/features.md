@@ -763,6 +763,7 @@ gone.
   is what lets it receive the document, whatever its local upload settings are. An app that never
   opted into iFinder never receives an iFinder document. A checkbox in the banner, on by default,
   turns the filter off; it is left out when no app qualifies.
+- **The integration is switched on:** the chat opens with the integration's tools on, even when your saved default for the app has them off, because the link came from that system. The app list narrows as soon as the integration answers, without waiting for the document's details.
 - **The original file, images included:** the document is fetched as the original and attached
   like a file from Nextcloud: an image as an image for a vision model, anything else as a document
   that keeps its original next to the extracted text.

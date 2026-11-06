@@ -57,6 +57,7 @@ import usePendingDocumentCheck from '../../../client/src/features/apps/hooks/use
 import useIntegrationDocumentAttachment from '../../../client/src/features/apps/hooks/useIntegrationDocumentAttachment';
 import {
   appBindsIntegration,
+  boundToolRefsFor,
   appCanTakeDocument,
   isChatReadyForDocument,
   documentFailureKind,
@@ -138,6 +139,21 @@ describe('pendingDocument helpers', () => {
     expect(appBindsIntegration({ integrations: { ifinder: {} } }, null)).toBe(false);
   });
 
+  test('boundToolRefsFor: the binding keys of the integration that give the chat tools', () => {
+    const info = { id: 'ifinder', definition: 'com.intrafind/ifinder', type: 'search' };
+    expect(boundToolRefsFor({ integrations: { ifinder: {} } }, info)).toEqual(['ifinder']);
+    expect(
+      boundToolRefsFor({ integrations: { 'com.intrafind/ifinder': {}, jira: {} } }, info)
+    ).toEqual(['com.intrafind/ifinder']);
+    expect(boundToolRefsFor({ integrations: { 'type:search': {} } }, info)).toEqual([
+      'type:search'
+    ]);
+    // A binding for scopes only gives no tools to switch on
+    expect(boundToolRefsFor({ integrations: { ifinder: { actions: [] } } }, info)).toEqual([]);
+    expect(boundToolRefsFor({ integrations: { jira: {} } }, info)).toEqual([]);
+    expect(boundToolRefsFor({}, info)).toEqual([]);
+  });
+
   test('documentKindOf: image, audio or document, from the file name, then the types', () => {
     expect(documentKindOf({ filename: 'scan.PNG' })).toBe('image');
     expect(documentKindOf({ mediaType: 'image/jpeg' })).toBe('image');
@@ -209,6 +225,16 @@ describe('usePendingDocumentCheck', () => {
       integration: 'ifinder',
       ref: { id: 'd1', scope: 'sp' }
     });
+  });
+
+  test('the integration is known while the document details are still loading', async () => {
+    let finish;
+    fetchIntegrationFileMetadata.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const { result } = renderHook(() => usePendingDocumentCheck(doc));
+    await waitFor(() => expect(result.current.info).toEqual(INFO));
+    expect(result.current.status).toBe('checking');
+    await act(async () => finish({ title: 'Site photo' }));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
   });
 
   test.each([
@@ -494,6 +520,22 @@ describe('useIntegrationDocumentAttachment', () => {
     await act(async () => {});
     expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1); // a re-render attaches nothing twice
     expect(onConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  test('switches on the tools of the binding for the integration the link comes from', async () => {
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+    processCloudFile.mockResolvedValue({ type: 'document', content: 'text', fileName: 'r.pdf' });
+    const onIntegrationBound = jest.fn();
+    mount({ onIntegrationBound });
+    await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+    expect(onIntegrationBound).toHaveBeenCalledWith(['ifinder']);
+  });
+
+  test('switches nothing on for an app that does not bind the integration', async () => {
+    const onIntegrationBound = jest.fn();
+    mount({ onIntegrationBound, app: { id: 'app1', integrations: { jira: {} } } });
+    await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+    expect(onIntegrationBound).not.toHaveBeenCalled();
   });
 
   test('the composer holds Send while the document loads, also when the run goes stale', async () => {
