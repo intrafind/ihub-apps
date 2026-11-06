@@ -482,6 +482,8 @@ and the members that used to sit next to it moved into `details`:
   upper-case registry codes (for example `NOT_TTS_MODEL`, `INVALID_AUDIO`, `PROVIDER_IN_USE`).
 - Lists of field problems are in `errors` (`[{ pointer, code, message }]`) instead of `details.issues`
   or a bare list in `details`.
+- Routes that carried their specific code in `details.code` (projects, uploads, iFinder collections,
+  the Copilot agent, the delete-project refusal) now answer it as `code`; `details` never holds a code.
 - Extras that were at the top level moved into `details`: `currentVersion`, `linkedModels`,
   `runningRuns`, `integrationId`, `summary`, and the `integration` and `connectUrl` of an
   integration that needs a sign-in.

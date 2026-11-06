@@ -53,7 +53,8 @@ A code the registry does not know (a protocol code of another subsystem) still a
 
 Where throwing is not possible, because a surrounding `try` would catch the error and answer a second time, write the
 same response in place with `sendErrorResponse(res, status, message, { code?, details? })` from `server/utils/responseHelpers.js`.
-`sendNotFound`, `sendBadRequest` and `sendInternalError` are shorthands of it. It never writes `{ error }` itself: it
+`sendNotFound`, `sendBadRequest` and `sendInternalError` are shorthands of it. A code passed as `details.code` (the
+older convention) is taken as the `code` of the response, and a list of problems passed as `details` becomes `errors`. It never writes `{ error }` itself: it
 goes through the same mapper, so the body is identical.
 
 ### What a 5xx message may contain
