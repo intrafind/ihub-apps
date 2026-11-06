@@ -356,3 +356,113 @@ describe('POST /api/admin/models/_discover with providerId', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('iFinder Model Gateway providers', () => {
+  const gatewayProvider = {
+    id: 'ifinder-gw',
+    name: 'iFinder gateway',
+    category: 'llm',
+    apiType: 'openai',
+    gateway: 'ifinder-model-gateway',
+    baseUrl: 'https://gw.example.com:9614',
+    apiKey: 'enc:project-key',
+    enabled: true
+  };
+
+  beforeEach(() => {
+    store['config/providers.json'].providers.push(clone(gatewayProvider));
+  });
+
+  it('creates a gateway provider and keeps the gateway marker', async () => {
+    const res = await request(app).post('/api/admin/providers').send({
+      id: 'gw2',
+      name: 'Gateway two',
+      category: 'llm',
+      apiType: 'local',
+      gateway: 'ifinder-model-gateway',
+      baseUrl: 'https://gw2.example.com:9614/'
+    });
+    expect(res.status).toBe(201);
+    const saved = store['config/providers.json'].providers.find(p => p.id === 'gw2');
+    expect(saved).toMatchObject({
+      apiType: 'local',
+      gateway: 'ifinder-model-gateway',
+      baseUrl: 'https://gw2.example.com:9614'
+    });
+  });
+
+  it('only accepts the OpenAI-dialect API types and a known gateway', async () => {
+    const wrongType = await request(app).post('/api/admin/providers').send({
+      id: 'gw3',
+      name: 'Gateway three',
+      category: 'llm',
+      apiType: 'google',
+      gateway: 'ifinder-model-gateway'
+    });
+    expect(wrongType.status).toBe(400);
+    const unknown = await request(app)
+      .post('/api/admin/providers')
+      .send({ id: 'gw4', name: 'Gateway four', category: 'llm', apiType: 'openai', gateway: 'x' });
+    expect(unknown.status).toBe(400);
+  });
+
+  it('drops the gateway marker from a provider that cannot be a gateway', async () => {
+    const res = await request(app)
+      .put('/api/admin/providers/openai')
+      .send({ id: 'openai', name: 'OpenAI', gateway: 'ifinder-model-gateway' });
+    expect(res.status).toBe(200);
+    const saved = store['config/providers.json'].providers.find(p => p.id === 'openai');
+    expect(saved.gateway).toBeUndefined();
+  });
+
+  it('lets a gateway model keep the adapter of its own dialect', async () => {
+    const mistral = await request(app)
+      .post('/api/admin/models')
+      .send({ ...baseModel, id: 'gw-mistral', provider: 'mistral', providerId: 'ifinder-gw' });
+    expect(mistral.status).toBe(200);
+    expect(store['models/gw-mistral.json']).toMatchObject({
+      provider: 'mistral',
+      providerId: 'ifinder-gw'
+    });
+
+    const speech = await request(app)
+      .post('/api/admin/models')
+      .send({
+        ...baseModel,
+        id: 'gw-voxtral',
+        provider: 'vllm-realtime',
+        providerId: 'ifinder-gw',
+        modelType: 'transcription'
+      });
+    expect(speech.status).toBe(200);
+    expect(store['models/gw-voxtral.json'].provider).toBe('vllm-realtime');
+
+    // An adapter a gateway does not offer falls back to the provider's API type.
+    const other = await request(app)
+      .post('/api/admin/models')
+      .send({ ...baseModel, id: 'gw-other', provider: 'google', providerId: 'ifinder-gw' });
+    expect(other.status).toBe(200);
+    expect(store['models/gw-other.json'].provider).toBe('openai');
+  });
+
+  it("does not rewrite its models' adapters when the provider's API type changes", async () => {
+    addModel({ ...baseModel, id: 'gw-mistral', provider: 'mistral', providerId: 'ifinder-gw' });
+    addModel({ ...baseModel, id: 'gw-chat', provider: 'openai', providerId: 'ifinder-gw' });
+    const provider = store['config/providers.json'].providers.find(p => p.id === 'ifinder-gw');
+    const res = await request(app)
+      .put('/api/admin/providers/ifinder-gw')
+      .send({ ...provider, apiKey: '••••••••', apiType: 'local' });
+    expect(res.status).toBe(200);
+    expect(res.body.updatedModels).toEqual([]);
+    expect(store['models/gw-mistral.json'].provider).toBe('mistral');
+    expect(store['models/gw-chat.json'].provider).toBe('openai');
+  });
+
+  it('refuses discovery for an unknown gateway before calling out', async () => {
+    const res = await request(app)
+      .post('/api/admin/models/_discover')
+      .send({ url: 'https://gw:9614', apiType: 'openai', gateway: 'other' });
+    expect(res.status).toBe(400);
+    expect(res.body.messageKey).toBe('unsupportedProvider');
+  });
+});

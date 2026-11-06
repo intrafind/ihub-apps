@@ -297,7 +297,7 @@ endpoint. **Local LLM** has none: enter your server's address, such as `http://l
 [OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Providers**, for example for a regional endpoint.
 
 Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
-OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's
+OpenRouter, Together, Groq), Mistral, Anthropic, Google and the iFinder Model Gateway. The call goes through the platform's
 proxy and SSL settings; it does not follow redirects, so a key is never sent to a host other than
 the one entered. The import fills in only what the endpoint reports — check tool support and test
 each model before enabling it for users.
@@ -311,8 +311,37 @@ offers, not its deployments, and calls a model by its deployment name, so the di
 `api-version` and the provider's API type is OpenAI Responses, the imported models keep the
 `…/openai/responses?api-version=…` URL.
 
-The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
-storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
+**iFinder Model Gateway.** The [iFinder Model Gateway](https://github.com/intrafind/ifinder) is an
+OpenAI-compatible proxy in front of vLLM, Azure OpenAI and Mistral deployments. It has its own
+listing and proxy routes, so it is a provider kind of its own: tick **This endpoint is an iFinder
+Model Gateway** when creating the provider in the import dialog, or choose **iFinder Model Gateway**
+under **Model gateway** on the provider's page. Enter the gateway root (`https://gateway:9614`) and
+the gateway **project API key** as the provider's key. A gateway with no projects is open; leave the
+key empty then.
+
+iHub reads `GET /v1/gateway/models`, which lists the models the key's project may use, and calls
+every model through the gateway's auto-select route `/v1/gateway/proxy/…`. The gateway picks a
+healthy deployment from the model ID, so a model keeps working when a backend is replaced. What the
+gateway reports decides how a model is imported; nothing is guessed from its name:
+
+| Gateway reports                      | Imported as                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `CHAT`                               | Chat model on `/v1/gateway/proxy/chat/completions`; context window from `max_model_len`                       |
+| `CHAT` with modality `VISION`        | Chat model with image input                                                                                   |
+| `REALTIME`, dialect `OPENAI` (vLLM)  | Transcription model on the `vllm-realtime` backend, `wss://…/v1/gateway/proxy/realtime?model=<id>`            |
+| `REALTIME`, dialect `MISTRAL`        | Transcription model on the `mistral` realtime backend, `wss://…/v1/gateway/proxy/realtime`                    |
+| `EMBEDDING`, `NER`, Azure `REALTIME` | Listed but cannot be picked: iHub has no embedding model type, cannot run NER, and Azure realtime is unverified |
+
+The adapter follows the gateway's `api_type`: `MISTRAL` models use the **Mistral** adapter,
+`OPENAI` and `AZURE_OPENAI` models use the provider's API type (**OpenAI-compatible**, or **vLLM /
+self-hosted** when most backends are vLLM). Unlike other providers, changing a gateway provider's
+API type does not rewrite its models, because they speak different dialects. The gateway does not
+support tool calling yet, so imported chat models have **Tool support** set to none. Raise it for
+a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
+Mistral backend.
+
+The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
+returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
 ### Models on a New Installation
 

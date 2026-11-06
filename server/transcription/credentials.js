@@ -119,6 +119,23 @@ export function resolveApiKey(model, { credentialProvider, envVars = [] } = {}) 
 }
 
 /**
+ * The key of a model linked to a custom provider (`providerId`) whose backend
+ * has no vendor of its own — self-hosted vLLM, or one reached through an
+ * iFinder Model Gateway. The model's own key wins, then the provider's key and
+ * its environment variable. A model without a link has no key here: such
+ * servers are usually open, so nothing is read from the environment.
+ *
+ * @param {Object} model - Speech model config as stored in cache.
+ * @returns {string} The key, or '' when none is configured.
+ */
+export function resolveLinkedApiKey(model) {
+  const linked = model?.providerId || '';
+  return linked
+    ? resolveApiKey(model, { credentialProvider: linked, envVars: [providerEnvKeyName(linked)] })
+    : resolveApiKey(model);
+}
+
+/**
  * The key of a model whose backend speaks a vendor's own API (Google, Mistral).
  * A model linked to a custom provider of that API type (`providerId`) uses that
  * provider's key and its environment variable, as the vendor's chat models do;
@@ -136,4 +153,4 @@ export function resolveVendorApiKey(model, vendor, envVar) {
     : resolveApiKey(model, { credentialProvider: vendor, envVars: [envVar] });
 }
 
-export default { expandEnvVars, resolveApiKey, resolveVendorApiKey };
+export default { expandEnvVars, resolveApiKey, resolveLinkedApiKey, resolveVendorApiKey };

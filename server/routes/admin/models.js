@@ -31,7 +31,9 @@ import {
 } from '../../services/ModelEndpointDiscovery.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
+  gatewayModelProvider,
   getProviderApiType,
+  isGatewayProvider,
   linkedModelProvider,
   resolveProviderApiKey
 } from '../../services/llmProviders.js';
@@ -248,7 +250,9 @@ export { describeModelTestFailure };
  * model keeps its speech backend, see linkedModelProvider), and a link to a built-in
  * entry (`providerId: "openai"`) is dropped, since the model reaches it through
  * its API type anyway. A link to a custom entry is always kept. A model
- * therefore cannot claim one API type while its provider declares another.
+ * therefore cannot claim one API type while its provider declares another —
+ * except on a gateway provider, whose models keep the adapter of their own
+ * dialect (Mistral next to OpenAI, see gatewayModelProvider).
  *
  * @param {Object} model - Model config from the request body
  * @returns {string|null} Error message for a link that cannot be honoured
@@ -262,11 +266,14 @@ function applyProviderLink(model) {
     return 'Invalid providerId';
   }
   const { data: providers = [] } = configCache.getProviders(true);
-  const apiType = getProviderApiType(providers.find(p => p.id === model.providerId));
+  const providerEntry = providers.find(p => p.id === model.providerId);
+  const apiType = getProviderApiType(providerEntry);
   if (!apiType) {
     return `Provider "${model.providerId}" does not exist or is not an LLM provider`;
   }
-  model.provider = linkedModelProvider(apiType, model);
+  model.provider = isGatewayProvider(providerEntry)
+    ? gatewayModelProvider(apiType, model)
+    : linkedModelProvider(apiType, model);
   if (BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
     delete model.providerId;
   }
@@ -405,6 +412,14 @@ export default function registerAdminModelsRoutes(app) {
    *                 type: string
    *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
    *                 default: openai
+   *               gateway:
+   *                 type: string
+   *                 enum: [ifinder-model-gateway]
+   *                 description: |
+   *                   Set when the endpoint is an iFinder Model Gateway (for an existing
+   *                   provider this is read from the provider entry). The listing is then
+   *                   read from `/v1/gateway/models` and models are called on
+   *                   `/v1/gateway/proxy/…`; `apiType` is `openai` or `local`.
    *               apiKey:
    *                 type: string
    *                 description: Optional. Sent only to this endpoint, never stored by this call.
@@ -417,7 +432,7 @@ export default function registerAdminModelsRoutes(app) {
    *         description: The endpoint could not be reached or rejected the request
    */
   app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
-    const { url, providerId, apiType = 'openai', apiKey } = req.body || {};
+    const { url, providerId, apiType = 'openai', apiKey, gateway } = req.body || {};
     if (url !== undefined && url !== null && typeof url !== 'string') {
       return sendBadRequest(res, 'Invalid URL');
     }
@@ -427,6 +442,8 @@ export default function registerAdminModelsRoutes(app) {
 
     let discoveryUrl = (url || '').trim();
     let discoveryApiType = apiType;
+    // Set for an iFinder Model Gateway, which lists and serves models on routes of its own.
+    let discoveryGateway = typeof gateway === 'string' && gateway ? gateway : undefined;
     let discoveryKey = (apiKey || '').trim();
 
     try {
@@ -440,6 +457,7 @@ export default function registerAdminModelsRoutes(app) {
           return sendNotFound(res, 'Provider');
         }
         discoveryApiType = getProviderApiType(providerEntry);
+        discoveryGateway = isGatewayProvider(providerEntry) ? providerEntry.gateway : undefined;
         if (!discoveryApiType) {
           return sendBadRequest(res, `Provider "${providerId}" is not an LLM provider`);
         }
@@ -456,7 +474,8 @@ export default function registerAdminModelsRoutes(app) {
       const result = await discoverModels({
         url: discoveryUrl,
         provider: discoveryApiType,
-        apiKey: discoveryKey
+        apiKey: discoveryKey,
+        gateway: discoveryGateway
       });
 
       // Flag listed models an existing config already points at (same remote
@@ -471,6 +490,7 @@ export default function registerAdminModelsRoutes(app) {
         modelsUrl: result.modelsUrl,
         baseUrl: result.baseUrl,
         azure: result.azure,
+        gateway: result.gateway || null,
         models: result.models.map(model => ({
           ...model,
           existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null

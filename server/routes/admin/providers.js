@@ -15,10 +15,13 @@ import logger from '../../utils/logger.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
+  GATEWAY_API_TYPES,
+  GATEWAY_KINDS,
   getLinkedModels,
   getProviderApiType,
   inspectProviderApiKey,
   isCustomLlmProvider,
+  isGatewayProvider,
   isReservedProviderId,
   linkedModelProvider
 } from '../../services/llmProviders.js';
@@ -37,7 +40,8 @@ const PROVIDER_CATEGORIES = ['llm', 'custom'];
  * objects). A custom LLM provider needs the `apiType` its endpoint speaks and
  * may carry a `baseUrl` used to list its models; a built-in LLM provider's API
  * type is its id, so an `apiType` on it is dropped. Other categories have
- * neither field.
+ * neither field. A custom LLM provider may name the `gateway` it points at
+ * (an iFinder Model Gateway), which fixes the API types it can have.
  *
  * @param {Object} provider - Provider entry from the request body
  * @returns {string|null} Error message, or null when the entry is valid
@@ -59,13 +63,25 @@ function normalizeProviderFields(provider) {
   if ((provider.category || 'llm') !== 'llm') {
     delete provider.apiType;
     delete provider.baseUrl;
+    delete provider.gateway;
     return null;
   }
 
   if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
     delete provider.apiType;
+    delete provider.gateway;
   } else if (!CUSTOM_PROVIDER_API_TYPES.includes(provider.apiType)) {
     return `API type must be one of: ${CUSTOM_PROVIDER_API_TYPES.join(', ')}`;
+  } else if (
+    provider.gateway === undefined ||
+    provider.gateway === null ||
+    provider.gateway === ''
+  ) {
+    delete provider.gateway;
+  } else if (!GATEWAY_KINDS.includes(provider.gateway)) {
+    return `Gateway must be one of: ${GATEWAY_KINDS.join(', ')}`;
+  } else if (!GATEWAY_API_TYPES.includes(provider.apiType)) {
+    return `A model gateway provider must use the API type ${GATEWAY_API_TYPES.join(' or ')}`;
   }
 
   if (provider.baseUrl === undefined || provider.baseUrl === null || provider.baseUrl === '') {
@@ -85,12 +101,14 @@ function normalizeProviderFields(provider) {
  * Point every model linked to a custom LLM provider at the provider's API
  * type, so changing it on the provider changes it for all of its models. A
  * Google transcription model keeps its speech backend (linkedModelProvider).
+ * A gateway provider is left alone: its models speak different dialects (a
+ * Mistral model next to an OpenAI one), each imported with its own adapter.
  *
  * @param {Object} provider - The saved provider entry
  * @returns {Promise<string[]>} Ids of the models rewritten
  */
 async function syncLinkedModelsApiType(provider) {
-  if (!isCustomLlmProvider(provider)) return [];
+  if (!isCustomLlmProvider(provider) || isGatewayProvider(provider)) return [];
   const apiType = getProviderApiType(provider);
   const { data: models = [] } = configCache.getModels(true);
   const updated = [];

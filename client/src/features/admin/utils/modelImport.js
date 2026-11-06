@@ -121,7 +121,15 @@ export function getImportableProviders(providers) {
  * The entry for `POST /admin/providers` that a new provider in the dialog
  * becomes. The server encrypts the key.
  */
-export function buildNewProviderConfig({ id, name, description, apiType, baseUrl, apiKey }) {
+export function buildNewProviderConfig({
+  id,
+  name,
+  description,
+  apiType,
+  baseUrl,
+  apiKey,
+  gateway
+}) {
   const provider = {
     id,
     name: name.trim(),
@@ -132,6 +140,7 @@ export function buildNewProviderConfig({ id, name, description, apiType, baseUrl
   };
   if (baseUrl) provider.baseUrl = baseUrl;
   if (apiKey) provider.apiKey = apiKey;
+  if (gateway) provider.gateway = gateway;
   return provider;
 }
 
@@ -153,7 +162,8 @@ function hostOf(url) {
  * @param {Object} entry - One entry of the discovery response's `models`
  * @param {Object} options
  * @param {string} options.id - iHub model id
- * @param {string} options.apiType - API type the endpoint speaks (the model's `provider`)
+ * @param {string} options.apiType - API type the endpoint speaks (the model's `provider`);
+ *   a model of a model gateway names its own dialect in `entry.modelProvider`, which wins
  * @param {string} options.providerId - Provider entry holding the key
  * @param {string} options.modelsUrl - Listing URL the entry came from (named in the description)
  * @param {boolean} [options.enabled=true]
@@ -173,7 +183,7 @@ export function buildImportedModelConfig(
       ? { en: entry.description, de: entry.description }
       : { en: `Imported from ${host}.`, de: `Importiert von ${host}.` },
     url: entry.url,
-    provider: apiType,
+    provider: entry.modelProvider || apiType,
     enabled,
     default: false
   };
@@ -188,7 +198,7 @@ export function buildImportedModelConfig(
   // offered for voice input, transcription or read aloud. Chat settings mean
   // nothing to it.
   if (entry.modelType === 'transcription' || entry.modelType === 'tts') {
-    config.provider = entry.backend || apiType;
+    config.provider = entry.backend || entry.modelProvider || apiType;
     config.modelType = entry.modelType;
     return config;
   }

@@ -971,12 +971,14 @@
         "id": "ID",
         "description": "Description",
         "apiType": "API type",
-        "baseUrl": "Base URL"
+        "baseUrl": "Base URL",
+        "gateway": "Model gateway"
       },
       "hints": {
         "apiType": "Which API the endpoint speaks. Gateways such as T-Systems LLM Hub are OpenAI-compatible; choose vLLM for a self-hosted vLLM server.",
         "apiTypeBuiltIn": "Built-in providers always speak their own API.",
-        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models."
+        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models.",
+        "gateway": "Choose iFinder Model Gateway when the base URL is a gateway. Models are then listed from /v1/gateway/models and called through /v1/gateway/proxy. The API key is the gateway project key."
       },
       "apiTypes": {
         "openai": "OpenAI-compatible (OpenAI, LLM Hub, LM Studio, …)",
@@ -994,6 +996,10 @@
         "none": "No models are linked to this provider.",
         "count": "{{count}} linked, {{enabled}} enabled",
         "more": "+{{count}} more"
+      },
+      "gateway": {
+        "none": "None (regular endpoint)",
+        "ifinder": "iFinder Model Gateway"
       }
     },
     "models": {
@@ -1302,7 +1308,9 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID."
         },
-        "unsupported": "iHub cannot run this model from this provider"
+        "unsupported": "iHub cannot run this model from this provider",
+        "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
+        "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one."
       },
       "getStarted": {
         "title": "Add the models your apps use",
