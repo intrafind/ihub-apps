@@ -22,6 +22,10 @@ import {
 
 const KEY = 'ihub_favorite_apps';
 
+// The stored embed flag only counts while the page is framed (see utils/embedMode.js), and jsdom
+// has no frame: the embed test below stands in for the iframe of an embedding host.
+jest.mock('../../../client/src/utils/isFramed', () => ({ isFramed: () => true }));
+
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();

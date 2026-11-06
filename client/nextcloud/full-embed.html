@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-ihub-embed="true">
+  <!--
+    data-ihub-embed marks this page as an embed: iHub then keeps its integration settings, colour
+    mode and language in the iframe's sessionStorage and never touches localStorage (see
+    src/utils/embedMode.js). It is an attribute rather than a script so that it is in place before
+    any module runs, whatever order the bundler evaluates them in.
+  -->
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />

@@ -21,6 +21,7 @@
  */
 
 import { fetchUIConfig } from '../api';
+import { clearSessionStorageKeepingEmbed } from './embedMode';
 
 const REFRESH_SALT_KEY = 'ihub-refresh-salt';
 const DISCLAIMER_KEY = 'ihub-disclaimer-acknowledged';
@@ -140,10 +141,11 @@ export const performForceRefresh = async () => {
 
     // Clear all localStorage / sessionStorage, then restore the keys we need
     // to survive a refresh. We restore the attempt counter so a follow-up
-    // load can still detect a runaway loop.
+    // load can still detect a runaway loop. An embed keeps its own flag and view settings:
+    // the page reloads without ?embed=true and must stay an embed.
     const attemptCounter = sessionStorage.getItem(REFRESH_ATTEMPT_KEY);
     localStorage.clear();
-    sessionStorage.clear();
+    clearSessionStorageKeepingEmbed();
     if (disclaimerAcknowledged) {
       localStorage.setItem(DISCLAIMER_KEY, disclaimerAcknowledged);
     }

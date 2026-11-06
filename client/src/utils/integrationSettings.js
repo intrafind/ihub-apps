@@ -2,37 +2,58 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Utility functions for managing integration settings (header/footer visibility)
- * throughout the iHub application.
+ * Utility functions for managing integration settings (header/footer/sidebar visibility and the
+ * UI language) throughout the iHub application.
+ *
+ * The settings come from the `header`, `footer`, `sidebar` and `language` URL parameters. A normal
+ * browser session remembers them in `localStorage`. In embed mode (`?embed=true`, or an embed
+ * entry such as `client/nextcloud/full-app-entry.jsx`; see `embedMode.js`) they are kept in the
+ * tab's `sessionStorage` instead and `localStorage` is never read or written: direct-visit users
+ * in other tabs keep their own preferences untouched, an embed never inherits stale state from
+ * them, and what the host passed in the URL still survives the in-app navigation that drops the
+ * query string.
  */
 
-// Per-tab/iframe flag set by embed entry points (e.g.
-// `client/nextcloud/full-app-entry.jsx`). When present, integration settings
-// are forced to "no chrome" and localStorage is never touched — direct-visit
-// users in other tabs keep their own preferences untouched, and the embed
-// experience always renders without iHub's own header/footer regardless of
-// any stale state from a previous session.
-const EMBED_MODE_KEY = 'ihubEmbedMode';
+import { getSessionValue, isEmbedMode, setSessionValue } from './embedMode';
+import { parseLanguageParam } from './supportedLanguages';
 
-function isEmbedMode() {
+const STORAGE_KEY = 'ihubIntegrationSettings';
+
+// An embed starts without iHub's own chrome; the host opts in with header/footer/sidebar=true.
+const EMBED_DEFAULTS = { showHeader: false, showFooter: false, showSidebar: false, language: null };
+
+/**
+ * Read the session-scoped settings of an embed, on top of the embed defaults. Anything in the
+ * stored value that is not a known setting of the right type is dropped.
+ * @returns {Object} The embed's integration settings
+ */
+function getEmbedSettings() {
+  const settings = { ...EMBED_DEFAULTS };
   try {
-    return sessionStorage.getItem(EMBED_MODE_KEY) === '1';
+    const saved = JSON.parse(getSessionValue(STORAGE_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      for (const key of ['showHeader', 'showFooter', 'showSidebar']) {
+        if (typeof saved[key] === 'boolean') settings[key] = saved[key];
+      }
+      settings.language = parseLanguageParam(saved.language);
+    }
   } catch {
-    return false;
+    // A corrupted value is treated as no settings.
   }
+  return settings;
 }
 
 /**
- * Get the integration settings from localStorage or use defaults.
- * In embed mode, always returns "no chrome" without reading localStorage.
+ * Get the integration settings: the tab's own in embed mode (without ever reading
+ * localStorage), otherwise from localStorage, falling back to the defaults.
  * @returns {Object} The integration settings
  */
 export const getIntegrationSettings = () => {
   if (isEmbedMode()) {
-    return { showHeader: false, showFooter: false, showSidebar: false, language: null };
+    return getEmbedSettings();
   }
   try {
-    const savedSettings = localStorage.getItem('ihubIntegrationSettings');
+    const savedSettings = localStorage.getItem(STORAGE_KEY);
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
       // showSidebar was added later; default to enabled when missing.
@@ -46,24 +67,27 @@ export const getIntegrationSettings = () => {
 };
 
 /**
- * Save integration settings to localStorage.
- * No-op in embed mode so iframe activity doesn't pollute the storage shared
- * with direct-visit usage.
+ * Save integration settings: to the tab's sessionStorage in embed mode (so iframe activity never
+ * pollutes the localStorage shared with direct-visit usage), otherwise to localStorage.
  * @param {Object} settings - The settings to save
  */
 export const saveIntegrationSettings = settings => {
   if (isEmbedMode()) {
+    setSessionValue(STORAGE_KEY, JSON.stringify(settings));
     return;
   }
   try {
-    localStorage.setItem('ihubIntegrationSettings', JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
     console.error('Error saving integration settings to localStorage:', error);
   }
 };
 
 /**
- * Update integration settings from URL parameters and save to localStorage
+ * Update integration settings from URL parameters and save them (to localStorage, or to the
+ * tab's sessionStorage in embed mode).
+ *
+ * An unsupported `language` is ignored and leaves the current language as it was.
  * @param {URLSearchParams} searchParams - The URL search parameters
  */
 export const updateSettingsFromUrl = searchParams => {
@@ -93,10 +117,10 @@ export const updateSettingsFromUrl = searchParams => {
       updated = true;
     }
 
-    // Update language setting if provided in URL
-    const languageParam = searchParams.get('language');
-    if (languageParam !== null) {
-      settings.language = languageParam;
+    // Update language setting if provided in URL and supported
+    const language = parseLanguageParam(searchParams.get('language'));
+    if (language !== null) {
+      settings.language = language;
       updated = true;
     }
 
