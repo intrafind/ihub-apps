@@ -325,3 +325,20 @@ closes it, and focus goes back to the **Test** button.
 - The test panels of integrations (**Test in chat**) and of projects (**Try in chat**) behave the
   same.
 - Beside the editor on wide screens nothing changes.
+
+## iFinder Search: A Search With No Hits Is Retried With Fewer Words, Not More
+
+After a search found nothing, the model often searched again with the same words plus more — "vacation
+policy" returned 0 hits, so it tried "vacation policy company". iFinder requires every word of a
+query to match, so a longer query can only find fewer documents, never more, and the retry was
+certain to fail. The model now widens instead: it drops words, tries synonyms and the other
+language (German/English), or joins alternatives with OR.
+
+- A search with no hits now tells the model which retries can work, including whether a filter is
+  what excluded everything. It suggests another search profile only when the chat has not fixed
+  one.
+- The same rule — added words only narrow; to find other documents use fewer or different words —
+  is in the **ifinder-search** skill, the iFinder search action's model guidance and the prompt of
+  the **iFinder Search** app.
+- Installations that kept the shipped iFinder Search app prompt get the new wording on upgrade. A
+  prompt an admin changed is left as is; the upgrade log names it.

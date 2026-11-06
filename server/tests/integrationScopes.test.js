@@ -29,7 +29,7 @@ import iAssistantScopes, {
   describeAnswerScope,
   scopeToConversationConfig
 } from '../services/integrations/scopes/iAssistantScopes.js';
-import iFinderTool from '../tools/iFinder.js';
+import iFinderTool, { zeroHitHint } from '../tools/iFinder.js';
 import { applyIntegrationScopes } from '../services/chat/RequestBuilder.js';
 import { normalizeChatSettings } from '../services/chat/ChatRepository.js';
 import { stripReservedToolContext } from '../utils/toolCallContext.js';
@@ -618,5 +618,57 @@ describe('chat request schema', () => {
     assert.throws(() =>
       chatPostSchema.body.parse({ messages: [], integrationScopes: { ifinder: 42 } })
     );
+  });
+});
+
+describe('iFinder search with no hits', () => {
+  beforeEach(() => {
+    iFinderService.search = async params => ({
+      query: params.query,
+      searchProfile: params.searchProfile,
+      totalFound: 0,
+      results: []
+    });
+  });
+
+  it('tells the model that adding words cannot help and how to widen instead', async () => {
+    const result = await iFinderTool.search({
+      query: 'vacation policy',
+      user: USER,
+      appConfig: SEARCH_APP
+    });
+    assert.match(result.hint, /adding words to this query can only match fewer documents/);
+    assert.match(result.hint, /OR/);
+    assert.match(result.hint, /iFinder_listProfiles/);
+    assert.doesNotMatch(result.hint, /without them/);
+  });
+
+  it('points at the filters when the query matches everything', () => {
+    const hint = zeroHitHint({ query: '*', filter: ['application.keyword:pdf'] });
+    assert.match(hint, /a filter excluded them all/);
+    assert.doesNotMatch(hint, /adding words/);
+  });
+
+  it('suggests dropping the filters once when a topic query had filters', () => {
+    const hint = zeroHitHint({ query: 'Urlaub', filter: ['application.keyword:PDF'] });
+    assert.match(hint, /run it once without them/);
+  });
+
+  it('does not suggest another profile when the chat fixed it', async () => {
+    const result = await iFinderTool.search({
+      query: 'vacation policy',
+      integrationScopes: { ifinder: 'contracts' },
+      user: USER,
+      chatId: 'chat-1',
+      appConfig: SEARCH_APP
+    });
+    assert.ok(result.hint);
+    assert.doesNotMatch(result.hint, /iFinder_listProfiles/);
+  });
+
+  it('adds no hint when the search found something', async () => {
+    iFinderService.search = async () => ({ totalFound: 3, results: [{ id: 'a' }] });
+    const result = await iFinderTool.search({ query: 'x', user: USER, appConfig: SEARCH_APP });
+    assert.equal(result.hint, undefined);
   });
 });

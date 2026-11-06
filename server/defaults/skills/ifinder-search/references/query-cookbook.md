@@ -184,6 +184,11 @@ iFinder_search({ query: '*', filter: ['cust.classification.keyword:"class 1"'] }
     Analyzed text fields carry no sortable doc values.
 ✓ sort: ['file.name.keyword:asc']
 
+✗ 0 hits for 'vacation policy', then query: 'vacation policy company'
+    Terms are ANDed: a query with more words matches a subset of the first
+    one's hits — and that was none. Adding words only ever narrows.
+✓ query: 'vacation'  ·  query: 'Urlaub OR Urlaubsregelung OR vacation'
+
 ✗ filter: ['application.keyword:pdf']
     Casing is deployment data, not convention.
 ✓ iFinder_getFacetValues({ facet: 'application.keyword' }) first, then filter on

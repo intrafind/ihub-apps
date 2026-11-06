@@ -9,13 +9,14 @@ description: >
   fixing. It covers the IntraFind query syntax — Lucene plus the `MODE/`,
   `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`, `DATE/`, `NUMBER/` and `OR/` operators
   for linguistic matching, thesaurus expansion, entity and proximity search —
-  when a field needs a `.keyword` suffix, filters versus query terms, facets,
-  sorting, paging and the discovery loop for an unfamiliar corpus. Do NOT use it
+  when a field needs a `.keyword` suffix, filters versus query terms, which way
+  to rewrite a query after zero, too few or too many hits, facets, sorting,
+  paging and the discovery loop for an unfamiliar corpus. Do NOT use it
   for web search or for other document sources.
 license: Apache-2.0
 metadata:
   author: IntraFind
-  version: '1.3'
+  version: '1.4'
 ---
 
 # Searching iFinder
@@ -146,6 +147,49 @@ Put the **topic** in `query` and every **narrowing criterion** in `filter`.
 Folding a filter into the query (`Kündigungsfrist AND application.keyword:PDF`)
 still works but skews relevance, because the format term counts toward the
 score.
+
+## Retrying: narrow or widen, never both ways at once
+
+Plain query terms are ANDed, and filters are ANDed with the query. Every word
+you add is one more condition a document must meet. So a retry moves the
+result set in one direction only:
+
+| You got                        | The next query needs                        | Adding words? |
+| ------------------------------ | ------------------------------------------- | ------------- |
+| too many hits                  | more words, a phrase, `NEAR/S(…)`, a filter | yes — narrows |
+| **0 hits**                     | fewer words, other words, OR-alternatives   | **never**     |
+| some hits, but you want others | fewer words, or different words             | no            |
+
+**Zero hits is a dead end for that wording.** `vacation policy` found nothing,
+so `vacation policy company` cannot find anything either — every document it
+could match also contains `vacation` and `policy`. Neither can
+`"vacation policy"` (a phrase is stricter still) or the same query with a new
+filter. A retry after zero has to _remove_ or _replace_ words:
+
+```
+✗ vacation policy                →  vacation policy company       (stricter: still 0)
+✗ vacation policy                →  "vacation policy" 2026        (stricter: still 0)
+✓ vacation policy                →  vacation                      (fewer words)
+✓ vacation policy                →  Urlaub OR Urlaubsregelung OR vacation
+                                                                 (other words, ORed)
+✓ vacation policy                →  THES/&Urlaub                  (synonyms)
+✓ vacation policy                →  urlaub*                       (prefix)
+```
+
+The corpus is often in another language than the question. Try the German
+word for an English question and the other way round before anything else —
+`Urlaub`, `Urlaubsantrag`, `Abwesenheit` rather than more English words.
+
+**Finding more or different documents works the same way.** A query that
+found three hits finds those three or fewer when you add a word. To find
+documents it missed, drop a word, swap a word for a synonym, or OR in
+alternatives (`Reisekosten OR Spesen OR "travel expenses"`).
+
+**Adding words is only for narrowing** a result set that is too large or off
+target — and then a filter or `NEAR/S(…)` is usually the sharper tool.
+
+When a search tool result carries a `hint`, it was written for this decision:
+follow it.
 
 ## Standard fields worth knowing
 
@@ -320,7 +364,9 @@ returns the long tail.
 | --------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
 | 0 hits with a filter                    | `.keyword` missing, or on a field that has none  | `iFinder_getFields`, then re-filter        |
 | 0 hits, exact value                     | wrong spelling or casing                         | `iFinder_getFacetValues` on that field     |
+| 0 hits, topic query                     | too many words, or words the corpus doesn't use  | fewer words, synonyms, other language, OR  |
 | 0 hits, plausible query                 | wrong search profile (unless fixed for the chat) | `iFinder_listProfiles`, then retry         |
+| too few hits, more expected             | query too strict                                 | drop or swap words — never add any         |
 | far too many hits                       | topic-only query                                 | move criteria into `filter`                |
 | right topic, wrong docs                 | ranking skewed by filter terms in the query      | move them to `filter`                      |
 | a known document missing                | the user cannot read it                          | say so; do not retry                       |
@@ -329,9 +375,10 @@ returns the long tail.
 | a German compound finds nothing         | analyzer stopped at the surface form             | `MODE/c&` or `MODE/s&`                     |
 | a name or code matches too loosely      | lemma or compound expansion                      | `MODE/e&`                                  |
 
-Never report "there are no documents about X" after one failed query. Confirm
-the profile and the field names first — the common case is a query fault, not an
-empty corpus.
+Never report "there are no documents about X" after one failed query. Widen the
+wording and confirm the profile and the field names first — the common case is a
+query fault, not an empty corpus. And never answer a zero with a longer query:
+that is the one retry that is certain to fail.
 
 ## Related references
 
