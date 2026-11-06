@@ -681,6 +681,14 @@ text page. Every such response has the same body:
   that exists) and `VALIDATION_FAILED` for an app configuration that does not match the schema. The
   `error` text still names the failed fields; the failed fields are in `details.issues`
   (`{ path, code, message }`, `path` a dotted string) instead of a bare `details` list with `path` arrays.
+- The in-place update endpoints (`/api/admin/update*`) answer in this shape: `BAD_REQUEST` for an installation
+  that cannot be updated in place or an invalid request, `FORBIDDEN` for a missing write permission,
+  `CONFLICT` for an update operation that is already running or no staged update, and
+  `PAYLOAD_TOO_LARGE` for an upload over the limit. The codes the update already used are now upper case
+  registry codes at the top level (before: lower case in `details.code`) and translated by the web app:
+  `DISK_SPACE` and `CONFIG_SNAPSHOT_FAILED` (507), `UPDATE_PENDING`, `CONFIRM_DOWNGRADE`,
+  `CONFIRM_UNSIGNED` and `STAGED_CHANGED` (409), `UNSIGNED_NOT_ALLOWED` (403) and `ARCHIVE_REJECTED` (422).
+  A rejected archive keeps its `error` text; its staging summary moved from `summary` to `details.summary`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
