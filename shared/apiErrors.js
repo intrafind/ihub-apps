@@ -253,6 +253,23 @@ export const MODEL_ERROR_CODES = Object.freeze({
   NO_AUDIO: 502
 });
 
+/** Answers to the interactions of a run (`server/routes/runs.js`, `InteractionService`). */
+export const INTERACTION_ERROR_CODES = Object.freeze({
+  ANSWER_IN_PROGRESS: 409,
+  ANSWER_IN_CHAT: 409,
+  APPROVER_REQUIRED: 403,
+  UNAUTHORIZED_APPROVER: 403,
+  CANCELLED: 409,
+  EXPIRED: 410,
+  RUN_DELETED: 410,
+  INVALID_DECISION: 400,
+  INVALID_INPUT: 400,
+  INVALID_OPTION: 400,
+  NOT_PENDING: 409,
+  REASON_REQUIRED: 400,
+  SKIP_NOT_ALLOWED: 400
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -266,7 +283,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...WORKFLOW_ERROR_CODES,
   ...BACKUP_ERROR_CODES,
   ...MARKETPLACE_ERROR_CODES,
-  ...MODEL_ERROR_CODES
+  ...MODEL_ERROR_CODES,
+  ...INTERACTION_ERROR_CODES
 });
 
 /**

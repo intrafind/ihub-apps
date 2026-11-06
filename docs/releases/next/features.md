@@ -664,6 +664,14 @@ text page. Every such response has the same body:
   (`not-tts-model`, `voices-unsupported`, `invalid-audio`, `audio-too-large`, `upstream-error`, `no-audio`).
   The headline of a failed text-to-speech or transcription test is shown only when it is safe to show (it may
   name a host); the reason stays in `details.remediation`, which the admin page shows.
+- The run endpoints (`/api/runs*`, answering an interaction, human events) answer in this shape:
+  `NOT_FOUND` (a run or an interaction), `FORBIDDEN`, `BAD_REQUEST` (an unsafe id) and
+  `VALIDATION_FAILED` with the failed fields in `details.issues` for a malformed answer or human event
+  (before: one `error` text and a `details` object of `formErrors` / `fieldErrors`). The refusals of an
+  answer keep their own status and code, now translated by the web app: `EXPIRED` and `RUN_DELETED`
+  (410), `CANCELLED`, `NOT_PENDING`, `ANSWER_IN_PROGRESS` and `ANSWER_IN_CHAT` (409),
+  `APPROVER_REQUIRED` and `UNAUTHORIZED_APPROVER` (403), and `INVALID_DECISION`, `INVALID_INPUT`,
+  `INVALID_OPTION`, `REASON_REQUIRED` and `SKIP_NOT_ALLOWED` (400).
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

@@ -22,15 +22,10 @@
 import { authRequired } from '../middleware/authRequired.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import {
-  sendBadRequest,
-  sendNotFound,
-  sendInsufficientPermissions,
-  sendFailedOperationError
-} from '../utils/responseHelpers.js';
+import { assertValidId } from '../utils/pathSecurity.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import runLog from '../services/loop/RunLog.js';
-import interactionService, { InteractionError } from '../services/loop/InteractionService.js';
+import interactionService from '../services/loop/InteractionService.js';
 import {
   interactionAnswerRequestSchema,
   humanEventRequestSchema
@@ -100,133 +95,106 @@ async function stopRun(runId, meta, cause) {
   return null;
 }
 
-function sendInteractionError(res, err, operation) {
-  if (err instanceof InteractionError) {
-    return res.status(err.status || 400).json({ error: err.message, code: err.code });
-  }
-  return sendFailedOperationError(res, operation, err);
-}
-
 export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs'), adminAuth, async (req, res) => {
-    try {
-      const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
-      const runs = await runLog.listRuns({
-        from: req.query.from,
-        to: req.query.to,
-        kind: typeof req.query.kind === 'string' ? req.query.kind : undefined,
-        principalId: typeof req.query.principalId === 'string' ? req.query.principalId : undefined,
-        limit
-      });
-      res.json({ runs, persisted: runLog.isEnabled() });
-    } catch (error) {
-      sendFailedOperationError(res, 'list runs', error);
-    }
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
+    const runs = await runLog.listRuns({
+      from: req.query.from,
+      to: req.query.to,
+      kind: typeof req.query.kind === 'string' ? req.query.kind : undefined,
+      principalId: typeof req.query.principalId === 'string' ? req.query.principalId : undefined,
+      limit
+    });
+    res.json({ runs, persisted: runLog.isEnabled() });
   });
 
   app.get(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      const auth = await authorizeRun(runId, req.user);
-      if (!auth.ok) {
-        return auth.status === 404
-          ? sendNotFound(res, 'Run')
-          : sendInsufficientPermissions(res, 'access run');
-      }
-      res.json({ ...auth.meta, seq: await runLog.lastSeq(runId), persisted: runLog.isEnabled() });
-    } catch (error) {
-      sendFailedOperationError(res, 'get run', error);
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    const auth = await authorizeRun(runId, req.user);
+    if (!auth.ok) {
+      throw auth.status === 404
+        ? new ServiceError('NOT_FOUND', 'Run not found')
+        : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
     }
+    res.json({ ...auth.meta, seq: await runLog.lastSeq(runId), persisted: runLog.isEnabled() });
   });
 
   app.get(buildServerPath('/api/runs/:runId/events'), authRequired, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      const auth = await authorizeRun(runId, req.user);
-      if (!auth.ok) {
-        return auth.status === 404
-          ? sendNotFound(res, 'Run')
-          : sendInsufficientPermissions(res, 'access run');
-      }
-      const after = Math.max(Number.parseInt(req.query.after, 10) || 0, 0);
-      const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 1000, 1), 5000);
-      const events = await runLog.readEvents(runId, { afterSeq: after, limit });
-      // The last raw ledger sequence this page read: the paging cursor. A
-      // projected page can be empty (headers, budget events, compactions
-      // produce no envelopes) while more of the ledger remains.
-      const nextAfter = events.length ? events[events.length - 1].seq : after;
-      // No `lastSeq`. It used to be answered per page, and on a provider whose
-      // append log cannot stop early — the filesystem one cannot, since a
-      // record's position need not follow its sequence number — that was a
-      // second full parse of the stream on top of the one `readEvents` just
-      // did. Replaying a 20k-event run in 1000-event pages paid for it twenty
-      // times. The client only ever used it to stop one page early: the walk
-      // terminates on a page that makes no progress (`ledgerPages.js`), so
-      // dropping it costs one empty request at the end of a re-sync and halves
-      // the reads for the whole of it.
-      if (req.query.view === 'sse') {
-        // Client re-sync: the same envelopes the live stream would have carried.
-        return res.json({
-          runId,
-          after,
-          nextAfter,
-          events: events.flatMap(projectLedgerEvent)
-        });
-      }
-      res.json({ runId, after, nextAfter, events });
-    } catch (error) {
-      sendFailedOperationError(res, 'read run events', error);
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    const auth = await authorizeRun(runId, req.user);
+    if (!auth.ok) {
+      throw auth.status === 404
+        ? new ServiceError('NOT_FOUND', 'Run not found')
+        : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
     }
+    const after = Math.max(Number.parseInt(req.query.after, 10) || 0, 0); // api-guidelines-ignore: existing ledger cursor, changed in its own API change
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 1000, 1), 5000);
+    const events = await runLog.readEvents(runId, { afterSeq: after, limit });
+    // The last raw ledger sequence this page read: the paging cursor. A
+    // projected page can be empty (headers, budget events, compactions
+    // produce no envelopes) while more of the ledger remains.
+    const nextAfter = events.length ? events[events.length - 1].seq : after;
+    // No `lastSeq`. It used to be answered per page, and on a provider whose
+    // append log cannot stop early — the filesystem one cannot, since a
+    // record's position need not follow its sequence number — that was a
+    // second full parse of the stream on top of the one `readEvents` just
+    // did. Replaying a 20k-event run in 1000-event pages paid for it twenty
+    // times. The client only ever used it to stop one page early: the walk
+    // terminates on a page that makes no progress (`ledgerPages.js`), so
+    // dropping it costs one empty request at the end of a re-sync and halves
+    // the reads for the whole of it.
+    if (req.query.view === 'sse') {
+      // Client re-sync: the same envelopes the live stream would have carried.
+      return res.json({
+        runId,
+        after,
+        nextAfter,
+        events: events.flatMap(projectLedgerEvent)
+      });
+    }
+    res.json({ runId, after, nextAfter, events });
   });
 
   app.delete(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      const auth = await authorizeRun(runId, req.user);
-      if (!auth.ok) {
-        return auth.status === 404
-          ? sendNotFound(res, 'Run')
-          : sendInsufficientPermissions(res, 'delete run');
-      }
-      const result = await runLog.deleteRun(runId);
-      res.json(result);
-    } catch (error) {
-      sendFailedOperationError(res, 'delete run', error);
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    const auth = await authorizeRun(runId, req.user);
+    if (!auth.ok) {
+      throw auth.status === 404
+        ? new ServiceError('NOT_FOUND', 'Run not found')
+        : new ServiceError('FORBIDDEN', 'Insufficient permissions: delete run required');
     }
+    const result = await runLog.deleteRun(runId);
+    res.json(result);
   });
 
   app.get(buildServerPath('/api/runs/:runId/interactions'), authRequired, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      const auth = await authorizeRun(runId, req.user);
-      const interactions = await interactionService.listPending({ runId });
-      // The run may be gone from memory (persistence off, restart) while its
-      // interactions are still on record: the principal recorded on them decides.
-      if (
-        !auth.ok &&
-        !(interactions.length && (await authorizeInteraction(interactions[0], req.user)))
-      ) {
-        return auth.status === 404
-          ? sendNotFound(res, 'Run')
-          : sendInsufficientPermissions(res, 'access run');
-      }
-      // Tool approval arguments in full only for their requester (#2945).
-      const visible = [];
-      for (const i of interactions) {
-        const mode = i.source?.identityMode || runLog.identityMode();
-        const mine =
-          !!i.source?.principalId &&
-          i.source.principalId === (await resolvePrincipal(req.user, { mode })).id;
-        visible.push(mine ? i : redactInteractionForViewer(i));
-      }
-      res.json({ runId, interactions: visible });
-    } catch (error) {
-      sendFailedOperationError(res, 'list run interactions', error);
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    const auth = await authorizeRun(runId, req.user);
+    const interactions = await interactionService.listPending({ runId });
+    // The run may be gone from memory (persistence off, restart) while its
+    // interactions are still on record: the principal recorded on them decides.
+    if (
+      !auth.ok &&
+      !(interactions.length && (await authorizeInteraction(interactions[0], req.user)))
+    ) {
+      throw auth.status === 404
+        ? new ServiceError('NOT_FOUND', 'Run not found')
+        : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
     }
+    // Tool approval arguments in full only for their requester (#2945).
+    const visible = [];
+    for (const i of interactions) {
+      const mode = i.source?.identityMode || runLog.identityMode();
+      const mine =
+        !!i.source?.principalId &&
+        i.source.principalId === (await resolvePrincipal(req.user, { mode })).id;
+      visible.push(mine ? i : redactInteractionForViewer(i));
+    }
+    res.json({ runId, interactions: visible });
   });
 
   /**
@@ -300,44 +268,42 @@ export default function registerRunRoutes(app) {
     buildServerPath('/api/runs/:runId/interactions/:interactionId/answer'),
     authRequired,
     async (req, res) => {
-      try {
-        const { runId, interactionId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!validateIdForPath(interactionId, 'interaction', res)) return;
-        const parsed = interactionAnswerRequestSchema.safeParse(req.body || {});
-        if (!parsed.success) {
-          return sendBadRequest(res, 'Invalid answer body', parsed.error.flatten());
-        }
-        const interaction = await interactionService.get(interactionId);
-        if (!interaction || interaction.runId !== runId) return sendNotFound(res, 'Interaction');
-        // Approver groups are enforced by the service; otherwise the principal
-        // recorded on the interaction, the run's owner (or anyone holding an
-        // anonymous run id) may answer — the interaction outlives the run's
-        // in-memory record, so it is authorized from its own source first.
-        const hasApproverPolicy =
-          Array.isArray(interaction.policy?.approverGroups) &&
-          interaction.policy.approverGroups.length > 0;
-        if (!hasApproverPolicy && !(await authorizeInteraction(interaction, req.user))) {
-          return sendInsufficientPermissions(res, 'answer interaction');
-        }
-        // A chat tool approval is answered with the next chat message, which
-        // also runs the approved call (#2945). Answered here, the interaction
-        // would be settled while nothing ran the call.
-        if (isChatToolApproval(interaction) || isViewToolApproval(interaction)) {
-          return res.status(409).json({
-            error: 'Answer this approval in its chat',
-            code: 'ANSWER_IN_CHAT'
-          });
-        }
-        const channel = typeof req.body?.channel === 'string' ? req.body.channel : 'api';
-        const answered = await interactionService.answer(interactionId, parsed.data, {
-          user: req.user,
-          channel: ['chat', 'run_page', 'queue', 'api'].includes(channel) ? channel : 'api'
-        });
-        res.json({ success: true, interaction: answered });
-      } catch (error) {
-        sendInteractionError(res, error, 'answer interaction');
+      const { runId, interactionId } = req.params;
+      assertValidId(runId, 'run');
+      assertValidId(interactionId, 'interaction');
+      const parsed = interactionAnswerRequestSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        throw parsed.error;
       }
+      const interaction = await interactionService.get(interactionId);
+      if (!interaction || interaction.runId !== runId) {
+        throw new ServiceError('NOT_FOUND', 'Interaction not found');
+      }
+      // Approver groups are enforced by the service; otherwise the principal
+      // recorded on the interaction, the run's owner (or anyone holding an
+      // anonymous run id) may answer — the interaction outlives the run's
+      // in-memory record, so it is authorized from its own source first.
+      const hasApproverPolicy =
+        Array.isArray(interaction.policy?.approverGroups) &&
+        interaction.policy.approverGroups.length > 0;
+      if (!hasApproverPolicy && !(await authorizeInteraction(interaction, req.user))) {
+        throw new ServiceError(
+          'FORBIDDEN',
+          'Insufficient permissions: answer interaction required'
+        );
+      }
+      // A chat tool approval is answered with the next chat message, which
+      // also runs the approved call (#2945). Answered here, the interaction
+      // would be settled while nothing ran the call.
+      if (isChatToolApproval(interaction) || isViewToolApproval(interaction)) {
+        throw new ServiceError('ANSWER_IN_CHAT', 'Answer this approval in its chat');
+      }
+      const channel = typeof req.body?.channel === 'string' ? req.body.channel : 'api';
+      const answered = await interactionService.answer(interactionId, parsed.data, {
+        user: req.user,
+        channel: ['chat', 'run_page', 'queue', 'api'].includes(channel) ? channel : 'api'
+      });
+      res.json({ success: true, interaction: answered }); // api-guidelines-ignore: existing success body, changed in its own API change
     }
   );
 
@@ -391,56 +357,52 @@ export default function registerRunRoutes(app) {
    *         description: Run not found
    */
   app.post(buildServerPath('/api/runs/:runId/human-events'), authRequired, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      const parsed = humanEventRequestSchema.safeParse(req.body || {});
-      if (!parsed.success) {
-        return sendBadRequest(res, 'Invalid human event body', parsed.error.flatten());
-      }
-      const auth = await authorizeRun(runId, req.user);
-      if (!auth.ok) {
-        return auth.status === 404
-          ? sendNotFound(res, 'Run')
-          : sendInsufficientPermissions(res, 'send human event');
-      }
-      const { kind, message, messageId, rating } = parsed.data;
-      // The run may live on another worker: continue its persisted sequence.
-      const event = await runLog.appendRecovered(
-        runId,
-        RUN_LOG_EVENTS.HUMAN_EVENT,
-        {
-          kind,
-          ...(message !== undefined ? { message } : {}),
-          ...(messageId !== undefined ? { messageId } : {}),
-          ...(rating !== undefined ? { rating } : {}),
-          by: await resolveActorId(req.user, {
-            mode: auth.meta?.identityMode || runLog.identityMode()
-          }),
-          at: new Date().toISOString()
-        },
-        { kind: auth.meta?.kind || 'chat' }
-      );
-      let effect = null;
-      if (kind === 'stop') {
-        const cause = await userAbortCause('run_stop', req.user, {
-          mode: auth.meta?.identityMode || runLog.identityMode(),
-          via: 'POST /api/runs/:runId/human-events (stop)',
-          related: { runId }
-        });
-        effect = await stopRun(runId, auth.meta, cause);
-      }
-      // A steer reaches the running loop at its next step boundary (queued on
-      // the worker that owns the run, relayed there in a cluster); without an
-      // active loop it is recorded only.
-      if (kind === 'steer') {
-        const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
-        effect = routed ? `steer_${routed}` : null;
-      }
-      res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
-    } catch (error) {
-      sendFailedOperationError(res, 'send human event', error);
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    const parsed = humanEventRequestSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      throw parsed.error;
     }
+    const auth = await authorizeRun(runId, req.user);
+    if (!auth.ok) {
+      throw auth.status === 404
+        ? new ServiceError('NOT_FOUND', 'Run not found')
+        : new ServiceError('FORBIDDEN', 'Insufficient permissions: send human event required');
+    }
+    const { kind, message, messageId, rating } = parsed.data;
+    // The run may live on another worker: continue its persisted sequence.
+    const event = await runLog.appendRecovered(
+      runId,
+      RUN_LOG_EVENTS.HUMAN_EVENT,
+      {
+        kind,
+        ...(message !== undefined ? { message } : {}),
+        ...(messageId !== undefined ? { messageId } : {}),
+        ...(rating !== undefined ? { rating } : {}),
+        by: await resolveActorId(req.user, {
+          mode: auth.meta?.identityMode || runLog.identityMode()
+        }),
+        at: new Date().toISOString()
+      },
+      { kind: auth.meta?.kind || 'chat' }
+    );
+    let effect = null;
+    if (kind === 'stop') {
+      const cause = await userAbortCause('run_stop', req.user, {
+        mode: auth.meta?.identityMode || runLog.identityMode(),
+        via: 'POST /api/runs/:runId/human-events (stop)',
+        related: { runId }
+      });
+      effect = await stopRun(runId, auth.meta, cause);
+    }
+    // A steer reaches the running loop at its next step boundary (queued on
+    // the worker that owns the run, relayed there in a cluster); without an
+    // active loop it is recorded only.
+    if (kind === 'steer') {
+      const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
+      effect = routed ? `steer_${routed}` : null;
+    }
+    res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -471,40 +433,38 @@ export default function registerRunRoutes(app) {
    *         description: Anonymous users have no queue
    */
   app.get(buildServerPath('/api/interactions/pending'), authRequired, async (req, res) => {
-    try {
-      if (isAnonymousUser(req.user)) return sendInsufficientPermissions(res, 'list interactions');
-      const admin = isAdmin(req.user);
-      const all = await interactionService.listPending({
-        kind: typeof req.query.kind === 'string' ? req.query.kind : undefined
-      });
-      const groups = Array.isArray(req.user.groups) ? req.user.groups : [];
-      // Owner ids were recorded in the identity mode of their run; resolve the
-      // caller in each mode that occurs so runs written before an identityMode
-      // change still match.
-      const modeOf = i =>
-        i.source?.identityMode || runLog.getRunMeta(i.runId)?.identityMode || runLog.identityMode();
-      const myIdByMode = new Map();
-      for (const mode of new Set(all.map(modeOf))) {
-        myIdByMode.set(mode, (await resolvePrincipal(req.user, { mode })).id);
-      }
-      const ownedByCaller = i =>
-        !!i.source?.principalId && i.source.principalId === myIdByMode.get(modeOf(i));
-      const visible = admin
-        ? all
-        : all.filter(i => {
-            const approvers = i.policy?.approverGroups;
-            if (Array.isArray(approvers) && approvers.length > 0) {
-              return approvers.some(g => groups.includes(g));
-            }
-            return ownedByCaller(i);
-          });
-      // A tool approval's arguments are the requester's: anyone else (an
-      // admin, an approver group) sees secret-looking values redacted (#2945).
-      res.json({
-        interactions: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
-      });
-    } catch (error) {
-      sendFailedOperationError(res, 'list pending interactions', error);
+    if (isAnonymousUser(req.user)) {
+      throw new ServiceError('FORBIDDEN', 'Insufficient permissions: list interactions required');
     }
+    const admin = isAdmin(req.user);
+    const all = await interactionService.listPending({
+      kind: typeof req.query.kind === 'string' ? req.query.kind : undefined
+    });
+    const groups = Array.isArray(req.user.groups) ? req.user.groups : [];
+    // Owner ids were recorded in the identity mode of their run; resolve the
+    // caller in each mode that occurs so runs written before an identityMode
+    // change still match.
+    const modeOf = i =>
+      i.source?.identityMode || runLog.getRunMeta(i.runId)?.identityMode || runLog.identityMode();
+    const myIdByMode = new Map();
+    for (const mode of new Set(all.map(modeOf))) {
+      myIdByMode.set(mode, (await resolvePrincipal(req.user, { mode })).id);
+    }
+    const ownedByCaller = i =>
+      !!i.source?.principalId && i.source.principalId === myIdByMode.get(modeOf(i));
+    const visible = admin
+      ? all
+      : all.filter(i => {
+          const approvers = i.policy?.approverGroups;
+          if (Array.isArray(approvers) && approvers.length > 0) {
+            return approvers.some(g => groups.includes(g));
+          }
+          return ownedByCaller(i);
+        });
+    // A tool approval's arguments are the requester's: anyone else (an
+    // admin, an approver group) sees secret-looking values redacted (#2945).
+    res.json({
+      interactions: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
+    });
   });
 }

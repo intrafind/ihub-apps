@@ -9035,7 +9035,7 @@
     "INVALID_TASK": "Some of the task settings are not valid.",
     "INVALID_BODY": "The request body is not valid.",
     "INVALID_RUNS": "The list of runs is not valid.",
-    "INVALID_DECISION": "The decision must be approve or reject.",
+    "INVALID_DECISION": "The decision is not valid.",
     "INVALID_STATUS": "The status must be paused, active or disabled.",
     "UPLOADS_DISABLED": "File uploads are switched off.",
     "USER_PROMPTS_NOT_ALLOWED": "This sign-in cannot keep personal prompts.",
@@ -9150,6 +9150,18 @@
     "VOICES_UNSUPPORTED": "The provider of this model does not manage voices.",
     "INVALID_AUDIO": "The audio is missing or not valid.",
     "UNSUPPORTED_TTS_PROVIDER": "The text-to-speech provider is not supported.",
-    "NO_AUDIO": "The model answered without any audio."
+    "NO_AUDIO": "The model answered without any audio.",
+    "ANSWER_IN_PROGRESS": "The interaction is being answered right now.",
+    "ANSWER_IN_CHAT": "Answer this approval in its chat.",
+    "APPROVER_REQUIRED": "An approver is required to answer this interaction.",
+    "UNAUTHORIZED_APPROVER": "You are not one of the approvers of this interaction.",
+    "CANCELLED": "The interaction was cancelled.",
+    "EXPIRED": "The interaction has expired.",
+    "RUN_DELETED": "The run of this interaction was deleted.",
+    "INVALID_INPUT": "The answer does not match what the interaction asks for.",
+    "INVALID_OPTION": "The chosen option is not one of the offered options.",
+    "NOT_PENDING": "The interaction is no longer waiting for an answer.",
+    "REASON_REQUIRED": "A reason is required to reject.",
+    "SKIP_NOT_ALLOWED": "This question cannot be skipped."
   }
 }
