@@ -675,3 +675,23 @@ at another page meant removing it and adding it again.
 - API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
   accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
   replaces the stored one as sent.
+
+## Audit Log: Open an Entry, and See Which Groups a Sign-in Brought Along
+
+Every entry in **Admin → Audit Log** now opens in a detail panel — click the row or the eye icon.
+For sign-ins through an external identity provider, the panel shows where the user's groups came
+from, so admins can check what an Entra ID or other OIDC user actually got, even without an active
+session.
+
+- **Groups from the identity provider:** the groups the provider sent at sign-in (for Entra ID
+  usually group ids), each with the iHub groups it maps to, or **Not mapped**.
+- **Assigned manually:** the groups an admin gave the user under **Users**.
+- **Added automatically:** groups such as `authenticated` or the provider's default groups.
+- **Effective groups:** what the user ended up with.
+- Recorded for OIDC, LDAP and NTLM sign-ins. The values are a snapshot from that sign-in; changes in
+  the identity provider show up with the next one. At most 200 provider groups are listed per
+  sign-in, with the total.
+- The audit log search also finds provider group names, so searching an Entra group id lists who
+  signed in with it.
+- Display only: who may do what is still decided by the groups of the current session, and nothing
+  is added to `users.json`.

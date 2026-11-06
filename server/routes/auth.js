@@ -19,6 +19,7 @@ import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { buildLoginGroupDetails } from '../utils/loginGroupDetails.js';
 import { setAuthCookie, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { appendQueryParams } from '../utils/appendQueryParams.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
@@ -372,7 +373,8 @@ export default function registerAuthRoutes(app) {
           name: result.user?.name ?? result.user?.username ?? result.user?.id ?? 'unknown',
           groups: result.user?.groups || [],
           authenticated: true
-        }
+        },
+        details: buildLoginGroupDetails(result.loginGroups)
       });
 
       // Set HTTP-only cookie for authentication
@@ -526,7 +528,8 @@ export default function registerAuthRoutes(app) {
           name: result.user?.name ?? result.user?.username ?? result.user?.id ?? 'unknown',
           groups: result.user?.groups || [],
           authenticated: true
-        }
+        },
+        details: buildLoginGroupDetails(result.loginGroups)
       });
 
       // Set HTTP-only cookie for authentication
