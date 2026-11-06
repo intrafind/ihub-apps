@@ -79,7 +79,8 @@ named `cust.*` and differ per installation.
 The `query` takes Lucene syntax.
 
 ```
-annual report                          words, relevance-ranked
+annual report                          bare words, relevance-ranked — see
+                                       "How iFinder combines the words"
 "annual report"                        exact phrase
 title:budget AND language:de           field-qualified, boolean
 creators:john OR owners:john           either
@@ -120,9 +121,11 @@ query without guessing at field names.
 
 A field prefix goes in front: `content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
 
-These operators are normally active, but a deployment can have them switched
-off, and a parser that does not know an operator treats it as a literal term and
-quietly matches nothing. So when an operator matters, run the query with and
+These operators are always understood: the IntraFind parser is iFinder's
+default, and a search profile cannot switch it off. An operator can still match
+nothing for a reason of its own — `THES/` needs a configured thesaurus,
+`ENTITY/` a field analyzed for entities, and a typo (`ENTITY/PERSON`,
+`near/S`) is silent. So when an operator matters, run the query with and
 without it and compare `totalFound` rather than trusting a zero.
 
 Full grammar, every option and worked examples:
@@ -164,7 +167,9 @@ setting:
 
 `minimum_should_match` counts bare words only. Write the operator out and it
 does not apply: `urlaub OR ferien OR abwesenheit` matches any one of the three,
-and `vertrag AND kündigung AND frist AND lieferant` requires all four.
+and `vertrag AND kündigung AND frist AND lieferant` requires all four. To set a
+threshold of your own, use `OR/2(vertrag kündigung frist lieferant)` — any two
+of the four.
 
 Filters are always ANDed with the query.
 
@@ -395,14 +400,15 @@ returns the long tail.
 | right topic, wrong docs                 | ranking skewed by filter terms in the query       | move them to `filter`                      |
 | a known document missing                | the user cannot read it                           | say so; do not retry                       |
 | sort ignored                            | sorting on an analyzed text field                 | use the `.keyword` variant                 |
-| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it                | re-run without it and compare `totalFound` |
+| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | no thesaurus, field without entities, or a typo   | re-run without it and compare `totalFound` |
 | a German compound finds nothing         | analyzer stopped at the surface form              | `MODE/c&` or `MODE/s&`                     |
 | a name or code matches too loosely      | lemma or compound expansion                       | `MODE/e&`                                  |
 
 Never report "there are no documents about X" after one failed query. Widen the
 wording and confirm the profile and the field names first — the common case is a
-query fault, not an empty corpus. And never answer a zero with a longer query:
-that is the one retry that is certain to fail.
+query fault, not an empty corpus. And never answer a zero with the same words
+plus more: up to three words it finds nothing again, from four on it finds
+documents that lack one of your words.
 
 ## Related references
 
