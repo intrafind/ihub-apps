@@ -27,8 +27,9 @@ const NO_DETAILS_CODE = 'DOCUMENT_DETAILS_UNAVAILABLE';
  * - `unverified`  the check itself failed (5xx, network) or the integration has no details route:
  *                 the document is not ruled out, and the chat reports a real failure
  *
- * `info` is the probe's answer (`{ id, definition, type, name }`) once the integration answered,
- * which is what an app's bindings are matched against.
+ * `info` is the probe's answer (`{ id, definition, type, name }`) once the integration answered
+ * (also while the document details are still loading), which is what an app's bindings are matched
+ * against.
  *
  * @param {{documentId: string, integration: string, searchProfile?: string}|null} doc
  * @returns {{status: string, title: string, info: Object|null}}
@@ -57,6 +58,9 @@ export default function usePendingDocumentCheck(doc) {
         const httpStatus = err?.response?.status;
         return settle(httpStatus === 404 || httpStatus === 403 ? 'unavailable' : 'unverified');
       }
+      // The integration answered: the picker can narrow its apps by the binding now, without
+      // waiting for the (slower) document details.
+      if (!signal.aborted) setResult({ key, status: 'checking', title: '', info });
       try {
         const details = await fetchIntegrationFileMetadata({ integration, ref, signal });
         return settle('ready', {
@@ -77,5 +81,5 @@ export default function usePendingDocumentCheck(doc) {
   if (!key) return { status: 'none', title: '', info: null };
   // A result for a previous document is stale until the new check answers.
   if (result.key !== key) return { status: 'checking', title: '', info: null };
-  return { status: result.status, title: result.title, info: result.info };
+  return { status: result.status, title: result.title || '', info: result.info || null };
 }
