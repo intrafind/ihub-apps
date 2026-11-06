@@ -9150,6 +9150,18 @@
     "VOICES_UNSUPPORTED": "Der Anbieter dieses Modells verwaltet keine Stimmen.",
     "INVALID_AUDIO": "Die Audiodatei fehlt oder ist ungültig.",
     "UNSUPPORTED_TTS_PROVIDER": "Der Text-to-Speech-Anbieter wird nicht unterstützt.",
-    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet."
+    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet.",
+    "ANSWER_IN_PROGRESS": "Die Interaktion wird gerade beantwortet.",
+    "ANSWER_IN_CHAT": "Beantworten Sie diese Freigabe im zugehörigen Chat.",
+    "APPROVER_REQUIRED": "Zum Beantworten dieser Interaktion ist ein Freigebender erforderlich.",
+    "UNAUTHORIZED_APPROVER": "Sie gehören nicht zu den Freigebenden dieser Interaktion.",
+    "CANCELLED": "Die Interaktion wurde abgebrochen.",
+    "EXPIRED": "Die Interaktion ist abgelaufen.",
+    "RUN_DELETED": "Der Lauf dieser Interaktion wurde gelöscht.",
+    "INVALID_INPUT": "Die Antwort passt nicht zu dem, was die Interaktion verlangt.",
+    "INVALID_OPTION": "Die gewählte Option gehört nicht zu den angebotenen Optionen.",
+    "NOT_PENDING": "Die Interaktion wartet nicht mehr auf eine Antwort.",
+    "REASON_REQUIRED": "Zum Ablehnen ist eine Begründung erforderlich.",
+    "SKIP_NOT_ALLOWED": "Diese Frage darf nicht übersprungen werden."
   }
 }
