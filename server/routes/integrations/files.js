@@ -19,6 +19,7 @@
  * `:integration` is an installation id. The installation must exist, be configured and
  * be granted to the user's groups before the connector is asked for anything;
  * the connector fetches with the signed-in user's own permissions in its system.
+ * Failures are thrown as `ServiceError`s for the error middleware to answer.
  * A built-in source provider that is not an installation (`project`) answers the
  * same routes under its own access rules: these are the one way to a source's content and
  * details, for Preview, Download, Add to email, Details and Open in App alike.
@@ -27,13 +28,13 @@
  */
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import { sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
+import { isValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { API_ERROR_CODES, GENERIC_ERROR_CODES } from '../../../shared/apiErrors.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { sendProviderContent } from '../../utils/sendProviderContent.js';
 import logger from '../../utils/logger.js';
 import {
-  DocumentAccessError,
   describeDocumentProvider,
   resolveDocumentProvider
 } from '../../services/integrations/documentAccess.js';
@@ -46,37 +47,38 @@ const MAX_SCOPE_CHARS = 256;
 const MAX_FILENAME_CHARS = 255;
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
+/** The generic registry code of an HTTP status (`404` → `NOT_FOUND`). */
+const CODE_BY_STATUS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(GENERIC_ERROR_CODES)
+      .filter(([code]) => code !== 'VALIDATION_FAILED' && code !== 'TIMEOUT')
+      .map(([code, status]) => [status, code])
+  )
+);
+
+const badRequest = message => new ServiceError('BAD_REQUEST', message);
+
 /**
  * What a request's `:integration` acts through, after the gate: the installation's connector,
- * or a built-in provider (`project`) with its own access rules. Null after answering.
+ * or a built-in provider (`project`) with its own access rules. Throws when there is none: a
+ * `DocumentAccessError` from the gate, or `INTEGRATION_NOT_FOUND`.
  */
-async function resolve(req, res) {
-  if (!validateIdForPath(req.params.integration, 'integration', res)) return null;
-  try {
-    const provider = await resolveDocumentProvider(req.params.integration, req.user);
-    if (provider) return provider;
-    res.status(404).json({ error: 'No such integration', code: 'INTEGRATION_NOT_FOUND' });
-    return null;
-  } catch (error) {
-    if (error instanceof DocumentAccessError) {
-      res.status(error.status).json({ error: error.message, code: error.code });
-      return null;
-    }
-    throw error;
-  }
+async function resolve(req) {
+  if (!isValidId(req.params.integration)) throw badRequest('Invalid integration ID');
+  const provider = await resolveDocumentProvider(req.params.integration, req.user);
+  if (!provider) throw new ServiceError('INTEGRATION_NOT_FOUND', 'No such integration');
+  return provider;
 }
 
-/** The document a request names: `{ id, scope? }`, or null after answering 400. */
-function refOf(req, res) {
+/** The document a request names: `{ id, scope? }`; throws a 400 for an unusable id or scope. */
+function refOf(req) {
   const { id } = req.params;
   const { scope } = req.query;
   if (typeof id !== 'string' || !id || id.length > MAX_REF_ID_CHARS || CONTROL_CHARS.test(id)) {
-    sendBadRequest(res, 'Invalid document id');
-    return null;
+    throw badRequest('Invalid document id');
   }
   if (scope !== undefined && (typeof scope !== 'string' || scope.length > MAX_SCOPE_CHARS)) {
-    sendBadRequest(res, 'Invalid scope parameter');
-    return null;
+    throw badRequest('Invalid scope parameter');
   }
   return scope ? { id, scope } : { id };
 }
@@ -90,21 +92,38 @@ function namedBy(filename, content) {
   return { ...content, contentDisposition: buildContentDisposition(filename) };
 }
 
-/** Answer a connector's failure with its status (a plain error is a logged 500). */
-function sendFailure(res, error, what) {
-  // A 401 here is the other system turning the user down, not iHub: the request has passed
-  // `authRequired`. Sent as 401 it would reach the client as an expired iHub session (the api
-  // client clears the token and raises the sign-in), so it is a 403.
+/**
+ * A connector's failure as the error to throw. A 401 here is the other system turning the user
+ * down, not iHub: the request has passed `authRequired`. Sent as 401 it would reach the client as
+ * an expired iHub session (the api client clears the token and raises the sign-in), so it is a 403.
+ * A 5xx message can carry the upstream response body; the log keeps it, the client gets a generic one.
+ * A 4xx keeps the connector's own message and, when the connector names a registry code of that
+ * status (`ORIGINAL_DISCARDED`), that code.
+ */
+function failureOf(error, what) {
+  if (error instanceof ServiceError) return error;
   const upstream = Number.isInteger(error?.status) ? error.status : 500;
+  if (upstream >= 500) {
+    logger.error(`Integration ${what} failed`, { component: 'files', error });
+    return new ServiceError(
+      upstream === 500 ? 'INTERNAL_ERROR' : 'UPSTREAM_ERROR',
+      `Integration ${what} failed`,
+      { status: upstream, cause: error }
+    );
+  }
   const status = upstream === 401 ? 403 : upstream;
-  if (status >= 500) logger.error(`Integration ${what} failed`, { component: 'files', error });
-  // A 5xx message can carry the upstream response body; the log keeps it, the client gets a generic one.
-  const message = status >= 500 ? undefined : error?.message;
-  return sendErrorResponse(res, status, message || `Integration ${what} failed`);
+  const code =
+    Object.hasOwn(API_ERROR_CODES, error?.code) && API_ERROR_CODES[error.code] === status
+      ? error.code
+      : (CODE_BY_STATUS[status] ?? 'BAD_REQUEST');
+  return new ServiceError(code, error?.message || `Integration ${what} failed`, {
+    status,
+    cause: error
+  });
 }
 
 router.get('/:integration/files', authRequired, async (req, res) => {
-  if (!(await resolve(req, res))) return undefined;
+  await resolve(req);
   return res.json(describeDocumentProvider(req.params.integration));
 });
 
@@ -113,39 +132,36 @@ router.get(
   authRequired,
   async (req, res) => {
     const format = req.query.format ?? 'original';
-    if (!FORMATS.has(format)) return sendBadRequest(res, 'Invalid format parameter');
+    if (!FORMATS.has(format)) throw badRequest('Invalid format parameter');
     const { filename } = req.params;
     if (
       filename !== undefined &&
       (!filename || filename.length > MAX_FILENAME_CHARS || CONTROL_CHARS.test(filename))
     ) {
-      return sendBadRequest(res, 'Invalid file name');
+      throw badRequest('Invalid file name');
     }
-    const provider = await resolve(req, res);
-    if (!provider) return undefined;
-    const ref = refOf(req, res);
-    if (!ref) return undefined;
+    const provider = await resolve(req);
+    const ref = refOf(req);
+    let content;
     try {
-      const content = await provider.content({ ref, user: req.user, format });
-      return sendProviderContent(res, namedBy(filename, content));
+      content = await provider.content({ ref, user: req.user, format });
     } catch (error) {
-      return sendFailure(res, error, 'content');
+      throw failureOf(error, 'content');
     }
+    return sendProviderContent(res, namedBy(filename, content));
   }
 );
 
 router.get('/:integration/files/:id', authRequired, async (req, res) => {
-  const provider = await resolve(req, res);
-  if (!provider) return undefined;
-  const ref = refOf(req, res);
-  if (!ref) return undefined;
+  const provider = await resolve(req);
+  const ref = refOf(req);
   if (typeof provider.metadata !== 'function') {
-    return res.status(404).json({ error: 'This integration has no details' });
+    throw new ServiceError('DOCUMENT_DETAILS_UNAVAILABLE', 'This integration has no details');
   }
   try {
     return res.json(await provider.metadata({ ref, user: req.user }));
   } catch (error) {
-    return sendFailure(res, error, 'metadata');
+    throw failureOf(error, 'metadata');
   }
 });
 

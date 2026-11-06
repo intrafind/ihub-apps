@@ -9,7 +9,7 @@ import {
 import { documentFailureKind, documentRefOf } from '../utils/pendingDocument';
 
 /** The integration answered 404 because it has no details route, not because the document is gone. */
-const NO_DETAILS_MESSAGE = 'This integration has no details';
+const NO_DETAILS_CODE = 'DOCUMENT_DETAILS_UNAVAILABLE';
 
 /**
  * Checks, with the signed-in user's own rights, that the integration a link names can hand
@@ -66,7 +66,7 @@ export default function usePendingDocumentCheck(doc) {
       } catch (err) {
         const httpStatus = err?.response?.status;
         const failure = documentFailureKind(httpStatus);
-        const noDetails = httpStatus === 404 && err?.response?.data?.error === NO_DETAILS_MESSAGE;
+        const noDetails = httpStatus === 404 && err?.response?.data?.code === NO_DETAILS_CODE;
         return settle(noDetails || failure === 'failed' ? 'unverified' : failure, { info });
       }
     })();

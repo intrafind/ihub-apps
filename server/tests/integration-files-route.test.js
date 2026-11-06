@@ -21,6 +21,7 @@ import configCache from '../configCache.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
 import { registerConnector } from '../services/integrations/protocols/native/connectors/index.js';
 import filesRoutes from '../routes/integrations/files.js';
+import errorHandler from '../middleware/errorHandler.js';
 import {
   _resetSourceProviders,
   registerSourceProvider,
@@ -54,6 +55,7 @@ function appFor(user) {
   app.use('/api/integrations', filesRoutes);
   // Mounted after the files router, as the scope and iFinder authorization routes are.
   app.get('/api/integrations/ifinder/authorization', (_req, res) => res.json({ sibling: true }));
+  app.use(errorHandler);
   return app;
 }
 
@@ -289,6 +291,7 @@ describe('integration files routes', () => {
       assert.equal(res.status, 404);
       // The client tells "no details route" from "no such document" by this text.
       assert.equal(res.body.error, 'This integration has no details');
+      assert.equal(res.body.code, 'DOCUMENT_DETAILS_UNAVAILABLE');
     });
 
     it('a 5xx answers with a generic message, never the upstream text; a 4xx keeps its own', async () => {

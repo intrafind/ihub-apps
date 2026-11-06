@@ -25,21 +25,24 @@ import integrationRegistry from './definitions/IntegrationRegistry.js';
 import { getConnector } from './protocols/native/connectors/index.js';
 import { mayUseIntegration, typeOfInstallation } from './integrationAccess.js';
 import { getSourceProvider, hasSourceProvider } from '../sources/providers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
 /** The capability a definition declares to hand over documents by reference. */
 export const FILES_CAPABILITY = 'files';
 
-export class DocumentAccessError extends Error {
+/**
+ * Why a user may not have documents of an integration. A `ServiceError`, so the error middleware
+ * answers it with the code's status.
+ */
+export class DocumentAccessError extends ServiceError {
   /**
    * @param {number} status
    * @param {string} code - `INTEGRATION_NOT_FOUND` | `INTEGRATION_NOT_CONFIGURED` | `INTEGRATION_NOT_GRANTED`
    * @param {string} message
    */
   constructor(status, code, message) {
-    super(message);
+    super(code, message, { status });
     this.name = 'DocumentAccessError';
-    this.status = status;
-    this.code = code;
   }
 }
 

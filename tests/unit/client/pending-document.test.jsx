@@ -203,17 +203,20 @@ describe('usePendingDocumentCheck', () => {
   });
 
   test.each([
-    [403, undefined, 'noAccess'],
-    [401, undefined, 'noAccess'],
-    [404, 'Document not found', 'notFound'],
-    [404, 'This integration has no details', 'unverified'],
-    [500, 'boom', 'unverified']
-  ])('metadata status %s (%s) is %s, keeping the integration', async (status, error, expected) => {
-    fetchIntegrationFileMetadata.mockRejectedValue(notFound(status, error));
-    const { result } = renderHook(() => usePendingDocumentCheck(doc));
-    await waitFor(() => expect(result.current.status).toBe(expected));
-    expect(result.current.info).toEqual(INFO);
-  });
+    [403, undefined, undefined, 'noAccess'],
+    [401, undefined, undefined, 'noAccess'],
+    [404, 'Document not found', undefined, 'notFound'],
+    [404, 'This integration has no details', 'DOCUMENT_DETAILS_UNAVAILABLE', 'unverified'],
+    [500, 'boom', undefined, 'unverified']
+  ])(
+    'metadata status %s (%s) is %s, keeping the integration',
+    async (status, error, code, expected) => {
+      fetchIntegrationFileMetadata.mockRejectedValue(notFound(status, error, code));
+      const { result } = renderHook(() => usePendingDocumentCheck(doc));
+      await waitFor(() => expect(result.current.status).toBe(expected));
+      expect(result.current.info).toEqual(INFO);
+    }
+  );
 
   test('a network failure does not rule the document out', async () => {
     fetchIntegrationFilesProbe.mockRejectedValue(new Error('offline'));
