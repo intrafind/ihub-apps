@@ -514,6 +514,6 @@ describe('iFinder Model Gateway providers', () => {
       .post('/api/admin/models/_discover')
       .send({ url: 'https://gw:9614', apiType: 'openai', gateway: 'other' });
     expect(res.status).toBe(400);
-    expect(res.body.messageKey).toBe('unsupportedProvider');
+    expect(res.body.details.messageKey).toBe('unsupportedProvider');
   });
 });
