@@ -143,6 +143,13 @@ export function AuthProvider({ children }) {
       // calling this, so a post-login refresh always reaches the server.
       const data = await fetchAuthStatus();
 
+      // The server did not accept the stored token (expired, or left over from
+      // before sign-in moved to the httpOnly cookie); any session came from the
+      // cookie. Drop it so it is not sent in front of the cookie again.
+      if (data?.bearerTokenRejected) {
+        localStorage.removeItem('authToken');
+      }
+
       if (data.success !== false) {
         dispatch({
           type: AUTH_ACTIONS.SET_AUTH_CONFIG,

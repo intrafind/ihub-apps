@@ -98,3 +98,69 @@ test('a plain page load keeps the stored token (Teams, add-in and extension rely
   expect(localStorage.getItem('authToken')).toBe('stale.token.from.an.earlier.session');
   expect(calls[0].authorization).toBe('Bearer stale.token.from.an.earlier.session');
 });
+
+/**
+ * The server as it answers now: a stored token it cannot use no longer hides
+ * the cookie, and it says so (`bearerTokenRejected`), so the gate forgets the
+ * token on any page load, not only right after a provider callback.
+ */
+function installServerThatRejectsTheToken({ cookieSession }) {
+  const calls = [];
+  global.fetch = jest.fn(async (url, options = {}) => {
+    const authorization = options.headers && options.headers.Authorization;
+    calls.push({ url, authorization });
+    const body = cookieSession ? { ...STATUS_SIGNED_IN } : { ...STATUS_ANONYMOUS };
+    body.bearerTokenRejected = Boolean(authorization);
+    return { ok: true, json: async () => body };
+  });
+  return calls;
+}
+
+test('a plain page load forgets a stored token the server rejected and opens the app', async () => {
+  const calls = installServerThatRejectsTheToken({ cookieSession: true });
+
+  await runGate('');
+
+  expect(calls[0].authorization).toBe('Bearer stale.token.from.an.earlier.session');
+  expect(localStorage.getItem('authToken')).toBeNull();
+  jest.advanceTimersByTime(300);
+  expect(document.getElementById('auth-gate-root').classList.contains('ag-hidden')).toBe(true);
+});
+
+test('a plain page load without a session forgets the rejected token and shows the login', async () => {
+  installServerThatRejectsTheToken({ cookieSession: false });
+
+  await runGate('');
+
+  expect(localStorage.getItem('authToken')).toBeNull();
+  expect(document.querySelector('.ag-btn').textContent).toContain('Corp SSO');
+});
+
+test('a failed provider callback says so instead of showing a bare login screen', async () => {
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      ...STATUS_ANONYMOUS,
+      autoRedirect: { provider: 'corp', url: '/api/auth/oidc/corp' }
+    })
+  }));
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+  await runGate('?auth=error&message=Call%20555-0100%20to%20unlock%20your%20account');
+
+  const error = document.querySelector('.ag-error');
+  expect(error).not.toBeNull();
+  // Our own text only: a crafted link cannot put its words on the login screen.
+  expect(error.textContent).toBe('signInFailed');
+  expect(error.textContent).not.toContain('555');
+  expect(warn).toHaveBeenCalledWith(
+    'Auth gate: sign-in failed:',
+    'Call 555-0100 to unlock your account'
+  );
+  // The URL no longer carries the error, and the browser is not sent straight
+  // back to the provider that just failed.
+  expect(window.location.search).toBe('');
+  expect(sessionStorage.getItem('autoRedirect_corp')).toBeNull();
+  expect(document.querySelector('.ag-btn').textContent).toContain('Corp SSO');
+  warn.mockRestore();
+});
