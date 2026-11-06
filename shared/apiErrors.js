@@ -253,7 +253,10 @@ export const MODEL_ERROR_CODES = Object.freeze({
   NO_AUDIO: 502
 });
 
-/** Answers to the interactions of a run (`server/routes/runs.js`, `InteractionService`). */
+/**
+ * Answers to the interactions of a run (`server/routes/runs.js`, `InteractionService`).
+ * `INVALID_DECISION` is shared with the scheduled tasks (`SCHEDULED_TASK_ERROR_CODES`).
+ */
 export const INTERACTION_ERROR_CODES = Object.freeze({
   ANSWER_IN_PROGRESS: 409,
   ANSWER_IN_CHAT: 409,
@@ -262,7 +265,6 @@ export const INTERACTION_ERROR_CODES = Object.freeze({
   CANCELLED: 409,
   EXPIRED: 410,
   RUN_DELETED: 410,
-  INVALID_DECISION: 400,
   INVALID_INPUT: 400,
   INVALID_OPTION: 400,
   NOT_PENDING: 409,

@@ -9035,7 +9035,7 @@
     "INVALID_TASK": "Some of the task settings are not valid.",
     "INVALID_BODY": "The request body is not valid.",
     "INVALID_RUNS": "The list of runs is not valid.",
-    "INVALID_DECISION": "The decision is not valid.",
+    "INVALID_DECISION": "The decision must be approve or reject.",
     "INVALID_STATUS": "The status must be paused, active or disabled.",
     "UPLOADS_DISABLED": "File uploads are switched off.",
     "USER_PROMPTS_NOT_ALLOWED": "This sign-in cannot keep personal prompts.",

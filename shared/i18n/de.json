@@ -9008,7 +9008,7 @@
     "INVALID_TASK": "Einige Einstellungen der Aufgabe sind ungültig.",
     "INVALID_BODY": "Der Anfrageinhalt ist ungültig.",
     "INVALID_RUNS": "Die Liste der Läufe ist ungültig.",
-    "INVALID_DECISION": "Die Entscheidung ist nicht gültig.",
+    "INVALID_DECISION": "Die Entscheidung muss „approve“ oder „reject“ sein.",
     "INVALID_STATUS": "Der Status muss „paused“, „active“ oder „disabled“ sein.",
     "UPLOADS_DISABLED": "Datei-Uploads sind ausgeschaltet.",
     "USER_PROMPTS_NOT_ALLOWED": "Mit dieser Anmeldung können keine persönlichen Prompts geführt werden.",
