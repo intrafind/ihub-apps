@@ -672,6 +672,11 @@ text page. Every such response has the same body:
   (410), `CANCELLED`, `NOT_PENDING`, `ANSWER_IN_PROGRESS` and `ANSWER_IN_CHAT` (409),
   `APPROVER_REQUIRED` and `UNAUTHORIZED_APPROVER` (403), and `INVALID_DECISION`, `INVALID_INPUT`,
   `INVALID_OPTION`, `REASON_REQUIRED` and `SKIP_NOT_ALLOWED` (400).
+- The app administration endpoints (`/api/admin/apps*`) answer in this shape: `NOT_FOUND` (an app or its
+  file), `BAD_REQUEST` (a missing field, an unsafe or changed id, a bad reorder list), `CONFLICT` (an app id
+  that exists) and `VALIDATION_FAILED` for an app configuration that does not match the schema. The
+  `error` text still names the failed fields; the failed fields are in `details.issues`
+  (`{ path, code, message }`, `path` a dotted string) instead of a bare `details` list with `path` arrays.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
