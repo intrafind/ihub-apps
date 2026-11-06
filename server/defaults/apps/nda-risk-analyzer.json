@@ -88,7 +88,31 @@
       "enabled": true,
       "maxFileSizeMB": 10,
       "supportedTextFormats": ["text/plain", "text/markdown", "text/x-markdown"],
-      "supportedPdfFormats": ["application/pdf"]
+      "supportedPdfFormats": ["application/pdf"],
+      "supportedFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "text/vtt",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-outlook",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation",
+        "text/*"
+      ]
     },
     "imageUpload": {
       "enabled": false

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchMimetypesConfig } from '../../../api/endpoints/config';
 
@@ -12,12 +12,22 @@ import { fetchMimetypesConfig } from '../../../api/endpoints/config';
  * @param {string[]} props.selectedFormats - Currently selected MIME types
  * @param {Function} props.onChange - Callback when selection changes
  * @param {string[]} props.defaultFormats - Default formats to use if none selected
+ * @param {boolean} props.selectEntireCategory - Select the entire category once, as soon as the
+ *   category is known (a freshly enabled upload type). Never set it for a saved selection.
  */
-function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaultFormats = [] }) {
+function MimeTypeSelector({
+  categoryType,
+  selectedFormats = [],
+  onChange,
+  defaultFormats = [],
+  selectEntireCategory = false
+}) {
   const { t } = useTranslation();
   const [mimetypesConfig, setMimetypesConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [useCategory, setUseCategory] = useState(false);
+  // The entire category is on when it is all selected, until the admin unchecks it to pick formats
+  const [pickIndividually, setPickIndividually] = useState(false);
+  const entireCategoryAppliedRef = useRef(false);
 
   useEffect(() => {
     fetchMimetypesConfig()
@@ -30,6 +40,14 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
         setLoading(false);
       });
   }, []);
+
+  const categoryMimeTypes = mimetypesConfig?.categories?.[categoryType]?.mimeTypes;
+
+  useEffect(() => {
+    if (!selectEntireCategory || entireCategoryAppliedRef.current || !categoryMimeTypes) return;
+    entireCategoryAppliedRef.current = true;
+    onChange(categoryMimeTypes);
+  }, [selectEntireCategory, categoryMimeTypes, onChange]);
 
   if (loading || !mimetypesConfig) {
     return (
@@ -51,14 +69,14 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
   const availableMimeTypes = category.mimeTypes || [];
 
   const handleCategoryToggle = checked => {
-    setUseCategory(checked);
+    setPickIndividually(!checked);
     if (checked) {
       // Select all MIME types in the category
       onChange(availableMimeTypes);
-    } else {
-      // Use default formats or keep current selection
-      onChange(selectedFormats.length > 0 ? selectedFormats : defaultFormats);
+    } else if (selectedFormats.length === 0) {
+      onChange(defaultFormats);
     }
+    // Otherwise the current selection stays and can now be narrowed down
   };
 
   const handleMimeTypeToggle = (mimeType, checked) => {
@@ -71,13 +89,14 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
   const isAllSelected =
     selectedFormats.length === availableMimeTypes.length &&
     availableMimeTypes.every(mt => selectedFormats.includes(mt));
+  const useCategory = isAllSelected && !pickIndividually;
 
   return (
     <div className="space-y-2">
       <div className="flex items-center mb-3 p-2 bg-indigo-50 rounded-sm">
         <input
           type="checkbox"
-          checked={useCategory || isAllSelected}
+          checked={useCategory}
           onChange={e => handleCategoryToggle(e.target.checked)}
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
         />
