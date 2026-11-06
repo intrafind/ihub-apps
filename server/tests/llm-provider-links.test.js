@@ -123,6 +123,7 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
 const { default: registerAdminProvidersRoutes } = await import('../routes/admin/providers.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { getApiKeyForModel, inspectModelApiKey } = await import('../utils.js');
 const { modelConfigSchema } = await import('../validators/modelConfigSchema.js');
 const { MODEL_API_TYPES } = await import('../../shared/llmProviders.js');
@@ -131,6 +132,7 @@ const app = express();
 app.use(express.json());
 registerAdminModelsRoutes(app);
 registerAdminProvidersRoutes(app);
+app.use(errorHandler);
 
 const baseModel = {
   modelId: 'gpt-oss-120b',
@@ -514,6 +516,6 @@ describe('iFinder Model Gateway providers', () => {
       .post('/api/admin/models/_discover')
       .send({ url: 'https://gw:9614', apiType: 'openai', gateway: 'other' });
     expect(res.status).toBe(400);
-    expect(res.body.messageKey).toBe('unsupportedProvider');
+    expect(res.body.details.messageKey).toBe('unsupportedProvider');
   });
 });
