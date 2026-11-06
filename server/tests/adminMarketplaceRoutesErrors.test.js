@@ -3,8 +3,8 @@
 
 /**
  * The marketplace admin routes answer errors through the global error
- * middleware (`{ error, code, details? }`): status and code come from the
- * `ServiceError` the services throw, never from the text of a message.
+ * middleware (`application/problem+json`: `{ type, title, status, detail, code, details? }`):
+ * status and code come from the `ServiceError` the services throw, never from the text of a message.
  *
  * Native ESM, so `jest.unstable_mockModule` + dynamic imports. Run with
  * `NODE_OPTIONS=--experimental-vm-modules`.
@@ -76,7 +76,14 @@ describe('marketplace admin routes: errors', () => {
       new ServiceError('NOT_FOUND', "Registry 'gone' not found")
     );
     const res = await request(app).delete('/api/admin/marketplace/registries/gone').expect(404);
-    expect(res.body).toEqual({ error: "Registry 'gone' not found", code: 'NOT_FOUND' });
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toMatchObject({
+      type: 'urn:ihub:problem:NOT_FOUND',
+      status: 404,
+      detail: "Registry 'gone' not found",
+      code: 'NOT_FOUND'
+    });
+    expect(res.body.error).toBeUndefined();
   });
 
   it('answers a duplicate registry with CONFLICT and an invalid one with BAD_REQUEST', async () => {
@@ -96,13 +103,23 @@ describe('marketplace admin routes: errors', () => {
       .post('/api/admin/marketplace/registries/main/items/integration/bad%20name/_install')
       .send({})
       .expect(400);
-    expect(name.body).toEqual({ error: 'Invalid item name', code: 'BAD_REQUEST' });
+    expect(name.body).toMatchObject({
+      type: 'urn:ihub:problem:BAD_REQUEST',
+      status: 400,
+      detail: 'Invalid item name',
+      code: 'BAD_REQUEST'
+    });
 
     const version = await request(app)
       .post(`${ITEM}/_install`)
       .send({ version: 'not a version!' })
       .expect(400);
-    expect(version.body).toEqual({ error: 'Invalid version', code: 'INVALID_VERSION' });
+    expect(version.body).toMatchObject({
+      type: 'urn:ihub:problem:INVALID_VERSION',
+      status: 400,
+      detail: 'Invalid version',
+      code: 'INVALID_VERSION'
+    });
     expect(contentInstaller.install).not.toHaveBeenCalled();
   });
 
@@ -115,7 +132,12 @@ describe('marketplace admin routes: errors', () => {
   ])('an install that fails with %s answers %i with that code', async (code, status) => {
     contentInstaller.install.mockRejectedValue(new ServiceError(code, 'The item cannot be used'));
     const res = await request(app).post(`${ITEM}/_install`).send({}).expect(status);
-    expect(res.body).toEqual({ error: 'The item cannot be used', code });
+    expect(res.body).toMatchObject({
+      type: `urn:ihub:problem:${code}`,
+      status,
+      detail: 'The item cannot be used',
+      code
+    });
   });
 
   it('answers an uninstall of an integration that is in use with INTEGRATION_IN_USE', async () => {
