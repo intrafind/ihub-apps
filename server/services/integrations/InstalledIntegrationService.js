@@ -312,7 +312,12 @@ function assertInstallValues(definition, instance, hasCredential) {
   if (valueErrors.length) {
     throw new IntegrationError('Invalid install values', {
       code: 'INVALID_VALUES',
-      details: valueErrors
+      // `errors` of the answer: which install value is wrong, by JSON Pointer
+      details: valueErrors.map(({ kind, key, message }) => ({
+        path: ['values', key],
+        code: kind,
+        message
+      }))
     });
   }
 }

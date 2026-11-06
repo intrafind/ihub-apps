@@ -221,7 +221,7 @@ function splitIssues(details) {
   return {
     details: Object.keys(rest).length ? rest : undefined,
     errors: issues.map(issue => ({
-      pointer: jsonPointer(issue.path),
+      pointer: jsonPointer(issue.path ?? issue.field),
       code: typeof issue.code === 'string' ? issue.code : 'INVALID',
       message: issue.message
     }))

@@ -89,7 +89,12 @@ function sendVoicesError(res, error, action) {
     error: error.message
   });
   const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
-  return sendErrorResponse(res, 502, message, { code: 'UPSTREAM_ERROR' });
+  // An admin route: the provider's own wording is what the operator needs to fix the setup, and
+  // the 5xx filter on `detail` would hide it as soon as it names a host or says "token".
+  return sendErrorResponse(res, 502, message, {
+    code: 'UPSTREAM_ERROR',
+    details: { reason: message }
+  });
 }
 
 /**
@@ -957,7 +962,10 @@ export default function registerAdminModelsRoutes(app) {
         error: error.message
       });
       const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
-      return sendErrorResponse(res, 502, message, { code: 'UPSTREAM_ERROR' });
+      return sendErrorResponse(res, 502, message, {
+        code: 'UPSTREAM_ERROR',
+        details: { reason: message }
+      });
     }
     if (bytes === 0) {
       return sendErrorResponse(res, 502, 'The text-to-speech model answered without any audio.', {
@@ -990,7 +998,10 @@ export default function registerAdminModelsRoutes(app) {
         provider: model.provider,
         error: result.message
       });
-      return sendErrorResponse(res, 502, result.message, { code: 'UPSTREAM_ERROR' });
+      return sendErrorResponse(res, 502, result.message, {
+        code: 'UPSTREAM_ERROR',
+        details: { reason: result.message }
+      });
     }
     return res.json({
       success: true,

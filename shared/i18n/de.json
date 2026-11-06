@@ -9146,6 +9146,22 @@
     "CONCURRENCY_LIMIT": "Das Limit gleichzeitiger Läufe ist erreicht.",
     "PROVIDER_IN_USE": "Der Anbieter wird noch von Modellen verwendet.",
     "ARCHIVE_REJECTED": "Das Update-Archiv wurde abgelehnt.",
-    "NO_AUDIO": "Das Sprachausgabe-Modell hat kein Audio zurückgegeben."
+    "NO_AUDIO": "Das Sprachausgabe-Modell hat kein Audio zurückgegeben.",
+    "APP_PROJECTS_DISABLED": "Projekte sind für diese App ausgeschaltet.",
+    "USER_PROJECTS_DISABLED": "Persönliche Projekte sind ausgeschaltet.",
+    "PROJECTS_NOT_ALLOWED": "Ihre Gruppen dürfen keine Projekte verwenden.",
+    "PROJECT_READ_ONLY": "Dieses Projekt ist für Sie schreibgeschützt.",
+    "PROJECT_MISMATCH": "Der Eintrag gehört zu einem anderen Projekt oder wird noch verarbeitet.",
+    "PROJECT_TEST_CHAT_NOT_KEEPABLE": "Der Testchat eines Projekttests kann nicht gespeichert werden.",
+    "ITEMS_NOT_EDITABLE": "Die Einträge dieses Projekts können hier nicht bearbeitet werden.",
+    "SHARE_TARGET_INVALID": "Das Freigabeziel ist nicht gültig.",
+    "IFINDER_UNAVAILABLE": "iFinder ist gerade nicht verfügbar.",
+    "IFINDER_WRITES_DISABLED": "Das Schreiben in iFinder-Sammlungen ist ausgeschaltet.",
+    "QUOTA_FILE_BYTES": "Die Datei ist größer als die erlaubte Größe.",
+    "UPLOAD_TOO_LARGE": "Der Upload ist zu groß.",
+    "COPILOT_AGENT_DISABLED": "Der Microsoft-365-Copilot-Agent ist ausgeschaltet.",
+    "COPILOT_REFERENCE_ID_MISSING": "Für den Copilot-Agenten ist noch keine Referenz-ID eingetragen.",
+    "COPILOT_PUBLIC_HTTPS_REQUIRED": "Der Copilot-Agent benötigt eine öffentliche HTTPS-Adresse.",
+    "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen."
   }
 }

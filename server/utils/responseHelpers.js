@@ -25,10 +25,19 @@ import { codeOfStatus, sendProblem } from './errorResponse.js';
  * @param {Object} options.details - Interpolation parameters for the client's message
  */
 export function sendErrorResponse(res, statusCode, message, options = {}) {
-  const { error, logPrefix, code, details } = options;
+  const { error, logPrefix } = options;
+  let { code, details } = options;
 
   if (error && logPrefix) {
     logger.error(logPrefix, { component: 'Utils', error });
+  }
+
+  // Older call sites carry the specific code in `details.code`; `details` never holds a
+  // code, it is the `code` of the response.
+  if (code === undefined && typeof details?.code === 'string') {
+    const { code: carried, ...rest } = details;
+    code = carried;
+    details = Object.keys(rest).length ? rest : undefined;
   }
 
   return sendProblem(

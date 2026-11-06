@@ -265,6 +265,26 @@ export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
   NOT_CONNECTABLE: 400
 });
 
+/** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */
+export const PROJECT_ERROR_CODES = Object.freeze({
+  APP_PROJECTS_DISABLED: 403,
+  USER_PROJECTS_DISABLED: 403,
+  PROJECTS_NOT_ALLOWED: 403,
+  PROJECT_READ_ONLY: 403,
+  PROJECT_MISMATCH: 409,
+  PROJECT_TEST_CHAT_NOT_KEEPABLE: 409,
+  ITEMS_NOT_EDITABLE: 400,
+  SHARE_TARGET_INVALID: 400,
+  IFINDER_UNAVAILABLE: 503,
+  IFINDER_WRITES_DISABLED: 403,
+  QUOTA_FILE_BYTES: 413,
+  UPLOAD_TOO_LARGE: 413,
+  COPILOT_AGENT_DISABLED: 409,
+  COPILOT_REFERENCE_ID_MISSING: 409,
+  COPILOT_PUBLIC_HTTPS_REQUIRED: 409,
+  INTEGRATION_AUTH_REQUIRED: 409
+});
+
 /** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
 export const MISC_ERROR_CODES = Object.freeze({
   TEAMS_SSO_TOKEN_REQUIRED: 400,
@@ -304,7 +324,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...CHAT_ERROR_CODES,
   ...CLOUD_STORAGE_ERROR_CODES,
   ...VOICE_ADMIN_ERROR_CODES,
-  ...MISC_ERROR_CODES
+  ...MISC_ERROR_CODES,
+  ...PROJECT_ERROR_CODES
 });
 
 /**

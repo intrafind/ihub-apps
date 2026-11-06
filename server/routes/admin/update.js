@@ -213,7 +213,7 @@ export default function registerAdminUpdateRoutes(app) {
             res,
             413,
             `The upload exceeds the limit of ${getUpdateSettings().maxUploadSizeMB} MB`,
-            { details: { code: 'upload-too-large' } }
+            { code: 'UPLOAD_TOO_LARGE' }
           );
         }
         return sendBadRequest(res, `Upload failed: ${error.message}`);

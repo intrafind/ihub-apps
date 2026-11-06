@@ -9173,6 +9173,22 @@
     "CONCURRENCY_LIMIT": "The limit of runs at the same time is reached.",
     "PROVIDER_IN_USE": "The provider is still used by models.",
     "ARCHIVE_REJECTED": "The update archive was rejected.",
-    "NO_AUDIO": "The text-to-speech model returned no audio."
+    "NO_AUDIO": "The text-to-speech model returned no audio.",
+    "APP_PROJECTS_DISABLED": "Projects are turned off for this app.",
+    "USER_PROJECTS_DISABLED": "Personal projects are turned off.",
+    "PROJECTS_NOT_ALLOWED": "Your groups may not use projects.",
+    "PROJECT_READ_ONLY": "This project is read-only for you.",
+    "PROJECT_MISMATCH": "The item belongs to a different project or is still being processed.",
+    "PROJECT_TEST_CHAT_NOT_KEEPABLE": "The scratch chat of a project test cannot be kept.",
+    "ITEMS_NOT_EDITABLE": "The items of this project cannot be edited here.",
+    "SHARE_TARGET_INVALID": "The share target is not valid.",
+    "IFINDER_UNAVAILABLE": "iFinder is not available right now.",
+    "IFINDER_WRITES_DISABLED": "Writing to iFinder collections is turned off.",
+    "QUOTA_FILE_BYTES": "The file is larger than the size limit.",
+    "UPLOAD_TOO_LARGE": "The upload is too large.",
+    "COPILOT_AGENT_DISABLED": "The Microsoft 365 Copilot agent is turned off.",
+    "COPILOT_REFERENCE_ID_MISSING": "The Copilot agent has no reference ID yet.",
+    "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
+    "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration."
   }
 }

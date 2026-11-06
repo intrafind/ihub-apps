@@ -33,7 +33,11 @@ async function blobToBase64(blob) {
   return btoa(binary);
 }
 
-const errorText = (error, fallback) => error?.response?.data?.detail || error?.message || fallback;
+const errorText = (error, fallback) =>
+  error?.response?.data?.details?.reason ||
+  error?.response?.data?.detail ||
+  error?.message ||
+  fallback;
 
 /**
  * Voices of a saved text-to-speech model (Admin → Models → a TTS model):
