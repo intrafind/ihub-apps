@@ -24,8 +24,18 @@ export const VALID_MODES = new Set(['auto', 'light', 'dark']);
  */
 export function parseModeParam(value) {
   if (typeof value !== 'string') return null;
-  const mode = value.trim().toLowerCase();
-  return VALID_MODES.has(mode) ? mode : null;
+  // Each case returns a literal rather than the input, so what leaves this function is one of
+  // three constants, never a string the URL supplied (static analysis tracks the difference).
+  switch (value.trim().toLowerCase()) {
+    case 'auto':
+      return 'auto';
+    case 'light':
+      return 'light';
+    case 'dark':
+      return 'dark';
+    default:
+      return null;
+  }
 }
 
 /**
@@ -92,10 +102,10 @@ export function applyThemeToDocument(dark) {
   if (typeof document === 'undefined') return;
   const html = document.documentElement;
   if (dark) {
-    html.setAttribute('data-theme', 'dark');
+    html.dataset.theme = 'dark';
     html.classList.add('dark');
   } else {
-    html.removeAttribute('data-theme');
+    delete html.dataset.theme;
     html.classList.remove('dark');
   }
 }

@@ -99,10 +99,7 @@ export function activateEmbedMode() {
  * @returns {boolean}
  */
 export function isEmbedDocument() {
-  return (
-    typeof document !== 'undefined' &&
-    document.documentElement.getAttribute('data-ihub-embed') === 'true'
-  );
+  return typeof document !== 'undefined' && document.documentElement.dataset.ihubEmbed === 'true';
 }
 
 /**
