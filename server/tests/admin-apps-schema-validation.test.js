@@ -122,10 +122,11 @@ describe('POST /api/admin/apps', () => {
       .send(redirectApp('tool', 'javascript:void(0)'));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/^Invalid app configuration: /);
-    expect(res.body.error).toContain('redirectConfig.url: Redirect URL must use http or https');
-    expect(res.body.details).toEqual(
-      expect.arrayContaining([expect.objectContaining({ path: ['redirectConfig', 'url'] })])
+    expect(res.body.detail).toMatch(/^Invalid app configuration: /);
+    expect(res.body.detail).toContain('redirectConfig.url: Redirect URL must use http or https');
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(res.body.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ pointer: '/redirectConfig/url' })])
     );
     expect(store['apps/tool.json']).toBeUndefined();
   });
@@ -136,7 +137,7 @@ describe('POST /api/admin/apps', () => {
       .send(chatApp('helper', { useManual: true }));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('useManual');
+    expect(res.body.detail).toContain('useManual');
     expect(store['apps/helper.json']).toBeUndefined();
   });
 
@@ -144,7 +145,7 @@ describe('POST /api/admin/apps', () => {
     const res = await request(app).post('/api/admin/apps').send({ id: 'helper' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Missing required fields');
+    expect(res.body.detail).toBe('Missing required fields');
   });
 });
 
@@ -172,7 +173,7 @@ describe('PUT /api/admin/apps/:appId', () => {
       .send({ ...existing, iframeConfig: { url: 'data:text/html,hello' } });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('iframeConfig.url: Iframe URL must use http or https');
+    expect(res.body.detail).toContain('iframeConfig.url: Iframe URL must use http or https');
     expect(store['apps/embed.json']).toEqual(existing);
   });
 
@@ -184,7 +185,7 @@ describe('PUT /api/admin/apps/:appId', () => {
       .send(chatApp('helper', { color: 'blue' }));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('color:');
+    expect(res.body.detail).toContain('color:');
     expect(store['apps/helper.json']).toEqual(chatApp('helper'));
   });
 });

@@ -108,7 +108,7 @@ describe('text-to-speech voices of a model', () => {
   test('a chat model has no voices', async () => {
     const res = await request(app).get('/api/admin/models/mistral-small/tts/voices');
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('not-tts-model');
+    expect(res.body.code).toBe('NOT_TTS_MODEL');
   });
 
   test('an unknown model is 404', async () => {
@@ -139,16 +139,17 @@ describe('text-to-speech voices of a model', () => {
   });
 
   test.each([
-    ['no name', { audio: sample }, 'invalid-name'],
-    ['no audio', { name: 'Anna' }, 'invalid-audio'],
+    ['no name', { audio: sample }, 'INVALID_NAME'],
+    ['no audio', { name: 'Anna' }, 'INVALID_AUDIO'],
     [
       'an unsupported file type',
       { name: 'Anna', audio: sample, filename: 'anna.exe' },
-      'invalid-audio'
+      'INVALID_AUDIO'
     ]
   ])('rejects a voice with %s', async (_label, body, code) => {
     const res = await request(app).post(base).send(body);
     expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
     expect(res.body.code).toBe(code);
     expect(state.calls).toHaveLength(0);
   });
@@ -163,14 +164,18 @@ describe('text-to-speech voices of a model', () => {
     state.failWith = new TtsUpstreamError('Mistral TTS failed (HTTP 422): sample too short');
     const res = await request(app).post(base).send({ name: 'Anna', audio: sample });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Mistral TTS failed (HTTP 422): sample too short');
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
+    expect(res.body.detail).toBe('Mistral TTS failed (HTTP 422): sample too short');
   });
 
   test('does not leak an unexpected error', async () => {
     state.failWith = new Error('ECONNREFUSED 10.0.0.5:443');
     const res = await request(app).get(base);
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Could not list voices');
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
+    expect(res.body.detail).toBe('Could not list voices');
+    expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
   });
 
   test('deletes a voice by id, and refuses a malformed id', async () => {

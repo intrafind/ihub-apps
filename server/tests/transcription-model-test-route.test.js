@@ -75,13 +75,30 @@ test('a working endpoint passes, and the key is not echoed', async () => {
   expect(tested).toContain('voxtral-mini-realtime');
 });
 
-test('a failing endpoint is a 502 carrying the reason', async () => {
+test('a failing endpoint is a 502 carrying the reason when it is safe to show', async () => {
+  state.result = { ok: false, message: 'The endpoint refused the connection' };
+  const res = await request(app).post(url);
+  expect(res.status).toBe(502);
+  expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+  expect(res.body).toEqual({
+    type: 'urn:ihub:problem:UPSTREAM_ERROR',
+    title: 'A connected service failed. Please try again later.',
+    status: 502,
+    detail: 'The endpoint refused the connection',
+    code: 'UPSTREAM_ERROR'
+  });
+});
+
+test('a failing endpoint whose message names an address is a 502 without that message', async () => {
   state.result = { ok: false, message: 'Connection failed: connect ECONNREFUSED' };
   const res = await request(app).post(url);
   expect(res.status).toBe(502);
+  expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
   expect(res.body).toEqual({
-    error: 'Connection failed: connect ECONNREFUSED',
-    details: 'Connection failed: connect ECONNREFUSED',
-    code: 'upstream-error'
+    type: 'urn:ihub:problem:UPSTREAM_ERROR',
+    title: 'A connected service failed. Please try again later.',
+    status: 502,
+    detail: 'A connected service failed. Please try again later.',
+    code: 'UPSTREAM_ERROR'
   });
 });

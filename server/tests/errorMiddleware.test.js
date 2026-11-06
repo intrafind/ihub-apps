@@ -181,6 +181,58 @@ describe('toErrorResponse', () => {
     assert.equal(other.errors, undefined);
   });
 
+  it('answers a bare list of problems as errors, with the field it is about', () => {
+    // Zod issues (`path` array) and `{ field, message }` entries of the proxy routes
+    const zod = toErrorResponse(
+      new ServiceError('BAD_REQUEST', 'Invalid app configuration', {
+        details: [{ code: 'custom', path: ['redirectConfig', 'url'], message: 'Must be http(s)' }]
+      })
+    ).body;
+    assert.equal(zod.details, undefined);
+    assert.deepEqual(zod.errors, [
+      { pointer: '/redirectConfig/url', code: 'custom', message: 'Must be http(s)' }
+    ]);
+    const fields = toErrorResponse(
+      new ServiceError('BAD_REQUEST', 'Invalid proxy', {
+        details: [{ field: 'proxy.https', message: 'Not a URL' }]
+      })
+    ).body;
+    assert.equal(fields.errors[0].pointer, '/proxy/https');
+    // a list that is not a list of problems stays a value
+    const other = toErrorResponse(
+      new ServiceError('CONFLICT', 'Busy', { details: ['a', 'b'] })
+    ).body;
+    assert.deepEqual(other.details, { value: ['a', 'b'] });
+    assert.equal(other.errors, undefined);
+  });
+
+  it('takes a code carried in details.code as the code of the response', () => {
+    const sent = [];
+    const res = {
+      setHeader() {},
+      status() {
+        return this;
+      },
+      json(body) {
+        sent.push(body);
+        return this;
+      }
+    };
+    sendErrorResponse(res, 403, 'Read-only', {
+      details: { code: 'PROJECT_READ_ONLY', required: 'edit' }
+    });
+    assert.equal(sent[0].code, 'PROJECT_READ_ONLY');
+    assert.equal(sent[0].type, 'urn:ihub:problem:PROJECT_READ_ONLY');
+    assert.deepEqual(sent[0].details, { required: 'edit' });
+    // nothing else in details: no details member at all
+    sendErrorResponse(res, 409, 'Busy', { details: { code: 'PROJECT_MISMATCH' } });
+    assert.equal(sent[1].details, undefined);
+    // an explicit code wins over details.code
+    sendErrorResponse(res, 409, 'x', { code: 'CONFLICT', details: { code: 'OTHER' } });
+    assert.equal(sent[2].code, 'CONFLICT');
+    assert.deepEqual(sent[2].details, { code: 'OTHER' });
+  });
+
   it('writes a JSON Pointer for a path (RFC 6901)', () => {
     assert.equal(jsonPointer(['a', 0, 'b']), '/a/0/b');
     assert.equal(jsonPointer('a.b'), '/a/b');

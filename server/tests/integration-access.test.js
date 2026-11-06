@@ -335,6 +335,7 @@ describe('storage providers', () => {
       let body = null;
       let passed = false;
       const res = {
+        setHeader() {},
         status(code) {
           status = code;
           return this;

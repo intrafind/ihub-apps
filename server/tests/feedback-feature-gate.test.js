@@ -47,6 +47,11 @@ function responseDouble() {
   const res = {
     statusCode: null,
     body: null,
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name.toLowerCase()] = value;
+      return this;
+    },
     status(code) {
       this.statusCode = code;
       return this;
@@ -103,6 +108,7 @@ describe('feedback feature gate', () => {
 
     assert.equal(passed, false);
     assert.equal(res.statusCode, 403);
+    assert.match(res.headers['content-type'], /^application\/problem\+json/);
     assert.equal(res.body.code, 'FEATURE_DISABLED');
   });
 
