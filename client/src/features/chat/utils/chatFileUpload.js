@@ -129,6 +129,8 @@ export function withStoredFile(entry, descriptor) {
     hasOriginal: descriptor.hasOriginal === true,
     canUseAsTemplate: descriptor.canUseAsTemplate === true,
     ...(Number.isFinite(descriptor.pages) ? { pages: descriptor.pages } : {}),
+    // The server shortened the text it keeps (the chip says so)
+    ...(descriptor.truncated === true ? { truncated: true } : {}),
     uploadState: 'done',
     uploadProgress: 100,
     uploadError: undefined

@@ -827,3 +827,15 @@ gone.
   `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).
+
+## Attachments: See What the Assistant Gets and Download It
+
+Each attachment under the composer now says what the assistant gets from the file: the characters of
+text extracted from a document, the page images sent instead for a scan without a text layer, or the
+size an image is sent in. Once the server stored the file, it also says when only the text is kept
+or the text was shortened.
+
+- **Download after attaching:** a file that came from a cloud storage or an integration, such as an
+  iFinder document opened from a link, has buttons to download the original file and, for a document,
+  the extracted text. A local file is yours already and has none. Images and audio from these sources
+  keep their original for the download.

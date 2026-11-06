@@ -6,6 +6,13 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize } from '../utils/cloudFileProcessing';
 import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAudio';
+import {
+  describeAttachment,
+  downloadableFile,
+  downloadableText,
+  saveAttachmentFile,
+  saveAttachmentText
+} from '../utils/attachmentContent';
 
 // Auto-collapse the list by default once it reaches this many files. Below the
 // threshold the list stays fully expanded with no collapse chrome — a 1-3 file
@@ -63,8 +70,12 @@ function uploadErrorText(code, t) {
 
 /**
  * Standalone component that displays a list of attached files
- * with source icon, file type icon, name, size, and remove buttons. Audio that
- * was extracted from a video also gets a button to save it as a .wav file.
+ * with source icon, file type icon, name, size, what the assistant gets from it
+ * (the text read from a document, the page images of a scan, the size an image is
+ * sent in) and remove buttons. Audio that was extracted from a video also gets a
+ * button to save it as a .wav file, and a file that came from a cloud storage or
+ * an integration gets buttons to download the original and, for a document, the
+ * extracted text (a local file is the user's own already).
  * Always visible when files are attached, independent of uploader state.
  *
  * To keep the chat input reachable, the list:
@@ -133,6 +144,50 @@ export default function AttachedFilesList({
     const source = file.source || 'local';
     if (source === 'local') return t('attachedFiles.sourceLocal', 'Local file');
     return t('attachedFiles.sourceCloud', 'Cloud file');
+  };
+
+  /** The words for what the assistant gets from a file (see `describeAttachment`). */
+  const contentLine = file => {
+    const info = describeAttachment(file);
+    if (!info) return null;
+    if (info.kind === 'document') {
+      const parts = [];
+      if (info.characters > 0) {
+        parts.push(
+          t('attachedFiles.content.text', 'Text extracted: {{count}} characters', {
+            count: info.characters.toLocaleString()
+          })
+        );
+      }
+      if (info.pageImages > 0) {
+        parts.push(
+          t(
+            'attachedFiles.content.pageImages',
+            'scan without text: {{count}} page image(s) sent instead',
+            { count: info.pageImages }
+          )
+        );
+      }
+      if (info.truncated) {
+        parts.push(t('attachedFiles.content.truncated', 'shortened to fit'));
+      }
+      if (info.originalKept === false) {
+        parts.push(t('attachedFiles.content.textOnly', 'only the text is kept in this chat'));
+      }
+      if (parts.length === 0) {
+        parts.push(t('attachedFiles.content.noText', 'No text could be read from this file'));
+      }
+      return parts.join(' · ');
+    }
+    if (info.kind === 'image') {
+      return info.width
+        ? t('attachedFiles.content.imageSized', 'Image sent to the model as {{width}}×{{height}}', {
+            width: info.width,
+            height: info.height
+          })
+        : t('attachedFiles.content.image', 'Image sent to the model');
+    }
+    return t('attachedFiles.content.audio', 'Audio sent to the model');
   };
 
   // Build the always-visible summary line for the collapsed header. Total size
@@ -287,6 +342,14 @@ export default function AttachedFilesList({
                       </output>
                     )}
                   </div>
+                  {contentLine(file) && (
+                    <div
+                      className="text-xs text-gray-500 dark:text-gray-400"
+                      data-testid="attached-file-content"
+                    >
+                      {contentLine(file)}
+                    </div>
+                  )}
                   {file.uploadState === 'uploading' && (
                     <progress
                       className="mt-1 block h-1.5 w-full overflow-hidden rounded-full accent-indigo-500"
@@ -312,6 +375,42 @@ export default function AttachedFilesList({
                     })}
                   >
                     <Icon name="download" size="sm" />
+                  </button>
+                )}
+
+                {/* Downloads — only for a file from a cloud storage or an integration: a local
+                    file is the user's own already. The original is the file as it was handed
+                    over; the text is what the assistant reads from it. */}
+                {(file.source || 'local') !== 'local' && downloadableFile(file) && (
+                  <button
+                    type="button"
+                    onClick={() => saveAttachmentFile(file)}
+                    className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    title={
+                      downloadableFile(file).kind === 'sent'
+                        ? t('attachedFiles.downloadSent', 'Download the image as sent to the model')
+                        : t('attachedFiles.downloadOriginal', 'Download original file')
+                    }
+                    aria-label={t('attachedFiles.downloadOriginalNamed', 'Download {{name}}', {
+                      name: file.fileName
+                    })}
+                  >
+                    <Icon name="download" size="sm" />
+                  </button>
+                )}
+                {(file.source || 'local') !== 'local' && downloadableText(file) && (
+                  <button
+                    type="button"
+                    onClick={() => saveAttachmentText(file)}
+                    className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    title={t('attachedFiles.downloadText', 'Download the extracted text')}
+                    aria-label={t(
+                      'attachedFiles.downloadTextNamed',
+                      'Download the extracted text of {{name}}',
+                      { name: file.fileName }
+                    )}
+                  >
+                    <Icon name="document-text" size="sm" />
                   </button>
                 )}
 
