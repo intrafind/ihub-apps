@@ -1,10 +1,15 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+// Must stay the first import. It decides embed mode and seeds the embed's language from the URL,
+// and the service below reads both when it is created: a dependency always runs before its
+// importer, whatever order the bundler gives the entry point's other imports (embedBootstrap.js).
+import '../utils/embedBootstrap';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { fetchTranslations, fetchUIConfig } from '../api';
+import { isEmbedMode } from '../utils/embedMode';
 
 // The built-in translations are only a fallback for when the translations API
 // is unreachable: the API serves them merged with the admin's overrides. They
@@ -80,10 +85,12 @@ class I18nService {
           interpolation: {
             escapeValue: false
           },
-          detection: {
-            order: ['localStorage', 'navigator'],
-            caches: ['localStorage']
-          },
+          // An embed keeps its language in the tab's sessionStorage and never reads or writes
+          // localStorage, which it may share with direct visits. The embed flag is set by the
+          // bootstrap imported at the top of this file.
+          detection: isEmbedMode()
+            ? { order: ['sessionStorage', 'navigator'], caches: ['sessionStorage'] }
+            : { order: ['localStorage', 'navigator'], caches: ['localStorage'] },
           react: {
             useSuspense: false // Disable suspense to avoid blocking
           }
@@ -166,6 +173,9 @@ class I18nService {
   broadcastLanguageChange(language) {
     if (this.suppressBroadcast) return;
     if (!this.broadcastChannel) return;
+    // The language of an embed is the host's business: publishing it would switch (and persist)
+    // the language of every direct-visit tab on the same origin.
+    if (isEmbedMode()) return;
     if (typeof language !== 'string' || !language) return;
 
     try {
