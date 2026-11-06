@@ -9153,6 +9153,8 @@
     "INVALID_APP": "The app is not valid for this request.",
     "PREFERENCES_UNAVAILABLE": "Preferences cannot be loaded or saved right now.",
     "FEATURE_DISABLED": "This feature is turned off.",
+    "CLIENT_HISTORY_NOT_ALLOWED": "The chat history is kept by the server. Send only the new message.",
+    "UNKNOWN_MESSAGE": "The message to continue from is not in this chat.",
     "STORAGE_PROVIDER_NOT_FOUND": "The storage provider does not exist.",
     "STORAGE_PROVIDER_REQUIRED": "A storage provider is required.",
     "INVALID_RETURN_URL": "The return address is not allowed.",

@@ -8,9 +8,7 @@ import { fetchUserIntegration } from '../../../api/userIntegrationsApi';
 
 /** A browse request refused for a missing connection (409 INTEGRATION_AUTH_REQUIRED) or a 401. */
 function isAuthRequired(err) {
-  return (
-    err?.response?.status === 401 || err?.response?.data?.detail === 'INTEGRATION_AUTH_REQUIRED'
-  );
+  return err?.response?.status === 401 || err?.response?.data?.code === 'INTEGRATION_AUTH_REQUIRED';
 }
 
 /**
@@ -21,10 +19,10 @@ function isAuthRequired(err) {
  * @returns {{reason: string, scopes: string[]}}
  */
 function authPromptOf(err) {
-  const data = err?.response?.data;
-  const reason = typeof data?.reason === 'string' ? data.reason : 'not_connected';
-  const scopes = Array.isArray(data?.scopes)
-    ? data.scopes.filter(scope => typeof scope === 'string' && scope)
+  const details = err?.response?.data?.details;
+  const reason = typeof details?.reason === 'string' ? details.reason : 'not_connected';
+  const scopes = Array.isArray(details?.scopes)
+    ? details.scopes.filter(scope => typeof scope === 'string' && scope)
     : [];
   return { reason, scopes };
 }

@@ -431,7 +431,11 @@ export default function registerMcpAppRoutes(app) {
               return conn.callToolRaw(callName, callArgs);
             })
         });
-        return res.status(answered.status).json(answered.body);
+        return answered.status >= 400
+          ? sendErrorResponse(res, answered.status, answered.body.error, {
+              code: answered.body.code
+            })
+          : res.status(answered.status).json(answered.body);
       } catch (error) {
         return sendError(res, error, 'tool call approval');
       }

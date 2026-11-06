@@ -245,6 +245,8 @@ export const MARKETPLACE_ERROR_CODES = Object.freeze({
 
 /** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
 export const CHAT_ERROR_CODES = Object.freeze({
+  CLIENT_HISTORY_NOT_ALLOWED: 400,
+  UNKNOWN_MESSAGE: 400,
   ANSWER_IN_CHAT: 409,
   APP_NOT_FOUND: 404,
   CHAT_OWNER_REQUIRED: 403,

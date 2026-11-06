@@ -9,17 +9,17 @@ const failed = data => ({ response: { data }, message: 'Request failed with stat
 
 describe('apiErrorMessage', () => {
   it('localizes a specific code from its i18n key', () => {
-    const error = failed({ error: 'A temporary chat cannot be shared', code: 'CHAT_TEMPORARY' });
+    const error = failed({ detail: 'A temporary chat cannot be shared', code: 'CHAT_TEMPORARY' });
     expect(apiErrorMessage(error, t, 'fallback')).toBe('Keep the chat first.');
   });
 
   it('shows the English text of a generic code', () => {
-    const error = failed({ error: 'Some recipients are not known users', code: 'BAD_REQUEST' });
+    const error = failed({ detail: 'Some recipients are not known users', code: 'BAD_REQUEST' });
     expect(apiErrorMessage(error, t, 'fallback')).toBe('Some recipients are not known users');
   });
 
   it('falls back to the response text when the code has no translation', () => {
-    const error = failed({ error: 'Plain text', code: 'NOT_IN_I18N' });
+    const error = failed({ detail: 'Plain text', code: 'NOT_IN_I18N' });
     expect(apiErrorMessage(error, t, 'fallback')).toBe('Plain text');
   });
 

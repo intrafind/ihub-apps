@@ -98,16 +98,20 @@ export function requireCloudStorageGrant(type) {
 export function respondIfAuthRequired(res, error, installationId) {
   if (!isIntegrationAuthRequired(error)) return false;
   const integration = error.integration || installationId;
-  res.status(409).json({
-    ...integrationAuthRequiredResult({
-      integration,
-      reason: error.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
-      message: error.message,
-      connectUrl: error.connectUrl || undefined,
-      scopes: error.scopes || undefined
-    }),
-    code: INTEGRATION_AUTH_REQUIRED
+  // The structured "connect first" result is the body the model's tools see; over HTTP it is
+  // an ordinary problem: the code, and what the Connect card needs in `details`.
+  const {
+    error: _code,
+    message,
+    ...details
+  } = integrationAuthRequiredResult({
+    integration,
+    reason: error.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
+    message: error.message,
+    connectUrl: error.connectUrl || undefined,
+    scopes: error.scopes || undefined
   });
+  sendErrorResponse(res, 409, message, { code: INTEGRATION_AUTH_REQUIRED, details });
   return true;
 }
 

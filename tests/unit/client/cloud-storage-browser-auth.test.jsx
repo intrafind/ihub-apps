@@ -42,9 +42,8 @@ describe('useCloudStorageBrowser: a refused browse request', () => {
   test('keeps the scopes of insufficient_scope', async () => {
     mockGet.mockRejectedValueOnce(
       refused({
-        error: 'INTEGRATION_AUTH_REQUIRED',
-        reason: 'insufficient_scope',
-        scopes: ['files.read', '', 7]
+        code: 'INTEGRATION_AUTH_REQUIRED',
+        details: { reason: 'insufficient_scope', scopes: ['files.read', '', 7] }
       })
     );
     const { result } = renderHook(() => useCloudStorageBrowser(adapter, { providerId: 'nc' }));
@@ -58,7 +57,7 @@ describe('useCloudStorageBrowser: a refused browse request', () => {
 
   test('has no scopes for a plain expired connection', async () => {
     mockGet.mockRejectedValueOnce(
-      refused({ error: 'INTEGRATION_AUTH_REQUIRED', reason: 'expired' })
+      refused({ code: 'INTEGRATION_AUTH_REQUIRED', details: { reason: 'expired' } })
     );
     const { result } = renderHook(() => useCloudStorageBrowser(adapter, { providerId: 'nc' }));
     await act(async () => {

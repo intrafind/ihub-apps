@@ -9126,6 +9126,8 @@
     "INVALID_APP": "Die App ist für diese Anfrage nicht gültig.",
     "PREFERENCES_UNAVAILABLE": "Einstellungen können gerade nicht geladen oder gespeichert werden.",
     "FEATURE_DISABLED": "Diese Funktion ist ausgeschaltet.",
+    "CLIENT_HISTORY_NOT_ALLOWED": "Der Chatverlauf wird vom Server verwaltet. Senden Sie nur die neue Nachricht.",
+    "UNKNOWN_MESSAGE": "Die Nachricht, ab der es weitergeht, ist nicht in diesem Chat.",
     "STORAGE_PROVIDER_NOT_FOUND": "Der Speicheranbieter existiert nicht.",
     "STORAGE_PROVIDER_REQUIRED": "Ein Speicheranbieter ist erforderlich.",
     "INVALID_RETURN_URL": "Die Rücksprungadresse ist nicht zulässig.",

@@ -1020,13 +1020,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // The code alone tells an integrator nothing about what to do
           // instead, and this is the one refusal they can hit by doing exactly
           // what the documentation told them to do before chats were stored.
-          return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED', {
-            hint:
-              'Chats are stored server-side: post only the new message as a single-element ' +
-              'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
-              'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
-              'chat completions endpoint instead.'
-          });
+          return sendErrorResponse(
+            res,
+            400,
+            'The chat history is kept by the server: send only the new message',
+            {
+              code: 'CLIENT_HISTORY_NOT_ALLOWED',
+              details: {
+                hint:
+                  'Chats are stored server-side: post only the new message as a single-element ' +
+                  'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
+                  'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
+                  'chat completions endpoint instead.'
+              }
+            }
+          );
         }
         if (messages.length === 0) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
@@ -1105,7 +1113,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           );
           // Appending onto the untouched history instead would silently
           // duplicate everything the edit meant to replace, so refuse.
-          if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
+          if (forkAt === -1) {
+            return sendErrorResponse(res, 400, 'The message to continue from is not in this chat', {
+              code: 'UNKNOWN_MESSAGE'
+            });
+          }
           // Carry the *stored* id onward. The store matches on `id` alone,
           // so forwarding the client's value forked the prompt here and not
           // the transcript: a regenerate in a session that never hydrated
@@ -1300,8 +1312,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               persistence
             });
         if (mention.handled) {
-          return mention.statusCode
-            ? res.status(mention.statusCode).json(mention.response)
+          // A refusal carries its status; its body is `{ error, code }` or `{ message }`.
+          return mention.statusCode >= 400
+            ? sendErrorResponse(
+                res,
+                mention.statusCode,
+                mention.response.error ?? mention.response.message,
+                { code: mention.response.code }
+              )
             : res.json(mention.response);
         }
 
