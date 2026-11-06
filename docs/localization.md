@@ -40,7 +40,7 @@ Translations are served via the `/api/translations/:lang` endpoint. The language
 
 The client picks its UI language in this priority order (`client/src/services/i18nService.js`):
 
-1. **`?language=de` URL parameter** — applied by `Layout.jsx` via `updateSettingsFromUrl()` (see `client/src/utils/integrationSettings.js`). The value is also persisted to `localStorage` under `ihubIntegrationSettings`.
+1. **`?language=de` URL parameter** — applied by `Layout.jsx` via `updateSettingsFromUrl()` (see `client/src/utils/integrationSettings.js`). Only the built-in languages are accepted; any other value is ignored. The value is also persisted to `localStorage` under `ihubIntegrationSettings`. With `?embed=true` it is kept in the tab's `sessionStorage` instead (see [Embed mode](embed-mode.md)).
 2. **`localStorage.i18nextLng`** — the user's last explicit choice (e.g. via the language selector). Persists across reloads.
 3. **`navigator.language`** — the browser's UI language. Used on the very first visit, when no localStorage value exists yet.
 4. **`defaultLanguage`** from `contents/config/ui.json` (server-provided) — used as the final fallback.
@@ -54,8 +54,12 @@ To force a language from the embedding page, you have two options:
 **1. URL parameter (load-time):**
 
 ```html
-<iframe src="https://ihub.example.com/?language=de"></iframe>
+<iframe src="https://ihub.example.com/?embed=true&language=de"></iframe>
 ```
+
+Add `embed=true` when the frame is embedded: the language then applies to that tab only and nothing
+is written to `localStorage`, so it does not change the language people see when they open iHub
+directly. Without it the language is remembered in the browser. See [Embed mode](embed-mode.md).
 
 **2. `BroadcastChannel` (runtime, cross-product):**
 

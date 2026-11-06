@@ -5,53 +5,21 @@
  * useDarkMode Hook
  *
  * Provides dark mode toggle functionality with:
- * - localStorage persistence (key: ih-dark-mode)
+ * - localStorage persistence (key: ih-dark-mode); in embed mode the preference is kept in
+ *   sessionStorage instead and localStorage is left alone (see utils/themePreference.js)
  * - System preference detection (prefers-color-scheme: dark)
  * - Three modes: 'auto' (follow system), 'light', 'dark'
  * - Sets data-theme="dark" on <html> element for Tailwind compatibility
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const STORAGE_KEY = 'ih-dark-mode';
-const VALID_MODES = new Set(['auto', 'light', 'dark']);
-
-/**
- * Get the stored preference from localStorage
- * @returns {'auto'|'light'|'dark'} The stored preference or 'auto' as default
- */
-const getStoredPreference = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && VALID_MODES.has(stored)) {
-      return stored;
-    }
-  } catch {
-    // localStorage may be unavailable
-  }
-  return 'auto';
-};
-
-/**
- * Check if the system prefers dark mode
- * @returns {boolean} True if system prefers dark mode
- */
-const getSystemPreference = () => {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-};
-
-/**
- * Determine the effective dark mode state based on preference
- * @param {'auto'|'light'|'dark'} preference - User preference
- * @returns {boolean} Whether dark mode should be active
- */
-const resolveIsDark = preference => {
-  if (preference === 'dark') return true;
-  if (preference === 'light') return false;
-  // 'auto' - follow system preference
-  return getSystemPreference();
-};
+import {
+  VALID_MODES,
+  applyThemeToDocument,
+  getStoredPreference,
+  resolveIsDark,
+  storePreference
+} from '../utils/themePreference';
 
 /**
  * Custom hook for managing dark mode
@@ -61,40 +29,20 @@ const useDarkMode = () => {
   const [preference, setPreferenceState] = useState(() => getStoredPreference());
   const [isDark, setIsDark] = useState(() => resolveIsDark(getStoredPreference()));
 
-  // Apply dark mode to document
-  const applyDarkMode = useCallback(dark => {
-    if (typeof document === 'undefined') return;
-    const html = document.documentElement;
-    if (dark) {
-      html.setAttribute('data-theme', 'dark');
-      html.classList.add('dark');
-    } else {
-      html.removeAttribute('data-theme');
-      html.classList.remove('dark');
+  // Update preference and persist it (localStorage, or the tab's sessionStorage in embed mode)
+  const setPreference = useCallback(newPreference => {
+    if (!VALID_MODES.has(newPreference)) {
+      console.warn(`Invalid dark mode preference: ${newPreference}`);
+      return;
     }
+
+    storePreference(newPreference);
+
+    setPreferenceState(newPreference);
+    const dark = resolveIsDark(newPreference);
+    setIsDark(dark);
+    applyThemeToDocument(dark);
   }, []);
-
-  // Update preference and persist to localStorage
-  const setPreference = useCallback(
-    newPreference => {
-      if (!VALID_MODES.has(newPreference)) {
-        console.warn(`Invalid dark mode preference: ${newPreference}`);
-        return;
-      }
-
-      try {
-        localStorage.setItem(STORAGE_KEY, newPreference);
-      } catch {
-        // localStorage may be unavailable
-      }
-
-      setPreferenceState(newPreference);
-      const dark = resolveIsDark(newPreference);
-      setIsDark(dark);
-      applyDarkMode(dark);
-    },
-    [applyDarkMode]
-  );
 
   // Cycle through modes: auto -> light -> dark -> auto
   const toggleMode = useCallback(() => {
@@ -108,8 +56,8 @@ const useDarkMode = () => {
 
   // Apply initial dark mode on mount
   useEffect(() => {
-    applyDarkMode(isDark);
-  }, [applyDarkMode, isDark]);
+    applyThemeToDocument(isDark);
+  }, [isDark]);
 
   // Listen for system preference changes when in 'auto' mode
   useEffect(() => {
@@ -122,7 +70,7 @@ const useDarkMode = () => {
     const handleChange = event => {
       const dark = event.matches;
       setIsDark(dark);
-      applyDarkMode(dark);
+      applyThemeToDocument(dark);
     };
 
     // Use addEventListener (modern browsers: Chrome 85+, Safari 14+, Firefox 78+)
@@ -135,7 +83,7 @@ const useDarkMode = () => {
       mediaQuery.addListener(handleChange);
       return () => mediaQuery.removeListener(handleChange);
     }
-  }, [preference, applyDarkMode]);
+  }, [preference]);
 
   return {
     /** Current preference: 'auto' | 'light' | 'dark' */

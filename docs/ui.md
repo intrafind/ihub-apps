@@ -144,6 +144,11 @@ until they are passed again with another value:
 | `?header=false`  | Hide the header and the sidebar entirely — for embedding (`?header=true` resets) |
 | `?footer=false`  | Hide the footer (`?footer=true` resets)                                |
 
+A page that embeds iHub in an iframe should add `embed=true`: the parameters then apply to that tab
+only and are not remembered, so people who open iHub directly are not affected. `embed=true` also
+accepts `mode=light|dark|auto` and `language=en|de`. See
+[Embedding iHub in Another Product](embed-mode.md).
+
 ### Footer Configuration
 
 The `footer` section controls the appearance and content of the application footer:

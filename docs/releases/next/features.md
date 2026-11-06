@@ -675,3 +675,36 @@ at another page meant removing it and adding it again.
 - API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
   accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
   replaces the stored one as sent.
+
+## Embed Mode: Steer an Embedded iHub from the URL Without Changing It for Direct Visits
+
+A page that embeds iHub in an iframe — iFinder's standard iHub integration, a portal, an intranet
+page — can now control iHub's chrome, colour mode and language from the URL, and none of it is
+remembered in the browser outside that tab. Before, `?sidebar=false`, `?header=false` or
+`?language=de` in an iframe were saved in `localStorage`, so on a same-site subdomain they also
+changed iHub for people who opened it directly, and the colour mode could not be set from the URL
+at all.
+
+- **`embed=true`** switches embed mode on for the tab. Header, footer and sidebar, the colour mode
+  and the language are then kept in the tab's `sessionStorage` and `localStorage` is neither read
+  nor written for them. They survive navigation inside iHub and a reload of the frame, and are gone
+  when the tab closes. Loading an embed URL starts a fresh session, so the URL the host builds is
+  what the user gets.
+- **`mode=light|dark|auto`** is new and sets the colour mode. It applies before the first render,
+  so the page does not flash the other mode. Outside embed mode it is stored like a click on the
+  dark-mode toggle.
+- **`header`, `footer`, `sidebar` and `language`** keep working. An embed starts without iHub's
+  header, footer and sidebar; the host switches a part on with `=true`. Only `en` and `de` are
+  accepted for `language` (`de-DE` selects `de`); invalid values for `mode` and `language` are
+  ignored — outside embed mode too.
+- Example: `/apps/translator?embed=true&sidebar=false&header=false&footer=false&mode=dark&language=de`
+  shows the Translator without iHub's chrome, in dark mode and in German, and opening iHub
+  directly afterwards shows the user's own settings.
+- An embed does not publish its language on the cross-product `intrafind` `BroadcastChannel`, so it
+  cannot switch the language of other iHub tabs.
+- The Nextcloud embed already ran in this mode; its colour mode and language now stay in the
+  iframe's tab as well instead of being read from and written to `localStorage`.
+- Not covered: the recently used apps list, the collapsed state of the sidebar and the sign-in
+  token are still stored in the browser as for any visit.
+
+See [Embedding iHub in Another Product](../../embed-mode.md).

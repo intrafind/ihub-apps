@@ -137,17 +137,11 @@ function EmbedRoot({ initialError }) {
   const rootEl = document.getElementById('ihub-embed-root');
   if (!rootEl) return;
 
-  // Flag this tab/iframe as an embed context BEFORE any client code runs.
-  // `client/src/utils/integrationSettings.js` checks sessionStorage for this
-  // key and returns "hide header & footer" without touching localStorage,
-  // so the embed experience always renders chrome-free *and* doesn't
-  // pollute the visibility preference of direct-visit users in other tabs.
-  try {
-    sessionStorage.setItem('ihubEmbedMode', '1');
-  } catch {
-    /* benign — Safari private mode etc. */
-  }
-
+  // This iframe is flagged as an embed by `data-ihub-embed` on full-embed.html's <html> element
+  // (applied by `client/src/utils/embedBootstrap.js` before any client code reads a preference).
+  // `client/src/utils/integrationSettings.js` then returns "hide header & footer" without
+  // touching localStorage, so the embed experience always renders chrome-free *and* doesn't
+  // pollute the visibility preference, colour mode or language of direct-visit users in other tabs.
   const basePath = detectBasePath();
 
   let config;
