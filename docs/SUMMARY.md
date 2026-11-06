@@ -124,6 +124,7 @@
     - [Artifacts](artifacts.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)
     - [Architecture Diagrams](diagrams.md)
+    - [API Guidelines](api-guidelines.md)
     - [Error Responses](error-responses.md)
     - [Troubleshooting](troubleshooting.md)
     - [Release Process](release-process.md)
