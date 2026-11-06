@@ -3,7 +3,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { findViolations } from '../../scripts/check-api-guidelines.js';
+import { findViolations, parseChangedLines } from '../../scripts/check-api-guidelines.js';
 
 const rules = (source, file = 'server/routes/example.js', changed = null) =>
   findViolations(source, file, changed).map(v => v.rule);
@@ -93,5 +93,38 @@ describe('check-api-guidelines', () => {
     assert.deepEqual(rules(source, 'server/routes/inference/responses.js'), []);
     assert.deepEqual(rules(source, 'server/routes/wellKnown.js'), []);
     assert.deepEqual(rules(source, 'server/routes/chats.js'), ['hand-rolled-error']);
+  });
+
+  it('reads the changed lines of checked files from a zero-context diff', () => {
+    const diff = [
+      'diff --git a/server/routes/chats.js b/server/routes/chats.js',
+      '--- a/server/routes/chats.js',
+      '+++ b/server/routes/chats.js',
+      '@@ -10,0 +11,2 @@ context',
+      '+a',
+      '+b',
+      '@@ -30 +32 @@',
+      '-old',
+      '+new',
+      'diff --git a/server/tests/x.test.js b/server/tests/x.test.js',
+      '--- a/server/tests/x.test.js',
+      '+++ b/server/tests/x.test.js',
+      '@@ -1 +1 @@',
+      'diff --git a/client/src/x.js b/client/src/x.js',
+      '--- a/client/src/x.js',
+      '+++ b/client/src/x.js',
+      '@@ -1 +1 @@',
+      'diff --git a/server/migrations/V001__x.js b/server/migrations/V001__x.js',
+      '+++ b/server/migrations/V001__x.js',
+      '@@ -0,0 +1,3 @@'
+    ].join('\n');
+    const files = parseChangedLines(diff);
+    assert.deepEqual([...files.keys()], ['server/routes/chats.js']);
+    assert.deepEqual([...files.get('server/routes/chats.js')], [11, 12, 32]);
+  });
+
+  it('never reads a path that leaves the server directory', () => {
+    const diff = '+++ b/server/../secrets.js\n@@ -0,0 +1 @@\n';
+    assert.equal(parseChangedLines(diff).size, 0);
   });
 });

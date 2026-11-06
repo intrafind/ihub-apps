@@ -24,12 +24,16 @@
  * that has a good reason to break a rule carries `// api-guidelines-ignore: <reason>`
  * on the same or the previous line.
  *
- * Usage: node scripts/check-api-guidelines.js [base-ref]   (default: origin/main)
+ * The script does not run git itself: it reads the zero-context diff of the change from
+ * standard input, so it spawns no process and its core stays a pure function of text.
+ *
+ * Usage:
+ *   git diff --unified=0 --diff-filter=ACMR --no-color origin/main...HEAD -- server \
+ *     | node scripts/check-api-guidelines.js
  *
  * Findings are printed as GitHub annotations, which show inline on the PR.
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -41,7 +45,7 @@ const EXEMPT_FILES =
   /^server\/routes\/(oauth|oauthAuthorize|oauthRegister|mcpOAuth|mcpServer|wellKnown|openaiProxy)\.js$|^server\/routes\/inference\//;
 
 /** Last path segments that name an operation, not a resource. */
-const ACTION_VERBS = [
+const ACTION_VERBS = new Set([
   'run',
   'duplicate',
   'cancel',
@@ -68,7 +72,7 @@ const ACTION_VERBS = [
   'export',
   'import',
   'seen'
-];
+]);
 
 const IGNORE_MARKER = 'api-guidelines-ignore';
 const PAGINATION_PARAMS = /^(page|pageSize|perPage|per_page|offset|after)$/;
@@ -103,18 +107,116 @@ const RULES = [
 ];
 
 const ROUTE = /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]*)\2/g;
-const QUERY_PARAM = /\breq\.query\.([A-Za-z_][\w]*)/g;
-const QUERY_DESTRUCTURE = /\{([^}]*)\}\s*=\s*req\.query\b/g;
+const QUERY_PARAM = /\breq\.query\.([A-Za-z_]\w*)/g;
+const QUERY_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*req\.query\b/g;
 
+/** 1-based line number of the character at |index|. */
 function lineOf(source, index) {
-  let line = 1;
-  for (let i = 0; i < index; i++) if (source.charCodeAt(i) === 10) line++;
-  return line;
+  return source.slice(0, index).split('\n').length;
 }
 
 /** A literal path segment: no parameter, template, wildcard or hidden-file part. */
 function isLiteralSegment(segment) {
   return segment !== '' && !/[$:*{}()]/.test(segment) && !segment.startsWith('.');
+}
+
+/**
+ * Collects violations of one file. `add` records one, unless the change did not touch
+ * its lines, the line carries the ignore marker, or the same rule already fired there.
+ */
+function createReporter(source, changed) {
+  const lines = source.split('\n');
+  const found = [];
+  const seen = new Set();
+
+  const touched = (line, endLine) => {
+    if (!changed) return true;
+    for (let n = line; n <= endLine; n++) if (changed.has(n)) return true;
+    return false;
+  };
+
+  const add = (index, endIndex, rule, message) => {
+    const line = lineOf(source, index);
+    if (!touched(line, lineOf(source, endIndex))) return;
+    if (lines[line - 1]?.includes(IGNORE_MARKER) || lines[line - 2]?.includes(IGNORE_MARKER))
+      return;
+    const key = `${line}:${rule}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push({ line, rule, message });
+  };
+
+  return { add, found };
+}
+
+function checkPatterns(source, add) {
+  for (const { id, pattern, message } of RULES) {
+    for (const match of source.matchAll(pattern)) {
+      add(match.index, match.index + match[0].length, id, message);
+    }
+  }
+}
+
+function checkRoute(match, add) {
+  const [whole, method, , path] = match;
+  // `app.get('platform')` reads an Express setting; a route starts with a slash or a template.
+  if (!/^[/$]/.test(path)) return;
+  const end = match.index + whole.length;
+  const segments = path.split('/');
+  const last = segments.at(-1);
+  if (method !== 'get' && ACTION_VERBS.has(last)) {
+    add(
+      match.index,
+      end,
+      'route-verb',
+      `'${path}' ends in a verb. A non-CRUD operation is an _action segment ('…/_${last}'), or a resource (docs/api-guidelines.md#actions-_action-segments).`
+    );
+  }
+  const badSegment = segments.find(
+    segment => isLiteralSegment(segment) && !segment.startsWith('_') && !KEBAB_SEGMENT.test(segment)
+  );
+  if (badSegment !== undefined) {
+    add(
+      match.index,
+      end,
+      'route-naming',
+      `Path segment '${badSegment}' of '${path}' is not lower-case kebab-case (docs/api-guidelines.md#1-resources-and-urls).`
+    );
+  }
+}
+
+function checkRoutes(source, add) {
+  for (const match of source.matchAll(ROUTE)) checkRoute(match, add);
+}
+
+function checkQueryName(name, index, endIndex, add) {
+  if (PAGINATION_PARAMS.test(name)) {
+    add(
+      index,
+      endIndex,
+      'pagination-param',
+      `Query parameter '${name}': lists page with 'limit' and an opaque 'cursor' and answer { items, nextCursor } (docs/api-guidelines.md#4-lists).`
+    );
+  } else if (SNAKE_CASE.test(name)) {
+    add(
+      index,
+      endIndex,
+      'query-naming',
+      `Query parameter '${name}' is snake_case; query parameters are camelCase (docs/api-guidelines.md#1-resources-and-urls).`
+    );
+  }
+}
+
+function checkQueryParams(source, add) {
+  for (const match of source.matchAll(QUERY_PARAM)) {
+    checkQueryName(match[1], match.index, match.index + match[0].length, add);
+  }
+  for (const match of source.matchAll(QUERY_DESTRUCTURE)) {
+    for (const part of match[1].split(',')) {
+      const name = part.split(':')[0].replace(/=.*/s, '').trim();
+      if (name) checkQueryName(name, match.index, match.index + match[0].length, add);
+    }
+  }
 }
 
 /**
@@ -127,87 +229,10 @@ function isLiteralSegment(segment) {
  */
 export function findViolations(source, file, changed = null) {
   if (EXEMPT_FILES.test(file)) return [];
-  const lines = source.split('\n');
-  const found = [];
-  const seen = new Set();
-
-  const add = (index, endIndex, rule, message) => {
-    const line = lineOf(source, index);
-    const endLine = lineOf(source, endIndex);
-    if (changed) {
-      let touched = false;
-      for (let n = line; n <= endLine; n++) if (changed.has(n)) touched = true;
-      if (!touched) return;
-    }
-    if (lines[line - 1]?.includes(IGNORE_MARKER) || lines[line - 2]?.includes(IGNORE_MARKER))
-      return;
-    const key = `${line}:${rule}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    found.push({ line, rule, message });
-  };
-
-  for (const { id, pattern, message } of RULES) {
-    for (const match of source.matchAll(pattern)) {
-      add(match.index, match.index + match[0].length, id, message);
-    }
-  }
-
-  for (const match of source.matchAll(ROUTE)) {
-    const [whole, method, , path] = match;
-    // `app.get('platform')` reads an Express setting; a route starts with a slash or a template.
-    if (!/^[/$]/.test(path)) continue;
-    const segments = path.split('/');
-    const last = segments[segments.length - 1];
-    if (method !== 'get' && ACTION_VERBS.includes(last)) {
-      add(
-        match.index,
-        match.index + whole.length,
-        'route-verb',
-        `'${path}' ends in a verb. A non-CRUD operation is an _action segment ('…/_${last}'), or a resource (docs/api-guidelines.md#actions-_action-segments).`
-      );
-    }
-    for (const segment of segments) {
-      if (!isLiteralSegment(segment) || segment.startsWith('_')) continue;
-      if (!KEBAB_SEGMENT.test(segment)) {
-        add(
-          match.index,
-          match.index + whole.length,
-          'route-naming',
-          `Path segment '${segment}' of '${path}' is not lower-case kebab-case (docs/api-guidelines.md#1-resources-and-urls).`
-        );
-        break;
-      }
-    }
-  }
-
-  const checkQueryName = (name, index, endIndex) => {
-    if (PAGINATION_PARAMS.test(name)) {
-      add(
-        index,
-        endIndex,
-        'pagination-param',
-        `Query parameter '${name}': lists page with 'limit' and an opaque 'cursor' and answer { items, nextCursor } (docs/api-guidelines.md#4-lists).`
-      );
-    } else if (SNAKE_CASE.test(name)) {
-      add(
-        index,
-        endIndex,
-        'query-naming',
-        `Query parameter '${name}' is snake_case; query parameters are camelCase (docs/api-guidelines.md#1-resources-and-urls).`
-      );
-    }
-  };
-  for (const match of source.matchAll(QUERY_PARAM)) {
-    checkQueryName(match[1], match.index, match.index + match[0].length);
-  }
-  for (const match of source.matchAll(QUERY_DESTRUCTURE)) {
-    for (const part of match[1].split(',')) {
-      const name = part.split(':')[0].replace(/=.*/s, '').trim();
-      if (name) checkQueryName(name, match.index, match.index + match[0].length);
-    }
-  }
-
+  const { add, found } = createReporter(source, changed);
+  checkPatterns(source, add);
+  checkRoutes(source, add);
+  checkQueryParams(source, add);
   return found.sort((a, b) => a.line - b.line);
 }
 
@@ -217,33 +242,20 @@ function hunkLines(header) {
   return Array.from({ length: Number(count) }, (_, i) => Number(start) + i);
 }
 
-/** Runs git with |args| (no shell). core.quotePath=false keeps non-ASCII paths unquoted. */
-function git(...args) {
-  return execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024
-  });
-}
-
-/** Lines added or changed per checked file, from a zero-context diff against the merge base. */
-function changedLines(base) {
-  const diff = git(
-    'diff',
-    '--unified=0',
-    '--diff-filter=ACMR',
-    '--no-color',
-    '--end-of-options',
-    `${base}...HEAD`,
-    '--',
-    'server'
-  );
+/**
+ * The lines a unified diff (made with `--unified=0`) adds or changes, per checked file.
+ *
+ * @param {string} diff - Output of `git diff --unified=0 --no-color`
+ * @returns {Map<string, Set<number>>}
+ */
+export function parseChangedLines(diff) {
   const files = new Map();
   let current = null;
   for (const line of diff.split('\n')) {
     // git ends the header with a tab when the path contains a space.
     const file = /^\+\+\+ b\/(.+?)\t?$/.exec(line)?.[1];
     if (file) {
-      current = CHECKED.test(file) ? new Set() : null;
+      current = CHECKED.test(file) && !file.includes('..') ? new Set() : null;
       if (current) files.set(file, current);
     } else if (current && line.startsWith('@@ ')) {
       for (const n of hunkLines(line)) current.add(n);
@@ -253,16 +265,16 @@ function changedLines(base) {
 }
 
 function main() {
-  const base = process.argv[2] || 'origin/main';
-  // A ref, never an option: git would read "--output=…" as one.
-  if (!/^\w[\w./~^@{}-]*$/.test(base)) {
-    console.error(`Invalid base ref: ${base}`);
+  if (process.stdin.isTTY) {
+    console.error(
+      'Pipe the diff in: git diff --unified=0 --diff-filter=ACMR --no-color origin/main...HEAD -- server | node scripts/check-api-guidelines.js'
+    );
     process.exit(2);
   }
 
-  const files = changedLines(base);
+  const files = parseChangedLines(readFileSync(0, 'utf8'));
   if (files.size === 0) {
-    console.log(`No server changes against ${base}; nothing to check.`);
+    console.log('No changed server files to check.');
     return;
   }
 
