@@ -924,7 +924,8 @@ export async function discoverModels(
   deps = {}
 ) {
   const fetchImpl = deps.fetch || httpFetch;
-  if (gateway !== undefined && gateway !== null && gateway !== '') {
+  // An unset or empty `gateway` is an ordinary endpoint.
+  if (gateway) {
     return discoverGatewayModels({ url, provider, apiKey, gateway }, fetchImpl);
   }
   if (!DISCOVERY_PROVIDERS.includes(provider)) {
