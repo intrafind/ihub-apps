@@ -1,5 +1,8 @@
 # Error Responses
 
+> The target shape is `application/problem+json` (RFC 9457) as defined in [API Guidelines](api-guidelines.md#3-errors).
+> This page describes what the server answers today, until the mapper moves.
+
 Every error response of the API has one shape, except the OAuth endpoints.
 
 ```json
