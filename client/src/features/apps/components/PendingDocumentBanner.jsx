@@ -32,6 +32,20 @@ function PendingDocumentBanner({
   const name = title || t('pages.appsList.pendingDocument.untitled', 'the document');
 
   if (isError) {
+    const errorText = {
+      unavailable: t(
+        'pages.appsList.pendingDocument.unavailable',
+        'The system this document comes from is not available to you.'
+      ),
+      noAccess: t(
+        'pages.appsList.pendingDocument.noAccess',
+        'You do not have access to this document.'
+      ),
+      notFound: t(
+        'pages.appsList.pendingDocument.notFound',
+        'This document could not be found. It may have been moved or deleted.'
+      )
+    }[status];
     return (
       <div
         role="alert"
@@ -39,22 +53,7 @@ function PendingDocumentBanner({
       >
         <Icon name="exclamation-circle" className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <div className="flex-1 min-w-0">
-          <p className="font-medium">
-            {status === 'unavailable'
-              ? t(
-                  'pages.appsList.pendingDocument.unavailable',
-                  'The system this document comes from is not available to you.'
-                )
-              : status === 'noAccess'
-                ? t(
-                    'pages.appsList.pendingDocument.noAccess',
-                    'You do not have access to this document.'
-                  )
-                : t(
-                    'pages.appsList.pendingDocument.notFound',
-                    'This document could not be found. It may have been moved or deleted.'
-                  )}
-          </p>
+          <p className="font-medium">{errorText}</p>
           <p className="mt-0.5 opacity-80">
             {t(
               'pages.appsList.pendingDocument.continueWithout',

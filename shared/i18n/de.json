@@ -7569,7 +7569,8 @@
     "documentNotFound": "Das Dokument konnte nicht angehängt werden: Es wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
     "documentAttachFailed": "Das Dokument konnte nicht angehängt werden. Bitte versuche es erneut.",
     "documentUnavailable": "Das Dokument konnte nicht angehängt werden: Das System, aus dem es stammt, steht dir nicht zur Verfügung.",
-    "documentNotAccepted": "Das Dokument konnte nicht angehängt werden: Diese App nimmt diese Art von Datei nicht an.",
+    "documentModelCannot": "Das Dokument konnte nicht angehängt werden: Das ausgewählte Modell kann diese Art von Datei nicht verarbeiten.",
+    "documentAppNotBound": "Das Dokument konnte nicht angehängt werden: Diese App verwendet das System, aus dem es stammt, nicht.",
     "documentFromIntegration": "{{name}}-Dokument",
     "project": "Projekt"
   },

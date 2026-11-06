@@ -92,9 +92,9 @@ function AppsList() {
   const documentApps = useMemo(
     () =>
       documentForApp && documentCheck.info
-        ? apps.filter(app => appCanTakeDocument(app, documentCheck.info, documentCheck.kind))
+        ? apps.filter(app => appCanTakeDocument(app, documentCheck.info))
         : [],
-    [documentForApp, documentCheck.info, documentCheck.kind, apps]
+    [documentForApp, documentCheck.info, apps]
   );
   const [onlyDocumentApps, setOnlyDocumentApps] = useState(true);
   const canRestrictToDocumentApps = documentApps.length > 0;

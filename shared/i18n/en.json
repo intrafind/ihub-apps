@@ -7596,7 +7596,8 @@
     "documentNotFound": "The document could not be attached: it was not found. It may have been moved or deleted.",
     "documentAttachFailed": "The document could not be attached. Please try again.",
     "documentUnavailable": "The document could not be attached: the system it comes from is not available to you.",
-    "documentNotAccepted": "The document could not be attached: this app does not accept this kind of file.",
+    "documentModelCannot": "The document could not be attached: the selected model cannot take this kind of file.",
+    "documentAppNotBound": "The document could not be attached: this app does not use the system it comes from.",
     "documentFromIntegration": "{{name}} document",
     "project": "Project"
   },

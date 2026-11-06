@@ -54,7 +54,6 @@ import VoiceModeDock from '../../voice/components/VoiceModeDock';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useChatFilePreUpload from '../../chat/hooks/useChatFilePreUpload';
-import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
@@ -92,11 +91,9 @@ import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import {
-  processDocumentFile,
   decodeAudioFileToBuffer,
   recordingToAudioAttachment
 } from '../../upload/utils/fileProcessing';
-import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
 import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors';
 import { startLiveTranscription } from '../../../utils/liveTranscription';

@@ -741,9 +741,10 @@ gone.
   link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
   the same list.
 - **Only apps that bind the integration:** an app is offered when it binds the integration the
-  document comes from (iFinder) and its upload settings take the document. An app that never opted
-  into iFinder never receives an iFinder document. A checkbox in the banner, on by default, turns
-  the filter off; it is left out when no app qualifies.
+  document comes from (iFinder under **Admin → Apps → Edit → Installed integrations**); the binding
+  is what lets it receive the document, whatever its local upload settings are. An app that never
+  opted into iFinder never receives an iFinder document. A checkbox in the banner, on by default,
+  turns the filter off; it is left out when no app qualifies.
 - **The original file, images included:** the document is fetched as the original and attached
   like a file from Nextcloud: an image as an image for a vision model, anything else as a document
   that keeps its original next to the extracted text.

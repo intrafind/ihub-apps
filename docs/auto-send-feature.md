@@ -156,13 +156,16 @@ The chat attaches the document the way the Nextcloud embed attaches the files yo
 3. The **original file** is fetched with your own permissions in that system
    (`GET /api/integrations/{integration}/files/content`), so an image stays an image. Only if the
    original cannot be fetched (not for a permission failure) is its text fetched as a `.txt`.
-4. The app's upload settings decide whether it takes this kind of file. An **image** is attached as
-   an image for a vision model, **audio** as audio, anything else as a document that keeps its
-   original next to the extracted text.
+4. The app must **bind the integration** (`app.integrations`); its local upload settings do not
+   matter, as they do not for the files of a storage provider. What only the model can decide is
+   checked: an **image** needs a model that sees and is attached as an image, **audio** needs a
+   model that hears, anything else is attached as a document that keeps its original next to the
+   extracted text.
 5. The `documentId`, `integration` and `searchProfile` parameters are removed from the URL to
    prevent re-fetching on refresh. If the document cannot be attached, a system message in the chat
    says why: the integration is not available to you, access was denied, the document was not
-   found, the app does not take this kind of file, or the fetch failed.
+   found, the app does not use the integration, the selected model cannot take this kind of file,
+   or the fetch failed.
 
 When sent to the backend, the document id is also passed as a `documentIds` array, so the chat
 request carries the document context (the iAssistant uses it as its retrieval scope).
@@ -181,11 +184,10 @@ to this user and whether the document can be read, and passes `documentId`, `int
 `searchProfile` and `prefill` on to the app the user picks, where the attachment works as above.
 `send`, `model` and `var_*` are **not** passed on, so no app auto-sends because of the choice.
 
-- **Which apps are offered:** apps that **bind the integration** (`app.integrations`: the
-  installation id, its definition id or `type:<type>`) and whose upload settings take the document
-  (an image needs image upload, anything else file upload). An app that never opted into the
-  integration does not receive its documents. The checkbox "Only show apps that can use this
-  document" is on by default and left out when no app qualifies.
+- **Which apps are offered:** chat apps that **bind the integration** (`app.integrations`: the
+  installation id, its definition id or `type:<type>`). The binding is what lets an app receive the
+  integration's documents; an app that never opted into the integration does not. The checkbox
+  "Only show apps that can use this document" is on by default and left out when no app qualifies.
 - **Errors:** an integration that is not installed, not configured or not granted to the user, a
   document the user cannot read (`401`/`403`) or that does not exist (`404`) is reported in the
   banner; apps then open without the document.

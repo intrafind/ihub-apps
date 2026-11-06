@@ -6,7 +6,7 @@ import {
   fetchIntegrationFileMetadata,
   fetchIntegrationFilesProbe
 } from '../../../api/endpoints/integrationFiles';
-import { documentFailureKind, documentKindOf, documentRefOf } from '../utils/pendingDocument';
+import { documentFailureKind, documentRefOf } from '../utils/pendingDocument';
 
 /** The integration answered 404 because it has no details route, not because the document is gone. */
 const NO_DETAILS_MESSAGE = 'This integration has no details';
@@ -19,7 +19,7 @@ const NO_DETAILS_MESSAGE = 'This integration has no details';
  * `status`:
  * - `none`        no pending document
  * - `checking`    the integration has not answered yet
- * - `ready`       the document is there (`title`, `kind`, `info` filled in)
+ * - `ready`       the document is there (`title`, `info` filled in)
  * - `unavailable` the integration is not installed, not configured or not granted (404/403 of the
  *                 probe): no document can come from it
  * - `noAccess`    the document is not readable (401/403)
@@ -28,11 +28,10 @@ const NO_DETAILS_MESSAGE = 'This integration has no details';
  *                 the document is not ruled out, and the chat reports a real failure
  *
  * `info` is the probe's answer (`{ id, definition, type, name }`) once the integration answered,
- * which is what an app's bindings are matched against; `kind` is what the document becomes as an
- * attachment (`image` | `audio` | `document`).
+ * which is what an app's bindings are matched against.
  *
  * @param {{documentId: string, integration: string, searchProfile?: string}|null} doc
- * @returns {{status: string, title: string, info: Object|null, kind: string}}
+ * @returns {{status: string, title: string, info: Object|null}}
  */
 export default function usePendingDocumentCheck(doc) {
   const documentId = doc?.documentId;
@@ -46,12 +45,11 @@ export default function usePendingDocumentCheck(doc) {
     const controller = new AbortController();
     const { signal } = controller;
     const settle = (status, rest = {}) => {
-      if (!signal.aborted)
-        setResult({ key, status, title: '', info: null, kind: 'document', ...rest });
+      if (!signal.aborted) setResult({ key, status, title: '', info: null, ...rest });
     };
     const ref = documentRefOf({ documentId, searchProfile });
 
-    (async () => {
+    void (async () => {
       let info;
       try {
         info = await fetchIntegrationFilesProbe({ integration, signal });
@@ -63,8 +61,7 @@ export default function usePendingDocumentCheck(doc) {
         const details = await fetchIntegrationFileMetadata({ integration, ref, signal });
         return settle('ready', {
           info,
-          title: String(details?.title || ''),
-          kind: documentKindOf({ mediaType: details?.mediaType, filename: details?.filename })
+          title: String(details?.title || '')
         });
       } catch (err) {
         const httpStatus = err?.response?.status;
@@ -77,8 +74,8 @@ export default function usePendingDocumentCheck(doc) {
     return () => controller.abort();
   }, [key, documentId, integration, searchProfile]);
 
-  if (!key) return { status: 'none', title: '', info: null, kind: 'document' };
+  if (!key) return { status: 'none', title: '', info: null };
   // A result for a previous document is stale until the new check answers.
-  if (result.key !== key) return { status: 'checking', title: '', info: null, kind: 'document' };
-  return { status: result.status, title: result.title, info: result.info, kind: result.kind };
+  if (result.key !== key) return { status: 'checking', title: '', info: null };
+  return { status: result.status, title: result.title, info: result.info };
 }

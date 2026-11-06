@@ -15,8 +15,9 @@ not fit the integrations platform:
 - the link names a **source provider** (`source=ifinder`), an older concept, instead of the
   integration the document comes from;
 - the picker offered **apps with file upload**, which says nothing about whether an app may receive
-  a document of *this* system, and the attach always ran the document text extraction, so an image
-  from iFinder was never attached as an image.
+  a document of *this* system (and tool-only access is going away: every tool is an integration),
+  and the attach always ran the document text extraction, so an image from iFinder was never
+  attached as an image.
 
 ## Decisions
 
@@ -89,18 +90,19 @@ integration gate applies beyond the provider's own rules.
 The chat attaches through the helper the Nextcloud embed and the cloud pickers use:
 
 1. fetch the **original** (`format=original`) through the integration route;
-2. check the app's upload config as `useNextcloudEmbedAttachments` does (uploads on, supported
-   formats, image vs document);
+2. check that the **app binds the integration** (the probe says which installation it is) and that
+   the selected model can take the kind of file — an image needs a model that sees, audio one that
+   hears; the app's local upload settings do **not** decide, as they do not for the files of a
+   storage provider (which `createUploadConfig` also offers when local upload is off);
 3. `processCloudFile(file, uploadConfig)`: an image becomes an image attachment (resized base64, for
    a vision model), audio an audio attachment, everything else a document that keeps its original
    (`[ORIGINAL_FILE]`) next to the extracted text.
 
 The text is fetched, as a `.txt`, only when the request for the original fails with an error other
 than a sign-in, permission or not-found failure (a document of which only the text is kept, as the
-downloads do); a permission failure applies to the text as well and is shown. The supported-format
-check of the app does not apply to that text.
+downloads do); a permission failure applies to the text as well and is shown.
 
-### 5. The picker offers the apps that can take this document
+### 5. The picker offers the apps that bind the integration
 
 The picker asks the probe first and shows the document (title and type from `metadata`):
 
@@ -114,21 +116,21 @@ The picker asks the probe first and shows the document (title and type from `met
 | unverified | no metadata route, 5xx, network | behaves as *ready* |
 
 An app is eligible when it is a chat app that **binds the integration** (`app.integrations` key =
-the installation id, its definition id, or `type:<type>`) **and** can take the document: its upload
-settings accept the kind (image upload for an image, file upload otherwise; the kind comes from the
-document's details). So an app that never opted into iFinder never receives an iFinder document,
-and a bound app that cannot take the file is not offered. The model's own abilities (vision) are
-checked when the chat attaches, where the model is known. The request still carries `documentIds`
-(the iAssistant's retrieval scope); apps that use that path without upload are part of §6. The
-checkbox in the banner ("Only apps that can use this document") is on by default and left out when
-no app qualifies.
+the installation id, its definition id, or `type:<type>`). The binding is the permission: the app
+receives the integration's documents by attaching them through the integration, whatever its local
+upload settings say, and an app that never opted into iFinder never receives an iFinder document.
+The model's own abilities (vision) are checked when the chat attaches, where the model is known;
+a link straight to an app that does not bind the integration is refused with a message in the chat.
+The request still carries `documentIds` (the iAssistant's retrieval scope). The checkbox in the
+banner ("Only apps that can use this document") is on by default and left out when no app qualifies.
 
-### 6. Reading the document with tools instead of attaching it
+### 6. No tool-only access
 
-A binding with `actions: ["getContent", "getMetadata"]` gives an app iFinder without search; the
-mechanism exists today. Having the *model* read the document by id (instead of an attachment) needs
-a hint in the prompt and is **not** part of this change; it is the follow-up that lets
-document-reading apps without upload become eligible.
+Every tool is an integration, and a tool-only path is being removed. So there is one way for an app
+to take a document of an integration: **attach it through the integration** (§4). An app that
+should only read iFinder without searching binds it with `actions: ["getContent", "getMetadata"]`;
+the binding is what makes it eligible, and the document arrives as an attachment, not as a prompt
+hint for the model to fetch by id.
 
 ## Not changed
 
@@ -145,6 +147,7 @@ document-reading apps without upload become eligible.
   not an installation passing through.
 - Client (`tests/unit/client/pending-document.test.jsx`): the helper (`integration` validation, the
   retired `source`, forwarding, binding match, kind, eligibility), the check hook's states, the
-  picker (filter, forwarding, error states, dismiss), the attach hook (original image as an image,
-  document label, upload settings, error messages, text fallback, ready gate, attached once), and
+  picker (filter by binding, forwarding, error states, dismiss), the attach hook (original image as
+  an image, document label, binding required, the binding decides over local upload, model that
+  cannot see, error messages, text fallback, ready gate, attached once), and
   `/start`.

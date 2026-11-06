@@ -139,39 +139,19 @@ export function documentKindOf({ mediaType, filename, contentType } = {}) {
   return 'document';
 }
 
-const UPLOAD_KEY_OF_KIND = { image: 'imageUpload', audio: 'audioUpload', document: 'fileUpload' };
-
 /**
- * Whether an app's upload settings take an attachment of this kind: uploads are on (the app
- * switches at least one kind on and does not switch them all off) and the kind itself is not
- * switched off. The model's own abilities (vision) are checked when the chat attaches.
- *
- * @param {Object} app - an entry of `GET /api/apps`
- * @param {'image'|'audio'|'document'} kind
- * @returns {boolean}
- */
-export function appAcceptsKind(app, kind) {
-  const upload = app?.upload;
-  if (!upload || upload.enabled === false) return false;
-  const anyKindOn = ['imageUpload', 'audioUpload', 'videoUpload', 'fileUpload'].some(
-    key => upload[key]?.enabled === true
-  );
-  return anyKindOn && upload[UPLOAD_KEY_OF_KIND[kind] || 'fileUpload']?.enabled !== false;
-}
-
-/**
- * Whether the picker offers an app for a pending document: a chat app that binds the integration
- * the document comes from and can take the document as an attachment of its kind. An app that
- * never opted into the integration never receives its documents.
+ * Whether the picker offers an app for a pending document: a chat app that **binds the
+ * integration** the document comes from. The binding is what lets an app receive the integration's
+ * documents (as it lets an app attach files from a storage provider, whatever its local upload
+ * settings say); an app that never opted into the integration never receives its documents.
  *
  * @param {Object} app - an entry of `GET /api/apps`
  * @param {{id: string, definition?: string, type?: string|null}} info - the probe's answer
- * @param {'image'|'audio'|'document'} kind
  * @returns {boolean}
  */
-export function appCanTakeDocument(app, info, kind) {
+export function appCanTakeDocument(app, info) {
   if (!app || (app.type || 'chat') !== 'chat') return false;
-  return appBindsIntegration(app, info) && appAcceptsKind(app, kind);
+  return appBindsIntegration(app, info);
 }
 
 /**

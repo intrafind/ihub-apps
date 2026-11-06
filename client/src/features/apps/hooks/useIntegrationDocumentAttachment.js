@@ -6,9 +6,29 @@ import { useTranslation } from 'react-i18next';
 import { fetchIntegrationFilesProbe } from '../../../api/endpoints/integrationFiles';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { processCloudFile } from '../../upload/utils/cloudFileProcessing';
-import { canonicalMimeType } from '../../upload/utils/fileProcessing';
-import { documentFailureKind, documentKindOf, documentRefOf } from '../utils/pendingDocument';
+import {
+  appBindsIntegration,
+  documentFailureKind,
+  documentKindOf,
+  documentRefOf
+} from '../utils/pendingDocument';
 import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
+
+/**
+ * Whether the selected model can take a file of this kind. The app's binding of the integration is
+ * what lets it receive the document (its local upload settings do not veto it, as they do not veto
+ * a storage provider's files); what only the model can decide is left: an image needs a model that
+ * sees, audio one that hears. A document is text that any model reads.
+ *
+ * @param {'image'|'audio'|'document'} kind
+ * @param {Object|null} model - the selected model object
+ * @returns {boolean}
+ */
+function modelTakes(kind, model) {
+  if (kind === 'image') return model?.supportsVision !== false && model?.supportsImages !== false;
+  if (kind === 'audio') return model?.supportsAudio === true;
+  return true;
+}
 
 /**
  * Attaches the document a link names (`?documentId=…&integration=…`) to the chat, once the app and
@@ -18,13 +38,14 @@ import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
  * 1. ask the integration whether it hands documents to this user (the gate);
  * 2. fetch the **original** file through `GET /api/integrations/:id/files/content`, with the
  *    user's own permissions in that system;
- * 3. check the app's upload settings for what the file is (image, audio, document);
+ * 3. check that the app binds the integration (its local upload settings do not matter) and that
+ *    the selected model can take what the file is (an image needs a model that sees);
  * 4. `processCloudFile`: an image becomes an image attachment for a vision model, audio an audio
  *    attachment, anything else a document that keeps its original next to the extracted text.
  *
  * A placeholder shows while it loads. A document that cannot be attached says why in the chat
- * (`addSystemMessage`): no access, not found, the integration not available, or the app does not
- * take this kind of file. Whatever happens, `onConsumed` runs at the end so the link's parameters
+ * (`addSystemMessage`): no access, not found, the integration not available, the app does not use it, or
+ * the model cannot take this kind of file. Whatever happens, `onConsumed` runs at the end so the link's parameters
  * leave the address and a refresh does not attach again.
  *
  * @param {Object} options
@@ -79,16 +100,7 @@ export default function useIntegrationDocumentAttachment({
       const fallbackName = doc.prefill || 'document';
 
       try {
-        const uploadConfig = uploader.createUploadConfig(live.app, live.currentModel);
-        if (!uploadConfig || uploadConfig.enabled === false) {
-          say(
-            live.t(
-              'sources.documentNotAccepted',
-              'The document could not be attached: this app does not accept this kind of file.'
-            )
-          );
-          return;
-        }
+        const uploadConfig = uploader.createUploadConfig(live.app, live.currentModel) || {};
 
         uploader.setSelectedFile({
           type: 'document',
@@ -101,6 +113,19 @@ export default function useIntegrationDocumentAttachment({
 
         // The probe is the gate: not installed, not configured or not granted ends here.
         const info = await fetchIntegrationFilesProbe({ integration: doc.integration });
+        // An installed integration's documents go only to an app that binds it: the binding is
+        // what lets the app receive them (as with a storage provider's files), whatever its local
+        // upload settings say. A provider that is not an installation (`project`) keeps its own rules.
+        if (info?.definition && !appBindsIntegration(live.app, info)) {
+          uploader.clearSelectedFile();
+          say(
+            live.t(
+              'sources.documentAppNotBound',
+              'The document could not be attached: this app does not use the system it comes from.'
+            )
+          );
+          return;
+        }
         const file = await fetchIntegrationDocumentFile({
           integration: doc.integration,
           ref,
@@ -108,26 +133,12 @@ export default function useIntegrationDocumentAttachment({
         });
 
         const kind = documentKindOf({ contentType: file.type, filename: file.name });
-        const kindConfig = { image: 'imageUpload', audio: 'audioUpload', document: 'fileUpload' }[
-          kind
-        ];
-        const supported = uploadConfig[kindConfig]?.supportedFormats;
-        const contentType = canonicalMimeType(file.type, file.name);
-        if (
-          uploadConfig[kindConfig]?.enabled !== true ||
-          (kind === 'document' &&
-            Array.isArray(supported) &&
-            supported.length > 0 &&
-            contentType !== 'application/octet-stream' &&
-            // The text of a document that has no original is always processable.
-            contentType !== 'text/plain' &&
-            !supported.includes(contentType))
-        ) {
+        if (!modelTakes(kind, live.currentModel)) {
           uploader.clearSelectedFile();
           say(
             live.t(
-              'sources.documentNotAccepted',
-              'The document could not be attached: this app does not accept this kind of file.'
+              'sources.documentModelCannot',
+              'The document could not be attached: the selected model cannot take this kind of file.'
             )
           );
           return;

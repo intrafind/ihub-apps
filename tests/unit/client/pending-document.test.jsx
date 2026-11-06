@@ -56,7 +56,6 @@ import AppsList from '../../../client/src/features/apps/pages/AppsList';
 import usePendingDocumentCheck from '../../../client/src/features/apps/hooks/usePendingDocumentCheck';
 import useIntegrationDocumentAttachment from '../../../client/src/features/apps/hooks/useIntegrationDocumentAttachment';
 import {
-  appAcceptsKind,
   appBindsIntegration,
   appCanTakeDocument,
   documentFailureKind,
@@ -149,29 +148,13 @@ describe('pendingDocument helpers', () => {
     expect(documentKindOf({})).toBe('document');
   });
 
-  test('appAcceptsKind follows the upload settings, per kind', () => {
-    const files = { upload: { fileUpload: { enabled: true } } };
-    expect(appAcceptsKind(files, 'document')).toBe(true);
-    expect(appAcceptsKind(files, 'image')).toBe(true); // uploads are on, images not switched off
-    expect(
-      appAcceptsKind(
-        { upload: { fileUpload: { enabled: true }, imageUpload: { enabled: false } } },
-        'image'
-      )
-    ).toBe(false);
-    expect(
-      appAcceptsKind({ upload: { enabled: false, fileUpload: { enabled: true } } }, 'document')
-    ).toBe(false);
-    expect(appAcceptsKind({ upload: { imageUpload: { enabled: true } } }, 'image')).toBe(true);
-    expect(appAcceptsKind({}, 'document')).toBe(false);
-  });
-
-  test('appCanTakeDocument needs the binding, a chat app and a matching upload', () => {
-    const app = { integrations: { ifinder: {} }, upload: { fileUpload: { enabled: true } } };
-    expect(appCanTakeDocument(app, INFO, 'document')).toBe(true);
-    expect(appCanTakeDocument({ ...app, integrations: {} }, INFO, 'document')).toBe(false);
-    expect(appCanTakeDocument({ ...app, upload: {} }, INFO, 'document')).toBe(false);
-    expect(appCanTakeDocument({ ...app, type: 'redirect' }, INFO, 'document')).toBe(false);
+  test('appCanTakeDocument: a chat app that binds the integration, whatever its upload settings', () => {
+    const app = { integrations: { ifinder: {} } };
+    expect(appCanTakeDocument(app, INFO)).toBe(true);
+    expect(appCanTakeDocument({ ...app, upload: { enabled: false } }, INFO)).toBe(true);
+    expect(appCanTakeDocument({ ...app, integrations: {} }, INFO)).toBe(false);
+    expect(appCanTakeDocument({ upload: { fileUpload: { enabled: true } } }, INFO)).toBe(false);
+    expect(appCanTakeDocument({ ...app, type: 'redirect' }, INFO)).toBe(false);
   });
 
   test('documentFailureKind maps statuses', () => {
@@ -196,16 +179,12 @@ describe('usePendingDocumentCheck', () => {
     expect(fetchIntegrationFilesProbe).not.toHaveBeenCalled();
   });
 
-  test('ready with the title, the kind and the integration, asking with the profile as scope', async () => {
-    fetchIntegrationFileMetadata.mockResolvedValue({
-      title: 'Site photo',
-      mediaType: 'image/png',
-      filename: 'site.png'
-    });
+  test('ready with the title and the integration, asking with the profile as scope', async () => {
+    fetchIntegrationFileMetadata.mockResolvedValue({ title: 'Site photo' });
     const { result } = renderHook(() => usePendingDocumentCheck(doc));
     expect(result.current.status).toBe('checking');
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(result.current).toMatchObject({ title: 'Site photo', kind: 'image', info: INFO });
+    expect(result.current).toMatchObject({ title: 'Site photo', info: INFO });
     expect(fetchIntegrationFileMetadata.mock.calls[0][0]).toMatchObject({
       integration: 'ifinder',
       ref: { id: 'd1', scope: 'sp' }
@@ -295,14 +274,15 @@ describe('AppsList with a pending document', () => {
     });
   });
 
-  test('offers the apps that bind the integration and take the document, and hands it on', async () => {
+  test('offers the apps that bind the integration, and hands the document on', async () => {
     renderAt('/apps?documentId=d1&integration=ifinder&searchProfile=sp&send=true');
 
     expect(await screen.findByText('Choose an app to open “Annual report” in')).toBeTruthy();
     expect(screen.getByLabelText('Summarizer')).toBeTruthy();
+    // The binding is what lets an app receive the document, whatever its upload settings say
+    expect(screen.getByLabelText('Reader')).toBeTruthy();
     expect(screen.getByLabelText('Text only')).toBeTruthy();
-    expect(screen.queryByLabelText('Reader')).toBeNull(); // binds iFinder, takes no upload
-    expect(screen.queryByLabelText('Poet')).toBeNull(); // takes uploads, never opted into iFinder
+    expect(screen.queryByLabelText('Poet')).toBeNull(); // never opted into iFinder
 
     fireEvent.click(screen.getByLabelText('Summarizer'));
     expect(location.pathname).toBe('/apps/summarizer');
@@ -314,20 +294,11 @@ describe('AppsList with a pending document', () => {
     expect(forwarded.has('source')).toBe(false);
   });
 
-  test('an image is offered only to apps that take images', async () => {
-    fetchIntegrationFileMetadata.mockResolvedValue({ title: 'Photo', mediaType: 'image/png' });
-    renderAt('/apps?documentId=d1&integration=ifinder');
-    await screen.findByText(/Photo/);
-    expect(screen.getByLabelText('Summarizer')).toBeTruthy();
-    expect(screen.queryByLabelText('Text only')).toBeNull();
-  });
-
   test('the checkbox shows every app again', async () => {
     renderAt('/apps?documentId=d1&integration=ifinder');
     await screen.findByText(/Annual report/);
     fireEvent.click(screen.getByLabelText('Only show apps that can use this document'));
     expect(screen.getByLabelText('Poet')).toBeTruthy();
-    expect(screen.getByLabelText('Reader')).toBeTruthy();
   });
 
   test('does not narrow the list when no app qualifies', async () => {
@@ -413,7 +384,7 @@ describe('useIntegrationDocumentAttachment', () => {
         useIntegrationDocumentAttachment({
           pending,
           ready: true,
-          app: { id: 'app1' },
+          app: { id: 'app1', integrations: { ifinder: {} } },
           currentModel: { id: 'm' },
           fileUploadHandler: uploader,
           addSystemMessage,
@@ -487,25 +458,59 @@ describe('useIntegrationDocumentAttachment', () => {
     });
   });
 
-  test('an app that switched images off does not get an image, and says so', async () => {
-    uploader.createUploadConfig.mockReturnValue(cfg({ imageUpload: { enabled: false } }));
+  test('a model that cannot see does not get an image, and says so', async () => {
     fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
-    mount();
+    mount({ currentModel: { id: 'm', supportsVision: false } });
     await waitFor(() => expect(onConsumed).toHaveBeenCalled());
     expect(processCloudFile).not.toHaveBeenCalled();
     expect(uploader.clearSelectedFile).toHaveBeenCalled();
     expect(addSystemMessage).toHaveBeenCalledWith(
-      expect.stringContaining('does not accept this kind of file'),
+      expect.stringContaining('selected model cannot take this kind of file'),
       true
     );
   });
 
-  test('an app without uploads says so before downloading anything', async () => {
-    uploader.createUploadConfig.mockReturnValue({ enabled: false });
+  test('the binding decides: an app without local upload still gets the document', async () => {
+    uploader.createUploadConfig.mockReturnValue({ enabled: false, localUploadEnabled: false });
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+    processCloudFile.mockResolvedValue({
+      type: 'document',
+      content: 'text',
+      fileName: 'report.pdf'
+    });
     mount();
     await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+    expect(processCloudFile).toHaveBeenCalledTimes(1);
+    expect(addSystemMessage).not.toHaveBeenCalled();
+  });
+
+  test('an app that does not bind the integration does not get its document', async () => {
+    mount({ app: { id: 'app1', integrations: { jira: {} } } });
+    await waitFor(() => expect(onConsumed).toHaveBeenCalled());
     expect(fetchIntegrationFileContent).not.toHaveBeenCalled();
-    expect(addSystemMessage).toHaveBeenCalledWith(expect.stringContaining('does not accept'), true);
+    expect(uploader.clearSelectedFile).toHaveBeenCalled();
+    expect(addSystemMessage).toHaveBeenCalledWith(
+      expect.stringContaining('does not use the system it comes from'),
+      true
+    );
+  });
+
+  test('a provider that is not an installation (project documents) needs no binding', async () => {
+    fetchIntegrationFilesProbe.mockResolvedValue({
+      id: 'project',
+      definition: null,
+      type: null,
+      name: 'project'
+    });
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('text/plain', 'item.txt'));
+    processCloudFile.mockResolvedValue({ type: 'document', content: 'item', fileName: 'item.txt' });
+    mount({
+      pending: { documentId: 'i1', integration: 'project', searchProfile: 'p1', prefill: 'Item' },
+      app: { id: 'app1' }
+    });
+    await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+    expect(processCloudFile).toHaveBeenCalledTimes(1);
+    expect(addSystemMessage).not.toHaveBeenCalled();
   });
 
   test.each([

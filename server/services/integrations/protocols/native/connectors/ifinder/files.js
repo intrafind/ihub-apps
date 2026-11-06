@@ -80,8 +80,9 @@ async function content({ ref, user, format = 'original' }) {
   if (format === 'pdf' && !documentUrl.includes('convertToPdf')) {
     documentUrl += (documentUrl.includes('?') ? '&' : '?') + 'convertToPdf=true';
   }
-  const baseUrl = iFinderService.getConfig().baseUrl.replace(/\/+$/, '');
-  const fullUrl = `${baseUrl}/${documentUrl.replace(/^\//, '')}`;
+  let baseUrl = iFinderService.getConfig().baseUrl;
+  while (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+  const fullUrl = `${baseUrl}/${documentUrl.startsWith('/') ? documentUrl.slice(1) : documentUrl}`;
   logger.debug('iFinder document proxy: fetching document', {
     component: 'iFinder',
     documentId: ref.id
