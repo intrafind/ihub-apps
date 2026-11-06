@@ -650,6 +650,11 @@ text page. Every such response has the same body:
   (`not-tts-model`, `voices-unsupported`, `invalid-audio`, `audio-too-large`, `upstream-error`, `no-audio`).
   The headline of a failed text-to-speech or transcription test is shown only when it is safe to show (it may
   name a host); the reason stays in `details.remediation`, which the admin page shows.
+- The app administration endpoints (`/api/admin/apps*`) answer in this shape: `NOT_FOUND` (an app or its
+  file), `BAD_REQUEST` (a missing field, an unsafe or changed id, a bad reorder list), `CONFLICT` (an app id
+  that exists) and `VALIDATION_FAILED` for an app configuration that does not match the schema. The
+  `error` text still names the failed fields; the failed fields are in `details.issues`
+  (`{ path, code, message }`, `path` a dotted string) instead of a bare `details` list with `path` arrays.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
