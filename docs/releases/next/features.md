@@ -639,6 +639,17 @@ text page. Every such response has the same body:
   `INTEGRITY_MISMATCH`) used to answer `500` without a code; they now carry their code and answer `403`
   and `422`. A registry that cannot be created for another reason than a duplicate or an invalid config
   (for example a storage failure) answers `500` instead of `400`.
+- The model administration endpoints (`/api/admin/models*`) answer in this shape: `NOT_FOUND`,
+  `BAD_REQUEST`, `CONFLICT` (a model id that exists) and the failures below. The model discovery
+  (`_discover`) answers `DISCOVERY_FAILED` with the stable reason in `details.messageKey` and the remediation
+  text in `details.remediation` (`details.upstreamStatus` when the endpoint answered); before, these were
+  top-level `messageKey`, `upstreamStatus` and a string `details`. The model connectivity test answers with
+  the LLM error code (for example `AUTH_FAILED`), the headline in `error`, and the remediation text and
+  `messageKey` in `details`. The text-to-speech voice routes use `NOT_TTS_MODEL`, `VOICES_UNSUPPORTED`,
+  `INVALID_AUDIO`, `PAYLOAD_TOO_LARGE`, `UPSTREAM_ERROR` and `NO_AUDIO` instead of the former lower-case codes
+  (`not-tts-model`, `voices-unsupported`, `invalid-audio`, `audio-too-large`, `upstream-error`, `no-audio`).
+  The headline of a failed text-to-speech or transcription test is shown only when it is safe to show (it may
+  name a host); the reason stays in `details.remediation`, which the admin page shows.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

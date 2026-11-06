@@ -243,6 +243,16 @@ export const MARKETPLACE_ERROR_CODES = Object.freeze({
   INTEGRITY_MISMATCH: 422
 });
 
+/** Model administration: discovery, text-to-speech voices (`server/routes/admin/models.js`). */
+export const MODEL_ERROR_CODES = Object.freeze({
+  DISCOVERY_FAILED: 502,
+  NOT_TTS_MODEL: 400,
+  VOICES_UNSUPPORTED: 501,
+  INVALID_AUDIO: 400,
+  UNSUPPORTED_TTS_PROVIDER: 400,
+  NO_AUDIO: 502
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -255,7 +265,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...INTEGRATION_ERROR_CODES,
   ...WORKFLOW_ERROR_CODES,
   ...BACKUP_ERROR_CODES,
-  ...MARKETPLACE_ERROR_CODES
+  ...MARKETPLACE_ERROR_CODES,
+  ...MODEL_ERROR_CODES
 });
 
 /**

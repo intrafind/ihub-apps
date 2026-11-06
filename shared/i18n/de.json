@@ -9117,6 +9117,12 @@
     "INCOMPATIBLE_IHUB_VERSION": "Diese iHub-Version ist mit dem Eintrag nicht kompatibel.",
     "CODE_NOT_TRUSTED": "Dem Register wird für Code nicht vertraut. Markieren Sie es als vertrauenswürdig für Code, um diesen Eintrag zu installieren.",
     "CODE_INTEGRITY_REQUIRED": "Der Katalog nennt keinen Hash für eine Code-Datei des Eintrags.",
-    "INTEGRITY_MISMATCH": "Eine Datei des Eintrags passt nicht zum Hash des Katalogs."
+    "INTEGRITY_MISMATCH": "Eine Datei des Eintrags passt nicht zum Hash des Katalogs.",
+    "DISCOVERY_FAILED": "Die Modellliste des Endpunkts konnte nicht gelesen werden.",
+    "NOT_TTS_MODEL": "Das Modell ist kein Text-to-Speech-Modell.",
+    "VOICES_UNSUPPORTED": "Der Anbieter dieses Modells verwaltet keine Stimmen.",
+    "INVALID_AUDIO": "Die Audiodatei fehlt oder ist ungültig.",
+    "UNSUPPORTED_TTS_PROVIDER": "Der Text-to-Speech-Anbieter wird nicht unterstützt.",
+    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet."
   }
 }

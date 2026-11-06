@@ -74,6 +74,7 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
 
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
 const { default: configCache } = await import('../configCache.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 beforeAll(() => {
   configCache.setCacheEntry('config/models.json', [ttsModel, chatModel]);
@@ -88,6 +89,7 @@ afterAll(() => {
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 registerAdminModelsRoutes(app);
+app.use(errorHandler);
 
 const base = '/api/admin/models/voxtral-mini-tts/tts/voices';
 const sample = Buffer.from('RIFF....WAVEfmt ').toString('base64');
@@ -108,7 +110,7 @@ describe('text-to-speech voices of a model', () => {
   test('a chat model has no voices', async () => {
     const res = await request(app).get('/api/admin/models/mistral-small/tts/voices');
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('not-tts-model');
+    expect(res.body.code).toBe('NOT_TTS_MODEL');
   });
 
   test('an unknown model is 404', async () => {
@@ -139,12 +141,12 @@ describe('text-to-speech voices of a model', () => {
   });
 
   test.each([
-    ['no name', { audio: sample }, 'invalid-name'],
-    ['no audio', { name: 'Anna' }, 'invalid-audio'],
+    ['no name', { audio: sample }, 'BAD_REQUEST'],
+    ['no audio', { name: 'Anna' }, 'INVALID_AUDIO'],
     [
       'an unsupported file type',
       { name: 'Anna', audio: sample, filename: 'anna.exe' },
-      'invalid-audio'
+      'INVALID_AUDIO'
     ]
   ])('rejects a voice with %s', async (_label, body, code) => {
     const res = await request(app).post(base).send(body);
