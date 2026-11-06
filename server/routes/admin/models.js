@@ -647,7 +647,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ message: 'Model updated successfully', model: updatedModel });
+    res.json({ message: 'Model updated successfully', model: updatedModel }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -711,7 +711,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.json({ message: 'Model created successfully', model: newModel });
+    res.json({ message: 'Model created successfully', model: newModel }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   app.post(buildServerPath('/api/admin/models/:modelId/toggle'), adminAuth, async (req, res) => {
@@ -839,7 +839,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
-    res.json({ message: 'Model deleted successfully' });
+    res.json({ message: 'Model deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
