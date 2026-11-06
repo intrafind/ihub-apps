@@ -64,6 +64,16 @@ Every new outbound connection — HTTP(S), WebSocket (`wss://`), a new SDK or cl
 
 What a tool call was — a web search, a document search, a page read, a call to a connected system — and how it is labelled is decided on the server and sent with the event (`tool/started`: `title`, `integration`, `activityKind`, `activityScope`, from `server/utils/toolDisplay.js`; the answer badge from `run/ended.knowledgeSources`). The client and `shared/run/` never infer it from a tool id; a new distinction gets a new server-sent field.
 
+### REST API Design ⚠️
+
+Full rules: `docs/api-guidelines.md` (use the `api-design` skill when adding or changing a route). Short form:
+
+- Plural kebab-case nouns, camelCase query/path/body names. An operation that is not CRUD is an **`_action`** segment (`POST /tasks/{id}/_duplicate`, `POST /tasks/_preview`); never a bare verb.
+- Status carries success: `201` + `Location` on create, `204` on delete, `400` (not 422) for validation. No `{ success }` / `{ message }` envelope; the top level is always an object.
+- Errors: **throw** `ServiceError(code, …)` with a registry code from `shared/apiErrors.js`; never write `res.status(x).json({ error })`. Target body is `application/problem+json` (RFC 9457) plus `code`. OAuth endpoints keep RFC 6749.
+- Lists are `{ items, nextCursor }` with `limit` / `cursor`; no `page`, `offset`, `pageSize`, `after`.
+- Changes are additive. Breaking an endpoint with external callers needs `Deprecation` / `Sunset` headers; ask before adding a shim.
+
 ### Breaking Changes
 
 **Always ask the user before implementing backward compatibility shims.** Describe what breaks (endpoints, fields, data shapes), let them choose compat vs clean break. Never silently add compat wrappers or deprecated re-exports.
