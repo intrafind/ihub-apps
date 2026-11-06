@@ -1,0 +1,97 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { findViolations } from '../../scripts/check-api-guidelines.js';
+
+const rules = (source, file = 'server/routes/example.js', changed = null) =>
+  findViolations(source, file, changed).map(v => v.rule);
+
+describe('check-api-guidelines', () => {
+  it('flags a hand-written error body, on one line or several', () => {
+    assert.deepEqual(rules("res.status(404).json({ error: 'Not found' });"), ['hand-rolled-error']);
+    assert.deepEqual(rules("return res.status(500).json({\n  code: 'X',\n  error: 'Failed'\n});"), [
+      'hand-rolled-error'
+    ]);
+    assert.deepEqual(rules("res.status(400).send({ error: 'Bad' });"), ['hand-rolled-error']);
+  });
+
+  it('accepts a thrown ServiceError and a success body that has an error member', () => {
+    assert.deepEqual(rules("throw new ServiceError('NOT_FOUND', 'Task not found');"), []);
+    assert.deepEqual(rules("res.status(200).json({ ok: false, error: 'probe failed' });"), []);
+    assert.deepEqual(rules('res.json({ error: null });'), []);
+  });
+
+  it('flags success envelopes', () => {
+    assert.deepEqual(rules('res.json({ success: true });'), ['success-envelope']);
+    assert.deepEqual(rules("res.json({ message: 'App updated successfully', app });"), [
+      'success-envelope'
+    ]);
+    assert.deepEqual(rules("res.json({ message: 'Hello', app });"), []);
+  });
+
+  it('flags status 422', () => {
+    assert.deepEqual(rules('res.status(422);'), ['status-422']);
+  });
+
+  it('flags a bare verb on a route but accepts an _action segment', () => {
+    assert.deepEqual(rules("router.post('/:taskId/run', handler);"), ['route-verb']);
+    assert.deepEqual(rules('app.post(`${base}/:id/duplicate`, handler);'), ['route-verb']);
+    assert.deepEqual(rules("router.post('/:keyId/_rotate', handler);"), []);
+    assert.deepEqual(rules('app.post(`${base}/_preview`, handler);'), []);
+    // a read named like a verb is a resource read, not an action
+    assert.deepEqual(rules("router.get('/jobs/:jobId/download', handler);"), []);
+  });
+
+  it('flags a path segment that is not kebab-case', () => {
+    assert.deepEqual(rules("router.get('/scheduledTasks/:id', handler);"), ['route-naming']);
+    assert.deepEqual(rules("router.get('/scheduled_tasks', handler);"), ['route-naming']);
+    assert.deepEqual(rules("router.get('/scheduled-tasks/:taskId/runs', handler);"), []);
+    assert.deepEqual(rules("router.get('/manifest.xml', handler);"), []);
+    assert.deepEqual(rules("router.get('/_notifications', handler);"), []);
+  });
+
+  it('flags paging and snake_case query parameters, direct or destructured', () => {
+    assert.deepEqual(rules('const p = req.query.page;'), ['pagination-param']);
+    assert.deepEqual(rules('const { limit, offset = 0 } = req.query;'), ['pagination-param']);
+    assert.deepEqual(rules('const s = req.query.per_page;'), ['pagination-param']);
+    assert.deepEqual(rules('const s = req.query.sort_by;'), ['query-naming']);
+    assert.deepEqual(rules('const { limit, cursor, appId } = req.query;'), []);
+  });
+
+  it('reports only changed lines', () => {
+    const source = [
+      "res.status(404).json({ error: 'old' });",
+      'const ok = 1;',
+      "res.status(404).json({ error: 'new' });"
+    ].join('\n');
+    assert.deepEqual(
+      findViolations(source, 'server/routes/example.js', new Set([3])).map(v => v.line),
+      [3]
+    );
+    assert.deepEqual(findViolations(source, 'server/routes/example.js', new Set([2])), []);
+    // a multi-line match is reported when any of its lines changed
+    const multi = "res.status(500).json({\n  error: 'x'\n});";
+    assert.equal(findViolations(multi, 'server/routes/example.js', new Set([2])).length, 1);
+  });
+
+  it('honors api-guidelines-ignore on the same or the previous line', () => {
+    assert.deepEqual(
+      rules("res.status(404).json({ error: 'x' }); // api-guidelines-ignore: legacy client"),
+      []
+    );
+    assert.deepEqual(
+      rules("// api-guidelines-ignore: legacy client\nres.status(404).json({ error: 'x' });"),
+      []
+    );
+  });
+
+  it('exempts endpoints that follow an external specification', () => {
+    const source = "res.status(400).json({ error: 'invalid_request' });";
+    assert.deepEqual(rules(source, 'server/routes/oauth.js'), []);
+    assert.deepEqual(rules(source, 'server/routes/inference/responses.js'), []);
+    assert.deepEqual(rules(source, 'server/routes/wellKnown.js'), []);
+    assert.deepEqual(rules(source, 'server/routes/chats.js'), ['hand-rolled-error']);
+  });
+});

@@ -53,6 +53,14 @@ the same release. External callers (API keys, integrations, browser extension, N
 **Headers.** `ETag`/`If-Match` for concurrent edits, `Idempotency-Key` for a `POST` that must not run twice,
 `Retry-After` on 429/503, `Location` on 201/202.
 
+## CI check
+
+The **API guidelines** check runs on every PR that touches `server/` (`scripts/check-api-guidelines.js`). It fails on
+*added or changed* lines that write an error body by hand, wrap a success in `{ success }` / `{ message }`, use 422,
+end a route in a verb, use a non-kebab-case path segment, or read `page` / `offset` / snake_case query parameters. Run it
+before you push: `node scripts/check-api-guidelines.js origin/main`. A line with a real reason carries
+`// api-guidelines-ignore: <reason>`.
+
 ## Touching an existing endpoint
 
 Bring it in line when that is cheap and no outside caller breaks: replace a hand-written `{ error }` with a thrown

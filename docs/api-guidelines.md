@@ -194,6 +194,29 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
   `application/problem+json`.
 - A review checks the [checklist](#checklist) below.
 
+### Checked on every pull request
+
+The **API guidelines** check (`.github/workflows/api-guidelines-check.yml`, `scripts/check-api-guidelines.js`)
+runs on every pull request that touches `server/`. It is a ratchet, like the accessibility check: it looks
+only at lines the pull request adds or changes, so the existing backlog does not block anyone, and new code
+meets the rules. It reports, as annotations on the diff:
+
+| Rule                | Finds                                                                          |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `hand-rolled-error` | `res.status(4xx/5xx).json({ error … })`: throw a `ServiceError` instead        |
+| `success-envelope`  | `.json({ success … })`, `.json({ message: '… successfully' })`                  |
+| `status-422`        | `res.status(422)`: validation is `400`                                          |
+| `route-verb`        | a `POST`/`PUT`/`PATCH`/`DELETE` route that ends in a verb: use an `_action`     |
+| `route-naming`      | a literal path segment that is not lower-case kebab-case                       |
+| `pagination-param`  | `req.query.page`, `pageSize`, `offset`, `after`, `per_page`: use `limit`/`cursor` |
+| `query-naming`      | a snake_case query parameter                                                    |
+
+Endpoints that implement an external specification are exempt (OAuth, `/.well-known`, the OpenAI-compatible
+`/v1` and `inference` routes, the MCP server). A line with a real reason to break a rule carries
+`// api-guidelines-ignore: <reason>` on the same or the previous line; the reviewer judges the reason.
+The check finds the mechanical violations; the [checklist](#checklist) still covers what a script cannot
+(the right status code, a resource model, compatibility).
+
 ## Checklist
 
 - [ ] Plural, kebab-case, verb-free path; actions use `_action`
