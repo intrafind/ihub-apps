@@ -1,5 +1,12 @@
 # Fixes — Unreleased
 
+## Google API Key No Longer Appears in Server Logs
+
+The Gemini adapter used to send the API key as a `?key=` query parameter on the request URL, so a
+provider error (quota, 4xx, 5xx) could write the key into the server logs. The key is now sent in
+the `x-goog-api-key` header instead, for chat requests and for the setup wizard's API key check.
+No configuration change is needed.
+
 ## Usage Menu, Limits & Quotas and Usage Reports Show the Same Numbers
 
 Each model call is now captured in one place, which both counts it against the user's limits and
