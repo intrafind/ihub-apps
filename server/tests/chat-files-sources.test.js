@@ -486,7 +486,7 @@ describe('task files from a connected system', () => {
     remote.fail = new ProjectError('SOURCE_GONE', 'gone');
     const gone = await attach(user, task.id, { source: SOURCE });
     assert.equal(gone.statusCode, 404);
-    assert.equal(gone.body.code ?? gone.body.code, 'SOURCE_GONE');
+    assert.equal(gone.body.code, 'SOURCE_GONE');
     await cleanup(user);
   });
 

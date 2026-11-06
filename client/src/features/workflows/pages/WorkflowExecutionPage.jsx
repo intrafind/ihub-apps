@@ -282,11 +282,7 @@ function WorkflowExecutionPage() {
       await apiClient.post(`/workflows/executions/${executionId}/restart`);
       await refetch();
     } catch (err) {
-      const msg =
-        err.response?.data?.detail ||
-        err.response?.data?.detail ||
-        err.message ||
-        'Failed to restart workflow';
+      const msg = err.response?.data?.detail || err.message || 'Failed to restart workflow';
       setRestartError(msg);
     } finally {
       setRestarting(false);
