@@ -480,8 +480,8 @@
       "dataFlow": "internal",
       "enabledByDefault": true,
       "guidance": {
-        "en": "Start broad with a few key terms and narrow with filters only when there are too many hits. Use the hit ids for getContent or getMetadata; never pass a title or link.",
-        "de": "Beginne breit mit wenigen Schlüsselbegriffen und grenze erst mit Filtern ein, wenn es zu viele Treffer gibt. Verwende die IDs der Treffer für getContent oder getMetadata; übergib nie einen Titel oder Link."
+        "en": "Start broad with a few key terms and narrow with filters only when there are too many hits. Bare words combine with OR, but up to three words must all match and from four on one in four may miss. So after 0 hits, or to find other documents, retry with fewer or different words (synonyms, German and English, alternatives joined with an explicit OR) — never with the same words plus more. To narrow, use filters, a phrase, NEAR/S or an explicit AND, not more bare words. Use the hit ids for getContent or getMetadata; never pass a title or link.",
+        "de": "Beginne breit mit wenigen Schlüsselbegriffen und grenze erst mit Filtern ein, wenn es zu viele Treffer gibt. Einfache Wörter werden mit ODER verknüpft, doch bis zu drei Wörter müssen alle treffen, ab vier darf jedes vierte fehlen. Nach 0 Treffern oder um andere Dokumente zu finden, daher mit weniger oder anderen Wörtern erneut suchen (Synonyme, deutsch und englisch, Alternativen mit explizitem OR verknüpft) — nie mit denselben Wörtern plus weiteren. Zum Eingrenzen Filter, eine Phrase, NEAR/S oder explizites AND verwenden, nicht mehr einfache Wörter. Verwende die IDs der Treffer für getContent oder getMetadata; übergib nie einen Titel oder Link."
       },
       "examples": [
         {
