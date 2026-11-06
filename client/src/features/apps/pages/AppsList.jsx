@@ -15,7 +15,7 @@ import NextcloudSelectionBanner from '../../nextcloud-embed/components/Nextcloud
 import PendingDocumentBanner from '../components/PendingDocumentBanner';
 import usePendingDocumentCheck from '../hooks/usePendingDocumentCheck';
 import {
-  appAcceptsDocuments,
+  appCanTakeDocument,
   pendingDocumentQuery,
   readPendingDocument,
   withoutPendingDocument
@@ -85,14 +85,19 @@ function AppsList() {
   // banner says why, and the app opens without it.
   const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
   const documentCheck = usePendingDocumentCheck(pendingDocument);
-  const documentUnusable =
-    documentCheck.status === 'noAccess' || documentCheck.status === 'notFound';
+  const documentUnusable = ['unavailable', 'noAccess', 'notFound'].includes(documentCheck.status);
   const documentForApp = pendingDocument && !documentUnusable ? pendingDocument : null;
-  const [onlyDocumentApps, setOnlyDocumentApps] = useState(true);
-  const canRestrictToDocumentApps = useMemo(
-    () => Boolean(documentForApp) && apps.some(appAcceptsDocuments),
-    [documentForApp, apps]
+  // Which apps can take it needs the integration's answer (its id, definition and type are what an
+  // app's bindings name); without one (the check failed) every app is offered.
+  const documentApps = useMemo(
+    () =>
+      documentForApp && documentCheck.info
+        ? apps.filter(app => appCanTakeDocument(app, documentCheck.info, documentCheck.kind))
+        : [],
+    [documentForApp, documentCheck.info, documentCheck.kind, apps]
   );
+  const [onlyDocumentApps, setOnlyDocumentApps] = useState(true);
+  const canRestrictToDocumentApps = documentApps.length > 0;
   const restrictToDocumentApps = canRestrictToDocumentApps && onlyDocumentApps;
 
   const dismissPendingDocument = useCallback(() => {
@@ -266,7 +271,7 @@ function AppsList() {
         if (!app) return false;
 
         // A pending document narrows the picker to apps that can take it
-        if (restrictToDocumentApps && !appAcceptsDocuments(app)) return false;
+        if (restrictToDocumentApps && !documentApps.includes(app)) return false;
 
         // Category filtering
         if (categoriesConfig.enabled && selectedCategory !== 'all') {
@@ -312,7 +317,8 @@ function AppsList() {
     searchConfig.enabled,
     categoriesConfig.enabled,
     selectedCategory,
-    restrictToDocumentApps
+    restrictToDocumentApps,
+    documentApps
   ]);
 
   // Memoized sorted apps to avoid recomputing on every render

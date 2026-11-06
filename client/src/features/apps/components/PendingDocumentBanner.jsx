@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
-const ERROR_STATUSES = new Set(['noAccess', 'notFound']);
+const ERROR_STATUSES = new Set(['unavailable', 'noAccess', 'notFound']);
 
 /**
  * Banner above the app picker while a document waits to be attached (`/apps?documentId=…`).
@@ -40,15 +40,20 @@ function PendingDocumentBanner({
         <Icon name="exclamation-circle" className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <div className="flex-1 min-w-0">
           <p className="font-medium">
-            {status === 'noAccess'
+            {status === 'unavailable'
               ? t(
-                  'pages.appsList.pendingDocument.noAccess',
-                  'You do not have access to this document.'
+                  'pages.appsList.pendingDocument.unavailable',
+                  'The system this document comes from is not available to you.'
                 )
-              : t(
-                  'pages.appsList.pendingDocument.notFound',
-                  'This document could not be found. It may have been moved or deleted.'
-                )}
+              : status === 'noAccess'
+                ? t(
+                    'pages.appsList.pendingDocument.noAccess',
+                    'You do not have access to this document.'
+                  )
+                : t(
+                    'pages.appsList.pendingDocument.notFound',
+                    'This document could not be found. It may have been moved or deleted.'
+                  )}
           </p>
           <p className="mt-0.5 opacity-80">
             {t(
@@ -98,7 +103,7 @@ function PendingDocumentBanner({
             <span>
               {t(
                 'pages.appsList.pendingDocument.onlyDocumentApps',
-                'Only show apps that accept documents'
+                'Only show apps that can use this document'
               )}
             </span>
           </label>

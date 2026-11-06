@@ -49,6 +49,9 @@ jest.mock('../../../client/src/api', () => ({
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true
 }));
+jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
+  __esModule: true
+}));
 jest.mock('../../../client/src/api/endpoints/sources', () => ({
   __esModule: true,
   fetchSourceContent: jest.fn(),

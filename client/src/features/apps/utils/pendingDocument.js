@@ -3,18 +3,21 @@
 
 /**
  * The "pending document" contract: a link such as
- * `/apps?documentId=<id>&source=ifinder[&searchProfile=<id>][&prefill=…]` opens the
- * app picker with a document waiting to be attached; the app the user picks gets the same
- * parameters and `AppChat` attaches the document and strips them.
+ * `/apps?documentId=<id>&integration=ifinder[&searchProfile=<id>][&prefill=…]` opens the app
+ * picker with a document waiting to be attached; the app the user picks gets the same
+ * parameters and the chat attaches the document and strips them.
  *
- * Kept in one place so the picker, the start page and `AppChat` agree on the parameter names
- * and limits (the limits mirror `server/routes/sources.js`).
+ * `integration` is the id of an installed integration that hands documents over by reference
+ * (the `files` capability, `GET /api/integrations/:id/files/*`). Kept in one place so the picker,
+ * the start page and the chat agree on the parameter names and limits (the limits mirror
+ * `server/routes/integrations/files.js`).
  *
  * @module features/apps/utils/pendingDocument
  */
+import { contentTypeFromExtension } from '../../nextcloud-embed/utilities/nextcloudFileMeta';
 
 export const DOCUMENT_ID_PARAM = 'documentId';
-export const DOCUMENT_SOURCE_PARAM = 'source';
+export const DOCUMENT_INTEGRATION_PARAM = 'integration';
 export const DOCUMENT_SCOPE_PARAM = 'searchProfile';
 export const DOCUMENT_PREFILL_PARAM = 'prefill';
 
@@ -24,37 +27,37 @@ export const DOCUMENT_PREFILL_PARAM = 'prefill';
  */
 export const PENDING_DOCUMENT_PARAMS = Object.freeze([
   DOCUMENT_ID_PARAM,
-  DOCUMENT_SOURCE_PARAM,
+  DOCUMENT_INTEGRATION_PARAM,
   DOCUMENT_SCOPE_PARAM,
   DOCUMENT_PREFILL_PARAM
 ]);
 
-const SOURCE_PATTERN = /^[\w.-]{1,100}$/;
+const INTEGRATION_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
 const MAX_ID_CHARS = 1024;
 const MAX_SCOPE_CHARS = 256;
 const MAX_PREFILL_CHARS = 2000;
 
-/** True for a source provider id the sources route would accept. */
-export const isValidDocumentSource = source =>
-  typeof source === 'string' && SOURCE_PATTERN.test(source);
+/** True for an installation id the integration routes would accept. */
+export const isValidIntegrationId = integration =>
+  typeof integration === 'string' && INTEGRATION_PATTERN.test(integration);
 
 /**
  * The pending document a URL carries, or `null` when it carries none or an unusable one.
  *
  * @param {URLSearchParams} searchParams
- * @returns {{documentId: string, source: string, searchProfile: string, prefill: string}|null}
+ * @returns {{documentId: string, integration: string, searchProfile: string, prefill: string}|null}
  */
 export function readPendingDocument(searchParams) {
   if (!searchParams) return null;
   const documentId = searchParams.get(DOCUMENT_ID_PARAM);
-  const source = searchParams.get(DOCUMENT_SOURCE_PARAM);
+  const integration = searchParams.get(DOCUMENT_INTEGRATION_PARAM);
   if (!documentId || documentId.length > MAX_ID_CHARS) return null;
-  if (!isValidDocumentSource(source)) return null;
+  if (!isValidIntegrationId(integration)) return null;
 
   const searchProfile = searchParams.get(DOCUMENT_SCOPE_PARAM) || '';
   return {
     documentId,
-    source,
+    integration,
     searchProfile: searchProfile.length <= MAX_SCOPE_CHARS ? searchProfile : '',
     prefill: (searchParams.get(DOCUMENT_PREFILL_PARAM) || '').slice(0, MAX_PREFILL_CHARS)
   };
@@ -63,14 +66,14 @@ export function readPendingDocument(searchParams) {
 /**
  * The query string that hands a pending document to the next page (no leading `?`).
  *
- * @param {{documentId: string, source: string, searchProfile?: string, prefill?: string}} doc
+ * @param {{documentId: string, integration: string, searchProfile?: string, prefill?: string}} doc
  * @returns {string}
  */
 export function pendingDocumentQuery(doc) {
   if (!doc) return '';
   const params = new URLSearchParams();
   params.set(DOCUMENT_ID_PARAM, doc.documentId);
-  params.set(DOCUMENT_SOURCE_PARAM, doc.source);
+  params.set(DOCUMENT_INTEGRATION_PARAM, doc.integration);
   if (doc.searchProfile) params.set(DOCUMENT_SCOPE_PARAM, doc.searchProfile);
   if (doc.prefill) params.set(DOCUMENT_PREFILL_PARAM, doc.prefill);
   return params.toString();
@@ -89,15 +92,86 @@ export function withoutPendingDocument(searchParams) {
 }
 
 /**
- * True when the app can take a document as input: a chat app whose file upload is on.
+ * The ref the integration's routes take (`{ id, scope? }`).
+ *
+ * @param {{documentId: string, searchProfile?: string}} doc
+ * @returns {{id: string, scope?: string}}
+ */
+export function documentRefOf(doc) {
+  return doc.searchProfile
+    ? { id: doc.documentId, scope: doc.searchProfile }
+    : { id: doc.documentId };
+}
+
+/**
+ * Whether an app binds an integration: a key of `app.integrations` that is the installation's id,
+ * its definition's id (every installation of the definition) or `type:<type>` (every
+ * installation of the type). `info` is the probe's answer (`GET /api/integrations/:id/files`).
  *
  * @param {Object} app - an entry of `GET /api/apps`
+ * @param {{id: string, definition?: string, type?: string|null}} info
  * @returns {boolean}
  */
-export function appAcceptsDocuments(app) {
-  if (!app) return false;
-  if ((app.type || 'chat') !== 'chat') return false;
-  return app.upload?.enabled !== false && app.upload?.fileUpload?.enabled === true;
+export function appBindsIntegration(app, info) {
+  const bindings = app?.integrations;
+  if (!info?.id || !bindings || typeof bindings !== 'object' || Array.isArray(bindings)) {
+    return false;
+  }
+  return [info.id, info.definition, info.type ? `type:${info.type}` : null].some(
+    key => typeof key === 'string' && Object.hasOwn(bindings, key)
+  );
+}
+
+/**
+ * What kind of attachment a document becomes: `image` (resized for a vision model), `audio`, or
+ * `document` (text extraction, original kept) — the same split `processCloudFile` makes.
+ *
+ * @param {{mediaType?: string, filename?: string, contentType?: string}} details
+ * @returns {'image'|'audio'|'document'}
+ */
+export function documentKindOf({ mediaType, filename, contentType } = {}) {
+  const fromName = filename ? contentTypeFromExtension(filename) : 'application/octet-stream';
+  const type = [fromName, contentType, mediaType].find(
+    candidate => typeof candidate === 'string' && /^(image|audio)\//.test(candidate)
+  );
+  if (type?.startsWith('image/') && /^image\/(jpe?g|png|gif|webp)$/.test(type)) return 'image';
+  if (type?.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+const UPLOAD_KEY_OF_KIND = { image: 'imageUpload', audio: 'audioUpload', document: 'fileUpload' };
+
+/**
+ * Whether an app's upload settings take an attachment of this kind: uploads are on (the app
+ * switches at least one kind on and does not switch them all off) and the kind itself is not
+ * switched off. The model's own abilities (vision) are checked when the chat attaches.
+ *
+ * @param {Object} app - an entry of `GET /api/apps`
+ * @param {'image'|'audio'|'document'} kind
+ * @returns {boolean}
+ */
+export function appAcceptsKind(app, kind) {
+  const upload = app?.upload;
+  if (!upload || upload.enabled === false) return false;
+  const anyKindOn = ['imageUpload', 'audioUpload', 'videoUpload', 'fileUpload'].some(
+    key => upload[key]?.enabled === true
+  );
+  return anyKindOn && upload[UPLOAD_KEY_OF_KIND[kind] || 'fileUpload']?.enabled !== false;
+}
+
+/**
+ * Whether the picker offers an app for a pending document: a chat app that binds the integration
+ * the document comes from and can take the document as an attachment of its kind. An app that
+ * never opted into the integration never receives its documents.
+ *
+ * @param {Object} app - an entry of `GET /api/apps`
+ * @param {{id: string, definition?: string, type?: string|null}} info - the probe's answer
+ * @param {'image'|'audio'|'document'} kind
+ * @returns {boolean}
+ */
+export function appCanTakeDocument(app, info, kind) {
+  if (!app || (app.type || 'chat') !== 'chat') return false;
+  return appBindsIntegration(app, info) && appAcceptsKind(app, kind);
 }
 
 /**

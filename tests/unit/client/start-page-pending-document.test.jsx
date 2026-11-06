@@ -64,12 +64,12 @@ const renderAt = url =>
   );
 
 test('redirects to the app picker with the document parameters', () => {
-  renderAt('/start?documentId=d1&source=ifinder&searchProfile=sp&send=true');
+  renderAt('/start?documentId=d1&integration=ifinder&searchProfile=sp&send=true');
   expect(screen.getByText('picker')).toBeTruthy();
   expect(location.pathname).toBe('/apps');
   const params = new URLSearchParams(location.search);
   expect(params.get('documentId')).toBe('d1');
-  expect(params.get('source')).toBe('ifinder');
+  expect(params.get('integration')).toBe('ifinder');
   expect(params.get('searchProfile')).toBe('sp');
   expect(params.has('send')).toBe(false);
 });

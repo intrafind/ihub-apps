@@ -698,20 +698,33 @@ session.
 
 ## Open a Document from Another System: Choose the App in iHub
 
-A link such as `/apps?documentId=<id>&source=ifinder` (optionally `&searchProfile=<id>` and
+A link such as `/apps?documentId=<id>&integration=ifinder` (optionally `&searchProfile=<id>` and
 `&prefill=…`) now opens the app list with the document waiting. Before, the system linking to iHub
 — for example the "Open in iHub" action of an iFinder hit — had to know the target app up front.
+The link names the **integration** the document comes from; the earlier `source` parameter is
+gone.
 
 - **Pick an app:** a banner names the document and the app you choose opens with it attached. The
   link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
   the same list.
-- **Only apps that take documents:** a checkbox in the banner, on by default, narrows the list to
-  apps with file upload; it is left out when no app qualifies.
-- **Clear errors:** a document you may not read, or one that no longer exists, is reported in the
-  banner before you choose an app, and the app then opens without it. A document that fails to
-  attach in the chat now says so instead of silently attaching nothing.
+- **Only apps that bind the integration:** an app is offered when it binds the integration the
+  document comes from (iFinder) and its upload settings take the document. An app that never opted
+  into iFinder never receives an iFinder document. A checkbox in the banner, on by default, turns
+  the filter off; it is left out when no app qualifies.
+- **The original file, images included:** the document is fetched as the original and attached
+  like a file from Nextcloud: an image as an image for a vision model, anything else as a document
+  that keeps its original next to the extracted text.
+- **Clear errors:** an integration that is not available to you, a document you may not read, or
+  one that no longer exists is reported in the banner before you choose an app, and the app then
+  opens without it. A document that fails to attach in the chat now says so instead of silently
+  attaching nothing.
 - **Nothing is attached twice:** the parameters are removed from the address once the app has
   used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
   passed on from the list.
+- **API:** installed integrations that declare the `files` capability hand over documents by
+  reference: `GET /api/integrations/:id/files` (the probe), `/files/content` and `/files/metadata`.
+  They answer `404` when the integration is not installed or configured and `403` when the user's
+  groups do not grant it; `GET /api/sources/:provider/*` applies the same gate to a provider that
+  is an installation. iFinder 1.2.0 is the first integration to declare it.
 
-See [Auto-Send and URL Parameters](../../auto-send-feature.md#ifinder-document-attachment).
+See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).

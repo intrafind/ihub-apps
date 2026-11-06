@@ -250,8 +250,9 @@
         "title": "Choose an app to open “{{name}}” in",
         "description": "The document is attached to the chat as soon as the app opens.",
         "untitled": "the document",
-        "onlyDocumentApps": "Only show apps that accept documents",
+        "onlyDocumentApps": "Only show apps that can use this document",
         "dismiss": "Dismiss",
+        "unavailable": "The system this document comes from is not available to you.",
         "noAccess": "You do not have access to this document.",
         "notFound": "This document could not be found. It may have been moved or deleted.",
         "continueWithout": "You can still pick an app and start without the document."
@@ -7594,6 +7595,9 @@
     "documentNoAccess": "The document could not be attached: you do not have access to it.",
     "documentNotFound": "The document could not be attached: it was not found. It may have been moved or deleted.",
     "documentAttachFailed": "The document could not be attached. Please try again.",
+    "documentUnavailable": "The document could not be attached: the system it comes from is not available to you.",
+    "documentNotAccepted": "The document could not be attached: this app does not accept this kind of file.",
+    "documentFromIntegration": "{{name}} document",
     "project": "Project"
   },
   "prompts": {

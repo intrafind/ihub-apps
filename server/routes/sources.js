@@ -18,7 +18,11 @@ import express from 'express';
 import { authRequired } from '../middleware/authRequired.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { sendBadRequest, sendErrorResponse } from '../utils/responseHelpers.js';
-import { getSourceProvider, hasSourceProvider } from '../services/sources/providers.js';
+import { sendProviderContent } from '../utils/sendProviderContent.js';
+import {
+  DocumentAccessError,
+  resolveDocumentProvider
+} from '../services/integrations/documentAccess.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -26,58 +30,6 @@ const router = express.Router();
 const FORMATS = new Set(['original', 'pdf', 'text']);
 const MAX_REF_ID_CHARS = 1024;
 const MAX_SCOPE_CHARS = 256;
-
-/**
- * Write what a provider's `content` returned: its headers, then its stream or body.
- *
- * @param {import('express').Response} res
- * @param {Object} content
- */
-function sendProviderContent(res, content) {
-  res.set('Content-Type', content.contentType || 'application/octet-stream');
-  if (content.contentDisposition) res.set('Content-Disposition', content.contentDisposition);
-  else if (content.fileName) {
-    const fileName = String(content.fileName).replace(/["\\\r\n]/g, '_');
-    res.set('Content-Disposition', `attachment; filename="${fileName}"`);
-  }
-  if (content.contentLength && !content.body)
-    res.set('Content-Length', String(content.contentLength));
-  if (content.stream && typeof content.stream.pipe === 'function') {
-    pipeContent(res, content.stream);
-    return;
-  }
-  res.send(content.body ?? '');
-}
-
-/**
- * Stream a provider's content to the client. `pipe` alone neither handles an
- * error of the source (an upstream reset would crash the process, or leave the
- * request hanging) nor stops reading it when the client goes away.
- *
- * @param {import('express').Response} res
- * @param {import('node:stream').Readable} stream
- */
-function pipeContent(res, stream) {
-  let failed = false;
-  stream.on('error', error => {
-    if (failed) return;
-    failed = true;
-    logger.warn('Source content stream failed', { component: 'sources', error: error.message });
-    stream.unpipe(res);
-    if (res.headersSent) {
-      res.destroy(error);
-      return;
-    }
-    for (const header of ['Content-Type', 'Content-Disposition', 'Content-Length']) {
-      res.removeHeader(header);
-    }
-    sendErrorResponse(res, 502, 'Source content stream failed');
-  });
-  res.on('close', () => {
-    if (!stream.readableEnded && typeof stream.destroy === 'function') stream.destroy();
-  });
-  stream.pipe(res);
-}
 
 /**
  * The provider and ref a request names, or null after answering 400/404.
@@ -94,7 +46,16 @@ async function resolve(req, res) {
     sendBadRequest(res, 'Invalid scope parameter');
     return null;
   }
-  const provider = hasSourceProvider(providerId) ? await getSourceProvider(providerId) : null;
+  let provider;
+  try {
+    // A provider that is an installed integration passes the same gate as
+    // `GET /api/integrations/:id/files/*` (configured, granted).
+    provider = await resolveDocumentProvider(providerId, req.user);
+  } catch (error) {
+    if (!(error instanceof DocumentAccessError)) throw error;
+    res.status(error.status).json({ error: error.message, code: error.code });
+    return null;
+  }
   if (!provider) {
     res.status(404).json({ error: 'Source provider not found' });
     return null;

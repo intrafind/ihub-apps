@@ -61,6 +61,7 @@ import connectionRoutes from '../routes/integrations/connections.js';
 import userIntegrationRoutes from '../routes/integrations/userIntegrations.js';
 import integrationRequestRoutes from '../routes/integrations/integrationRequests.js';
 import integrationScopeRoutes from '../routes/integrations/scopes.js';
+import integrationFilesRoutes from '../routes/integrations/files.js';
 import nextcloudEmbedRoutes from '../routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from '../routes/office.js';
 import registerNextcloudEmbedPageRoutes from '../routes/nextcloudEmbedPages.js';
@@ -156,6 +157,8 @@ const ROUTE_STEPS = [
   // the user integrations, whose GET /:id hands ids it does not know on.
   app => app.use(buildApiPath('/integrations/requests'), integrationRequestRoutes),
   app => app.use(buildApiPath('/integrations'), userIntegrationRoutes),
+  // Documents by reference from an installed integration (the `files` capability).
+  app => app.use(buildApiPath('/integrations'), integrationFilesRoutes),
   app => app.use(buildApiPath('/integrations/jira'), jiraRoutes),
   app => app.use(buildApiPath('/integrations/office365'), office365Routes),
   app => app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes),

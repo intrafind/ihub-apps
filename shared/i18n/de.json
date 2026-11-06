@@ -305,8 +305,9 @@
         "title": "Wähle eine App, in der „{{name}}“ geöffnet werden soll",
         "description": "Das Dokument wird an den Chat angehängt, sobald die App geöffnet ist.",
         "untitled": "das Dokument",
-        "onlyDocumentApps": "Nur Apps anzeigen, die Dokumente annehmen",
+        "onlyDocumentApps": "Nur Apps anzeigen, die dieses Dokument verwenden können",
         "dismiss": "Schließen",
+        "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
         "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
         "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
         "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
@@ -7567,6 +7568,9 @@
     "documentNoAccess": "Das Dokument konnte nicht angehängt werden: Du hast keinen Zugriff darauf.",
     "documentNotFound": "Das Dokument konnte nicht angehängt werden: Es wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
     "documentAttachFailed": "Das Dokument konnte nicht angehängt werden. Bitte versuche es erneut.",
+    "documentUnavailable": "Das Dokument konnte nicht angehängt werden: Das System, aus dem es stammt, steht dir nicht zur Verfügung.",
+    "documentNotAccepted": "Das Dokument konnte nicht angehängt werden: Diese App nimmt diese Art von Datei nicht an.",
+    "documentFromIntegration": "{{name}}-Dokument",
     "project": "Projekt"
   },
   "prompts": {

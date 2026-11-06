@@ -39,13 +39,12 @@ import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
 
 // Import our custom hooks and components
-import { fetchSourceFile } from '../../chat/sources/sourceActions';
+import useIntegrationDocumentAttachment from '../hooks/useIntegrationDocumentAttachment';
 import {
   DOCUMENT_ID_PARAM,
+  DOCUMENT_INTEGRATION_PARAM,
   DOCUMENT_SCOPE_PARAM,
-  DOCUMENT_SOURCE_PARAM,
-  documentFailureKind,
-  isValidDocumentSource
+  readPendingDocument
 } from '../utils/pendingDocument';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
@@ -321,9 +320,8 @@ function AppChat({
   }, []);
   const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
-  const documentId = searchParams.get(DOCUMENT_ID_PARAM);
-  const searchProfileParam = searchParams.get(DOCUMENT_SCOPE_PARAM);
-  const documentSource = searchParams.get(DOCUMENT_SOURCE_PARAM);
+  const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
+  const documentId = pendingDocument?.documentId ?? null;
   // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
   // the project rides on the chat request as `projectId`.
   const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
@@ -1391,105 +1389,25 @@ function AppChat({
     showStartForm
   ]);
 
-  // Fetch and attach the document when navigated from "Open in App": the
-  // source's provider (`source`), its id and scope, fetched through the one
-  // provider route (`GET /api/sources/:provider/content`) with the user's own
-  // permissions.
-  const documentAttached = useRef(false);
-  useEffect(() => {
-    if (documentAttached.current || !app || !documentSource || !documentId) return;
-    if (!isValidDocumentSource(documentSource)) return;
-
-    documentAttached.current = true;
-    const source = {
-      provider: documentSource,
-      ref: searchProfileParam ? { id: documentId, scope: searchProfileParam } : { id: documentId }
-    };
-    const displayType =
-      documentSource === 'ifinder'
-        ? 'iFinder Document'
-        : t('sources.documentFromSource', 'Document');
-
-    const fetchAndAttach = async () => {
-      // Show loading placeholder immediately
-      fileUploadHandler.setSelectedFile({
-        type: 'document',
-        source: documentSource,
-        fileName: prefillMessage || t('attachedFiles.loading', 'Loading document...'),
-        fileSize: 0,
-        fileType: 'application/octet-stream',
-        loading: true,
-        displayType
-      });
-
-      try {
-        const file = await fetchSourceFile(source, prefillMessage || 'document');
-
-        // Process through the same pipeline as uploaded files
-        const { content, pageImages } = await processDocumentFile(
-          file,
-          extractionOptionsOf(app?.upload?.fileUpload)
-        );
-
-        const fileData = {
-          type: 'document',
-          source: documentSource,
-          [ORIGINAL_FILE]: file,
-          content,
-          pageImages: pageImages || [],
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          displayType
-        };
-
-        fileUploadHandler.setSelectedFile(fileData);
-      } catch (err) {
-        console.error('Failed to fetch and attach the document:', err);
-        fileUploadHandler.clearSelectedFile();
-        // Say why nothing was attached: a link can name a document the user may not read or
-        // one that no longer exists.
-        const failure = documentFailureKind(err?.response?.status);
-        addSystemMessage(
-          failure === 'noAccess'
-            ? t(
-                'sources.documentNoAccess',
-                'The document could not be attached: you do not have access to it.'
-              )
-            : failure === 'notFound'
-              ? t(
-                  'sources.documentNotFound',
-                  'The document could not be attached: it was not found. It may have been moved or deleted.'
-                )
-              : t(
-                  'sources.documentAttachFailed',
-                  'The document could not be attached. Please try again.'
-                ),
-          true
-        );
-      }
-
-      // Clean source params from URL to prevent re-fetch
+  // Attach the document a link names (`?documentId=…&integration=…`, "Open in App" or a link from
+  // another system) the way the Nextcloud embed attaches its files: the original, through the
+  // integration, as an image, audio or document attachment — and say so when it cannot be attached.
+  useIntegrationDocumentAttachment({
+    pending: pendingDocument,
+    ready: Boolean(app) && !modelsLoading,
+    app,
+    currentModel: currentModelObject,
+    fileUploadHandler,
+    addSystemMessage,
+    onConsumed: () => {
+      // Clean the link's parameters from the URL to prevent a second attach on refresh
       const newSearch = new URLSearchParams(searchParams);
-      [DOCUMENT_ID_PARAM, DOCUMENT_SCOPE_PARAM, DOCUMENT_SOURCE_PARAM].forEach(k =>
+      [DOCUMENT_ID_PARAM, DOCUMENT_SCOPE_PARAM, DOCUMENT_INTEGRATION_PARAM].forEach(k =>
         newSearch.delete(k)
       );
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-    };
-
-    void fetchAndAttach();
-  }, [
-    app,
-    documentSource,
-    documentId,
-    searchProfileParam,
-    prefillMessage,
-    fileUploadHandler,
-    searchParams,
-    navigate,
-    addSystemMessage,
-    t
-  ]);
+    }
+  });
 
   // Auto-start conversation if app.autoStart is enabled
   const autoStartTriggered = useRef(false);
@@ -2013,9 +1931,11 @@ function AppChat({
       if (!targetAppId || !source?.ref?.id) return;
       const params = new URLSearchParams({
         prefill: source.title || '',
-        documentId: source.ref.id,
-        ...(source.ref.scope ? { searchProfile: source.ref.scope } : {}),
-        source: source.provider
+        [DOCUMENT_ID_PARAM]: source.ref.id,
+        ...(source.ref.scope ? { [DOCUMENT_SCOPE_PARAM]: source.ref.scope } : {}),
+        // The system the document comes from: the installation id, which is the provider id
+        // of an integration's sources.
+        [DOCUMENT_INTEGRATION_PARAM]: source.provider
       });
       const targetPath = `/apps/${targetAppId}?${params.toString()}`;
       if (embedded) openInNewTab(targetPath);
