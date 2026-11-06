@@ -45,7 +45,7 @@ export function buildLoginGroupDetails(loginGroups) {
   let mapping = {};
   if (externalNames.length > 0) {
     try {
-      mapping = loadGroupMapping() || {};
+      mapping = loadGroupMapping();
     } catch (error) {
       logger.warn('Could not load group mapping for the login audit entry', {
         component: 'LoginGroupDetails',
