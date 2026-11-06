@@ -1000,6 +1000,33 @@
       "gateway": {
         "none": "None (regular endpoint)",
         "ifinder": "iFinder Model Gateway"
+      },
+      "sync": {
+        "title": "Sync with gateway",
+        "subtitle": "Compare the gateway’s models with the models imported from it. Nothing changes until you apply your choice.",
+        "button": "Sync with gateway",
+        "loading": "Asking the gateway…",
+        "applying": "Applying…",
+        "retry": "Try again",
+        "apply": "Apply {{count}}",
+        "inSync": "The models are in sync with the gateway.",
+        "changed": "Changed on the gateway",
+        "changedHint": "The model is updated to match the gateway.",
+        "added": "New on the gateway",
+        "addedHint": "Tick the models to import. They are enabled when imported.",
+        "removed": "No longer available",
+        "removedHint": "The model is disabled, not deleted: apps may still use it.",
+        "importedAs": "{{remoteId}} → imported as {{id}}",
+        "reasonMissing": "The gateway no longer lists this model.",
+        "reasonUnsupported": "The gateway now lists this model as something iHub cannot run.",
+        "doneSummary": "{{ok}} applied, {{failed}} not applied.",
+        "fields": {
+          "url": "URL",
+          "provider": "Adapter",
+          "contextWindow": "Context window",
+          "supportsVision": "Image input"
+        },
+        "skipped": "The gateway changed since you looked. Run the sync again."
       }
     },
     "models": {
