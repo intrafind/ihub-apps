@@ -47,11 +47,14 @@ const I18NEXT_LANGUAGE_KEY = 'i18nextLng';
 export function bootstrapFromUrl(search) {
   const params = new URLSearchParams(search);
   // An embed page keeps its session across reloads, so it never resets it.
-  if (isEmbedDocument()) {
+  const embedPage = isEmbedDocument();
+  if (embedPage) {
     activateEmbedMode();
   }
-  activateEmbedModeFromUrl(params);
-  const embedded = isEmbedMode();
+  const embedUrl = activateEmbedModeFromUrl(params);
+  // The stored flag alone is not enough outside a frame (see isEmbedMode), so this page's own
+  // request counts too.
+  const embedded = embedPage || embedUrl || isEmbedMode();
 
   // The i18n service reads this (instead of localStorage) when it initialises in embed mode.
   const language = parseLanguageParam(params.get('language'));

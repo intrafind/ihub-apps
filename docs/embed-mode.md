@@ -52,7 +52,14 @@ read nor written** for them:
 | UI language (also the selector)  | `i18nextLng`                  | `i18nextLng`                 |
 
 - The values survive navigation inside iHub (which drops the query string) and a reload of the
-  frame, and are gone when the tab closes.
+  frame, and are gone when the tab closes. Signing out and the forced refresh clear the rest of
+  the tab's `sessionStorage` but keep them, so the frame stays an embed.
+- Embed mode applies to a **frame**. If the same tab later opens iHub at top level — a link in the
+  host that opens iHub in the same tab, or an address typed there — that page is an ordinary visit
+  that uses the user's own settings, even though a frame on a same-site host shares the tab's
+  storage with it. The frame's embed session is still there when the host's frame comes back. A
+  top-level page whose own URL carries `embed=true` is an embed until it navigates on (a reload of
+  an in-app URL no longer is one).
 - Loading a URL with `embed=true` **starts a fresh embed session**: what an earlier load of the
   same frame left behind is discarded, so the URL the host builds is what the user gets. A URL
   without `embed=true` keeps the session.

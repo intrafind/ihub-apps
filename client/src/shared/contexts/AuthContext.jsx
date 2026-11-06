@@ -13,6 +13,7 @@ import {
 } from '../../utils/runtimeBasePath';
 import { getSafeReturnPath } from '../../utils/safeUrl';
 import { bindChatIdsToUser } from '../../utils/chatId';
+import { clearSessionStorageKeepingEmbed } from '../../utils/embedMode';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -615,8 +616,9 @@ export function AuthProvider({ children }) {
       const authKeys = ['authToken', 'userPreferences', 'lastLoginTime'];
       authKeys.forEach(key => localStorage.removeItem(key));
 
-      // Clear all sessionStorage (contains temporary session data)
-      sessionStorage.clear();
+      // Clear all sessionStorage (contains temporary session data). An embed keeps its own
+      // flag and view settings: the frame reloads without ?embed=true and must stay an embed.
+      clearSessionStorageKeepingEmbed();
 
       // Clear API cache if available
       try {

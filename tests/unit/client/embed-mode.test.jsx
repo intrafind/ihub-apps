@@ -15,6 +15,7 @@ import {
   EMBED_MODE_KEY,
   activateEmbedMode,
   activateEmbedModeFromUrl,
+  clearSessionStorageKeepingEmbed,
   getSessionValue,
   isEmbedMode,
   removeSessionValue,
@@ -43,6 +44,10 @@ jest.mock('../../../client/src/api', () => ({
   fetchTranslations: jest.fn(() => Promise.resolve({})),
   fetchUIConfig: jest.fn(() => Promise.resolve({}))
 }));
+
+// What the browser says about this page: framed (the usual embed) or top level.
+let mockFramed = true;
+jest.mock('../../../client/src/utils/isFramed', () => ({ isFramed: () => mockFramed }));
 
 const ACCEPTANCE_QUERY = 'embed=true&sidebar=false&header=false&footer=false&mode=dark&language=de';
 
@@ -90,6 +95,8 @@ function trackLocalStorage({ blockSessionStorage = false } = {}) {
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  mockFramed = true;
+  window.history.replaceState({}, '', '/');
 });
 
 afterEach(() => {
@@ -225,6 +232,134 @@ describe('activating embed mode', () => {
     tracker.stop();
 
     expect(tracker.calls).toEqual([]);
+  });
+});
+
+describe('a top-level visit in the same tab', () => {
+  // A frame on a same-site host shares sessionStorage with a top-level iHub page opened later in
+  // the same tab, so the stored flag must not make that page an embed.
+  test("is a direct visit although the host's frame stored the embed flag", () => {
+    seedDirectVisitPreferences();
+    bootstrapFromUrl('embed=true&header=true&mode=dark&language=de');
+    expect(isEmbedMode()).toBe(true);
+    expect(getStoredPreference()).toBe('dark');
+
+    // The user opens iHub itself in that tab: no parameter, no frame.
+    mockFramed = false;
+    expect(isEmbedMode()).toBe(false);
+    expect(getIntegrationSettings()).toEqual(DIRECT_VISIT_SETTINGS);
+    expect(getStoredPreference()).toBe('light');
+    applyThemeToDocument(false);
+    bootstrapFromUrl('');
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+
+    // The host's frame comes back in that tab: its embed session is still there.
+    mockFramed = true;
+    expect(isEmbedMode()).toBe(true);
+    expect(getStoredPreference()).toBe('dark');
+  });
+
+  test("writes its own choices to localStorage, not to the frame's session", () => {
+    bootstrapFromUrl('embed=true&mode=dark');
+    mockFramed = false;
+
+    storePreference('light');
+    saveIntegrationSettings({
+      showHeader: false,
+      showFooter: true,
+      showSidebar: true,
+      language: null
+    });
+
+    expect(localStorage.getItem('ih-dark-mode')).toBe('light');
+    expect(JSON.parse(localStorage.getItem('ihubIntegrationSettings')).showHeader).toBe(false);
+    expect(getSessionValue('ih-dark-mode')).toBe('dark');
+  });
+
+  test('a top-level page with embed=true in its URL is an embed, until it navigates on', () => {
+    mockFramed = false;
+    window.history.pushState({}, '', '/apps/chat?embed=true&mode=dark');
+    bootstrapFromUrl(window.location.search);
+    expect(isEmbedMode()).toBe(true);
+    expect(getStoredPreference()).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+
+    window.history.pushState({}, '', '/apps/other');
+    expect(isEmbedMode()).toBe(false);
+  });
+
+  test('an embed page carrying data-ihub-embed is an embed at top level too', () => {
+    mockFramed = false;
+    document.documentElement.setAttribute('data-ihub-embed', 'true');
+    try {
+      bootstrapFromUrl('mode=dark');
+      expect(isEmbedMode()).toBe(true);
+      expect(getSessionValue('ih-dark-mode')).toBe('dark');
+      expect(localStorage.getItem('ih-dark-mode')).toBeNull();
+    } finally {
+      document.documentElement.removeAttribute('data-ihub-embed');
+    }
+  });
+});
+
+describe('clearing sessionStorage in an embed', () => {
+  test('keeps the embed flag and view settings and drops the rest', () => {
+    bootstrapFromUrl('embed=true&mode=dark&language=de');
+    updateSettingsFromUrl(new URLSearchParams('header=true'));
+    sessionStorage.setItem('ai_hub_chat_id_chat', 'chat-1');
+    sessionStorage.setItem('authReturnUrl', '/apps/chat');
+
+    clearSessionStorageKeepingEmbed();
+
+    expect(sessionStorage.getItem('ai_hub_chat_id_chat')).toBeNull();
+    expect(sessionStorage.getItem('authReturnUrl')).toBeNull();
+    // The frame reloads without ?embed=true and is still an embed with its settings.
+    expect(isEmbedMode()).toBe(true);
+    expect(getStoredPreference()).toBe('dark');
+    expect(getSessionValue('i18nextLng')).toBe('de');
+    expect(getIntegrationSettings()).toMatchObject({ showHeader: true, language: null });
+  });
+
+  test('is a plain clear in a normal tab', () => {
+    sessionStorage.setItem('ai_hub_chat_id_chat', 'chat-1');
+    clearSessionStorageKeepingEmbed();
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  test('also removes the embed state a frame left in the tab of a direct visit', () => {
+    bootstrapFromUrl('embed=true&mode=dark');
+    mockFramed = false; // a later top-level visit in the same tab
+    sessionStorage.setItem('ai_hub_chat_id_chat', 'chat-1');
+
+    clearSessionStorageKeepingEmbed();
+
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  test('sign-out and the forced refresh use it, and nothing else clears sessionStorage wholesale', () => {
+    const clientSrc = path.resolve(__dirname, '../../../client/src');
+    const sources = dir =>
+      fs
+        .readdirSync(dir, { withFileTypes: true })
+        .flatMap(entry =>
+          entry.isDirectory()
+            ? sources(path.join(dir, entry.name))
+            : /\.(js|jsx)$/.test(entry.name)
+              ? [path.join(dir, entry.name)]
+              : []
+        );
+
+    const offenders = sources(clientSrc)
+      .filter(file => !file.endsWith(path.join('utils', 'embedMode.js')))
+      .filter(file => /sessionStorage\.clear\(\)/.test(fs.readFileSync(file, 'utf8')))
+      .map(file => path.relative(clientSrc, file));
+    expect(offenders).toEqual([]);
+
+    for (const file of ['shared/contexts/AuthContext.jsx', 'utils/forceRefresh.js']) {
+      expect(fs.readFileSync(path.join(clientSrc, file), 'utf8')).toMatch(
+        /clearSessionStorageKeepingEmbed\(\)/
+      );
+    }
   });
 });
 

@@ -16,11 +16,14 @@
  * `data-ihub-embed="true"` on its `<html>` element (the Nextcloud full-app embed); both are
  * handled by `embedBootstrap.js`. The flag is itself a `sessionStorage` entry, so it sticks for
  * the lifetime of the frame even though the in-app router drops the query string on the first
- * navigation.
+ * navigation. It only counts while the page is framed (see {@link isEmbedMode}), so a top-level
+ * visit of iHub later in the same tab is an ordinary visit.
  *
  * `sessionStorage` can be blocked (third-party storage rules, some privacy modes). The session
  * helpers below then fall back to memory, so embed mode keeps working until the page is reloaded.
  */
+
+import { isFramed } from './isFramed';
 
 /** `sessionStorage` flag marking this tab/iframe as an embed. */
 export const EMBED_MODE_KEY = 'ihubEmbedMode';
@@ -79,11 +82,30 @@ export function removeSessionValue(key) {
 }
 
 /**
- * Whether this tab/iframe is an embed.
+ * Whether this page is an embed.
+ *
+ * The flag is stored in the tab's `sessionStorage`, and a frame on a same-site host shares that
+ * storage with a top-level iHub page opened later in the same tab (a link in the host that opens
+ * iHub in the same tab, or an address typed there). That page is a direct visit, so the stored
+ * flag only counts while the page is framed. A page that is not framed is an embed only when it
+ * says so itself: `?embed=true` in its own URL, or `data-ihub-embed` on its `<html>` element.
+ *
  * @returns {boolean}
  */
 export function isEmbedMode() {
-  return getSessionValue(EMBED_MODE_KEY) === '1';
+  if (getSessionValue(EMBED_MODE_KEY) !== '1') return false;
+  return isFramed() || isEmbedDocument() || urlRequestsEmbed();
+}
+
+/**
+ * Whether the URL of this page carries `embed=true`.
+ * @returns {boolean}
+ */
+function urlRequestsEmbed() {
+  return (
+    typeof window !== 'undefined' &&
+    isEmbedParam(new URLSearchParams(window.location.search).get('embed'))
+  );
 }
 
 /**
@@ -108,6 +130,27 @@ export function isEmbedDocument() {
  */
 export function resetEmbedSession() {
   EMBED_SESSION_KEYS.forEach(removeSessionValue);
+}
+
+/**
+ * Clear the tab's `sessionStorage` but keep the embed's flag and preferences. Sign-out and the
+ * forced refresh wipe the session and then load a URL without `embed=true`; clearing the embed's
+ * state with the rest would drop the frame out of embed mode, after which it would read and write
+ * `localStorage` again. Outside embed mode this is a plain `sessionStorage.clear()`, which also
+ * removes any embed state a frame earlier in the same tab left behind.
+ */
+export function clearSessionStorageKeepingEmbed() {
+  const kept = isEmbedMode()
+    ? [EMBED_MODE_KEY, ...EMBED_SESSION_KEYS]
+        .map(key => [key, getSessionValue(key)])
+        .filter(([, value]) => value !== null)
+    : [];
+  try {
+    sessionStorage.clear();
+  } catch {
+    // sessionStorage unavailable; nothing stored there to clear.
+  }
+  kept.forEach(([key, value]) => setSessionValue(key, value));
 }
 
 /**
