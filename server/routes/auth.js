@@ -20,6 +20,7 @@ import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/re
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { setAuthCookie, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
+import { appendQueryParams } from '../utils/appendQueryParams.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { LoginLockedError } from '../utils/loginLockout.js';
@@ -476,9 +477,10 @@ export default function registerAuthRoutes(app) {
         returnUrl = '/';
       }
 
-      // Redirect to the validated return URL with success indicator
+      // Redirect to the validated return URL with success indicator, in the query
+      // and not inside a #fragment (the auth gate reads it from location.search).
       // returnUrl has been validated above: same-origin check, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
-      res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success'); // lgtm[js/server-side-unvalidated-url-redirection]
+      res.redirect(appendQueryParams(returnUrl, { ntlm: 'success' })); // lgtm[js/server-side-unvalidated-url-redirection]
     } catch (error) {
       logger.error('NTLM login error', { component: 'Auth', error });
       return sendErrorResponse(res, 401, error.message || 'NTLM authentication failed');
@@ -675,6 +677,11 @@ export default function registerAuthRoutes(app) {
         defaultGroups: platform.anonymousAuth?.defaultGroups || ['anonymous']
       },
       authenticated: req.user && req.user.id !== 'anonymous',
+      // The token the client sent as `Authorization: Bearer` was not accepted
+      // (expired, another installation's, its user or sign-in method gone); any
+      // session came from the cookie (see jwtAuth). The client drops the stored
+      // token so it stops sending it.
+      bearerTokenRejected: req.bearerTokenRejected === true,
       autoRedirect: shouldAutoRedirect
         ? {
             provider: autoRedirectProvider.name,
@@ -749,6 +756,8 @@ export default function registerAuthRoutes(app) {
       }
     };
 
+    // Who is signed in changes with every login and logout: no cache may keep it.
+    res.set('Cache-Control', 'no-store');
     res.json(status);
   });
 

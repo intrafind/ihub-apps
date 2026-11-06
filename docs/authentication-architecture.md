@@ -407,6 +407,8 @@ apiClient.interceptors.request.use(config => {
 - Stored manually by legacy code
 - Accessible to JavaScript
 - Sent as `Authorization: Bearer <token>` header
+- Deleted by the auth gate and `AuthContext` when `GET /api/auth/status` answers
+  `bearerTokenRejected: true` (the server could not use it, see below)
 
 ---
 
@@ -417,8 +419,18 @@ apiClient.interceptors.request.use(config => {
 ### How JWT Validation Works
 
 1. **Token Source Detection** (in order of preference):
+   - Authorization header (`Authorization: Bearer <token>`), so an explicit token (Office add-in,
+     browser extension, Teams tab) wins over the browser's session cookie
    - HttpOnly cookie (`req.cookies.authToken`)
-   - Authorization header (`Authorization: Bearer <token>`)
+
+   When the header carries one of iHub's own session tokens that cannot be used (expired, signed
+   by another installation, its user deleted or disabled, its sign-in method switched off) and the
+   request also carries the session cookie, the cookie decides. Browsers that signed in before the
+   OIDC callback stopped putting the token in the URL still send such a token from localStorage;
+   without the fallback it hid every fresh sign-in. A header token never removes the cookie, and
+   `GET /api/auth/status` reports it with `bearerTokenRejected: true` so the client deletes it.
+   OAuth tokens (`oauth_*` auth modes) never fall back to the cookie: their clients refresh them,
+   and their per-client restrictions stay in force.
 
 2. **Token Validation**:
    ```javascript
