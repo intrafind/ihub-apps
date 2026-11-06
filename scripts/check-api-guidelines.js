@@ -13,6 +13,7 @@
  * What it looks for, on changed lines of `server/**\/*.js` (tests and migrations excluded):
  *
  *   hand-rolled-error  `res.status(4xx|5xx).json({ error … })` — throw a ServiceError instead
+ *                      (a body with `error_description` is RFC 6749/6750 and stays)
  *   success-envelope   `.json({ success: … })` / `.json({ message: '… successfully' })`
  *   status-422         `res.status(422)` — validation is 400 VALIDATION_FAILED
  *   route-verb         `router.post('/:id/run')` — a non-CRUD operation is an `_action` segment
@@ -42,7 +43,7 @@ const CHECKED = /^server\/(?!tests\/|migrations\/).*\.js$/;
 
 /** Endpoints whose shape an external specification fixes: OAuth, OIDC discovery, OpenAI, MCP. */
 const EXEMPT_FILES =
-  /^server\/routes\/(oauth|oauthAuthorize|oauthRegister|mcpOAuth|mcpServer|wellKnown|openaiProxy)\.js$|^server\/routes\/inference\//;
+  /^server\/routes\/(oauth|oauthAuthorize|oauthRegister|mcpOAuth|mcpServer|wellKnown|openaiProxy)\.js$|^server\/routes\/inference\/|^server\/services\/inference\//;
 
 /** Last path segments that name an operation, not a resource. */
 const ACTION_VERBS = new Set([
@@ -82,7 +83,8 @@ const KEBAB_SEGMENT = /^[a-z][a-z0-9-]*(\.[a-z0-9]+)*$/;
 const RULES = [
   {
     id: 'hand-rolled-error',
-    pattern: /\.status\(\s*[45]\d\d\s*\)\s*\.(?:json|send)\(\s*\{[^}]*?\berror\s*:/gs,
+    // a status that is not a 1xx-3xx literal: 4xx, 5xx, or a variable (`error.status`)
+    pattern: /\.status\(\s*(?![123]\d\d\s*\))[^()]*\)\s*\.(?:json|send)\(\s*\{[^}]*?\berror\s*:/gs,
     message:
       'Throw a ServiceError(code, message) instead of writing the error body; the error middleware shapes it (docs/api-guidelines.md#3-errors).'
   },
@@ -149,9 +151,16 @@ function createReporter(source, changed) {
   return { add, found };
 }
 
+/** `{ error, error_description }` is the body RFC 6749 / 6750 fix for OAuth and bearer tokens. */
+function isRfc6749Body(source, index) {
+  const end = source.indexOf('}', index);
+  return end > -1 && /\berror_description\b/.test(source.slice(index, end));
+}
+
 function checkPatterns(source, add) {
   for (const { id, pattern, message } of RULES) {
     for (const match of source.matchAll(pattern)) {
+      if (id === 'hand-rolled-error' && isRfc6749Body(source, match.index)) continue;
       add(match.index, match.index + match[0].length, id, message);
     }
   }
@@ -309,4 +318,4 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
