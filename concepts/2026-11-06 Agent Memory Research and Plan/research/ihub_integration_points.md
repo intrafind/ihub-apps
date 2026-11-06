@@ -110,7 +110,7 @@ The system prompt is assembled **only in** `PromptService.processMessageTemplate
 | --- | --- | --- |
 | 1 | 481-484 | `app.system` localized → `systemPrompt` (skipped entirely when a system message is already present, or `app` is null — `bypassAppPrompts`) |
 | 2 | 486-500 | `{{variable}}` substitution: `allVariables = { ...globalPromptVariables, ...userVariables }` (user variables = latest message `variables`) |
-| 3 | 502-518 | Temporal context (`platform_context`, from `platform.globalPromptVariables.context`) **prepended** unless the template places `{{platform_context|date|year|day_of_week}}` itself |
+| 3 | 502-518 | Temporal context (`platform_context`, from `platform.globalPromptVariables.context`) **prepended** unless the template places `{{platform_context\|date\|year\|day_of_week}}` itself |
 | 4 | 520-539 | Projects (#1036): `_applyProjects()` (:190-230) replaces `{{projects}}` or appends the knowledge block via `KnowledgeScopePlanner` |
 | 5 | 541-580 | Skills (feature `skills`): `describeSkillCatalog` text appended, then `prepareActiveSkills` text (`<active_skill name=…>` blocks) |
 | 6 | 581-595 | Style (`configCache.getStyles()[style]`) appended |
@@ -124,7 +124,7 @@ After `processMessageTemplates`, `RequestBuilder.js` still appends web-search gu
 Injection point candidates for a memory block, as the code stands:
 - **Inside `processMessageTemplates`** between step 4 (projects) and step 5 (skills), as a `{{memory}}`-or-append block, with the same neutralization the task block uses (`runMemory.js:57-60` `neutralizeNotes` escapes `<task_memory>` tags).
 - **Or after `prepareChatRequest`**, with the scheduled-task helper pattern `appendSystemNote(llmMessages, note)` (`server/services/scheduler/tasks/taskExecution.js:114-123`: appends to the existing system message or unshifts one; idempotent via `includes`).
-- **Or as a loop seam** `preStep(ctx)` that edits `ctx.messages` on `ctx.iteration === 1` (`chatSeams.js:126-128` does exactly this for knowledge sources). Note the ledger hashes the model-visible messages (`request/header`, `docs/run-ledger.md`), so whichever point is chosen, the block is recorded and replayable.
+- **Or as a loop seam** `preStep(ctx)` that edits `ctx.messages` on `ctx.iteration === 1` (`chatSeams.js:126-128` does exactly this for knowledge sources). Note the ledger records the model-visible messages **in full** on the first call and on every change, not only their hash (`LLMClient.js:1561-1619`, `request/header.messages`), and `GET /api/runs/:runId/events` serves ledger events to the run's owner and to admins (`routes/runs.js:8-9, 143-178`). Whichever point is chosen, the injected block is therefore readable by admins through the ledger and a copy survives deletion of the memory entry until the run is erased — a constraint any "admins see metadata only" rule has to address (the same holds for today's `<task_memory>` block).
 
 ### 2.2 Scheduled tasks
 
@@ -308,7 +308,7 @@ All namespaces are declared once in `server/storage/namespaces.js`: `CONFIG_NAME
 | Need | Call |
 | --- | --- |
 | Scope-based memory read/write with versions | `server/services/memory/memoryService.js`: `registerMemoryScopeHandler(handler)`, `resolveMemoryScope(user)`, `readMemory(scope)`, `writeMemory(scope, { mode, content, summary, expectedVersion, updatedBy, maxChars })`, `readMemoryForPrompt(scope, maxChars)` |
-| Durable per-owner document store with CAS and locks | `server/storage/bootstrap.js` `getStorage()`/`readFacet(provider,'documents'|'locks')`; `documents.get/put/list/delete`; `locks.withLock(name, fn, { ttlMs, waitMs })`; errors `server/storage/errors.js` (`EtagMismatchError`); template repository `server/services/scheduler/tasks/TaskMemoryRepository.js` |
+| Durable per-owner document store with CAS and locks | `server/storage/bootstrap.js` `getStorage()`/`readFacet(provider,'documents' \| 'locks')`; `documents.get/put/list/delete`; `locks.withLock(name, fn, { ttlMs, waitMs })`; errors `server/storage/errors.js` (`EtagMismatchError`); template repository `server/services/scheduler/tasks/TaskMemoryRepository.js` |
 | Namespace declaration | `server/storage/namespaces.js` `RUNTIME_NAMESPACES` / `BLOB_NAMESPACES` |
 | Encrypt bodies at rest | `server/services/TokenStorageService.js` `encryptString/decryptString`; envelope encryption `server/services/projects/crypto/KeyProvider.js` + `streamingAead.js` |
 | LLM extraction / consolidation call | `server/services/loop/LLMClient.js` `llmClient.complete({ model, messages, options: { responseFormat:'json', responseSchema }, timeoutMs, signal, telemetry })`; `llmClient.resolveModel(...)`; `server/services/loop/extractJson.js` `extractJson`; `server/services/inference/structuredOutput.js` `normalizeSchema/createOutputValidator/jsonInstruction`; tag-parsing precedent `memoryComposer.js` `parseComposerReply` |
