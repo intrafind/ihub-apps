@@ -197,7 +197,7 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
 ### Checked on every pull request
 
 The **API guidelines** check (`.github/workflows/api-guidelines-check.yml`, `scripts/check-api-guidelines.js`)
-runs on every pull request that touches `server/`. It is a ratchet, like the accessibility check: it looks
+runs on every pull request and is a required status check. It is a ratchet, like the accessibility check: it looks
 only at lines the pull request adds or changes, so the existing backlog does not block anyone, and new code
 meets the rules. It reports, as annotations on the diff:
 

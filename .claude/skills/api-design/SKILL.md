@@ -55,7 +55,7 @@ the same release. External callers (API keys, integrations, browser extension, N
 
 ## CI check
 
-The **API guidelines** check runs on every PR that touches `server/` (`scripts/check-api-guidelines.js`). It fails on
+The **API guidelines** check is a required status check on every PR (`scripts/check-api-guidelines.js`). It fails on
 *added or changed* lines that write an error body by hand, wrap a success in `{ success }` / `{ message }`, use 422,
 end a route in a verb, use a non-kebab-case path segment, or read `page` / `offset` / snake_case query parameters. Run it
 before you push: `git diff --unified=0 --diff-filter=ACMR origin/main...HEAD -- server | node scripts/check-api-guidelines.js`. A line with a real reason carries

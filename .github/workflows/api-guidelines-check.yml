@@ -5,11 +5,15 @@
 # lines a pull request adds or changes, so new code meets the rules and old code is fixed
 # as it is touched.
 #
-# check: runs scripts/check-api-guidelines.js on every PR that touches server/. It reports
+# check: runs scripts/check-api-guidelines.js on every PR. It reports
 #   hand-written error bodies, { success } / { message } envelopes, status 422, verbs in
 #   route paths (use an _action segment), non-kebab-case path segments, and page / offset /
 #   snake_case query parameters, as inline annotations on the diff. A line with a reason to
 #   break a rule carries "// api-guidelines-ignore: <reason>".
+#
+# There is deliberately no `paths:` filter: the job is a required status check, and a
+# required check that a PR never triggers would block that PR forever. A PR without
+# server changes passes in a few seconds ("No changed server files to check").
 
 name: API Guidelines Check
 
@@ -17,10 +21,6 @@ on:
   pull_request:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
-    paths:
-      - 'server/**'
-      - 'scripts/check-api-guidelines.js'
-      - '.github/workflows/api-guidelines-check.yml'
   workflow_dispatch:
 
 permissions:
