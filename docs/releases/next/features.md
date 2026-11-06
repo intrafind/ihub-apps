@@ -675,3 +675,23 @@ at another page meant removing it and adding it again.
 - API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
   accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
   replaces the stored one as sent.
+
+## Open a Document from Another System: Choose the App in iHub
+
+A link such as `/apps?documentId=<id>&source=ifinder` (optionally `&searchProfile=<id>` and
+`&prefill=…`) now opens the app list with the document waiting. Before, the system linking to iHub
+— for example the "Open in iHub" action of an iFinder hit — had to know the target app up front.
+
+- **Pick an app:** a banner names the document and the app you choose opens with it attached. The
+  link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
+  the same list.
+- **Only apps that take documents:** a checkbox in the banner, on by default, narrows the list to
+  apps with file upload; it is left out when no app qualifies.
+- **Clear errors:** a document you may not read, or one that no longer exists, is reported in the
+  banner before you choose an app, and the app then opens without it. A document that fails to
+  attach in the chat now says so instead of silently attaching nothing.
+- **Nothing is attached twice:** the parameters are removed from the address once the app has
+  used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
+  passed on from the list.
+
+See [Auto-Send and URL Parameters](../../auto-send-feature.md#ifinder-document-attachment).

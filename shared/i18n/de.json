@@ -301,6 +301,16 @@
     "appsList": {
       "title": "KI-Anwendungen",
       "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "pendingDocument": {
+        "title": "Wähle eine App, in der „{{name}}“ geöffnet werden soll",
+        "description": "Das Dokument wird an den Chat angehängt, sobald die App geöffnet ist.",
+        "untitled": "das Dokument",
+        "onlyDocumentApps": "Nur Apps anzeigen, die Dokumente annehmen",
+        "dismiss": "Schließen",
+        "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
+        "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+        "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
+      },
       "nextcloudSelection": {
         "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt."
       },
@@ -7530,6 +7540,9 @@
     "loading": "Wird geladen…",
     "detailsUnavailable": "Keine weiteren Details verfügbar.",
     "documentFromSource": "Dokument",
+    "documentNoAccess": "Das Dokument konnte nicht angehängt werden: Du hast keinen Zugriff darauf.",
+    "documentNotFound": "Das Dokument konnte nicht angehängt werden: Es wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+    "documentAttachFailed": "Das Dokument konnte nicht angehängt werden. Bitte versuche es erneut.",
     "project": "Projekt"
   },
   "prompts": {

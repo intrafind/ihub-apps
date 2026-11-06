@@ -151,10 +151,32 @@ The `source=ifinder` parameter is **required** to trigger the attachment — the
 3. The document is processed through the same pipeline as an uploaded file and
    attached to the chat.
 4. The `documentId`, `source`, and `searchProfile` parameters are removed from
-   the URL to prevent re-fetching on refresh.
+   the URL to prevent re-fetching on refresh. If the document cannot be fetched, a
+   system message in the chat says whether access was denied, the document was
+   not found, or the fetch failed.
 
 When sent to the backend, the attached document is passed as a `documentIds`
 array, so the chat request always carries the document context.
+
+### Letting the user choose the app
+
+When the link does not know the target app, point it at the app list instead:
+
+```
+/apps?documentId={id}&source=ifinder[&searchProfile={id}][&prefill=...]
+```
+
+`/start` with the same parameters redirects to `/apps`. The list shows a banner with the
+document, checks (with the signed-in user's own rights) that it can be read, and passes
+`documentId`, `source`, `searchProfile` and `prefill` on to the app the user picks, where the
+attachment works as above. `send`, `model` and `var_*` are **not** passed on, so no app
+auto-sends because of the choice.
+
+- A document the user cannot read (`401`/`403`) or that does not exist (`404`) is reported in the
+  banner; apps then open without it.
+- The banner's checkbox "Only show apps that accept documents" is on by default. It lists chat apps
+  with file upload enabled, and is left out when no app qualifies.
+- A refresh on `/apps` keeps the pending document; picking an app consumes it.
 
 ### Examples
 

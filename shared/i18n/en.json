@@ -246,6 +246,16 @@
     "appsList": {
       "title": "AI Apps",
       "subtitle": "Choose an application to start a conversation",
+      "pendingDocument": {
+        "title": "Choose an app to open “{{name}}” in",
+        "description": "The document is attached to the chat as soon as the app opens.",
+        "untitled": "the document",
+        "onlyDocumentApps": "Only show apps that accept documents",
+        "dismiss": "Dismiss",
+        "noAccess": "You do not have access to this document.",
+        "notFound": "This document could not be found. It may have been moved or deleted.",
+        "continueWithout": "You can still pick an app and start without the document."
+      },
       "nextcloudSelection": {
         "description": "Pick an app below to start a chat — your selected files will be attached automatically."
       },
@@ -7557,6 +7567,9 @@
     "loading": "Loading…",
     "detailsUnavailable": "No further details are available.",
     "documentFromSource": "Document",
+    "documentNoAccess": "The document could not be attached: you do not have access to it.",
+    "documentNotFound": "The document could not be attached: it was not found. It may have been moved or deleted.",
+    "documentAttachFailed": "The document could not be attached. Please try again.",
     "project": "Project"
   },
   "prompts": {

@@ -40,6 +40,13 @@ import lazyWithRetry from '../../../utils/lazyWithRetry';
 
 // Import our custom hooks and components
 import { fetchSourceFile } from '../../chat/sources/sourceActions';
+import {
+  DOCUMENT_ID_PARAM,
+  DOCUMENT_SCOPE_PARAM,
+  DOCUMENT_SOURCE_PARAM,
+  documentFailureKind,
+  isValidDocumentSource
+} from '../utils/pendingDocument';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useVoiceMode from '../../voice/hooks/useVoiceMode';
@@ -314,9 +321,9 @@ function AppChat({
   }, []);
   const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
-  const documentId = searchParams.get('documentId');
-  const searchProfileParam = searchParams.get('searchProfile');
-  const documentSource = searchParams.get('source');
+  const documentId = searchParams.get(DOCUMENT_ID_PARAM);
+  const searchProfileParam = searchParams.get(DOCUMENT_SCOPE_PARAM);
+  const documentSource = searchParams.get(DOCUMENT_SOURCE_PARAM);
   // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
   // the project rides on the chat request as `projectId`.
   const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
@@ -1391,7 +1398,7 @@ function AppChat({
   const documentAttached = useRef(false);
   useEffect(() => {
     if (documentAttached.current || !app || !documentSource || !documentId) return;
-    if (!/^[\w.-]{1,100}$/.test(documentSource)) return;
+    if (!isValidDocumentSource(documentSource)) return;
 
     documentAttached.current = true;
     const source = {
@@ -1440,11 +1447,33 @@ function AppChat({
       } catch (err) {
         console.error('Failed to fetch and attach the document:', err);
         fileUploadHandler.clearSelectedFile();
+        // Say why nothing was attached: a link can name a document the user may not read or
+        // one that no longer exists.
+        const failure = documentFailureKind(err?.response?.status);
+        addSystemMessage(
+          failure === 'noAccess'
+            ? t(
+                'sources.documentNoAccess',
+                'The document could not be attached: you do not have access to it.'
+              )
+            : failure === 'notFound'
+              ? t(
+                  'sources.documentNotFound',
+                  'The document could not be attached: it was not found. It may have been moved or deleted.'
+                )
+              : t(
+                  'sources.documentAttachFailed',
+                  'The document could not be attached. Please try again.'
+                ),
+          true
+        );
       }
 
       // Clean source params from URL to prevent re-fetch
       const newSearch = new URLSearchParams(searchParams);
-      ['documentId', 'searchProfile', 'source'].forEach(k => newSearch.delete(k));
+      [DOCUMENT_ID_PARAM, DOCUMENT_SCOPE_PARAM, DOCUMENT_SOURCE_PARAM].forEach(k =>
+        newSearch.delete(k)
+      );
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     };
 
@@ -1457,7 +1486,9 @@ function AppChat({
     prefillMessage,
     fileUploadHandler,
     searchParams,
-    navigate
+    navigate,
+    addSystemMessage,
+    t
   ]);
 
   // Auto-start conversation if app.autoStart is enabled

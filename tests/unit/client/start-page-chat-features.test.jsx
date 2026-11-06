@@ -18,7 +18,9 @@ jest.mock('react-i18next', () => ({
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate
+  useNavigate: () => mockNavigate,
+  useSearchParams: () => [new URLSearchParams()],
+  Navigate: () => null
 }));
 
 const mockApp = {
