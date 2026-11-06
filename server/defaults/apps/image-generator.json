@@ -68,7 +68,15 @@
       "enabled": true,
       "resizeImages": false,
       "maxFileSizeMB": 10,
-      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+      "supportedFormats": [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/tif"
+      ]
     }
   },
   "starterPrompts": [
