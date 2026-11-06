@@ -232,10 +232,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       setDiscoveryError({
         message: translateDiscoveryError(
           t,
-          body.messageKey,
-          body.error || getAdminApiErrorMessage(err)
+          body.details?.messageKey,
+          body.detail || getAdminApiErrorMessage(err)
         ),
-        details: body.details
+        details: body.details?.remediation
       });
     } finally {
       setDiscovering(false);

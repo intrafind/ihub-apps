@@ -15,15 +15,11 @@ import { useTranslation } from 'react-i18next';
  */
 export function isVersionConflict(err) {
   const data = err?.response?.data ?? err?.originalError?.response?.data;
-  return (
-    err?.code === 'VERSION_CONFLICT' ||
-    data?.error === 'VERSION_CONFLICT' ||
-    data?.code === 'VERSION_CONFLICT'
-  );
+  return err?.code === 'VERSION_CONFLICT' || data?.code === 'VERSION_CONFLICT';
 }
 
 function defaultFormatError(err) {
-  return err?.response?.data?.message || err?.message || String(err);
+  return err?.response?.data?.detail || err?.message || String(err);
 }
 
 /**

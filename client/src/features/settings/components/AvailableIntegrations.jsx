@@ -111,7 +111,7 @@ export default function AvailableIntegrations({ entries, onEntriesChange, onMess
           'Could not disconnect {{name}}: {{message}}',
           {
             name: nameOf(entry),
-            message: error?.response?.data?.error || error?.message || ''
+            message: error?.response?.data?.detail || error?.message || ''
           }
         )
       });

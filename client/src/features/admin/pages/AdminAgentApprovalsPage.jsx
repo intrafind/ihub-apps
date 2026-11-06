@@ -46,7 +46,7 @@ export default function AdminAgentApprovalsPage() {
         const items = Array.isArray(body?.interactions) ? body.interactions : [];
         setPending(items.filter(i => i && i.kind !== 'notify'));
       } catch (err) {
-        setError(err?.response?.data?.error || err?.message || String(err));
+        setError(err?.response?.data?.detail || err?.message || String(err));
       } finally {
         setLoading(false);
       }

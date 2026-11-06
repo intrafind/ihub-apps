@@ -269,7 +269,7 @@ describe('PcmStreamPlayer multi-stream mode', () => {
       player.enqueueStream(async () => ({
         ok: false,
         status: 500,
-        json: async () => ({ error: 'Provider down', code: 'upstream' })
+        json: async () => ({ detail: 'Provider down', code: 'upstream' })
       })),
       player.enqueueStream(async () => finished(0.5).response)
     ]);

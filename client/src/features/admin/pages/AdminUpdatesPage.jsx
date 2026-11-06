@@ -216,7 +216,7 @@ function AdminUpdatesPage() {
     }, RESTART_POLL_MS);
   };
 
-  const errorText = error => error.response?.data?.error || error.message;
+  const errorText = error => error.response?.data?.detail || error.message;
 
   /** Online: download the release from GitHub; it is verified like any other archive. */
   const handleDownload = async () => {
@@ -237,8 +237,8 @@ function AdminUpdatesPage() {
         setMessage(null);
       }
     } catch (error) {
-      if (error.response?.status === 422 && error.response.data?.summary) {
-        setSummary(error.response.data.summary);
+      if (error.response?.status === 422 && error.response.data?.details?.summary) {
+        setSummary(error.response.data.details.summary);
         setMessage(null);
       } else {
         setMessage({

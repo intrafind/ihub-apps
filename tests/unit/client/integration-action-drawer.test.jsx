@@ -37,7 +37,7 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
     mockApi.markInstalledIntegrationActionsReviewed(...args)
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
-  getAdminApiErrorMessage: err => err?.response?.data?.error || err?.message || 'error'
+  getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || 'error'
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
@@ -274,7 +274,7 @@ describe('ActionTestPanel', () => {
 
   it('shows the server’s refusal', async () => {
     mockApi.testIntegrationAction.mockRejectedValue({
-      response: { data: { error: 'This action is not a read: confirm the test to run it' } }
+      response: { data: { detail: 'This action is not a read: confirm the test to run it' } }
     });
     render(
       <ActionTestPanel

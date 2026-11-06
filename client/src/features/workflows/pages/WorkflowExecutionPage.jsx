@@ -283,8 +283,8 @@ function WorkflowExecutionPage() {
       await refetch();
     } catch (err) {
       const msg =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
+        err.response?.data?.detail ||
+        err.response?.data?.detail ||
         err.message ||
         'Failed to restart workflow';
       setRestartError(msg);

@@ -84,7 +84,7 @@ async function responseError(response) {
   } catch {
     // Not JSON — keep the status alone.
   }
-  return new SpeechRequestError(body.error || `HTTP ${response.status}`, {
+  return new SpeechRequestError(body.detail || `HTTP ${response.status}`, {
     status: response.status,
     code: body.code
   });

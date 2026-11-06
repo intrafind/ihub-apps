@@ -228,7 +228,7 @@ export default function SetupWizard() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || t('setup.step2.testError'));
+        setError(data.detail || t('setup.step2.testError'));
         return;
       }
       // Refresh platform config so setup.configured becomes true in memory,

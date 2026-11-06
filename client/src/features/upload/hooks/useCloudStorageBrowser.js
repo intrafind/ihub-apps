@@ -9,7 +9,7 @@ import { fetchUserIntegration } from '../../../api/userIntegrationsApi';
 /** A browse request refused for a missing connection (409 INTEGRATION_AUTH_REQUIRED) or a 401. */
 function isAuthRequired(err) {
   return (
-    err?.response?.status === 401 || err?.response?.data?.error === 'INTEGRATION_AUTH_REQUIRED'
+    err?.response?.status === 401 || err?.response?.data?.detail === 'INTEGRATION_AUTH_REQUIRED'
   );
 }
 

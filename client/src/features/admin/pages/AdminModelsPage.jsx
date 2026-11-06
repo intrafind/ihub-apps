@@ -227,14 +227,15 @@ function AdminModelsPage() {
     } catch (err) {
       // Server body: { error: headline, details: remediation text, code, messageKey }
       const body = err?.response?.data || {};
-      const fallbackMessage = body.error || t('admin.models.testResults.failed', 'Test Failed');
+      const fallbackMessage = body.detail || t('admin.models.testResults.failed', 'Test Failed');
       setTestResults(prev => ({
         ...prev,
         [modelId]: {
           success: false,
-          message: translateModelTestMessage(t, body.messageKey, fallbackMessage),
+          message: translateModelTestMessage(t, body.details?.messageKey, fallbackMessage),
           error:
-            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
+            body.details?.remediation ||
+            (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         }
       }));
     } finally {

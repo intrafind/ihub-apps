@@ -15,7 +15,7 @@ const headingClass =
   'text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center';
 
 function errorText(error, fallback) {
-  return error?.response?.data?.error || error?.message || fallback;
+  return error?.response?.data?.detail || error?.message || fallback;
 }
 
 function formatNumber(value) {

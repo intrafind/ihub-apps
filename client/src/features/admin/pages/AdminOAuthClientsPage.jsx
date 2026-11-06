@@ -106,7 +106,7 @@ function AdminOAuthClientsPage() {
       setClients(data.clients || []);
       setCimdClients(data.cimdClients || []);
     } catch (error) {
-      if (error.response?.data?.error?.includes('OAuth clients are not enabled')) {
+      if (error.response?.data?.detail?.includes('OAuth clients are not enabled')) {
         setMessage({
           type: 'warning',
           text: t(

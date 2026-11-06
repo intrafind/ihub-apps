@@ -161,7 +161,7 @@ export default function RequestableIntegrations({ onMessage }) {
               })
             : t('integrations.requests.failed', 'Could not request {{name}}: {{message}}', {
                 name: item.name,
-                message: error?.response?.data?.error || error?.message || ''
+                message: error?.response?.data?.detail || error?.message || ''
               })
       });
     } finally {

@@ -170,13 +170,15 @@ function AdminProvidersPage() {
       } catch (err) {
         // Server body: { error: headline, details: remediation text, code, messageKey }
         const body = err?.response?.data || {};
-        const failureFallback = body.error || t('admin.providers.health.testFailed', 'Test failed');
+        const failureFallback =
+          body.detail || t('admin.providers.health.testFailed', 'Test failed');
         results.push({
           model,
           success: false,
-          message: translateModelTestMessage(t, body.messageKey, failureFallback),
+          message: translateModelTestMessage(t, body.details?.messageKey, failureFallback),
           error:
-            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
+            body.details?.remediation ||
+            (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         });
       }
       // Update incrementally so user sees progress

@@ -83,7 +83,7 @@ export default function AdminAgentsPage() {
     } catch (err) {
       setError(
         t('admin.agents.triggerFailed', 'Trigger failed: {{message}}', {
-          message: err?.response?.data?.message || err.message
+          message: err?.response?.data?.detail || err.message
         })
       );
     }

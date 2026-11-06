@@ -225,7 +225,7 @@ export default function IntegrationsPage() {
         setMessage({
           type: 'error',
           text: t('integrations.page.connections.disconnectFailed', {
-            message: data.error || response.statusText
+            message: data.detail || response.statusText
           })
         });
         return;
@@ -272,7 +272,7 @@ export default function IntegrationsPage() {
       if (!response.ok) {
         setMessage({
           type: 'error',
-          text: t(errorKey, { message: data.error || response.statusText })
+          text: t(errorKey, { message: data.detail || response.statusText })
         });
         return null;
       }

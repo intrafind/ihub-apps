@@ -286,7 +286,7 @@ export function outcomeFromError(action, instance, error) {
     label: instance.label || instance.id,
     status: error?.response?.status ?? null,
     code: data.code || null,
-    reason: data.details?.reason || data.error || error?.message || '',
+    reason: data.details?.reason || data.detail || error?.message || '',
     logEntry: data.details?.logEntry || null,
     problems: problemsOf(data)
   };
