@@ -243,6 +243,49 @@ export const MARKETPLACE_ERROR_CODES = Object.freeze({
   INTEGRITY_MISMATCH: 422
 });
 
+/** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
+export const CHAT_ERROR_CODES = Object.freeze({
+  ANSWER_IN_CHAT: 409,
+  APP_NOT_FOUND: 404,
+  CHAT_OWNER_REQUIRED: 403,
+  CHAT_STORAGE_UNAVAILABLE: 503,
+  GUEST_COOKIE_MISSING: 404,
+  INVALID_APP: 400,
+  PREFERENCES_UNAVAILABLE: 503,
+  FEATURE_DISABLED: 403
+});
+
+/** Codes of the cloud storage connection routes (`server/routes/integrations`). */
+export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
+  STORAGE_PROVIDER_NOT_FOUND: 404,
+  STORAGE_PROVIDER_REQUIRED: 400,
+  INVALID_RETURN_URL: 400,
+  NOT_CONNECTABLE: 400
+});
+
+/** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
+export const MISC_ERROR_CODES = Object.freeze({
+  TEAMS_SSO_TOKEN_REQUIRED: 400,
+  TEAMS_AUTH_NOT_ENABLED: 400,
+  TEAMS_ACCOUNT_DISABLED: 403,
+  TEAMS_INVALID_OR_EXPIRED_TOKEN: 401,
+  CONCURRENCY_LIMIT: 409,
+  PROVIDER_IN_USE: 409,
+  ARCHIVE_REJECTED: 422,
+  NO_AUDIO: 502
+});
+
+/** Codes of the admin text-to-speech voice routes (`server/routes/admin/models.js`). */
+export const VOICE_ADMIN_ERROR_CODES = Object.freeze({
+  NOT_TTS_MODEL: 400,
+  VOICES_UNSUPPORTED: 501,
+  UNSUPPORTED_PROVIDER: 400,
+  INVALID_NAME: 400,
+  INVALID_AUDIO: 400,
+  AUDIO_TOO_LARGE: 413,
+  INVALID_VOICE: 400
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -255,7 +298,11 @@ export const API_ERROR_CODES = Object.freeze({
   ...INTEGRATION_ERROR_CODES,
   ...WORKFLOW_ERROR_CODES,
   ...BACKUP_ERROR_CODES,
-  ...MARKETPLACE_ERROR_CODES
+  ...MARKETPLACE_ERROR_CODES,
+  ...CHAT_ERROR_CODES,
+  ...CLOUD_STORAGE_ERROR_CODES,
+  ...VOICE_ADMIN_ERROR_CODES,
+  ...MISC_ERROR_CODES
 });
 
 /**

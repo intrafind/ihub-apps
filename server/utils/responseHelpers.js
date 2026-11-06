@@ -6,30 +6,35 @@
  */
 
 import logger from './logger.js';
+import { ServiceError } from './ServiceError.js';
+import { codeOfStatus, sendProblem } from './errorResponse.js';
 
 /**
- * Send a standardized error response
+ * Send a standardized error response (`application/problem+json`, see
+ * `utils/errorResponse.js`). Throw a `ServiceError` where you can; use this where the
+ * response must be written in place, for example inside a `try` whose `catch` would
+ * answer a second time.
+ *
  * @param {Object} res - Express response object
  * @param {number} statusCode - HTTP status code
- * @param {string} message - Error message
+ * @param {string} message - What went wrong; shown to the caller as `detail` (a 5xx only when it is safe)
  * @param {Object} options - Additional options
  * @param {Error} options.error - Error object for logging
  * @param {string} options.logPrefix - Prefix for console logging
- * @param {Object} options.details - Additional error details
+ * @param {string} options.code - A code of `shared/apiErrors.js`; default is the generic code of the status
+ * @param {Object} options.details - Interpolation parameters for the client's message
  */
 export function sendErrorResponse(res, statusCode, message, options = {}) {
-  const { error, logPrefix, details } = options;
+  const { error, logPrefix, code, details } = options;
 
   if (error && logPrefix) {
     logger.error(logPrefix, { component: 'Utils', error });
   }
 
-  const response = { error: message };
-  if (details) {
-    response.details = details;
-  }
-
-  return res.status(statusCode).json(response);
+  return sendProblem(
+    res,
+    new ServiceError(code ?? codeOfStatus(statusCode), message, { status: statusCode, details })
+  );
 }
 
 /**
@@ -63,7 +68,7 @@ export function sendFailedOperationError(res, operation, error) {
  * @param {Object} res - Express response object
  */
 export function sendAuthRequired(res) {
-  return res.status(401).json({ error: 'Authentication required' });
+  return sendErrorResponse(res, 401, 'Authentication required');
 }
 
 /**
@@ -75,7 +80,7 @@ export function sendInsufficientPermissions(res, requiredPermission) {
   const message = requiredPermission
     ? `Insufficient permissions: ${requiredPermission} required`
     : 'Insufficient permissions';
-  return res.status(403).json({ error: message });
+  return sendErrorResponse(res, 403, message);
 }
 
 /**
@@ -84,7 +89,7 @@ export function sendInsufficientPermissions(res, requiredPermission) {
  * @param {string} resource - Resource that was not found
  */
 export function sendNotFound(res, resource) {
-  return res.status(404).json({ error: `${resource} not found` });
+  return sendErrorResponse(res, 404, `${resource} not found`);
 }
 
 /**
