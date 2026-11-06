@@ -831,6 +831,9 @@ export async function processNtlmLogin(req, ntlmConfig) {
       provider: user.provider,
       domain: user.domain
     },
+    // Where the groups came from, for the login audit entry; kept off `user`,
+    // which goes back to the browser.
+    loginGroups: user.loginGroups,
     token,
     expiresIn
   };

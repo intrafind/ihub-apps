@@ -97,6 +97,18 @@
       return;
     }
 
+    // A provider callback that failed comes back as ?auth=error&message=...
+    // Say so, instead of a login screen that looks as if nothing happened, and
+    // do not send the browser straight back to the provider. Only our own text
+    // is shown, so a crafted link cannot put words on the login screen; the
+    // server's message goes to the console (and the server log has the details).
+    var signInFailed = params.get('auth') === 'error';
+    if (signInFailed) {
+      console.warn('Auth gate: sign-in failed:', params.get('message') || '(no details)');
+      currentError = t('signInFailed');
+      cleanUrlParams(['auth', 'message']);
+    }
+
     // 2. Fetch auth status
     fetchAuthStatus()
       .then(function (data) {
@@ -132,7 +144,7 @@
 
         // Auto-redirect to OIDC provider
         var isLogoutPage = params.get('logout') === 'true';
-        if (data.autoRedirect && !isLogoutPage) {
+        if (data.autoRedirect && !isLogoutPage && !signInFailed) {
           if (shouldAutoRedirect(data.autoRedirect.provider)) {
             markAutoRedirectAttempt(data.autoRedirect.provider);
             var returnUrl = getEffectiveReturnUrl();
@@ -177,10 +189,19 @@
       method: 'GET',
       credentials: 'include',
       headers: headers
-    }).then(function (res) {
-      if (!res.ok) throw new Error(t('serverError'));
-      return res.json();
-    });
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error(t('serverError'));
+        return res.json();
+      })
+      .then(function (data) {
+        // The server did not accept the stored token (expired, left over from
+        // before sign-in moved to the cookie, another installation's); any
+        // session came from the cookie. Forget it, so it is never sent in front
+        // of the cookie again.
+        if (data && data.bearerTokenRejected) removeToken();
+        return data;
+      });
   }
 
   function postLogin(endpoint, body) {

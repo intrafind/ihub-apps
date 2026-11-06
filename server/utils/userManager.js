@@ -518,6 +518,42 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
 }
 
 /**
+ * The raw sources of an external user's groups at login, recorded on the login
+ * audit entry (see utils/loginGroupDetails.js) so an admin can see which
+ * groups the identity provider sent and which were assigned by hand. Never
+ * persisted to users.json and never used for authorization.
+ *
+ * LDAP maps its groups before this point and passes the directory groups as
+ * `ldapData.ldapGroups` instead of `externalGroups`.
+ *
+ * @param {Object} externalUser - External user data
+ * @param {string[]} manualGroups - The user's `internalGroups` from users.json
+ * @returns {{external: string[], manual: string[]}}
+ */
+function describeLoginGroupSources(externalUser, manualGroups) {
+  const external = Array.isArray(externalUser.externalGroups)
+    ? externalUser.externalGroups
+    : Array.isArray(externalUser.ldapData?.ldapGroups)
+      ? externalUser.ldapData.ldapGroups
+      : [];
+  return { external: [...external], manual: Array.isArray(manualGroups) ? [...manualGroups] : [] };
+}
+
+/**
+ * The admin rescue may just have granted the first user an admin group in
+ * `internalGroups`; keep the login's manual groups in step with it.
+ *
+ * @param {Object} user - The user returned by ensureFirstUserIsAdmin()
+ * @returns {Object} the same user
+ */
+function withRescuedManualGroups(user) {
+  if (user?.loginGroups && Array.isArray(user.internalGroups)) {
+    user.loginGroups.manual = [...user.internalGroups];
+  }
+  return user;
+}
+
+/**
  * Validate and persist external user based on platform configuration
  * Consolidates the validation logic from proxyAuth.js, oidcAuth.js, ntlmAuth.js, and ldapAuth.js
  * @param {Object} externalUser - External user data (OIDC/Proxy/Teams/NTLM/LDAP)
@@ -602,7 +638,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       active: persistedUser.active,
       authMethods: persistedUser.authMethods || [authMethod],
       lastActiveDate: persistedUser.lastActiveDate,
-      persistedUser: true
+      persistedUser: true,
+      loginGroups: describeLoginGroupSources(externalUser, manualInternalGroups)
     };
 
     userWithAdminCheck = await ensureFirstUserIsAdmin(
@@ -611,7 +648,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       usersFilePath
     );
 
-    return userWithAdminCheck;
+    return withRescuedManualGroups(userWithAdminCheck);
   }
 
   // User doesn't exist - check self-signup settings
@@ -658,10 +695,11 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     active: true,
     authMethods: [authMethod],
     lastActiveDate: persistedUser.lastActiveDate,
-    persistedUser: true
+    persistedUser: true,
+    loginGroups: describeLoginGroupSources(externalUser, manualInternalGroups)
   };
 
   userWithAdminCheck = await ensureFirstUserIsAdmin(userWithAdminCheck, authMethod, usersFilePath);
 
-  return userWithAdminCheck;
+  return withRescuedManualGroups(userWithAdminCheck);
 }

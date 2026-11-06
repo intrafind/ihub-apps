@@ -247,6 +247,9 @@ export async function loginLdapUser(username, password, ldapConfig) {
       authMethod: 'ldap',
       provider: persistedUser.provider
     },
+    // Where the groups came from, for the login audit entry; kept off `user`,
+    // which goes back to the browser.
+    loginGroups: persistedUser.loginGroups,
     token,
     expiresIn
   };

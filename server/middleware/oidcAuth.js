@@ -13,9 +13,11 @@ import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { setAuthCookie } from '../utils/cookieSettings.js';
+import { appendQueryParams } from '../utils/appendQueryParams.js';
 import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { buildLoginGroupDetails } from '../utils/loginGroupDetails.js';
 import { createOidcStateStore } from '../utils/oidcLoginState.js';
 import {
   shouldStoreLoginTokens,
@@ -838,7 +840,10 @@ export function createOidcCallbackHandler(providerName) {
             name: user.name ?? user.email ?? user.id,
             groups: user.groups || [],
             authenticated: true
-          }
+          },
+          // The groups the provider sent and what each mapped to, for the
+          // entry's detail view.
+          details: buildLoginGroupDetails(user.loginGroups)
         });
 
         // Return URL from the signed login state; an OAuth authorization flow
@@ -875,8 +880,12 @@ export function createOidcCallbackHandler(providerName) {
         // above; the token is never put in the URL (it would end up in history, logs and
         // Referer headers).
         if (req.query.redirect !== 'false') {
-          const separator = returnUrl.includes('?') ? '&' : '?';
-          const finalRedirectUrl = `${returnUrl}${separator}oidc=success&provider=${providerName}`;
+          // In the query, never inside a #fragment: the auth gate reads it from
+          // location.search to know the sign-in just happened.
+          const finalRedirectUrl = appendQueryParams(returnUrl, {
+            oidc: 'success',
+            provider: providerName
+          });
 
           authDebugService.log(
             'oidc',

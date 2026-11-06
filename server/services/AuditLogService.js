@@ -26,6 +26,10 @@ const FLUSH_INTERVAL_MS = 5000;
 // Hard cap so a failing disk + high write volume can't exhaust memory. When
 // exceeded we drop the oldest entries and emit a single overflow warning.
 const MAX_QUEUE = 10000;
+// Upper bound on the serialized `details` of one entry. Details are optional
+// context for the entry's detail view; an oversized object is dropped rather
+// than written, so one caller cannot bloat the log.
+const MAX_DETAILS_BYTES = 64 * 1024;
 
 // Linear-time email-shape detection. A regex like /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // backtracks polynomially on attacker-supplied login usernames (CodeQL ReDoS),
@@ -106,6 +110,31 @@ function buildActor(req, explicitActor) {
 }
 
 /**
+ * Validate the optional `details` of an entry: a plain object that serializes
+ * to at most MAX_DETAILS_BYTES. Returns undefined for anything else.
+ */
+function sanitizeDetails(details, action, resource) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
+  let serialized;
+  try {
+    serialized = JSON.stringify(details);
+  } catch {
+    return undefined;
+  }
+  if (!serialized || serialized === '{}') return undefined;
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_DETAILS_BYTES) {
+    logger.warn('Audit entry details too large; dropped', {
+      component: 'AuditLogService',
+      action,
+      resource,
+      bytes: Buffer.byteLength(serialized, 'utf8')
+    });
+    return undefined;
+  }
+  return JSON.parse(serialized);
+}
+
+/**
  * Derive the audit source from the request when not provided explicitly.
  */
 function deriveSource(req) {
@@ -141,6 +170,9 @@ export async function flushAuditLog() {
  * @param {Object} [options.actor] - Explicit actor for pre-auth events (e.g. failed login)
  * @param {string} [options.requestId] - Explicit request id (used by the middleware,
  *   whose res 'finish' callback may run outside the request's async context)
+ * @param {Object} [options.details] - Structured context shown when an admin opens
+ *   the entry (e.g. the groups a login brought along). Plain JSON object, at most
+ *   64 KB serialized; anything else is dropped.
  * @returns {Object|null} the buffered entry, or null on failure
  */
 export function logAudit({
@@ -152,7 +184,8 @@ export function logAudit({
   result = 'success',
   source,
   actor,
-  requestId
+  requestId,
+  details
 } = {}) {
   try {
     const auditCfg = getAuditConfig();
@@ -180,6 +213,8 @@ export function logAudit({
     if (auditCfg.anonymizeIp !== 'drop') {
       entry.ip = auditCfg.anonymizeIp === 'mask' ? anonymizeIp(rawIp) : rawIp;
     }
+    const safeDetails = sanitizeDetails(details, action, resource);
+    if (safeDetails) entry.details = safeDetails;
 
     const validation = validateAuditEntry(entry);
     if (!validation.success) {
@@ -330,7 +365,8 @@ function buildValueMatcher(include, exclude) {
 
 /**
  * Build the free-text matcher for `q`. Case-insensitive substring match over
- * the summary, resource id, IP, request id and actor name. Runs in memory over
+ * the summary, resource id, IP, request id, actor name and the identity-provider
+ * groups a login recorded in its details. Runs in memory over
  * the entries in the date range — there is no index.
  */
 function buildTextMatcher(q) {
@@ -347,6 +383,15 @@ function buildTextMatcher(q) {
     // Admins may still search by the raw id or username a label replaces.
     for (const value of [entry.actor?.id, entry.actor?.username]) {
       if (typeof value === 'string' && value.toLowerCase().includes(needle)) return true;
+    }
+    // A login records the groups the identity provider sent; searching for
+    // one (an Entra group id, say) finds who signed in with it.
+    const externalGroups = entry.details?.groups?.external;
+    if (Array.isArray(externalGroups)) {
+      for (const group of externalGroups) {
+        const name = group?.name;
+        if (typeof name === 'string' && name.toLowerCase().includes(needle)) return true;
+      }
     }
     return false;
   };

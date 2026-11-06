@@ -326,6 +326,18 @@ closes it, and focus goes back to the **Test** button.
   same.
 - Beside the editor on wide screens nothing changes.
 
+## Single Sign-On: A Failed Sign-In Shows a Message Instead of the Same Login Screen
+
+When the sign-in at the identity provider (OIDC, for example Microsoft Entra ID) could not be
+completed, the browser came back to the login screen without any explanation, so clicking the
+provider button seemed to do nothing. Typical causes are a new user while self-registration is
+off, or a sign-in request that could not be verified. The login screen now says that the sign-in did
+not complete and asks the user to try again or to contact the administrator.
+
+- The reason is written to the server log, and to the browser console for support.
+- After a failed sign-in the login screen no longer sends the browser straight back to the
+  provider, also when automatic redirect is configured.
+
 ## iFinder Search: A Search With No Hits Is Retried With Fewer Words, Not More
 
 After a search found nothing, the model often searched again with the same words plus more —
