@@ -264,7 +264,17 @@ export function parseChangedLines(diff) {
   return files;
 }
 
-function main() {
+/**
+ * The whole of stdin. Not `readFileSync(0)`: a pipe is non-blocking, so that
+ * throws EAGAIN whenever the producer (`git diff`) has not written yet.
+ */
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function main() {
   if (process.stdin.isTTY) {
     console.error(
       'Pipe the diff in: git diff --unified=0 --diff-filter=ACMR --no-color origin/main...HEAD -- server | node scripts/check-api-guidelines.js'
@@ -272,7 +282,7 @@ function main() {
     process.exit(2);
   }
 
-  const files = parseChangedLines(readFileSync(0, 'utf8'));
+  const files = parseChangedLines(await readStdin());
   if (files.size === 0) {
     console.log('No changed server files to check.');
     return;
