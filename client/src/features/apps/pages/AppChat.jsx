@@ -474,7 +474,8 @@ function AppChat({
     setImageAspectRatio,
     setImageQuality,
     setIntegrationScopes,
-    modelsLoading
+    modelsLoading,
+    settingsInitializedFor
   } = useAppSettings(appId, app, { chatSettings, isolated: embedded, withTranscription: true });
 
   // Where the chat's integrations search and whom they ask (#3050): the "+"
@@ -1391,14 +1392,18 @@ function AppChat({
   // integration, as an image, audio or document attachment — and say so when it cannot be attached.
   useIntegrationDocumentAttachment({
     pending: pendingDocument,
-    // This chat's app (not the previous one while a route change loads) and its model: the
-    // model decides whether an image or audio can be attached. With no models at all there is
-    // nothing to wait for; with models but none selected yet, the attach starts when one is.
+    // This chat's own app and the model its settings picked: not the previous app's, which the
+    // settings still hold for the render in which a new app has loaded and its settings are not
+    // initialized yet. The model decides what an image or audio needs, so with no model there is
+    // nothing to attach to; the attach starts as soon as one is selected.
+    appId,
+    chatId,
     ready:
       Boolean(app) &&
       app.id === appId &&
       !modelsLoading &&
-      (Boolean(currentModelObject) || !models?.length),
+      settingsInitializedFor === appId &&
+      Boolean(currentModelObject),
     app,
     currentModel: currentModelObject,
     fileUploadHandler,

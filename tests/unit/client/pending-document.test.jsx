@@ -384,6 +384,8 @@ describe('useIntegrationDocumentAttachment', () => {
         useIntegrationDocumentAttachment({
           pending,
           ready: true,
+          appId: 'app1',
+          chatId: 'chat-1',
           app: { id: 'app1', integrations: { ifinder: {} } },
           currentModel: { id: 'm' },
           fileUploadHandler: uploader,
@@ -468,6 +470,29 @@ describe('useIntegrationDocumentAttachment', () => {
       expect.stringContaining('selected model cannot take this kind of file'),
       true
     );
+  });
+
+  test('without a model only a document goes in, never an image or audio', async () => {
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
+    mount({ currentModel: null });
+    await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+    expect(processCloudFile).not.toHaveBeenCalled();
+    expect(addSystemMessage).toHaveBeenCalledWith(
+      expect.stringContaining('selected model cannot take this kind of file'),
+      true
+    );
+
+    jest.clearAllMocks();
+    fetchIntegrationFilesProbe.mockResolvedValue(INFO);
+    uploader.createUploadConfig.mockReturnValue(cfg());
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+    processCloudFile.mockResolvedValue({
+      type: 'document',
+      content: 'text',
+      fileName: 'report.pdf'
+    });
+    mount({ currentModel: null, pending: { ...pending, documentId: 'd2' } });
+    await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
   });
 
   test('the binding decides: an app without local upload still gets the document', async () => {
@@ -617,6 +642,27 @@ describe('useIntegrationDocumentAttachment', () => {
       await finish();
       expect(addSystemMessage).not.toHaveBeenCalled();
       expect(uploader.clearSelectedFile).not.toHaveBeenCalled();
+    });
+
+    test('a new chat on the same app and the same link gets nothing from the old run', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      uploader.setSelectedFile.mockClear();
+      rerender({ chatId: 'chat-2' });
+      await finish();
+      expect(uploader.setSelectedFile).not.toHaveBeenCalled();
+      expect(onConsumed).not.toHaveBeenCalled();
+    });
+
+    test('the route moving to another app ends the run even before the new app has loaded', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      uploader.setSelectedFile.mockClear();
+      // The route changed, the loaded app is still the old one, the link is the same
+      rerender({ appId: 'app2' });
+      await finish();
+      expect(uploader.setSelectedFile).not.toHaveBeenCalled();
+      expect(onConsumed).not.toHaveBeenCalled();
     });
 
     test('an unmounted chat consumes nothing', async () => {

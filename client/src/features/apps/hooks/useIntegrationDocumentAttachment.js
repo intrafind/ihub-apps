@@ -31,6 +31,8 @@ const documentKey = pending =>
  * @returns {boolean}
  */
 function modelTakes(kind, model) {
+  // No model: only text can go in.
+  if (!model) return kind === 'document';
   if (kind === 'image') return model?.supportsVision !== false && model?.supportsImages !== false;
   if (kind === 'audio') return model?.supportsAudio === true;
   return true;
@@ -56,7 +58,9 @@ function modelTakes(kind, model) {
  *
  * @param {Object} options
  * @param {{documentId: string, integration: string, searchProfile?: string, prefill?: string}|null} options.pending
- * @param {boolean} options.ready - the app and the models are loaded
+ * @param {boolean} options.ready - this chat's app is loaded and its settings picked a model
+ * @param {string} [options.appId] - the route's app: a change ends a run that is under way
+ * @param {string} [options.chatId] - the chat shown: a new chat ends a run that is under way
  * @param {Object} options.app
  * @param {Object|null} options.currentModel - the selected model object
  * @param {Object} options.fileUploadHandler - `useFileUploadHandler()`
@@ -66,6 +70,8 @@ function modelTakes(kind, model) {
 export default function useIntegrationDocumentAttachment({
   pending,
   ready,
+  appId,
+  chatId,
   app,
   currentModel,
   fileUploadHandler,
@@ -79,6 +85,8 @@ export default function useIntegrationDocumentAttachment({
   useEffect(() => {
     liveRef.current = {
       pending,
+      appId,
+      chatId,
       app,
       currentModel,
       fileUploadHandler,
@@ -107,12 +115,19 @@ export default function useIntegrationDocumentAttachment({
       const live = liveRef.current;
       const { pending: doc, fileUploadHandler: uploader } = live;
       const startedAppId = live.app?.id;
-      // What this run started for is gone: the chat was left, another app opened, or another
-      // document is pending. It then touches neither the attachment nor the address.
+      const startedRouteAppId = live.appId;
+      const startedChatId = live.chatId;
+      // What this run started for is gone: the chat was left, a new chat started, another app
+      // opened, or another document is pending. It then touches neither the attachment nor the
+      // address.
       const stale = () => {
         const now = liveRef.current;
         return (
-          !mountedRef.current || documentKey(now.pending) !== key || now.app?.id !== startedAppId
+          !mountedRef.current ||
+          documentKey(now.pending) !== key ||
+          now.app?.id !== startedAppId ||
+          now.appId !== startedRouteAppId ||
+          now.chatId !== startedChatId
         );
       };
       const say = message => live.addSystemMessage?.(message, true);
