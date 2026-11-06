@@ -44,6 +44,7 @@ import {
   DOCUMENT_ID_PARAM,
   DOCUMENT_INTEGRATION_PARAM,
   DOCUMENT_SCOPE_PARAM,
+  isChatReadyForDocument,
   readPendingDocument
 } from '../utils/pendingDocument';
 import useAppChat from '../../chat/hooks/useAppChat';
@@ -1355,6 +1356,10 @@ function AppChat({
     // devices lost, so on a phone the handoff from the start page failed
     // while on a desktop the 100 ms below always covered it.
     if (modelsLoading || !selectedModel) return;
+    // A document the link names is attached first: a message sent while it loads would go out
+    // without it. The attach removes its parameters from the address when it is done, which runs
+    // this effect again.
+    if (pendingDocument) return;
 
     autoSendTriggered.current = true;
     autoSendPending.current = false;
@@ -1384,7 +1389,8 @@ function AppChat({
     navigate,
     modelsLoading,
     selectedModel,
-    showStartForm
+    showStartForm,
+    pendingDocument
   ]);
 
   // Attach the document a link names (`?documentId=…&integration=…`, "Open in App" or a link from
@@ -1398,12 +1404,13 @@ function AppChat({
     // nothing to attach to; the attach starts as soon as one is selected.
     appId,
     chatId,
-    ready:
-      Boolean(app) &&
-      app.id === appId &&
-      !modelsLoading &&
-      settingsInitializedFor === appId &&
-      Boolean(currentModelObject),
+    ready: isChatReadyForDocument({
+      app,
+      appId,
+      modelsLoading,
+      settingsInitializedFor,
+      model: currentModelObject
+    }),
     app,
     currentModel: currentModelObject,
     fileUploadHandler,

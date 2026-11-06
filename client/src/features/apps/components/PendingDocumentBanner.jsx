@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
-const ERROR_STATUSES = new Set(['unavailable', 'noAccess', 'notFound']);
+const ERROR_STATUSES = new Set(['unavailable', 'noAccess', 'notFound', 'noApp']);
 
 /**
  * Banner above the app picker while a document waits to be attached (`/apps?documentId=…`).
@@ -12,7 +12,8 @@ const ERROR_STATUSES = new Set(['unavailable', 'noAccess', 'notFound']);
  * — can narrow the picker to the apps that take documents.
  *
  * @param {Object} props
- * @param {string} props.status - `usePendingDocumentCheck().status`
+ * @param {string} props.status - `usePendingDocumentCheck().status`, or `noApp` when the
+ *   integration is available but no app binds it
  * @param {string} props.title - the document's name: its title, else the link's `prefill`, else ''
  * @param {() => void} props.onDismiss - drop the pending document and stay on the picker
  * @param {boolean} props.canRestrict - at least one app takes documents (else no toggle)
@@ -44,6 +45,10 @@ function PendingDocumentBanner({
       notFound: t(
         'pages.appsList.pendingDocument.notFound',
         'This document could not be found. It may have been moved or deleted.'
+      ),
+      noApp: t(
+        'pages.appsList.pendingDocument.noApp',
+        'No app can use documents from this system. Ask an administrator to add the integration to an app.'
       )
     }[status];
     return (

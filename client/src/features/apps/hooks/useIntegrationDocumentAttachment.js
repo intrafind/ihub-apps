@@ -15,6 +15,9 @@ import {
 import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
 import { modelTakesFileKind } from '../../../shared/utils/modelInputCapabilities';
 
+/** The id under which this hook reports itself as busy to the composer (`setAttachmentProcessing`). */
+const BUSY_ID = 'integration-document';
+
 /** What identifies a pending document: the system it comes from, its id and its scope. */
 const documentKey = pending =>
   pending
@@ -126,6 +129,10 @@ export default function useIntegrationDocumentAttachment({
       const fallbackName = doc.prefill || 'document';
 
       try {
+        // A message sent while the document loads would go out without it (the composer holds
+        // Send while an attachment is processing), whether the user presses it or the link
+        // auto-sends.
+        uploader.setAttachmentProcessing?.(BUSY_ID, true);
         const uploadConfig = uploader.createUploadConfig(live.app, live.currentModel) || {};
 
         placeholder = {
@@ -232,6 +239,8 @@ export default function useIntegrationDocumentAttachment({
           }[failure]
         );
       } finally {
+        // Also when the run is stale: the flag is this run's, and nothing else clears it.
+        uploader.setAttachmentProcessing?.(BUSY_ID, false);
         // The latest callback: it reads the address as it is now, not as it was when this run
         // started, so it cannot bring back a setting the user removed meanwhile. Not at all when
         // the run is stale: the address belongs to something else by then.

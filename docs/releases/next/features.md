@@ -767,6 +767,9 @@ gone.
   rules. The integrations feature switch does not apply to them. iFinder 1.2.0 is the first
   integration to declare the capability.
   A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
-  iFinder gets `403 SOURCE_FORBIDDEN`.
+  iFinder gets `403 SOURCE_FORBIDDEN`. The same applies to the sources of an iAssistant answer, which
+  carry `provider: ifinder`: preview, download and details of a citation need the grant of the
+  `ifinder` installation, so a group that may use the iAssistant but not iFinder gets
+  `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).

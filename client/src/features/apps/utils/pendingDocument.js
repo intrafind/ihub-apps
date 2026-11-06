@@ -155,6 +155,37 @@ export function appCanTakeDocument(app, info) {
 }
 
 /**
+ * Whether a chat can take the pending document now: this route's own app is loaded (the route
+ * resolves an app id case-insensitively, so `/apps/Summarizer` loads the app `summarizer`), its
+ * settings are initialized for it rather than for the previous app, the models have loaded and one
+ * is selected (the model decides what an image or audio needs).
+ *
+ * @param {Object} state
+ * @param {Object|null} state.app - the loaded app
+ * @param {string} [state.appId] - the route's app id
+ * @param {boolean} state.modelsLoading
+ * @param {string|null} state.settingsInitializedFor - the app id `useAppSettings` initialized
+ * @param {Object|null} state.model - the selected model object
+ * @returns {boolean}
+ */
+export function isChatReadyForDocument({
+  app,
+  appId,
+  modelsLoading,
+  settingsInitializedFor,
+  model
+}) {
+  return Boolean(
+    app &&
+    appId &&
+    String(app.id).toLowerCase() === String(appId).toLowerCase() &&
+    !modelsLoading &&
+    settingsInitializedFor === app.id &&
+    model
+  );
+}
+
+/**
  * The text for a document that could not be attached, by the HTTP status of the failure.
  *
  * @param {number|undefined} status

@@ -310,6 +310,7 @@
         "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
         "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
         "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+        "noApp": "Keine App kann Dokumente aus diesem System verwenden. Bitte eine Administratorin oder einen Administrator, die Integration zu einer App hinzuzufügen.",
         "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
       },
       "nextcloudSelection": {

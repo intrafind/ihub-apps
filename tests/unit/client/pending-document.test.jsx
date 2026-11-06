@@ -58,6 +58,7 @@ import useIntegrationDocumentAttachment from '../../../client/src/features/apps/
 import {
   appBindsIntegration,
   appCanTakeDocument,
+  isChatReadyForDocument,
   documentFailureKind,
   documentKindOf,
   pendingDocumentQuery,
@@ -155,6 +156,25 @@ describe('pendingDocument helpers', () => {
     expect(appCanTakeDocument({ ...app, integrations: {} }, INFO)).toBe(false);
     expect(appCanTakeDocument({ upload: { fileUpload: { enabled: true } } }, INFO)).toBe(false);
     expect(appCanTakeDocument({ ...app, type: 'redirect' }, INFO)).toBe(false);
+  });
+
+  test("isChatReadyForDocument: the route's own app, initialized settings, models and a model", () => {
+    const state = {
+      app: { id: 'summarizer' },
+      appId: 'summarizer',
+      modelsLoading: false,
+      settingsInitializedFor: 'summarizer',
+      model: { id: 'm' }
+    };
+    expect(isChatReadyForDocument(state)).toBe(true);
+    // The route resolves ids case-insensitively: the app loads under its own id
+    expect(isChatReadyForDocument({ ...state, appId: 'Summarizer' })).toBe(true);
+    expect(isChatReadyForDocument({ ...state, app: { id: 'other' } })).toBe(false);
+    expect(isChatReadyForDocument({ ...state, app: null })).toBe(false);
+    expect(isChatReadyForDocument({ ...state, modelsLoading: true })).toBe(false);
+    // Settings still hold the previous app
+    expect(isChatReadyForDocument({ ...state, settingsInitializedFor: 'other' })).toBe(false);
+    expect(isChatReadyForDocument({ ...state, model: null })).toBe(false);
   });
 
   test('documentFailureKind maps statuses', () => {
@@ -304,12 +324,34 @@ describe('AppsList with a pending document', () => {
     expect(screen.getByLabelText('Poet')).toBeTruthy();
   });
 
-  test('does not narrow the list when no app qualifies', async () => {
+  test('says so when no app binds the integration, and hands nothing on', async () => {
     useApps.mockReturnValue({ apps: [unbound], loading: false, error: null });
-    renderAt('/apps?documentId=d1&integration=ifinder');
-    await screen.findByText(/Annual report/);
-    expect(screen.getByLabelText('Poet')).toBeTruthy();
+    renderAt('/apps?documentId=d1&integration=ifinder&searchProfile=sp');
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'No app can use documents from this system'
+    );
+    expect(screen.queryByText(/Choose an app to open/)).toBeNull();
+    expect(screen.getByLabelText('Poet')).toBeTruthy(); // apps still open, without the document
     expect(screen.queryByLabelText('Only show apps that can use this document')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Poet'));
+    expect(location.pathname).toBe('/apps/poet');
+    expect(location.search).toBe('');
+  });
+
+  test('a provider that is not an installation (project) goes to every app', async () => {
+    fetchIntegrationFilesProbe.mockResolvedValue({
+      id: 'project',
+      definition: null,
+      type: null,
+      name: 'project'
+    });
+    useApps.mockReturnValue({ apps: [unbound], loading: false, error: null });
+    renderAt('/apps?documentId=d1&integration=project');
+    expect(await screen.findByText(/Choose an app to open/)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Poet'));
+    expect(new URLSearchParams(location.search).get('integration')).toBe('project');
   });
 
   test('an integration that is not available says so and apps open without the document', async () => {
@@ -452,6 +494,45 @@ describe('useIntegrationDocumentAttachment', () => {
     await act(async () => {});
     expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1); // a re-render attaches nothing twice
     expect(onConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  test('the composer holds Send while the document loads, also when the run goes stale', async () => {
+    uploader.setAttachmentProcessing = jest.fn();
+    fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+    processCloudFile.mockResolvedValue({
+      type: 'document',
+      content: 'text',
+      fileName: 'report.pdf'
+    });
+    mount();
+    await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+    const calls = uploader.setAttachmentProcessing.mock.calls;
+    expect(calls[0]).toEqual(['integration-document', true]);
+    expect(calls.at(-1)).toEqual(['integration-document', false]);
+    // Busy before the placeholder is shown, idle only after the attachment is in the composer
+    const busy = uploader.setAttachmentProcessing.mock.invocationCallOrder[0];
+    expect(busy).toBeLessThan(uploader.setSelectedFile.mock.invocationCallOrder[0]);
+    expect(uploader.setAttachmentProcessing.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      uploader.setSelectedFile.mock.invocationCallOrder.at(-1)
+    );
+  });
+
+  test.each([
+    ['an image served as a generic type', 'application/octet-stream', 'site.png', 'image/png'],
+    ['a type with parameters', 'Image/JPEG; charset=binary', 'photo.jpg', 'image/jpeg'],
+    ['no type at all', undefined, 'site.png', 'image/png']
+  ])('the file gets a normalized type: %s', async (_, sent, name, expected) => {
+    fetchIntegrationFileContent.mockResolvedValue({
+      data: new Blob(['bytes']),
+      headers: {
+        ...(sent ? { 'content-type': sent } : {}),
+        'content-disposition': `attachment; filename="${name}"`
+      }
+    });
+    processCloudFile.mockResolvedValue({ type: 'image', fileName: name });
+    mount({ currentModel: { id: 'm', supportsVision: true } });
+    await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
+    expect(processCloudFile.mock.calls[0][0].type).toBe(expected);
   });
 
   test('a document keeps its type and is labelled with the integration', async () => {

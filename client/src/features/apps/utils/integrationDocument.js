@@ -3,6 +3,7 @@
 
 import { fetchIntegrationFileContent } from '../../../api/endpoints/integrationFiles';
 import { filenameFromContentDisposition } from '../../../utils/externalNavigation';
+import { contentTypeFromExtension } from '../../nextcloud-embed/utilities/nextcloudFileMeta';
 
 /**
  * A document of an installed integration as a `File`, for the chat to attach:
@@ -34,6 +35,14 @@ export async function fetchIntegrationDocumentFile({ integration, ref, fallbackN
   }
   const fileName =
     filenameFromContentDisposition(response.headers?.['content-disposition']) || fallbackName;
-  const contentType = response.headers?.['content-type'] || 'application/octet-stream';
+  // The type without its parameters (`image/jpeg; charset=binary`), and from the file's extension
+  // when the integration sent none or only a generic one: `processCloudFile` decides image, audio
+  // or document from this type, so it must agree with the kind the attach check derived.
+  const sent = String(response.headers?.['content-type'] || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  const contentType =
+    !sent || sent === 'application/octet-stream' ? contentTypeFromExtension(fileName) : sent;
   return new File([response.data], fileName, { type: contentType });
 }

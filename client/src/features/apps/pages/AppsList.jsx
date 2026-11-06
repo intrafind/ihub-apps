@@ -86,16 +86,27 @@ function AppsList() {
   const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
   const documentCheck = usePendingDocumentCheck(pendingDocument);
   const documentUnusable = ['unavailable', 'noAccess', 'notFound'].includes(documentCheck.status);
-  const documentForApp = pendingDocument && !documentUnusable ? pendingDocument : null;
+  const readableDocument = pendingDocument && !documentUnusable ? pendingDocument : null;
   // Which apps can take it needs the integration's answer (its id, definition and type are what an
   // app's bindings name); without one (the check failed) every app is offered.
   const documentApps = useMemo(
     () =>
-      documentForApp && documentCheck.info
+      readableDocument && documentCheck.info
         ? apps.filter(app => appCanTakeDocument(app, documentCheck.info))
         : [],
-    [documentForApp, documentCheck.info, apps]
+    [readableDocument, documentCheck.info, apps]
   );
+  // An installed integration whose documents no app can receive (none binds it): every app would
+  // refuse the document, so the picker says so and hands nothing on. A provider that is not an
+  // installation (`project`) has no definition and keeps going to every app.
+  const noAppForDocument = Boolean(
+    readableDocument &&
+    !loading &&
+    apps.length > 0 &&
+    documentCheck.info?.definition &&
+    documentApps.length === 0
+  );
+  const documentForApp = noAppForDocument ? null : readableDocument;
   const [onlyDocumentApps, setOnlyDocumentApps] = useState(true);
   const canRestrictToDocumentApps = documentApps.length > 0;
   const restrictToDocumentApps = canRestrictToDocumentApps && onlyDocumentApps;
@@ -463,7 +474,7 @@ function AppsList() {
       <div className="max-w-6xl mx-auto">
         {pendingDocument && (
           <PendingDocumentBanner
-            status={documentCheck.status}
+            status={noAppForDocument ? 'noApp' : documentCheck.status}
             title={documentCheck.title || pendingDocument.prefill}
             onDismiss={dismissPendingDocument}
             canRestrict={canRestrictToDocumentApps}

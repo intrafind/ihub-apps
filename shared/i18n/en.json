@@ -255,6 +255,7 @@
         "unavailable": "The system this document comes from is not available to you.",
         "noAccess": "You do not have access to this document.",
         "notFound": "This document could not be found. It may have been moved or deleted.",
+        "noApp": "No app can use documents from this system. Ask an administrator to add the integration to an app.",
         "continueWithout": "You can still pick an app and start without the document."
       },
       "nextcloudSelection": {
