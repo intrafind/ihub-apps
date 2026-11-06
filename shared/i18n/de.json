@@ -1279,12 +1279,14 @@
         "id": "ID",
         "description": "Beschreibung",
         "apiType": "API-Typ",
-        "baseUrl": "Basis-URL"
+        "baseUrl": "Basis-URL",
+        "gateway": "Model-Gateway"
       },
       "hints": {
         "apiType": "Welche API der Endpunkt spricht. Gateways wie T-Systems LLM Hub sind OpenAI-kompatibel; für einen selbst betriebenen vLLM-Server vLLM wählen.",
         "apiTypeBuiltIn": "Integrierte Anbieter sprechen immer ihre eigene API.",
-        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden."
+        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden.",
+        "gateway": "Wählen Sie iFinder Model Gateway, wenn die Basis-URL ein Gateway ist. Die Modelle werden dann von /v1/gateway/models gelistet und über /v1/gateway/proxy aufgerufen. Der API-Schlüssel ist der Projektschlüssel des Gateways."
       },
       "apiTypes": {
         "openai": "OpenAI-kompatibel (OpenAI, LLM Hub, LM Studio, …)",
@@ -1302,6 +1304,10 @@
         "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
         "count": "{{count}} verknüpft, {{enabled}} aktiv",
         "more": "+{{count}} weitere"
+      },
+      "gateway": {
+        "none": "Keines (normaler Endpunkt)",
+        "ifinder": "iFinder Model Gateway"
       }
     },
     "models": {
@@ -1610,7 +1616,9 @@
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
         },
-        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen"
+        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
+        "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
+        "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt."
       },
       "getStarted": {
         "title": "Fügen Sie die Modelle hinzu, die Ihre Apps nutzen",

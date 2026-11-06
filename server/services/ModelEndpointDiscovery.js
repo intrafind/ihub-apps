@@ -27,7 +27,12 @@ import {
   MAX_OUTPUT_TOKENS_MAX,
   MAX_OUTPUT_TOKENS_MIN
 } from '../../shared/validationPatterns.js';
-import { CUSTOM_PROVIDER_API_TYPES, TRANSCRIPTION_API_TYPES } from '../../shared/llmProviders.js';
+import {
+  CUSTOM_PROVIDER_API_TYPES,
+  GATEWAY_API_TYPES,
+  IFINDER_GATEWAY,
+  TRANSCRIPTION_API_TYPES
+} from '../../shared/llmProviders.js';
 
 /**
  * API types whose `/models` listing this module knows how to call and read —
@@ -95,6 +100,38 @@ export function isAzureOpenAiHost(hostname) {
 }
 
 /**
+ * Parse the URL an admin entered: http(s) only, no credentials in it.
+ *
+ * @param {string} input
+ * @returns {URL}
+ * @throws {ModelDiscoveryError}
+ */
+function parseHttpUrl(input) {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new ModelDiscoveryError('invalidUrl', 'Enter a valid http:// or https:// URL', {
+      status: 400
+    });
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new ModelDiscoveryError('invalidUrl', 'Enter a valid http:// or https:// URL', {
+      status: 400
+    });
+  }
+  if (parsed.username || parsed.password) {
+    throw new ModelDiscoveryError(
+      'credentialsInUrl',
+      'Remove the credentials from the URL and enter the key in the API key field',
+      { status: 400 }
+    );
+  }
+  return parsed;
+}
+
+/**
  * Turn whatever URL the admin pasted into the listing URL and the API base.
  *
  * Accepted forms, using an OpenAI-compatible server as the example:
@@ -119,27 +156,7 @@ export function isAzureOpenAiHost(hostname) {
  * @throws {ModelDiscoveryError} for anything that is not an http(s) URL
  */
 export function resolveModelsEndpoint(input, provider) {
-  const raw = typeof input === 'string' ? input.trim() : '';
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new ModelDiscoveryError('invalidUrl', 'Enter a valid http:// or https:// URL', {
-      status: 400
-    });
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new ModelDiscoveryError('invalidUrl', 'Enter a valid http:// or https:// URL', {
-      status: 400
-    });
-  }
-  if (parsed.username || parsed.password) {
-    throw new ModelDiscoveryError(
-      'credentialsInUrl',
-      'Remove the credentials from the URL and enter the key in the API key field',
-      { status: 400 }
-    );
-  }
+  const parsed = parseHttpUrl(input);
 
   let path = stripTrailingSlashes(parsed.pathname);
   const azure = provider !== 'google' && isAzureOpenAiHost(parsed.hostname);
@@ -540,6 +557,17 @@ export function normalizeModelEntry(item) {
  * @throws {ModelDiscoveryError} when the body is not a model listing
  */
 export function parseModelsResponse(body) {
+  return collectEntries(body, normalizeModelEntry);
+}
+
+/**
+ * The entries of a listing body: `{ data: [...] }` (OpenAI-compatible,
+ * Mistral, LLM Hub, Anthropic, the iFinder Model Gateway), `{ models: [...] }`
+ * (Google) or a bare array.
+ *
+ * @throws {ModelDiscoveryError} when the body is not a model listing
+ */
+function listingItems(body) {
   let items = null;
   if (Array.isArray(body)) items = body;
   else if (Array.isArray(body?.data)) items = body.data;
@@ -550,11 +578,15 @@ export function parseModelsResponse(body) {
         'Expected a JSON object with a "data" or "models" array, as returned by a /models endpoint.'
     });
   }
+  return items;
+}
 
+/** Normalize every entry of a listing with `normalize`; drop duplicates; sort by id. */
+function collectEntries(body, normalize) {
   const seen = new Set();
   const models = [];
-  for (const item of items) {
-    const entry = normalizeModelEntry(item);
+  for (const item of listingItems(body)) {
+    const entry = normalize(item);
     if (!entry || seen.has(entry.id)) continue;
     seen.add(entry.id);
     models.push(entry);
@@ -664,51 +696,15 @@ async function readJsonBody(response) {
 }
 
 /**
- * Fetch and normalize the model listing behind `url`.
- *
- * The call goes through `httpFetch`, so the platform's proxy and SSL settings
- * apply exactly as they do for the imported models later. Private and
- * loopback hosts are allowed on purpose: self-hosted vLLM and LM Studio
- * servers live there, and only admins can reach this. Redirects are not
- * followed, so a key is never sent on to a host the admin did not enter.
- *
- * @param {Object} params
- * @param {string} params.url - URL entered by the admin
- * @param {string} [params.provider='openai'] - One of {@link DISCOVERY_PROVIDERS}
- * @param {string} [params.apiKey] - Optional key; omitted from the call when empty
- * @param {Object} [deps]
- * @param {typeof httpFetch} [deps.fetch] - Injected for tests
- * @returns {Promise<{ provider: string, modelsUrl: string, baseUrl: string, azure: boolean,
- *   models: Array<ReturnType<typeof normalizeModelEntry> & { url: string,
- *     modelType?: 'transcription'|'tts', backend?: string, unsupported?: true }> }>}
- *   A speech model carries the `modelType` and the `backend` (model `provider`)
- *   it is imported with, or `unsupported` when iHub cannot run it.
- * @throws {ModelDiscoveryError}
+ * GET a listing and read its JSON body. Redirects are not followed and every
+ * failure becomes a {@link ModelDiscoveryError} the admin can act on.
  */
-export async function discoverModels({ url, provider = 'openai', apiKey } = {}, deps = {}) {
-  const fetchImpl = deps.fetch || httpFetch;
-  if (!DISCOVERY_PROVIDERS.includes(provider)) {
-    throw new ModelDiscoveryError(
-      'unsupportedProvider',
-      `Model import does not support provider "${provider}"`,
-      { status: 400 }
-    );
-  }
-  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
-  const { modelsUrl, baseUrl, azure, azureApiVersion } = resolveModelsEndpoint(url, provider);
-  // Google and Anthropic page their listings; ask for everything at once.
-  const requestUrl =
-    provider === 'google'
-      ? `${modelsUrl}?pageSize=1000`
-      : provider === 'anthropic'
-        ? `${modelsUrl}?limit=1000`
-        : modelsUrl;
-
+async function fetchListingBody({ fetchImpl, requestUrl, headers, modelsUrl, provider, key }) {
   let response;
   try {
     response = await fetchImpl(requestUrl, {
       method: 'GET',
-      headers: buildDiscoveryHeaders(provider, key),
+      headers,
       redirect: 'manual',
       // node-fetch stops reading the body past this many bytes.
       size: MAX_RESPONSE_BYTES,
@@ -749,8 +745,216 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
     }
     throw describeHttpFailure(response.status, Boolean(key));
   }
+  return readJsonBody(response);
+}
 
-  const models = parseModelsResponse(await readJsonBody(response)).map(entry => {
+// ---------------------------------------------------------------------------
+// iFinder Model Gateway
+// ---------------------------------------------------------------------------
+
+/** Path every Model Gateway route hangs off (`/v1/gateway/models`, `/v1/gateway/proxy/…`). */
+const GATEWAY_PATH = /\/v1\/gateway(?:\/|$)/i;
+
+/**
+ * The gateway's listing URL and the base its proxy routes hang off, from
+ * whatever URL the admin pasted: the gateway root (`https://gw:9614`), the
+ * `/v1/gateway` base, the listing, or a proxy URL. A path prefix in front of
+ * `/v1/gateway` (a reverse proxy mounting the gateway) is kept.
+ *
+ * Query string and fragment are dropped, as for every other endpoint.
+ *
+ * @param {string} input
+ * @returns {{ modelsUrl: string, baseUrl: string, proxyUrl: string, azure: false }}
+ * @throws {ModelDiscoveryError} for anything that is not an http(s) URL
+ */
+export function resolveGatewayEndpoint(input) {
+  const parsed = parseHttpUrl(input);
+  let path = stripTrailingSlashes(parsed.pathname);
+  const match = GATEWAY_PATH.exec(path);
+  if (match) path = path.slice(0, match.index);
+  else if (path.toLowerCase().endsWith('/v1')) path = path.slice(0, -'/v1'.length);
+  const root = `${parsed.origin}${path}`;
+  return {
+    modelsUrl: `${root}/v1/gateway/models`,
+    baseUrl: `${root}/v1/gateway`,
+    proxyUrl: `${root}/v1/gateway/proxy`,
+    azure: false
+  };
+}
+
+/** Upper-cased strings of a list field; anything else is an empty list. */
+function upperList(value) {
+  return Array.isArray(value)
+    ? value.filter(v => typeof v === 'string').map(v => v.trim().toUpperCase())
+    : [];
+}
+
+/**
+ * Normalize one entry of the gateway's `GET /v1/gateway/models`:
+ *
+ *   { id, object, api_type: OPENAI | MISTRAL | AZURE_OPENAI, max_model_len,
+ *     endpoints: [CHAT | EMBEDDING | NER | REALTIME], modalities: [VISION] }
+ *
+ * The gateway probes its backends, so `endpoints` is authoritative for what a
+ * model is — nothing is guessed from the id. A model serving several
+ * endpoints is imported for the first of chat, embedding, realtime.
+ *
+ * The listing says nothing about tool calling: the gateway does not support it
+ * yet, so chat models are reported without tool support.
+ *
+ * @param {Object} item
+ * @returns {Object|null} Null for an entry without an id
+ */
+export function normalizeGatewayEntry(item) {
+  if (!item || typeof item !== 'object') return null;
+  const id = firstString(item.id);
+  if (!id) return null;
+
+  const endpoints = upperList(item.endpoints);
+  const modalities = upperList(item.modalities);
+  const apiType = firstString(item.api_type)?.toUpperCase() || 'OPENAI';
+
+  let type = 'other';
+  if (endpoints.includes('CHAT')) type = 'chat';
+  else if (endpoints.includes('EMBEDDING')) type = 'embedding';
+  else if (endpoints.includes('REALTIME')) type = 'transcription';
+  const chat = type === 'chat';
+
+  return {
+    id,
+    name: id,
+    description: null,
+    ownedBy: null,
+    type,
+    ...(type === 'transcription' ? { realtime: true } : {}),
+    contextWindow: chat
+      ? firstTokenCount(CONTEXT_WINDOW_MIN, CONTEXT_WINDOW_MAX, item.max_model_len)
+      : null,
+    maxOutputTokens: null,
+    supportsVision: chat ? modalities.includes('VISION') : null,
+    // Not offered by the gateway yet; revisit when its listing reports it.
+    supportsTools: chat ? false : null,
+    endOfLife: null,
+    gateway: { apiType, endpoints }
+  };
+}
+
+/** Read the gateway's listing body into normalized entries, sorted by id. */
+export function parseGatewayModelsResponse(body) {
+  return collectEntries(body, normalizeGatewayEntry);
+}
+
+/**
+ * How a model of the gateway is imported: the URL it is called on (always
+ * through the gateway's auto-select `proxy` routes, which pick a healthy
+ * deployment from the model id), the adapter that speaks its dialect and, for
+ * speech, the backend that runs it.
+ *
+ * - `OPENAI` and `AZURE_OPENAI` models use `apiType` (the provider's: `openai`
+ *   or `local`); `MISTRAL` models use the `mistral` adapter.
+ * - iHub has no embedding model type and cannot run NER (`/pooling`), so those
+ *   are listed but `unsupported`.
+ * - Realtime speech is dialect-specific. vLLM takes `model` as a query
+ *   parameter of the URL (the gateway's auto-select needs it there); the
+ *   Mistral backend adds it itself. Azure's realtime handshake is unverified
+ *   in the gateway, so it is `unsupported`.
+ *
+ * @param {string} proxyUrl - `…/v1/gateway/proxy`
+ * @param {string} apiType - The provider's API type, `openai` or `local`
+ * @param {ReturnType<typeof normalizeGatewayEntry>} entry
+ * @returns {Object} Fields merged into the entry
+ */
+export function buildGatewayTarget(proxyUrl, apiType, entry) {
+  const dialect = entry.gateway.apiType;
+  const modelProvider = dialect === 'MISTRAL' ? 'mistral' : apiType;
+  switch (entry.type) {
+    case 'chat':
+      return { url: `${proxyUrl}/chat/completions`, modelProvider };
+    case 'embedding':
+      return { url: `${proxyUrl}/embeddings`, modelProvider, unsupported: true };
+    case 'transcription': {
+      const realtime = `${toWebSocketUrl(proxyUrl)}/realtime`;
+      if (dialect === 'MISTRAL') {
+        return { modelType: 'transcription', backend: 'mistral', url: realtime };
+      }
+      if (dialect === 'OPENAI') {
+        return {
+          modelType: 'transcription',
+          backend: 'vllm-realtime',
+          url: `${realtime}?model=${encodeURIComponent(entry.id)}`
+        };
+      }
+      return { url: realtime, modelProvider, unsupported: true };
+    }
+    default:
+      return { url: `${proxyUrl}/chat/completions`, modelProvider, unsupported: true };
+  }
+}
+
+/**
+ * Fetch and normalize the model listing behind `url`.
+ *
+ * The call goes through `httpFetch`, so the platform's proxy and SSL settings
+ * apply exactly as they do for the imported models later. Private and
+ * loopback hosts are allowed on purpose: self-hosted vLLM and LM Studio
+ * servers live there, and only admins can reach this. Redirects are not
+ * followed, so a key is never sent on to a host the admin did not enter.
+ *
+ * @param {Object} params
+ * @param {string} params.url - URL entered by the admin
+ * @param {string} [params.provider='openai'] - One of {@link DISCOVERY_PROVIDERS}
+ * @param {string} [params.apiKey] - Optional key; omitted from the call when empty
+ * @param {string} [params.gateway] - `ifinder-model-gateway` when the endpoint is an iFinder
+ *   Model Gateway: its own listing and proxy routes apply, and `provider` is then the
+ *   dialect of its OpenAI models (`openai` or `local`)
+ * @param {Object} [deps]
+ * @param {typeof httpFetch} [deps.fetch] - Injected for tests
+ * @returns {Promise<{ provider: string, modelsUrl: string, baseUrl: string, azure: boolean,
+ *   gateway?: string,
+ *   models: Array<ReturnType<typeof normalizeModelEntry> & { url: string,
+ *     modelType?: 'transcription'|'tts', backend?: string, modelProvider?: string,
+ *     unsupported?: true }> }>}
+ *   A speech model carries the `modelType` and the `backend` (model `provider`)
+ *   it is imported with, or `unsupported` when iHub cannot run it. A gateway
+ *   model carries the adapter (`modelProvider`) of its dialect.
+ * @throws {ModelDiscoveryError}
+ */
+export async function discoverModels(
+  { url, provider = 'openai', apiKey, gateway } = {},
+  deps = {}
+) {
+  const fetchImpl = deps.fetch || httpFetch;
+  // An unset or empty `gateway` is an ordinary endpoint.
+  if (gateway) {
+    return discoverGatewayModels({ url, provider, apiKey, gateway }, fetchImpl);
+  }
+  if (!DISCOVERY_PROVIDERS.includes(provider)) {
+    throw new ModelDiscoveryError(
+      'unsupportedProvider',
+      `Model import does not support provider "${provider}"`,
+      { status: 400 }
+    );
+  }
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  const { modelsUrl, baseUrl, azure, azureApiVersion } = resolveModelsEndpoint(url, provider);
+  // Google and Anthropic page their listings; ask for everything at once.
+  const requestUrl =
+    provider === 'google'
+      ? `${modelsUrl}?pageSize=1000`
+      : provider === 'anthropic'
+        ? `${modelsUrl}?limit=1000`
+        : modelsUrl;
+
+  const body = await fetchListingBody({
+    fetchImpl,
+    requestUrl,
+    headers: buildDiscoveryHeaders(provider, key),
+    modelsUrl,
+    provider,
+    key
+  });
+
+  const models = parseModelsResponse(body).map(entry => {
     if (entry.type !== 'transcription' && entry.type !== 'tts') {
       return {
         ...entry,
@@ -773,6 +977,49 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
   });
 
   return { provider, modelsUrl, baseUrl, azure, models };
+}
+
+/** {@link discoverModels} for an iFinder Model Gateway. */
+async function discoverGatewayModels({ url, provider, apiKey, gateway }, fetchImpl) {
+  if (gateway !== IFINDER_GATEWAY) {
+    throw new ModelDiscoveryError('unsupportedProvider', `Unknown gateway "${gateway}"`, {
+      status: 400
+    });
+  }
+  if (!GATEWAY_API_TYPES.includes(provider)) {
+    throw new ModelDiscoveryError(
+      'unsupportedProvider',
+      `A model gateway provider must use the API type ${GATEWAY_API_TYPES.join(' or ')}`,
+      { status: 400 }
+    );
+  }
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  const { modelsUrl, baseUrl, proxyUrl, azure } = resolveGatewayEndpoint(url);
+
+  // The gateway authenticates with a project API key as a Bearer token. It is
+  // optional: a gateway without projects is open (a 401 then says "key needed").
+  const body = await fetchListingBody({
+    fetchImpl,
+    requestUrl: modelsUrl,
+    headers: buildDiscoveryHeaders('openai', key),
+    modelsUrl,
+    provider: gateway,
+    key
+  });
+
+  const models = parseGatewayModelsResponse(body).map(entry => ({
+    ...entry,
+    ...buildGatewayTarget(proxyUrl, provider, entry)
+  }));
+
+  logger.info('Model gateway discovered', {
+    component: 'ModelEndpointDiscovery',
+    url: redactUrlSecrets(modelsUrl),
+    gateway,
+    models: models.length
+  });
+
+  return { provider, modelsUrl, baseUrl, azure, gateway, models };
 }
 
 /**

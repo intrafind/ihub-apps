@@ -14,6 +14,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   resolveModelsEndpoint,
+  resolveGatewayEndpoint,
+  normalizeGatewayEntry,
   buildDiscoveryHeaders,
   buildInferenceUrl,
   buildSpeechTarget,
@@ -697,4 +699,266 @@ test('Azure OpenAI: a pasted api-version keeps the Responses URL the admin gave'
     { fetch }
   );
   assert.equal(v1.models[0].url, 'https://res.openai.azure.com/openai/v1/responses');
+});
+
+// ---------------------------------------------------------------------------
+// iFinder Model Gateway
+// ---------------------------------------------------------------------------
+
+/** What `GET /v1/gateway/models` of the iFinder Model Gateway answers. */
+const GATEWAY_BODY = {
+  data: [
+    {
+      id: 'mistral-large-3',
+      object: 'model',
+      api_type: 'MISTRAL',
+      max_model_len: 131072,
+      endpoints: ['CHAT'],
+      modalities: []
+    },
+    {
+      id: 'qwen3-vl',
+      object: 'model',
+      api_type: 'OPENAI',
+      max_model_len: 32768,
+      endpoints: ['CHAT'],
+      modalities: ['VISION']
+    },
+    {
+      id: 'e5-mistral-7b-instruct',
+      object: 'model',
+      api_type: 'OPENAI',
+      max_model_len: 4096,
+      endpoints: ['EMBEDDING'],
+      modalities: []
+    },
+    {
+      id: 'bio-ner',
+      object: 'model',
+      api_type: 'OPENAI',
+      endpoints: ['NER'],
+      modalities: []
+    },
+    {
+      id: 'voxtral-realtime',
+      object: 'model',
+      api_type: 'OPENAI',
+      endpoints: ['REALTIME'],
+      modalities: []
+    },
+    {
+      id: 'mistral-realtime',
+      object: 'model',
+      api_type: 'MISTRAL',
+      endpoints: ['REALTIME'],
+      modalities: []
+    },
+    {
+      id: 'azure-realtime',
+      object: 'model',
+      api_type: 'AZURE_OPENAI',
+      endpoints: ['REALTIME'],
+      modalities: []
+    },
+    {
+      id: 'gpt-4o',
+      object: 'model',
+      api_type: 'AZURE_OPENAI',
+      max_model_len: 128000,
+      endpoints: ['CHAT'],
+      modalities: ['VISION']
+    }
+  ]
+};
+
+const GATEWAY = 'ifinder-model-gateway';
+
+test('resolveGatewayEndpoint finds the listing and proxy base from any pasted form', () => {
+  const expected = {
+    modelsUrl: 'https://gw.example.com:9614/v1/gateway/models',
+    baseUrl: 'https://gw.example.com:9614/v1/gateway',
+    proxyUrl: 'https://gw.example.com:9614/v1/gateway/proxy',
+    azure: false
+  };
+  for (const input of [
+    'https://gw.example.com:9614',
+    'https://gw.example.com:9614/',
+    'https://gw.example.com:9614/v1',
+    'https://gw.example.com:9614/v1/gateway',
+    'https://gw.example.com:9614/v1/gateway/models',
+    'https://gw.example.com:9614/v1/gateway/proxy/chat/completions',
+    'https://gw.example.com:9614/v1/gateway/models?x=1#frag'
+  ]) {
+    assert.deepEqual(resolveGatewayEndpoint(input), expected, input);
+  }
+});
+
+test('resolveGatewayEndpoint keeps a reverse proxy prefix and rejects bad URLs', () => {
+  assert.equal(
+    resolveGatewayEndpoint('https://host/ai/v1/gateway/models').proxyUrl,
+    'https://host/ai/v1/gateway/proxy'
+  );
+  assert.equal(
+    resolveGatewayEndpoint('https://host/ai').modelsUrl,
+    'https://host/ai/v1/gateway/models'
+  );
+  assert.throws(() => resolveGatewayEndpoint('ftp://host'), { messageKey: 'invalidUrl' });
+  assert.throws(() => resolveGatewayEndpoint('https://user:pw@host'), {
+    messageKey: 'credentialsInUrl'
+  });
+});
+
+test('normalizeGatewayEntry types a model by its endpoints and reads its capabilities', () => {
+  const chat = normalizeGatewayEntry(GATEWAY_BODY.data[1]);
+  assert.equal(chat.type, 'chat');
+  assert.equal(chat.contextWindow, 32768);
+  assert.equal(chat.supportsVision, true);
+  // The gateway does not support tool calling yet.
+  assert.equal(chat.supportsTools, false);
+
+  const text = normalizeGatewayEntry(GATEWAY_BODY.data[0]);
+  assert.equal(text.supportsVision, false);
+
+  assert.equal(normalizeGatewayEntry(GATEWAY_BODY.data[2]).type, 'embedding');
+  assert.equal(normalizeGatewayEntry(GATEWAY_BODY.data[3]).type, 'other');
+  const speech = normalizeGatewayEntry(GATEWAY_BODY.data[4]);
+  assert.equal(speech.type, 'transcription');
+  assert.equal(speech.realtime, true);
+  assert.equal(speech.contextWindow, null);
+  assert.equal(normalizeGatewayEntry({ object: 'model' }), null);
+  // An entry without endpoints cannot be routed: not importable as a chat model.
+  assert.equal(normalizeGatewayEntry({ id: 'x', api_type: 'OPENAI' }).type, 'other');
+});
+
+test('normalizeGatewayEntry takes the chat endpoint first when a model serves several', () => {
+  const entry = normalizeGatewayEntry({
+    id: 'multi',
+    api_type: 'OPENAI',
+    endpoints: ['REALTIME', 'EMBEDDING', 'CHAT']
+  });
+  assert.equal(entry.type, 'chat');
+});
+
+test('discoverModels on a gateway lists /v1/gateway/models with the project key', async () => {
+  const { fetch, calls } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  const result = await discoverModels(
+    {
+      url: 'https://gw.example.com:9614',
+      provider: 'openai',
+      apiKey: ' proj-key ',
+      gateway: GATEWAY
+    },
+    { fetch }
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://gw.example.com:9614/v1/gateway/models');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer proj-key');
+  assert.equal(calls[0].init.redirect, 'manual');
+  assert.equal(result.gateway, GATEWAY);
+  assert.equal(result.provider, 'openai');
+  assert.equal(result.baseUrl, 'https://gw.example.com:9614/v1/gateway');
+  assert.equal(result.modelsUrl, 'https://gw.example.com:9614/v1/gateway/models');
+});
+
+test('discoverModels on a gateway sends no Authorization header without a key', async () => {
+  const { fetch, calls } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  await discoverModels({ url: 'http://gw:9614', provider: 'openai', gateway: GATEWAY }, { fetch });
+  assert.equal(calls[0].init.headers.Authorization, undefined);
+});
+
+test('discoverModels on a gateway calls chat models through the auto-select proxy', async () => {
+  const { fetch } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  const { models } = await discoverModels(
+    { url: 'https://gw.example.com:9614', provider: 'openai', gateway: GATEWAY },
+    { fetch }
+  );
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+  const proxy = 'https://gw.example.com:9614/v1/gateway/proxy';
+
+  // The dialect picks the adapter: Mistral keeps its own, OpenAI and Azure use the provider's.
+  assert.equal(byId['mistral-large-3'].url, `${proxy}/chat/completions`);
+  assert.equal(byId['mistral-large-3'].modelProvider, 'mistral');
+  assert.equal(byId['qwen3-vl'].url, `${proxy}/chat/completions`);
+  assert.equal(byId['qwen3-vl'].modelProvider, 'openai');
+  assert.equal(byId['gpt-4o'].modelProvider, 'openai');
+  assert.equal(byId['gpt-4o'].supportsVision, true);
+  assert.equal(byId['gpt-4o'].unsupported, undefined);
+});
+
+test('discoverModels on a gateway marks models iHub cannot run as unsupported', async () => {
+  const { fetch } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  const { models } = await discoverModels(
+    { url: 'https://gw.example.com:9614', provider: 'local', gateway: GATEWAY },
+    { fetch }
+  );
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+  // iHub has no embedding model type and cannot run NER; Azure realtime is unverified.
+  assert.equal(byId['e5-mistral-7b-instruct'].unsupported, true);
+  assert.equal(byId['e5-mistral-7b-instruct'].url.endsWith('/proxy/embeddings'), true);
+  assert.equal(byId['bio-ner'].unsupported, true);
+  assert.equal(byId['azure-realtime'].unsupported, true);
+  // A `local` provider makes its OpenAI-dialect chat models use the vLLM adapter.
+  assert.equal(byId['qwen3-vl'].modelProvider, 'local');
+});
+
+test('discoverModels on a gateway builds the realtime URL per dialect', async () => {
+  const { fetch } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  const { models } = await discoverModels(
+    { url: 'https://gw.example.com:9614', provider: 'openai', gateway: GATEWAY },
+    { fetch }
+  );
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+
+  // vLLM: the auto-select route reads the model from the query string.
+  assert.equal(byId['voxtral-realtime'].modelType, 'transcription');
+  assert.equal(byId['voxtral-realtime'].backend, 'vllm-realtime');
+  assert.equal(
+    byId['voxtral-realtime'].url,
+    'wss://gw.example.com:9614/v1/gateway/proxy/realtime?model=voxtral-realtime'
+  );
+  // Mistral: its backend adds the model parameter itself.
+  assert.equal(byId['mistral-realtime'].backend, 'mistral');
+  assert.equal(byId['mistral-realtime'].url, 'wss://gw.example.com:9614/v1/gateway/proxy/realtime');
+
+  const insecure = await discoverModels(
+    { url: 'http://gw:9614', provider: 'openai', gateway: GATEWAY },
+    { fetch }
+  );
+  assert.match(insecure.models.find(m => m.id === 'voxtral-realtime').url, /^ws:\/\/gw:9614\//);
+});
+
+test('discoverModels on a gateway reports a rejected or missing project key', async () => {
+  const noKey = await discoverModels(
+    { url: 'https://gw:9614', provider: 'openai', gateway: GATEWAY },
+    { fetch: fakeFetch(fakeResponse(401, {})).fetch }
+  ).catch(e => e);
+  assert.ok(noKey instanceof ModelDiscoveryError);
+  assert.equal(noKey.messageKey, 'apiKeyRequired');
+
+  const wrongKey = await discoverModels(
+    { url: 'https://gw:9614', provider: 'openai', apiKey: 'bad', gateway: GATEWAY },
+    { fetch: fakeFetch(fakeResponse(401, {})).fetch }
+  ).catch(e => e);
+  assert.equal(wrongKey.messageKey, 'authenticationFailed');
+});
+
+test('discoverModels on a gateway rejects an unknown gateway and a non-OpenAI API type', async () => {
+  const { fetch, calls } = fakeFetch(fakeResponse(200, GATEWAY_BODY));
+  for (const params of [
+    { url: 'https://gw:9614', provider: 'openai', gateway: 'other-gateway' },
+    { url: 'https://gw:9614', provider: 'google', gateway: GATEWAY },
+    { url: 'https://gw:9614', provider: 'mistral', gateway: GATEWAY }
+  ]) {
+    const err = await discoverModels(params, { fetch }).catch(e => e);
+    assert.ok(err instanceof ModelDiscoveryError, JSON.stringify(params));
+    assert.equal(err.messageKey, 'unsupportedProvider');
+    assert.equal(err.status, 400);
+  }
+  assert.equal(calls.length, 0, 'nothing is fetched for a bad request');
+});
+
+test('discoverModels without a gateway is unchanged for a /v1/gateway-looking URL', async () => {
+  const { fetch, calls } = fakeFetch(fakeResponse(200, { data: [{ id: 'm' }] }));
+  await discoverModels({ url: 'https://host/v1/gateway', provider: 'openai' }, { fetch });
+  assert.equal(calls[0].url, 'https://host/v1/gateway/models');
 });

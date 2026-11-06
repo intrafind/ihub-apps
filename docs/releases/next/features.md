@@ -1,5 +1,23 @@
 # Features — Unreleased
 
+## iFinder Model Gateway as a Model Source
+
+iHub can use the **iFinder Model Gateway** as a built-in model source. Under **Admin → Models →
+Import from URL**, tick **This endpoint is an iFinder Model Gateway**, enter the gateway root and a
+project API key, and iHub lists the models the project may use.
+
+- **Detected, not guessed:** chat, vision and realtime-speech models are recognised from what the
+  gateway reports for each model, with the context window. Embedding and NER models are listed but
+  cannot be picked.
+- **Right dialect per model:** Mistral models use the Mistral adapter, OpenAI and Azure models the
+  provider's API type. All calls go through the gateway's auto-select route, so a model survives a
+  backend being replaced.
+- **Tool calling:** the gateway does not support it yet, so imported models have tool support off.
+- **Existing providers:** **Admin → Providers** has a new **Model gateway** setting for turning a
+  provider into a gateway provider.
+
+See [Models](../../models.md#importing-models-from-an-endpoint).
+
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
 **Admin → Integrations** is one platform for everything iHub connects to. An integration is a
