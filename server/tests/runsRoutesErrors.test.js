@@ -14,7 +14,12 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-const state = { auth: { ok: true, meta: {} }, interaction: null, answerError: null };
+const state = {
+  auth: { ok: true, meta: {} },
+  interaction: null,
+  answerError: null,
+  interactionAllowed: true
+};
 
 const realAuth = await import('../middleware/authRequired.js');
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
@@ -29,7 +34,7 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
 }));
 jest.unstable_mockModule('../services/loop/runAccess.js', () => ({
   authorizeRun: async () => state.auth,
-  authorizeInteraction: async () => true
+  authorizeInteraction: async () => state.interactionAllowed
 }));
 const realInteraction = await import('../services/loop/InteractionService.js');
 jest.unstable_mockModule('../services/loop/InteractionService.js', () => ({
@@ -61,6 +66,7 @@ beforeEach(() => {
   state.auth = { ok: true, meta: {} };
   state.interaction = { id: 'i1', runId: 'run1', policy: {} };
   state.answerError = null;
+  state.interactionAllowed = true;
 });
 
 describe('run routes: errors', () => {
@@ -92,6 +98,37 @@ describe('run routes: errors', () => {
     state.interaction = { id: 'i1', runId: 'other', policy: {} };
     const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(404);
     expect(res.body).toEqual({ error: 'Interaction not found', code: 'NOT_FOUND' });
+  });
+
+  it('answers a malformed human event with VALIDATION_FAILED and the fields in details.issues', async () => {
+    const res = await request(app)
+      .post('/api/runs/run1/human-events')
+      .send({ kind: 'not-a-kind' })
+      .expect(400);
+    expect(res.body.code).toBe('VALIDATION_FAILED');
+    expect(Array.isArray(res.body.details.issues)).toBe(true);
+  });
+
+  it('refuses to answer a chat tool approval here with ANSWER_IN_CHAT', async () => {
+    state.interaction = {
+      id: 'i1',
+      runId: 'run1',
+      kind: 'approval',
+      origin: 'tool',
+      policy: {},
+      source: { chatId: 'chat1' }
+    };
+    const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(409);
+    expect(res.body).toEqual({ error: 'Answer this approval in its chat', code: 'ANSWER_IN_CHAT' });
+  });
+
+  it('answers a caller who may not answer the interaction with FORBIDDEN', async () => {
+    state.interactionAllowed = false;
+    const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(403);
+    expect(res.body).toEqual({
+      error: 'Insufficient permissions: answer interaction required',
+      code: 'FORBIDDEN'
+    });
   });
 
   it('keeps the status and code of an InteractionError', async () => {
