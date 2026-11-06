@@ -10,7 +10,7 @@ description: >
   `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`, `DATE/`, `NUMBER/` and `OR/` operators
   for linguistic matching, thesaurus expansion, entity and proximity search —
   when a field needs a `.keyword` suffix, filters versus query terms, how a
-  search profile combines words (AND, or OR with minimum_should_match), which
+  query's words combine (OR with minimum_should_match 3<-25%), which
   way to rewrite a query after zero, too few or too many hits, facets, sorting,
   paging and the discovery loop for an unfamiliar corpus. Do NOT use it
   for web search or for other document sources.
@@ -149,29 +149,28 @@ Folding a filter into the query (`Kündigungsfrist AND application.keyword:PDF`)
 still works but skews relevance, because the format term counts toward the
 score.
 
-## How a search profile combines words
+## How iFinder combines the words of a query
 
-How the bare words of a query combine is a setting of the **search profile**,
-not of the syntax: its default operator, and for OR a `minimum_should_match`.
+iFinder's search profiles combine the bare words of a query with **OR**, and
+require a share of them through `minimum_should_match: 3<-25%`. Expect that
+setting:
 
-| Profile setting                              | Bare words `a b c d`                                             |
-| -------------------------------------------- | ---------------------------------------------------------------- |
-| AND (also a profile that sets nothing)       | every word must match                                            |
-| OR + `3<-25%` (shipped Standard, Confluence) | up to 3 words: every word; from 4 on, a quarter may miss (4 → 3) |
-| OR without `minimum_should_match`            | any one word is enough                                           |
+| Bare words in the query | Must match           |
+| ----------------------- | -------------------- |
+| 1 – 3                   | all of them          |
+| 4                       | 3                    |
+| 5 – 7                   | all but one          |
+| 8                       | 6 (a quarter misses) |
 
-The tools do not report a profile's setting. So **when the logic matters,
-write the operator out**: an explicit `AND` or `OR` means the same in every
-profile, and `minimum_should_match` applies only to bare words, never to an
-explicit `OR`. `urlaub OR ferien OR abwesenheit` matches any of the three even
-in a profile that requires three of three bare words.
+`minimum_should_match` counts bare words only. Write the operator out and it
+does not apply: `urlaub OR ferien OR abwesenheit` matches any one of the three,
+and `vertrag AND kündigung AND frist AND lieferant` requires all four.
 
-Filters are always ANDed with the query, whatever the profile.
+Filters are always ANDed with the query.
 
 ## Retrying: narrow or widen, never both ways at once
 
-A retry moves the result set in one direction only, and only some moves go
-that direction in every profile:
+A retry moves the result set in one direction only:
 
 | You got                        | The next query needs                                                 | Same words plus more? |
 | ------------------------------ | -------------------------------------------------------------------- | --------------------- |
@@ -180,16 +179,19 @@ that direction in every profile:
 | some hits, but you want others | fewer words, other words, explicit `OR`                              | no                    |
 
 **Zero hits is a dead end for that wording.** `vacation policy` found nothing,
-so `vacation policy company` cannot find anything either: two or three bare
-words must all match in an AND profile and in the shipped OR profiles alike,
-and every document the longer query could match also contains `vacation` and
-`policy`. Neither can `"vacation policy"` (a phrase is stricter still) or the
-same query with a new filter. A retry after zero has to _remove_ or _replace_
-words:
+so `vacation policy company` cannot find anything either: up to three bare
+words must all match, and every document the longer query could match also
+contains `vacation` and `policy`. Neither can `"vacation policy"` (a phrase is
+stricter still) or the same query with a new filter. Padding it to four words
+or more does not help either: then one word may miss, so the hits are
+documents that lack `vacation` or `policy` — off topic, not the missing
+documents. A retry after zero has to _remove_ or _replace_ words:
 
 ```
-✗ vacation policy                →  vacation policy company       (stricter: still 0)
+✗ vacation policy                →  vacation policy company       (all 3 required: still 0)
 ✗ vacation policy                →  "vacation policy" 2026        (stricter: still 0)
+✗ vacation policy                →  vacation policy company handbook
+                                                                 (3 of 4: hits drift off topic)
 ✓ vacation policy                →  vacation                      (fewer words)
 ✓ vacation policy                →  Urlaub OR Urlaubsregelung OR vacation
                                                                  (other words, explicit OR)
@@ -205,10 +207,10 @@ word for an English question and the other way round before anything else —
 a query missed, drop a word, swap a word for a synonym, or join alternatives
 with an explicit `OR` (`Reisekosten OR Spesen OR "travel expenses"`).
 
-**To narrow, do not rely on bare extra words.** From four words on, the shipped
-OR profiles let a quarter of them miss, so a fifth bare word may not narrow at
-all — and in an OR profile without `minimum_should_match` it widens. A filter,
-a phrase, `NEAR/S(…)` or an explicit `AND` narrows in every profile.
+**To narrow, do not rely on bare extra words.** Up to three words, each added
+word narrows. From four on, one in four may miss, so a fifth bare word may not
+narrow at all. A filter, a phrase, `NEAR/S(…)` or an explicit `AND` always
+narrows.
 
 When a search tool result carries a `hint`, it was written for this decision:
 follow it.
@@ -382,20 +384,20 @@ returns the long tail.
 
 ## When a search disappoints
 
-| Symptom                                 | Likely cause                                     | Fix                                        |
-| --------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
-| 0 hits with a filter                    | `.keyword` missing, or on a field that has none  | `iFinder_getFields`, then re-filter        |
-| 0 hits, exact value                     | wrong spelling or casing                         | `iFinder_getFacetValues` on that field     |
-| 0 hits, topic query                     | too many words, or words the corpus doesn't use  | fewer words, synonyms, other language, OR  |
-| 0 hits, plausible query                 | wrong search profile (unless fixed for the chat) | `iFinder_listProfiles`, then retry         |
-| too few hits, more expected             | query too strict                                 | drop or swap words, explicit `OR`          |
-| far too many hits                       | topic-only query, or an OR profile               | `filter`, phrase, `NEAR/S`, explicit `AND` |
-| right topic, wrong docs                 | ranking skewed by filter terms in the query      | move them to `filter`                      |
-| a known document missing                | the user cannot read it                          | say so; do not retry                       |
-| sort ignored                            | sorting on an analyzed text field                | use the `.keyword` variant                 |
-| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it               | re-run without it and compare `totalFound` |
-| a German compound finds nothing         | analyzer stopped at the surface form             | `MODE/c&` or `MODE/s&`                     |
-| a name or code matches too loosely      | lemma or compound expansion                      | `MODE/e&`                                  |
+| Symptom                                 | Likely cause                                      | Fix                                        |
+| --------------------------------------- | ------------------------------------------------- | ------------------------------------------ |
+| 0 hits with a filter                    | `.keyword` missing, or on a field that has none   | `iFinder_getFields`, then re-filter        |
+| 0 hits, exact value                     | wrong spelling or casing                          | `iFinder_getFacetValues` on that field     |
+| 0 hits, topic query                     | too many words, or words the corpus doesn't use   | fewer words, synonyms, other language, OR  |
+| 0 hits, plausible query                 | wrong search profile (unless fixed for the chat)  | `iFinder_listProfiles`, then retry         |
+| too few hits, more expected             | query too strict                                  | drop or swap words, explicit `OR`          |
+| far too many hits                       | topic-only query, or 4+ bare words (one may miss) | `filter`, phrase, `NEAR/S`, explicit `AND` |
+| right topic, wrong docs                 | ranking skewed by filter terms in the query       | move them to `filter`                      |
+| a known document missing                | the user cannot read it                           | say so; do not retry                       |
+| sort ignored                            | sorting on an analyzed text field                 | use the `.keyword` variant                 |
+| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it                | re-run without it and compare `totalFound` |
+| a German compound finds nothing         | analyzer stopped at the surface form              | `MODE/c&` or `MODE/s&`                     |
+| a name or code matches too loosely      | lemma or compound expansion                       | `MODE/e&`                                  |
 
 Never report "there are no documents about X" after one failed query. Widen the
 wording and confirm the profile and the field names first — the common case is a

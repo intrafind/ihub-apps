@@ -6,13 +6,13 @@
  *
  * The shipped `ifinder-search` prompt told the model to rephrase a search with
  * "more specific terms". After a search with no hits that is the one retry
- * certain to fail: up to three bare words must all match — in AND search
- * profiles and in the shipped OR profiles (`minimum_should_match: 3<-25%`)
- * alike — so "vacation policy" finding nothing means "vacation policy company"
- * finds nothing either. The new default drops "more specific terms" and adds a
- * bullet: after zero hits, or to find other documents, use fewer or different
- * words and an explicit OR; write AND or OR out when it matters, since how bare
- * words combine is a profile setting.
+ * certain to fail: iFinder's search profiles combine bare words with OR and
+ * `minimum_should_match: 3<-25%`, so up to three words must all match —
+ * "vacation policy" finding nothing means "vacation policy company" finds
+ * nothing either. The new default drops "more specific terms" and adds a
+ * bullet explaining that setting: after zero hits, or to find other documents,
+ * use fewer or different words and an explicit OR; to narrow, use a filter, a
+ * phrase, NEAR/S or an explicit AND rather than more bare words.
  *
  * `performInitialSetup` only copies files that are *missing* from contents/,
  * so existing installations keep the old wording until this migration runs.
@@ -36,13 +36,13 @@ export const FRAGMENTS = Object.freeze({
     from: '- Search several times, not once. Break a question into its parts and rephrase: synonyms, German and English wording, more specific terms, and IntraFind operators such as `NEAR/S(term1 term2)` (both in one sentence) or `THES/&term` (thesaurus expansion).',
     to:
       '- Search several times, not once. Break a question into its parts and rephrase: synonyms, German and English wording, and IntraFind operators such as `NEAR/S(term1 term2)` (both in one sentence) or `THES/&term` (thesaurus expansion).\n' +
-      '- After 0 hits, or to find other documents, search with fewer or different words — synonyms, the other language, alternatives joined with an explicit OR — never with the same words plus more: up to three words must all match in every shipped search profile, so a query that found nothing finds nothing once it gets longer. Whether bare words combine with AND or OR is a setting of the search profile, so write `AND` or `OR` out when it matters; to narrow a result that is too large, use a filter, a phrase, `NEAR/S(…)` or an explicit `AND`.'
+      '- iFinder combines the bare words of a query with OR, but up to three words must all match, and from four words on one in four may miss. So after 0 hits, or to find other documents, search with fewer or different words — synonyms, the other language, alternatives joined with an explicit OR — never with the same words plus more: one more word cannot find anything, and a fourth word only lets one of yours go missing. To narrow a result that is too large, use a filter, a phrase, `NEAR/S(…)` or an explicit `AND`, not more bare words.'
   },
   de: {
     from: '- Suche mehrfach, nicht nur einmal. Zerlege eine Frage in ihre Teile und formuliere um: Synonyme, deutsche und englische Begriffe, spezifischere Begriffe und IntraFind-Operatoren wie `NEAR/S(begriff1 begriff2)` (beide in einem Satz) oder `THES/&begriff` (Thesaurus-Erweiterung).',
     to:
       '- Suche mehrfach, nicht nur einmal. Zerlege eine Frage in ihre Teile und formuliere um: Synonyme, deutsche und englische Begriffe und IntraFind-Operatoren wie `NEAR/S(begriff1 begriff2)` (beide in einem Satz) oder `THES/&begriff` (Thesaurus-Erweiterung).\n' +
-      '- Nach 0 Treffern oder um andere Dokumente zu finden, mit weniger oder anderen Wörtern suchen — Synonyme, die andere Sprache, Alternativen mit explizitem OR verknüpft — nie mit denselben Wörtern plus weiteren: Bis zu drei Wörter müssen in jedem ausgelieferten Suchprofil alle treffen, eine Suche ohne Treffer findet verlängert also nichts. Ob einfache Wörter mit UND oder ODER verknüpft werden, ist eine Einstellung des Suchprofils, daher `AND` oder `OR` ausschreiben, wenn es darauf ankommt; ein zu großes Ergebnis mit einem Filter, einer Phrase, `NEAR/S(…)` oder explizitem `AND` eingrenzen.'
+      '- iFinder verknüpft die einfachen Wörter einer Suche mit ODER, doch bis zu drei Wörter müssen alle treffen, und ab vier Wörtern darf jedes vierte fehlen. Nach 0 Treffern oder um andere Dokumente zu finden, daher mit weniger oder anderen Wörtern suchen — Synonyme, die andere Sprache, Alternativen mit explizitem OR verknüpft — nie mit denselben Wörtern plus weiteren: Ein Wort mehr findet nichts, und ein viertes Wort lässt nur eines deiner Wörter fehlen. Ein zu großes Ergebnis mit einem Filter, einer Phrase, `NEAR/S(…)` oder explizitem `AND` eingrenzen, nicht mit mehr einfachen Wörtern.'
   }
 });
 

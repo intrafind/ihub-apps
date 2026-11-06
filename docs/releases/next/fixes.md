@@ -341,16 +341,16 @@ not complete and asks the user to try again or to contact the administrator.
 ## iFinder Search: A Search With No Hits Is Retried With Fewer Words, Not More
 
 After a search found nothing, the model often searched again with the same words plus more —
-"vacation policy" returned 0 hits, so it tried "vacation policy company". Up to three words of a
-query must all match, in AND search profiles and in iFinder's shipped profiles alike, so the longer
-query was certain to fail as well. The model now widens instead: it drops words, tries synonyms and
+"vacation policy" returned 0 hits, so it tried "vacation policy company". iFinder's search profiles
+require all of up to three words, so the longer query was certain to fail as well. The model now widens instead: it drops words, tries synonyms and
 the other language (German/English), or joins alternatives with an explicit OR.
 
 - A search with no hits now tells the model which retries can work, including whether a filter is
   what excluded everything. It suggests another search profile only when the chat has not fixed
   one.
-- The model knows that whether words combine with AND or OR is a setting of the search profile, and
-  writes AND or OR out when it matters — an explicit operator means the same in every profile.
+- The model knows how iFinder combines the words of a query: all of up to three words must match,
+  and from four on one in four may be missing. To narrow a result it uses filters, phrases or an
+  explicit AND rather than more words.
 - The same guidance is in the **ifinder-search** skill, the iFinder search action's model guidance
   and the prompt of the **iFinder Search** app.
 - Installations that kept the shipped iFinder Search app prompt get the new wording on upgrade. A

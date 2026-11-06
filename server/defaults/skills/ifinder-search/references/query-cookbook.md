@@ -185,11 +185,11 @@ iFinder_search({ query: '*', filter: ['cust.classification.keyword:"class 1"'] }
 ✓ sort: ['file.name.keyword:asc']
 
 ✗ 0 hits for 'vacation policy', then query: 'vacation policy company'
-    Up to three bare words must all match — in AND profiles and in the shipped
-    OR profiles alike — so the longer query matches a subset of the first
-    one's hits, and that was none.
+    Up to three bare words must all match, so the longer query matches a
+    subset of the first one's hits, and that was none. From four words on one
+    may miss, so the hits lack `vacation` or `policy`: off topic.
 ✓ query: 'vacation'  ·  query: 'Urlaub OR Urlaubsregelung OR vacation'
-    An explicit OR is an OR in every profile; minimum_should_match only
+    An explicit OR matches any one of the words; minimum_should_match only
     applies to bare words.
 
 ✗ filter: ['application.keyword:pdf']
