@@ -59,11 +59,19 @@ const stored = () => ({
   'gw-retired': { id: 'gw-retired', modelId: 'retired', enabled: true, default: true }
 });
 
-const pick = item => ({ kind: item.kind, remoteId: item.remoteId });
+// A pick names the iHub model for `changed` and `removed` (several can share a remote id).
+const pick = item => ({
+  kind: item.kind,
+  remoteId: item.remoteId,
+  ...(item.modelId ? { modelId: item.modelId } : {})
+});
 const outcomes = results => results.map(r => `${r.kind}:${r.remoteId}=${r.status}`);
 
 test('keys and patches', () => {
   assert.equal(itemKey(ADDED), 'added:llama-4');
+  // changed and removed are about one iHub model, not the remote model it points at
+  assert.equal(itemKey(CHANGED), 'changed:gw-qwen');
+  assert.equal(itemKey(REMOVED), 'removed:gw-retired');
   assert.deepEqual(patchOf(CHANGED.changes), { contextWindow: 65536, supportsVision: true });
   assert.deepEqual(patchOf(undefined), {});
 });
@@ -217,5 +225,77 @@ test('every update and disable keeps its change history and audit entry', async 
 test('no picks, nothing done', async () => {
   const store = memoryStore(stored());
   assert.deepEqual(await applyGatewayDrift({ picks: [], items: ITEMS, store }), []);
+  assert.deepEqual(store.log, []);
+});
+
+// Two iHub models can share a remote id: a clone of an imported model keeps its
+// `modelId` and its provider. Each is its own item and must be picked and applied alone.
+const CLONE_A = { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired', reason: 'missing' };
+const CLONE_B = {
+  kind: 'removed',
+  remoteId: 'retired',
+  modelId: 'gw-retired-copy',
+  reason: 'missing'
+};
+const CLONES = [CLONE_A, CLONE_B];
+const clonedFiles = () => ({
+  'gw-retired': { id: 'gw-retired', modelId: 'retired', enabled: true },
+  'gw-retired-copy': { id: 'gw-retired-copy', modelId: 'retired', enabled: true }
+});
+
+test('two models of one remote model are both applied when both are picked', async () => {
+  const store = memoryStore(clonedFiles());
+  const results = await applyGatewayDrift({ picks: CLONES.map(pick), items: CLONES, store });
+
+  assert.deepEqual(
+    results.map(r => [r.modelId, r.status]),
+    [
+      ['gw-retired', 'applied'],
+      ['gw-retired-copy', 'applied']
+    ]
+  );
+  assert.equal(store.files.get('gw-retired').enabled, false);
+  assert.equal(store.files.get('gw-retired-copy').enabled, false);
+});
+
+test('picking one of two models of a remote model leaves the other alone', async () => {
+  const store = memoryStore(clonedFiles());
+  const results = await applyGatewayDrift({ picks: [pick(CLONE_B)], items: CLONES, store });
+
+  assert.deepEqual(
+    results.map(r => [r.modelId, r.status]),
+    [['gw-retired-copy', 'applied']]
+  );
+  assert.equal(store.files.get('gw-retired').enabled, true);
+  assert.equal(store.files.get('gw-retired-copy').enabled, false);
+});
+
+test('changes to two models of one remote model go to the right model each', async () => {
+  const a = { ...CHANGED, modelId: 'gw-qwen' };
+  const b = {
+    ...CHANGED,
+    modelId: 'gw-qwen-copy',
+    changes: [{ field: 'contextWindow', from: 1, to: 999 }]
+  };
+  const store = memoryStore({
+    'gw-qwen': { id: 'gw-qwen', contextWindow: 32768 },
+    'gw-qwen-copy': { id: 'gw-qwen-copy', contextWindow: 1 }
+  });
+  await applyGatewayDrift({ picks: [pick(a), pick(b)], items: [a, b], store });
+  assert.equal(store.files.get('gw-qwen').contextWindow, 65536);
+  assert.equal(store.files.get('gw-qwen-copy').contextWindow, 999);
+});
+
+test('a pick that does not name the model of a changed or removed item is skipped', async () => {
+  const store = memoryStore(clonedFiles());
+  const results = await applyGatewayDrift({
+    picks: [{ kind: 'removed', remoteId: 'retired' }],
+    items: CLONES,
+    store
+  });
+  assert.deepEqual(
+    results.map(r => r.status),
+    ['skipped']
+  );
   assert.deepEqual(store.log, []);
 });

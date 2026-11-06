@@ -1013,7 +1013,7 @@
         "changed": "Changed on the gateway",
         "changedHint": "The model is updated to match the gateway.",
         "added": "New on the gateway",
-        "addedHint": "The model is imported.",
+        "addedHint": "Tick the models to import. They are enabled when imported.",
         "removed": "No longer available",
         "removedHint": "The model is disabled, not deleted: apps may still use it.",
         "importedAs": "{{remoteId}} → imported as {{id}}",

@@ -231,3 +231,25 @@ test('items come out changed, added, removed, each by remote id', () => {
     ['changed:qwen3-vl', 'added:new-one', 'removed:aa-gone', 'removed:zz-gone']
   );
 });
+
+test('a clone of an imported model is reported on its own', () => {
+  const original = imported(CHAT, { contextWindow: 1 });
+  const clone = { ...original, id: 'ifinder-gw-qwen3-vl-copy' }; // Clone keeps modelId and provider
+  const changed = drift([original, clone], [listed(CHAT)]);
+  assert.deepEqual(
+    changed.map(item => [item.kind, item.modelId]),
+    [
+      ['changed', 'ifinder-gw-qwen3-vl'],
+      ['changed', 'ifinder-gw-qwen3-vl-copy']
+    ]
+  );
+
+  const gone = drift([original, clone], []);
+  assert.deepEqual(
+    gone.map(item => [item.kind, item.modelId]),
+    [
+      ['removed', 'ifinder-gw-qwen3-vl'],
+      ['removed', 'ifinder-gw-qwen3-vl-copy']
+    ]
+  );
+});

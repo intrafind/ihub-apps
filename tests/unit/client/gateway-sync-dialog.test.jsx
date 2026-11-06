@@ -113,19 +113,35 @@ test('shows what changed, what is new and what is gone, with the old and new val
   expect(screen.getByText(/disabled, not deleted/)).toBeInTheDocument();
 });
 
-test('every item starts ticked and the button counts them', async () => {
+test('changes and gone models start ticked; new models start unticked', async () => {
   setup();
   await open();
-  expect(screen.getAllByRole('checkbox').every(box => box.checked)).toBe(true);
-  expect(screen.getByRole('button', { name: 'Apply 4' })).toBeEnabled();
+  const ticked = name => screen.getByRole('checkbox', { name }).checked;
+  expect(ticked(/gw-qwen/)).toBe(true);
+  expect(ticked(/gw-retired/)).toBe(true);
+  expect(ticked(/gw-emb/)).toBe(true);
+  // Importing makes a model available to users: that is the admin's explicit choice.
+  expect(ticked(/mistral-large-3 → imported as/)).toBe(false);
+  expect(screen.getByRole('button', { name: 'Apply 3' })).toBeEnabled();
+});
+
+test('Apply never imports a new model the admin did not tick', async () => {
+  setup();
+  await open();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Apply 3' }));
+  });
+  const [, options] = writes()[0];
+  expect(options.body.items.map(i => i.kind)).toEqual(['changed', 'removed', 'removed']);
 });
 
 test('sends only what is still ticked, then reports and tells the page', async () => {
   setup();
   const { onSynced } = await open();
 
-  // Keep the new model and the update; leave both gone models alone.
-  fireEvent.click(screen.getByRole('checkbox', { name: /retired/ }));
+  // Import the new model and keep the update; leave both gone models alone.
+  fireEvent.click(screen.getByRole('checkbox', { name: /mistral-large-3 → imported as/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /gw-retired/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /gw-emb/ }));
   expect(screen.getByRole('button', { name: 'Apply 2' })).toBeEnabled();
 
@@ -140,7 +156,7 @@ test('sends only what is still ticked, then reports and tells the page', async (
   expect(options.method).toBe('POST');
   expect(options.body).toEqual({
     items: [
-      { kind: 'changed', remoteId: 'qwen3-vl' },
+      { kind: 'changed', remoteId: 'qwen3-vl', modelId: 'gw-qwen' },
       { kind: 'added', remoteId: 'mistral-large-3' }
     ]
   });
@@ -159,14 +175,18 @@ test('a gone model is sent as a pick, and nothing is ever deleted', async () => 
     fireEvent.click(screen.getByRole('button', { name: 'Apply 1' }));
   });
   expect(writes()).toHaveLength(1);
-  expect(writes()[0][1].body).toEqual({ items: [{ kind: 'removed', remoteId: 'retired' }] });
+  expect(writes()[0][1].body).toEqual({
+    items: [{ kind: 'removed', remoteId: 'retired', modelId: 'gw-retired' }]
+  });
   expect(mockApi.mock.calls.some(([, options]) => options?.method === 'DELETE')).toBe(false);
 });
 
 test('cannot apply with nothing ticked', async () => {
   setup();
   await open();
-  for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+  for (const box of screen.getAllByRole('checkbox').filter(box => box.checked)) {
+    fireEvent.click(box);
+  }
   expect(screen.getByRole('button', { name: 'Apply 0' })).toBeDisabled();
 });
 
@@ -192,6 +212,7 @@ test('an item the server could not apply is named with its reason; the rest went
     )
   );
   const { onSynced } = await open();
+  fireEvent.click(screen.getByRole('checkbox', { name: /mistral-large-3 → imported as/ }));
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply 4' }));
   });
@@ -207,6 +228,7 @@ test('a pick the gateway changed since the admin looked is explained, not hidden
     picks.map(pick => ({ ...pick, status: 'skipped', detail: 'changedSinceReview' }))
   );
   const { onSynced } = await open();
+  fireEvent.click(screen.getByRole('checkbox', { name: /mistral-large-3 → imported as/ }));
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply 4' }));
   });
@@ -253,4 +275,31 @@ test('when the gateway cannot be asked, shows why and lets the admin try again',
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   });
   expect(screen.getByRole('heading', { name: /Changed on the gateway/ })).toBeInTheDocument();
+});
+
+test('two models of one remote model are separate rows, ticked and sent one by one', async () => {
+  const clones = {
+    modelsUrl: 'x',
+    items: [
+      { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired', reason: 'missing' },
+      { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired-copy', reason: 'missing' }
+    ]
+  };
+  setup(clones);
+  await open();
+
+  // Two rows, two checkboxes: ticking or unticking one does not touch the other.
+  expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('checkbox', { name: /gw-retired-copy/ }));
+  expect(screen.getByRole('checkbox', { name: /gw-retired-copy/ }).checked).toBe(false);
+  expect(screen.getByRole('checkbox', { name: /^gw-retired\b(?!-copy)/ }).checked).toBe(true);
+  expect(screen.getByRole('button', { name: 'Apply 1' })).toBeEnabled();
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Apply 1' }));
+  });
+  expect(writes()[0][1].body).toEqual({
+    items: [{ kind: 'removed', remoteId: 'retired', modelId: 'gw-retired' }]
+  });
+  expect(screen.getByText('1 applied, 0 not applied.')).toBeInTheDocument();
 });

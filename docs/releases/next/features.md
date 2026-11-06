@@ -31,8 +31,8 @@ project API key, and iHub lists the models the project may use.
   provider into a gateway provider.
 - **Sync with gateway:** on a gateway provider's page, **Sync with gateway** compares what the
   gateway lists now with the models imported from it: new models, changed context window, image
-  input, URL or adapter, and models that are gone. Review the changes, untick what you don't want,
-  and apply. A model that is gone is disabled, never deleted.
+  input, URL or adapter, and models that are gone. Changes and gone models start ticked, new
+  models start unticked (importing one makes it available), and nothing happens until you apply. A model that is gone is disabled, never deleted.
 
 See [Models](../../models.md#importing-models-from-an-endpoint).
 

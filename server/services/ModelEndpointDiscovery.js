@@ -48,7 +48,7 @@ const DISCOVERY_TIMEOUT_MS = 15000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 
 /** Most entries returned to the browser. */
-const MAX_MODELS = 5000;
+export const MAX_MODELS = 5000;
 
 /**
  * Error raised for anything the admin has to fix: a bad URL, an endpoint that

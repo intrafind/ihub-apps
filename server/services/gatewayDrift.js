@@ -10,11 +10,12 @@
  * compares what the gateway lists now (the normalized entries of
  * `discoverModels`) with the models linked to its provider and reports, per
  * model, what an admin could do about it. Nothing is changed here: the admin
- * picks, and the client applies the pick through the regular model endpoints.
+ * picks, and `gatewaySyncApply.js` applies the pick on the server.
  *
  * Three kinds of item:
  *   - `added`:   the gateway lists a model nobody imported. Carries the model
- *                config to create, the same one the import dialog would build.
+ *                config the import dialog would build, as a preview: applying
+ *                builds it again from a fresh listing.
  *   - `changed`: an imported model differs from what the gateway reports now
  *                (URL, adapter, context window, vision). Carries the fields as
  *                `{ field, from, to }`.
@@ -175,6 +176,9 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
   }
 
   return items.sort(
-    (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.remoteId.localeCompare(b.remoteId)
+    (a, b) =>
+      KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+      a.remoteId.localeCompare(b.remoteId) ||
+      (a.modelId || '').localeCompare(b.modelId || '')
   );
 }

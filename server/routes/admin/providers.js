@@ -29,6 +29,7 @@ import {
 } from '../../services/llmProviders.js';
 import {
   discoverModels,
+  MAX_MODELS,
   ModelDiscoveryError,
   stripTrailingSlashes
 } from '../../services/ModelEndpointDiscovery.js';
@@ -234,11 +235,12 @@ const modelStore = {
     configStore.writeJson(await configStore.resolveIdToPath('models', id), model)
 };
 
-/** Most picks one sync request may carry. */
-const MAX_SYNC_PICKS = 500;
+/** Most picks one sync request may carry: as many as a listing is read with. */
+const MAX_SYNC_PICKS = MAX_MODELS;
 
 /**
- * The picks of a sync request: `{ items: [{ kind, remoteId }] }`.
+ * The picks of a sync request: `{ items: [{ kind, remoteId, modelId? }] }`. A `changed` or
+ * `removed` pick names the iHub model in `modelId`: several iHub models can share one remote id.
  *
  * @throws {ServiceError} `BAD_REQUEST` for anything else
  */
@@ -250,19 +252,28 @@ function picksOf(body) {
       `items must be a list of at most ${MAX_SYNC_PICKS} picks`
     );
   }
+  const textOf = (value, max) =>
+    typeof value === 'string' && value.length > 0 && value.length <= max;
   for (const pick of list) {
+    const kind = pick?.kind;
     const valid =
       pick &&
       typeof pick === 'object' &&
-      ['added', 'changed', 'removed'].includes(pick.kind) &&
-      typeof pick.remoteId === 'string' &&
-      pick.remoteId.length > 0 &&
-      pick.remoteId.length <= 200;
+      ['added', 'changed', 'removed'].includes(kind) &&
+      textOf(pick.remoteId, 200) &&
+      (kind === 'added' ? pick.modelId === undefined : textOf(pick.modelId, 100));
     if (!valid) {
-      throw new ServiceError('BAD_REQUEST', 'Each pick needs a kind and a remoteId');
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Each pick needs a kind and a remoteId, and a changed or removed pick the modelId of the model'
+      );
     }
   }
-  return list.map(({ kind, remoteId }) => ({ kind, remoteId }));
+  return list.map(({ kind, remoteId, modelId }) => ({
+    kind,
+    remoteId,
+    ...(modelId ? { modelId } : {})
+  }));
 }
 
 export default function registerAdminProvidersRoutes(app) {
@@ -340,14 +351,20 @@ export default function registerAdminProvidersRoutes(app) {
    *     description: |
    *       Reads the model listing of an iFinder Model Gateway provider (its base URL
    *       and stored project key) and compares it with the models linked to the
-   *       provider. Changes nothing: every item names what an admin could do, and the
-   *       client applies the choice with the regular model endpoints.
+   *       provider. Changes nothing: every item names what an admin could do. To apply
+   *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
+   *       replay it through the model endpoints, which read the config cache and can
+   *       write back a stale copy.
    *
-   *       Item kinds: `added` (listed, not imported; carries the model config to
-   *       `POST /admin/models`), `changed` (an imported model differs from the gateway;
-   *       carries `changes` as `{ field, from, to }`), `removed` (an enabled imported
-   *       model the gateway no longer lists, or lists as something iHub cannot run;
-   *       `reason` is `missing` or `unsupported`; the offer is to disable it).
+   *       Item kinds: `added` (listed, not imported; `model` is a preview of the config
+   *       that would be created, the sync builds it again from a fresh listing),
+   *       `changed` (an imported model differs from the gateway; carries `changes` as
+   *       `{ field, from, to }`), `removed` (an enabled imported model the gateway no
+   *       longer lists, or lists as something iHub cannot run; `reason` is `missing` or
+   *       `unsupported`; the offer is to disable it).
+   *
+   *       `changed` and `removed` items name the iHub model in `modelId`. Several iHub
+   *       models can share one `remoteId` (a clone keeps it), each is its own item.
    *     tags:
    *       - Admin - Providers
    *     security:
@@ -429,7 +446,8 @@ export default function registerAdminProvidersRoutes(app) {
    *       The server asks the gateway again and applies only picks that still match what it
    *       reports now; it never takes a model config from the request. `added` creates the
    *       model, `changed` sets the changed fields on the stored model, `removed` disables
-   *       the model (it is never deleted).
+   *       the model (it is never deleted). A `changed` or `removed` pick names the iHub
+   *       model in `modelId`, because several iHub models can share one `remoteId`.
    *
    *       The request succeeds as a whole when it is understood: each item has its own
    *       outcome, and one failure does not stop the others.
@@ -454,7 +472,7 @@ export default function registerAdminProvidersRoutes(app) {
    *             properties:
    *               items:
    *                 type: array
-   *                 maxItems: 500
+   *                 maxItems: 5000
    *                 items:
    *                   type: object
    *                   required: [kind, remoteId]
@@ -464,6 +482,9 @@ export default function registerAdminProvidersRoutes(app) {
    *                       enum: [added, changed, removed]
    *                     remoteId:
    *                       type: string
+   *                     modelId:
+   *                       type: string
+   *                       description: The iHub model; required for `changed` and `removed`
    *     responses:
    *       200:
    *         description: One outcome per picked item, in the order they were applied

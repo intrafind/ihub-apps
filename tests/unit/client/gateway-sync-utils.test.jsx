@@ -34,9 +34,15 @@ const CHANGED = {
 const REMOVED = { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired', reason: 'missing' };
 
 describe('small helpers', () => {
-  it('keys an item by kind and remote model', () => {
+  it('keys an added item by its remote model, a changed or removed one by the iHub model', () => {
     expect(itemKey(ADDED)).toBe('added:mistral-large-3');
-    expect(itemKey({ ...ADDED, kind: 'changed' })).toBe('changed:mistral-large-3');
+    expect(itemKey(CHANGED)).toBe('changed:gw-qwen');
+    expect(itemKey(REMOVED)).toBe('removed:gw-retired');
+  });
+
+  it('keeps two iHub models of one remote model apart', () => {
+    const clone = { ...REMOVED, modelId: 'gw-retired-copy' };
+    expect(itemKey(clone)).not.toBe(itemKey(REMOVED));
   });
 
   it('counts the items of each kind', () => {
@@ -58,7 +64,7 @@ describe('small helpers', () => {
 });
 
 describe('applyGatewaySync', () => {
-  it('sends only the kind and remote id of each pick, never a model config', async () => {
+  it('sends only the kind, the remote id and the iHub model of each pick, never a model config', async () => {
     const call = jest.fn(async () => ({ data: { items: [] } }));
     await applyGatewaySync('ifinder-gw', [ADDED, CHANGED, REMOVED], call);
 
@@ -69,8 +75,8 @@ describe('applyGatewaySync', () => {
     expect(options.body).toEqual({
       items: [
         { kind: 'added', remoteId: 'mistral-large-3' },
-        { kind: 'changed', remoteId: 'qwen3-vl' },
-        { kind: 'removed', remoteId: 'retired' }
+        { kind: 'changed', remoteId: 'qwen3-vl', modelId: 'gw-qwen' },
+        { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired' }
       ]
     });
   });
@@ -83,10 +89,17 @@ describe('applyGatewaySync', () => {
           {
             kind: 'changed',
             remoteId: 'qwen3-vl',
+            modelId: 'gw-qwen',
             status: 'skipped',
             detail: 'changedSinceReview'
           },
-          { kind: 'removed', remoteId: 'retired', status: 'failed', detail: 'disk full' }
+          {
+            kind: 'removed',
+            remoteId: 'retired',
+            modelId: 'gw-retired',
+            status: 'failed',
+            detail: 'disk full'
+          }
         ]
       }
     }));
@@ -101,13 +114,19 @@ describe('applyGatewaySync', () => {
         detail: undefined
       },
       {
-        key: 'changed:qwen3-vl',
+        key: 'changed:gw-qwen',
         kind: 'changed',
         status: 'skipped',
         ok: false,
         detail: 'changedSinceReview'
       },
-      { key: 'removed:retired', kind: 'removed', status: 'failed', ok: false, detail: 'disk full' }
+      {
+        key: 'removed:gw-retired',
+        kind: 'removed',
+        status: 'failed',
+        ok: false,
+        detail: 'disk full'
+      }
     ]);
   });
 
@@ -119,7 +138,7 @@ describe('applyGatewaySync', () => {
 
     expect(results.map(r => [r.key, r.status, r.ok])).toEqual([
       ['added:mistral-large-3', 'failed', false],
-      ['removed:retired', 'failed', false]
+      ['removed:gw-retired', 'failed', false]
     ]);
     expect(results[0].detail).toBe('Provider ifinder-gw not found');
   });
@@ -134,5 +153,21 @@ describe('applyGatewaySync', () => {
     const call = jest.fn(async () => ({ data: { items: [] } }));
     await applyGatewaySync('a/b c', [ADDED], call);
     expect(call.mock.calls[0][0]).toBe('/admin/providers/a%2Fb%20c/_sync-models');
+  });
+});
+
+describe('two iHub models of one remote model', () => {
+  it('are sent as two picks, each naming its model, and answered as two results', async () => {
+    const clone = { ...REMOVED, modelId: 'gw-retired-copy' };
+    const call = jest.fn(async (path, options) => ({
+      data: { items: options.body.items.map(pick => ({ ...pick, status: 'applied' })) }
+    }));
+    const results = await applyGatewaySync('ifinder-gw', [REMOVED, clone], call);
+
+    expect(call.mock.calls[0][1].body.items).toEqual([
+      { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired' },
+      { kind: 'removed', remoteId: 'retired', modelId: 'gw-retired-copy' }
+    ]);
+    expect(results.map(r => r.key)).toEqual(['removed:gw-retired', 'removed:gw-retired-copy']);
   });
 });

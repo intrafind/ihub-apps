@@ -14,9 +14,13 @@
 
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 
-/** Stable key of a drift item (one per kind and remote model). */
+/**
+ * Stable key of a drift item or of a pick: the same rule as the server's. `changed` and `removed`
+ * are about one iHub model and several can share a remote id (Clone keeps it), so they are keyed
+ * by the iHub model; `added` is about a remote model nobody imported, keyed by its remote id.
+ */
 export function itemKey(item) {
-  return `${item.kind}:${item.remoteId}`;
+  return `${item.kind}:${item.kind === 'added' ? item.remoteId : item.modelId}`;
 }
 
 /**
@@ -47,12 +51,12 @@ export function formatChangeValue(field, value, labels = {}) {
 /**
  * Send the picked items to the server to apply.
  *
- * Only the kind and remote id of each item are sent: the server derives what to
+ * Only the kind, the remote id and, for a changed or removed item, the iHub model are sent: the server derives what to
  * do from a fresh look at the gateway, so a pick that no longer matches comes
  * back `skipped`. A request that fails as a whole gives every item `failed`.
  *
  * @param {string} providerId - The gateway provider
- * @param {Array<{ kind: string, remoteId: string }>} items - Picked drift items
+ * @param {Array<{ kind: string, remoteId: string, modelId?: string }>} items - Picked drift items
  * @param {typeof makeAdminApiCall} [call] - Injected for tests
  * @returns {Promise<Array<{ key: string, kind: string, status: 'applied'|'skipped'|'failed',
  *   ok: boolean, detail?: string }>>}
@@ -62,7 +66,13 @@ export async function applyGatewaySync(providerId, items, call = makeAdminApiCal
   try {
     const { data } = await call(`/admin/providers/${encodeURIComponent(providerId)}/_sync-models`, {
       method: 'POST',
-      body: { items: items.map(({ kind, remoteId }) => ({ kind, remoteId })) }
+      body: {
+        items: items.map(({ kind, remoteId, modelId }) => ({
+          kind,
+          remoteId,
+          ...(modelId ? { modelId } : {})
+        }))
+      }
     });
     return (Array.isArray(data?.items) ? data.items : []).map(result => ({
       key: itemKey(result),

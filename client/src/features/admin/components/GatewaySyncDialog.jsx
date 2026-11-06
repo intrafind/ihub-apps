@@ -23,10 +23,11 @@ const KINDS = ['changed', 'added', 'removed'];
  * models imported from it, and apply the ones the admin picks.
  *
  * The comparison (`GET /admin/providers/:id/_model-drift`) changes nothing. The
- * admin sees what is new on the gateway, what changed, and what is gone, and
- * every item starts ticked so a plain "Apply" brings the models in line; a gone
- * model is disabled, never deleted. The server applies the pick and answers one
- * outcome per item, so a failure of one does not hide the others.
+ * admin sees what is new on the gateway, what changed, and what is gone. Changes and gone
+ * models start ticked so a plain "Apply" brings the models in line; new models start
+ * unticked, because importing one makes it available. A gone model is disabled,
+ * never deleted. The server applies the pick and answers one outcome per item, so
+ * a failure of one does not hide the others.
  *
  * Mount it only while it is open: its state is not reset between openings.
  *
@@ -54,7 +55,10 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       );
       const list = Array.isArray(response.data?.items) ? response.data.items : [];
       setItems(list);
-      setSelected(Object.fromEntries(list.map(item => [itemKey(item), true])));
+      // Changes and gone models start ticked: they bring the imported models in line. New models
+      // start unticked: an admin who left a model out on purpose must not make it available to
+      // users by clicking Apply on the rest.
+      setSelected(Object.fromEntries(list.map(item => [itemKey(item), item.kind !== 'added'])));
       setStep('review');
     } catch (err) {
       // Kept as the server sent it and translated when shown: `load` must not

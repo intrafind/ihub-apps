@@ -1321,7 +1321,7 @@
         "changed": "Auf dem Gateway geändert",
         "changedHint": "Das Modell wird an das Gateway angepasst.",
         "added": "Neu auf dem Gateway",
-        "addedHint": "Das Modell wird importiert.",
+        "addedHint": "Haken Sie die Modelle an, die importiert werden sollen. Importierte Modelle sind aktiviert.",
         "removed": "Nicht mehr verfügbar",
         "removedHint": "Das Modell wird deaktiviert, nicht gelöscht: Apps könnten es noch verwenden.",
         "importedAs": "{{remoteId}} → wird importiert als {{id}}",

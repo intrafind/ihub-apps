@@ -190,7 +190,8 @@ const { default: registerAdminProvidersRoutes } = await import('../routes/admin/
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
-app.use(express.json());
+// Like the real server (middleware/setup.js), with room for a body of the most picks allowed.
+app.use(express.json({ limit: '5mb' }));
 registerAdminProvidersRoutes(app);
 app.use(errorHandler);
 
@@ -297,9 +298,9 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
   const sync = (id, body) =>
     request(app).post(`/api/admin/providers/${id}/_sync-models`).send(body);
   const PICKS = [
-    { kind: 'changed', remoteId: 'qwen3-vl' },
+    { kind: 'changed', remoteId: 'qwen3-vl', modelId: 'ifinder-gw-qwen' },
     { kind: 'added', remoteId: 'mistral-large-3' },
-    { kind: 'removed', remoteId: 'retired-model' }
+    { kind: 'removed', remoteId: 'retired-model', modelId: 'ifinder-gw-gone' }
   ];
 
   it('applies the picked items and refreshes the cache once', async () => {
@@ -331,8 +332,8 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
   it('an update followed by a disable keeps both, although the cache is stale in between', async () => {
     await sync('ifinder-gw', {
       items: [
-        { kind: 'removed', remoteId: 'retired-model' },
-        { kind: 'changed', remoteId: 'qwen3-vl' }
+        { kind: 'removed', remoteId: 'retired-model', modelId: 'ifinder-gw-gone' },
+        { kind: 'changed', remoteId: 'qwen3-vl', modelId: 'ifinder-gw-qwen' }
       ]
     });
     expect(files.get('models/ifinder-gw-qwen.json').contextWindow).toBe(32768);
@@ -358,10 +359,51 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
     expect(files.get('models/ifinder-gw-gone.json').enabled).toBe(true);
   });
 
+  describe('when two iHub models share one remote model (Clone keeps modelId and provider)', () => {
+    beforeEach(() => {
+      const clone = { ...models.find(m => m.id === 'ifinder-gw-gone'), id: 'ifinder-gw-gone-copy' };
+      models.push(clone);
+      files.set('models/ifinder-gw-gone-copy.json', clone);
+    });
+
+    it('reports each one as its own item', async () => {
+      const res = await drift('ifinder-gw');
+      const gone = res.body.items.filter(i => i.kind === 'removed');
+      expect(gone.map(i => [i.remoteId, i.modelId])).toEqual([
+        ['retired-model', 'ifinder-gw-gone'],
+        ['retired-model', 'ifinder-gw-gone-copy']
+      ]);
+    });
+
+    it('disables both when both are picked, and answers once for each', async () => {
+      const res = await sync('ifinder-gw', {
+        items: [
+          { kind: 'removed', remoteId: 'retired-model', modelId: 'ifinder-gw-gone' },
+          { kind: 'removed', remoteId: 'retired-model', modelId: 'ifinder-gw-gone-copy' }
+        ]
+      });
+      expect(res.body.items.map(i => [i.modelId, i.status])).toEqual([
+        ['ifinder-gw-gone', 'applied'],
+        ['ifinder-gw-gone-copy', 'applied']
+      ]);
+      expect(files.get('models/ifinder-gw-gone.json').enabled).toBe(false);
+      expect(files.get('models/ifinder-gw-gone-copy.json').enabled).toBe(false);
+    });
+
+    it('disables only the one that is picked', async () => {
+      const res = await sync('ifinder-gw', {
+        items: [{ kind: 'removed', remoteId: 'retired-model', modelId: 'ifinder-gw-gone-copy' }]
+      });
+      expect(res.body.items).toHaveLength(1);
+      expect(files.get('models/ifinder-gw-gone.json').enabled).toBe(true);
+      expect(files.get('models/ifinder-gw-gone-copy.json').enabled).toBe(false);
+    });
+  });
+
   it('skips a pick that no longer matches the gateway and writes nothing for it', async () => {
     const res = await sync('ifinder-gw', {
       items: [
-        { kind: 'removed', remoteId: 'qwen3-vl' },
+        { kind: 'removed', remoteId: 'qwen3-vl', modelId: 'ifinder-gw-qwen' },
         { kind: 'added', remoteId: 'unknown' }
       ]
     });
@@ -397,7 +439,11 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
       { items: [{ kind: 'deleted', remoteId: 'x' }] },
       { items: [{ kind: 'added' }] },
       { items: [null] },
-      { items: Array.from({ length: 501 }, () => ({ kind: 'added', remoteId: 'x' })) }
+      // a changed or removed pick names the iHub model; an added one has none yet
+      { items: [{ kind: 'changed', remoteId: 'qwen3-vl' }] },
+      { items: [{ kind: 'removed', remoteId: 'retired-model', modelId: '' }] },
+      { items: [{ kind: 'added', remoteId: 'x', modelId: 'ifinder-gw-x' }] },
+      { items: Array.from({ length: 5001 }, () => ({ kind: 'added', remoteId: 'x' })) }
     ];
     for (const body of bad) {
       const res = await sync('ifinder-gw', body);

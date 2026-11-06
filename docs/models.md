@@ -347,7 +347,7 @@ Mistral backend.
 are added and retired, a context window is corrected, a model moves to another dialect. On the
 provider's page (**Admin → Providers →** the gateway **→ Linked models**), **Sync with gateway**
 asks the gateway what it lists now and compares that with the models imported from it. Nothing
-changes until you apply your choice. The dialog shows three groups, each item ticked to start with:
+changes until you apply your choice. The dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
 
 | Group                       | What it means                                                                                     | When applied                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -361,6 +361,8 @@ the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your c
 reported. A context window the gateway does not report is left as you set it. Each applied item has
 its own result, so one failure does not stop the others.
 
+Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
+
 Applying is done by the server, not by chaining model calls from the browser: it asks the gateway
 again, applies only the picks that still match what the gateway reports (anything else comes back
 `skipped`: run the sync again), and reads and writes each model's stored file. Each item has its own
@@ -370,7 +372,7 @@ and the model's change history.
 | Endpoint                                                  | Purpose                                                                      |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `GET /api/admin/providers/{providerId}/_model-drift`      | The comparison: `{ modelsUrl, items }`. Writes nothing                        |
-| `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
+| `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId, modelId? }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
 
 Both need an admin and answer `404` for an unknown provider, `400` for one that is no gateway or has
 no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the gateway cannot be asked, in

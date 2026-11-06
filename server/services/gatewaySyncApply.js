@@ -26,9 +26,13 @@
 /** The order items are applied in. The result is the same in any order. */
 const APPLY_ORDER = ['added', 'changed', 'removed'];
 
-/** Stable key of a drift item (one per kind and remote model). */
+/**
+ * Stable key of a drift item or of a pick. `changed` and `removed` are about one iHub model, and
+ * several can share a remote id (Clone keeps `modelId` and the provider), so they are keyed by
+ * the iHub model. `added` is about a remote model nobody imported: keyed by the remote id.
+ */
 export function itemKey(item) {
-  return `${item.kind}:${item.remoteId}`;
+  return `${item.kind}:${item.kind === 'added' ? item.remoteId : item.modelId}`;
 }
 
 /** The fields to set on a model for a `changed` item: `{ field: to }`. */
@@ -48,7 +52,8 @@ export function patchOf(changes) {
  * Apply the picked items.
  *
  * @param {Object} params
- * @param {Array<{ kind: string, remoteId: string }>} params.picks - What the admin chose
+ * @param {Array<{ kind: string, remoteId: string, modelId?: string }>} params.picks - What the admin
+ *   chose; `modelId` (the iHub model) names the model of a `changed` or `removed` pick
  * @param {Array<Object>} params.items - The drift as it is now (`computeGatewayDrift`)
  * @param {ModelStore} params.store
  * @returns {Promise<Array<{ kind: string, remoteId: string, modelId?: string,
@@ -71,7 +76,11 @@ export async function applyGatewayDrift({ picks, items, store }) {
 
   const results = [];
   for (const pick of ordered) {
-    const base = { kind: pick.kind, remoteId: pick.remoteId };
+    const base = {
+      kind: pick.kind,
+      remoteId: pick.remoteId,
+      ...(pick.modelId ? { modelId: pick.modelId } : {})
+    };
     const item = byKey.get(itemKey(pick));
     if (!item) {
       results.push({ ...base, status: 'skipped', detail: 'changedSinceReview' });
