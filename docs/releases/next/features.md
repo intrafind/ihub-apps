@@ -756,8 +756,10 @@ gone.
   used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
   passed on from the list.
 - **API:** installed integrations that declare the `files` capability hand over documents by
-  reference: `GET /api/integrations/:id/files` (the probe), `/files/content` and `/files/metadata`.
-  They answer `404` when the integration is not installed or configured and `403` when the user's
+  reference, as resources of the integration: `GET /api/integrations/:integration/files` (the
+  probe), `/files/:id` (the document's details), `/files/:id/content` and
+  `/files/:id/content/:filename` (the same bytes under a name for a browser or viewer). The id is a
+  URL-encoded path segment; `scope` and `format` are query parameters. They answer `404` when the integration is not installed or configured and `403` when the user's
   groups do not grant it; `GET /api/sources/:provider/*` applies the same gate to a provider that
   is an installation. iFinder 1.2.0 is the first integration to declare it.
   A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use

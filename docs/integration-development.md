@@ -168,7 +168,8 @@ export default { id: 'acmewiki', content, metadata };
   with 500. *Open in App* falls back to `text` after any server error except 401 and 403.
 - **Open in App.** The link it opens is `/apps/<app>?documentId=<ref.id>&integration=<provider id>`
   (plus `searchProfile=<ref.scope>`); the chat fetches the original through
-  `GET /api/integrations/<provider id>/files/content`, which serves a provider registered by code
+  `GET /api/integrations/<provider id>/files/<ref.id>/content` (the id URL-encoded, `?scope=<ref.scope>`),
+  which serves a provider registered by code
   under its own access rules. A provider that is an **installed integration** whose definition
   declares the `files` capability (a native connector with `files: { content, metadata?, configured? }`)
   is served by its connector instead and passes a gate first: the installation must exist, be

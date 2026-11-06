@@ -15,7 +15,7 @@
  * - is granted to the user's groups (`INTEGRATION_NOT_GRANTED`, 403;
  *   `permissions.integrations`, see `integrationAccess.js`).
  *
- * It serves `GET /api/integrations/:id/files/*` and, so that a source whose
+ * It serves `GET /api/integrations/:integration/files/*` and, so that a source whose
  * provider is an installation gets the same gate, `GET /api/sources/:provider/*`
  * (`resolveDocumentProvider`).
  *

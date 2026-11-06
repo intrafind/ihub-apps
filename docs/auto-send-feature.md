@@ -154,7 +154,7 @@ The chat attaches the document the way the Nextcloud embed attaches the files yo
    (`GET /api/integrations/{integration}/files`): it must be installed, switched on and
    configured, and granted to your groups (`permissions.integrations`).
 3. The **original file** is fetched with your own permissions in that system
-   (`GET /api/integrations/{integration}/files/content`), so an image stays an image. Only if the
+   (`GET /api/integrations/{integration}/files/{id}/content`), so an image stays an image. Only if the
    original cannot be fetched (not for a permission failure) is its text fetched as a `.txt`.
 4. The app must **bind the integration** (`app.integrations`); its local upload settings do not
    matter, as they do not for the files of a storage provider. What only the model can decide is

@@ -44,7 +44,7 @@ function modelTakes(kind, model) {
  * (`useNextcloudEmbedAttachments`):
  *
  * 1. ask the integration whether it hands documents to this user (the gate);
- * 2. fetch the **original** file through `GET /api/integrations/:id/files/content`, with the
+ * 2. fetch the **original** file through `GET /api/integrations/:integration/files/:id/content`, with the
  *    user's own permissions in that system;
  * 3. check that the app binds the integration (its local upload settings do not matter) and that
  *    the selected model can take what the file is (an image needs a model that sees);

@@ -7,7 +7,7 @@
  * (`ref: { id: documentId, scope: searchProfile }`) and fetched with the
  * signed-in user's own iFinder permissions.
  *
- * Reached through `GET /api/integrations/ifinder/files/content|metadata`
+ * Reached through `GET /api/integrations/ifinder/files/:id[/content]`
  * (`routes/integrations/files.js`, which checks that the installation is
  * configured and granted) and, in the server, through the `ifinder` source
  * provider (`services/sources/providers/ifinder.js`), an adapter over this.

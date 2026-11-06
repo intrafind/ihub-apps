@@ -64,11 +64,19 @@ New, in the style of the Nextcloud routes:
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/integrations/:id/files` | the probe: `{ id, definition, type, name }` of an installation that can hand over documents and that this user may use |
-| `GET /api/integrations/:id/files/content?id=&scope=&format=` | the document, streamed with its headers |
-| `GET /api/integrations/:id/files/metadata?id=&scope=` | its details |
+| `GET /api/integrations/:integration/files` | the probe: `{ id, definition, type, name }` of an installation that can hand over documents and that this user may use |
+| `GET /api/integrations/:integration/files/:id[?scope=]` | the document's details |
+| `GET /api/integrations/:integration/files/:id/content[?scope=&format=]` | the document, streamed with its headers |
+| `GET /api/integrations/:integration/files/:id/content/:filename` | the same bytes; the name only gives a browser, download manager or viewer something to show when the integration sent none (never overrides its own `Content-Disposition`) |
 
-`:id` is checked against the installations before anything runs (no path building from input):
+The document is a **resource of the integration**, so its id is a URL-encoded path segment (iFinder's
+own API takes it the same way, `…/docs/{docId}`), not a query parameter: that leaves room for more
+under `/files/:id` and for a listing at `/files` (the browse half of the storage provider contract,
+which should take this shape too instead of `files/content?ref=`). `scope` (iFinder: the search
+profile) and `format` stay in the query. The ids are checked (not empty, at most 1024 characters, no
+control characters), as are the file name (at most 255) and the scope (at most 256).
+
+`:integration` is checked against the installations before anything runs (no path building from input):
 
 | Case | Answer |
 | --- | --- |

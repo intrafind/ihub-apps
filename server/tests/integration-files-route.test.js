@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `GET /api/integrations/:id/files` · `/files/content` · `/files/metadata`
+ * `GET /api/integrations/:integration/files` · `/files/:id` · `/files/:id/content[/:filename]`
  * (routes/integrations/files.js): documents by reference from an installed
  * integration that declares the `files` capability — only while the
  * installation exists, is configured and is granted to the user's groups —
@@ -158,9 +158,7 @@ describe('integration files routes', () => {
 
       installed[0].enabled = true;
       configured = false;
-      res = await request(appFor(GRANTED))
-        .get('/api/integrations/ifinder/files/content')
-        .query({ id: 'd1' });
+      res = await request(appFor(GRANTED)).get('/api/integrations/ifinder/files/d1/content');
       assert.equal(res.status, 404);
       assert.equal(res.body.code, 'INTEGRATION_NOT_CONFIGURED');
       assert.deepEqual(calls, [], 'the connector is not asked');
@@ -173,11 +171,13 @@ describe('integration files routes', () => {
     });
   });
 
-  describe('content and metadata', () => {
+  describe('the document: details, content, name', () => {
+    const BASE = '/api/integrations/ifinder/files';
+
     it('content: streams the original with the connector headers, for the signed-in user', async () => {
       const res = await request(appFor(GRANTED))
-        .get('/api/integrations/ifinder/files/content')
-        .query({ id: 'd1', scope: 'sales' });
+        .get(`${BASE}/d1/content`)
+        .query({ scope: 'sales' });
       assert.equal(res.status, 200);
       assert.equal(res.headers['content-type'], 'image/png');
       assert.equal(res.headers['content-disposition'], 'attachment; filename="scan.png"');
@@ -187,22 +187,80 @@ describe('integration files routes', () => {
       ]);
     });
 
-    it('content: validates format and id', async () => {
+    it('the id is a URL-encoded path segment: any character an id may carry arrives intact', async () => {
+      const id = 'sp:site/Shared Documents/Q1 #2?.pdf';
+      const content = await request(appFor(GRANTED)).get(
+        `${BASE}/${encodeURIComponent(id)}/content`
+      );
+      assert.equal(content.status, 200);
+      const details = await request(appFor(GRANTED)).get(`${BASE}/${encodeURIComponent(id)}`);
+      assert.equal(details.status, 200);
+      assert.deepEqual(
+        calls.map(call => call.ref),
+        [{ id }, { id }]
+      );
+    });
+
+    it('content: the optional file name names the download when the connector sent none, and never changes what is served', async () => {
+      registerConnector({
+        id: 'ifinder',
+        actions: {},
+        files: {
+          ...fakeFiles,
+          content: async ({ ref }) => {
+            calls.push({ kind: 'content', ref });
+            return { contentType: 'application/pdf', body: Buffer.from('%PDF') };
+          }
+        }
+      });
+      const app = appFor(GRANTED);
+      const plain = await request(app).get(`${BASE}/d1/content`);
+      assert.equal(plain.headers['content-disposition'], undefined);
+
+      const named = await request(app).get(
+        `${BASE}/d1/content/${encodeURIComponent('Q1 Bericht.pdf')}`
+      );
+      assert.equal(named.status, 200);
+      assert.equal(named.body.toString(), '%PDF');
+      assert.match(named.headers['content-disposition'], /^attachment; filename="Q1 Bericht\.pdf"/);
+
+      // Any name is a valid header, whatever characters it carries
+      const unicode = await request(app).get(
+        `${BASE}/d1/content/${encodeURIComponent('Prüfung 文档.pdf')}`
+      );
+      assert.equal(unicode.status, 200);
+      assert.match(
+        unicode.headers['content-disposition'],
+        /filename\*=UTF-8''Pr%C3%BCfung%20%E6%96%87%E6%A1%A3\.pdf/
+      );
+
+      assert.deepEqual(
+        calls.map(call => call.ref),
+        [{ id: 'd1' }, { id: 'd1' }, { id: 'd1' }]
+      );
+    });
+
+    it("content: a name in the path does not override the connector's own", async () => {
+      const res = await request(appFor(GRANTED)).get(`${BASE}/d1/content/other.png`);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers['content-disposition'], 'attachment; filename="scan.png"');
+    });
+
+    it('content: validates the format, the id and the name before the connector is asked', async () => {
       const app = appFor(GRANTED);
       assert.equal(
-        (
-          await request(app)
-            .get('/api/integrations/ifinder/files/content')
-            .query({ id: 'd1', format: 'zip' })
-        ).status,
+        (await request(app).get(`${BASE}/d1/content`).query({ format: 'zip' })).status,
         400
       );
-      assert.equal((await request(app).get('/api/integrations/ifinder/files/content')).status, 400);
+      assert.equal((await request(app).get(`${BASE}/${'x'.repeat(1025)}/content`)).status, 400);
+      assert.equal((await request(app).get(`${BASE}/a%00b/content`)).status, 400);
+      assert.equal((await request(app).get(`${BASE}/d1/content/a%0Ab.pdf`)).status, 400);
+      assert.equal((await request(app).get(`${BASE}/d1/content/${'n'.repeat(256)}`)).status, 400);
       assert.equal(
         (
           await request(app)
-            .get('/api/integrations/ifinder/files/content')
-            .query({ id: 'x'.repeat(1025) })
+            .get(`${BASE}/d1`)
+            .query({ scope: 's'.repeat(257) })
         ).status,
         400
       );
@@ -211,36 +269,25 @@ describe('integration files routes', () => {
 
     it("content: a connector's status is the answer's; a plain error is 500", async () => {
       const app = appFor(GRANTED);
-      assert.equal(
-        (await request(app).get('/api/integrations/ifinder/files/content').query({ id: 'gone' }))
-          .status,
-        404
-      );
-      assert.equal(
-        (await request(app).get('/api/integrations/ifinder/files/content').query({ id: 'boom' }))
-          .status,
-        500
-      );
+      assert.equal((await request(app).get(`${BASE}/gone/content`)).status, 404);
+      assert.equal((await request(app).get(`${BASE}/boom/content`)).status, 500);
     });
 
-    it('metadata: returns the connector details; a 403 stays a 403', async () => {
+    it('details: returns the connector details at the document itself; a 403 stays a 403', async () => {
       const app = appFor(GRANTED);
-      const ok = await request(app)
-        .get('/api/integrations/ifinder/files/metadata')
-        .query({ id: 'd1' });
+      const ok = await request(app).get(`${BASE}/d1`).query({ scope: 'sales' });
       assert.equal(ok.status, 200);
       assert.deepEqual(ok.body, { title: 'Doc d1', mediaType: 'image/png' });
-      const denied = await request(app)
-        .get('/api/integrations/ifinder/files/metadata')
-        .query({ id: 'denied' });
+      assert.deepEqual(calls, [
+        { kind: 'metadata', ref: { id: 'd1', scope: 'sales' }, user: 'ada' }
+      ]);
+      const denied = await request(app).get(`${BASE}/denied`);
       assert.equal(denied.status, 403);
     });
 
-    it('metadata: 404 when the connector has no details route', async () => {
+    it('details: 404 when the connector has no details route', async () => {
       registerConnector({ id: 'ifinder', actions: {}, files: { content: fakeFiles.content } });
-      const res = await request(appFor(GRANTED))
-        .get('/api/integrations/ifinder/files/metadata')
-        .query({ id: 'd1' });
+      const res = await request(appFor(GRANTED)).get(`${BASE}/d1`);
       assert.equal(res.status, 404);
       // The client tells "no details route" from "no such document" by this text.
       assert.equal(res.body.error, 'This integration has no details');
@@ -248,9 +295,7 @@ describe('integration files routes', () => {
 
     it('a 5xx answers with a generic message, never the upstream text; a 4xx keeps its own', async () => {
       const app = appFor(GRANTED);
-      const failed = await request(app)
-        .get('/api/integrations/ifinder/files/content')
-        .query({ id: 'boom' });
+      const failed = await request(app).get(`${BASE}/boom/content`);
       assert.equal(failed.status, 500);
       assert.equal(failed.body.error, 'Integration content failed');
       assert.doesNotMatch(JSON.stringify(failed.body), /upstream exploded/);
@@ -271,25 +316,19 @@ describe('integration files routes', () => {
           }
         }
       });
-      const bad = await request(app)
-        .get('/api/integrations/ifinder/files/content')
-        .query({ id: 'x' });
+      const bad = await request(app).get(`${BASE}/x/content`);
       assert.equal(bad.status, 502);
       assert.equal(bad.body.error, 'Integration content failed');
       assert.doesNotMatch(JSON.stringify(bad.body), /ifinder-7/);
 
-      const details = await request(app)
-        .get('/api/integrations/ifinder/files/metadata')
-        .query({ id: 'x' });
+      const details = await request(app).get(`${BASE}/x`);
       assert.equal(details.status, 503);
       assert.equal(details.body.error, 'Integration metadata failed');
       assert.doesNotMatch(JSON.stringify(details.body), /10\.0\.0\.7/);
 
       // A 4xx keeps the connector's own words (the client shows or maps them)
       registerConnector({ id: 'ifinder', actions: {}, files: fakeFiles });
-      const gone = await request(app)
-        .get('/api/integrations/ifinder/files/content')
-        .query({ id: 'gone' });
+      const gone = await request(app).get(`${BASE}/gone/content`);
       assert.equal(gone.status, 404);
       assert.equal(gone.body.error, 'Document not found');
     });
@@ -328,8 +367,8 @@ describe('integration files routes', () => {
       });
 
       const res = await request(app)
-        .get('/api/integrations/project/files/content')
-        .query({ id: 'item-1', scope: 'p1' });
+        .get('/api/integrations/project/files/item-1/content')
+        .query({ scope: 'p1' });
       assert.equal(res.status, 200);
       assert.equal(res.text, 'item text');
       assert.deepEqual(calls, [

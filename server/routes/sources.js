@@ -49,7 +49,7 @@ async function resolve(req, res) {
   let provider;
   try {
     // A provider that is an installed integration passes the same gate as
-    // `GET /api/integrations/:id/files/*` (configured, granted).
+    // `GET /api/integrations/:integration/files/*` (configured, granted).
     provider = await resolveDocumentProvider(providerId, req.user);
   } catch (error) {
     if (!(error instanceof DocumentAccessError)) throw error;

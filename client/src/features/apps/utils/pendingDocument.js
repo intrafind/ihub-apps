@@ -8,7 +8,7 @@
  * parameters and the chat attaches the document and strips them.
  *
  * `integration` is the id of an installed integration that hands documents over by reference
- * (the `files` capability, `GET /api/integrations/:id/files/*`). Kept in one place so the picker,
+ * (the `files` capability, `GET /api/integrations/:integration/files/*`). Kept in one place so the picker,
  * the start page and the chat agree on the parameter names and limits (the limits mirror
  * `server/routes/integrations/files.js`).
  *
