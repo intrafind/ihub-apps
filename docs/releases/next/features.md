@@ -728,3 +728,48 @@ session.
   signed in with it.
 - Display only: who may do what is still decided by the groups of the current session, and nothing
   is added to `users.json`.
+
+## Open a Document from Another System: Choose the App in iHub
+
+A link such as `/apps?documentId=<id>&integration=ifinder` (optionally `&searchProfile=<id>` and
+`&prefill=…`) now opens the app list with the document waiting. Before, the system linking to iHub
+— for example the "Open in iHub" action of an iFinder hit — had to know the target app up front.
+The link names the **integration** the document comes from; the earlier `source` parameter is
+gone.
+
+- **Pick an app:** a banner names the document and the app you choose opens with it attached. The
+  link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
+  the same list.
+- **Only apps that bind the integration:** an app is offered when it binds the integration the
+  document comes from (iFinder under **Admin → Apps → Edit → Installed integrations**); the binding
+  is what lets it receive the document, whatever its local upload settings are. An app that never
+  opted into iFinder never receives an iFinder document. A checkbox in the banner, on by default,
+  turns the filter off; it is left out when no app qualifies.
+- **The original file, images included:** the document is fetched as the original and attached
+  like a file from Nextcloud: an image as an image for a vision model, anything else as a document
+  that keeps its original next to the extracted text.
+- **Clear errors:** an integration that is not available to you, a document you may not read, or
+  one that no longer exists is reported in the banner before you choose an app, and the app then
+  opens without it. A document that fails to attach in the chat now says so instead of silently
+  attaching nothing.
+- **Nothing is attached twice:** the parameters are removed from the address once the app has
+  used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
+  passed on from the list.
+- **API:** installed integrations that declare the `files` capability hand over documents by
+  reference, as resources of the integration: `GET /api/integrations/:integration/files` (the
+  probe), `/files/:id` (the document's details), `/files/:id/content` and
+  `/files/:id/content/:filename` (the same bytes under a name for a browser or viewer). The id is a
+  URL-encoded path segment; `scope` and `format` are query parameters. They answer `404` when the integration is not installed or configured and `403` when the user's
+  groups do not grant it (an upstream `401` is answered as `403`, so it never reads as an expired
+  iHub session). These routes are the one way to a source's content and details for Preview,
+  Download, Add to email, Details and Open in App: the old `GET /api/sources/:provider/content` and
+  `/metadata` are removed, and `project` documents answer the same routes under their own access
+  rules. The integrations feature switch does not apply to them. iFinder 1.2.0 is the first
+  integration to declare the capability.
+  A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
+  iFinder gets `403 SOURCE_FORBIDDEN`. The same applies to the sources of an iAssistant answer, which
+  carry `provider: ifinder`: preview, download and details of a citation need the grant of the
+  `ifinder` installation, so a group that may use the iAssistant but not iFinder gets
+  `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
+
+See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).

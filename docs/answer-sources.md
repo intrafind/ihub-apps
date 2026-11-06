@@ -196,11 +196,12 @@ adapter does this. Provider-run web search (Anthropic, Google, OpenAI) reports t
 ## Actions: source providers
 
 Open and Copy link need only a `url`. Preview, Download, Add to email, Open in App and Details
-fetch the source through the provider that owns it. The route is one for all providers:
+fetch the source through the provider that owns it. The route is one for all providers (`:integration`
+is the source's `provider`; `:id` is its URL-encoded `ref.id`):
 
 ```
-GET /api/sources/:provider/content?id=<ref.id>[&scope=<ref.scope>][&format=original|pdf|text]
-GET /api/sources/:provider/metadata?id=<ref.id>[&scope=<ref.scope>]
+GET /api/integrations/:integration/files/:id/content[/:filename][?scope=<ref.scope>&format=original|pdf|text]
+GET /api/integrations/:integration/files/:id[?scope=<ref.scope>]
 ```
 
 A provider is server code, registered by its integration. It fetches with the signed-in user's own

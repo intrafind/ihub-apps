@@ -103,6 +103,16 @@ such as the default `1`, any peer counts as trusted. To accept the header from y
 its address instead, for example `"trustProxy": "10.0.0.5"` or `"trustProxy": "loopback"` when the
 proxy runs on the same host. With `"trustProxy": false` the header is ignored.
 
+### Encoded slashes in paths
+
+Some API paths carry an id as one URL-encoded segment, for example a document of an integration:
+`/api/integrations/ifinder/files/https%3A%2F%2Fexample.com%2Fdoc.pdf/content`. The proxy must pass
+the `%2F` on unchanged. nginx does when `proxy_pass` has no URI part (`proxy_pass http://backend;`);
+with a URI (`proxy_pass http://backend/;`) or a `rewrite` that strips the prefix, it decodes the path
+first, and the id then splits into several segments and answers 404. iHub also works behind a
+proxy that keeps the prefix (see above), which avoids the rewrite. Apache needs
+`AllowEncodedSlashes NoDecode`. Ids without a slash are not affected.
+
 ## Nginx Configuration
 
 ### Production Nginx Configuration (nginx.conf)

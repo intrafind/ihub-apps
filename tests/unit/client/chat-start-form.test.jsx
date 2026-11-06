@@ -27,7 +27,13 @@ jest.mock('../../../client/src/features/upload/components/UnifiedUploader', () =
 }));
 jest.mock('../../../client/src/features/upload/components/AttachedFilesList', () => ({
   __esModule: true,
-  default: () => null
+  default: ({ files }) => (
+    <ul data-testid="attached-files">
+      {files.map(file => (
+        <li key={file.fileName}>{file.fileName}</li>
+      ))}
+    </ul>
+  )
 }));
 
 const ChatStartForm = require('../../../client/src/features/chat/components/ChatStartForm').default;
@@ -46,7 +52,15 @@ const MODELS = [
 ];
 
 /** The form with its state held the way AppChat and the Office panel hold it. */
-function Harness({ app = APP, models = MODELS, showModelSelector = true, onSubmit, onModel }) {
+function Harness({
+  app = APP,
+  models = MODELS,
+  showModelSelector = true,
+  onSubmit,
+  onModel,
+  uploadConfig = { localUploadEnabled: false },
+  selectedFile = null
+}) {
   const [variables, setVariables] = useState({ language: 'German' });
   const [message, setMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState(models?.[0]?.id ?? null);
@@ -59,8 +73,8 @@ function Harness({ app = APP, models = MODELS, showModelSelector = true, onSubmi
         onVariablesChange={setVariables}
         message={message}
         onMessageChange={setMessage}
-        uploadConfig={{ localUploadEnabled: false }}
-        selectedFile={null}
+        uploadConfig={uploadConfig}
+        selectedFile={selectedFile}
         onFileSelect={() => {}}
         onSubmit={onSubmit}
         models={models}
@@ -197,5 +211,29 @@ describe("the selected model's hint", () => {
 
     expect(screen.getByText('Experimental model')).toBeInTheDocument();
     expect(sendButton()).toBeDisabled();
+  });
+});
+
+describe('attachments', () => {
+  const FILE = { type: 'document', fileName: 'report.pdf', content: 'text' };
+  const DROP_ZONE = 'Drag and drop files here, or click to browse';
+
+  test('a document an integration attached stays visible when local upload is off', () => {
+    render(<Harness selectedFile={FILE} />);
+    expect(screen.getByTestId('attached-files')).toHaveTextContent('report.pdf');
+    // Nothing to browse without local upload
+    expect(screen.queryByText(DROP_ZONE)).not.toBeInTheDocument();
+  });
+
+  test('without local upload and without a file there is no attachments section', () => {
+    render(<Harness />);
+    expect(screen.queryByText('Attachments')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attached-files')).not.toBeInTheDocument();
+  });
+
+  test('with local upload the drop zone and the attached file are both there', () => {
+    render(<Harness uploadConfig={{ localUploadEnabled: true }} selectedFile={FILE} />);
+    expect(screen.getByText(DROP_ZONE)).toBeInTheDocument();
+    expect(screen.getByTestId('attached-files')).toHaveTextContent('report.pdf');
   });
 });

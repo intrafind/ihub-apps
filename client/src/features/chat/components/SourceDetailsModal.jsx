@@ -4,7 +4,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchSourceMetadata } from '../../../api/endpoints/sources';
+import { fetchIntegrationFileMetadata } from '../../../api/endpoints/integrationFiles';
 import { siteOf } from '../sources/sourcesView';
 import ItemProvenance from '../../projects/components/ItemProvenance';
 
@@ -17,7 +17,7 @@ function formatDate(value) {
 
 /**
  * A source's details: what its provider knows about it (`GET
- * /api/sources/:provider/metadata`, fetched with the user's own permissions),
+ * /api/integrations/:integration/files/:id`, fetched with the user's own permissions),
  * and what the source itself carries while that loads or when the provider
  * has no details to give.
  *
@@ -37,7 +37,11 @@ function SourceDetailsModal({ source, onClose }) {
     const controller = new AbortController();
     // Via apiClient, not a bare cookie `fetch`: the Outlook task pane and the
     // extension side panel carry their session in an Authorization header.
-    fetchSourceMetadata({ source, signal: controller.signal })
+    fetchIntegrationFileMetadata({
+      integration: source.provider,
+      ref: source.ref,
+      signal: controller.signal
+    })
       .then(data => {
         if (!cancelled) setMetadata(data || {});
       })

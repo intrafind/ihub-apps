@@ -56,12 +56,9 @@ jest.mock('../../../client/src/api', () => ({
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true
 }));
-jest.mock('../../../client/src/api/endpoints/sources', () => ({
-  __esModule: true,
-  fetchSourceContent: jest.fn(),
-  fetchSourceMetadata: jest.fn()
+jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
+  __esModule: true
 }));
-
 // Capture the SSE handler so the test decides when the stream reports itself
 // connected — which is when the request is actually made.
 const mockStream = { onEvent: null, opened: 0 };

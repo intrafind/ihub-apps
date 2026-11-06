@@ -51,8 +51,8 @@ share filter.
   as the envelope, so the calling chat lists them.
 - **Actions**: one vocabulary (open, copy link, preview, download, add to email, open in app,
   details). Open and copy need a `url`. The rest need a `ref` and a provider registered with
-  `registerSourceProvider({ id, content, metadata })`, served by one route:
-  `GET /api/sources/:provider/content|metadata`. A declared tool that returns iFinder ids with
+  `registerSourceProvider({ id, content, metadata })`, served by one route
+  (`GET /api/integrations/:integration/files/:id[/content]`; originally `GET /api/sources/:provider/…`, removed in favour of it). A declared tool that returns iFinder ids with
   `"provider": "ifinder"` gets every document action for free.
 - **Privacy is a property of the data**, not of the field name: `private` per source, and any
   source with a `ref` is private. A share keeps only public sources.

@@ -301,6 +301,18 @@
     "appsList": {
       "title": "KI-Anwendungen",
       "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "pendingDocument": {
+        "title": "Wähle eine App, in der „{{name}}“ geöffnet werden soll",
+        "description": "Das Dokument wird an den Chat angehängt, sobald die App geöffnet ist.",
+        "untitled": "das Dokument",
+        "onlyDocumentApps": "Nur Apps anzeigen, die dieses Dokument verwenden können",
+        "dismiss": "Schließen",
+        "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
+        "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
+        "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+        "noApp": "Keine App kann Dokumente aus diesem System verwenden. Bitte eine Administratorin oder einen Administrator, die Integration zu einer App hinzuzufügen.",
+        "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
+      },
       "nextcloudSelection": {
         "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt."
       },
@@ -7554,6 +7566,13 @@
     "loading": "Wird geladen…",
     "detailsUnavailable": "Keine weiteren Details verfügbar.",
     "documentFromSource": "Dokument",
+    "documentNoAccess": "Das Dokument konnte nicht angehängt werden: Du hast keinen Zugriff darauf.",
+    "documentNotFound": "Das Dokument konnte nicht angehängt werden: Es wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+    "documentAttachFailed": "Das Dokument konnte nicht angehängt werden. Bitte versuche es erneut.",
+    "documentUnavailable": "Das Dokument konnte nicht angehängt werden: Das System, aus dem es stammt, steht dir nicht zur Verfügung.",
+    "documentModelCannot": "Das Dokument konnte nicht angehängt werden: Das ausgewählte Modell kann diese Art von Datei nicht verarbeiten.",
+    "documentAppNotBound": "Das Dokument konnte nicht angehängt werden: Diese App verwendet das System, aus dem es stammt, nicht.",
+    "documentFromIntegration": "{{name}}-Dokument",
     "project": "Projekt"
   },
   "prompts": {
@@ -9068,6 +9087,9 @@
     "INVALID_REASON": "Die Begründung muss ein Text sein.",
     "REASON_TOO_LONG": "Die Begründung ist zu lang.",
     "INTEGRATION_NOT_FOUND": "Die Integration wurde nicht gefunden.",
+    "INTEGRATION_NOT_CONFIGURED": "Die Integration ist nicht konfiguriert.",
+    "INTEGRATION_NOT_GRANTED": "Sie dürfen diese Integration nicht verwenden.",
+    "DOCUMENT_DETAILS_UNAVAILABLE": "Diese Integration hat keine Details zu ihren Dokumenten.",
     "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
     "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen.",
     "EXECUTION_NOT_FINISHED": "Die Workflow-Ausführung ist noch nicht abgeschlossen.",

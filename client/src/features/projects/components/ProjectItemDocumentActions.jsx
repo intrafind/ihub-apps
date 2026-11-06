@@ -73,8 +73,12 @@ export function useProjectItemDocumentActions(projectId) {
           // The deep link comes with the details, read with the viewer's rights.
           let link = null;
           try {
-            const { fetchSourceMetadata } = await import('../../../api/endpoints/sources');
-            const details = await fetchSourceMetadata({ source });
+            const { fetchIntegrationFileMetadata } =
+              await import('../../../api/endpoints/integrationFiles');
+            const details = await fetchIntegrationFileMetadata({
+              integration: source.provider,
+              ref: source.ref
+            });
             link = details?.deepLink || details?.url || null;
           } catch {
             link = null;
