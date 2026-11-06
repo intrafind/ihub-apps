@@ -760,5 +760,7 @@ gone.
   They answer `404` when the integration is not installed or configured and `403` when the user's
   groups do not grant it; `GET /api/sources/:provider/*` applies the same gate to a provider that
   is an installation. iFinder 1.2.0 is the first integration to declare it.
+  A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
+  iFinder gets `403 SOURCE_FORBIDDEN`.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).

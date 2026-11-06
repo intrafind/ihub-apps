@@ -542,6 +542,92 @@ describe('useIntegrationDocumentAttachment', () => {
     expect(processCloudFile.mock.calls[0][0].name).toBe('Photo.txt');
   });
 
+  test.each([401, 403, 404])(
+    'a %s on the original is shown, not turned into a text request',
+    async status => {
+      fetchIntegrationFileContent.mockRejectedValue({ response: { status, data: {} } });
+      mount();
+      await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+      expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1);
+      expect(processCloudFile).not.toHaveBeenCalled();
+      expect(addSystemMessage).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  describe('when the chat moves on while the document loads', () => {
+    let release;
+    beforeEach(() => {
+      fetchIntegrationFileContent.mockImplementation(
+        () =>
+          new Promise(resolve => {
+            release = () => resolve(blobResponse('application/pdf', 'report.pdf'));
+          })
+      );
+      processCloudFile.mockResolvedValue({
+        type: 'document',
+        content: 'text',
+        fileName: 'report.pdf'
+      });
+    });
+    const finish = async () => {
+      await act(async () => {
+        release();
+      });
+      await act(async () => {});
+    };
+
+    test('the latest callback consumes the link, not the one the run started with', async () => {
+      const first = jest.fn();
+      const latest = jest.fn();
+      const { rerender } = mount({ onConsumed: first });
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      rerender({ onConsumed: latest });
+      await finish();
+      expect(latest).toHaveBeenCalledTimes(1);
+      expect(first).not.toHaveBeenCalled();
+    });
+
+    test('a user who left (no document pending any more) gets nothing attached and nothing consumed', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      uploader.setSelectedFile.mockClear();
+      rerender({ pending: null });
+      await finish();
+      expect(processCloudFile).not.toHaveBeenCalled();
+      expect(uploader.setSelectedFile).not.toHaveBeenCalled();
+      expect(onConsumed).not.toHaveBeenCalled();
+      expect(addSystemMessage).not.toHaveBeenCalled();
+    });
+
+    test('another app opened meanwhile gets nothing either', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      uploader.setSelectedFile.mockClear();
+      rerender({ app: { id: 'app2', integrations: { ifinder: {} } } });
+      await finish();
+      expect(uploader.setSelectedFile).not.toHaveBeenCalled();
+      expect(onConsumed).not.toHaveBeenCalled();
+    });
+
+    test('a failure after the user left is not reported in the new chat', async () => {
+      const { rerender } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      rerender({ pending: null });
+      processCloudFile.mockRejectedValue(new Error('boom'));
+      await finish();
+      expect(addSystemMessage).not.toHaveBeenCalled();
+      expect(uploader.clearSelectedFile).not.toHaveBeenCalled();
+    });
+
+    test('an unmounted chat consumes nothing', async () => {
+      const { unmount } = mount();
+      await waitFor(() => expect(fetchIntegrationFileContent).toHaveBeenCalled());
+      unmount();
+      await finish();
+      expect(onConsumed).not.toHaveBeenCalled();
+    });
+  });
+
   test('waits until the app and models are ready', async () => {
     fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
     processCloudFile.mockResolvedValue({ type: 'document', fileName: 'report.pdf' });

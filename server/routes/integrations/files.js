@@ -36,7 +36,10 @@ const FORMATS = new Set(['original', 'pdf', 'text']);
 const MAX_REF_ID_CHARS = 1024;
 const MAX_SCOPE_CHARS = 256;
 
-router.use(requireFeature('integrations'));
+// The feature gate sits on the file routes below, not on the router: this router is mounted at
+// `/api/integrations` ahead of other integration routes (scopes, the iFinder authorization),
+// which must keep answering when the integrations feature is off.
+const featureGate = requireFeature('integrations');
 
 /**
  * What a request's `:id` acts through, after the gate: the installation's connector,
@@ -76,15 +79,17 @@ function refOf(req, res) {
 function sendFailure(res, error, what) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
   if (status >= 500) logger.error(`Integration ${what} failed`, { component: 'files', error });
-  return sendErrorResponse(res, status, error?.message || `Integration ${what} failed`);
+  // A 5xx message can carry the upstream response body; the log keeps it, the client gets a generic one.
+  const message = status >= 500 ? undefined : error?.message;
+  return sendErrorResponse(res, status, message || `Integration ${what} failed`);
 }
 
-router.get('/:id/files', authRequired, async (req, res) => {
+router.get('/:id/files', featureGate, authRequired, async (req, res) => {
   if (!(await resolve(req, res))) return undefined;
   return res.json(describeDocumentProvider(req.params.id));
 });
 
-router.get('/:id/files/content', authRequired, async (req, res) => {
+router.get('/:id/files/content', featureGate, authRequired, async (req, res) => {
   const format = req.query.format ?? 'original';
   if (!FORMATS.has(format)) return sendBadRequest(res, 'Invalid format parameter');
   const provider = await resolve(req, res);
@@ -99,7 +104,7 @@ router.get('/:id/files/content', authRequired, async (req, res) => {
   }
 });
 
-router.get('/:id/files/metadata', authRequired, async (req, res) => {
+router.get('/:id/files/metadata', featureGate, authRequired, async (req, res) => {
   const provider = await resolve(req, res);
   if (!provider) return undefined;
   const ref = refOf(req, res);

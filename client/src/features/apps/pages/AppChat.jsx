@@ -1391,7 +1391,14 @@ function AppChat({
   // integration, as an image, audio or document attachment — and say so when it cannot be attached.
   useIntegrationDocumentAttachment({
     pending: pendingDocument,
-    ready: Boolean(app) && !modelsLoading,
+    // This chat's app (not the previous one while a route change loads) and its model: the
+    // model decides whether an image or audio can be attached. With no models at all there is
+    // nothing to wait for; with models but none selected yet, the attach starts when one is.
+    ready:
+      Boolean(app) &&
+      app.id === appId &&
+      !modelsLoading &&
+      (Boolean(currentModelObject) || !models?.length),
     app,
     currentModel: currentModelObject,
     fileUploadHandler,

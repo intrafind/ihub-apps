@@ -53,6 +53,8 @@ function appFor(user) {
     next();
   });
   app.use('/api/integrations', filesRoutes);
+  // Mounted after the files router, as the scope and iFinder authorization routes are.
+  app.get('/api/integrations/ifinder/authorization', (_req, res) => res.json({ sibling: true }));
   app.use('/api/sources', sourceRoutes);
   return app;
 }
@@ -240,6 +242,19 @@ describe('integration files routes', () => {
         .get('/api/integrations/ifinder/files/metadata')
         .query({ id: 'd1' });
       assert.equal(res.status, 404);
+    });
+  });
+
+  describe('the integrations feature gate', () => {
+    it('closes the file routes when the feature is off, but not the routes behind this router', async () => {
+      configCache.getFeatures = () => ({ integrations: false });
+      const app = appFor(GRANTED);
+      const files = await request(app).get('/api/integrations/ifinder/files');
+      assert.equal(files.status, 403);
+      assert.equal(files.body.code, 'FEATURE_DISABLED');
+      const sibling = await request(app).get('/api/integrations/ifinder/authorization');
+      assert.equal(sibling.status, 200);
+      assert.deepEqual(sibling.body, { sibling: true });
     });
   });
 

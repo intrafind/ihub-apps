@@ -14,6 +14,12 @@ import {
 } from '../utils/pendingDocument';
 import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
 
+/** What identifies a pending document: the system it comes from, its id and its scope. */
+const documentKey = pending =>
+  pending
+    ? `${pending.integration}\u0000${pending.documentId}\u0000${pending.searchProfile || ''}`
+    : null;
+
 /**
  * Whether the selected model can take a file of this kind. The app's binding of the integration is
  * what lets it receive the document (its local upload settings do not veto it, as they do not veto
@@ -83,18 +89,32 @@ export default function useIntegrationDocumentAttachment({
     };
   });
 
-  const key = pending
-    ? `${pending.integration}\u0000${pending.documentId}\u0000${pending.searchProfile || ''}`
-    : null;
-  const attachedKey = useRef(null);
+  const key = documentKey(pending);
+  const attachedKeyRef = useRef(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!key || !ready || attachedKey.current === key) return;
-    attachedKey.current = key;
+    if (!key || !ready || attachedKeyRef.current === key) return;
+    attachedKeyRef.current = key;
 
     const run = async () => {
       const live = liveRef.current;
       const { pending: doc, fileUploadHandler: uploader } = live;
+      const startedAppId = live.app?.id;
+      // What this run started for is gone: the chat was left, another app opened, or another
+      // document is pending. It then touches neither the attachment nor the address.
+      const stale = () => {
+        const now = liveRef.current;
+        return (
+          !mountedRef.current || documentKey(now.pending) !== key || now.app?.id !== startedAppId
+        );
+      };
       const say = message => live.addSystemMessage?.(message, true);
       const ref = documentRefOf(doc);
       const fallbackName = doc.prefill || 'document';
@@ -113,6 +133,7 @@ export default function useIntegrationDocumentAttachment({
 
         // The probe is the gate: not installed, not configured or not granted ends here.
         const info = await fetchIntegrationFilesProbe({ integration: doc.integration });
+        if (stale()) return;
         // An installed integration's documents go only to an app that binds it: the binding is
         // what lets the app receive them (as with a storage provider's files), whatever its local
         // upload settings say. A provider that is not an installation (`project`) keeps its own rules.
@@ -132,6 +153,7 @@ export default function useIntegrationDocumentAttachment({
           fallbackName
         });
 
+        if (stale()) return;
         const kind = documentKindOf({ contentType: file.type, filename: file.name });
         if (!modelTakes(kind, live.currentModel)) {
           uploader.clearSelectedFile();
@@ -145,6 +167,7 @@ export default function useIntegrationDocumentAttachment({
         }
 
         const processed = await processCloudFile(file, uploadConfig);
+        if (stale()) return;
         const label = getLocalizedContent(info?.name, live.language);
         uploader.setSelectedFile({
           ...processed,
@@ -161,6 +184,7 @@ export default function useIntegrationDocumentAttachment({
         });
       } catch (err) {
         console.error('Failed to fetch and attach the document:', err);
+        if (stale()) return;
         uploader.clearSelectedFile();
         const failure =
           err?.response?.data?.code === 'INTEGRATION_NOT_GRANTED' ||
@@ -189,7 +213,10 @@ export default function useIntegrationDocumentAttachment({
           }[failure]
         );
       } finally {
-        live.onConsumed?.();
+        // The latest callback: it reads the address as it is now, not as it was when this run
+        // started, so it cannot bring back a setting the user removed meanwhile. Not at all when
+        // the run is stale: the address belongs to something else by then.
+        if (!stale()) liveRef.current.onConsumed?.();
       }
     };
 
