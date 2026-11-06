@@ -451,11 +451,25 @@ Actor, resource, action, result and source are **checkbox lists**. Open one and 
 
 The option lists come from the log itself, not from a fixed vocabulary, so resource types added by a new release (or derived from a request path) show up on their own. Counts and options are computed over the **date range only** — unticking a value never makes its checkbox disappear.
 
-**Free-text search:** the search box matches the summary, resource ID, IP, request ID and actor name of every entry in the date range. It is a plain substring match, case-insensitive.
+**Free-text search:** the search box matches the summary, resource ID, IP, request ID and actor name of every entry in the date range, plus the identity-provider group names a sign-in recorded (so an Entra group id finds who signed in with it). It is a plain substring match, case-insensitive.
 
 **Quick filters:** one-click chips for **Today** / **Today & yesterday** / **Last 7 days** / **Last 30 days**, **Hide sign-ins** (drops `login` and `logout`), and **Failures only**. **Clear all filters** appears whenever any filter is active.
 
-**Long summaries:** the summary cell has a show-more/show-less toggle. There is no row-level detail view — the full record is available through the CSV export, which always reflects the filters currently on screen.
+**Long summaries:** the summary cell has a show-more/show-less toggle. The CSV export always reflects the filters currently on screen.
+
+### Entry details
+
+Click a row, or its eye icon, to open the entry in a side panel: actor, action, result, resource, source, IP, request ID, the user's effective groups, and the raw JSON record.
+
+**Groups at sign-in.** For a sign-in through OIDC (for example Entra ID), LDAP or NTLM, the panel also shows where the user's groups came from:
+
+| Section | Content |
+| --- | --- |
+| **Groups from the identity provider** | Each group the provider sent (token claim, or the directory for LDAP/NTLM) and the iHub groups it maps to through the `mappings` in `groups.json` — or **Not mapped** |
+| **Assigned manually** | The user's groups from **Users** (`internalGroups`) |
+| **Added automatically** | Effective groups explained by neither, such as `authenticated` or the provider's default groups |
+
+This is a snapshot of that sign-in; a change in the identity provider shows up with the next sign-in. Up to 200 provider groups are recorded per sign-in, with the total. It is display only: authorization keeps using the groups of the current session, and nothing is written to `users.json`. Proxy and Teams authentication record no sign-in entry and so show no breakdown.
 
 ### URL-persisted filters
 

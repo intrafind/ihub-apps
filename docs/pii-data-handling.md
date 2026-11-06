@@ -176,6 +176,12 @@ and page reads are explicitly **excluded** from the audit log
 (`server/middleware/auditLogger.js`). Email-shaped actor identifiers are
 masked by default (`audit.includeEmail: false`).
 
+Sign-ins through an external identity provider (OIDC, LDAP, NTLM) add a
+`details.groups` object: the group names the provider sent (capped at 200,
+with `externalTotal` beyond that), the iHub groups each one maps to, and the
+user's manually assigned groups. It is shown in the entry's detail view and
+deleted with the audit log under its retention.
+
 ### 5. Structured logs
 
 Winston writes structured JSON to **stdout** always. A per-request

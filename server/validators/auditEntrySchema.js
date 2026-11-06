@@ -64,7 +64,10 @@ export const auditEntrySchema = z.object({
   // `null` is a valid value: when `audit.anonymizeIp: "drop"` the recorder
   // explicitly drops the IP to null so the field is preserved for log shape
   // consistency but contains no PII.
-  ip: z.string().nullable().optional()
+  ip: z.string().nullable().optional(),
+  // Structured context for the entry's detail view, e.g. the groups a login
+  // brought along (`details.groups`, see utils/loginGroupDetails.js).
+  details: z.record(z.string(), z.unknown()).optional()
 });
 
 /**
