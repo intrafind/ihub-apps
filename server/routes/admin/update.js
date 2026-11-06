@@ -75,9 +75,9 @@ function sendUpdateError(res, error, context) {
 /** Staging result: 200 when staged, 422 with the summary when the archive was rejected. */
 function sendStageResult(res, summary) {
   if (summary.accepted) return res.json(summary);
-  return res.status(422).json({
-    error: summary.problems.map(problem => problem.message).join('; '),
-    summary
+  return sendErrorResponse(res, 422, summary.problems.map(problem => problem.message).join('; '), {
+    code: 'ARCHIVE_REJECTED',
+    details: { summary }
   });
 }
 

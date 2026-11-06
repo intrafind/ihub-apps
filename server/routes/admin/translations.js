@@ -10,6 +10,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const MAX_VALUE_LENGTH = 5000;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -121,10 +122,10 @@ export default function registerAdminTranslationsRoutes(app) {
     async (req, res) => {
       try {
         const language = resolveLanguage(req.params.lang);
-        if (!language) return res.status(404).json({ error: 'Unsupported language' });
+        if (!language) return sendErrorResponse(res, 404, 'Unsupported language');
 
         const base = await loadBuiltinLocaleJson(`${language}.json`);
-        if (!base) return res.status(500).json({ error: 'Built-in locale could not be loaded' });
+        if (!base) return sendErrorResponse(res, 500, 'Built-in locale could not be loaded');
         const stored = (await configStore.readJson(`locales/${language}.json`)) || {};
 
         const overrides = new Map();
@@ -178,7 +179,7 @@ export default function registerAdminTranslationsRoutes(app) {
         });
       } catch (error) {
         logger.error('Error listing translations', { component: 'AdminTranslations', error });
-        res.status(500).json({ error: 'Failed to load translations' });
+        sendErrorResponse(res, 500, 'Failed to load translations');
       }
     }
   );
@@ -194,21 +195,21 @@ export default function registerAdminTranslationsRoutes(app) {
     async (req, res) => {
       try {
         const language = resolveLanguage(req.params.lang);
-        if (!language) return res.status(404).json({ error: 'Unsupported language' });
+        if (!language) return sendErrorResponse(res, 404, 'Unsupported language');
 
         const { path, value } = req.body || {};
-        if (!isPath(path)) return res.status(400).json({ error: 'Invalid key path' });
+        if (!isPath(path)) return sendErrorResponse(res, 400, 'Invalid key path');
         const reset = value === null;
         if (!reset && (typeof value !== 'string' || value.length > MAX_VALUE_LENGTH)) {
-          return res.status(400).json({ error: 'Value must be a string' });
+          return sendErrorResponse(res, 400, 'Value must be a string');
         }
 
         const base = await loadBuiltinLocaleJson(`${language}.json`);
-        if (!base) return res.status(500).json({ error: 'Built-in locale could not be loaded' });
+        if (!base) return sendErrorResponse(res, 500, 'Built-in locale could not be loaded');
         // Resetting is always allowed so stale keys can be cleaned out; setting
         // needs a key the built-in locale actually has.
         if (!reset && leafAt(base, path) === undefined) {
-          return res.status(400).json({ error: 'Unknown translation key' });
+          return sendErrorResponse(res, 400, 'Unknown translation key');
         }
 
         const relPath = `locales/${language}.json`;
@@ -236,7 +237,7 @@ export default function registerAdminTranslationsRoutes(app) {
           component: 'AdminTranslations',
           error
         });
-        res.status(500).json({ error: 'Failed to save translation' });
+        sendErrorResponse(res, 500, 'Failed to save translation');
       }
     }
   );

@@ -8,7 +8,12 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendBadRequest,
+  sendNotFound,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
 
@@ -161,7 +166,7 @@ export default function registerAdminCredentialsRoutes(app) {
 
       const store = await readStore();
       if (store.credentials?.[profile.id]) {
-        return res.status(409).json({ error: 'Credential id already exists' });
+        return sendErrorResponse(res, 409, 'Credential id already exists');
       }
 
       // Encrypt secret fields before writing.

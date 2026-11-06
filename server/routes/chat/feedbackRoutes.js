@@ -10,7 +10,11 @@ import { requireFeature } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import {
+  sendBadRequest,
+  sendInternalError,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
@@ -40,8 +44,7 @@ export function requireAppFeedbackEnabled(req, res, next) {
   const { data: apps = [] } = configCache.getApps(true) || {};
   const appConfig = findByIdCaseInsensitive(apps, appId);
   if (appConfig && appConfig.features?.feedback === false) {
-    return res.status(403).json({
-      error: `Feedback is disabled for app '${appId}'`,
+    return sendErrorResponse(res, 403, `Feedback is disabled for app '${appId}'`, {
       code: 'FEATURE_DISABLED'
     });
   }

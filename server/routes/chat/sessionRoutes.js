@@ -722,13 +722,13 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     if (streaming) return outcome;
 
     if (outcome.refusal) {
-      return res.status(409).json({ error: outcome.refusal.message, code: outcome.refusal.code });
+      return sendErrorResponse(res, 409, outcome.refusal.message, { code: outcome.refusal.code });
     }
     if (outcome.status === 'error') {
       if (outcome.error) return sendLLMError(res, outcome.error, { context: 'chat' });
-      return res
-        .status(502)
-        .json({ error: outcome.errorInfo?.message, code: outcome.errorInfo?.code || 'ERROR' });
+      return sendErrorResponse(res, 502, outcome.errorInfo?.message, {
+        code: outcome.errorInfo?.code || 'ERROR'
+      });
     }
     return res.json({
       messageId,
@@ -897,11 +897,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           if (isNewGuest(req.user)) {
             // The chat exists but this request came without the guest cookie
             // that owns it, so its browser does not keep cookies for this site.
-            return res.status(404).json({
-              error:
-                'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
-              code: 'GUEST_COOKIE_MISSING'
-            });
+            return sendErrorResponse(
+              res,
+              404,
+              'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
+              { code: 'GUEST_COOKIE_MISSING' }
+            );
           }
           return sendNotFound(res, 'Chat session');
         }
@@ -927,10 +928,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             ? checkProjectTestChat(access.chat, projectTest.projectId)
             : projectTest;
           if (refused) {
-            return res.status(refused.status).json({
-              error: await getLocalizedError(refused.messageKey, {}, clientLanguage),
-              code: refused.code
-            });
+            return sendErrorResponse(
+              res,
+              refused.status,
+              await getLocalizedError(refused.messageKey, {}, clientLanguage),
+              { code: refused.code }
+            );
           }
         }
         const chatProjects = await resolveChatProjects({
@@ -943,9 +946,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           projects: projectTest ? undefined : requestedProjects
         });
         if (!chatProjects.ok) {
-          return res
-            .status(chatProjects.status)
-            .json({ error: chatProjects.message, code: chatProjects.code });
+          return sendErrorResponse(res, chatProjects.status, chatProjects.message, {
+            code: chatProjects.code
+          });
         }
 
         let messageId = null;
@@ -1009,9 +1012,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         if (!storage.stored || !repository.isAvailable()) {
           // No browser-held fallback: a conversation nobody can continue is
           // not an answer. The provider failure itself was logged at boot.
-          return res
-            .status(503)
-            .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
+          return sendErrorResponse(res, 503, 'Chat storage is unavailable', {
+            code: 'CHAT_STORAGE_UNAVAILABLE'
+          });
         }
         if (messages.length > 1) {
           // The code alone tells an integrator nothing about what to do
@@ -1039,8 +1042,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           mode: access.chat?.identityMode || runLog.identityMode()
         });
         if (!owner) {
-          return res.status(403).json({
-            error: 'This chat has no owner to be stored under',
+          return sendErrorResponse(res, 403, 'This chat has no owner to be stored under', {
             code: 'CHAT_OWNER_REQUIRED'
           });
         }
@@ -1062,9 +1064,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           repository
         });
         if (approvals.refusal) {
-          return res
-            .status(approvals.refusal.status)
-            .json({ error: approvals.refusal.message, code: approvals.refusal.code });
+          return sendErrorResponse(res, approvals.refusal.status, approvals.refusal.message, {
+            code: approvals.refusal.code
+          });
         }
         toolApproval = { grants: approvals.grants, resume: null };
         /**
@@ -1161,10 +1163,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             })
           : { ok: true, scopes: {} };
         if (!scopeResolution.ok) {
-          return res.status(403).json({
-            error: scopeResolution.message,
+          return sendErrorResponse(res, 403, scopeResolution.message, {
             code: scopeResolution.code,
-            integrationId: scopeResolution.integrationId
+            details: { integrationId: scopeResolution.integrationId }
           });
         }
         const integrationScopes = scopeResolution.scopes;
@@ -1364,26 +1365,27 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               {},
               clientLanguage
             );
-            return res
-              .status(
-                prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
-                  ? 404
-                  : prep.error.code === 'modelAccessDeniedForUser'
-                    ? 403
-                    : prep.error.code === 'noModelsAvailable' ||
-                        prep.error.code === 'noCompatibleModels' ||
-                        prep.error.code === 'noModelIdProvided' ||
-                        prep.error.code === 'noModelsForUser'
-                      ? 400
-                      : 500
-              )
-              .json({ error: errMsg, code: prep.error.code });
+            return sendErrorResponse(
+              res,
+              prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
+                ? 404
+                : prep.error.code === 'modelAccessDeniedForUser'
+                  ? 403
+                  : prep.error.code === 'noModelsAvailable' ||
+                      prep.error.code === 'noCompatibleModels' ||
+                      prep.error.code === 'noModelIdProvided' ||
+                      prep.error.code === 'noModelsForUser'
+                    ? 400
+                    : 500,
+              errMsg,
+              { code: prep.error.code }
+            );
           }
           const approvalRefusal = await commitApproval();
           if (approvalRefusal) {
-            return res
-              .status(approvalRefusal.status)
-              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
+            return sendErrorResponse(res, approvalRefusal.status, approvalRefusal.message, {
+              code: approvalRefusal.code
+            });
           }
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           ({ model, llmMessages } = prep.data);
@@ -1433,9 +1435,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               code: approvalRefusal.code,
               message: approvalRefusal.message
             });
-            return res
-              .status(approvalRefusal.status)
-              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
+            return sendErrorResponse(res, approvalRefusal.status, approvalRefusal.message, {
+              code: approvalRefusal.code
+            });
           }
           model = prep.data.model;
           // What open MCP App views reported since the last turn; model-only.
@@ -1469,9 +1471,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // Refused at persistence: the chat's container changed under the
           // turn (`settleUserTurn`), and nothing of it was stored.
           if (outcome?.refusal) {
-            return res
-              .status(409)
-              .json({ error: outcome.refusal.message, code: outcome.refusal.code });
+            return sendErrorResponse(res, 409, outcome.refusal.message, {
+              code: outcome.refusal.code
+            });
           }
 
           return res.json({ status: 'streaming', chatId });

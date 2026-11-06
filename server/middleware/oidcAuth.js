@@ -24,6 +24,7 @@ import {
   storeLoginTokens
 } from '../services/integrations/iFinderTokenProvider.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 // Store configured providers
 const configuredProviders = new Map();
 
@@ -632,7 +633,7 @@ export function createOidcAuthHandler(providerName) {
   return (req, res, next) => {
     const provider = configuredProviders.get(providerName);
     if (!provider) {
-      return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
+      return sendErrorResponse(res, 404, `OIDC provider '${providerName}' not found`);
     }
 
     // The return URL travels inside the signed state (utils/oidcLoginState.js).

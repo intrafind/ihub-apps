@@ -5,7 +5,8 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import {
   sendNotFound,
   sendBadRequest,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import inboxStore from '../../agents/inbox/inboxStore.js';
@@ -56,10 +57,9 @@ export default function registerAdminAgentInboxesRoutes(app) {
       res.json({ ok: true, version: result.version });
     } catch (error) {
       if (error.code === 'VERSION_CONFLICT') {
-        return res.status(409).json({
-          error: 'VERSION_CONFLICT',
-          message: error.message,
-          currentVersion: error.currentVersion
+        return sendErrorResponse(res, 409, error.message, {
+          code: 'VERSION_CONFLICT',
+          details: { currentVersion: error.currentVersion }
         });
       }
       sendFailedOperationError(res, 'write inbox', error);

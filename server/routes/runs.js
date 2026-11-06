@@ -27,7 +27,8 @@ import {
   sendBadRequest,
   sendNotFound,
   sendInsufficientPermissions,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../utils/responseHelpers.js';
 import runLog from '../services/loop/RunLog.js';
 import interactionService, { InteractionError } from '../services/loop/InteractionService.js';
@@ -102,7 +103,7 @@ async function stopRun(runId, meta, cause) {
 
 function sendInteractionError(res, err, operation) {
   if (err instanceof InteractionError) {
-    return res.status(err.status || 400).json({ error: err.message, code: err.code });
+    return sendErrorResponse(res, err.status || 400, err.message, { code: err.code });
   }
   return sendFailedOperationError(res, operation, err);
 }
@@ -324,8 +325,7 @@ export default function registerRunRoutes(app) {
         // also runs the approved call (#2945). Answered here, the interaction
         // would be settled while nothing ran the call.
         if (isChatToolApproval(interaction) || isViewToolApproval(interaction)) {
-          return res.status(409).json({
-            error: 'Answer this approval in its chat',
+          return sendErrorResponse(res, 409, 'Answer this approval in its chat', {
             code: 'ANSWER_IN_CHAT'
           });
         }

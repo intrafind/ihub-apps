@@ -4,6 +4,7 @@
 import { isContentAdmin } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 /**
  * Content admin authentication middleware
  * Allows access for users with either adminAccess or contentAdmin permissions.
@@ -12,10 +13,7 @@ import logger from '../utils/logger.js';
 export function contentAdminAuth(req, res, next) {
   try {
     if (!req.user || req.user.id === 'anonymous') {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'You must be logged in to access this resource.'
-      });
+      return sendErrorResponse(res, 401, 'You must be logged in to access this resource.');
     }
 
     // Delegated and machine principals (personal API keys, OAuth clients,
@@ -24,15 +22,9 @@ export function contentAdminAuth(req, res, next) {
       return next();
     }
 
-    return res.status(403).json({
-      error: 'Access denied',
-      message: 'Content admin access required.'
-    });
+    return sendErrorResponse(res, 403, 'Content admin access required.');
   } catch (error) {
     logger.error('Content admin authentication error', { component: 'ContentAdminAuth', error });
-    return res.status(500).json({
-      error: 'Authentication system error',
-      message: 'Internal server error during authentication'
-    });
+    return sendErrorResponse(res, 500, 'Internal server error during authentication');
   }
 }

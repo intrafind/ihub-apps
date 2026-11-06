@@ -68,14 +68,13 @@ function resolveVoicesModel(req, res) {
     return null;
   }
   if (!isTtsModel(model)) {
-    res.status(400).json({ error: 'Not a text-to-speech model', code: 'not-tts-model' });
+    sendErrorResponse(res, 400, 'Not a text-to-speech model', { code: 'NOT_TTS_MODEL' });
     return null;
   }
   const provider = getTtsProvider(model.provider);
   if (!provider?.listVoices) {
-    res.status(501).json({
-      error: `Provider "${model.provider}" does not manage voices`,
-      code: 'voices-unsupported'
+    sendErrorResponse(res, 501, `Provider "${model.provider}" does not manage voices`, {
+      code: 'VOICES_UNSUPPORTED'
     });
     return null;
   }
@@ -90,7 +89,7 @@ function sendVoicesError(res, error, action) {
     error: error.message
   });
   const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
-  return res.status(502).json({ error: message, code: 'upstream-error' });
+  return sendErrorResponse(res, 502, message, { code: 'UPSTREAM_ERROR' });
 }
 
 /**
@@ -498,11 +497,12 @@ export default function registerAdminModelsRoutes(app) {
       });
     } catch (error) {
       if (error instanceof ModelDiscoveryError) {
-        return res.status(error.status).json({
-          error: error.message,
-          details: error.details,
-          messageKey: error.messageKey,
-          upstreamStatus: error.upstreamStatus
+        return sendErrorResponse(res, error.status, error.message, {
+          details: {
+            remediation: error.details,
+            messageKey: error.messageKey,
+            upstreamStatus: error.upstreamStatus
+          }
         });
       }
       return sendInternalError(res, error, 'discover models');
@@ -933,9 +933,8 @@ export default function registerAdminModelsRoutes(app) {
     delete safeModel.apiKey;
     const provider = getTtsProvider(model.provider);
     if (!provider) {
-      return res.status(400).json({
-        error: `Unsupported text-to-speech provider: ${model.provider}`,
-        code: 'unsupported-provider'
+      return sendErrorResponse(res, 400, `Unsupported text-to-speech provider: ${model.provider}`, {
+        code: 'UNSUPPORTED_PROVIDER'
       });
     }
     const cfg = provider.resolveUpstream(model);
@@ -958,13 +957,11 @@ export default function registerAdminModelsRoutes(app) {
         error: error.message
       });
       const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
-      return res.status(502).json({ error: message, details: message, code: 'upstream-error' });
+      return sendErrorResponse(res, 502, message, { code: 'UPSTREAM_ERROR' });
     }
     if (bytes === 0) {
-      return res.status(502).json({
-        error: 'No audio was returned',
-        details: 'The text-to-speech model answered without any audio.',
-        code: 'no-audio'
+      return sendErrorResponse(res, 502, 'The text-to-speech model answered without any audio.', {
+        code: 'NO_AUDIO'
       });
     }
     const seconds = bytes / 2 / provider.sampleRate;
@@ -993,9 +990,7 @@ export default function registerAdminModelsRoutes(app) {
         provider: model.provider,
         error: result.message
       });
-      return res
-        .status(502)
-        .json({ error: result.message, details: result.message, code: 'upstream-error' });
+      return sendErrorResponse(res, 502, result.message, { code: 'UPSTREAM_ERROR' });
     }
     return res.json({
       success: true,
@@ -1037,29 +1032,29 @@ export default function registerAdminModelsRoutes(app) {
 
       const voiceName = typeof name === 'string' ? name.trim() : '';
       if (!voiceName || voiceName.length > 100) {
-        return res
-          .status(400)
-          .json({ error: 'name is required (at most 100 characters)', code: 'invalid-name' });
+        return sendErrorResponse(res, 400, 'name is required (at most 100 characters)', {
+          code: 'INVALID_NAME'
+        });
       }
       if (typeof audio !== 'string' || !audio) {
-        return res.status(400).json({ error: 'audio is required', code: 'invalid-audio' });
+        return sendErrorResponse(res, 400, 'audio is required', { code: 'INVALID_AUDIO' });
       }
       const sample = Buffer.from(audio, 'base64');
       if (!sample.length) {
-        return res.status(400).json({ error: 'audio is not valid base64', code: 'invalid-audio' });
+        return sendErrorResponse(res, 400, 'audio is not valid base64', { code: 'INVALID_AUDIO' });
       }
       if (sample.length > MAX_VOICE_SAMPLE_BYTES) {
-        return res
-          .status(413)
-          .json({ error: 'The voice sample is too large', code: 'audio-too-large' });
+        return sendErrorResponse(res, 413, 'The voice sample is too large', {
+          code: 'AUDIO_TOO_LARGE'
+        });
       }
       const safeName =
         typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '_').slice(-100) : '';
       const extension = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : 'wav';
       if (!VOICE_SAMPLE_EXTENSIONS.has(extension)) {
-        return res
-          .status(400)
-          .json({ error: 'Unsupported audio file type', code: 'invalid-audio' });
+        return sendErrorResponse(res, 400, 'Unsupported audio file type', {
+          code: 'INVALID_AUDIO'
+        });
       }
       const voiceLanguages = Array.isArray(languages)
         ? [...new Set(languages.filter(l => TTS_LANGUAGES.includes(l)))]
@@ -1097,7 +1092,7 @@ export default function registerAdminModelsRoutes(app) {
       if (!resolved) return undefined;
       const { voiceId } = req.params;
       if (!/^[\w-]{1,100}$/.test(voiceId)) {
-        return res.status(400).json({ error: 'Invalid voice id', code: 'invalid-voice' });
+        return sendErrorResponse(res, 400, 'Invalid voice id', { code: 'INVALID_VOICE' });
       }
       try {
         await resolved.provider.deleteVoice(resolved.cfg, voiceId);
@@ -1173,9 +1168,10 @@ export default function registerAdminModelsRoutes(app) {
         const { userMessage, errorMessage, messageKey } = describeModelTestFailure(testError);
         const mappedStatus = llmErrorToHttpStatus(testError);
         const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
-        res
-          .status(httpStatus)
-          .json({ error: userMessage, details: errorMessage, code: testError.code, messageKey });
+        sendErrorResponse(res, httpStatus, userMessage, {
+          code: testError.code,
+          details: { remediation: errorMessage, messageKey }
+        });
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });

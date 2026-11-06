@@ -8,7 +8,8 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import {
   sendNotFound,
   sendBadRequest,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
@@ -212,9 +213,7 @@ export default function registerAdminAgentsRoutes(app) {
         await configStore.createJson(profileRelPath(profile.id), profile);
       } catch (err) {
         if (err.code === 'EEXIST') {
-          return res
-            .status(409)
-            .json({ error: 'CONFLICT', message: `Profile ${profile.id} already exists` });
+          return sendErrorResponse(res, 409, `Profile ${profile.id} already exists`);
         }
         throw err;
       }
@@ -343,10 +342,9 @@ export default function registerAdminAgentsRoutes(app) {
         res.json({ ok: true, version: result.version });
       } catch (error) {
         if (error.code === 'VERSION_CONFLICT') {
-          return res.status(409).json({
-            error: 'VERSION_CONFLICT',
-            message: error.message,
-            currentVersion: error.currentVersion
+          return sendErrorResponse(res, 409, error.message, {
+            code: 'VERSION_CONFLICT',
+            details: { currentVersion: error.currentVersion }
           });
         }
         sendFailedOperationError(res, 'write agent memory', error);
@@ -448,10 +446,9 @@ export default function registerAdminAgentsRoutes(app) {
         });
       } catch (error) {
         if (error.code === 'VERSION_CONFLICT') {
-          return res.status(409).json({
-            error: 'VERSION_CONFLICT',
-            message: error.message,
-            currentVersion: error.currentVersion
+          return sendErrorResponse(res, 409, error.message, {
+            code: 'VERSION_CONFLICT',
+            details: { currentVersion: error.currentVersion }
           });
         }
         logger.error('Failed to build memory from tool', {

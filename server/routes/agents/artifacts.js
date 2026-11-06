@@ -13,7 +13,8 @@ import { authRequired, authenticatedOnly } from '../../middleware/authRequired.j
 import {
   sendBadRequest,
   sendNotFound,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isAdmin } from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -76,13 +77,10 @@ async function authorizeArtifactAccess(req, res, runId) {
     if (triggered && requesting && requesting !== 'anonymous' && triggered === requesting) {
       return true;
     }
-    res.status(403).json({
-      error: 'forbidden',
-      message: 'You are not allowed to access this run’s artifacts.'
-    });
+    sendErrorResponse(res, 403, 'You are not allowed to access this run’s artifacts.');
     return false;
   } catch {
-    res.status(403).json({ error: 'forbidden', message: 'Authorization check failed.' });
+    sendErrorResponse(res, 403, 'Authorization check failed.');
     return false;
   }
 }

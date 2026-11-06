@@ -8,7 +8,12 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
-import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { getProxyConfig, redactUrlSecrets } from '../../utils/httpConfig.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
@@ -531,10 +536,12 @@ export default function registerAdminProvidersRoutes(app) {
       const { data: models = [] } = configCache.getModels(true);
       const linkedModels = getLinkedModels(providerId, models).map(m => m.id);
       if (linkedModels.length > 0) {
-        return res.status(409).json({
-          error: `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
-          linkedModels
-        });
+        return sendErrorResponse(
+          res,
+          409,
+          `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
+          { code: 'PROVIDER_IN_USE', details: { linkedModels } }
+        );
       }
 
       // Load current providers
