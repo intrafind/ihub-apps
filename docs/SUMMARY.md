@@ -64,6 +64,7 @@
     - [Tools (Legacy)](tools.md)
     - [Compare Mode](compare-mode.md)
     - [Auto-Send Query Parameter](auto-send-feature.md)
+    - [Embedding iHub in Another Product (Embed Mode)](embed-mode.md)
     - [Feedback Feature](feedback-feature.md)
     - [iFinder Integration](iFinder-Integration.md)
     - [iFinder Quick Reference](iFinder-Quick-Reference.md)
