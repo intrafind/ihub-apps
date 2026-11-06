@@ -91,7 +91,7 @@ Every `4xx` and `5xx` response is `application/problem+json` as defined by
 ```json
 {
   "type": "urn:ihub:problem:NOT_FOUND",
-  "title": "Not found",
+  "title": "The requested resource was not found.",
   "status": 404,
   "detail": "Scheduled task t1 not found",
   "code": "NOT_FOUND",
@@ -117,10 +117,14 @@ Every `4xx` and `5xx` response is `application/problem+json` as defined by
   title of the code and the real one is only logged.
 - **Throw, do not answer.** A handler throws a `ServiceError(code, message, { status?, details? })` and the global
   error middleware shapes the response. A handler never writes an error body itself, with `res.status(…).json({ error })`
-  or any other form. This is also what makes the shape the same everywhere.
+  or any other form. This is also what makes the shape the same everywhere. Where throwing is not possible (a
+  surrounding `try` would catch it and answer twice), `sendErrorResponse(res, status, message, { code?, details? })`
+  writes the same response in place; it goes through the same mapper.
 - **A new code** goes into `shared/apiErrors.js` and into `apiErrors` of `shared/i18n/en.json` and `de.json`.
   Codes are `UPPER_SNAKE`; never `kebab-case` or ad hoc strings.
-- The OAuth endpoints keep `{ "error", "error_description" }` of RFC 6749.
+- The OAuth endpoints and bearer-token errors keep `{ "error", "error_description" }` of RFC 6749 / 6750, the
+  OpenAI-compatible endpoints keep the OpenAI error object. The voice routes keep their kebab-case protocol
+  codes: they are shared with the voice WebSocket and the voice dock, not part of the registry.
 
 ## 4. Lists
 
@@ -241,12 +245,10 @@ The check finds the mechanical violations; the [checklist](#checklist) still cov
 
 ## Where we are
 
-The rules above are the target. The code is not there yet:
-
-- **Errors:** `server/utils/errorResponse.js` still produces the older `{ error, code, details }` body, and about
-  80 call sites still write `{ error }` themselves. Moving the mapper to the `application/problem+json` body above
-  is a deliberate breaking change for the client (which reads `error`); both change in the same release.
-- **Success bodies, verbs, pagination:** migrate when an endpoint is touched. A grep for
+- **Errors:** done. The mapper (`server/utils/errorResponse.js`) answers `application/problem+json` and the
+  API guidelines check keeps new hand-written bodies out. The exceptions are the specifications that fix their
+  own shape (OAuth and bearer tokens, the OpenAI-compatible endpoints) and the voice routes, whose kebab-case
+  codes are shared with the voice WebSocket.
+- **Success bodies, verbs, pagination:** migrate when an endpoint is touched. The check fails a new
+  `{ success }` envelope, a bare verb in a route and a `page` / `offset` parameter; a grep for
   `json({ success`, `json({ message:` and `/run`, `/duplicate`, `/cancel` finds the candidates.
-
-When the mapper has moved, update [Error Responses](error-responses.md) and delete this section.
