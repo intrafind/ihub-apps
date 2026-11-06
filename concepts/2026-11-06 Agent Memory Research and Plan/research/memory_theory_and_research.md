@@ -155,7 +155,7 @@ Evidence that stored reflections/skills/playbooks improve agents is consistent a
 - Backbone dependence: the same memory method scored 0.781 (Nemori, gpt-4o-mini) vs 0.447 (Nemori, Qwen-2.5-3B), with memory-write format-error rates of 17.9% and 30.4% respectively; SimpleMem 0.289 vs 0.102. — [arXiv 2602.19320v1](https://arxiv.org/html/2602.19320v1)
 - Cost of self-maintenance: offline memory construction on LoCoMo took A-Mem ~15 h / 1.49M tokens, Nemori ~3.25 h / 7.04M tokens, MAGMA ~7.28 h / 2.73M tokens, MemoryOS ~7.83 h / 4.04M tokens. — [arXiv 2602.19320v1](https://arxiv.org/html/2602.19320v1)
 - MLM anti-pattern: free-form summarisation "may keep incorrect statements as if verified"; unbounded growth makes "irrelevant entries compete with useful ones". — [MLM article](https://machinelearningmastery.com/the-ai-agent-memory-stack-building-blocks-patterns-and-frameworks/)
-- Multi-agent accuracy/cost study (Jan 2026, arXiv:2601.07978): mem0 more efficient than Graphiti, accuracy differences not statistically significant. — [arXiv 2601.07978](https://arxiv.deeppaper.ai/papers/2601.07978v2) *(via search summary)*
+- Multi-agent accuracy/cost study (arXiv:2601.07978, Wolff & Bennati, COMPSAC 2026): the January 2026 revision (v2) reported mem0 more efficient than Graphiti with accuracy differences not statistically significant; the September 2026 revision (v5) reports mem0, RAG and full context at 77–81% versus Graphiti and Cognee at 55–56% on LoCoMo, with RAG at 8.4× lower cost than mem0 (see §8 for the current numbers). — [arXiv 2601.07978v5](https://arxiv.org/abs/2601.07978v5)
 
 ### Inferences
 - The evidence base for procedural/playbook memory is strongest on *task-shaped* workloads (coding, AppWorld, embodied tasks) where a crisp success signal exists; for open chat assistants the evidence is weaker and mostly vendor anecdotes.
@@ -240,7 +240,7 @@ The literature and vendor docs converge on: keep a small always-loaded layer (pr
 - Anthropic Dreams: input store never modified; output store reviewable; cost ∝ transcripts; start small. — [Claude Platform docs: Dreams](https://platform.claude.com/docs/en/managed-agents/dreams)
 - Anatomy: make writes backbone-aware with validation layers; model maintenance throughput; adaptive schemas; benchmark with Δ vs full context. — [arXiv 2602.19320v1](https://arxiv.org/html/2602.19320v1)
 - Always-On Agents: treat permissions, credentials, commitments, trigger conditions and externally committed effects as governed persistent state with provenance, recoverability and rollback — relevant to scheduled tasks. — [arXiv 2606.30306](https://arxiv.org/abs/2606.30306)
-- Multi-agent: mem0 vs Graphiti accuracy not significantly different, mem0 cheaper (Jan 2026). — [arXiv 2601.07978](https://arxiv.deeppaper.ai/papers/2601.07978v2)
+- Multi-agent: the January 2026 revision found mem0 vs Graphiti accuracy not significantly different and mem0 cheaper; the September 2026 revision (v5) puts Graphiti and Cognee at 55–56% against 77–81% for mem0, RAG and full context. — [arXiv 2601.07978v5](https://arxiv.org/abs/2601.07978v5)
 - Claude product: per-project memory isolation plus account memory; org-level availability switch; sensitive-category exclusion; retention-period expiry; export/import. — [Claude support](https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context)
 
 ### Inferences (design recommendations distilled from the above)
