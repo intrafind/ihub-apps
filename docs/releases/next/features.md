@@ -1,5 +1,15 @@
 # Features — Unreleased
 
+## Upload Types Start With All Their Formats Selected
+
+In **Admin → Apps → Upload Configuration**, turning on an upload type (images, files, audio or
+video) now selects **Use entire category** straight away, so the app accepts every format of that
+type. Uncheck it to pick individual formats; your selection stays as it was and you remove what you
+do not want. Before, a newly enabled type started with a short default list.
+
+Unchecking **Use entire category** now also works when every format is selected. Apps that are
+already configured keep their formats.
+
 ## iFinder Model Gateway as a Model Source
 
 iHub can use the **iFinder Model Gateway** as a built-in model source. Under **Admin → Models →
