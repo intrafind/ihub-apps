@@ -100,18 +100,18 @@ export function respondIfAuthRequired(res, error, installationId) {
   const integration = error.integration || installationId;
   // The structured "connect first" result is the body the model's tools see; over HTTP it is
   // an ordinary problem: the code, and what the Connect card needs in `details`.
-  const {
-    error: _code,
-    message,
-    ...details
-  } = integrationAuthRequiredResult({
+  const result = integrationAuthRequiredResult({
     integration,
     reason: error.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
     message: error.message,
     connectUrl: error.connectUrl || undefined,
     scopes: error.scopes || undefined
   });
-  sendErrorResponse(res, 409, message, { code: INTEGRATION_AUTH_REQUIRED, details });
+  // `error` (the code) and `message` are the code and the detail of the answer
+  const details = { ...result };
+  delete details.error;
+  delete details.message;
+  sendErrorResponse(res, 409, result.message, { code: INTEGRATION_AUTH_REQUIRED, details });
   return true;
 }
 

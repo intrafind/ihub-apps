@@ -84,7 +84,7 @@ const RULES = [
   {
     id: 'hand-rolled-error',
     // a status that is not a 1xx-3xx literal: 4xx, 5xx, or a variable (`error.status`)
-    pattern: /\.status\(\s*(?![123]\d\d\s*\))[^()]*\)\s*\.(?:json|send)\(\s*\{[^}]*?\berror\s*:/gs,
+    pattern: /\.status\((?!\s*[123]\d\d\s*\))[^()]*\)\s*\.(?:json|send)\(\s*\{[^}]*?\berror\s*:/gs,
     message:
       'Throw a ServiceError(code, message) instead of writing the error body; the error middleware shapes it (docs/api-guidelines.md#3-errors).'
   },

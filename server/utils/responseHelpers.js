@@ -19,10 +19,10 @@ import { codeOfStatus, sendProblem } from './errorResponse.js';
  * @param {number} statusCode - HTTP status code
  * @param {string} message - What went wrong; shown to the caller as `detail` (a 5xx only when it is safe)
  * @param {Object} options - Additional options
- * @param {Error} options.error - Error object for logging
- * @param {string} options.logPrefix - Prefix for console logging
- * @param {string} options.code - A code of `shared/apiErrors.js`; default is the generic code of the status
- * @param {Object} options.details - Interpolation parameters for the client's message
+ * @param {Error} [options.error] - Error object for logging
+ * @param {string} [options.logPrefix] - Prefix for console logging
+ * @param {string} [options.code] - A code of `shared/apiErrors.js`; default is the generic code of the status
+ * @param {Object|Array} [options.details] - Interpolation parameters for the client's message, or a list of problems
  */
 export function sendErrorResponse(res, statusCode, message, options = {}) {
   const { error, logPrefix } = options;

@@ -217,7 +217,8 @@ function splitIssues(details) {
     issues.length > 0 &&
     issues.every(issue => issue && typeof issue === 'object' && typeof issue.message === 'string');
   if (!listed) return { details };
-  const { issues: _issues, ...rest } = details;
+  const rest = { ...details };
+  delete rest.issues;
   return {
     details: Object.keys(rest).length ? rest : undefined,
     errors: issues.map(issue => ({
