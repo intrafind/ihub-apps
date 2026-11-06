@@ -10,9 +10,11 @@ import {
   BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
   getLinkedModels,
-  getProviderApiType
+  getProviderApiType,
+  isGatewayProvider
 } from '../../../../../shared/llmProviders.js';
 import ProviderFormFields from '../components/ProviderFormFields';
+import GatewaySyncDialog from '../components/GatewaySyncDialog';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -42,6 +44,7 @@ function AdminProviderEditPage() {
     apiKeySet: false
   });
   const [models, setModels] = useState([]);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   // Connectivity test state — kept out of formData so running a test never
   // looks like an unsaved edit.
@@ -54,6 +57,8 @@ function AdminProviderEditPage() {
   const linkedModels = isLlmProvider ? getLinkedModels(providerId, models) : [];
   // Import needs the saved entry: the server reads its key and API type.
   const canImport = CUSTOM_PROVIDER_API_TYPES.includes(getProviderApiType(initialData));
+  // Like import, the sync reads the saved entry (its base URL and key) on the server.
+  const canSync = isGatewayProvider(initialData);
 
   useEffect(() => {
     loadProvider();
@@ -96,6 +101,12 @@ function AdminProviderEditPage() {
       setLoading(false);
     }
   }, [providerId, i18n.language]);
+
+  // After a sync: only the models changed, so the form and its unsaved edits stay.
+  const reloadModels = useCallback(async () => {
+    const response = await makeAdminApiCall('/admin/models').catch(() => null);
+    if (response) setModels(Array.isArray(response.data) ? response.data : []);
+  }, []);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -328,18 +339,30 @@ function AdminProviderEditPage() {
                   )}
                 </p>
               </div>
-              {canImport && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate('/admin/models', { state: { importProviderId: providerId } })
-                  }
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
-                >
-                  <Icon name="link" className="w-4 h-4" />
-                  {t('admin.providers.linkedModels.import', 'Import models')}
-                </button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {canSync && (
+                  <button
+                    type="button"
+                    onClick={() => setSyncOpen(true)}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
+                  >
+                    <Icon name="refresh" className="w-4 h-4" />
+                    {t('admin.providers.sync.button', 'Sync with gateway')}
+                  </button>
+                )}
+                {canImport && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate('/admin/models', { state: { importProviderId: providerId } })
+                    }
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
+                  >
+                    <Icon name="link" className="w-4 h-4" />
+                    {t('admin.providers.linkedModels.import', 'Import models')}
+                  </button>
+                )}
+              </div>
             </div>
             {linkedModels.length === 0 ? (
               <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
@@ -378,6 +401,14 @@ function AdminProviderEditPage() {
           </div>
         )}
       </div>
+
+      {syncOpen && (
+        <GatewaySyncDialog
+          providerId={providerId}
+          onClose={() => setSyncOpen(false)}
+          onSynced={reloadModels}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={blocker.state === 'blocked'}

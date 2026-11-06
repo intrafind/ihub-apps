@@ -5,7 +5,8 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { isValidId, validateIdForPath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
@@ -23,9 +24,18 @@ import {
   isCustomLlmProvider,
   isGatewayProvider,
   isReservedProviderId,
-  linkedModelProvider
+  linkedModelProvider,
+  resolveProviderApiKey
 } from '../../services/llmProviders.js';
-import { stripTrailingSlashes } from '../../services/ModelEndpointDiscovery.js';
+import {
+  discoverModels,
+  ModelDiscoveryError,
+  stripTrailingSlashes
+} from '../../services/ModelEndpointDiscovery.js';
+import { computeGatewayDrift } from '../../services/gatewayDrift.js';
+import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
@@ -156,6 +166,105 @@ function describeOutboundPath(providerId) {
   return { proxy, proxyEnabled, endpoint: endpoints[providerId] || null };
 }
 
+/**
+ * Ask a model gateway provider's gateway what it lists now and compare that with the models
+ * imported from it. Shared by the drift report and by the sync that applies it, so both see
+ * the same thing and fail the same way.
+ *
+ * @param {string} providerId
+ * @returns {Promise<{ provider: Object, modelsUrl: string, items: Array<Object> }>}
+ * @throws {ServiceError} `BAD_REQUEST` for an unusable id, a provider that is no gateway or has no
+ *   base URL, `NOT_FOUND` for an unknown provider, `UPSTREAM_ERROR` when the gateway cannot be asked
+ */
+async function loadGatewayDrift(providerId) {
+  if (!isValidId(providerId)) throw new ServiceError('BAD_REQUEST', 'Invalid provider ID');
+
+  const { data: providers = [] } = configCache.getProviders(true);
+  const provider = providers.find(p => p.id === providerId);
+  if (!provider) throw new ServiceError('NOT_FOUND', `Provider ${providerId} not found`);
+  if (!isGatewayProvider(provider)) {
+    throw new ServiceError('BAD_REQUEST', `Provider ${providerId} is not a model gateway`, {
+      details: { providerId }
+    });
+  }
+  if (!provider.baseUrl) {
+    throw new ServiceError('BAD_REQUEST', `Provider ${providerId} has no base URL`, {
+      details: { providerId }
+    });
+  }
+
+  let listing;
+  try {
+    listing = await discoverModels({
+      url: provider.baseUrl,
+      provider: getProviderApiType(provider),
+      apiKey: resolveProviderApiKey(provider) || '',
+      gateway: provider.gateway
+    });
+  } catch (error) {
+    if (!(error instanceof ModelDiscoveryError)) throw error;
+    // A URL the admin has to fix is theirs (400); anything else is the gateway's.
+    throw new ServiceError(error.status === 400 ? 'BAD_REQUEST' : 'UPSTREAM_ERROR', error.message, {
+      status: error.status,
+      details: {
+        reason: error.messageKey,
+        upstreamStatus: error.upstreamStatus,
+        hint: error.details
+      }
+    });
+  }
+
+  const { data: models = [] } = configCache.getModels(true);
+  return {
+    provider,
+    modelsUrl: listing.modelsUrl,
+    items: computeGatewayDrift({
+      provider,
+      models,
+      entries: listing.models,
+      modelsUrl: listing.modelsUrl
+    })
+  };
+}
+
+/** Models are stored one file each; sync reads and writes those files, not the config cache. */
+const modelStore = {
+  read: async id => configStore.readJson(await configStore.resolveIdToPath('models', id)),
+  write: async (id, model) =>
+    configStore.writeJson(await configStore.resolveIdToPath('models', id), model)
+};
+
+/** Most picks one sync request may carry. */
+const MAX_SYNC_PICKS = 500;
+
+/**
+ * The picks of a sync request: `{ items: [{ kind, remoteId }] }`.
+ *
+ * @throws {ServiceError} `BAD_REQUEST` for anything else
+ */
+function picksOf(body) {
+  const list = body?.items;
+  if (!Array.isArray(list) || list.length > MAX_SYNC_PICKS) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `items must be a list of at most ${MAX_SYNC_PICKS} picks`
+    );
+  }
+  for (const pick of list) {
+    const valid =
+      pick &&
+      typeof pick === 'object' &&
+      ['added', 'changed', 'removed'].includes(pick.kind) &&
+      typeof pick.remoteId === 'string' &&
+      pick.remoteId.length > 0 &&
+      pick.remoteId.length <= 200;
+    if (!valid) {
+      throw new ServiceError('BAD_REQUEST', 'Each pick needs a kind and a remoteId');
+    }
+  }
+  return list.map(({ kind, remoteId }) => ({ kind, remoteId }));
+}
+
 export default function registerAdminProvidersRoutes(app) {
   /**
    * @swagger
@@ -220,6 +329,200 @@ export default function registerAdminProvidersRoutes(app) {
       } catch (error) {
         return sendInternalError(res, error, 'fetch provider schema');
       }
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/providers/{providerId}/_model-drift:
+   *   get:
+   *     summary: Compare a model gateway with the models imported from it (Admin)
+   *     description: |
+   *       Reads the model listing of an iFinder Model Gateway provider (its base URL
+   *       and stored project key) and compares it with the models linked to the
+   *       provider. Changes nothing: every item names what an admin could do, and the
+   *       client applies the choice with the regular model endpoints.
+   *
+   *       Item kinds: `added` (listed, not imported; carries the model config to
+   *       `POST /admin/models`), `changed` (an imported model differs from the gateway;
+   *       carries `changes` as `{ field, from, to }`), `removed` (an enabled imported
+   *       model the gateway no longer lists, or lists as something iHub cannot run;
+   *       `reason` is `missing` or `unsupported`; the offer is to disable it).
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The drift report; `items` is empty when everything matches
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 modelsUrl:
+   *                   type: string
+   *                 items:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       kind:
+   *                         type: string
+   *                         enum: [added, changed, removed]
+   *                       remoteId:
+   *                         type: string
+   *                       modelId:
+   *                         type: string
+   *                         description: The iHub model (changed and removed)
+   *                       name:
+   *                         type: string
+   *                         description: Display name (added)
+   *                       model:
+   *                         type: object
+   *                         description: Model config to create (added)
+   *                       reason:
+   *                         type: string
+   *                         enum: [missing, unsupported]
+   *                       changes:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           properties:
+   *                             field:
+   *                               type: string
+   *                             from: {}
+   *                             to: {}
+   *       400:
+   *         description: "`BAD_REQUEST`: the provider is not a model gateway, has no base URL, or its URL is unusable"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   *       502:
+   *         description: "`UPSTREAM_ERROR`: the gateway could not be reached or rejected the request; `details.reason` names why (`authenticationFailed`, `apiKeyRequired`, `connectionRefused`, …)"
+   */
+  app.get(
+    buildServerPath('/api/admin/providers/:providerId/_model-drift'),
+    adminAuth,
+    async (req, res) => {
+      const { modelsUrl, items } = await loadGatewayDrift(req.params.providerId);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ modelsUrl, items });
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/providers/{providerId}/_sync-models:
+   *   post:
+   *     summary: Apply a pick of the gateway drift to the models (Admin)
+   *     description: |
+   *       Applies the items an admin picked from `GET /admin/providers/{providerId}/_model-drift`.
+   *       The server asks the gateway again and applies only picks that still match what it
+   *       reports now; it never takes a model config from the request. `added` creates the
+   *       model, `changed` sets the changed fields on the stored model, `removed` disables
+   *       the model (it is never deleted).
+   *
+   *       The request succeeds as a whole when it is understood: each item has its own
+   *       outcome, and one failure does not stop the others.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [items]
+   *             properties:
+   *               items:
+   *                 type: array
+   *                 maxItems: 500
+   *                 items:
+   *                   type: object
+   *                   required: [kind, remoteId]
+   *                   properties:
+   *                     kind:
+   *                       type: string
+   *                       enum: [added, changed, removed]
+   *                     remoteId:
+   *                       type: string
+   *     responses:
+   *       200:
+   *         description: One outcome per picked item, in the order they were applied
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 items:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       kind:
+   *                         type: string
+   *                       remoteId:
+   *                         type: string
+   *                       modelId:
+   *                         type: string
+   *                       status:
+   *                         type: string
+   *                         enum: [applied, skipped, failed]
+   *                       detail:
+   *                         type: string
+   *                         description: "Why an item was not applied; `changedSinceReview` for a skipped one"
+   *       400:
+   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is not a model gateway or has no base URL"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   *       502:
+   *         description: "`UPSTREAM_ERROR`: the gateway could not be asked; nothing was changed"
+   */
+  app.post(
+    buildServerPath('/api/admin/providers/:providerId/_sync-models'),
+    adminAuth,
+    async (req, res) => {
+      const picks = picksOf(req.body);
+      const { items } = await loadGatewayDrift(req.params.providerId);
+      const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
+
+      const results = await applyGatewayDrift({
+        picks,
+        items,
+        store: {
+          ...modelStore,
+          audit: (action, id, summary) =>
+            logAudit({ req, action, resource: 'model', resourceId: id, summary }),
+          snapshot: (id, before, after) =>
+            saveSnapshot({ resource: 'model', id, before, after, admin })
+        }
+      });
+      // One refresh for the whole batch, after every file is written.
+      if (results.some(result => result.status === 'applied')) {
+        await configCache.refreshModelsCache();
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ items: results });
     }
   );
 
