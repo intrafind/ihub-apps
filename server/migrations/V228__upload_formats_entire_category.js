@@ -102,6 +102,38 @@ export async function precondition(ctx) {
   return await ctx.fileExists('apps');
 }
 
+/**
+ * The entire category to put into an enabled upload type, or null when the type stays as it is:
+ * not enabled, no such category, or a list that was chosen (or is already the entire category).
+ */
+function entireCategoryFor(uploadKey, typeConfig, mimetypes) {
+  if (typeConfig?.enabled !== true) return null;
+
+  const category = mimetypes?.categories?.[TYPE_CATEGORIES[uploadKey]]?.mimeTypes;
+  if (!Array.isArray(category) || category.length === 0) return null;
+
+  const formats = typeConfig.supportedFormats;
+  if (!Array.isArray(formats)) return category;
+  if (sameFormats(formats, category) || !isOldDefault(uploadKey, formats)) return null;
+  return category;
+}
+
+/** Applies the entire category to the app's upload types; true when anything changed. */
+function selectEntireCategories(app, mimetypes) {
+  if (!app?.upload || typeof app.upload !== 'object') return false;
+
+  let changed = false;
+  for (const uploadKey of Object.keys(TYPE_CATEGORIES)) {
+    const category = entireCategoryFor(uploadKey, app.upload[uploadKey], mimetypes);
+    if (!category) continue;
+    app.upload[uploadKey].supportedFormats = [...category];
+    changed = true;
+  }
+  return changed;
+}
+
+// Apps are read and written one after the other on purpose: a failure leaves the files that were
+// done complete, and there are few of them.
 export async function up(ctx) {
   const mimetypes = await readMimetypes(ctx);
   const appFiles = await ctx.listFiles('apps', '*.json');
@@ -110,28 +142,9 @@ export async function up(ctx) {
   let migratedApps = 0;
   for (const file of appFiles) {
     const app = await ctx.readJson(`apps/${file}`);
-    if (!app || typeof app !== 'object' || !app.upload || typeof app.upload !== 'object') continue;
-
-    let changed = false;
-    for (const [uploadKey, categoryId] of Object.entries(TYPE_CATEGORIES)) {
-      const typeConfig = app.upload[uploadKey];
-      if (!typeConfig || typeConfig.enabled !== true) continue;
-
-      const category = mimetypes?.categories?.[categoryId]?.mimeTypes;
-      if (!Array.isArray(category) || category.length === 0) continue;
-
-      const formats = typeConfig.supportedFormats;
-      const onDefault = !Array.isArray(formats) || isOldDefault(uploadKey, formats);
-      if (!onDefault || (Array.isArray(formats) && sameFormats(formats, category))) continue;
-
-      typeConfig.supportedFormats = [...category];
-      changed = true;
-    }
-
-    if (changed) {
-      await ctx.writeJson(`apps/${file}`, app);
-      migratedApps++;
-    }
+    if (!selectEntireCategories(app, mimetypes)) continue;
+    await ctx.writeJson(`apps/${file}`, app);
+    migratedApps++;
   }
 
   if (migratedApps > 0) {
