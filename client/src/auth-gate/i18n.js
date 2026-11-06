@@ -33,6 +33,8 @@ var __authGateI18n = (function () {
       retry: 'Retry',
       serverError: 'Unable to connect to the server.',
       sessionExpired: 'Your session has expired. Please sign in again.',
+      signInFailed:
+        'Sign-in did not complete. Please try again. If it keeps failing, contact your administrator.',
       demoAccounts: 'Demo accounts:',
       demoAdmin: 'Admin: admin / password123',
       demoUser: 'User: user / password123',
@@ -63,6 +65,8 @@ var __authGateI18n = (function () {
       retry: 'Erneut versuchen',
       serverError: 'Verbindung zum Server konnte nicht hergestellt werden.',
       sessionExpired: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
+      signInFailed:
+        'Die Anmeldung wurde nicht abgeschlossen. Bitte versuchen Sie es erneut. Wenn sie weiterhin fehlschlägt, wenden Sie sich an Ihren Administrator.',
       demoAccounts: 'Demo-Konten:',
       demoAdmin: 'Admin: admin / password123',
       demoUser: 'Benutzer: user / password123',
