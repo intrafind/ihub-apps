@@ -4268,6 +4268,30 @@
           "admin": "Admin",
           "api": "API"
         }
+      },
+      "details": {
+        "open": "Show details",
+        "title": "Audit entry",
+        "ip": "IP address",
+        "requestId": "Request ID",
+        "entryId": "Entry ID",
+        "effectiveGroups": "Effective groups",
+        "effectiveGroupsHint": "The groups the user had for this action.",
+        "providerGroups": "Groups from the identity provider",
+        "providerGroupsCount": "{{total}} received, {{mapped}} mapped to iHub groups",
+        "providerGroupsTruncated": "Showing the first {{shown}} of {{total}} groups.",
+        "noProviderGroups": "The identity provider sent no groups.",
+        "providerGroup": "Provider group",
+        "mapsTo": "Maps to",
+        "notMapped": "Not mapped",
+        "manualGroups": "Assigned manually",
+        "manualGroupsHint": "Groups an admin assigned to the user under Users.",
+        "automaticGroups": "Added automatically",
+        "automaticGroupsHint": "Groups every signed-in user or every user of this provider receives.",
+        "groupsRecordedAtLogin": "Recorded at sign-in. Changes in the identity provider apply from the next sign-in.",
+        "noGroups": "None",
+        "moreDetails": "More details",
+        "rawEntry": "Raw entry (JSON)"
       }
     },
     "filters": {

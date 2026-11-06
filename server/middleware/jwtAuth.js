@@ -34,13 +34,14 @@ import { oauthClientsFile } from '../utils/contentsPath.js';
  * @param {Function} next - Express next function
  * @param {string} source - Where the token came from, for the log line
  * @param {string} userId - The subject the token carries
+ * @param {Function} dropCookie - Drops the session cookie if it holds this token
  */
-function rejectDeletedUser(req, res, next, source, userId) {
+function rejectDeletedUser(req, res, next, source, userId, dropCookie) {
   logger.warn(`JWT Auth token rejected: ${source} user not found`, {
     component: 'JwtAuth',
     userId
   });
-  res.clearCookie('authToken', getClearAuthCookieOptions(req));
+  dropCookie();
   if (req.path.startsWith('/api/auth/')) {
     return next();
   }
@@ -51,36 +52,58 @@ function rejectDeletedUser(req, res, next, source, userId) {
 }
 
 /**
- * Refuse a token whose user record is gone (see {@link rejectDeletedUser}) or
- * disabled (403).
+ * Answer a request whose token stands for a user that is gone (see
+ * {@link rejectDeletedUser}) or disabled (403).
  *
  * @param {Object} req - Express request
  * @param {Object} res - Express response
  * @param {Function} next - Express next function
- * @param {Object|null|undefined} userRecord - What the lookup found
+ * @param {'missing'|'disabled'} state - From `userRecordState`
  * @param {string} source - Where the token came from, for the log line
  * @param {string} userId - The subject the token carries
- * @returns {boolean} True when the request has been answered or handed on, so
- *   the caller must stop
+ * @param {Function} dropCookie - Drops the session cookie if it holds this token
  */
-function refuseUnusableUser(req, res, next, userRecord, source, userId) {
-  const state = userRecordState(userRecord);
+function answerUnusableUser(req, res, next, state, source, userId, dropCookie) {
   if (state === 'missing') {
-    rejectDeletedUser(req, res, next, source, userId);
-    return true;
+    return rejectDeletedUser(req, res, next, source, userId, dropCookie);
   }
-  if (state === 'disabled') {
-    logger.warn(`JWT Auth token rejected: ${source} user account disabled`, {
-      component: 'JwtAuth',
-      userId: userRecord.id || userId
-    });
-    res.status(403).json({
-      error: 'access_denied',
-      error_description: 'User account has been disabled'
-    });
-    return true;
-  }
-  return false;
+  logger.warn(`JWT Auth token rejected: ${source} user account disabled`, {
+    component: 'JwtAuth',
+    userId
+  });
+  return res.status(403).json({
+    error: 'access_denied',
+    error_description: 'User account has been disabled'
+  });
+}
+
+/**
+ * The session cookie to try when the token in the Authorization header turns
+ * out to be unusable, or null.
+ *
+ * Browsers that signed in before the OIDC callback stopped putting the token in
+ * the redirect URL still keep that token in localStorage, and the web client
+ * sends it as `Authorization: Bearer` on every request. Once it has expired, or
+ * its user or sign-in method is gone, it must not hide the session cookie the
+ * browser sends along with it: the person signs in at the identity provider,
+ * gets a fresh cookie, and is still shown the login screen, round after round.
+ *
+ * Only for our own session tokens. An OAuth token (Office add-in, browser
+ * extension, API clients) keeps its own answers, so its client refreshes it and
+ * its per-client restrictions are never swapped for the cookie's full session.
+ * The claim is read without verifying the token: falling back grants nothing a
+ * request without the header would not get, since the browser sends the cookie
+ * either way.
+ *
+ * @param {string} headerToken - Token from the Authorization header
+ * @param {string|null} cookieToken - Token from the `authToken` cookie
+ * @returns {string|null}
+ */
+function sessionCookieFallback(headerToken, cookieToken) {
+  if (!cookieToken || cookieToken === headerToken) return null;
+  const authMode = decodeJwt(headerToken)?.payload?.authMode;
+  if (typeof authMode === 'string' && authMode.startsWith('oauth_')) return null;
+  return cookieToken;
 }
 
 /**
@@ -97,18 +120,73 @@ export default async function jwtAuthMiddleware(req, res, next) {
   // over the main-app session cookie so that the correct auth mode is used.
   // SSE connections cannot send custom headers and rely on the cookie, but they also
   // never send an Authorization header, so this order is safe for both.
-  let token = null;
-
+  // A header token that turns out unusable hands over to the cookie, see
+  // sessionCookieFallback().
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-  } else if (req.cookies && req.cookies.authToken) {
-    token = req.cookies.authToken;
-  }
+  const headerToken =
+    authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  const cookieToken = req.cookies?.authToken || null;
 
-  if (!token) {
-    return next(); // No token, continue as anonymous
+  if (headerToken) {
+    return authenticateToken(req, res, next, headerToken, {
+      fromHeader: true,
+      cookieFallback: sessionCookieFallback(headerToken, cookieToken)
+    });
   }
+  if (cookieToken) {
+    return authenticateToken(req, res, next, cookieToken, { fromHeader: false });
+  }
+  return next(); // No token, continue as anonymous
+}
+
+/**
+ * Authenticate the request with one token.
+ *
+ * @param {Object} req - Express request
+ * @param {Object} res - Express response
+ * @param {Function} next - Express next function
+ * @param {string} token - The token to check
+ * @param {Object} options
+ * @param {boolean} options.fromHeader - The token came in the Authorization header
+ * @param {string|null} [options.cookieFallback] - Session cookie to try when the
+ *   token is unusable
+ */
+async function authenticateToken(req, res, next, token, { fromHeader, cookieFallback = null }) {
+  // The cookie is httpOnly, so only a response can end it, and only when it is
+  // this token that is dead: a stale header token says nothing about the cookie
+  // sent next to it, and dropping that would sign the person out.
+  const dropCookie = () => {
+    if (req.cookies?.authToken === token) {
+      res.clearCookie('authToken', getClearAuthCookieOptions(req));
+    }
+  };
+
+  // This token gives no identity. A stale session token in the header hands over
+  // to the session cookie; anything else is answered as before. The flag tells
+  // /api/auth/status to have the client forget the token it sent.
+  const unusable = answer => {
+    if (fromHeader) req.bearerTokenRejected = true;
+    if (cookieFallback) {
+      logger.info('JWT Auth: Authorization token unusable, using the session cookie', {
+        component: 'JwtAuth'
+      });
+      return authenticateToken(req, res, next, cookieFallback, { fromHeader: false });
+    }
+    return answer();
+  };
+
+  const refuseUser = (userRecord, source, userId) =>
+    unusable(() =>
+      answerUnusableUser(
+        req,
+        res,
+        next,
+        userRecordState(userRecord),
+        source,
+        userRecord?.id || userId,
+        dropCookie
+      )
+    );
 
   const platform = configCache.getPlatform() || {};
 
@@ -155,7 +233,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
 
     if (!decoded) {
       logger.warn('JWT Auth: Token verification failed', { component: 'JwtAuth' });
-      return next(); // Invalid token, continue as anonymous
+      return unusable(() => next()); // Invalid token, continue as anonymous
     }
 
     // Debug: Log JWT payload in development
@@ -172,19 +250,21 @@ export default async function jwtAuthMiddleware(req, res, next) {
 
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && decoded.exp < now) {
-      // For /api/auth/status endpoint, don't return 401 on expired token
-      // Allow the endpoint to respond with proper auth status and auto-redirect info
-      if (req.path === '/api/auth/status') {
-        logger.info('JWT Auth: Token expired, continuing to status endpoint', {
-          component: 'JwtAuth'
-        });
-        return next();
-      }
+      return unusable(() => {
+        // For /api/auth/status endpoint, don't return 401 on expired token
+        // Allow the endpoint to respond with proper auth status and auto-redirect info
+        if (req.path === '/api/auth/status') {
+          logger.info('JWT Auth: Token expired, continuing to status endpoint', {
+            component: 'JwtAuth'
+          });
+          return next();
+        }
 
-      return res.status(401).json({
-        error: 'Token expired',
-        code: 'TOKEN_EXPIRED',
-        message: 'Your session has expired. Please log in again.'
+        return res.status(401).json({
+          error: 'Token expired',
+          code: 'TOKEN_EXPIRED',
+          message: 'Your session has expired. Please log in again.'
+        });
       });
     }
 
@@ -287,7 +367,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
       } else {
         // OAuth clients not enabled, but token is OAuth type - reject
         logger.warn('OAuth token rejected: OAuth clients not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', getClearAuthCookieOptions(req));
+        dropCookie();
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }
@@ -461,7 +541,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
           // since, and a refresh token must not keep their access alive.
           const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
 
-          if (refuseUnusableUser(req, res, next, userRecord, 'OAuth', userId)) return;
+          if (userRecordState(userRecord) !== 'active') {
+            return refuseUser(userRecord, 'OAuth', userId);
+          }
 
           // Load OAuth client to apply current per-client permission restrictions.
           // Client restrictions are looked up fresh on every request so that admin
@@ -569,7 +651,7 @@ export default async function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         logger.warn('OAuth auth code token rejected: OAuth not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', getClearAuthCookieOptions(req));
+        dropCookie();
         if (req.path === '/api/auth/status') {
           return next();
         }
@@ -586,7 +668,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
           // Find the user in the database
           const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
 
-          if (refuseUnusableUser(req, res, next, userRecord, 'local', userId)) return;
+          if (userRecordState(userRecord) !== 'active') {
+            return refuseUser(userRecord, 'local', userId);
+          }
 
           // User exists and is active, create user object from token
           user = {
@@ -615,13 +699,15 @@ export default async function jwtAuthMiddleware(req, res, next) {
         logger.warn('JWT Auth token rejected: local authentication is not enabled', {
           component: 'JwtAuth'
         });
-        res.clearCookie('authToken', getClearAuthCookieOptions(req));
-        if (req.path === '/api/auth/status') {
-          return next(); // Continue as anonymous — let status endpoint return available auth methods
-        }
-        return res.status(401).json({
-          error: 'invalid_token',
-          error_description: 'Local authentication is not enabled'
+        return unusable(() => {
+          dropCookie();
+          if (req.path === '/api/auth/status') {
+            return next(); // Continue as anonymous — let status endpoint return available auth methods
+          }
+          return res.status(401).json({
+            error: 'invalid_token',
+            error_description: 'Local authentication is not enabled'
+          });
         });
       }
     } else if (decoded.authMode === 'oidc') {
@@ -631,7 +717,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
         // The user was persisted before this token was issued, so a missing
         // record means the account was deleted since.
         const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
-        if (refuseUnusableUser(req, res, next, userRecord, 'OIDC', userId)) return;
+        if (userRecordState(userRecord) !== 'active') {
+          return refuseUser(userRecord, 'OIDC', userId);
+        }
 
         user = {
           id: decoded.sub || decoded.username,
@@ -661,7 +749,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
         // before sub was the canonical id carry the directory subject (or, with no
         // sub, the username); those are matched through ldapData.subject.
         const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
-        if (refuseUnusableUser(req, res, next, userRecord, 'LDAP', userId)) return;
+        if (userRecordState(userRecord) !== 'active') {
+          return refuseUser(userRecord, 'LDAP', userId);
+        }
 
         user = {
           id: decoded.sub || decoded.username,
@@ -692,7 +782,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
       // Teams users are persisted to users.json via validateAndPersistExternalUser
       try {
         const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
-        if (refuseUnusableUser(req, res, next, userRecord, 'Teams', userId)) return;
+        if (userRecordState(userRecord) !== 'active') {
+          return refuseUser(userRecord, 'Teams', userId);
+        }
 
         user = {
           id: decoded.id || decoded.sub,
@@ -718,7 +810,9 @@ export default async function jwtAuthMiddleware(req, res, next) {
       // NTLM users are persisted to users.json via validateAndPersistExternalUser
       try {
         const { userId, record: userRecord } = await resolveTokenUser(platform, decoded);
-        if (refuseUnusableUser(req, res, next, userRecord, 'NTLM', userId)) return;
+        if (userRecordState(userRecord) !== 'active') {
+          return refuseUser(userRecord, 'NTLM', userId);
+        }
 
         user = {
           id: decoded.id || decoded.sub,

@@ -4602,6 +4602,30 @@
           "admin": "Admin",
           "api": "API"
         }
+      },
+      "details": {
+        "open": "Details anzeigen",
+        "title": "Audit-Eintrag",
+        "ip": "IP-Adresse",
+        "requestId": "Request-ID",
+        "entryId": "Eintrags-ID",
+        "effectiveGroups": "Wirksame Gruppen",
+        "effectiveGroupsHint": "Die Gruppen, die der Benutzer bei dieser Aktion hatte.",
+        "providerGroups": "Gruppen aus dem Identity Provider",
+        "providerGroupsCount": "{{total}} erhalten, {{mapped}} auf iHub-Gruppen gemappt",
+        "providerGroupsTruncated": "Die ersten {{shown}} von {{total}} Gruppen werden angezeigt.",
+        "noProviderGroups": "Der Identity Provider hat keine Gruppen gesendet.",
+        "providerGroup": "Gruppe im Provider",
+        "mapsTo": "Gemappt auf",
+        "notMapped": "Nicht gemappt",
+        "manualGroups": "Manuell zugewiesen",
+        "manualGroupsHint": "Gruppen, die ein Admin dem Benutzer unter Benutzer zugewiesen hat.",
+        "automaticGroups": "Automatisch hinzugefügt",
+        "automaticGroupsHint": "Gruppen, die jeder angemeldete Benutzer oder jeder Benutzer dieses Providers erhält.",
+        "groupsRecordedAtLogin": "Stand bei der Anmeldung. Änderungen im Identity Provider gelten ab der nächsten Anmeldung.",
+        "noGroups": "Keine",
+        "moreDetails": "Weitere Details",
+        "rawEntry": "Roher Eintrag (JSON)"
       }
     },
     "filters": {
