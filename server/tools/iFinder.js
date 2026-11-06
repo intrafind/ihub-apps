@@ -14,8 +14,13 @@ import iFinderScopes, {
  * own profiles (#3050).
  */
 async function withSearchProfile(params = {}) {
-  const { searchProfile } = await resolveToolSearchProfile(params);
-  return { ...params, searchProfile };
+  return (await resolveScopedParams(params)).scoped;
+}
+
+/** {@link withSearchProfile}, plus whether the chat fixed the profile. */
+async function resolveScopedParams(params = {}) {
+  const { searchProfile, fixed } = await resolveToolSearchProfile(params);
+  return { scoped: { ...params, searchProfile }, fixed: Boolean(fixed) };
 }
 
 /**
@@ -26,13 +31,14 @@ async function withSearchProfile(params = {}) {
  * unknown the result stays as it was and the panel shows the id.
  *
  * @param {Object} params - the tool call's params
- * @param {(params: Object) => Promise<Object>} run - the service call
+ * @param {(params: Object, scope: {fixed: boolean}) => Promise<Object>} run - the
+ *   service call, given the scoped params and whether the chat fixed the profile
  * @returns {Promise<Object>} the call's result
  */
 async function withSearchProfileName(params, run) {
-  const scoped = await withSearchProfile(params);
+  const { scoped, fixed } = await resolveScopedParams(params);
   const [result, names] = await Promise.all([
-    run(scoped),
+    run(scoped, { fixed }),
     searchProfileNames({ user: scoped.user, signal: scoped.signal })
   ]);
   const searchProfile = result && typeof result === 'object' ? result.searchProfile : undefined;
@@ -40,15 +46,73 @@ async function withSearchProfileName(params, run) {
   return name && !result.error ? { ...result, searchProfileName: name } : result;
 }
 
+/** True when a query string matches every document (`*`, `*:*`) or is empty. */
+function matchesEverything(query) {
+  const trimmed = typeof query === 'string' ? query.trim() : '';
+  return trimmed === '' || trimmed === '*' || trimmed === '*:*';
+}
+
+/**
+ * What the model should do next after a search that found nothing.
+ *
+ * iFinder's search profiles combine bare query words with OR and
+ * `minimum_should_match: 3<-25%`: every word of a query of up to three words
+ * must match, and from four on a quarter may miss. So a short query that
+ * matched nothing cannot match anything with one more word, and padding it to
+ * four words or more only finds documents that lack one of the original words.
+ * Yet that is the retry models reach for ("vacation policy" → "vacation policy
+ * company"). The hint says so at the moment the model decides, and names the
+ * moves that do widen: fewer words, other words, and an explicit OR, which
+ * `minimum_should_match` does not apply to. It does not suggest another
+ * search profile when the chat fixed the profile.
+ *
+ * @param {Object} params - the search call's params (`query`, `filter`)
+ * @param {{fixed?: boolean}} [scope] - whether the chat fixed the profile
+ * @returns {string} the hint
+ */
+export function zeroHitHint({ query, filter } = {}, { fixed = false } = {}) {
+  const filters = Array.isArray(filter) ? filter.filter(Boolean) : [];
+  const steps = [];
+  if (matchesEverything(query)) {
+    steps.push(
+      'The query matches every document, so a filter excluded them all: check each filter value against iFinder_getFacetValues and the field name against iFinder_getFields, or drop filters one at a time.'
+    );
+  } else {
+    steps.push(
+      'No document matched. Do not retry with the same words plus more: up to three words must all match, so one more word cannot find anything, and from four words on one word may miss, so the hits lack one of your words and drift off topic.',
+      'Widen instead: keep only the one or two words that carry the topic; swap words for synonyms, a broader term or the other language (German/English); join alternatives with an explicit OR (`urlaub OR ferien OR abwesenheit`), which matches any one of them; or use `THES/&term` for thesaurus expansion or a prefix wildcard (`urlaub*`).'
+    );
+    if (filters.length > 0) {
+      steps.push(
+        'The filters are ANDed with the query: run it once without them to see whether a filter is what excludes the hits.'
+      );
+    }
+  }
+  if (!fixed) {
+    steps.push(
+      'If a broader query also finds nothing, check the search profile with iFinder_listProfiles.'
+    );
+  }
+  steps.push('Only report that no document exists after a broader query also found nothing.');
+  return steps.join(' ');
+}
+
 /**
  * Search for documents in iFinder
  * @param {Object} params - The search parameters
  * @param {string} params.query - The search query
  * @param {number} [params.limit] - Maximum number of results to return
- * @returns {Promise<Object>} The search results, with `searchProfileName` when known
+ * @returns {Promise<Object>} The search results, with `searchProfileName` when
+ *   known and a `hint` when nothing matched ({@link zeroHitHint})
  */
 export async function search(params) {
-  return withSearchProfileName(params, scoped => iFinderService.search(scoped));
+  return withSearchProfileName(params, async (scoped, scope) => {
+    const result = await iFinderService.search(scoped);
+    if (result && typeof result === 'object' && !result.error && result.totalFound === 0) {
+      return { ...result, hint: zeroHitHint(scoped, scope) };
+    }
+    return result;
+  });
 }
 
 /**

@@ -115,5 +115,5 @@ test('the real shipped skill syncs into an empty contents directory', async () =
   });
   assert.ok(updated >= 4, `refreshed ${updated}`);
   const skill = await fs.readFile(path.join(contents, 'skills/ifinder-search/SKILL.md'), 'utf8');
-  assert.match(skill, /version: '1\.3'/);
+  assert.match(skill, /version: '1\.4'/);
 });

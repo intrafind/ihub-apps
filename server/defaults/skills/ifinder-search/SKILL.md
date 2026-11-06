@@ -9,13 +9,15 @@ description: >
   fixing. It covers the IntraFind query syntax — Lucene plus the `MODE/`,
   `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`, `DATE/`, `NUMBER/` and `OR/` operators
   for linguistic matching, thesaurus expansion, entity and proximity search —
-  when a field needs a `.keyword` suffix, filters versus query terms, facets,
-  sorting, paging and the discovery loop for an unfamiliar corpus. Do NOT use it
+  when a field needs a `.keyword` suffix, filters versus query terms, how a
+  query's words combine (OR with minimum_should_match 3<-25%), which
+  way to rewrite a query after zero, too few or too many hits, facets, sorting,
+  paging and the discovery loop for an unfamiliar corpus. Do NOT use it
   for web search or for other document sources.
 license: Apache-2.0
 metadata:
   author: IntraFind
-  version: '1.3'
+  version: '1.4'
 ---
 
 # Searching iFinder
@@ -77,7 +79,8 @@ named `cust.*` and differ per installation.
 The `query` takes Lucene syntax.
 
 ```
-annual report                          words, relevance-ranked
+annual report                          bare words, relevance-ranked — see
+                                       "How iFinder combines the words"
 "annual report"                        exact phrase
 title:budget AND language:de           field-qualified, boolean
 creators:john OR owners:john           either
@@ -118,9 +121,11 @@ query without guessing at field names.
 
 A field prefix goes in front: `content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
 
-These operators are normally active, but a deployment can have them switched
-off, and a parser that does not know an operator treats it as a literal term and
-quietly matches nothing. So when an operator matters, run the query with and
+These operators are always understood: the IntraFind parser is iFinder's
+default, and a search profile cannot switch it off. An operator can still match
+nothing for a reason of its own — `THES/` needs a configured thesaurus,
+`ENTITY/` a field analyzed for entities, and a typo (`ENTITY/PERSON`,
+`near/S`) is silent. So when an operator matters, run the query with and
 without it and compare `totalFound` rather than trusting a zero.
 
 Full grammar, every option and worked examples:
@@ -146,6 +151,74 @@ Put the **topic** in `query` and every **narrowing criterion** in `filter`.
 Folding a filter into the query (`Kündigungsfrist AND application.keyword:PDF`)
 still works but skews relevance, because the format term counts toward the
 score.
+
+## How iFinder combines the words of a query
+
+iFinder's search profiles combine the bare words of a query with **OR**, and
+require a share of them through `minimum_should_match: 3<-25%`. Expect that
+setting:
+
+| Bare words in the query | Must match           |
+| ----------------------- | -------------------- |
+| 1 – 3                   | all of them          |
+| 4                       | 3                    |
+| 5 – 7                   | all but one          |
+| 8                       | 6 (a quarter misses) |
+
+`minimum_should_match` counts bare words only. Write the operator out and it
+does not apply: `urlaub OR ferien OR abwesenheit` matches any one of the three,
+and `vertrag AND kündigung AND frist AND lieferant` requires all four. To set a
+threshold of your own, use `OR/2(vertrag kündigung frist lieferant)` — any two
+of the four.
+
+Filters are always ANDed with the query.
+
+## Retrying: narrow or widen, never both ways at once
+
+A retry moves the result set in one direction only:
+
+| You got                        | The next query needs                                                 | Same words plus more? |
+| ------------------------------ | -------------------------------------------------------------------- | --------------------- |
+| too many hits                  | a filter, a phrase, `NEAR/S(…)`, or words joined with explicit `AND` | only with `AND`       |
+| **0 hits**                     | fewer words, other words, alternatives joined with explicit `OR`     | **never**             |
+| some hits, but you want others | fewer words, other words, explicit `OR`                              | no                    |
+
+**Zero hits is a dead end for that wording.** `vacation policy` found nothing,
+so `vacation policy company` cannot find anything either: up to three bare
+words must all match, and every document the longer query could match also
+contains `vacation` and `policy`. Neither can `"vacation policy"` (a phrase is
+stricter still) or the same query with a new filter. Padding it to four words
+or more does not help either: then one word may miss, so the hits are
+documents that lack `vacation` or `policy` — off topic, not the missing
+documents. A retry after zero has to _remove_ or _replace_ words:
+
+```
+✗ vacation policy                →  vacation policy company       (all 3 required: still 0)
+✗ vacation policy                →  "vacation policy" 2026        (stricter: still 0)
+✗ vacation policy                →  vacation policy company handbook
+                                                                 (3 of 4: hits drift off topic)
+✓ vacation policy                →  vacation                      (fewer words)
+✓ vacation policy                →  Urlaub OR Urlaubsregelung OR vacation
+                                                                 (other words, explicit OR)
+✓ vacation policy                →  THES/&Urlaub                  (synonyms)
+✓ vacation policy                →  urlaub*                       (prefix)
+```
+
+The corpus is often in another language than the question. Try the German
+word for an English question and the other way round before anything else —
+`Urlaub`, `Urlaubsantrag`, `Abwesenheit` rather than more English words.
+
+**Finding more or different documents works the same way.** To find documents
+a query missed, drop a word, swap a word for a synonym, or join alternatives
+with an explicit `OR` (`Reisekosten OR Spesen OR "travel expenses"`).
+
+**To narrow, do not rely on bare extra words.** Up to three words, each added
+word narrows. From four on, one in four may miss, so a fifth bare word may not
+narrow at all. A filter, a phrase, `NEAR/S(…)` or an explicit `AND` always
+narrows.
+
+When a search tool result carries a `hint`, it was written for this decision:
+follow it.
 
 ## Standard fields worth knowing
 
@@ -316,22 +389,26 @@ returns the long tail.
 
 ## When a search disappoints
 
-| Symptom                                 | Likely cause                                     | Fix                                        |
-| --------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
-| 0 hits with a filter                    | `.keyword` missing, or on a field that has none  | `iFinder_getFields`, then re-filter        |
-| 0 hits, exact value                     | wrong spelling or casing                         | `iFinder_getFacetValues` on that field     |
-| 0 hits, plausible query                 | wrong search profile (unless fixed for the chat) | `iFinder_listProfiles`, then retry         |
-| far too many hits                       | topic-only query                                 | move criteria into `filter`                |
-| right topic, wrong docs                 | ranking skewed by filter terms in the query      | move them to `filter`                      |
-| a known document missing                | the user cannot read it                          | say so; do not retry                       |
-| sort ignored                            | sorting on an analyzed text field                | use the `.keyword` variant                 |
-| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it               | re-run without it and compare `totalFound` |
-| a German compound finds nothing         | analyzer stopped at the surface form             | `MODE/c&` or `MODE/s&`                     |
-| a name or code matches too loosely      | lemma or compound expansion                      | `MODE/e&`                                  |
+| Symptom                                 | Likely cause                                      | Fix                                        |
+| --------------------------------------- | ------------------------------------------------- | ------------------------------------------ |
+| 0 hits with a filter                    | `.keyword` missing, or on a field that has none   | `iFinder_getFields`, then re-filter        |
+| 0 hits, exact value                     | wrong spelling or casing                          | `iFinder_getFacetValues` on that field     |
+| 0 hits, topic query                     | too many words, or words the corpus doesn't use   | fewer words, synonyms, other language, OR  |
+| 0 hits, plausible query                 | wrong search profile (unless fixed for the chat)  | `iFinder_listProfiles`, then retry         |
+| too few hits, more expected             | query too strict                                  | drop or swap words, explicit `OR`          |
+| far too many hits                       | topic-only query, or 4+ bare words (one may miss) | `filter`, phrase, `NEAR/S`, explicit `AND` |
+| right topic, wrong docs                 | ranking skewed by filter terms in the query       | move them to `filter`                      |
+| a known document missing                | the user cannot read it                           | say so; do not retry                       |
+| sort ignored                            | sorting on an analyzed text field                 | use the `.keyword` variant                 |
+| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | no thesaurus, field without entities, or a typo   | re-run without it and compare `totalFound` |
+| a German compound finds nothing         | analyzer stopped at the surface form              | `MODE/c&` or `MODE/s&`                     |
+| a name or code matches too loosely      | lemma or compound expansion                       | `MODE/e&`                                  |
 
-Never report "there are no documents about X" after one failed query. Confirm
-the profile and the field names first — the common case is a query fault, not an
-empty corpus.
+Never report "there are no documents about X" after one failed query. Widen the
+wording and confirm the profile and the field names first — the common case is a
+query fault, not an empty corpus. And never answer a zero with the same words
+plus more: up to three words it finds nothing again, from four on it finds
+documents that lack one of your words.
 
 ## Related references
 
