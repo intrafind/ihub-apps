@@ -7,8 +7,12 @@ video) now selects **Use entire category** straight away, so the app accepts eve
 type. Uncheck it to pick individual formats; your selection stays as it was and you remove what you
 do not want. Before, a newly enabled type started with a short default list.
 
-Unchecking **Use entire category** now also works when every format is selected. Apps that are
-already configured keep their formats.
+Unchecking **Use entire category** now also works when every format is selected.
+
+**Migration:** on the first start with this version, every enabled upload type that has no format
+list, or still has one of the old defaults the editor and the chat used, is moved to the entire
+category of its type (for documents that includes HTML, CSS, JavaScript and **Any text file**).
+Format lists you chose yourself, and types that are turned off, are left alone.
 
 ## iFinder Model Gateway as a Model Source
 
