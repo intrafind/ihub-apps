@@ -349,6 +349,24 @@ export default function registerAdminProvidersRoutes(app) {
         return sendBadRequest(res, validationError);
       }
 
+      // A gateway provider's models speak different dialects (Mistral next to
+      // OpenAI, a realtime speech backend). Taking the gateway setting away would
+      // move them all to the provider's one API type — a realtime model would end
+      // up on the OpenAI batch transcriber — so refuse while that would happen.
+      if (isGatewayProvider(providers[index]) && !isGatewayProvider(updatedProvider)) {
+        const { data: models = [] } = configCache.getModels(true);
+        const apiType = getProviderApiType(updatedProvider);
+        const affected = getLinkedModels(providerId, models).filter(
+          model => linkedModelProvider(apiType, model) !== model.provider
+        );
+        if (affected.length > 0) {
+          return sendBadRequest(
+            res,
+            `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
+          );
+        }
+      }
+
       providers[index] = updatedProvider;
 
       // Save updated providers

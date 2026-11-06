@@ -189,15 +189,20 @@ const KEY_REQUIRED_HOSTS = Object.freeze(['api.openai.com']);
  *   server at a custom `url`) and not linked to a custom provider entry: the
  *   same kind of endpoint, reached through the OpenAI API type. Linked models
  *   keep their key requirement — that provider exists to hold one.
+ * - A model linked to an iFinder Model Gateway provider, whatever its dialect:
+ *   a gateway without projects is open, so no key is the normal case there.
+ *   One that does need a key answers 401 when the model is called.
  *
  * This only decides what happens when no key is found anywhere; a configured
  * key is always sent.
  *
  * @param {Object} model - Model config (`provider`, `providerId`, `url`)
+ * @param {Object} [providerEntry] - The provider entry the model is linked to, when it has one
  * @returns {boolean}
  */
-export function allowsMissingApiKey(model) {
+export function allowsMissingApiKey(model, providerEntry) {
   if (!model) return false;
+  if (isGatewayProvider(providerEntry)) return true;
   if (model.provider === 'local') return true;
   if (model.provider !== 'openai' || model.providerId || typeof model.url !== 'string') {
     return false;

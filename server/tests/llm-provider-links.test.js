@@ -123,7 +123,7 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
 const { default: registerAdminProvidersRoutes } = await import('../routes/admin/providers.js');
-const { getApiKeyForModel } = await import('../utils.js');
+const { getApiKeyForModel, inspectModelApiKey } = await import('../utils.js');
 const { modelConfigSchema } = await import('../validators/modelConfigSchema.js');
 const { MODEL_API_TYPES } = await import('../../shared/llmProviders.js');
 
@@ -456,6 +456,57 @@ describe('iFinder Model Gateway providers', () => {
     expect(res.body.updatedModels).toEqual([]);
     expect(store['models/gw-mistral.json'].provider).toBe('mistral');
     expect(store['models/gw-chat.json'].provider).toBe('openai');
+  });
+
+  it('lets models of a gateway without a key run keyless, in every dialect', () => {
+    store['config/providers.json'].providers.push({
+      id: 'open-gw',
+      name: 'Open gateway',
+      category: 'llm',
+      apiType: 'openai',
+      gateway: 'ifinder-model-gateway',
+      enabled: true
+    });
+    for (const provider of ['openai', 'mistral']) {
+      const model = { ...baseModel, id: `open-${provider}`, provider, providerId: 'open-gw' };
+      expect(inspectModelApiKey(model, { quiet: true }).state).toBe('keyless');
+    }
+    // A gateway with a project key still sends it.
+    const keyed = { ...baseModel, id: 'keyed', provider: 'mistral', providerId: 'ifinder-gw' };
+    expect(inspectModelApiKey(keyed, { quiet: true })).toMatchObject({
+      state: 'ok',
+      apiKey: 'project-key'
+    });
+    // Any other custom provider without a key is still an error.
+    const plain = { ...baseModel, id: 'plain', provider: 'openai', providerId: 'nokey' };
+    expect(inspectModelApiKey(plain, { quiet: true }).state).toBe('missing');
+  });
+
+  it('refuses to remove the gateway setting while models use their own dialect', async () => {
+    addModel({ ...baseModel, id: 'gw-mistral', provider: 'mistral', providerId: 'ifinder-gw' });
+    const provider = store['config/providers.json'].providers.find(p => p.id === 'ifinder-gw');
+    const { gateway: _gateway, ...withoutGateway } = provider;
+    const res = await request(app)
+      .put('/api/admin/providers/ifinder-gw')
+      .send({ ...withoutGateway, apiKey: '••••••••' });
+    expect(res.status).toBe(400);
+    expect(store['models/gw-mistral.json'].provider).toBe('mistral');
+    expect(store['config/providers.json'].providers.find(p => p.id === 'ifinder-gw').gateway).toBe(
+      'ifinder-model-gateway'
+    );
+  });
+
+  it('removes the gateway setting when every model already matches the API type', async () => {
+    addModel({ ...baseModel, id: 'gw-chat', provider: 'openai', providerId: 'ifinder-gw' });
+    const provider = store['config/providers.json'].providers.find(p => p.id === 'ifinder-gw');
+    const { gateway: _gateway, ...withoutGateway } = provider;
+    const res = await request(app)
+      .put('/api/admin/providers/ifinder-gw')
+      .send({ ...withoutGateway, apiKey: '••••••••' });
+    expect(res.status).toBe(200);
+    expect(
+      store['config/providers.json'].providers.find(p => p.id === 'ifinder-gw').gateway
+    ).toBeUndefined();
   });
 
   it('refuses discovery for an unknown gateway before calling out', async () => {

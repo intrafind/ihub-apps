@@ -335,7 +335,10 @@ gateway reports decides how a model is imported; nothing is guessed from its nam
 The adapter follows the gateway's `api_type`: `MISTRAL` models use the **Mistral** adapter,
 `OPENAI` and `AZURE_OPENAI` models use the provider's API type (**OpenAI-compatible**, or **vLLM /
 self-hosted** when most backends are vLLM). Unlike other providers, changing a gateway provider's
-API type does not rewrite its models, because they speak different dialects. The gateway does not
+API type does not rewrite its models, because they speak different dialects, and the gateway
+setting cannot be removed while a model still uses its own dialect (delete or relink those models
+first). Models of a gateway provider run without a key when none is configured; a gateway that
+requires one answers 401. The gateway does not
 support tool calling yet, so imported chat models have **Tool support** set to none. Raise it for
 a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
 Mistral backend.
