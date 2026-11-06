@@ -343,6 +343,41 @@ support tool calling yet, so imported chat models have **Tool support** set to n
 a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
 Mistral backend.
 
+**Keeping the models in line with the gateway.** A gateway's models change over time: deployments
+are added and retired, a context window is corrected, a model moves to another dialect. On the
+provider's page (**Admin → Providers →** the gateway **→ Linked models**), **Sync with gateway**
+asks the gateway what it lists now and compares that with the models imported from it. Nothing
+changes until you apply your choice. The dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
+
+| Group                       | What it means                                                                                     | When applied                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Changed on the gateway**  | An imported model differs from the gateway: URL, adapter, context window or image input           | The model is updated to match; the old and new values are shown                  |
+| **New on the gateway**      | The gateway lists a model nobody imported                                                         | The model is imported, as in **Import from URL**                                 |
+| **No longer available**     | An enabled imported model the gateway no longer lists, or now lists as something iHub cannot run  | The model is **disabled**, not deleted: apps may still use it                    |
+
+Models iHub cannot run (embedding, NER) are never offered, a model you disabled yourself is not
+reported as gone, and a model you configured by hand for the same endpoint counts as imported. Using
+the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your choice and is not
+reported. A context window the gateway does not report is left as you set it. Each applied item has
+its own result, so one failure does not stop the others.
+
+Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
+
+Applying is done by the server, not by chaining model calls from the browser: it asks the gateway
+again, applies only the picks that still match what the gateway reports (anything else comes back
+`skipped`: run the sync again), and reads and writes each model's stored file. Each item has its own
+result and one failure does not stop the others. Every changed model is written to the audit log
+and the model's change history.
+
+| Endpoint                                                  | Purpose                                                                      |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `GET /api/admin/providers/{providerId}/_model-drift`      | The comparison: `{ modelsUrl, items }`. Writes nothing                        |
+| `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId, modelId? }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
+
+Both need an admin and answer `404` for an unknown provider, `400` for one that is no gateway or has
+no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the gateway cannot be asked, in
+which case nothing is changed.
+
 The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
 returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
