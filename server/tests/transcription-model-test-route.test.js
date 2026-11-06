@@ -85,11 +85,12 @@ test('a failing endpoint is a 502 carrying the reason when it is safe to show', 
     title: 'A connected service failed. Please try again later.',
     status: 502,
     detail: 'The endpoint refused the connection',
-    code: 'UPSTREAM_ERROR'
+    code: 'UPSTREAM_ERROR',
+    details: { reason: 'The endpoint refused the connection' }
   });
 });
 
-test('a failing endpoint whose message names an address is a 502 without that message', async () => {
+test('a failing endpoint whose message names an address keeps it out of detail, and gives it to the admin in details.reason', async () => {
   state.result = { ok: false, message: 'Connection failed: connect ECONNREFUSED' };
   const res = await request(app).post(url);
   expect(res.status).toBe(502);
@@ -98,7 +99,10 @@ test('a failing endpoint whose message names an address is a 502 without that me
     type: 'urn:ihub:problem:UPSTREAM_ERROR',
     title: 'A connected service failed. Please try again later.',
     status: 502,
+    // `detail` is filtered like every 5xx message; this is an admin route, so the operator
+    // still gets the provider's wording to fix the setup.
     detail: 'A connected service failed. Please try again later.',
-    code: 'UPSTREAM_ERROR'
+    code: 'UPSTREAM_ERROR',
+    details: { reason: 'Connection failed: connect ECONNREFUSED' }
   });
 });

@@ -342,10 +342,10 @@ describe('configuration and gates', () => {
     assert.equal((await drive(route.create, { body: { name: 'x' } })).statusCode, 401);
     const thirdParty = await drive(route.create, { user: THIRD_PARTY, body: { name: 'x' } });
     assert.equal(thirdParty.statusCode, 403);
-    assert.equal(thirdParty.body.details.code, 'PROJECTS_NOT_ALLOWED');
+    assert.equal(thirdParty.body.code, 'PROJECTS_NOT_ALLOWED');
     const nobody = await drive(route.create, { user: NOBODY, body: { name: 'x' } });
     assert.equal(nobody.statusCode, 403);
-    assert.equal(nobody.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(nobody.body.code, 'PERMISSION_DENIED');
   });
 
   it('keeps user projects dark while the flag is off', async () => {
@@ -353,7 +353,7 @@ describe('configuration and gates', () => {
     setFeatures({ userProjects: false });
     const res = await drive(route.create, { user: ADA, body: { name: 'x' } });
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details.code, 'USER_PROJECTS_DISABLED');
+    assert.equal(res.body.code, 'USER_PROJECTS_DISABLED');
     const feature = await drive(route.config, { user: ADA });
     assert.equal(feature.body.userProjects.enabled, false);
     // An existing project is dark too, reads and writes alike, except for a
@@ -362,7 +362,7 @@ describe('configuration and gates', () => {
     for (const handlers of [route.get, route.update, route.remove, route.addItem]) {
       const dark = await drive(handlers, { user: ADA, params, body: { name: 'y' } });
       assert.equal(dark.statusCode, 403, JSON.stringify(dark.body));
-      assert.equal(dark.body.details.code, 'USER_PROJECTS_DISABLED');
+      assert.equal(dark.body.code, 'USER_PROJECTS_DISABLED');
     }
     assert.equal((await drive(route.get, { user: ROOT, params })).statusCode, 200);
     setFeatures({ projects: false });
@@ -446,7 +446,7 @@ describe('user projects', () => {
       body: { name: 'Mine now' }
     });
     assert.equal(forbidden.statusCode, 403);
-    assert.equal(forbidden.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(forbidden.body.code, 'PERMISSION_DENIED');
     assert.equal(
       (await drive(route.remove, { user: GRACE, params: { projectId: project.id } })).statusCode,
       403,
@@ -486,7 +486,7 @@ describe('user projects', () => {
       { type: 'user', id: 'user-ghost', role: 'user' }
     ]);
     assert.equal(unknown.statusCode, 400);
-    assert.equal(unknown.body.details.code, 'SHARE_TARGET_INVALID');
+    assert.equal(unknown.body.code, 'SHARE_TARGET_INVALID');
     const anonymousGroup = await setMembers(ADA, project.id, [
       { type: 'group', id: 'anonymous', role: 'user' }
     ]);
@@ -531,7 +531,7 @@ describe('user projects', () => {
       body: { kind: 'upload', ref: {}, name: 'x.txt' }
     });
     assert.equal(upload.statusCode, 400, 'an upload without a file or text has nothing to ingest');
-    assert.equal(upload.body.details.code, 'INVALID_REF');
+    assert.equal(upload.body.code, 'INVALID_REF');
     const removed = await drive(route.removeItem, {
       user: ADA,
       params: { projectId: project.id, itemId: added.body.item.id }
@@ -609,7 +609,7 @@ describe('documents linked from another project', () => {
       }
     });
     assert.equal(created.statusCode, 400, JSON.stringify(created.body));
-    assert.equal(created.body.details.code, 'INVALID_REF');
+    assert.equal(created.body.code, 'INVALID_REF');
   });
 
   async function addLink(user, projectId, ref) {
@@ -671,7 +671,7 @@ describe('documents linked from another project', () => {
       itemId: original.body.item.id
     });
     assert.equal(own.statusCode, 400);
-    assert.equal(own.body.details.code, 'INVALID_REF');
+    assert.equal(own.body.code, 'INVALID_REF');
   });
 
   it('refuses a source the caller only sees for compliance or not at all', async () => {
@@ -686,12 +686,12 @@ describe('documents linked from another project', () => {
       const target = await create(user, { name: `${user.name}'s project` });
       const res = await addLink(user, target.id, ref);
       assert.equal(res.statusCode, 404, `${user.id}: ${JSON.stringify(res.body)}`);
-      assert.equal(res.body.details.code, 'PROJECT_NOT_FOUND');
+      assert.equal(res.body.code, 'PROJECT_NOT_FOUND');
     }
     const target = await create(ADA, { name: 'Target' });
     const missing = await addLink(ADA, target.id, { projectId: source.id, itemId: 'itm_gone' });
     assert.equal(missing.statusCode, 404);
-    assert.equal(missing.body.details.code, 'ITEM_NOT_FOUND');
+    assert.equal(missing.body.code, 'ITEM_NOT_FOUND');
   });
 
   it('links only from the caller’s own projects and published ones', async () => {
@@ -709,7 +709,7 @@ describe('documents linked from another project', () => {
       itemId: original.body.item.id
     });
     assert.equal(fromShared.statusCode, 403, JSON.stringify(fromShared.body));
-    assert.equal(fromShared.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(fromShared.body.code, 'PERMISSION_DENIED');
 
     // An admin project is linked once it is published, by everyone signed in.
     const repo = getProjectRepository();
@@ -929,7 +929,7 @@ describe('the project catalog', () => {
 
     const republish = await publish(ROOT, project.id, true);
     assert.equal(republish.statusCode, 403);
-    assert.equal(republish.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(republish.body.code, 'PERMISSION_DENIED');
     const out = await publish(ROOT, project.id, false);
     assert.equal(out.statusCode, 200, JSON.stringify(out.body));
     assert.equal(out.body.audience.catalog, false);
@@ -940,7 +940,7 @@ describe('the project catalog', () => {
     const project = await create(SOLO, { name: 'Mine alone' });
     const refused = await publish(SOLO, project.id);
     assert.equal(refused.statusCode, 403);
-    assert.equal(refused.body.details.code, 'PERMISSION_DENIED');
+    assert.equal(refused.body.code, 'PERMISSION_DENIED');
     await getProjectRepository().setPublished(project.id, true, { actor: ADA });
     assert.equal((await publish(SOLO, project.id, false)).statusCode, 200);
   });
@@ -1424,7 +1424,7 @@ describe('admin projects', () => {
     assert.deepEqual(deps.body.dependencies, [{ type: 'app', id: 'support', name: 'Support' }]);
     const blocked = await drive(route.adminDelete, { user: EDITOR, params: { id: 'faq' } });
     assert.equal(blocked.statusCode, 400);
-    assert.equal(blocked.body.details.code, 'PROJECT_IN_USE');
+    assert.equal(blocked.body.code, 'PROJECT_IN_USE');
 
     const toggled = await drive(route.adminToggle, {
       user: EDITOR,
@@ -1474,7 +1474,7 @@ describe('admin projects', () => {
     // The linked project cannot be deleted through the user route either.
     const viaUser = await drive(route.remove, { user: EDITOR, params: { projectId: 'faq' } });
     assert.equal(viaUser.statusCode, 400, JSON.stringify(viaUser.body));
-    assert.equal(viaUser.body.details.code, 'PROJECT_IN_USE');
+    assert.equal(viaUser.body.code, 'PROJECT_IN_USE');
     // PUT is a metadata request: a document carrying items is refused, not
     // silently stored without them.
     const withItems = await drive(route.adminPut, {
@@ -1483,7 +1483,7 @@ describe('admin projects', () => {
       body: { id: 'faq', name: { en: 'FAQ' }, items: [] }
     });
     assert.equal(withItems.statusCode, 400);
-    assert.equal(withItems.body.details.code, 'ITEMS_NOT_EDITABLE');
+    assert.equal(withItems.body.code, 'ITEMS_NOT_EDITABLE');
     const put = await drive(route.adminPut, {
       user: EDITOR,
       params: { id: 'faq' },
@@ -1513,7 +1513,7 @@ describe('admin projects', () => {
       body: { id: 'ifinder-tier', name: { en: 'Later' }, tier: 'ifinder' }
     });
     assert.equal(ifinder.statusCode, 400);
-    assert.match(ifinder.body.error, /tier/);
+    assert.match(ifinder.body.detail, /tier/);
     const project = await create(ADA, { name: 'Private matter' });
     const gone = await drive(route.adminDelete, { user: ROOT, params: { id: project.id } });
     assert.equal(gone.statusCode, 204);
@@ -1728,7 +1728,7 @@ describe('chats in a project', () => {
         body: { attachedProjectIds: [mine.id] }
       });
       assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
-      assert.equal(refused.body.details.code, 'APP_PROJECTS_DISABLED');
+      assert.equal(refused.body.code, 'APP_PROJECTS_DISABLED');
       assert.equal((await chats.getChat(chat.id)).attachedProjectIds, undefined);
     } finally {
       configCache.setCacheEntry('config/apps.json', apps?.data || []);

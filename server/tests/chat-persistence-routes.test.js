@@ -512,7 +512,7 @@ describe('temporary chats and guests', () => {
     await withHistoryOff(async () => {
       const list = await drive(listHandlers, { user: ADA });
       assert.equal(list.statusCode, 503);
-      assert.equal(list.body.details.code, 'CHAT_PERSISTENCE_UNAVAILABLE');
+      assert.equal(list.body.code, 'CHAT_PERSISTENCE_UNAVAILABLE');
 
       const one = await drive(getHandlers, {
         params: { chatId: 'chat-tmp-history-off' },
