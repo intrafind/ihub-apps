@@ -301,6 +301,18 @@
     "appsList": {
       "title": "KI-Anwendungen",
       "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "pendingDocument": {
+        "title": "Wähle eine App, in der „{{name}}“ geöffnet werden soll",
+        "description": "Das Dokument wird an den Chat angehängt, sobald die App geöffnet ist.",
+        "untitled": "das Dokument",
+        "onlyDocumentApps": "Nur Apps anzeigen, die dieses Dokument verwenden können",
+        "dismiss": "Schließen",
+        "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
+        "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
+        "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+        "noApp": "Keine App kann Dokumente aus diesem System verwenden. Bitte eine Administratorin oder einen Administrator, die Integration zu einer App hinzuzufügen.",
+        "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
+      },
       "nextcloudSelection": {
         "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt."
       },
@@ -1267,12 +1279,14 @@
         "id": "ID",
         "description": "Beschreibung",
         "apiType": "API-Typ",
-        "baseUrl": "Basis-URL"
+        "baseUrl": "Basis-URL",
+        "gateway": "Model-Gateway"
       },
       "hints": {
         "apiType": "Welche API der Endpunkt spricht. Gateways wie T-Systems LLM Hub sind OpenAI-kompatibel; für einen selbst betriebenen vLLM-Server vLLM wählen.",
         "apiTypeBuiltIn": "Integrierte Anbieter sprechen immer ihre eigene API.",
-        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden."
+        "baseUrl": "Optional. Die API-Basis, von der beim Import die Modelle des Anbieters gelesen werden.",
+        "gateway": "Wählen Sie iFinder Model Gateway, wenn die Basis-URL ein Gateway ist. Die Modelle werden dann von /v1/gateway/models gelistet und über /v1/gateway/proxy aufgerufen. Der API-Schlüssel ist der Projektschlüssel des Gateways."
       },
       "apiTypes": {
         "openai": "OpenAI-kompatibel (OpenAI, LLM Hub, LM Studio, …)",
@@ -1290,6 +1304,10 @@
         "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
         "count": "{{count}} verknüpft, {{enabled}} aktiv",
         "more": "+{{count}} weitere"
+      },
+      "gateway": {
+        "none": "Keines (normaler Endpunkt)",
+        "ifinder": "iFinder Model Gateway"
       }
     },
     "models": {
@@ -1598,7 +1616,9 @@
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
         },
-        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen"
+        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
+        "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
+        "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt."
       },
       "getStarted": {
         "title": "Fügen Sie die Modelle hinzu, die Ihre Apps nutzen",
@@ -4592,6 +4612,30 @@
           "admin": "Admin",
           "api": "API"
         }
+      },
+      "details": {
+        "open": "Details anzeigen",
+        "title": "Audit-Eintrag",
+        "ip": "IP-Adresse",
+        "requestId": "Request-ID",
+        "entryId": "Eintrags-ID",
+        "effectiveGroups": "Wirksame Gruppen",
+        "effectiveGroupsHint": "Die Gruppen, die der Benutzer bei dieser Aktion hatte.",
+        "providerGroups": "Gruppen aus dem Identity Provider",
+        "providerGroupsCount": "{{total}} erhalten, {{mapped}} auf iHub-Gruppen gemappt",
+        "providerGroupsTruncated": "Die ersten {{shown}} von {{total}} Gruppen werden angezeigt.",
+        "noProviderGroups": "Der Identity Provider hat keine Gruppen gesendet.",
+        "providerGroup": "Gruppe im Provider",
+        "mapsTo": "Gemappt auf",
+        "notMapped": "Nicht gemappt",
+        "manualGroups": "Manuell zugewiesen",
+        "manualGroupsHint": "Gruppen, die ein Admin dem Benutzer unter Benutzer zugewiesen hat.",
+        "automaticGroups": "Automatisch hinzugefügt",
+        "automaticGroupsHint": "Gruppen, die jeder angemeldete Benutzer oder jeder Benutzer dieses Providers erhält.",
+        "groupsRecordedAtLogin": "Stand bei der Anmeldung. Änderungen im Identity Provider gelten ab der nächsten Anmeldung.",
+        "noGroups": "Keine",
+        "moreDetails": "Weitere Details",
+        "rawEntry": "Roher Eintrag (JSON)"
       }
     },
     "filters": {
@@ -7530,6 +7574,13 @@
     "loading": "Wird geladen…",
     "detailsUnavailable": "Keine weiteren Details verfügbar.",
     "documentFromSource": "Dokument",
+    "documentNoAccess": "Das Dokument konnte nicht angehängt werden: Du hast keinen Zugriff darauf.",
+    "documentNotFound": "Das Dokument konnte nicht angehängt werden: Es wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
+    "documentAttachFailed": "Das Dokument konnte nicht angehängt werden. Bitte versuche es erneut.",
+    "documentUnavailable": "Das Dokument konnte nicht angehängt werden: Das System, aus dem es stammt, steht dir nicht zur Verfügung.",
+    "documentModelCannot": "Das Dokument konnte nicht angehängt werden: Das ausgewählte Modell kann diese Art von Datei nicht verarbeiten.",
+    "documentAppNotBound": "Das Dokument konnte nicht angehängt werden: Diese App verwendet das System, aus dem es stammt, nicht.",
+    "documentFromIntegration": "{{name}}-Dokument",
     "project": "Projekt"
   },
   "prompts": {
@@ -9044,6 +9095,9 @@
     "INVALID_REASON": "Die Begründung muss ein Text sein.",
     "REASON_TOO_LONG": "Die Begründung ist zu lang.",
     "INTEGRATION_NOT_FOUND": "Die Integration wurde nicht gefunden.",
+    "INTEGRATION_NOT_CONFIGURED": "Die Integration ist nicht konfiguriert.",
+    "INTEGRATION_NOT_GRANTED": "Sie dürfen diese Integration nicht verwenden.",
+    "DOCUMENT_DETAILS_UNAVAILABLE": "Diese Integration hat keine Details zu ihren Dokumenten.",
     "SKILL_NAME_TAKEN": "Ein globaler Skill mit diesem Namen existiert bereits. Wählen Sie einen anderen Namen.",
     "SKILL_NAME_RESERVED": "Dieser Name ist für einen System-Skill reserviert. Wählen Sie einen anderen Namen.",
     "EXECUTION_NOT_FINISHED": "Die Workflow-Ausführung ist noch nicht abgeschlossen.",

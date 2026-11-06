@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import Icon from '../../../shared/components/Icon';
@@ -19,6 +19,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import AppChatStarter from '../../chat/components/AppChatStarter';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
+import { pendingDocumentQuery, readPendingDocument } from '../utils/pendingDocument';
 
 export default function StartPage() {
   const { t, i18n } = useTranslation();
@@ -26,6 +27,7 @@ export default function StartPage() {
   const { user } = useAuth();
   const { uiConfig, resetHeaderColor } = useUIConfig();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
   // Durable chats — inert (no request, empty list) when the capability is off
@@ -114,8 +116,16 @@ export default function StartPage() {
     });
   }, [chatsEnabled, chats, apps]);
 
+  // A document waiting for an app (`/start?documentId=…&source=…`): the chat input here belongs to
+  // the default app and cannot carry it, so hand over to the app picker, which can.
+  const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
+
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
   const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
+
+  if (pendingDocument) {
+    return <Navigate to={`/apps?${pendingDocumentQuery(pendingDocument)}`} replace />;
+  }
 
   return (
     <div className="min-h-full flex flex-col items-center justify-center px-6 py-12 bg-gray-50 dark:bg-gray-900">

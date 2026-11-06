@@ -248,3 +248,55 @@ test('speech models are imported for their backend; one iHub cannot run cannot b
   });
   expect(createModel.body.providerId).toBeUndefined();
 });
+
+test('a new iFinder Model Gateway provider is discovered as a gateway and imports each dialect', async () => {
+  mockApi({
+    models: [
+      {
+        id: 'mistral-large-3',
+        name: 'mistral-large-3',
+        type: 'chat',
+        url: 'https://gw.example:9614/v1/gateway/proxy/chat/completions',
+        modelProvider: 'mistral'
+      }
+    ]
+  });
+  await renderDialog();
+
+  fireEvent.click(screen.getByRole('checkbox', { name: /iFinder Model Gateway/ }));
+  fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'iFinder Gateway' } });
+  fireEvent.change(screen.getByLabelText(/^Endpoint URL/), {
+    target: { value: 'https://gw.example:9614' }
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Load models/ }));
+  });
+  const [[, discover]] = calls('/admin/models/_discover', 'POST');
+  expect(discover.body).toMatchObject({
+    url: 'https://gw.example:9614',
+    apiType: 'openai',
+    gateway: 'ifinder-model-gateway'
+  });
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mistral-large-3' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 models' }));
+  });
+  const [[, createProvider]] = calls('/admin/providers', 'POST');
+  expect(createProvider.body).toMatchObject({ gateway: 'ifinder-model-gateway' });
+  // The model speaks Mistral although the provider's API type is OpenAI.
+  const [[, createModel]] = calls('/admin/models', 'POST');
+  expect(createModel.body).toMatchObject({
+    provider: 'mistral',
+    providerId: 'ifinder-gateway',
+    url: 'https://gw.example:9614/v1/gateway/proxy/chat/completions'
+  });
+});
+
+test('an ordinary provider is discovered without a gateway marker', async () => {
+  mockApi({ models: [{ id: 'gpt-x', name: 'GPT X', type: 'chat' }] });
+  await renderDialog();
+  await loadModelsForNewProvider();
+  const [[, discover]] = calls('/admin/models/_discover', 'POST');
+  expect(discover.body).not.toHaveProperty('gateway');
+});

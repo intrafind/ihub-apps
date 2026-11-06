@@ -87,6 +87,17 @@ function readProviderEnvKey(model, providerConfigId) {
   }
 }
 
+/** The provider entry a model is linked to (`providerId`), or undefined. */
+function findProviderEntry(model) {
+  if (!model?.providerId) return undefined;
+  try {
+    const { data: providers = [] } = configCache.getProviders(true);
+    return providers.find(p => p.id === model.providerId);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Work out where a model's API key comes from, and whether it can be used.
  *
@@ -197,7 +208,7 @@ export function inspectModelApiKey(model, { quiet = false } = {}) {
   });
 
   if (undecryptableSource) return nothing('undecryptable');
-  if (allowsMissingApiKey(model)) return nothing('keyless');
+  if (allowsMissingApiKey(model, findProviderEntry(model))) return nothing('keyless');
 
   log('error', 'No API key found for provider or model-specific key', {
     provider: sanitizeForLog(providerConfigId),

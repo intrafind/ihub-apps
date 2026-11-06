@@ -26,6 +26,12 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { getItemKind, isItemKindEnabled } from '../projects/kinds/registry.js';
+import {
+  IFINDER_DEFINITION_ID,
+  IFINDER_INSTANCE_ID,
+  installedInstance
+} from '../integrations/ifinderConfig.js';
+import { mayUseIntegration } from '../integrations/integrationAccess.js';
 import '../projects/kinds/cloudKinds.js';
 import '../projects/kinds/linkKinds.js';
 import { chatFilePolicy } from './chatFilePolicy.js';
@@ -147,6 +153,12 @@ function dispositionFileName(header) {
  * @returns {Promise<{bytes: Buffer, contentType: string, name: string, lastModified: null, ref: Object}>}
  */
 async function fetchIfinderDocument({ ref, user, maxBytes }) {
+  // The grant `GET /api/integrations/ifinder/files/*` checks: a user whose groups may not use the
+  // iFinder integration may not pull its documents through a chat either.
+  const instance = installedInstance(IFINDER_INSTANCE_ID, IFINDER_DEFINITION_ID);
+  if (!instance || !mayUseIntegration(instance, user)) {
+    throw new ChatFileError('SOURCE_FORBIDDEN', 'Your groups may not use iFinder', 403);
+  }
   const provider = await ifinderProvider();
   const request = {
     id: ref.documentId,

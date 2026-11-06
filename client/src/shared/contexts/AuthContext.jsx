@@ -13,6 +13,7 @@ import {
 } from '../../utils/runtimeBasePath';
 import { getSafeReturnPath } from '../../utils/safeUrl';
 import { bindChatIdsToUser } from '../../utils/chatId';
+import { clearSessionStorageKeepingEmbed } from '../../utils/embedMode';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -142,6 +143,13 @@ export function AuthProvider({ children }) {
       // load fires /auth/status once. Login paths clear the API cache before
       // calling this, so a post-login refresh always reaches the server.
       const data = await fetchAuthStatus();
+
+      // The server did not accept the stored token (expired, or left over from
+      // before sign-in moved to the httpOnly cookie); any session came from the
+      // cookie. Drop it so it is not sent in front of the cookie again.
+      if (data?.bearerTokenRejected) {
+        localStorage.removeItem('authToken');
+      }
 
       if (data.success !== false) {
         dispatch({
@@ -608,8 +616,9 @@ export function AuthProvider({ children }) {
       const authKeys = ['authToken', 'userPreferences', 'lastLoginTime'];
       authKeys.forEach(key => localStorage.removeItem(key));
 
-      // Clear all sessionStorage (contains temporary session data)
-      sessionStorage.clear();
+      // Clear all sessionStorage (contains temporary session data). An embed keeps its own
+      // flag and view settings: the frame reloads without ?embed=true and must stay an embed.
+      clearSessionStorageKeepingEmbed();
 
       // Clear API cache if available
       try {

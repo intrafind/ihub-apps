@@ -470,6 +470,8 @@ The documents each search found are listed in the chat's tool activity, like web
 
 **Sources panel.** The documents the turn's `iFinder_search`, `iFinder_getMetadata` and `iFinder_getContent` calls found are listed in the **Sources** panel under the answer, the same way as the documents of an iAssistant answer and the pages of a web search (see [Answer Sources](answer-sources.md)). Each one has the full menu: **Preview (PDF)**, **Download**, **Details**, **Open in App**, **Copy link**, and **Add to email** in the Outlook task pane; its title opens the deep link. Each document carries a `ref` of document id and the search profile the tool searched, which the `ifinder` source provider (`GET /api/sources/ifinder/content|metadata`) resolves with the signed-in user's own permissions. The documents the answer links to — by the deep link, or by the document id in the link title — are listed under **Cited in this answer**, numbered like their badges in the text; the other hits under **Also considered**. One call lists at most 50 documents. With [chat history](chat-persistence.md) on, the documents are stored with the answer and the panel comes back when the chat is reopened; a [shared link](chat-sharing.md) never includes them.
 
+**Open in iHub.** A link such as `/apps?documentId=<id>&integration=ifinder` (the iFinder hit action) opens the app list with the document waiting. The apps offered are those that bind the iFinder integration (**Admin → Apps → Edit → Installed integrations**); the one the user picks receives the original file (an image as an image, for a model that sees) with the user's own iFinder permissions, whatever its local upload settings are. The iFinder installation must be configured and granted to the user's groups, otherwise the list says so. See [Auto-Send and URL Parameters](auto-send-feature.md#document-attachment-from-an-integration).
+
 **Links and follow-up questions.** Only the message text of earlier turns is replayed to the model — not the tool results — so a document listed in one turn would be known by its title alone in the next, and a title is neither an id nor unique (the same file is usually indexed several times). The prompt therefore has the model write every document link as `[title](deepLink "source › location · id")`. The link title renders as a tooltip, so a user hovering a link sees which system and folder it opens (SharePoint › Vertrieb › Dokumente …) before clicking; the document id at its end is what a follow-up turn ("who wrote the second one?") passes to `iFinder_getMetadata` or `iFinder_getContent`, and it never appears in the visible text. A document the model knows only by title is searched for again (`title:"…"`) and matched by its deep link before either tool is called. Links without a title of their own get their decoded destination as the tooltip from the chat renderer.
 
 **App configuration:**
@@ -525,7 +527,7 @@ highlighted in the source document:
   passage.
 
 Both entries appear only for documents that expose an `ACCESS` link, which is what the
-`GET /api/sources/ifinder/content` route needs to resolve the binary. The preview requests that
+`GET /api/integrations/ifinder/files/:id/content` route needs to resolve the binary. The preview requests that
 route with the PDF format, i.e. the PDF rendition iFinder generates for the document.
 
 **How passages are located.** A passage is a substring of the fulltext that the converter put into

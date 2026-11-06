@@ -138,3 +138,25 @@ test('an OIDC callback drops the stored token before it asks who is signed in', 
   expect(tokenWhenAsked).toBeNull();
   window.history.replaceState({}, '', '/');
 });
+
+test('a stored token the server rejected is dropped, while the cookie session carries on', async () => {
+  // A token left in localStorage from before sign-in moved to the cookie: the server
+  // answers from the cookie and says it did not accept the token, so it must go.
+  localStorage.setItem('authToken', 'stale.token.from.an.earlier.session');
+  fetchAuthStatus.mockResolvedValueOnce({ ...SIGNED_IN, bearerTokenRejected: true });
+
+  await renderProbe();
+
+  await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('admin'));
+  expect(localStorage.getItem('authToken')).toBeNull();
+});
+
+test('a stored token the server accepted is kept (the Teams tab signs in with it)', async () => {
+  localStorage.setItem('authToken', 'teams.session.token');
+  fetchAuthStatus.mockResolvedValueOnce({ ...SIGNED_IN, bearerTokenRejected: false });
+
+  await renderProbe();
+
+  await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('admin'));
+  expect(localStorage.getItem('authToken')).toBe('teams.session.token');
+});

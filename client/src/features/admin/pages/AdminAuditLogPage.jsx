@@ -17,6 +17,7 @@ import {
   setExcluded
 } from '../utils/auditLogFilters';
 import AdminLoadError from '../components/AdminLoadError';
+import AuditEntryDetailDrawer from '../components/AuditEntryDetailDrawer';
 import { getAuditActorLink, getAuditResourceLink } from '../utils/auditLinks';
 
 const ACTION_PILL_COLORS = {
@@ -248,6 +249,7 @@ function AdminAuditLogPage() {
   const [error, setError] = useState(null);
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const [exporting, setExporting] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   // A filter change also has to reset the page, and React Router's
   // setSearchParams does not queue: two calls in one tick lose the first. Every
@@ -470,6 +472,7 @@ function AdminAuditLogPage() {
           <Link
             to={href}
             title={e.actor?.id}
+            onClick={event => event.stopPropagation()}
             className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             {label}
@@ -509,6 +512,7 @@ function AdminAuditLogPage() {
               (href ? (
                 <Link
                   to={href}
+                  onClick={event => event.stopPropagation()}
                   className="block max-w-[14rem] truncate text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                   title={e.resourceId}
                 >
@@ -550,6 +554,16 @@ function AdminAuditLogPage() {
           />
         );
       }
+    }
+  ];
+
+  const rowActions = [
+    {
+      id: 'details',
+      label: t('admin.auditLog.details.open', 'Show details'),
+      icon: 'eye',
+      priority: 'primary',
+      onClick: setSelectedEntry
     }
   ];
 
@@ -721,6 +735,8 @@ function AdminAuditLogPage() {
         columns={columns}
         data={entries}
         getRowId={e => e.id || `${e.ts}`}
+        actions={rowActions}
+        onRowClick={setSelectedEntry}
         loading={loading}
         pagination={{
           mode: 'server',
@@ -735,6 +751,12 @@ function AdminAuditLogPage() {
           icon: 'document-search',
           title: t('admin.auditLog.noEntries', 'No audit log entries found.')
         }}
+      />
+
+      <AuditEntryDetailDrawer
+        entry={selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        valueLabel={valueLabel}
       />
     </div>
   );

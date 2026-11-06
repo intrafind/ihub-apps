@@ -4,12 +4,11 @@ import AnswerSources from '../../../client/src/features/chat/components/AnswerSo
 import { _resetSourcesStore } from '../../../client/src/features/chat/sources/sourcesStore';
 import {
   copySourceLink,
-  fetchSourceFile,
   openSource,
   resolveSourceFilename,
   sourceActionsOf
 } from '../../../client/src/features/chat/sources/sourceActions';
-import { fetchSourceContent } from '../../../client/src/api/endpoints/sources';
+import { fetchIntegrationFileContent } from '../../../client/src/api/endpoints/integrationFiles';
 import { resolveCitations } from '../../../shared/sources/index.js';
 
 /**
@@ -39,10 +38,10 @@ jest.mock('react-i18next', () => ({
   })
 }));
 
-jest.mock('../../../client/src/api/endpoints/sources', () => ({
+jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
   __esModule: true,
-  fetchSourceContent: jest.fn(),
-  fetchSourceMetadata: jest.fn(() => Promise.resolve({}))
+  fetchIntegrationFileContent: jest.fn(),
+  fetchIntegrationFileMetadata: jest.fn(() => Promise.resolve({}))
 }));
 
 jest.mock('../../../client/src/features/workflows/components/AppSelectionModal', () => ({
@@ -127,7 +126,7 @@ beforeEach(() => {
   windowOpen = jest.spyOn(window, 'open').mockReturnValue({});
   URL.createObjectURL = jest.fn(() => 'blob:mock-url');
   URL.revokeObjectURL = jest.fn();
-  fetchSourceContent.mockResolvedValue({
+  fetchIntegrationFileContent.mockResolvedValue({
     data: new Blob(['%PDF-1.7 report'], { type: 'application/pdf' }),
     headers: {
       'content-type': 'application/pdf',
@@ -247,13 +246,16 @@ describe('opening and downloading', () => {
     openMenu();
     fireEvent.click(screen.getByText('Download'));
     await waitFor(() => expect(anchorClick).toHaveBeenCalled());
-    expect(fetchSourceContent).toHaveBeenCalledWith({ source: DOC });
+    expect(fetchIntegrationFileContent).toHaveBeenCalledWith({
+      integration: DOC.provider,
+      ref: DOC.ref
+    });
     expect(windowOpen).not.toHaveBeenCalled();
     anchorClick.mockRestore();
   });
 
   test('reports a failed download', async () => {
-    fetchSourceContent.mockRejectedValue(new Error('HTTP 401'));
+    fetchIntegrationFileContent.mockRejectedValue(new Error('HTTP 401'));
     renderSources();
     openMenu();
     fireEvent.click(screen.getByText('Download'));
@@ -278,42 +280,6 @@ describe('"Open in App"', () => {
   });
 });
 
-describe('the file "Open in App" attaches', () => {
-  const httpError = status => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
-
-  test('is the original, named as the server sent it', async () => {
-    const file = await fetchSourceFile(DOC, 'Quarterly report');
-    expect(file.name).toBe('Quarterly report.pdf');
-    expect(file.type).toBe('application/pdf');
-    expect(fetchSourceContent).toHaveBeenCalledTimes(1);
-  });
-
-  test('is the text when the provider answers that it has no binary', async () => {
-    fetchSourceContent.mockRejectedValueOnce(httpError(404)).mockResolvedValueOnce({
-      data: new Blob(['The report text'], { type: 'text/plain' }),
-      headers: { 'content-type': 'text/plain' }
-    });
-    const file = await fetchSourceFile(DOC, 'Quarterly report');
-    expect(fetchSourceContent).toHaveBeenLastCalledWith({ source: DOC, format: 'text' });
-    expect(file.name).toBe('Quarterly report.txt');
-    expect(file.type).toBe('text/plain');
-  });
-
-  test.each([
-    [
-      'a timeout',
-      Object.assign(new Error('timeout of 120000ms exceeded'), { code: 'ECONNABORTED' })
-    ],
-    ['an abort', Object.assign(new Error('canceled'), { name: 'CanceledError' })],
-    ['a sign-in failure', httpError(401)],
-    ['a permission failure', httpError(403)]
-  ])('fails on %s instead of quietly attaching the text', async (_, error) => {
-    fetchSourceContent.mockRejectedValueOnce(error);
-    await expect(fetchSourceFile(DOC, 'Quarterly report')).rejects.toBe(error);
-    expect(fetchSourceContent).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe('"Add to email" in the Outlook task pane', () => {
   test('hands Outlook the downloaded bytes and confirms what was attached', async () => {
     const attach = installOffice({ mode: 'compose' });
@@ -322,7 +288,10 @@ describe('"Add to email" in the Outlook task pane', () => {
     fireEvent.click(screen.getByText('Add to email'));
 
     await waitFor(() => expect(attach).toHaveBeenCalled());
-    expect(fetchSourceContent).toHaveBeenCalledWith({ source: DOC });
+    expect(fetchIntegrationFileContent).toHaveBeenCalledWith({
+      integration: DOC.provider,
+      ref: DOC.ref
+    });
     const [base64, filename, options] = attach.mock.calls[0];
     expect(Buffer.from(base64, 'base64').toString()).toBe('%PDF-1.7 report');
     expect(filename).toBe('Quarterly report.pdf');
@@ -361,7 +330,7 @@ describe('"Add to email" in the Outlook task pane', () => {
 
   test('a document too large for a mail is refused before Outlook sees it', async () => {
     const attach = installOffice({ mode: 'compose' });
-    fetchSourceContent.mockResolvedValue({
+    fetchIntegrationFileContent.mockResolvedValue({
       data: new Blob(['x'.repeat(26 * 1024 * 1024)], { type: 'application/pdf' }),
       headers: { 'content-type': 'application/pdf' }
     });
@@ -389,7 +358,7 @@ describe('"Add to email" in the Outlook task pane', () => {
 
   test('a failed download never reaches Outlook', async () => {
     const attach = installOffice({ mode: 'compose' });
-    fetchSourceContent.mockRejectedValue(new Error('403'));
+    fetchIntegrationFileContent.mockRejectedValue(new Error('403'));
     renderSources();
     openMenu();
     fireEvent.click(screen.getByText('Add to email'));

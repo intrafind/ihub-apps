@@ -16,12 +16,18 @@ through `iFinder_search`, in the `query` string and in `filter` entries.
 > (`intrafind_query_string`) is chosen server-side.
 
 **Availability.** The search service enables the IntraFind parser by default
-(`searchservice.use-intrafind-queryparser: true`), and a search profile can
-override the engine query type. So the operators are normally on, but a
-deployment can have them off. There is no capability endpoint to ask: try one
-operator and compare hit counts against the same query without it. A profile
-running the plain parser treats `THES/&boot` as the literal term `THES/&boot`
-and typically returns nothing.
+(`searchservice.use-intrafind-queryparser: true`). A search profile cannot
+change the engine query type — its options only tune the parser — so the
+operators are on unless the whole deployment switched the parser off. An
+operator can still match nothing for a reason of its own: no thesaurus for
+`THES/`, no entity analysis on the field for `ENTITY/`, or a typo.
+
+**How bare words combine.** A search profile sets the parser's default
+operator and `minimum_should_match`. iFinder's search profiles use OR with
+`3<-25%`: every word of a query of up to three words must match, from four on
+a quarter may miss (4 → 3, 5–7 → all but one, 8 → 6). `minimum_should_match`
+applies to bare words only, never to an explicit `AND` / `OR` or to an `OR/`
+group, which carries its own.
 
 ---
 
@@ -204,8 +210,8 @@ The `OR/` argument is a standard minimum-should-match spec (`2`, `75%`, `2<-1
 5<80%`), optionally with `;`-separated flags: `rd` remove duplicates, `rm<int>`
 reduce main clauses, `ro<int>` reduce original clauses, `req` required.
 
-Reach for these when a long query returns nothing because everything is ANDed,
-or too much because everything is ORed.
+Reach for `OR/` when you want your own threshold instead of the profile's: a
+bare four-word query needs three of the four words, `OR/2(a b c d)` any two.
 
 ---
 
@@ -233,7 +239,7 @@ iFinder_search({
 // Weights over 5 kg mentioned in the text
 iFinder_search({ query: 'UNIT/>=(5 kg)' });
 
-// Loosen a long query that ANDs itself to zero
+// Any two of four words, instead of the profile's three of four
 iFinder_search({ query: 'OR/2(kündigung frist vertrag arbeitsrecht)' });
 ```
 
@@ -249,9 +255,9 @@ iFinder_search({ query: 'OR/2(kündigung frist vertrag arbeitsrecht)' });
 - **A wrong entity type is silent.** `ENTITY/PERSON` is not `ENTITY/PERS`; an
   unknown type matches nothing rather than erroring.
 - **Filters take the same syntax**, and the same caveat applies: an operator
-  that a profile's parser does not understand becomes a literal term and the
-  filter quietly matches nothing.
+  that matches nothing (a typo, no thesaurus) makes the filter quietly match
+  nothing.
 - **Verify before relying on it.** Run the query with and without the operator
-  and compare `totalFound`. An operator that is not active, a thesaurus that is
-  not configured, and a field that cannot analyze entities all look the same
-  from outside: zero hits.
+  and compare `totalFound`. A typo, a thesaurus that is not configured, and a
+  field that cannot analyze entities all look the same from outside: zero
+  hits.

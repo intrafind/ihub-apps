@@ -193,25 +193,29 @@ function ChatStartForm({
         />
       </div>
 
-      {uploadEnabled && (
+      {(uploadEnabled || files.length > 0) && (
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {t('pages.appChat.startForm.attachments', 'Attachments')}
           </span>
-          <button
-            type="button"
-            onClick={() => openDialogRef.current?.()}
-            disabled={isProcessing}
-            className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-indigo-500 dark:hover:text-indigo-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Icon name="paper-clip" size="lg" className="text-current" />
-            <span>
-              {t(
-                'pages.appChat.startForm.dropZone',
-                'Drag and drop files here, or click to browse'
-              )}
-            </span>
-          </button>
+          {/* Without local upload there is nothing to browse, but a document an integration
+              attached (an app that binds iFinder) still has to be seen and removable. */}
+          {uploadEnabled && (
+            <button
+              type="button"
+              onClick={() => openDialogRef.current?.()}
+              disabled={isProcessing}
+              className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-indigo-500 dark:hover:text-indigo-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Icon name="paper-clip" size="lg" className="text-current" />
+              <span>
+                {t(
+                  'pages.appChat.startForm.dropZone',
+                  'Drag and drop files here, or click to browse'
+                )}
+              </span>
+            </button>
+          )}
           {files.length > 0 && (
             <AttachedFilesList
               files={files}

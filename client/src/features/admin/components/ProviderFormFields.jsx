@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
-import { CUSTOM_PROVIDER_API_TYPES } from '../../../../../shared/llmProviders.js';
+import {
+  CUSTOM_PROVIDER_API_TYPES,
+  GATEWAY_API_TYPES,
+  IFINDER_GATEWAY
+} from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
 
 const INPUT =
@@ -32,6 +36,13 @@ function ProviderFormFields({
   apiTypeLocked = false
 }) {
   const { t } = useTranslation();
+  // A model gateway provider only offers the dialects of its OpenAI-compatible models.
+  const apiTypes = data.gateway ? GATEWAY_API_TYPES : CUSTOM_PROVIDER_API_TYPES;
+
+  const changeGateway = value => {
+    onChange('gateway', value || undefined);
+    if (value && !GATEWAY_API_TYPES.includes(data.apiType)) onChange('apiType', 'openai');
+  };
 
   return (
     <>
@@ -110,7 +121,7 @@ function ProviderFormFields({
                 onChange={e => onChange('apiType', e.target.value)}
                 className={INPUT}
               >
-                {CUSTOM_PROVIDER_API_TYPES.map(type => (
+                {apiTypes.map(type => (
                   <option key={type} value={type}>
                     {apiTypeLabel(t, type)}
                   </option>
@@ -148,6 +159,32 @@ function ProviderFormFields({
               )}
             </p>
           </div>
+          {!apiTypeLocked && (
+            <div className="sm:col-span-2">
+              <label htmlFor="provider-gateway" className={LABEL}>
+                {t('admin.providers.fields.gateway', 'Model gateway')}
+              </label>
+              <select
+                id="provider-gateway"
+                value={data.gateway || ''}
+                onChange={e => changeGateway(e.target.value)}
+                className={INPUT}
+              >
+                <option value="">
+                  {t('admin.providers.gateway.none', 'None (regular endpoint)')}
+                </option>
+                <option value={IFINDER_GATEWAY}>
+                  {t('admin.providers.gateway.ifinder', 'iFinder Model Gateway')}
+                </option>
+              </select>
+              <p className={HINT}>
+                {t(
+                  'admin.providers.hints.gateway',
+                  'Choose iFinder Model Gateway when the base URL is a gateway. Models are then listed from /v1/gateway/models and called through /v1/gateway/proxy. The API key is the gateway project key.'
+                )}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </>

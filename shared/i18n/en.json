@@ -246,6 +246,18 @@
     "appsList": {
       "title": "AI Apps",
       "subtitle": "Choose an application to start a conversation",
+      "pendingDocument": {
+        "title": "Choose an app to open “{{name}}” in",
+        "description": "The document is attached to the chat as soon as the app opens.",
+        "untitled": "the document",
+        "onlyDocumentApps": "Only show apps that can use this document",
+        "dismiss": "Dismiss",
+        "unavailable": "The system this document comes from is not available to you.",
+        "noAccess": "You do not have access to this document.",
+        "notFound": "This document could not be found. It may have been moved or deleted.",
+        "noApp": "No app can use documents from this system. Ask an administrator to add the integration to an app.",
+        "continueWithout": "You can still pick an app and start without the document."
+      },
       "nextcloudSelection": {
         "description": "Pick an app below to start a chat — your selected files will be attached automatically."
       },
@@ -959,12 +971,14 @@
         "id": "ID",
         "description": "Description",
         "apiType": "API type",
-        "baseUrl": "Base URL"
+        "baseUrl": "Base URL",
+        "gateway": "Model gateway"
       },
       "hints": {
         "apiType": "Which API the endpoint speaks. Gateways such as T-Systems LLM Hub are OpenAI-compatible; choose vLLM for a self-hosted vLLM server.",
         "apiTypeBuiltIn": "Built-in providers always speak their own API.",
-        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models."
+        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models.",
+        "gateway": "Choose iFinder Model Gateway when the base URL is a gateway. Models are then listed from /v1/gateway/models and called through /v1/gateway/proxy. The API key is the gateway project key."
       },
       "apiTypes": {
         "openai": "OpenAI-compatible (OpenAI, LLM Hub, LM Studio, …)",
@@ -982,6 +996,10 @@
         "none": "No models are linked to this provider.",
         "count": "{{count}} linked, {{enabled}} enabled",
         "more": "+{{count}} more"
+      },
+      "gateway": {
+        "none": "None (regular endpoint)",
+        "ifinder": "iFinder Model Gateway"
       }
     },
     "models": {
@@ -1290,7 +1308,9 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID."
         },
-        "unsupported": "iHub cannot run this model from this provider"
+        "unsupported": "iHub cannot run this model from this provider",
+        "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
+        "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one."
       },
       "getStarted": {
         "title": "Add the models your apps use",
@@ -4258,6 +4278,30 @@
           "admin": "Admin",
           "api": "API"
         }
+      },
+      "details": {
+        "open": "Show details",
+        "title": "Audit entry",
+        "ip": "IP address",
+        "requestId": "Request ID",
+        "entryId": "Entry ID",
+        "effectiveGroups": "Effective groups",
+        "effectiveGroupsHint": "The groups the user had for this action.",
+        "providerGroups": "Groups from the identity provider",
+        "providerGroupsCount": "{{total}} received, {{mapped}} mapped to iHub groups",
+        "providerGroupsTruncated": "Showing the first {{shown}} of {{total}} groups.",
+        "noProviderGroups": "The identity provider sent no groups.",
+        "providerGroup": "Provider group",
+        "mapsTo": "Maps to",
+        "notMapped": "Not mapped",
+        "manualGroups": "Assigned manually",
+        "manualGroupsHint": "Groups an admin assigned to the user under Users.",
+        "automaticGroups": "Added automatically",
+        "automaticGroupsHint": "Groups every signed-in user or every user of this provider receives.",
+        "groupsRecordedAtLogin": "Recorded at sign-in. Changes in the identity provider apply from the next sign-in.",
+        "noGroups": "None",
+        "moreDetails": "More details",
+        "rawEntry": "Raw entry (JSON)"
       }
     },
     "filters": {
@@ -7557,6 +7601,13 @@
     "loading": "Loading…",
     "detailsUnavailable": "No further details are available.",
     "documentFromSource": "Document",
+    "documentNoAccess": "The document could not be attached: you do not have access to it.",
+    "documentNotFound": "The document could not be attached: it was not found. It may have been moved or deleted.",
+    "documentAttachFailed": "The document could not be attached. Please try again.",
+    "documentUnavailable": "The document could not be attached: the system it comes from is not available to you.",
+    "documentModelCannot": "The document could not be attached: the selected model cannot take this kind of file.",
+    "documentAppNotBound": "The document could not be attached: this app does not use the system it comes from.",
+    "documentFromIntegration": "{{name}} document",
     "project": "Project"
   },
   "prompts": {
@@ -9071,6 +9122,9 @@
     "INVALID_REASON": "The reason must be text.",
     "REASON_TOO_LONG": "The reason is too long.",
     "INTEGRATION_NOT_FOUND": "The integration was not found.",
+    "INTEGRATION_NOT_CONFIGURED": "The integration is not configured.",
+    "INTEGRATION_NOT_GRANTED": "You are not allowed to use this integration.",
+    "DOCUMENT_DETAILS_UNAVAILABLE": "This integration has no details for its documents.",
     "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
     "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name.",
     "EXECUTION_NOT_FINISHED": "The workflow execution has not finished yet.",

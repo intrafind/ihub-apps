@@ -3,6 +3,7 @@
 
 import { useCallback, useState } from 'react';
 import { usePlatformConfig } from '../contexts/PlatformConfigContext';
+import { modelInputCapabilities } from '../utils/modelInputCapabilities';
 import { storageProvidersBoundBy } from '../../../../shared/storageBindings.js';
 
 /**
@@ -76,7 +77,11 @@ export function useFileUploadHandler() {
     // A transcription model selected in the chat takes audio and video only —
     // they are its whole input — so it offers them in every app that does not
     // switch them off explicitly.
-    const transcriptionModel = selectedModel?.modelType === 'transcription';
+    const {
+      transcription: transcriptionModel,
+      vision: isVisionModel,
+      audio: isAudioModel
+    } = modelInputCapabilities(selectedModel);
     const transcriptionUpload =
       transcriptionModel && (audioConfig?.enabled !== false || videoConfig?.enabled !== false);
 
@@ -117,22 +122,6 @@ export function useFileUploadHandler() {
         }
       };
     }
-
-    // Determine if image upload should be disabled based on model capabilities
-    // Use model metadata (supportsVision/supportsImages) if available, fallback to name heuristics
-    const modelId = selectedModel?.id || '';
-    const isVisionModel =
-      selectedModel?.supportsVision ??
-      selectedModel?.supportsImages ??
-      (modelId &&
-        (modelId.includes('vision') ||
-          modelId.includes('gpt-4') ||
-          modelId.includes('claude-3') ||
-          modelId.includes('gemini') ||
-          modelId.includes('4o')));
-
-    // Determine if audio upload should be disabled based on model capabilities
-    const isAudioModel = selectedModel?.supportsAudio === true;
 
     // Audio goes to the selected model: one that takes audio, or a
     // transcription model, whose only input it is.

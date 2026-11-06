@@ -223,6 +223,68 @@ describe('buildImportedModelConfig', () => {
   });
 });
 
+describe('buildImportedModelConfig for an iFinder Model Gateway', () => {
+  const options = {
+    id: 'gw-m',
+    apiType: 'openai',
+    providerId: 'ifinder-gw',
+    modelsUrl: 'https://gw.example.com:9614/v1/gateway/models'
+  };
+  const gatewayEntry = {
+    id: 'mistral-large-3',
+    name: 'mistral-large-3',
+    type: 'chat',
+    url: 'https://gw.example.com:9614/v1/gateway/proxy/chat/completions',
+    modelProvider: 'mistral',
+    contextWindow: 131072,
+    supportsVision: false,
+    supportsTools: false
+  };
+
+  it("uses the adapter of the model's own dialect and links it to the gateway provider", () => {
+    const config = buildImportedModelConfig(gatewayEntry, options);
+    expect(config).toMatchObject({
+      modelId: 'mistral-large-3',
+      provider: 'mistral',
+      providerId: 'ifinder-gw',
+      url: 'https://gw.example.com:9614/v1/gateway/proxy/chat/completions',
+      contextWindow: 131072,
+      // The gateway does not support tool calling yet.
+      supportsTools: 'none'
+    });
+    expect(config.supportsVision).toBeUndefined();
+  });
+
+  it('imports an OpenAI-dialect model with the provider API type', () => {
+    const config = buildImportedModelConfig(
+      { ...gatewayEntry, modelProvider: 'openai', supportsVision: true },
+      options
+    );
+    expect(config.provider).toBe('openai');
+    expect(config.supportsVision).toBe(true);
+  });
+
+  it('imports a realtime model on its speech backend as a transcription model', () => {
+    const config = buildImportedModelConfig(
+      {
+        id: 'voxtral-realtime',
+        name: 'voxtral-realtime',
+        type: 'transcription',
+        modelType: 'transcription',
+        backend: 'vllm-realtime',
+        url: 'wss://gw.example.com:9614/v1/gateway/proxy/realtime?model=voxtral-realtime'
+      },
+      options
+    );
+    expect(config).toMatchObject({
+      provider: 'vllm-realtime',
+      modelType: 'transcription',
+      providerId: 'ifinder-gw'
+    });
+    expect(config.contextWindow).toBeUndefined();
+  });
+});
+
 describe('buildNewProviderConfig', () => {
   it('creates an LLM provider entry with plain-text fields', () => {
     expect(
@@ -247,16 +309,27 @@ describe('buildNewProviderConfig', () => {
   });
 });
 
+describe('buildNewProviderConfig with a gateway', () => {
+  it('stores the gateway marker only when one is chosen', () => {
+    const base = { id: 'gw', name: 'Gateway', description: '', apiType: 'openai' };
+    expect(buildNewProviderConfig({ ...base, gateway: 'ifinder-model-gateway' }).gateway).toBe(
+      'ifinder-model-gateway'
+    );
+    expect(buildNewProviderConfig({ ...base, gateway: '' })).not.toHaveProperty('gateway');
+  });
+});
+
 describe('getImportableProviders', () => {
   it('keeps LLM providers whose API type lists models', () => {
     const ids = getImportableProviders([
       { id: 'openai' },
       { id: 'bedrock', category: 'llm' },
       { id: 'llmhub', category: 'llm', apiType: 'openai' },
+      { id: 'ifinder-gw', category: 'llm', apiType: 'openai', gateway: 'ifinder-model-gateway' },
       { id: 'brave', category: 'websearch' },
       { id: 'my-keys', category: 'custom' }
     ]).map(p => p.id);
-    expect(ids).toEqual(['openai', 'llmhub']);
+    expect(ids).toEqual(['openai', 'llmhub', 'ifinder-gw']);
   });
 });
 

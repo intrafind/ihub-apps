@@ -1,5 +1,23 @@
 # Features — Unreleased
 
+## iFinder Model Gateway as a Model Source
+
+iHub can use the **iFinder Model Gateway** as a built-in model source. Under **Admin → Models →
+Import from URL**, tick **This endpoint is an iFinder Model Gateway**, enter the gateway root and a
+project API key, and iHub lists the models the project may use.
+
+- **Detected, not guessed:** chat, vision and realtime-speech models are recognised from what the
+  gateway reports for each model, with the context window. Embedding and NER models are listed but
+  cannot be picked.
+- **Right dialect per model:** Mistral models use the Mistral adapter, OpenAI and Azure models the
+  provider's API type. All calls go through the gateway's auto-select route, so a model survives a
+  backend being replaced.
+- **Tool calling:** the gateway does not support it yet, so imported models have tool support off.
+- **Existing providers:** **Admin → Providers** has a new **Model gateway** setting for turning a
+  provider into a gateway provider.
+
+See [Models](../../models.md#importing-models-from-an-endpoint).
+
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
 **Admin → Integrations** is one platform for everything iHub connects to. An integration is a
@@ -686,3 +704,101 @@ at another page meant removing it and adding it again.
 - API: `PATCH /api/projects/:id/items/:itemId` and `PATCH /api/admin/projects/:id/items/:itemId`
   accept `ref` next to `name` and `pinned`. The reference is checked like a new item's and
   replaces the stored one as sent.
+
+## Embed Mode: Steer an Embedded iHub from the URL Without Changing It for Direct Visits
+
+A page that embeds iHub in an iframe — iFinder's standard iHub integration, a portal, an intranet
+page — can now control iHub's chrome, colour mode and language from the URL, and none of it is
+remembered in the browser outside that tab. Before, `?sidebar=false`, `?header=false` or
+`?language=de` in an iframe were saved in `localStorage`, so on a same-site subdomain they also
+changed iHub for people who opened it directly, and the colour mode could not be set from the URL
+at all.
+
+- **`embed=true`** switches embed mode on for the tab. Header, footer and sidebar, the colour mode
+  and the language are then kept in the tab's `sessionStorage` and `localStorage` is neither read
+  nor written for them. They survive navigation inside iHub and a reload of the frame, and are gone
+  when the tab closes. Loading an embed URL starts a fresh session, so the URL the host builds is
+  what the user gets.
+- **`mode=light|dark|auto`** is new and sets the colour mode. It applies before the first render,
+  so the page does not flash the other mode. Outside embed mode it is stored like a click on the
+  dark-mode toggle.
+- **`header`, `footer`, `sidebar` and `language`** keep working. An embed starts without iHub's
+  header, footer and sidebar; the host switches a part on with `=true`. Only `en` and `de` are
+  accepted for `language` (`de-DE` selects `de`); invalid values for `mode` and `language` are
+  ignored — outside embed mode too.
+- Example: `/apps/translator?embed=true&sidebar=false&header=false&footer=false&mode=dark&language=de`
+  shows the Translator without iHub's chrome, in dark mode and in German, and opening iHub
+  directly afterwards shows the user's own settings.
+- An embed does not publish its language on the cross-product `intrafind` `BroadcastChannel`, so it
+  cannot switch the language of other iHub tabs.
+- The Nextcloud embed already ran in this mode; its colour mode and language now stay in the
+  iframe's tab as well instead of being read from and written to `localStorage`.
+- Not covered: the recently used apps list, the collapsed state of the sidebar and the sign-in
+  token are still stored in the browser as for any visit.
+
+See [Embedding iHub in Another Product](../../embed-mode.md).
+
+## Audit Log: Open an Entry, and See Which Groups a Sign-in Brought Along
+
+Every entry in **Admin → Audit Log** now opens in a detail panel — click the row or the eye icon.
+For sign-ins through an external identity provider, the panel shows where the user's groups came
+from, so admins can check what an Entra ID or other OIDC user actually got, even without an active
+session.
+
+- **Groups from the identity provider:** the groups the provider sent at sign-in (for Entra ID
+  usually group ids), each with the iHub groups it maps to, or **Not mapped**.
+- **Assigned manually:** the groups an admin gave the user under **Users**.
+- **Added automatically:** groups such as `authenticated` or the provider's default groups.
+- **Effective groups:** what the user ended up with.
+- Recorded for OIDC, LDAP and NTLM sign-ins. The values are a snapshot from that sign-in; changes in
+  the identity provider show up with the next one. At most 200 provider groups are listed per
+  sign-in, with the total.
+- The audit log search also finds provider group names, so searching an Entra group id lists who
+  signed in with it.
+- Display only: who may do what is still decided by the groups of the current session, and nothing
+  is added to `users.json`.
+
+## Open a Document from Another System: Choose the App in iHub
+
+A link such as `/apps?documentId=<id>&integration=ifinder` (optionally `&searchProfile=<id>` and
+`&prefill=…`) now opens the app list with the document waiting. Before, the system linking to iHub
+— for example the "Open in iHub" action of an iFinder hit — had to know the target app up front.
+The link names the **integration** the document comes from; the earlier `source` parameter is
+gone.
+
+- **Pick an app:** a banner names the document and the app you choose opens with it attached. The
+  link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
+  the same list.
+- **Only apps that bind the integration:** an app is offered when it binds the integration the
+  document comes from (iFinder under **Admin → Apps → Edit → Installed integrations**); the binding
+  is what lets it receive the document, whatever its local upload settings are. An app that never
+  opted into iFinder never receives an iFinder document. A checkbox in the banner, on by default,
+  turns the filter off; it is left out when no app qualifies.
+- **The original file, images included:** the document is fetched as the original and attached
+  like a file from Nextcloud: an image as an image for a vision model, anything else as a document
+  that keeps its original next to the extracted text.
+- **Clear errors:** an integration that is not available to you, a document you may not read, or
+  one that no longer exists is reported in the banner before you choose an app, and the app then
+  opens without it. A document that fails to attach in the chat now says so instead of silently
+  attaching nothing.
+- **Nothing is attached twice:** the parameters are removed from the address once the app has
+  used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
+  passed on from the list.
+- **API:** installed integrations that declare the `files` capability hand over documents by
+  reference, as resources of the integration: `GET /api/integrations/:integration/files` (the
+  probe), `/files/:id` (the document's details), `/files/:id/content` and
+  `/files/:id/content/:filename` (the same bytes under a name for a browser or viewer). The id is a
+  URL-encoded path segment; `scope` and `format` are query parameters. They answer `404` when the integration is not installed or configured and `403` when the user's
+  groups do not grant it (an upstream `401` is answered as `403`, so it never reads as an expired
+  iHub session). These routes are the one way to a source's content and details for Preview,
+  Download, Add to email, Details and Open in App: the old `GET /api/sources/:provider/content` and
+  `/metadata` are removed, and `project` documents answer the same routes under their own access
+  rules. The integrations feature switch does not apply to them. iFinder 1.2.0 is the first
+  integration to declare the capability.
+  A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
+  iFinder gets `403 SOURCE_FORBIDDEN`. The same applies to the sources of an iAssistant answer, which
+  carry `provider: ifinder`: preview, download and details of a citation need the grant of the
+  `ifinder` installation, so a group that may use the iAssistant but not iFinder gets
+  `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
+
+See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).

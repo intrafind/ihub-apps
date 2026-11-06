@@ -19,7 +19,7 @@
  *   session.created / session.update / input_audio_buffer.append|commit /
  *   transcription.delta|done / error
  */
-import { expandEnvVars, resolveApiKey } from './credentials.js';
+import { expandEnvVars, resolveLinkedApiKey } from './credentials.js';
 
 // The vLLM realtime protocol sends `session.created` on connect and we defer
 // session.update + the initial commit until then, so the client only streams
@@ -57,8 +57,10 @@ export function resolveUpstream(model) {
   return {
     url: expandEnvVars(model?.url || '').trim(),
     // Self-hosted endpoints often need no auth, so there is deliberately no
-    // environment fallback here: an unset key means "send no Authorization".
-    apiKey: resolveApiKey(model),
+    // environment fallback for an unlinked model: an unset key means "send no
+    // Authorization". A model linked to a provider (an iFinder Model Gateway,
+    // say) uses that provider's key.
+    apiKey: resolveLinkedApiKey(model),
     model: model?.modelId || ''
   };
 }

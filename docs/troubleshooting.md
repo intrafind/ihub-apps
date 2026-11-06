@@ -471,6 +471,9 @@ echo "OIDC Secret: ${OIDC_CLIENT_SECRET:0:10}..."
 - **Wrong Redirect URI:** Must match exactly in OIDC provider settings
 - **Certificate Issues:** OIDC requires HTTPS in production
 - **Scope Problems:** Ensure required scopes are configured
+- **"Sign-in did not complete" on the login screen:** the provider callback failed (for example
+  a new user while `allowSelfSignup` is off, or a state that could not be verified). The reason is
+  in the server log (components `OidcAuth`, `OidcLoginState`) and in the browser console.
 
 ---
 

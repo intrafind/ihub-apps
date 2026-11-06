@@ -109,15 +109,17 @@ Everything the answer does not cite is listed under *Also considered*.
 
 *Open* and *Copy link* need only a `url`. *Preview*, *Download*, *Add to email* (Outlook), *Open in
 App* and *Details* fetch the item's content through the system that owns it. To offer them,
-register a source provider. All providers share one route:
+register a source provider. All providers share one route (`<provider>` is the id the source's
+`provider` field carries; for an installed integration it is the installation id, and the route
+applies the integration gate first):
 
 ```
-GET /api/sources/<provider>/content?id=<ref.id>[&scope=<ref.scope>][&format=original|pdf|text]
-GET /api/sources/<provider>/metadata?id=<ref.id>[&scope=<ref.scope>]
+GET /api/integrations/<provider>/files/<ref.id>/content[/<filename>][?scope=<ref.scope>&format=original|pdf|text]
+GET /api/integrations/<provider>/files/<ref.id>[?scope=<ref.scope>]
 ```
 
-The route checks the sign-in, the provider name and the length of `id` (1024 characters at most)
-and `scope` (256 at most). It also handles a stream that fails: it answers 502 before the first
+`<ref.id>` is one URL-encoded path segment. The route checks the sign-in, the provider name and the
+length of `id` (1024 characters at most) and `scope` (256 at most). It also handles a stream that fails: it answers 502 before the first
 byte, and aborts the response after it. Your provider does the rest:
 
 ```js
@@ -166,6 +168,15 @@ export default { id: 'acmewiki', content, metadata };
   App* when your system has no file.
 - **Errors.** Throw `sourceProviderError(status, message)`. A plain error is logged and answered
   with 500. *Open in App* falls back to `text` after any server error except 401 and 403.
+- **Open in App.** The link it opens is `/apps/<app>?documentId=<ref.id>&integration=<provider id>`
+  (plus `searchProfile=<ref.scope>`); the chat fetches the original through
+  `GET /api/integrations/<provider id>/files/<ref.id>/content` (the id URL-encoded, `?scope=<ref.scope>`),
+  which serves a provider registered by code
+  under its own access rules. A provider that is an **installed integration** whose definition
+  declares the `files` capability (a native connector with `files: { content, metadata?, configured? }`)
+  is served by its connector instead and passes a gate first: the installation must exist, be
+  configured and be granted to the user's groups. See
+  [Auto-Send and URL Parameters](auto-send-feature.md#document-attachment-from-an-integration).
 - **Details.** The dialog shows `title`, `filename`, `application`, `sizeFormatted`, `author`,
   `sourceName`, `modificationDate`, `indexingDate`, `language`, `navigationTree` (breadcrumbs) and
   `deepLink`. Every field is optional, and `metadata` itself is too. Without it, *Details* says
