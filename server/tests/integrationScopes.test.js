@@ -631,14 +631,14 @@ describe('iFinder search with no hits', () => {
     });
   });
 
-  it('tells the model that adding words cannot help and how to widen instead', async () => {
+  it('tells the model that the same words plus more cannot help, and how to widen', async () => {
     const result = await iFinderTool.search({
       query: 'vacation policy',
       user: USER,
       appConfig: SEARCH_APP
     });
-    assert.match(result.hint, /adding words to this query can only match fewer documents/);
-    assert.match(result.hint, /OR/);
+    assert.match(result.hint, /Do not retry with the same words plus more/);
+    assert.match(result.hint, /explicit OR/);
     assert.match(result.hint, /iFinder_listProfiles/);
     assert.doesNotMatch(result.hint, /without them/);
   });
@@ -646,7 +646,7 @@ describe('iFinder search with no hits', () => {
   it('points at the filters when the query matches everything', () => {
     const hint = zeroHitHint({ query: '*', filter: ['application.keyword:pdf'] });
     assert.match(hint, /a filter excluded them all/);
-    assert.doesNotMatch(hint, /adding words/);
+    assert.doesNotMatch(hint, /same words plus more/);
   });
 
   it('suggests dropping the filters once when a topic query had filters', () => {

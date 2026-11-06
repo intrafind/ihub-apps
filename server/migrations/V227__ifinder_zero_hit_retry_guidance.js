@@ -5,12 +5,14 @@
  * Migration V227 — iFinder search app: retry after zero hits with fewer words
  *
  * The shipped `ifinder-search` prompt told the model to rephrase a search with
- * "more specific terms". iFinder ANDs query terms, so after a search with no
- * hits that is the one retry certain to fail: "vacation policy" found nothing,
- * so "vacation policy company" cannot find anything either. The new default
- * drops "more specific terms" and adds a bullet saying that added words only
- * narrow, and that a search with no hits — or one meant to find other
- * documents — needs fewer or different words.
+ * "more specific terms". After a search with no hits that is the one retry
+ * certain to fail: up to three bare words must all match — in AND search
+ * profiles and in the shipped OR profiles (`minimum_should_match: 3<-25%`)
+ * alike — so "vacation policy" finding nothing means "vacation policy company"
+ * finds nothing either. The new default drops "more specific terms" and adds a
+ * bullet: after zero hits, or to find other documents, use fewer or different
+ * words and an explicit OR; write AND or OR out when it matters, since how bare
+ * words combine is a profile setting.
  *
  * `performInitialSetup` only copies files that are *missing* from contents/,
  * so existing installations keep the old wording until this migration runs.
@@ -34,13 +36,13 @@ export const FRAGMENTS = Object.freeze({
     from: '- Search several times, not once. Break a question into its parts and rephrase: synonyms, German and English wording, more specific terms, and IntraFind operators such as `NEAR/S(term1 term2)` (both in one sentence) or `THES/&term` (thesaurus expansion).',
     to:
       '- Search several times, not once. Break a question into its parts and rephrase: synonyms, German and English wording, and IntraFind operators such as `NEAR/S(term1 term2)` (both in one sentence) or `THES/&term` (thesaurus expansion).\n' +
-      '- Query terms are ANDed, so every added word narrows the result. Add words only to narrow a result that is too large. After 0 hits, or to find other documents, search with fewer or different words — synonyms, the other language, alternatives joined with OR — never with the same words plus more: a query that found nothing finds nothing once it gets longer.'
+      '- After 0 hits, or to find other documents, search with fewer or different words — synonyms, the other language, alternatives joined with an explicit OR — never with the same words plus more: up to three words must all match in every shipped search profile, so a query that found nothing finds nothing once it gets longer. Whether bare words combine with AND or OR is a setting of the search profile, so write `AND` or `OR` out when it matters; to narrow a result that is too large, use a filter, a phrase, `NEAR/S(…)` or an explicit `AND`.'
   },
   de: {
     from: '- Suche mehrfach, nicht nur einmal. Zerlege eine Frage in ihre Teile und formuliere um: Synonyme, deutsche und englische Begriffe, spezifischere Begriffe und IntraFind-Operatoren wie `NEAR/S(begriff1 begriff2)` (beide in einem Satz) oder `THES/&begriff` (Thesaurus-Erweiterung).',
     to:
       '- Suche mehrfach, nicht nur einmal. Zerlege eine Frage in ihre Teile und formuliere um: Synonyme, deutsche und englische Begriffe und IntraFind-Operatoren wie `NEAR/S(begriff1 begriff2)` (beide in einem Satz) oder `THES/&begriff` (Thesaurus-Erweiterung).\n' +
-      '- Suchbegriffe werden mit UND verknüpft, jedes zusätzliche Wort grenzt das Ergebnis also ein. Füge Wörter nur hinzu, um ein zu großes Ergebnis einzugrenzen. Nach 0 Treffern oder um andere Dokumente zu finden, mit weniger oder anderen Wörtern suchen — Synonyme, die andere Sprache, Alternativen mit OR verknüpft — nie mit denselben Wörtern plus weiteren: Eine Suche ohne Treffer findet auch verlängert nichts.'
+      '- Nach 0 Treffern oder um andere Dokumente zu finden, mit weniger oder anderen Wörtern suchen — Synonyme, die andere Sprache, Alternativen mit explizitem OR verknüpft — nie mit denselben Wörtern plus weiteren: Bis zu drei Wörter müssen in jedem ausgelieferten Suchprofil alle treffen, eine Suche ohne Treffer findet verlängert also nichts. Ob einfache Wörter mit UND oder ODER verknüpft werden, ist eine Einstellung des Suchprofils, daher `AND` oder `OR` ausschreiben, wenn es darauf ankommt; ein zu großes Ergebnis mit einem Filter, einer Phrase, `NEAR/S(…)` oder explizitem `AND` eingrenzen.'
   }
 });
 

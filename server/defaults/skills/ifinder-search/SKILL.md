@@ -9,8 +9,9 @@ description: >
   fixing. It covers the IntraFind query syntax — Lucene plus the `MODE/`,
   `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`, `DATE/`, `NUMBER/` and `OR/` operators
   for linguistic matching, thesaurus expansion, entity and proximity search —
-  when a field needs a `.keyword` suffix, filters versus query terms, which way
-  to rewrite a query after zero, too few or too many hits, facets, sorting,
+  when a field needs a `.keyword` suffix, filters versus query terms, how a
+  search profile combines words (AND, or OR with minimum_should_match), which
+  way to rewrite a query after zero, too few or too many hits, facets, sorting,
   paging and the discovery loop for an unfamiliar corpus. Do NOT use it
   for web search or for other document sources.
 license: Apache-2.0
@@ -148,30 +149,50 @@ Folding a filter into the query (`Kündigungsfrist AND application.keyword:PDF`)
 still works but skews relevance, because the format term counts toward the
 score.
 
+## How a search profile combines words
+
+How the bare words of a query combine is a setting of the **search profile**,
+not of the syntax: its default operator, and for OR a `minimum_should_match`.
+
+| Profile setting                              | Bare words `a b c d`                                             |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| AND (also a profile that sets nothing)       | every word must match                                            |
+| OR + `3<-25%` (shipped Standard, Confluence) | up to 3 words: every word; from 4 on, a quarter may miss (4 → 3) |
+| OR without `minimum_should_match`            | any one word is enough                                           |
+
+The tools do not report a profile's setting. So **when the logic matters,
+write the operator out**: an explicit `AND` or `OR` means the same in every
+profile, and `minimum_should_match` applies only to bare words, never to an
+explicit `OR`. `urlaub OR ferien OR abwesenheit` matches any of the three even
+in a profile that requires three of three bare words.
+
+Filters are always ANDed with the query, whatever the profile.
+
 ## Retrying: narrow or widen, never both ways at once
 
-Plain query terms are ANDed, and filters are ANDed with the query. Every word
-you add is one more condition a document must meet. So a retry moves the
-result set in one direction only:
+A retry moves the result set in one direction only, and only some moves go
+that direction in every profile:
 
-| You got                        | The next query needs                        | Adding words? |
-| ------------------------------ | ------------------------------------------- | ------------- |
-| too many hits                  | more words, a phrase, `NEAR/S(…)`, a filter | yes — narrows |
-| **0 hits**                     | fewer words, other words, OR-alternatives   | **never**     |
-| some hits, but you want others | fewer words, or different words             | no            |
+| You got                        | The next query needs                                                 | Same words plus more? |
+| ------------------------------ | -------------------------------------------------------------------- | --------------------- |
+| too many hits                  | a filter, a phrase, `NEAR/S(…)`, or words joined with explicit `AND` | only with `AND`       |
+| **0 hits**                     | fewer words, other words, alternatives joined with explicit `OR`     | **never**             |
+| some hits, but you want others | fewer words, other words, explicit `OR`                              | no                    |
 
 **Zero hits is a dead end for that wording.** `vacation policy` found nothing,
-so `vacation policy company` cannot find anything either — every document it
-could match also contains `vacation` and `policy`. Neither can
-`"vacation policy"` (a phrase is stricter still) or the same query with a new
-filter. A retry after zero has to _remove_ or _replace_ words:
+so `vacation policy company` cannot find anything either: two or three bare
+words must all match in an AND profile and in the shipped OR profiles alike,
+and every document the longer query could match also contains `vacation` and
+`policy`. Neither can `"vacation policy"` (a phrase is stricter still) or the
+same query with a new filter. A retry after zero has to _remove_ or _replace_
+words:
 
 ```
 ✗ vacation policy                →  vacation policy company       (stricter: still 0)
 ✗ vacation policy                →  "vacation policy" 2026        (stricter: still 0)
 ✓ vacation policy                →  vacation                      (fewer words)
 ✓ vacation policy                →  Urlaub OR Urlaubsregelung OR vacation
-                                                                 (other words, ORed)
+                                                                 (other words, explicit OR)
 ✓ vacation policy                →  THES/&Urlaub                  (synonyms)
 ✓ vacation policy                →  urlaub*                       (prefix)
 ```
@@ -180,13 +201,14 @@ The corpus is often in another language than the question. Try the German
 word for an English question and the other way round before anything else —
 `Urlaub`, `Urlaubsantrag`, `Abwesenheit` rather than more English words.
 
-**Finding more or different documents works the same way.** A query that
-found three hits finds those three or fewer when you add a word. To find
-documents it missed, drop a word, swap a word for a synonym, or OR in
-alternatives (`Reisekosten OR Spesen OR "travel expenses"`).
+**Finding more or different documents works the same way.** To find documents
+a query missed, drop a word, swap a word for a synonym, or join alternatives
+with an explicit `OR` (`Reisekosten OR Spesen OR "travel expenses"`).
 
-**Adding words is only for narrowing** a result set that is too large or off
-target — and then a filter or `NEAR/S(…)` is usually the sharper tool.
+**To narrow, do not rely on bare extra words.** From four words on, the shipped
+OR profiles let a quarter of them miss, so a fifth bare word may not narrow at
+all — and in an OR profile without `minimum_should_match` it widens. A filter,
+a phrase, `NEAR/S(…)` or an explicit `AND` narrows in every profile.
 
 When a search tool result carries a `hint`, it was written for this decision:
 follow it.
@@ -366,8 +388,8 @@ returns the long tail.
 | 0 hits, exact value                     | wrong spelling or casing                         | `iFinder_getFacetValues` on that field     |
 | 0 hits, topic query                     | too many words, or words the corpus doesn't use  | fewer words, synonyms, other language, OR  |
 | 0 hits, plausible query                 | wrong search profile (unless fixed for the chat) | `iFinder_listProfiles`, then retry         |
-| too few hits, more expected             | query too strict                                 | drop or swap words — never add any         |
-| far too many hits                       | topic-only query                                 | move criteria into `filter`                |
+| too few hits, more expected             | query too strict                                 | drop or swap words, explicit `OR`          |
+| far too many hits                       | topic-only query, or an OR profile               | `filter`, phrase, `NEAR/S`, explicit `AND` |
 | right topic, wrong docs                 | ranking skewed by filter terms in the query      | move them to `filter`                      |
 | a known document missing                | the user cannot read it                          | say so; do not retry                       |
 | sort ignored                            | sorting on an analyzed text field                | use the `.keyword` variant                 |

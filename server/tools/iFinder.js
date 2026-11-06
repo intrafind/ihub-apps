@@ -55,11 +55,15 @@ function matchesEverything(query) {
 /**
  * What the model should do next after a search that found nothing.
  *
- * The terms of an iFinder query are ANDed, and so are its filters. A query
- * that matched no document cannot match one once more words are added — yet
- * that is the retry models reach for ("vacation policy" → "vacation policy
- * company"). The hint says so at the moment the model decides, and names the
- * moves that can widen the result instead. It does not suggest another
+ * How bare query words combine is a setting of the search profile: AND, or
+ * OR with a `minimum_should_match`. iFinder's shipped profiles use OR with
+ * `3<-25%`, which still requires every word of a query of up to three words.
+ * So for the short queries models write, a query that matched nothing cannot
+ * match anything once more words are added — yet that is the retry models
+ * reach for ("vacation policy" → "vacation policy company"). The hint says so
+ * at the moment the model decides, and names the moves that widen in every
+ * profile: fewer words, other words, and an explicit OR, which
+ * `minimum_should_match` does not apply to. It does not suggest another
  * search profile when the chat fixed the profile.
  *
  * @param {Object} params - the search call's params (`query`, `filter`)
@@ -75,8 +79,8 @@ export function zeroHitHint({ query, filter } = {}, { fixed = false } = {}) {
     );
   } else {
     steps.push(
-      'No document matched. Query terms are ANDed (so are filters): adding words to this query can only match fewer documents, never more. Do not retry with the same words plus more words.',
-      'Widen instead: keep only the one or two words that carry the topic; swap words for synonyms, a broader term or the other language (German/English); join alternatives with OR (`urlaub OR ferien OR abwesenheit`), or use `THES/&term` for thesaurus expansion or a prefix wildcard (`urlaub*`).'
+      'No document matched. Do not retry with the same words plus more: in an AND search profile every word must match, and in the shipped OR profiles so must every word of a query of up to three words — a longer query cannot find more.',
+      'Widen instead: keep only the one or two words that carry the topic; swap words for synonyms, a broader term or the other language (German/English); join alternatives with an explicit OR (`urlaub OR ferien OR abwesenheit`), which works the same in every profile; or use `THES/&term` for thesaurus expansion or a prefix wildcard (`urlaub*`).'
     );
     if (filters.length > 0) {
       steps.push(
