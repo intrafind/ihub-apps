@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { buildServerPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import configCache from '../configCache.js';
 import {
   buildManifest,
@@ -10,7 +11,6 @@ import {
   resolvePwaConfig
 } from '../services/pwa/PwaService.js';
 import logger from '../utils/logger.js';
-import { sendInternalError, sendNotFound } from '../utils/responseHelpers.js';
 
 export default function registerPwaRoutes(app) {
   /**
@@ -19,31 +19,27 @@ export default function registerPwaRoutes(app) {
    * When the admin changes PWA config, the ETag changes and the browser fetches a fresh manifest.
    */
   app.get(buildServerPath('/manifest.json'), (req, res) => {
-    try {
-      const uiConfig = configCache.getUI();
-      const rawPwaConfig = uiConfig?.data?.pwa;
+    const uiConfig = configCache.getUI();
+    const rawPwaConfig = uiConfig?.data?.pwa;
 
-      if (!rawPwaConfig?.enabled) {
-        return sendNotFound(res, 'PWA');
-      }
-
-      const pwaConfig = resolvePwaConfig(rawPwaConfig);
-      const etag = `"${computePwaETag(pwaConfig)}"`;
-
-      if (req.headers['if-none-match'] === etag) {
-        return res.status(304).end();
-      }
-
-      res.set({
-        'Content-Type': 'application/manifest+json',
-        'Cache-Control': 'no-cache',
-        ETag: etag
-      });
-
-      res.json(buildManifest(pwaConfig));
-    } catch (error) {
-      return sendInternalError(res, error, 'serve manifest.json');
+    if (!rawPwaConfig?.enabled) {
+      throw new ServiceError('NOT_FOUND', 'PWA not found');
     }
+
+    const pwaConfig = resolvePwaConfig(rawPwaConfig);
+    const etag = `"${computePwaETag(pwaConfig)}"`;
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
+    res.set({
+      'Content-Type': 'application/manifest+json',
+      'Cache-Control': 'no-cache',
+      ETag: etag
+    });
+
+    res.json(buildManifest(pwaConfig));
   });
 
   /**
