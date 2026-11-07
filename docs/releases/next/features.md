@@ -700,6 +700,14 @@ text page. Every such response has the same body:
   `SOURCE_UNAVAILABLE` and `SOURCE_INVALID` (400) and `SOURCE_FAILED` (502). Storage failures answer with
   their storage code (`INVALID_CURSOR` for a bad paging cursor, 400). Details of a refusal (a quota's
   `limit`, `used` and `size`) stay in `details`.
+- The MCP App endpoints (`/api/mcp-apps*`) answer in this shape: `BAD_REQUEST`, `AUTH_REQUIRED`, `FORBIDDEN` and
+  `NOT_FOUND` for an app or tool the caller may not use, `PAYLOAD_TOO_LARGE`, and `UPSTREAM_ERROR` (502) when
+  the MCP server fails. "Connect this server first" is `409 INTEGRATION_AUTH_REQUIRED` with the server and the
+  link to connect it in `details` (`integration`, `connectUrl`; before: top level, with `error: "auth_required"`),
+  a refresh that failed for a transient reason is `503 MCP_AUTH_REFRESH_FAILED` (before: `error:
+  "auth_refresh_failed"`), and a call that needs approval answers `403 APPROVAL_REQUIRED_NO_USER` or
+  `409 APPROVAL_ALREADY_ANSWERED`. The message of a failing MCP server is shown only when it names no paths,
+  hosts or credentials.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

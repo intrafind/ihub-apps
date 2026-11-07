@@ -30,6 +30,7 @@ import { newRunId } from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
 import { approvalDisplayData } from '../loop/seams/approvalSeam.js';
 import { actionFingerprint } from '../../utils/actionFingerprint.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import {
   needsApproval,
   resolveToolApproval,
@@ -43,6 +44,10 @@ export const VIEW_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Interaction states that mean "nobody will answer this any more". */
 const LAPSED = new Set(['expired', 'cancelled']);
+
+function alreadyAnswered() {
+  return new ServiceError('APPROVAL_ALREADY_ANSWERED', 'This approval was already answered');
+}
 
 /**
  * The iHub-facing id of a tool on the view's server: the server's tool prefix
@@ -191,6 +196,7 @@ export async function requestViewToolCall({
  *   server's tool on the caller's connection
  * @param {Object} [params.interactionService]
  * @returns {Promise<{status: number, body: Object}>}
+ * @throws {ServiceError} `APPROVAL_ALREADY_ANSWERED` (409) when someone answered first.
  */
 export async function answerViewToolApproval({
   interaction,
@@ -208,10 +214,7 @@ export async function answerViewToolApproval({
   });
   if (!interaction || LAPSED.has(interaction.status)) return expired();
   if (interaction.status === 'answered') {
-    return {
-      status: 409,
-      body: { error: 'This approval was already answered', code: 'APPROVAL_ALREADY_ANSWERED' }
-    };
+    throw alreadyAnswered();
   }
   try {
     await interactionService.answer(
@@ -226,10 +229,7 @@ export async function answerViewToolApproval({
     if (error?.code === 'NOT_PENDING' || error?.code === 'ANSWER_IN_PROGRESS') {
       const current = await interactionService.get(interaction.id).catch(() => null);
       if (current && LAPSED.has(current.status)) return expired();
-      return {
-        status: 409,
-        body: { error: 'This approval was already answered', code: 'APPROVAL_ALREADY_ANSWERED' }
-      };
+      throw alreadyAnswered();
     }
     throw error;
   }

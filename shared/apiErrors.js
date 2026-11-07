@@ -310,6 +310,14 @@ export const CHAT_ERROR_CODES = Object.freeze({
   SOURCE_FAILED: 502
 });
 
+/** MCP App views (`server/routes/mcpAppRoutes.js`) and the approval of their tool calls. */
+export const MCP_APP_ERROR_CODES = Object.freeze({
+  INTEGRATION_AUTH_REQUIRED: 409,
+  MCP_AUTH_REFRESH_FAILED: 503,
+  APPROVAL_REQUIRED_NO_USER: 403,
+  APPROVAL_ALREADY_ANSWERED: 409
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -326,7 +334,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...MODEL_ERROR_CODES,
   ...INTERACTION_ERROR_CODES,
   ...UPDATE_ERROR_CODES,
-  ...CHAT_ERROR_CODES
+  ...CHAT_ERROR_CODES,
+  ...MCP_APP_ERROR_CODES
 });
 
 /**

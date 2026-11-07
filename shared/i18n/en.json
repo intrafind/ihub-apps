@@ -9237,6 +9237,10 @@
     "SOURCE_GONE": "The file no longer exists in the connected system.",
     "SOURCE_UNAVAILABLE": "The connected system is not available.",
     "SOURCE_INVALID": "The file reference is not valid.",
-    "SOURCE_FAILED": "The file could not be fetched from the connected system."
+    "SOURCE_FAILED": "The file could not be fetched from the connected system.",
+    "INTEGRATION_AUTH_REQUIRED": "Connect this integration first, then try again.",
+    "MCP_AUTH_REFRESH_FAILED": "The sign-in to the MCP server could not be refreshed. Try again in a moment.",
+    "APPROVAL_REQUIRED_NO_USER": "This call needs a person's approval, and this client cannot ask for it.",
+    "APPROVAL_ALREADY_ANSWERED": "This approval was already answered."
   }
 }

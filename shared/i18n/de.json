@@ -9210,6 +9210,10 @@
     "SOURCE_GONE": "Die Datei existiert im angebundenen System nicht mehr.",
     "SOURCE_UNAVAILABLE": "Das angebundene System ist nicht verfügbar.",
     "SOURCE_INVALID": "Die Dateireferenz ist ungültig.",
-    "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden."
+    "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden.",
+    "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie diese Integration zuerst und versuchen Sie es dann erneut.",
+    "MCP_AUTH_REFRESH_FAILED": "Die Anmeldung beim MCP-Server konnte nicht erneuert werden. Versuchen Sie es gleich noch einmal.",
+    "APPROVAL_REQUIRED_NO_USER": "Dieser Aufruf benötigt die Freigabe einer Person, und dieser Client kann sie nicht einholen.",
+    "APPROVAL_ALREADY_ANSWERED": "Diese Freigabe wurde bereits beantwortet."
   }
 }

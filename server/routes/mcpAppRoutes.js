@@ -67,6 +67,7 @@ import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { zSafeId } from '../validators/common.js';
 import validate from '../validators/validate.js';
 import logger from '../utils/logger.js';
+import { ServiceError } from '../utils/ServiceError.js';
 
 const COMPONENT = 'McpApps';
 
@@ -112,11 +113,55 @@ const handshakeBodySchema = z.object({
 /** Status of "connect this MCP server first" — deliberately not 401 (see module comment). */
 export const MCP_APP_AUTH_REQUIRED_STATUS = 409;
 
-class McpAppAccessError extends Error {
-  constructor(status, message, extra = {}) {
-    super(message);
-    this.status = status;
-    this.extra = extra;
+/** The registry code of the statuses an access check refuses with. */
+const ACCESS_CODE_BY_STATUS = {
+  400: 'BAD_REQUEST',
+  401: 'AUTH_REQUIRED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND'
+};
+
+class McpAppAccessError extends ServiceError {
+  /**
+   * @param {number} status - 400, 401, 403 or 404
+   * @param {string} message - What to tell the caller
+   */
+  constructor(status, message) {
+    super(ACCESS_CODE_BY_STATUS[status] || 'FORBIDDEN', message, { status });
+  }
+}
+
+/**
+ * What a failed request to an MCP server stands for: a caller that has to connect
+ * first (409), a refresh that failed for a transient reason (503), or the server
+ * failing (502, with its message when it is safe to show). A ServiceError is already
+ * an answer and passes through.
+ *
+ * @param {unknown} error
+ * @returns {ServiceError}
+ */
+function toMcpAppError(error) {
+  if (error instanceof ServiceError) return error;
+  if (isAuthRequiredError(error)) return authRequiredAccessError(error.serverId);
+  if (isTokenRefreshError(error)) {
+    return new ServiceError('MCP_AUTH_REFRESH_FAILED', 'Refreshing the MCP sign-in failed', {
+      cause: error
+    });
+  }
+  return new ServiceError('UPSTREAM_ERROR', error?.message || 'MCP App request failed', {
+    cause: error
+  });
+}
+
+/**
+ * Run an operation on an MCP connection; its failures are translated with
+ * {@link toMcpAppError}.
+ */
+async function viaMcp(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw toMcpAppError(error);
   }
 }
 
@@ -194,47 +239,36 @@ export async function resolveMcpApp(req, appId, toolId, { declaredView = false }
   // a caller who has not connected it is told where to do so.
   if (!isUserOAuthServer(found.conn.config)) {
     const conn = found.conn;
-    return { app, conn, tool: found.tool, user, serverId, run: operation => operation(conn) };
+    return {
+      app,
+      conn,
+      tool: found.tool,
+      user,
+      serverId,
+      run: operation => viaMcp(() => operation(conn))
+    };
   }
-  let conn;
-  try {
-    conn = await mcpClientManager.connectionForUser(serverId, user);
-  } catch (error) {
-    if (isAuthRequiredError(error)) throw authRequiredAccessError(serverId);
-    throw error;
-  }
+  const conn = await viaMcp(() => mcpClientManager.connectionForUser(serverId, user));
   return {
     app,
     conn,
     tool: found.tool,
     user,
     serverId,
-    run: operation => mcpClientManager.withUserConnection(serverId, user, operation)
+    run: operation => viaMcp(() => mcpClientManager.withUserConnection(serverId, user, operation))
   };
 }
 
 /** The "connect first" answer for a per-user server. */
 function authRequiredAccessError(serverId) {
-  return new McpAppAccessError(MCP_APP_AUTH_REQUIRED_STATUS, 'auth_required', {
-    code: INTEGRATION_AUTH_REQUIRED,
+  return new ServiceError(INTEGRATION_AUTH_REQUIRED, 'Connect this integration first', {
+    status: MCP_APP_AUTH_REQUIRED_STATUS,
     ...(serverId
-      ? { integration: serverId, connectUrl: mcpClientManager.connectUrlFor(serverId) }
+      ? {
+          details: { integration: serverId, connectUrl: mcpClientManager.connectUrlFor(serverId) }
+        }
       : {})
   });
-}
-
-function sendError(res, error, action) {
-  if (isAuthRequiredError(error) && !(error instanceof McpAppAccessError)) {
-    error = authRequiredAccessError(error.serverId);
-  }
-  if (error instanceof McpAppAccessError) {
-    return res.status(error.status).json({ error: error.message, ...error.extra });
-  }
-  if (isTokenRefreshError(error)) {
-    return res.status(503).json({ error: 'auth_refresh_failed', code: error.code });
-  }
-  logger.warn(`MCP App ${action} failed`, { component: COMPONENT, error: error.message });
-  return res.status(502).json({ error: error.message || `MCP App ${action} failed` });
 }
 
 /**
@@ -269,37 +303,30 @@ export default function registerMcpAppRoutes(app) {
     authRequired,
     validate({ query: resourceQuerySchema }),
     async (req, res) => {
-      try {
-        const { run, tool, serverId } = await resolveMcpApp(
-          req,
-          req.query.appId,
-          req.query.toolId,
-          { declaredView: true }
-        );
-        const { resource, appTool } = await run(async conn => ({
-          resource: await conn.getUiResource(tool._mcp.ui.resourceUri),
-          appTool: await conn.getAppTool(tool._mcp.originalName)
-        }));
-        res.setHeader('Cache-Control', 'no-store');
-        res.json({
-          uri: resource.uri,
-          html: resource.html,
-          csp: resource.csp,
-          permissions: resource.permissions,
-          allow: buildAllowAttribute(resource.permissions),
-          prefersBorder: resource.prefersBorder,
-          // `hostContext.toolInfo.tool` for the view.
-          tool: {
-            name: tool._mcp.originalName,
-            description: tool.description || '',
-            inputSchema: tool.parameters || { type: 'object', properties: {} },
-            ...(appTool?.title ? { title: appTool.title } : {})
-          },
-          serverId
-        });
-      } catch (error) {
-        return sendError(res, error, 'resource fetch');
-      }
+      const { run, tool, serverId } = await resolveMcpApp(req, req.query.appId, req.query.toolId, {
+        declaredView: true
+      });
+      const { resource, appTool } = await run(async conn => ({
+        resource: await conn.getUiResource(tool._mcp.ui.resourceUri),
+        appTool: await conn.getAppTool(tool._mcp.originalName)
+      }));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({
+        uri: resource.uri,
+        html: resource.html,
+        csp: resource.csp,
+        permissions: resource.permissions,
+        allow: buildAllowAttribute(resource.permissions),
+        prefersBorder: resource.prefersBorder,
+        // `hostContext.toolInfo.tool` for the view.
+        tool: {
+          name: tool._mcp.originalName,
+          description: tool.description || '',
+          inputSchema: tool.parameters || { type: 'object', properties: {} },
+          ...(appTool?.title ? { title: appTool.title } : {})
+        },
+        serverId
+      });
     }
   );
 
@@ -310,69 +337,65 @@ export default function registerMcpAppRoutes(app) {
     async (req, res) => {
       const { appId, toolId, name, chatId = null } = req.body;
       const args = req.body.arguments || {};
-      try {
-        const {
-          app: appConfig,
-          run,
-          user,
-          serverId,
-          tool: viewTool
-        } = await resolveMcpApp(req, appId, toolId);
-        if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
-          return res.status(413).json({ error: 'Tool arguments too large' });
-        }
-        const outcome = await run(async conn => {
-          // Visibility: only tools of this same server that list "app".
-          const target = await conn.getAppTool(name);
-          if (!target) return { forbidden: true };
-          // A tool that needs a person's approval (#2945) waits for it like a
-          // model's call: the chat hosting the view shows the approval card,
-          // and the server runs the stored call once it is approved. A host
-          // that cannot show the card gets APPROVAL_REQUIRED_NO_USER.
-          const gate = await requestViewToolCall({
-            user,
-            appId,
-            app: appConfig,
-            viewTool,
-            serverId,
-            name,
-            args,
-            target,
-            chatId,
-            canApprove: req.body.toolApprovalCapable === true,
-            platform: configCache.getPlatform?.() || null,
-            getInstallation: installedIntegrationById
-          });
-          if (gate.status !== 'run') return { gate };
-          // The specification asks hosts to log view-initiated calls.
-          logger.info('MCP App tool call', {
-            component: COMPONENT,
-            appId,
-            viaToolId: toolId,
-            serverId,
-            tool: name,
-            userId: user.id,
-            argKeys: Object.keys(args).join(', ')
-          });
-          return { result: await conn.callToolRaw(name, args) };
-        });
-        if (outcome.forbidden) {
-          return res.status(403).json({ error: `Tool ${name} is not callable from this app` });
-        }
-        if (outcome.gate?.status === 'refused') {
-          return res.status(403).json({ error: outcome.gate.message, code: outcome.gate.code });
-        }
-        if (outcome.gate?.status === 'awaiting') {
-          // Nothing ran: the host shows the card and answers with
-          // POST /api/mcp-apps/tools/call/approval, which runs the call.
-          return res
-            .status(202)
-            .json({ awaitingApproval: true, interaction: outcome.gate.interaction });
-        }
-        return res.json(toViewToolResult(outcome.result));
-      } catch (error) {
-        return sendError(res, error, 'tool call');
+      const {
+        app: appConfig,
+        run,
+        user,
+        serverId,
+        tool: viewTool
+      } = await resolveMcpApp(req, appId, toolId);
+      if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
+        throw new ServiceError('PAYLOAD_TOO_LARGE', 'Tool arguments too large');
       }
+      const outcome = await run(async conn => {
+        // Visibility: only tools of this same server that list "app".
+        const target = await conn.getAppTool(name);
+        if (!target) return { forbidden: true };
+        // A tool that needs a person's approval (#2945) waits for it like a
+        // model's call: the chat hosting the view shows the approval card,
+        // and the server runs the stored call once it is approved. A host
+        // that cannot show the card gets APPROVAL_REQUIRED_NO_USER.
+        const gate = await requestViewToolCall({
+          user,
+          appId,
+          app: appConfig,
+          viewTool,
+          serverId,
+          name,
+          args,
+          target,
+          chatId,
+          canApprove: req.body.toolApprovalCapable === true,
+          platform: configCache.getPlatform?.() || null,
+          getInstallation: installedIntegrationById
+        });
+        if (gate.status !== 'run') return { gate };
+        // The specification asks hosts to log view-initiated calls.
+        logger.info('MCP App tool call', {
+          component: COMPONENT,
+          appId,
+          viaToolId: toolId,
+          serverId,
+          tool: name,
+          userId: user.id,
+          argKeys: Object.keys(args).join(', ')
+        });
+        return { result: await conn.callToolRaw(name, args) };
+      });
+      if (outcome.forbidden) {
+        throw new ServiceError('FORBIDDEN', `Tool ${name} is not callable from this app`);
+      }
+      if (outcome.gate?.status === 'refused') {
+        throw new ServiceError(outcome.gate.code, outcome.gate.message, { status: 403 });
+      }
+      if (outcome.gate?.status === 'awaiting') {
+        // Nothing ran: the host shows the card and answers with
+        // POST /api/mcp-apps/tools/call/approval, which runs the call.
+        return res
+          .status(202)
+          .json({ awaitingApproval: true, interaction: outcome.gate.interaction });
+      }
+      return res.json(toViewToolResult(outcome.result));
     }
   );
 
@@ -389,47 +412,43 @@ export default function registerMcpAppRoutes(app) {
     validate({ body: approvalBodySchema }),
     async (req, res) => {
       const { appId, toolId, interactionId, decision } = req.body;
-      try {
-        const { run, user } = await resolveMcpApp(req, appId, toolId);
-        const interaction = await interactionService.get(interactionId);
-        if (interaction) {
-          const view = interaction.source?.viewCall;
-          if (
-            !isViewToolApproval(interaction) ||
-            view.appId !== appId ||
-            view.viewToolId !== toolId
-          ) {
-            return res.status(404).json({ error: 'Approval not found' });
-          }
-          if (!(await authorizeInteraction(interaction, user))) {
-            return res.status(403).json({ error: 'This approval belongs to another user' });
-          }
+      const { run, user } = await resolveMcpApp(req, appId, toolId);
+      const interaction = await interactionService.get(interactionId);
+      if (interaction) {
+        const view = interaction.source?.viewCall;
+        if (
+          !isViewToolApproval(interaction) ||
+          view.appId !== appId ||
+          view.viewToolId !== toolId
+        ) {
+          throw new ServiceError('NOT_FOUND', 'Approval not found');
         }
-        const answered = await answerViewToolApproval({
-          interaction,
-          decision,
-          user,
-          call: (callName, callArgs) =>
-            run(async conn => {
-              // Still a tool this view may call (the server may have changed).
-              if (!(await conn.getAppTool(callName))) {
-                throw new McpAppAccessError(403, `Tool ${callName} is not callable from this app`);
-              }
-              logger.info('MCP App tool call (approved)', {
-                component: COMPONENT,
-                appId,
-                viaToolId: toolId,
-                tool: callName,
-                userId: user.id,
-                interactionId
-              });
-              return conn.callToolRaw(callName, callArgs);
-            })
-        });
-        return res.status(answered.status).json(answered.body);
-      } catch (error) {
-        return sendError(res, error, 'tool call approval');
+        if (!(await authorizeInteraction(interaction, user))) {
+          throw new ServiceError('FORBIDDEN', 'This approval belongs to another user');
+        }
       }
+      const answered = await answerViewToolApproval({
+        interaction,
+        decision,
+        user,
+        call: (callName, callArgs) =>
+          run(async conn => {
+            // Still a tool this view may call (the server may have changed).
+            if (!(await conn.getAppTool(callName))) {
+              throw new McpAppAccessError(403, `Tool ${callName} is not callable from this app`);
+            }
+            logger.info('MCP App tool call (approved)', {
+              component: COMPONENT,
+              appId,
+              viaToolId: toolId,
+              tool: callName,
+              userId: user.id,
+              interactionId
+            });
+            return conn.callToolRaw(callName, callArgs);
+          })
+      });
+      return res.status(answered.status).json(answered.body);
     }
   );
 
@@ -443,21 +462,17 @@ export default function registerMcpAppRoutes(app) {
     validate({ body: handshakeBodySchema }),
     async (req, res) => {
       const { appId, toolId, handshake } = req.body;
-      try {
-        const { tool, user, serverId } = await resolveMcpApp(req, appId, toolId);
-        logger.info('MCP App view used the legacy mcp-ui handshake', {
-          component: COMPONENT,
-          handshake,
-          appId,
-          viaToolId: toolId,
-          serverId,
-          tool: tool._mcp.originalName,
-          userId: user.id
-        });
-        return res.status(204).end();
-      } catch (error) {
-        return sendError(res, error, 'handshake report');
-      }
+      const { tool, user, serverId } = await resolveMcpApp(req, appId, toolId);
+      logger.info('MCP App view used the legacy mcp-ui handshake', {
+        component: COMPONENT,
+        handshake,
+        appId,
+        viaToolId: toolId,
+        serverId,
+        tool: tool._mcp.originalName,
+        userId: user.id
+      });
+      return res.status(204).end();
     }
   );
 
@@ -467,25 +482,21 @@ export default function registerMcpAppRoutes(app) {
     validate({ body: resourceReadBodySchema }),
     async (req, res) => {
       const { appId, toolId, uri } = req.body;
-      try {
-        const { run, user, serverId } = await resolveMcpApp(req, appId, toolId);
-        logger.info('MCP App resource read', {
-          component: COMPONENT,
-          appId,
-          viaToolId: toolId,
-          serverId,
-          uri: isUiResourceUri(uri) ? uri : uri.slice(0, 200),
-          userId: user.id
-        });
-        const result = await run(conn => conn.readResource(uri));
-        const contents = Array.isArray(result?.contents) ? result.contents : [];
-        if (jsonByteLength(contents) > MAX_UI_RESOURCE_BYTES) {
-          return res.status(413).json({ error: 'Resource too large' });
-        }
-        return res.json({ contents });
-      } catch (error) {
-        return sendError(res, error, 'resource read');
+      const { run, user, serverId } = await resolveMcpApp(req, appId, toolId);
+      logger.info('MCP App resource read', {
+        component: COMPONENT,
+        appId,
+        viaToolId: toolId,
+        serverId,
+        uri: isUiResourceUri(uri) ? uri : uri.slice(0, 200),
+        userId: user.id
+      });
+      const result = await run(conn => conn.readResource(uri));
+      const contents = Array.isArray(result?.contents) ? result.contents : [];
+      if (jsonByteLength(contents) > MAX_UI_RESOURCE_BYTES) {
+        throw new ServiceError('PAYLOAD_TOO_LARGE', 'Resource too large');
       }
+      return res.json({ contents });
     }
   );
 }
