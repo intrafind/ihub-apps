@@ -94,8 +94,10 @@ describe('sanitizeGeneratedTitle', () => {
     assert.equal(sanitizeGeneratedTitle('\n  First line\nsecond line'), 'First line');
   });
 
-  it('removes control and bidi characters', () => {
-    assert.equal(sanitizeGeneratedTitle('A‮B\u0000C​D'), 'ABCD');
+  it('removes control, zero-width and bidirectional characters', () => {
+    // Built from code points: invisible characters do not belong in source.
+    const [rlo, nul, zwsp] = [0x202e, 0x0000, 0x200b].map(code => String.fromCodePoint(code));
+    assert.equal(sanitizeGeneratedTitle(`A${rlo}B${nul}C${zwsp}D`), 'ABCD');
   });
 
   it('cuts at 60 characters on a word boundary', () => {

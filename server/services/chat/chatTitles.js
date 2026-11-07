@@ -87,10 +87,16 @@ export function buildTitleMessages({ userText, assistantText }) {
 export function sanitizeGeneratedTitle(raw) {
   if (typeof raw !== 'string') return '';
   const line = raw
-
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, '')
-    .split('\n')
-    .map(l => l.trim())
+    .split(/\r?\n/)
+    // Control and format characters (zero-width, bidirectional overrides, ...)
+    // are dropped as a class: a generated title is shown in a list, and one
+    // that reorders or hides text must not be.
+    .map(l =>
+      l
+        .replace(/\s+/g, ' ')
+        .replace(/[\p{Cc}\p{Cf}]/gu, '')
+        .trim()
+    )
     .find(Boolean);
   if (!line) return '';
   let title = line
