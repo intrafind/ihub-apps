@@ -153,8 +153,6 @@ export default function registerExportRoutes(app) {
     } catch (raw) {
       const error = toDocumentServiceError(raw);
       if (error instanceof ServiceError) throw error;
-      if (error?.status)
-        throw new ServiceError('BAD_REQUEST', error.message, { status: error.status });
       logger.error('PDF export failed', { component: 'Exports', error });
       throw new ServiceError('INTERNAL_ERROR', 'The PDF could not be created.');
     }
