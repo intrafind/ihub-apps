@@ -94,11 +94,13 @@ const {
   classifyProxyTestResult,
   clampTestTimeout
 } = await import('../routes/admin/proxy.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp() {
   const app = express();
   app.use(express.json());
   registerAdminProxyRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
