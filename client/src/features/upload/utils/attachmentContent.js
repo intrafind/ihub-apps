@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { saveBlobAs } from '../../../utils/externalNavigation';
+import { formatFileSize } from './cloudFileProcessing';
 import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 
 /**
@@ -32,7 +33,7 @@ function dataUrlToBlob(dataUrl) {
   try {
     const binary = atob(dataUrl.slice(comma + 1));
     const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.codePointAt(i);
     return new Blob([bytes], { type: header.slice('data:'.length).split(';')[0] });
   } catch {
     return null;
@@ -179,4 +180,62 @@ export async function saveAttachmentText(entry) {
     new Blob([text], { type: 'text/plain;charset=utf-8' }),
     `${stem(entry.fileName)}.txt`
   );
+}
+
+/** The parts of the sentence a document's chip says, in the order they are said. */
+function documentContentParts(info, t) {
+  const parts = [];
+  if (info.stub && info.textBytes > 0) {
+    parts.push(
+      t('attachedFiles.content.textServer', 'Text extracted on the server: {{size}}', {
+        size: formatFileSize(info.textBytes)
+      })
+    );
+  }
+  if (info.characters > 0) {
+    parts.push(
+      t('attachedFiles.content.text', 'Text extracted: {{count}} characters', {
+        count: info.characters.toLocaleString()
+      })
+    );
+  }
+  if (info.pageImages > 0) {
+    parts.push(
+      t(
+        'attachedFiles.content.pageImages',
+        'scan without text: {{count}} page image(s) sent instead',
+        { count: info.pageImages }
+      )
+    );
+  }
+  if (info.truncated) parts.push(t('attachedFiles.content.truncated', 'shortened to fit'));
+  if (info.originalKept === false) {
+    parts.push(t('attachedFiles.content.textOnly', 'only the text is kept in this chat'));
+  }
+  if (parts.length === 0) {
+    parts.push(t('attachedFiles.content.noText', 'No text could be read from this file'));
+  }
+  return parts;
+}
+
+/**
+ * What the assistant gets from an attachment, as the line the chip shows.
+ *
+ * @param {Object} entry - a composer attachment
+ * @param {Function} t - the translation function
+ * @returns {string|null}
+ */
+export function contentLineOf(entry, t) {
+  const info = describeAttachment(entry);
+  if (!info) return null;
+  if (info.kind === 'document') return documentContentParts(info, t).join(' · ');
+  if (info.kind === 'image') {
+    return info.width
+      ? t('attachedFiles.content.imageSized', 'Image sent to the model as {{width}}×{{height}}', {
+          width: info.width,
+          height: info.height
+        })
+      : t('attachedFiles.content.image', 'Image sent to the model');
+  }
+  return t('attachedFiles.content.audio', 'Audio sent to the model');
 }

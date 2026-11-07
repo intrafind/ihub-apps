@@ -9,7 +9,7 @@ import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAud
 import {
   canDownloadFile,
   canDownloadText,
-  describeAttachment,
+  contentLineOf,
   downloadableFile,
   saveAttachmentFile,
   saveAttachmentText
@@ -165,57 +165,6 @@ export default function AttachedFilesList({
     }
   };
 
-  /** The words for what the assistant gets from a file (see `describeAttachment`). */
-  const contentLine = file => {
-    const info = describeAttachment(file);
-    if (!info) return null;
-    if (info.kind === 'document') {
-      const parts = [];
-      if (info.stub && info.textBytes > 0) {
-        parts.push(
-          t('attachedFiles.content.textServer', 'Text extracted on the server: {{size}}', {
-            size: formatFileSize(info.textBytes)
-          })
-        );
-      }
-      if (info.characters > 0) {
-        parts.push(
-          t('attachedFiles.content.text', 'Text extracted: {{count}} characters', {
-            count: info.characters.toLocaleString()
-          })
-        );
-      }
-      if (info.pageImages > 0) {
-        parts.push(
-          t(
-            'attachedFiles.content.pageImages',
-            'scan without text: {{count}} page image(s) sent instead',
-            { count: info.pageImages }
-          )
-        );
-      }
-      if (info.truncated) {
-        parts.push(t('attachedFiles.content.truncated', 'shortened to fit'));
-      }
-      if (info.originalKept === false) {
-        parts.push(t('attachedFiles.content.textOnly', 'only the text is kept in this chat'));
-      }
-      if (parts.length === 0) {
-        parts.push(t('attachedFiles.content.noText', 'No text could be read from this file'));
-      }
-      return parts.join(' · ');
-    }
-    if (info.kind === 'image') {
-      return info.width
-        ? t('attachedFiles.content.imageSized', 'Image sent to the model as {{width}}×{{height}}', {
-            width: info.width,
-            height: info.height
-          })
-        : t('attachedFiles.content.image', 'Image sent to the model');
-    }
-    return t('attachedFiles.content.audio', 'Audio sent to the model');
-  };
-
   // Build the always-visible summary line for the collapsed header. Total size
   // sums only resolved (non-loading) files; loading files get a separate hint.
   const loadingCount = files.filter(file => file.loading).length;
@@ -368,12 +317,12 @@ export default function AttachedFilesList({
                       </output>
                     )}
                   </div>
-                  {contentLine(file) && (
+                  {contentLineOf(file, t) && (
                     <div
                       className="text-xs text-gray-500 dark:text-gray-400"
                       data-testid="attached-file-content"
                     >
-                      {contentLine(file)}
+                      {contentLineOf(file, t)}
                     </div>
                   )}
                   {file.uploadState === 'uploading' && (

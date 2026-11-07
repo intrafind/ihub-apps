@@ -28,6 +28,164 @@ const documentKey = pending =>
     ? `${pending.integration}\u0000${pending.documentId}\u0000${pending.searchProfile || ''}`
     : null;
 
+/** The label under which an integration's document is shown (`iFinder document`), or `{}`. */
+function displayTypeOf(live, info) {
+  const label = getLocalizedContent(info?.name, live.language);
+  return label
+    ? {
+        displayType: live.t('sources.documentFromIntegration', {
+          defaultValue: '{{name}} document',
+          name: label
+        })
+      }
+    : {};
+}
+
+/**
+ * The user-facing kind of a failed attach: the integration is not available (the gate, or the
+ * server's refusal to fetch from it), no access, not found, or a failure to try again.
+ *
+ * The file API wraps the axios error (`originalError`); the integration routes do not.
+ *
+ * @param {Object} err
+ * @returns {'unavailable'|'noAccess'|'notFound'|'failed'}
+ */
+function failureKindOf(err) {
+  const response = err?.response || err?.originalError?.response;
+  const code = response?.data?.code || response?.data?.details?.code;
+  if (UNAVAILABLE_CODES.has(code)) return 'unavailable';
+  return documentFailureKind(response?.status);
+}
+
+/** The chat message for a failed attach. */
+function failureMessageOf(kind, t) {
+  return {
+    unavailable: t(
+      'sources.documentUnavailable',
+      'The document could not be attached: the system it comes from is not available to you.'
+    ),
+    noAccess: t(
+      'sources.documentNoAccess',
+      'The document could not be attached: you do not have access to it.'
+    ),
+    notFound: t(
+      'sources.documentNotFound',
+      'The document could not be attached: it was not found. It may have been moved or deleted.'
+    ),
+    failed: t(
+      'sources.documentAttachFailed',
+      'The document could not be attached. Please try again.'
+    )
+  }[kind];
+}
+
+/** Codes of a refusal that means the system the document comes from is not available. */
+const UNAVAILABLE_CODES = new Set([
+  'INTEGRATION_NOT_GRANTED',
+  'INTEGRATION_NOT_CONFIGURED',
+  'INTEGRATION_NOT_FOUND',
+  'SOURCE_UNAVAILABLE'
+]);
+
+/**
+ * Attach by reference: the server fetches the document, stores it and reads it; nothing passes
+ * through the browser. The composer gets a stub (see `attachmentContent.js`).
+ *
+ * @param {Object} ctx - `{ live, doc, uploader, stale, dropPlaceholder, fallbackName }` of the run
+ * @param {Object} info - the probe's answer
+ * @param {{kind: string, ref: Object}} source - what the server fetches
+ * @param {{ephemeral?: boolean}} serverFiles
+ * @returns {Promise<'attached'|'stale'|'fallback'>} `fallback`: the server cannot take the file as a
+ *   document (an image, audio), so the browser fetches it; any other refusal is thrown
+ */
+async function attachByReference(ctx, info, source, serverFiles) {
+  const { live, doc, uploader, stale, dropPlaceholder, fallbackName } = ctx;
+  let stored;
+  try {
+    stored = await uploadChatFile(
+      live.chatId,
+      { source },
+      {
+        fields: {
+          ...(live.app?.id ? { appId: live.app.id } : {}),
+          ...(serverFiles.ephemeral ? { ephemeral: true } : {})
+        }
+      }
+    );
+  } catch (serverError) {
+    // Only "not a document" falls back; everything else is reported by the caller.
+    if (uploadErrorCode(serverError) === 'UNSUPPORTED_TYPE') return 'fallback';
+    throw serverError;
+  }
+  const descriptor = stored?.file;
+  if (!descriptor?.id) throw new Error('No file in the response');
+  if (stale()) {
+    // The chat moved on: do not leave the file the server just stored behind
+    deleteChatFile(live.chatId, descriptor.id).catch(() => {});
+    dropPlaceholder();
+    return 'stale';
+  }
+  uploader.setSelectedFile(
+    withStoredFile(
+      {
+        type: 'document',
+        source: doc.integration,
+        integration: doc.integration,
+        chatId: live.chatId,
+        fileName: descriptor.name || fallbackName,
+        fileSize: descriptor.originalBytes || descriptor.bytes || 0,
+        fileType: descriptor.mimeType || 'application/octet-stream',
+        ...displayTypeOf(live, info)
+      },
+      descriptor
+    )
+  );
+  return 'attached';
+}
+
+/**
+ * Attach in the browser: fetch the original through the integration's route, check that the model
+ * can take it, and process it like the Nextcloud embed does (an image for a vision model, audio, or
+ * a document that keeps its original next to the extracted text).
+ *
+ * @param {Object} ctx - see {@link attachByReference}
+ * @param {Object} info - the probe's answer
+ * @param {Object} uploadConfig
+ * @returns {Promise<void>}
+ */
+async function attachInBrowser(ctx, info, uploadConfig) {
+  const { live, doc, uploader, stale, dropPlaceholder, fallbackName } = ctx;
+  const file = await fetchIntegrationDocumentFile({
+    integration: doc.integration,
+    ref: documentRefOf(doc),
+    fallbackName
+  });
+  if (stale()) return dropPlaceholder();
+
+  const kind = documentKindOf({ contentType: file.type, filename: file.name });
+  if (!modelTakesFileKind(kind, live.currentModel)) {
+    uploader.clearSelectedFile();
+    live.addSystemMessage?.(
+      live.t(
+        'sources.documentModelCannot',
+        'The document could not be attached: the selected model cannot take this kind of file.'
+      ),
+      true
+    );
+    return undefined;
+  }
+
+  const processed = await processCloudFile(file, uploadConfig);
+  if (stale()) return dropPlaceholder();
+  uploader.setSelectedFile({
+    ...processed,
+    source: doc.integration,
+    integration: doc.integration,
+    ...(kind === 'document' ? displayTypeOf(live, info) : {})
+  });
+  return undefined;
+}
+
 /**
  * Attaches the document a link names (`?documentId=…&integration=…`) to the chat, once the app and
  * its model are known:
@@ -116,7 +274,7 @@ export default function useIntegrationDocumentAttachment({
 
     const run = async () => {
       const live = liveRef.current;
-      const { pending: doc, fileUploadHandler: uploader } = live;
+      const { pending: doc, fileUploadHandler: uploader, serverFiles } = live;
       const startedAppId = live.app?.id;
       const startedRouteAppId = live.appId;
       const startedChatId = live.chatId;
@@ -142,7 +300,6 @@ export default function useIntegrationDocumentAttachment({
         const handler = liveRef.current.fileUploadHandler;
         if (placeholder && handler?.selectedFile === placeholder) handler.clearSelectedFile();
       };
-      const ref = documentRefOf(doc);
       const fallbackName = doc.prefill || 'document';
 
       try {
@@ -185,101 +342,16 @@ export default function useIntegrationDocumentAttachment({
         // default for the app has them off (or the binding is available only).
         const boundRefs = boundToolRefsFor(live.app, info);
         if (boundRefs.length > 0) liveRef.current.onIntegrationBound?.(boundRefs);
-        // By reference: the server fetches the document, stores it and reads it; nothing passes
-        // through the browser. A file the server cannot take as a document (an image, audio) goes
-        // the browser's way below, where the model gets its bytes.
+        // By reference where the server can fetch from the integration; a file it cannot take as a
+        // document (an image, audio) goes the browser's way, where the model gets its bytes.
+        const ctx = { live, doc, uploader, stale, dropPlaceholder, fallbackName };
         const serverSource =
           serverFiles?.enabled && live.chatId ? serverFileSourceFor(info, doc) : null;
         if (serverSource) {
-          try {
-            const stored = await uploadChatFile(
-              live.chatId,
-              { source: serverSource },
-              {
-                fields: {
-                  ...(live.app?.id ? { appId: live.app.id } : {}),
-                  ...(serverFiles.ephemeral ? { ephemeral: true } : {})
-                }
-              }
-            );
-            const descriptor = stored?.file;
-            if (!descriptor?.id) throw new Error('No file in the response');
-            if (stale()) {
-              // The chat moved on: do not leave the file the server just stored behind
-              deleteChatFile(live.chatId, descriptor.id).catch(() => {});
-              dropPlaceholder();
-              return;
-            }
-            const label = getLocalizedContent(info?.name, live.language);
-            uploader.setSelectedFile(
-              withStoredFile(
-                {
-                  type: 'document',
-                  source: doc.integration,
-                  integration: doc.integration,
-                  chatId: live.chatId,
-                  fileName: descriptor.name || fallbackName,
-                  fileSize: descriptor.originalBytes || descriptor.bytes || 0,
-                  fileType: descriptor.mimeType || 'application/octet-stream',
-                  ...(label
-                    ? {
-                        displayType: live.t('sources.documentFromIntegration', {
-                          defaultValue: '{{name}} document',
-                          name: label
-                        })
-                      }
-                    : {})
-                },
-                descriptor
-              )
-            );
-            return;
-          } catch (serverError) {
-            // Only "not a document" falls back; everything else is reported below.
-            if (uploadErrorCode(serverError) !== 'UNSUPPORTED_TYPE') throw serverError;
-          }
+          const outcome = await attachByReference(ctx, info, serverSource, serverFiles);
+          if (outcome !== 'fallback') return;
         }
-        const file = await fetchIntegrationDocumentFile({
-          integration: doc.integration,
-          ref,
-          fallbackName
-        });
-
-        if (stale()) {
-          dropPlaceholder();
-          return;
-        }
-        const kind = documentKindOf({ contentType: file.type, filename: file.name });
-        if (!modelTakesFileKind(kind, live.currentModel)) {
-          uploader.clearSelectedFile();
-          say(
-            live.t(
-              'sources.documentModelCannot',
-              'The document could not be attached: the selected model cannot take this kind of file.'
-            )
-          );
-          return;
-        }
-
-        const processed = await processCloudFile(file, uploadConfig);
-        if (stale()) {
-          dropPlaceholder();
-          return;
-        }
-        const label = getLocalizedContent(info?.name, live.language);
-        uploader.setSelectedFile({
-          ...processed,
-          source: doc.integration,
-          integration: doc.integration,
-          ...(kind === 'document' && label
-            ? {
-                displayType: live.t('sources.documentFromIntegration', {
-                  defaultValue: '{{name}} document',
-                  name: label
-                })
-              }
-            : {})
-        });
+        await attachInBrowser(ctx, info, uploadConfig);
       } catch (err) {
         console.error('Failed to fetch and attach the document:', err);
         if (stale()) {
@@ -287,36 +359,7 @@ export default function useIntegrationDocumentAttachment({
           return;
         }
         uploader.clearSelectedFile();
-        // The file API wraps the axios error (`originalError`); the integration routes do not.
-        const response = err?.response || err?.originalError?.response;
-        const code = response?.data?.code || response?.data?.details?.code;
-        const failure =
-          code === 'INTEGRATION_NOT_GRANTED' ||
-          code === 'INTEGRATION_NOT_CONFIGURED' ||
-          code === 'INTEGRATION_NOT_FOUND' ||
-          code === 'SOURCE_UNAVAILABLE'
-            ? 'unavailable'
-            : documentFailureKind(response?.status);
-        say(
-          {
-            unavailable: live.t(
-              'sources.documentUnavailable',
-              'The document could not be attached: the system it comes from is not available to you.'
-            ),
-            noAccess: live.t(
-              'sources.documentNoAccess',
-              'The document could not be attached: you do not have access to it.'
-            ),
-            notFound: live.t(
-              'sources.documentNotFound',
-              'The document could not be attached: it was not found. It may have been moved or deleted.'
-            ),
-            failed: live.t(
-              'sources.documentAttachFailed',
-              'The document could not be attached. Please try again.'
-            )
-          }[failure]
-        );
+        say(failureMessageOf(failureKindOf(err), live.t));
       } finally {
         // Also when the run is stale: the flag is this run's, and nothing else clears it.
         uploader.setAttachmentProcessing?.(BUSY_ID, false);
