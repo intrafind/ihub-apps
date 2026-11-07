@@ -127,9 +127,11 @@ describe('OCR upload route: errors', () => {
 
   it('answers an anonymous caller with 401', async () => {
     user = { id: 'anonymous', groups: ['anonymous'] };
-    await postOcr()
-      .attach('files', PDF, { filename: 'a.pdf', contentType: 'application/pdf' })
-      .expect(401);
+    const res = await postOcr().attach('files', PDF, {
+      filename: 'a.pdf',
+      contentType: 'application/pdf'
+    });
+    expect(res.status).toBe(401);
   });
 
   it('starts a job for a valid upload, and the process survives the failures above', async () => {
