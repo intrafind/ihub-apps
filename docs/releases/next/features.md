@@ -810,7 +810,8 @@ used to be an HTML or plain text page.
   editor administration endpoints answer in this shape: `BAD_REQUEST` for an invalid filter, date range, asset
   id, configuration or proxy setting (the reason is in `detail`; an invalid proxy configuration lists the failed
   fields in `errors`), `NOT_FOUND` for an unknown asset or language and `FORBIDDEN` for a proxy test target the
-  SSRF guard blocks. The UI endpoints no longer answer an error with `{ success: false, message }`. An
+  SSRF guard blocks. The UI endpoints no longer answer an error with `{ success: false, message }`, and a UI
+  configuration that is missing a section or has an invalid value answers `BAD_REQUEST` again instead of 500. An
   unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.

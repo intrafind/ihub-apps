@@ -325,42 +325,51 @@ export default function registerAdminUIRoutes(app) {
 
     for (const section of requiredSections) {
       if (!config.hasOwnProperty(section)) {
-        throw new Error(`Missing required section: ${section}`);
+        throw new ServiceError('BAD_REQUEST', `Missing required section: ${section}`);
       }
     }
 
     // Validate header section
     if (config.header && typeof config.header !== 'object') {
-      throw new Error('Header section must be an object');
+      throw new ServiceError('BAD_REQUEST', 'Header section must be an object');
     }
 
     // Validate footer section
     if (config.footer && typeof config.footer !== 'object') {
-      throw new Error('Footer section must be an object');
+      throw new ServiceError('BAD_REQUEST', 'Footer section must be an object');
     }
 
     // Validate pwa section if present
     if (config.pwa !== undefined) {
       if (typeof config.pwa !== 'object') {
-        throw new Error('pwa section must be an object');
+        throw new ServiceError('BAD_REQUEST', 'pwa section must be an object');
       }
       const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
       const VALID_DISPLAYS = ['standalone', 'fullscreen', 'minimal-ui', 'browser'];
       const { pwa } = config;
       if (pwa.themeColor && !HEX_COLOR.test(pwa.themeColor)) {
-        throw new Error('pwa.themeColor must be a valid 6-digit hex color (e.g. #003557)');
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'pwa.themeColor must be a valid 6-digit hex color (e.g. #003557)'
+        );
       }
       if (pwa.backgroundColor && !HEX_COLOR.test(pwa.backgroundColor)) {
-        throw new Error('pwa.backgroundColor must be a valid 6-digit hex color');
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'pwa.backgroundColor must be a valid 6-digit hex color'
+        );
       }
       if (pwa.display && !VALID_DISPLAYS.includes(pwa.display)) {
-        throw new Error(`pwa.display must be one of: ${VALID_DISPLAYS.join(', ')}`);
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `pwa.display must be one of: ${VALID_DISPLAYS.join(', ')}`
+        );
       }
       if (pwa.name && typeof pwa.name !== 'string') {
-        throw new Error('pwa.name must be a string');
+        throw new ServiceError('BAD_REQUEST', 'pwa.name must be a string');
       }
       if (pwa.shortName && typeof pwa.shortName !== 'string') {
-        throw new Error('pwa.shortName must be a string');
+        throw new ServiceError('BAD_REQUEST', 'pwa.shortName must be a string');
       }
     }
 
@@ -368,11 +377,11 @@ export default function registerAdminUIRoutes(app) {
     // localized `{ lang: value }` fields; unset fields fall back to i18n.
     if (config.errorPages !== undefined) {
       if (typeof config.errorPages !== 'object' || Array.isArray(config.errorPages)) {
-        throw new Error('errorPages section must be an object');
+        throw new ServiceError('BAD_REQUEST', 'errorPages section must be an object');
       }
       for (const [pageKey, page] of Object.entries(config.errorPages)) {
         if (page !== null && (typeof page !== 'object' || Array.isArray(page))) {
-          throw new Error(`errorPages.${pageKey} must be an object`);
+          throw new ServiceError('BAD_REQUEST', `errorPages.${pageKey} must be an object`);
         }
       }
     }
@@ -383,13 +392,13 @@ export default function registerAdminUIRoutes(app) {
     if (config.startPage !== undefined) {
       const { startPage } = config;
       if (typeof startPage !== 'object' || startPage === null || Array.isArray(startPage)) {
-        throw new Error('startPage section must be an object');
+        throw new ServiceError('BAD_REQUEST', 'startPage section must be an object');
       }
       if (startPage.showDefaultApp !== undefined && typeof startPage.showDefaultApp !== 'boolean') {
-        throw new Error('startPage.showDefaultApp must be a boolean');
+        throw new ServiceError('BAD_REQUEST', 'startPage.showDefaultApp must be a boolean');
       }
       if (startPage.showUserName !== undefined && typeof startPage.showUserName !== 'boolean') {
-        throw new Error('startPage.showUserName must be a boolean');
+        throw new ServiceError('BAD_REQUEST', 'startPage.showUserName must be a boolean');
       }
       if (
         startPage.defaultAppId !== undefined &&
@@ -401,14 +410,14 @@ export default function registerAdminUIRoutes(app) {
           startPage.defaultAppId.length > APP_ID_MAX_LENGTH ||
           !APP_ID_PATTERN.test(startPage.defaultAppId)
         ) {
-          throw new Error('startPage.defaultAppId must be a valid app id');
+          throw new ServiceError('BAD_REQUEST', 'startPage.defaultAppId must be a valid app id');
         }
       }
       for (const field of ['title', 'subtitle']) {
         const value = startPage[field];
         if (value === undefined || value === null) continue;
         if (typeof value !== 'object' || Array.isArray(value)) {
-          throw new Error(`startPage.${field} must be a localized object`);
+          throw new ServiceError('BAD_REQUEST', `startPage.${field} must be a localized object`);
         }
       }
       // `defaultPage` decides what the "/" route shows. Anything but "start"
@@ -420,7 +429,8 @@ export default function registerAdminUIRoutes(app) {
         startPage.defaultPage !== ''
       ) {
         if (!VALID_DEFAULT_PAGES.includes(startPage.defaultPage)) {
-          throw new Error(
+          throw new ServiceError(
+            'BAD_REQUEST',
             `startPage.defaultPage must be one of: ${VALID_DEFAULT_PAGES.join(', ')}`
           );
         }
@@ -433,7 +443,7 @@ export default function registerAdminUIRoutes(app) {
           value.length > APP_ID_MAX_LENGTH ||
           !APP_ID_PATTERN.test(value)
         ) {
-          throw new Error(`startPage.${field} must be a valid id`);
+          throw new ServiceError('BAD_REQUEST', `startPage.${field} must be a valid id`);
         }
       }
       // App shortcuts: which apps lead the start-page grid and the sidebar's
@@ -444,7 +454,8 @@ export default function registerAdminUIRoutes(app) {
         startPage.appsMode !== ''
       ) {
         if (!VALID_APP_SHORTCUT_MODES.includes(startPage.appsMode)) {
-          throw new Error(
+          throw new ServiceError(
+            'BAD_REQUEST',
             `startPage.appsMode must be one of: ${VALID_APP_SHORTCUT_MODES.join(', ')}`
           );
         }
@@ -454,7 +465,8 @@ export default function registerAdminUIRoutes(app) {
         // Unset means "use the built-in default", which the client applies.
         if (value === undefined || value === null || value === '') continue;
         if (!Number.isInteger(value) || value < 0 || value > MAX_APP_SHORTCUTS) {
-          throw new Error(
+          throw new ServiceError(
+            'BAD_REQUEST',
             `startPage.${field} must be an integer between 0 and ${MAX_APP_SHORTCUTS}`
           );
         }
@@ -462,10 +474,14 @@ export default function registerAdminUIRoutes(app) {
       if (startPage.featuredAppIds !== undefined && startPage.featuredAppIds !== null) {
         const { featuredAppIds } = startPage;
         if (!Array.isArray(featuredAppIds)) {
-          throw new Error('startPage.featuredAppIds must be an array of app ids');
+          throw new ServiceError(
+            'BAD_REQUEST',
+            'startPage.featuredAppIds must be an array of app ids'
+          );
         }
         if (featuredAppIds.length > MAX_FEATURED_APPS) {
-          throw new Error(
+          throw new ServiceError(
+            'BAD_REQUEST',
             `startPage.featuredAppIds must not hold more than ${MAX_FEATURED_APPS} ids`
           );
         }
@@ -473,11 +489,17 @@ export default function registerAdminUIRoutes(app) {
         // same treatment as every other app id in this config.
         for (const id of featuredAppIds) {
           if (typeof id !== 'string' || id.length > APP_ID_MAX_LENGTH || !APP_ID_PATTERN.test(id)) {
-            throw new Error('startPage.featuredAppIds must only contain valid app ids');
+            throw new ServiceError(
+              'BAD_REQUEST',
+              'startPage.featuredAppIds must only contain valid app ids'
+            );
           }
         }
         if (new Set(featuredAppIds).size !== featuredAppIds.length) {
-          throw new Error('startPage.featuredAppIds must not contain duplicates');
+          throw new ServiceError(
+            'BAD_REQUEST',
+            'startPage.featuredAppIds must not contain duplicates'
+          );
         }
       }
     }
