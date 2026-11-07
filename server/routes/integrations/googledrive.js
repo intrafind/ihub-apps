@@ -10,12 +10,12 @@ import GoogleDriveService from '../../services/integrations/GoogleDriveService.j
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import rateLimit from 'express-rate-limit';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 import {
   requireCloudStorageGrant,
   requestedProviderId,
+  createCloudStorageLimiter,
   integrationAuthRequiredError
 } from './cloudStorageAccess.js';
 
@@ -38,13 +38,8 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('googledrive'));
 
-// Rate limiter for status and other authenticated endpoints
-const googleDriveApiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false
-});
+// Rate limiter for status, browse and download requests
+const googleDriveApiLimiter = createCloudStorageLimiter();
 
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
@@ -111,7 +106,7 @@ router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => 
  * List drives for a specific source
  * GET /api/integrations/googledrive/drives/:source
  */
-router.get('/drives/:source', authRequired, async (req, res) => {
+router.get('/drives/:source', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -175,7 +170,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  * List items in a drive folder
  * GET /api/integrations/googledrive/items?driveId=xxx&folderId=xxx&search=xxx&source=xxx
  */
-router.get('/items', authRequired, async (req, res) => {
+router.get('/items', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -225,7 +220,7 @@ router.get('/items', authRequired, async (req, res) => {
  * Download a file from Google Drive
  * GET /api/integrations/googledrive/download?fileId=xxx
  */
-router.get('/download', authRequired, async (req, res) => {
+router.get('/download', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
