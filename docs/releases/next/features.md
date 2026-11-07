@@ -733,6 +733,12 @@ used to be an HTML or plain text page.
   answer in this shape: `BAD_REQUEST` while OAuth clients are switched off, for an unsafe id or an invalid
   body (the reason is in `detail`), `NOT_FOUND` for an unknown client or a public key that is not available,
   and 500 with a fixed text for an unexpected failure (the cause is in the server log).
+- The agent profile administration endpoints (`/api/admin/agents/profiles*`) answer in this shape:
+  `BAD_REQUEST` for an unsafe, missing or mismatched id or an invalid memory request, `NOT_FOUND` for an unknown
+  profile, `CONFLICT` for a profile that exists already, and `VERSION_CONFLICT` (409) with the current version
+  in `details.currentVersion` when a memory write lost the race. A profile that does not match its schema
+  answers `VALIDATION_FAILED` with the failed fields in `errors` (before: `BAD_REQUEST` with the formatted
+  schema issues in `details`). A failing model call keeps its canonical status through its LLM code.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
