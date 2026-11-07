@@ -150,9 +150,9 @@ export default function registerExportRoutes(app) {
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('X-Page-Count', String(pages));
       return res.send(buffer);
-    } catch (raw) {
-      const error = toDocumentServiceError(raw);
-      if (error instanceof ServiceError) throw error;
+    } catch (error) {
+      const mapped = toDocumentServiceError(error);
+      if (mapped instanceof ServiceError) throw mapped;
       logger.error('PDF export failed', { component: 'Exports', error });
       throw new ServiceError('INTERNAL_ERROR', 'The PDF could not be created.');
     }
