@@ -73,9 +73,9 @@ function handle(operation, handler) {
   return async (req, res) => {
     try {
       await handler(req, res);
-    } catch (raw) {
-      const error = toDocumentServiceError(raw);
-      if (error instanceof ServiceError) throw error;
+    } catch (error) {
+      const mapped = toDocumentServiceError(error);
+      if (mapped instanceof ServiceError) throw mapped;
       logger.error(`Document template ${operation} failed`, {
         component: 'AdminDocumentTemplates',
         error

@@ -29,6 +29,8 @@ import { ServiceError } from './ServiceError.js';
  */
 export const CONTENT_ACCESS_TYPES = Object.freeze(['apps', 'prompts', 'skills', 'workflows']);
 
+const STATUS_CODES = { 403: 'FORBIDDEN', 404: 'NOT_FOUND' };
+
 /**
  * A refused change, carrying the HTTP status the route should answer with.
  */
@@ -38,9 +40,7 @@ export class ContentAccessError extends ServiceError {
    * @param {string} message - What was refused, for the admin who asked
    */
   constructor(status, message) {
-    super(status === 404 ? 'NOT_FOUND' : status === 403 ? 'FORBIDDEN' : 'BAD_REQUEST', message, {
-      status
-    });
+    super(STATUS_CODES[status] || 'BAD_REQUEST', message, { status });
     this.name = 'ContentAccessError';
   }
 }
