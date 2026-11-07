@@ -53,8 +53,14 @@ function ChatTitleEditor({
   // cancel discarded the draft.
   const settledRef = useRef(false);
 
+  // The stored title can change under an open editor — a generated title
+  // arrives with the next list fetch (#2314). The draft follows it only while
+  // the user has not typed anything; a title being edited is never overwritten.
+  const lastValueRef = useRef(value);
   useEffect(() => {
-    setDraft(value);
+    const previous = lastValueRef.current;
+    lastValueRef.current = value;
+    setDraft(current => (current === previous ? value : current));
     settledRef.current = false;
   }, [value]);
 

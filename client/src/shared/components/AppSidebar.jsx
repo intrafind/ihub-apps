@@ -390,7 +390,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       setRenamingChatId(null);
       setChatActionError(null);
       setChatActionStatus(null);
-      patchChatInCache(chatId, { title, titleSetByUser: true });
+      patchChatInCache(chatId, { title, titleSetByUser: true, titleSource: 'user' });
       try {
         // The server normalizes the title (whitespace collapsed, length
         // capped), so show what it actually stored rather than what was typed.

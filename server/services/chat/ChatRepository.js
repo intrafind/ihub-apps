@@ -232,6 +232,22 @@ function normalizeTitle(title, maxLength = MAX_TITLE_LENGTH) {
   return deriveChatTitle(title, maxLength);
 }
 
+/** Longest title an LLM may give a chat (≈ six short words). */
+export const MAX_GENERATED_TITLE_LENGTH = 60;
+
+/**
+ * Where a chat's title came from: `user` (renamed), `llm` (generated in the
+ * background, #2314) or `derived` (the first message, cut). Chats stored before
+ * the field existed carry only `titleSetByUser`, so it is read from both.
+ *
+ * @param {Object|null|undefined} chat - Stored chat.
+ * @returns {'user'|'llm'|'derived'}
+ */
+export function titleSourceOf(chat) {
+  if (chat?.titleSetByUser === true) return 'user';
+  return chat?.titleSource === 'llm' ? 'llm' : 'derived';
+}
+
 /**
  * Coerce a stored `runIds` value into a capped array of ids.
  *
@@ -1242,6 +1258,7 @@ export class ChatRepository {
           settings: normalizeChatSettings(settings),
           title: normalizeTitle(title),
           titleSetByUser: false,
+          titleSource: 'derived',
           createdAt: now,
           lastMessageAt: now,
           messageCount: 0,
@@ -1602,10 +1619,78 @@ export class ChatRepository {
         {
           ...existing,
           title: normalized,
-          titleSetByUser: normalized.length > 0
+          titleSetByUser: normalized.length > 0,
+          // A cleared title is a reset to a derived one. `titleClaimedAt` stays
+          // as it is: a reset never asks for a generated title again.
+          titleSource: normalized.length > 0 ? 'user' : 'derived'
         },
         etag
       );
+    });
+  }
+
+  /**
+   * Claim the one background title generation a chat gets (#2314).
+   *
+   * Under the chat lock and an etag-conditional write, so that of two workers
+   * (or two completion events) finishing the same first turn exactly one wins.
+   * The claim is stored on the chat, so it also holds across restarts and is
+   * never given back: a failed generation leaves the derived title, and a title
+   * reset does not ask for another.
+   *
+   * Refused — `null` — unless the chat exists, is kept (not temporary), was
+   * opened from the UI (not a scheduled task, the Responses API or a project
+   * test), still carries a derived non-empty title nobody renamed, was not
+   * claimed before and holds a user message answered by a successful assistant
+   * message. The two texts handed back are what the title is made from.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{title: string, userText: string, assistantText: string}|null>}
+   */
+  async claimGeneratedTitle(chatId) {
+    if (!this._usable(chatId, 'claimGeneratedTitle')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat, etag } = await this._loadChat(chatId);
+      if (!chat || chat.temporary === true || chat.titleClaimedAt) return null;
+      const via = chat.origin?.createdVia;
+      if (via && via !== 'ui') return null;
+      if (titleSourceOf(chat) !== 'derived' || !chat.title) return null;
+      const { messages } = await this._readMessages(chatId);
+      const user = messages.find(m => m.role === 'user' && typeof m.content === 'string');
+      const assistant = messages.find(
+        m => m.role === 'assistant' && !m.error && typeof m.content === 'string' && m.content.trim()
+      );
+      if (!user?.content.trim() || !assistant) return null;
+      await this._writeChat({ ...chat, titleClaimedAt: new Date().toISOString() }, etag);
+      return { title: chat.title, userText: user.content, assistantText: assistant.content };
+    });
+  }
+
+  /**
+   * Store a generated title — only if nothing has named the chat since the
+   * claim. A rename always wins: `renameChat` sets the source to `user`, and a
+   * reset to empty changes the title, so either makes this a no-op.
+   *
+   * Touches nothing but the title: the chat keeps its place in the list and its
+   * unseen flag.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} title - Generated title, already sanitized.
+   * @param {Object} options
+   * @param {string} options.expectedTitle - The derived title seen at the claim.
+   * @returns {Promise<{applied: boolean, chat: Object|null}>}
+   */
+  async setGeneratedTitle(chatId, title, { expectedTitle } = {}) {
+    if (!this._usable(chatId, 'setGeneratedTitle')) return { applied: false, chat: null };
+    return this._withChatLock(chatId, async () => {
+      const { chat, etag } = await this._loadChat(chatId);
+      if (!chat) return { applied: false, chat: null };
+      const next = normalizeTitle(title, MAX_GENERATED_TITLE_LENGTH);
+      if (!next || titleSourceOf(chat) !== 'derived' || chat.title !== expectedTitle) {
+        return { applied: false, chat };
+      }
+      const stored = await this._writeChat({ ...chat, title: next, titleSource: 'llm' }, etag);
+      return { applied: true, chat: stored };
     });
   }
 
@@ -1856,7 +1941,10 @@ export class ChatRepository {
       // The first user message names the chat, unless the user already did.
       if (!chat.titleSetByUser && !chat.title && entry.role === 'user') {
         const derived = deriveChatTitle(entry.content);
-        if (derived) patch.title = derived;
+        if (derived) {
+          patch.title = derived;
+          patch.titleSource = 'derived';
+        }
       }
       await this._writeChat(applyChatPatch(chat, patch), chatEtag);
 

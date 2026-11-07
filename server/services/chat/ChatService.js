@@ -76,6 +76,7 @@ import {
   replaceToolResult
 } from './chatToolApproval.js';
 import { describeChatError } from './chatErrors.js';
+import { scheduleChatTitle } from './chatTitles.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
@@ -1024,6 +1025,19 @@ class ChatService {
           clientConnected: clientConnectedOf(persist, chatId),
           message: persist.assistant
         });
+        // A named chat is easier to find again. After the answer is stored and
+        // not awaited: the title never delays the turn, and it works the same
+        // when the client has long gone, because the user is a closure value.
+        if (outcome.status === 'completed' && !outcome.error) {
+          scheduleChatTitle({
+            repository: persist.repository,
+            chatId,
+            user,
+            chatModel: model,
+            appId: app?.id,
+            language
+          });
+        }
       }
       return outcome;
     } catch (error) {

@@ -51,6 +51,7 @@ import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { resolveChatOwner } from '../services/chat/chatOwner.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
+import { chatModelOf, scheduleChatTitle } from '../services/chat/chatTitles.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
@@ -654,6 +655,16 @@ export default function registerChatRoutes(app) {
       if (!canKeepChatHistory(req.user)) throw notFound('Chat');
       chat = await repository.keepChat(chatId);
       if (!chat) throw notFound('Chat');
+      // The chat was temporary, so no title was written for it; now that it
+      // is in the history it gets the one, in the background.
+      scheduleChatTitle({
+        repository,
+        chatId,
+        user: req.user,
+        chatModel: chatModelOf(chat),
+        appId: chat.appId,
+        language: req.headers['accept-language']?.split(',')[0]
+      });
       // A temporary chat ran with its project's knowledge but was left off
       // the project's page; kept, it belongs there like any chat.
       if (chat.projectId) {

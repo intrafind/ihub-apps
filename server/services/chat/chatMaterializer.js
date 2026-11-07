@@ -377,7 +377,7 @@ export async function settleUserTurn({
       ...(variables ? { variables } : {}),
       // A chat opened by an empty auto-start turn has no title yet; the first
       // message carrying text names it. A title the user set is never touched.
-      ...(!chat.title && title && !chat.titleSetByUser ? { title } : {})
+      ...(!chat.title && title && !chat.titleSetByUser ? { title, titleSource: 'derived' } : {})
       // No `runIds` here: the repository derives them from `activeRunId` on
       // every patch, so that a run the delete cascade owes the ledger is
       // recorded whether or not a message from it ever landed. Computing them

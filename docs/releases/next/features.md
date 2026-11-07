@@ -1,5 +1,28 @@
 # Features — Unreleased
 
+## Chats Get a Short Title After the First Answer
+
+Chats in the history were named after the first words of your first message, so a list of chats
+that all began with "Can you help me with …" was hard to scan. Under **Admin → Chat History → Chat
+titles**, switch on **Generate chat titles**: after the first answer of a chat, a short model call
+replaces that name with a headline of three to six words, in the language of the first message.
+
+- **Off by default.** It sends the first message and the first answer of each chat, cut to about 600
+  characters each, to a model. Nothing changes until you switch it on.
+- **Your model choice.** Pick a small, cheap **Title model**, or leave it empty so the chat's own model
+  writes the title. The picked model is used only for people whose groups may use it; everyone else
+  gets the chat's own model. No other model is ever used.
+- **Your rename always wins.** A title you set yourself is never replaced, not even when you rename
+  while the title is still being written.
+- **Once, and in the background.** Each chat gets at most one generated title, after its first
+  answer, without delaying the chat. If it fails, the first-message title stays. It shows in the list
+  a few seconds after the answer. Temporary chats get theirs when you keep them.
+
+**Migration:** on the first start with this version, `chats.titles` is added to `platform.json`,
+switched off.
+
+See [Chat Persistence → Chat titles](../../chat-persistence.md#chat-titles).
+
 ## Upload Types Start With All Their Formats Selected
 
 In **Admin → Apps → Upload Configuration**, turning on an upload type (images, files, audio or

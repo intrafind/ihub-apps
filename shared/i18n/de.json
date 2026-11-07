@@ -939,6 +939,15 @@
         "sharingEnabledHelp": "Die Einstellung „Teilen von Chats erlauben“ unten."
       },
       "title": "Chatverlauf",
+      "titles": {
+        "title": "Chat-Titel",
+        "description": "Ein Chat wird zunächst nach seiner ersten Nachricht benannt. Ist die Funktion aktiv, ersetzt ein kurzer Modellaufruf nach der ersten Antwort diesen Titel durch eine Überschrift. Ein von Nutzenden vergebener Titel wird nie ersetzt.",
+        "enabled": "Chat-Titel generieren",
+        "enabledHelp": "Sendet die erste Nachricht und die erste Antwort jedes Chats (auf je etwa 600 Zeichen gekürzt) an das unten gewählte Titelmodell. Standardmäßig aus.",
+        "modelId": "Titelmodell",
+        "modelChat": "Das Modell des Chats",
+        "modelIdHelp": "Ein kleines, günstiges Modell genügt. Es wird nur für Nutzende verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats den Titel. Ein anderes Modell wird nie verwendet."
+      },
       "sharing": {
         "title": "Chats teilen",
         "description": "Schreibgeschützte Links auf gespeicherte Chats. Erfordert zusätzlich das Feature „Chats teilen“. Ein Link ist eine Kopie des Chats im Stand zum Zeitpunkt des Teilens; ob die hochgeladenen Dateien mitgeteilt werden, entscheidet der Eigentümer (standardmäßig nicht).",

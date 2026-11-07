@@ -257,6 +257,9 @@ const cancelRecording = recording => {
 
 // Longest audio sent to a transcription model (the server holds up to ~70
 // minutes for a batch model and caps a session at 70 minutes).
+/** How long after a first answer the chat list is fetched again for a generated title. */
+const TITLE_REFRESH_DELAY_MS = 6000;
+
 const MAX_TRANSCRIPTION_SECONDS = 3600;
 // Longest recording attached to a chat model that takes audio: it goes in the
 // chat request as 16 kHz WAV (~1.9 MB a minute), within the request size limit.
@@ -1321,11 +1324,25 @@ function AppChat({
   // branch of a turn clears `processing`, so the transition covers a failed
   // turn too — that one is stored as well.
   const wasProcessingRef = useRef(false);
+  const messagesCountRef = useRef(0);
+  messagesCountRef.current = messages.length;
+  const titleRefreshRef = useRef(null);
   useEffect(() => {
     const wasProcessing = wasProcessingRef.current;
     wasProcessingRef.current = processing;
-    if (chatPersistence && wasProcessing && !processing) invalidateChatsCache();
+    if (chatPersistence && wasProcessing && !processing) {
+      invalidateChatsCache();
+      // The first answer of a chat may also get a generated title (#2314),
+      // which the server writes in the background after the turn has ended —
+      // there is no open stream left to announce it on. One more look at the
+      // list a few seconds later picks it up; later turns never retitle.
+      if (messagesCountRef.current <= 2) {
+        clearTimeout(titleRefreshRef.current);
+        titleRefreshRef.current = setTimeout(invalidateChatsCache, TITLE_REFRESH_DELAY_MS);
+      }
+    }
   }, [processing, chatPersistence]);
+  useEffect(() => () => clearTimeout(titleRefreshRef.current), []);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);

@@ -231,3 +231,21 @@ export function chatRetentionSettings(platformConfig) {
     maxMessagesPerChat: readNumber(chats.maxMessagesPerChat, DEFAULT_MAX_MESSAGES_PER_CHAT)
   };
 }
+
+/**
+ * Settings of the background chat titles (#2314): `chats.titles` in
+ * platform.json. Off unless an admin switched it on — an installation that
+ * never set it makes no extra model call and sends no chat content anywhere.
+ * Read live, so a change applies to the next turn without a restart.
+ *
+ * @param {Object} platformConfig - Platform configuration.
+ * @returns {{enabled: boolean, modelId: string}} `modelId` is empty when the
+ *   chat's own model is to write the title.
+ */
+export function chatTitleSettings(platformConfig) {
+  const titles = platformConfig?.chats?.titles;
+  return {
+    enabled: titles?.enabled === true,
+    modelId: typeof titles?.modelId === 'string' ? titles.modelId.trim() : ''
+  };
+}
