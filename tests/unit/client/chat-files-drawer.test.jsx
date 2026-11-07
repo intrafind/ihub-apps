@@ -193,7 +193,7 @@ describe('uploaded file helpers', () => {
       { role: 'assistant', content: 'hi', isGreeting: true },
       { role: 'user', content: 'q1', attachments: [{ id: 'file_pdf' }] },
       { role: 'assistant', content: 'a' },
-      { role: 'user', content: 'q2', fileData: [{ fileId: 'file_docx' }] }
+      { role: 'user', content: 'q2', attachments: [{ id: 'file_docx' }] }
     ]);
     expect(questions.get('file_pdf')).toBe(1);
     expect(questions.get('file_docx')).toBe(2);
@@ -258,6 +258,46 @@ describe('the Files drawer', () => {
       />
     );
     expect(await screen.findByRole('heading', { name: 'plan.docx' })).toBeInTheDocument();
+  });
+
+  it('says so when the file a card named is gone, instead of opening another one', async () => {
+    render(
+      <ArtifactsPanel
+        isOpen
+        onClose={() => {}}
+        source={makeSource()}
+        uploadedSource={makeUploaded()}
+        initialTab="uploaded"
+        initialFileId="file_deleted"
+      />
+    );
+    expect(await screen.findByTestId('uploaded-file-gone')).toHaveTextContent(
+      'This file is no longer in the chat.'
+    );
+    // Not the first file in its place: no preview heading until the user picks one
+    expect(screen.queryByRole('heading', { name: 'plan.docx' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'contract.pdf' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /plan\.docx/ }));
+    expect(await screen.findByRole('heading', { name: 'plan.docx' })).toBeInTheDocument();
+    expect(screen.queryByTestId('uploaded-file-gone')).not.toBeInTheDocument();
+  });
+
+  it('says the file is gone, not that nothing was uploaded, when none is left', async () => {
+    const empty = { ...makeUploaded(), list: jest.fn(async () => ({ items: [] })) };
+    render(
+      <ArtifactsPanel
+        isOpen
+        onClose={() => {}}
+        source={makeSource()}
+        uploadedSource={empty}
+        initialTab="uploaded"
+        initialFileId="file_deleted"
+      />
+    );
+    expect(await screen.findByTestId('uploaded-file-gone')).toHaveTextContent(
+      'This file is no longer in the chat.'
+    );
+    expect(screen.queryByTestId('uploaded-empty')).not.toBeInTheDocument();
   });
 
   it('shows type badge, size, pages and what is stored per uploaded file', async () => {

@@ -8,12 +8,13 @@ import { renderMarkdown } from '../../../config/marked.config';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { isOriginalDiscarded } from '../../../api/utils/fileErrors';
 import ArtifactPreview from './ArtifactPreview';
-import { fileLookOf, formatBytes, saveName } from '../utils/artifactFiles';
+import { formatBytes, saveName } from '../utils/artifactFiles';
 import {
   extractedTextFileName,
   parseStructuredText,
   questionOfFiles,
   uploadedFileBadge,
+  uploadedFileLook,
   uploadedStorageState,
   uploadedViewKind
 } from '../utils/uploadedFiles';
@@ -22,29 +23,6 @@ const BUTTON =
   'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium min-h-[2.25rem] disabled:opacity-50 disabled:cursor-not-allowed';
 const SECONDARY = `${BUTTON} border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700`;
 const DANGER = `${BUTTON} border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30`;
-
-/** Icon of an uploaded file: e-mails, meetings and pages have their own. */
-function lookOf(file) {
-  switch (uploadedViewKind(file)) {
-    case 'email':
-      return {
-        icon: 'envelope',
-        className: 'bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
-      };
-    case 'meeting':
-      return {
-        icon: 'calendar',
-        className: 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-      };
-    case 'page':
-      return {
-        icon: 'globe',
-        className: 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300'
-      };
-    default:
-      return fileLookOf({ mimeType: file.mimeType });
-  }
-}
 
 /** The header table and body of an e-mail, meeting or web page. */
 function StructuredItem({ text, kind }) {
@@ -191,11 +169,13 @@ export default function UploadedFilesTab({
     blobsRef.current = new Map();
   }, [source]);
 
-  const current =
-    items.find(item => item.id === selectedId) ||
-    items.find(item => item.id === initialFileId) ||
-    items[0] ||
-    null;
+  // A message's card names a file by id. When that file is no longer in the chat (it was deleted)
+  // the drawer says so; it does not open another file in its place.
+  const requested =
+    items.find(item => item.id === selectedId) || items.find(item => item.id === initialFileId);
+  const requestedGone =
+    Boolean(initialFileId) && !requested && (selectedId === initialFileId || selectedId === null);
+  const current = requested || (requestedGone ? null : items[0] || null);
 
   const getBlob = useCallback(
     id => {
@@ -309,6 +289,18 @@ export default function UploadedFilesTab({
     );
   }
   if (items.length === 0) {
+    // A card named a file and none is left: say that, not that nothing was ever uploaded
+    if (requestedGone) {
+      return (
+        <p
+          className="p-4 text-sm text-gray-700 dark:text-gray-200"
+          role="status"
+          data-testid="uploaded-file-gone"
+        >
+          {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
+        </p>
+      );
+    }
     return (
       <p className="p-4 text-sm text-gray-600 dark:text-gray-300" data-testid="uploaded-empty">
         {access === 'none'
@@ -331,7 +323,7 @@ export default function UploadedFilesTab({
         aria-label={t('chatFiles.listLabel', 'Files uploaded to this chat')}
       >
         {items.map(item => {
-          const look = lookOf(item);
+          const look = uploadedFileLook(item);
           const state = uploadedStorageState(item);
           const isCurrent = item.id === current?.id;
           const question = questions.get(item.id);
@@ -396,11 +388,20 @@ export default function UploadedFilesTab({
         className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4"
         aria-label={t('chatArtifacts.previewLabel', 'Preview')}
       >
+        {requestedGone && (
+          <p
+            className="text-sm text-gray-700 dark:text-gray-200"
+            role="status"
+            data-testid="uploaded-file-gone"
+          >
+            {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
+          </p>
+        )}
         {current && (
           <>
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <h3
-                className="mr-auto min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100"
+                className="mr-auto min-w-0 break-words text-base font-semibold text-gray-900 dark:text-gray-100"
                 title={current.name}
               >
                 {current.name}

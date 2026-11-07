@@ -431,7 +431,12 @@ const STAGED_IMAGE = {
 };
 const STAGED_AUDIO = { type: 'audio', fileName: 'memo.wav', base64: 'data:audio/wav;base64,AAAA' };
 
+// The fixture's model takes neither images nor audio; a test that needs vision says so
+const mockModelsWithoutVision = mockBaseSettings.models;
+const mockVisionModels = [{ ...mockBaseSettings.models[0], supportsVision: true }];
+
 beforeEach(() => {
+  mockBaseSettings.models = mockModelsWithoutVision;
   mockCapability.persistence = false;
   mockCapability.resolving = false;
   jest.clearAllMocks();
@@ -557,6 +562,7 @@ describe('files staged in the composer', () => {
   });
 
   test('go out with the typed message they were added for, and are cleared by it', async () => {
+    mockBaseSettings.models = mockVisionModels;
     mockUploadHandler.selectedFile = STAGED_IMAGE;
     renderChat();
     await screen.findAllByTestId('composer');
@@ -566,7 +572,10 @@ describe('files staged in the composer', () => {
 
     const turn = sent();
     expect(turn.apiMessage.imageData).toEqual(STAGED_IMAGE);
-    expect(turn.displayMessage.meta.imageData).toEqual(STAGED_IMAGE);
+    // The bubble's text is what was typed: the image is shown from the attachment views the
+    // chat derives from the payload, never as markup in the content
+    expect(turn.displayMessage.content).toBe('what is on this picture');
+    expect(turn.displayMessage.meta.imageData).toBeUndefined();
     expect(mockUploadHandler.clearSelectedFile).toHaveBeenCalledTimes(1);
     expect(mockUploadHandler.hideUploader).toHaveBeenCalledTimes(1);
   });
@@ -580,6 +589,23 @@ describe('files staged in the composer', () => {
 
     expect(sent().apiMessage.audioData).toBeNull();
     expect(mockChat.addSystemMessage).not.toHaveBeenCalled();
+  });
+
+  test('an image staged before the model was switched to one without vision stops the typed turn', async () => {
+    mockUploadHandler.selectedFile = STAGED_IMAGE;
+    renderChat();
+    await screen.findAllByTestId('composer');
+    fireEvent.change(typedField(), { target: { value: 'what is on this picture' } });
+
+    submitTyped();
+
+    expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    expect(mockChat.addSystemMessage).toHaveBeenCalledWith(
+      expect.stringContaining('cannot process images'),
+      true
+    );
+    // The image stays in the composer: the user can pick another model or remove it
+    expect(mockUploadHandler.clearSelectedFile).not.toHaveBeenCalled();
   });
 
   test('the same audio file still stops a typed turn: the model takes no audio', async () => {

@@ -1190,13 +1190,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             appConfig: chatApp,
             store: repository.fileStore?.()
           });
-        const nonDocumentAttachments = [newMessage?.imageData, newMessage?.audioData]
-          .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
-          .filter(entry => entry && typeof entry === 'object');
+        // `prepareTurnFiles` already describes the images and audio of the turn next to its
+        // documents; adding them again here stored every image and audio file twice.
         const persistedAttachments =
-          turnFileAttachments.length > 0
-            ? [...turnFileAttachments, ...nonDocumentAttachments]
-            : messageAttachments(newMessage);
+          turnFileAttachments.length > 0 ? turnFileAttachments : messageAttachments(newMessage);
         const includeHistory = chatApp?.sendChatHistory !== false && sendChatHistory !== false;
         const hydratedHistory = includeHistory
           ? await hydrateHistoryForPrompt(chatId, history, {

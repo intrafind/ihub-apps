@@ -908,6 +908,18 @@ or the text was shortened.
   iFinder document opened from a link, has buttons to download the original file and, for a document,
   the extracted text (from the stored file when the server fetched it). A local file is yours already and has none. Images and audio from these sources
   keep their original for the download.
+- **After sending:** the files of a message are shown as cards above it, not as a badge inside its
+  text, and they are the same cards before and after a reload and in a shared chat. A document
+  opens in the **Files** panel with a click or Enter, an image shows a thumbnail, and audio is a
+  card of its own. Each card repeats what the assistant got from the file, and once only the text
+  of a file is kept it says so instead of showing a size. The thumbnail and the "what the assistant
+  got" line are shown for a message sent in the current session; a reopened chat shows the name,
+  type and size. More than four files fold into **+N more files** (more than three on a phone or
+  in the Outlook task pane). In a shared chat a file the owner did not share is marked as such.
+- **Copy and link:** copying a message, or its link, gives the text you typed. It no longer
+  carries the markup of a file badge.
+- **Images and a model without vision:** an image attached before switching to a model that cannot
+  see images now stops the message with a note instead of sending it; audio already did.
   
 ## LLM Timeouts Configurable for All Providers and Per Provider
 

@@ -407,11 +407,15 @@ function chatFileSettingsSafe() {
  * @returns {Object}
  */
 export function describeStored(stored) {
+  // The size a transcript shows for the file: the original's while it is kept. A stored file's
+  // `bytes` is its text and its original together, so the file would show twice its size.
+  const originalBytes = Number(stored.originalBytes);
+  const bytes = stored.hasOriginal && originalBytes > 0 ? originalBytes : stored.bytes;
   return {
     id: stored.id,
     type: stored.mimeType,
     name: stored.name,
-    bytes: stored.bytes,
+    bytes,
     ...(stored.origin && stored.origin !== 'upload' ? { origin: stored.origin } : {}),
     ...(stored.hasOriginal ? { hasOriginal: true } : {}),
     ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})

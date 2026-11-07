@@ -8,20 +8,18 @@ import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
- * Whether a user message carries an upload: the live payload (`fileData`,
- * `imageData`, `audioData`) or, for a reopened chat, the stored descriptors.
+ * Whether a user message carries an upload: its attachment views (derived from the
+ * payload for a turn sent in this session, from the stored descriptors otherwise).
+ * The payload fields are still checked: a message built by a caller that did not
+ * derive views must not lose its file-only turn.
  *
  * @param {Object} message - Chat message.
  * @returns {boolean}
  */
 function hasUserAttachments(message) {
-  return [
-    message.fileData,
-    message.imageData,
-    message.audioData,
-    message.attachments,
-    message.sharedAttachments
-  ].some(value => (Array.isArray(value) ? value.length > 0 : !!value));
+  return [message.attachments, message.fileData, message.imageData, message.audioData].some(
+    value => (Array.isArray(value) ? value.length > 0 : !!value)
+  );
 }
 
 /**
