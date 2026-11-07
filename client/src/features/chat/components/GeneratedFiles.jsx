@@ -37,6 +37,10 @@ function GeneratedFileCard({ file, chatId }) {
   // A file with a preview opens in the viewer; the others (Office documents,
   // archives) keep the download button as their only action.
   const openable = Boolean(viewer && canFetch && state !== 'missing' && isOpenable(file));
+  // Only a file the chat has stored can be shared; a live one has no id yet.
+  const shareable = Boolean(
+    viewer?.shareArtifact && file.stored && file.id && chatId && state !== 'missing'
+  );
 
   const download = async () => {
     setState('loading');
@@ -114,6 +118,20 @@ function GeneratedFileCard({ file, chatId }) {
         </button>
       ) : (
         info
+      )}
+      {shareable && (
+        <button
+          type="button"
+          onClick={() => viewer.shareArtifact(file)}
+          data-testid="generated-file-share"
+          className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+          aria-label={t('chatMessage.generatedFiles.shareNamed', 'Share {{name}}', {
+            name: file.name
+          })}
+        >
+          <Icon name="share" size="sm" />
+          {t('chatMessage.generatedFiles.share', 'Share')}
+        </button>
       )}
       {canFetch && state !== 'missing' && (
         <button

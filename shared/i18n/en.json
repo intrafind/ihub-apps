@@ -6053,6 +6053,7 @@
     "openInCanvas": "Open in Canvas",
     "generatedImage": "Generated image",
     "downloadImage": "Download image",
+    "shareImage": "Share image",
     "imageNotPersisted": "Image not available",
     "copyLink": "Copy link",
     "linkCopied": "Link copied!",
@@ -6114,7 +6115,9 @@
       "notKept": "This file was not kept with the chat",
       "slides": "{{count}} slides",
       "sheets": "{{count}} sheets",
-      "open": "Open"
+      "open": "Open",
+      "share": "Share",
+      "shareNamed": "Share {{name}}"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",

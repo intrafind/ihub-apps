@@ -14,14 +14,18 @@ import { createContext, useContext } from 'react';
  * bytes inline as base64 `data`; a stored one is fetched by id. `siblings` is
  * the list the viewer steps through; by default the artifacts of the chat.
  *
- * @type {import('react').Context<{ openArtifact: (artifact: Object, siblings?: Object[]) => void }|null>}
+ * `shareArtifact(descriptor)` opens the share dialog for one stored artifact. It
+ * is only present when the chat can be shared (the same gate as the viewer's
+ * Share button), so a card shows its Share action only when it is set.
+ *
+ * @type {import('react').Context<{ openArtifact: (artifact: Object, siblings?: Object[]) => void, shareArtifact?: ((artifact: Object) => void)|null }|null>}
  */
 const ArtifactViewerContext = createContext(null);
 
 export default ArtifactViewerContext;
 
 /**
- * @returns {{ openArtifact: (artifact: Object, siblings?: Object[]) => void }|null}
+ * @returns {{ openArtifact: (artifact: Object, siblings?: Object[]) => void, shareArtifact?: ((artifact: Object) => void)|null }|null}
  */
 export function useArtifactViewer() {
   return useContext(ArtifactViewerContext);
