@@ -95,9 +95,12 @@ jest.unstable_mockModule('../utils/contentsPath.js', () => ({
 
 const { default: registerRoutes } = await import('../routes/admin/officeIntegration.js');
 
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
+
 const app = express();
 app.use(express.json());
 registerRoutes(app);
+app.use(errorHandler);
 
 const put = body => request(app).put('/api/admin/office-integration/config').send(body);
 
