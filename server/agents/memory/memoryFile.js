@@ -16,6 +16,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../validators/agentProfileSchema.js';
@@ -105,10 +106,12 @@ export async function writeMemory(
 ) {
   const current = await readMemory(profileId);
   if (typeof expectedVersion === 'number' && expectedVersion !== current.version) {
-    const conflictErr = new Error(
-      `Memory version mismatch: expected ${expectedVersion}, found ${current.version}`
+    const conflictErr = new ServiceError(
+      'VERSION_CONFLICT',
+      `Memory version mismatch: expected ${expectedVersion}, found ${current.version}`,
+      { details: { currentVersion: current.version } }
     );
-    conflictErr.code = 'VERSION_CONFLICT';
+    // Callers inside the server (agent tools) read it straight off the error.
     conflictErr.currentVersion = current.version;
     throw conflictErr;
   }
