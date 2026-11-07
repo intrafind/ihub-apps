@@ -9,7 +9,6 @@
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { sendInternalError } from '../utils/responseHelpers.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { getQuotaStatus } from '../services/quota/quotaService.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
@@ -80,33 +79,29 @@ export default function registerUsageRoutes(app) {
    *         description: Authentication required
    */
   app.get(buildServerPath('/api/usage/me'), authRequired, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform() || {};
-      let user = req.user;
-      if (user && !user.permissions) {
-        user = enhanceUserWithPermissions(user, platformConfig.auth || {}, platformConfig);
-      }
-      if (!user && isAnonymousAccessAllowed(platformConfig)) {
-        user = enhanceUserWithPermissions(null, platformConfig.auth || {}, platformConfig);
-      }
-      const language =
-        (typeof req.query.lang === 'string' && req.query.lang) ||
-        req.headers['accept-language']?.split(',')[0]?.split('-')[0] ||
-        platformConfig.defaultLanguage ||
-        'en';
-      const status = await getQuotaStatus(user, { language });
-      const files = await fileUsage(user);
-      res.set('Cache-Control', 'no-store');
-      res.json({
-        ...status,
-        files: {
-          ...status.files,
-          usedBytes: files?.usedBytes ?? null,
-          fileCount: files?.fileCount ?? null
-        }
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'load usage');
+    const platformConfig = configCache.getPlatform() || {};
+    let user = req.user;
+    if (user && !user.permissions) {
+      user = enhanceUserWithPermissions(user, platformConfig.auth || {}, platformConfig);
     }
+    if (!user && isAnonymousAccessAllowed(platformConfig)) {
+      user = enhanceUserWithPermissions(null, platformConfig.auth || {}, platformConfig);
+    }
+    const language =
+      (typeof req.query.lang === 'string' && req.query.lang) ||
+      req.headers['accept-language']?.split(',')[0]?.split('-')[0] ||
+      platformConfig.defaultLanguage ||
+      'en';
+    const status = await getQuotaStatus(user, { language });
+    const files = await fileUsage(user);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ...status,
+      files: {
+        ...status.files,
+        usedBytes: files?.usedBytes ?? null,
+        fileCount: files?.fileCount ?? null
+      }
+    });
   });
 }
