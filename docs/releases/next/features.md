@@ -774,6 +774,9 @@ used to be an HTML or plain text page.
 - The skill endpoints (`/api/skills*`) answer in this shape: `BAD_REQUEST` for an unsafe skill name or a missing
   file path and `NOT_FOUND` for an unknown skill, missing skill content or an unknown resource (the reason is
   in `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The CORS administration endpoints (`/api/admin/cors/config`) answer in this shape: `BAD_REQUEST` for an invalid
+  field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
+  unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
