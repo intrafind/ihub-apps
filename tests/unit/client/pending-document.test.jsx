@@ -715,7 +715,7 @@ describe('useIntegrationDocumentAttachment', () => {
 
     test('a security scan that rejects the file is final: said in the chat, the browser is not asked', async () => {
       uploadChatFile.mockRejectedValue({
-        response: { status: 400, data: { details: { code: 'SCAN_REJECTED' } } }
+        response: { status: 400, data: { code: 'SCAN_REJECTED' } }
       });
       mount({ serverFiles });
       await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
@@ -732,7 +732,7 @@ describe('useIntegrationDocumentAttachment', () => {
 
     test('a file the server cannot take as a document goes the browser way (an image)', async () => {
       uploadChatFile.mockRejectedValue({
-        response: { status: 400, data: { details: { code: 'UNSUPPORTED_TYPE' } } }
+        response: { status: 400, data: { code: 'UNSUPPORTED_TYPE' } }
       });
       fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
       processCloudFile.mockResolvedValue({ type: 'image', fileName: 'site.png' });
@@ -752,7 +752,7 @@ describe('useIntegrationDocumentAttachment', () => {
       'a refusal of %s (%s) is said in the chat, and the browser is not asked',
       async (status, code, text) => {
         uploadChatFile.mockRejectedValue({
-          originalError: { response: { status, data: { details: { code } } } }
+          originalError: { response: { status, data: { code } } }
         });
         mount({ serverFiles });
         await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
