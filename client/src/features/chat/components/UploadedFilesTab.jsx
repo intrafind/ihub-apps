@@ -289,6 +289,18 @@ export default function UploadedFilesTab({
     );
   }
   if (items.length === 0) {
+    // A card named a file and none is left: say that, not that nothing was ever uploaded
+    if (requestedGone) {
+      return (
+        <p
+          className="p-4 text-sm text-gray-700 dark:text-gray-200"
+          role="status"
+          data-testid="uploaded-file-gone"
+        >
+          {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
+        </p>
+      );
+    }
     return (
       <p className="p-4 text-sm text-gray-600 dark:text-gray-300" data-testid="uploaded-empty">
         {access === 'none'

@@ -168,6 +168,32 @@ describe('a turn sent in this session', () => {
     expect(bubble).toHaveStyle({ display: 'none' });
   });
 
+  test('a link restores the text of a turn: an ordinary message offers one, a turn of only files does not', () => {
+    // The actions are only drawn on an editable transcript
+    const renderEditable = message =>
+      render(
+        <ChatMessageList
+          messages={[message]}
+          appId="app"
+          chatId="chat-1"
+          modelId="m"
+          app={{ id: 'app' }}
+          editable
+          onDelete={() => {}}
+          onEdit={() => {}}
+          onResend={() => {}}
+        />
+      );
+    const { unmount } = renderEditable(sentMessage('Please check this', { fileData: doc }));
+    expect(screen.getByTitle('Copy link')).toBeInTheDocument();
+    unmount();
+    renderEditable(sentMessage('', { fileData: doc }));
+    // The turn is still there and still has its other actions; only the link is gone
+    expect(screen.getByText('Contract.pdf')).toBeInTheDocument();
+    expect(screen.getByTitle('Delete message')).toBeInTheDocument();
+    expect(screen.queryByTitle('Copy link')).not.toBeInTheDocument();
+  });
+
   test('typed text that looks like HTML is text: no element, no remote image', () => {
     const typed = 'look <img src="https://evil.example/pixel.png" onerror="alert(1)"> here';
     const message = sentMessage(typed, { fileData: doc });

@@ -310,3 +310,71 @@ describe('MessageAttachments: more files than fit', () => {
     expect(screen.getByTestId('message-attachments-fold')).toHaveTextContent('+2 more files');
   });
 });
+
+describe('MessageAttachments: what a screen reader is told', () => {
+  const imagesWithLines = () =>
+    toAttachmentViews({
+      live: {
+        imageData: [1, 2, 3].map(n => ({
+          type: 'image',
+          fileName: `photo-${n}.png`,
+          fileType: 'image/png',
+          fileSize: 1000,
+          width: 640,
+          height: 480
+        }))
+      }
+    });
+
+  test('every id a card is described by exists, also for the tiles of an image grid', () => {
+    const { container } = render(<MessageAttachments attachments={imagesWithLines()} />);
+    const tiles = screen.getAllByTestId('message-attachment');
+    expect(tiles).toHaveLength(3);
+    for (const tile of tiles) {
+      for (const id of (tile.getAttribute('aria-describedby') || '').split(' ').filter(Boolean)) {
+        expect(container.querySelector(`[id="${CSS.escape(id)}"]`)).not.toBeNull();
+      }
+    }
+  });
+
+  test('a grid tile has no room for its state line, so its text carries it', () => {
+    render(<MessageAttachments attachments={imagesWithLines()} />);
+    const [tile] = screen.getAllByTestId('message-attachment');
+    expect(tile).toHaveTextContent('Image sent to the model as 640×480');
+  });
+
+  test('"Opens in the Files panel" is there only when some card can open', () => {
+    const views = viewsOf([stored('f1', 'Contract.pdf')]);
+    const { rerender } = render(<MessageAttachments attachments={views} />);
+    expect(screen.queryByText('Opens in the Files panel')).not.toBeInTheDocument();
+    rerender(<MessageAttachments attachments={views} onOpenFile={() => {}} />);
+    expect(screen.getByText('Opens in the Files panel')).toBeInTheDocument();
+    // a stored file that is not shared with this viewer cannot open either
+    rerender(
+      <MessageAttachments
+        attachments={viewsOf([stored('f1', 'Contract.pdf', { shared: false })])}
+        onOpenFile={() => {}}
+      />
+    );
+    expect(screen.queryByText('Opens in the Files panel')).not.toBeInTheDocument();
+  });
+});
+
+describe('MessageAttachments: the look of a card', () => {
+  const tileOf = card => card.querySelector('span[aria-hidden="true"]');
+
+  test('a PDF is red; a type nobody has a look for is neutral, not the PDF red', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          { type: 'application/pdf', name: 'a.pdf', bytes: 10 },
+          { type: 'application/x-unknown', name: 'b.bin', bytes: 10 }
+        ])}
+      />
+    );
+    const [pdf, other] = screen.getAllByTestId('message-attachment');
+    expect(tileOf(pdf).className).toContain('bg-red-50');
+    expect(tileOf(other).className).not.toContain('bg-red-50');
+    expect(tileOf(other).className).toContain('bg-gray-100');
+  });
+});

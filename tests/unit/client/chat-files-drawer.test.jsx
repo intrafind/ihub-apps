@@ -282,6 +282,24 @@ describe('the Files drawer', () => {
     expect(screen.queryByTestId('uploaded-file-gone')).not.toBeInTheDocument();
   });
 
+  it('says the file is gone, not that nothing was uploaded, when none is left', async () => {
+    const empty = { ...makeUploaded(), list: jest.fn(async () => ({ items: [] })) };
+    render(
+      <ArtifactsPanel
+        isOpen
+        onClose={() => {}}
+        source={makeSource()}
+        uploadedSource={empty}
+        initialTab="uploaded"
+        initialFileId="file_deleted"
+      />
+    );
+    expect(await screen.findByTestId('uploaded-file-gone')).toHaveTextContent(
+      'This file is no longer in the chat.'
+    );
+    expect(screen.queryByTestId('uploaded-empty')).not.toBeInTheDocument();
+  });
+
   it('shows type badge, size, pages and what is stored per uploaded file', async () => {
     render(
       <ArtifactsPanel
