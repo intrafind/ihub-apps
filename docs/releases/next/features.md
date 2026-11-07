@@ -725,6 +725,10 @@ used to be an HTML or plain text page.
   deleted, a gateway setting that cannot be removed while models use their own dialect) and
   `409 PROVIDER_IN_USE` with the models that use the provider in `details.linkedModels`. An unexpected
   failure answers 500 with a fixed text; the cause is in the server log.
+- The platform configuration endpoints (`/api/admin/configs/platform`, `/api/admin/voice/azure/test`) answer
+  in this shape: `BAD_REQUEST` for a body that is not an object, a default language that is not a language
+  code, a rejected `proxyAuth.sharedSecretHeader` or a `toolApproval` block that does not validate (the
+  reason is in `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
