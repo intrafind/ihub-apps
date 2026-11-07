@@ -10,6 +10,7 @@ import configCache from '../../configCache.js';
 import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { resolveMcpPublicBase } from '../../services/mcp/mcpOAuthPublicUrl.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 import {
@@ -21,11 +22,6 @@ import {
 } from '../../utils/oauthClientManager.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendInternalError
-} from '../../utils/responseHelpers.js';
 import {
   COPILOT_OAUTH_SCOPES,
   DEFAULT_COPILOT_AGENT_CONFIG,
@@ -175,11 +171,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/copilot-agent/status'), adminAuth, (req, res) => {
     let found;
-    try {
-      found = findCopilotClient(configCache.getPlatform() || {});
-    } catch (error) {
-      return sendInternalError(res, error, 'read the Copilot agent status');
-    }
+    found = findCopilotClient(configCache.getPlatform() || {});
     const platform = configCache.getPlatform() || {};
     const settings = readSettings(platform);
     const baseUrl = resolvePublicBase(req, platform);
@@ -237,83 +229,79 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         description: Copilot agent enabled
    */
   app.post(buildServerPath('/api/admin/copilot-agent/enable'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      const settings = readSettings(platform);
-      const clientsFile = oauthClientsFile(platform.oauth || {});
+    const platform = configCache.getPlatform() || {};
+    const settings = readSettings(platform);
+    const clientsFile = oauthClientsFile(platform.oauth || {});
 
-      let oauthClientId = settings.oauthClientId;
-      let clientSecret = null;
-      const found = findCopilotClient(platform);
-      if (found) {
-        if (found.client.active === false) {
-          await updateOAuthClient(oauthClientId, { active: true }, clientsFile, req.user?.id);
-        }
-      } else {
-        const created = await createOAuthClient(
-          {
-            name: 'Microsoft 365 Copilot',
-            description:
-              'Auto-generated client for the Microsoft 365 Copilot agent: Copilot signs users in to the MCP gateway with it.',
-            clientType: 'confidential',
-            grantTypes: ['authorization_code', 'refresh_token'],
-            redirectUris: [TEAMS_OAUTH_REDIRECT_URI],
-            scopes: [...COPILOT_OAUTH_SCOPES],
-            trusted: true,
-            consentRequired: false
-          },
-          clientsFile,
-          req.user?.id || 'admin'
-        );
-        oauthClientId = created.clientId;
-        clientSecret = created.clientSecret;
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'oauthClient',
-          resourceId: oauthClientId,
-          summary: 'Created the OAuth client of the Microsoft 365 Copilot agent'
-        });
+    let oauthClientId = settings.oauthClientId;
+    let clientSecret = null;
+    const found = findCopilotClient(platform);
+    if (found) {
+      if (found.client.active === false) {
+        await updateOAuthClient(oauthClientId, { active: true }, clientsFile, req.user?.id);
       }
-
-      const appId = isGuid(settings.appId) ? settings.appId : randomUUID();
-
-      await updateStoredPlatform(stored => {
-        stored.oauth = {
-          ...stored.oauth,
-          enabled: { ...stored.oauth?.enabled, authz: true, clients: true },
-          authorizationCodeEnabled: true,
-          refreshTokenEnabled: true
-        };
-        stored.mcpServer = { ...stored.mcpServer, enabled: true };
-        stored.copilotAgent = {
-          ...readSettings(stored),
-          enabled: true,
-          appId,
-          oauthClientId,
-          // A Teams registration names the client it was made for: a new
-          // client needs a new registration.
-          ...(clientSecret ? { oauthReferenceId: '' } : {})
-        };
-      });
-
+    } else {
+      const created = await createOAuthClient(
+        {
+          name: 'Microsoft 365 Copilot',
+          description:
+            'Auto-generated client for the Microsoft 365 Copilot agent: Copilot signs users in to the MCP gateway with it.',
+          clientType: 'confidential',
+          grantTypes: ['authorization_code', 'refresh_token'],
+          redirectUris: [TEAMS_OAUTH_REDIRECT_URI],
+          scopes: [...COPILOT_OAUTH_SCOPES],
+          trusted: true,
+          consentRequired: false
+        },
+        clientsFile,
+        req.user?.id || 'admin'
+      );
+      oauthClientId = created.clientId;
+      clientSecret = created.clientSecret;
       logAudit({
         req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'copilotAgent',
-        summary: 'Enabled the Microsoft 365 Copilot agent (and the MCP gateway it uses)'
+        action: 'create',
+        resource: 'oauthClient',
+        resourceId: oauthClientId,
+        summary: 'Created the OAuth client of the Microsoft 365 Copilot agent'
       });
-      logger.info('Copilot agent enabled', { component: COMPONENT, oauthClientId });
-
-      res.json({
-        message: 'Copilot agent enabled',
-        oauthClientId,
-        ...(clientSecret ? { clientSecret } : {})
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'enable the Copilot agent');
     }
+
+    const appId = isGuid(settings.appId) ? settings.appId : randomUUID();
+
+    await updateStoredPlatform(stored => {
+      stored.oauth = {
+        ...stored.oauth,
+        enabled: { ...stored.oauth?.enabled, authz: true, clients: true },
+        authorizationCodeEnabled: true,
+        refreshTokenEnabled: true
+      };
+      stored.mcpServer = { ...stored.mcpServer, enabled: true };
+      stored.copilotAgent = {
+        ...readSettings(stored),
+        enabled: true,
+        appId,
+        oauthClientId,
+        // A Teams registration names the client it was made for: a new
+        // client needs a new registration.
+        ...(clientSecret ? { oauthReferenceId: '' } : {})
+      };
+    });
+
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'copilotAgent',
+      summary: 'Enabled the Microsoft 365 Copilot agent (and the MCP gateway it uses)'
+    });
+    logger.info('Copilot agent enabled', { component: COMPONENT, oauthClientId });
+
+    res.json({
+      message: 'Copilot agent enabled',
+      oauthClientId,
+      ...(clientSecret ? { clientSecret } : {})
+    });
   });
 
   /**
@@ -332,25 +320,21 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         description: Copilot agent disabled
    */
   app.post(buildServerPath('/api/admin/copilot-agent/disable'), adminAuth, async (req, res) => {
-    try {
-      const found = findCopilotClient(configCache.getPlatform() || {});
-      if (found && found.client.active !== false) {
-        await updateOAuthClient(found.clientId, { active: false }, found.clientsFile, req.user?.id);
-      }
-      await updateStoredPlatform(stored => {
-        stored.copilotAgent = { ...readSettings(stored), enabled: false };
-      });
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'copilotAgent',
-        summary: 'Disabled the Microsoft 365 Copilot agent'
-      });
-      res.json({ message: 'Copilot agent disabled' });
-    } catch (error) {
-      return sendInternalError(res, error, 'disable the Copilot agent');
+    const found = findCopilotClient(configCache.getPlatform() || {});
+    if (found && found.client.active !== false) {
+      await updateOAuthClient(found.clientId, { active: false }, found.clientsFile, req.user?.id);
     }
+    await updateStoredPlatform(stored => {
+      stored.copilotAgent = { ...readSettings(stored), enabled: false };
+    });
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'copilotAgent',
+      summary: 'Disabled the Microsoft 365 Copilot agent'
+    });
+    res.json({ message: 'Copilot agent disabled' });
   });
 
   /**
@@ -400,23 +384,19 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         description: A field failed validation
    */
   app.put(buildServerPath('/api/admin/copilot-agent/config'), adminAuth, async (req, res) => {
-    try {
-      const result = validateCopilotAgentConfig(req.body);
-      if (result.error) return sendBadRequest(res, result.error);
-      await updateStoredPlatform(stored => {
-        stored.copilotAgent = { ...readSettings(stored), ...result.value };
-      });
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'copilotAgent',
-        summary: `Updated the Microsoft 365 Copilot agent settings (${Object.keys(result.value).join(', ')})`
-      });
-      res.json({ message: 'Settings saved' });
-    } catch (error) {
-      return sendInternalError(res, error, 'save the Copilot agent settings');
-    }
+    const result = validateCopilotAgentConfig(req.body);
+    if (result.error) throw new ServiceError('BAD_REQUEST', result.error);
+    await updateStoredPlatform(stored => {
+      stored.copilotAgent = { ...readSettings(stored), ...result.value };
+    });
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'copilotAgent',
+      summary: `Updated the Microsoft 365 Copilot agent settings (${Object.keys(result.value).join(', ')})`
+    });
+    res.json({ message: 'Settings saved' });
   });
 
   /**
@@ -440,27 +420,22 @@ export default function registerAdminCopilotAgentRoutes(app) {
     buildServerPath('/api/admin/copilot-agent/rotate-secret'),
     adminAuth,
     async (req, res) => {
-      try {
-        const found = findCopilotClient(configCache.getPlatform() || {});
-        if (!found) {
-          return sendErrorResponse(
-            res,
-            404,
-            'The Copilot agent has no OAuth client. Enable it first.'
-          );
-        }
-        const rotated = await rotateClientSecret(found.clientId, found.clientsFile, req.user?.id);
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'oauthClient',
-          resourceId: found.clientId,
-          summary: 'Rotated the secret of the Microsoft 365 Copilot agent client'
-        });
-        res.json({ oauthClientId: found.clientId, clientSecret: rotated.clientSecret });
-      } catch (error) {
-        return sendInternalError(res, error, 'rotate the Copilot agent secret');
+      const found = findCopilotClient(configCache.getPlatform() || {});
+      if (!found) {
+        throw new ServiceError(
+          'NOT_FOUND',
+          'The Copilot agent has no OAuth client. Enable it first.'
+        );
       }
+      const rotated = await rotateClientSecret(found.clientId, found.clientsFile, req.user?.id);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'oauthClient',
+        resourceId: found.clientId,
+        summary: 'Rotated the secret of the Microsoft 365 Copilot agent client'
+      });
+      res.json({ oauthClientId: found.clientId, clientSecret: rotated.clientSecret });
     }
   );
 
@@ -484,54 +459,44 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *         description: The agent is not enabled, the OAuth client registration ID is missing, or the public address is not HTTPS
    */
   app.get(buildServerPath('/api/admin/copilot-agent/package.zip'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      const settings = readSettings(platform);
-      if (!settings.enabled || !isGuid(settings.appId) || !findCopilotClient(platform)) {
-        return sendErrorResponse(res, 409, 'Enable the Copilot agent first', {
-          details: { code: 'COPILOT_AGENT_DISABLED' }
-        });
-      }
-      if (!settings.oauthReferenceId) {
-        return sendErrorResponse(
-          res,
-          409,
-          'Enter the OAuth client registration ID from the Teams Developer Portal first',
-          { details: { code: 'COPILOT_REFERENCE_ID_MISSING' } }
-        );
-      }
-
-      // Copilot calls only HTTPS addresses; a package naming http:// would
-      // install and then fail on every call.
-      const baseUrl = resolvePublicBase(req, platform);
-      if (!baseUrl.startsWith('https://')) {
-        return sendErrorResponse(
-          res,
-          409,
-          'Copilot needs an HTTPS address. Set the MCP gateway Public URL to the HTTPS address of iHub first.',
-          { details: { code: 'COPILOT_PUBLIC_HTTPS_REQUIRED' } }
-        );
-      }
-
-      const manifests = buildCopilotAgentManifests({
-        config: settings,
-        baseUrl,
-        mcpUrl: `${baseUrl}/mcp`,
-        version: copilotPackageVersion()
-      });
-      const zip = await buildPackageZip({ manifests, icons: await readPackageIcons() });
-
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', 'attachment; filename="ihub-copilot-agent.zip"');
-      res.setHeader('Cache-Control', 'no-store');
-      res.send(zip);
-      logger.info('Copilot agent package downloaded', {
-        component: COMPONENT,
-        version: manifests.manifest.version,
-        userId: req.user?.id || 'admin'
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'build the Copilot agent package');
+    const platform = configCache.getPlatform() || {};
+    const settings = readSettings(platform);
+    if (!settings.enabled || !isGuid(settings.appId) || !findCopilotClient(platform)) {
+      throw new ServiceError('COPILOT_AGENT_DISABLED', 'Enable the Copilot agent first');
     }
+    if (!settings.oauthReferenceId) {
+      throw new ServiceError(
+        'COPILOT_REFERENCE_ID_MISSING',
+        'Enter the OAuth client registration ID from the Teams Developer Portal first'
+      );
+    }
+
+    // Copilot calls only HTTPS addresses; a package naming http:// would
+    // install and then fail on every call.
+    const baseUrl = resolvePublicBase(req, platform);
+    if (!baseUrl.startsWith('https://')) {
+      throw new ServiceError(
+        'COPILOT_PUBLIC_HTTPS_REQUIRED',
+        'Copilot needs an HTTPS address. Set the MCP gateway Public URL to the HTTPS address of iHub first.'
+      );
+    }
+
+    const manifests = buildCopilotAgentManifests({
+      config: settings,
+      baseUrl,
+      mcpUrl: `${baseUrl}/mcp`,
+      version: copilotPackageVersion()
+    });
+    const zip = await buildPackageZip({ manifests, icons: await readPackageIcons() });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="ihub-copilot-agent.zip"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(zip);
+    logger.info('Copilot agent package downloaded', {
+      component: COMPONENT,
+      version: manifests.manifest.version,
+      userId: req.user?.id || 'admin'
+    });
   });
 }

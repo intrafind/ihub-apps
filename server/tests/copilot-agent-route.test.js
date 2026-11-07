@@ -99,9 +99,12 @@ jest.unstable_mockModule('../utils/contentsPath.js', () => ({
 
 const { default: registerRoutes } = await import('../routes/admin/copilotAgent.js');
 
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
+
 const app = express();
 app.use(express.json());
 registerRoutes(app);
+app.use(errorHandler);
 
 const HOST = 'ihub.example.com';
 const get = url => request(app).get(url).set('Host', HOST);
