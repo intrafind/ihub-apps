@@ -158,4 +158,12 @@ describe('agent artifact routes: errors', () => {
     const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md').expect(200);
     expect(res.text).toBe('# Report');
   });
+  // Keep this the last test of the file: it spends the rest of the route's rate-limit window.
+  it('rate-limits listing and reading artifacts', async () => {
+    let status = null;
+    for (let i = 0; i < 80 && status !== 429; i += 1) {
+      status = (await request(app).get('/api/agents/runs/ghost/artifacts')).status;
+    }
+    expect(status).toBe(429);
+  });
 });
