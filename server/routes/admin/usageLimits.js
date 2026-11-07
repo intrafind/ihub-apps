@@ -18,9 +18,9 @@
  */
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
-import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import {
   currentWindows,
@@ -107,54 +107,47 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       400: { description: Invalid settings }
    */
   app.get(buildServerPath('/api/admin/usage/limits/settings'), adminAuth, (req, res) => {
-    try {
-      res.json(settingsResponse(configCache.getPlatform() || {}));
-    } catch (error) {
-      return sendInternalError(res, error, 'load usage limit settings');
-    }
+    res.json(settingsResponse(configCache.getPlatform() || {}));
   });
 
   app.put(buildServerPath('/api/admin/usage/limits/settings'), adminAuth, async (req, res) => {
-    try {
-      const body = req.body || {};
-      const parsedBudget = usageLimitBucketSchema.safeParse(body.allModels || {});
-      if (!parsedBudget.success) return sendBadRequest(res, 'Invalid allModels budget');
-      const resets = body.resets || {};
-      if (resets.timezone !== null && resets.timezone !== undefined && resets.timezone !== '') {
-        if (!isValidTimeZone(resets.timezone)) return sendBadRequest(res, 'Unknown time zone');
-      }
-      for (const key of ['dailyAt', 'weeklyAt', 'monthlyAt']) {
-        if (resets[key] !== undefined && !TIME.test(resets[key])) {
-          return sendBadRequest(res, `${key} must be HH:MM`);
-        }
-      }
-      if (resets.weeklyOn !== undefined && !WEEKDAYS.includes(resets.weeklyOn)) {
-        return sendBadRequest(res, 'weeklyOn must be a weekday name');
-      }
-
-      const platform = await configStore.readJson('config/platform.json');
-      if (!platform) return sendInternalError(res, new Error('platform.json unreadable'), 'save');
-      const current = platform.usageLimits || {};
-      platform.usageLimits = {
-        ...current,
-        allModels: Object.fromEntries(
-          Object.entries(parsedBudget.data).filter(([, v]) => v !== undefined && v !== null)
-        ),
-        resets: {
-          ...(current.resets || {}),
-          timezone: resets.timezone ? resets.timezone : null,
-          ...(resets.dailyAt ? { dailyAt: resets.dailyAt } : {}),
-          ...(resets.weeklyOn ? { weeklyOn: resets.weeklyOn } : {}),
-          ...(resets.weeklyAt ? { weeklyAt: resets.weeklyAt } : {}),
-          ...(resets.monthlyAt ? { monthlyAt: resets.monthlyAt } : {})
-        }
-      };
-      await configStore.writeJson('config/platform.json', platform);
-      await configCache.refreshCacheEntry('config/platform.json');
-      res.json(settingsResponse(configCache.getPlatform() || platform));
-    } catch (error) {
-      return sendInternalError(res, error, 'save usage limit settings');
+    const body = req.body || {};
+    const parsedBudget = usageLimitBucketSchema.safeParse(body.allModels || {});
+    if (!parsedBudget.success) throw new ServiceError('BAD_REQUEST', 'Invalid allModels budget');
+    const resets = body.resets || {};
+    if (resets.timezone !== null && resets.timezone !== undefined && resets.timezone !== '') {
+      if (!isValidTimeZone(resets.timezone))
+        throw new ServiceError('BAD_REQUEST', 'Unknown time zone');
     }
+    for (const key of ['dailyAt', 'weeklyAt', 'monthlyAt']) {
+      if (resets[key] !== undefined && !TIME.test(resets[key])) {
+        throw new ServiceError('BAD_REQUEST', `${key} must be HH:MM`);
+      }
+    }
+    if (resets.weeklyOn !== undefined && !WEEKDAYS.includes(resets.weeklyOn)) {
+      throw new ServiceError('BAD_REQUEST', 'weeklyOn must be a weekday name');
+    }
+
+    const platform = await configStore.readJson('config/platform.json');
+    if (!platform) throw new ServiceError('INTERNAL_ERROR', 'platform.json unreadable');
+    const current = platform.usageLimits || {};
+    platform.usageLimits = {
+      ...current,
+      allModels: Object.fromEntries(
+        Object.entries(parsedBudget.data).filter(([, v]) => v !== undefined && v !== null)
+      ),
+      resets: {
+        ...(current.resets || {}),
+        timezone: resets.timezone ? resets.timezone : null,
+        ...(resets.dailyAt ? { dailyAt: resets.dailyAt } : {}),
+        ...(resets.weeklyOn ? { weeklyOn: resets.weeklyOn } : {}),
+        ...(resets.weeklyAt ? { weeklyAt: resets.weeklyAt } : {}),
+        ...(resets.monthlyAt ? { monthlyAt: resets.monthlyAt } : {})
+      }
+    };
+    await configStore.writeJson('config/platform.json', platform);
+    await configCache.refreshCacheEntry('config/platform.json');
+    res.json(settingsResponse(configCache.getPlatform() || platform));
   });
 
   /**
@@ -173,20 +166,16 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       200: { description: "{ items, total, page, pageSize }" }
    */
   app.get(buildServerPath('/api/admin/usage/limits/users'), adminAuth, async (req, res) => {
-    try {
-      const { search, status, modelId, page, pageSize } = req.query;
-      res.json(
-        await listQuotaUsers({
-          search: typeof search === 'string' ? search : '',
-          status: ['all', 'limited', 'warning', 'exceeded'].includes(status) ? status : 'all',
-          modelId: typeof modelId === 'string' && modelId ? modelId : null,
-          page: Number(page) || 1,
-          pageSize: Number(pageSize) || 25
-        })
-      );
-    } catch (error) {
-      return sendInternalError(res, error, 'list usage limits');
-    }
+    const { search, status, modelId, page, pageSize } = req.query;
+    res.json(
+      await listQuotaUsers({
+        search: typeof search === 'string' ? search : '',
+        status: ['all', 'limited', 'warning', 'exceeded'].includes(status) ? status : 'all',
+        modelId: typeof modelId === 'string' && modelId ? modelId : null,
+        page: Number(page) || 1,
+        pageSize: Number(pageSize) || 25
+      })
+    );
   });
 
   /**
@@ -205,15 +194,11 @@ export default function registerAdminUsageLimitRoutes(app) {
     buildServerPath('/api/admin/usage/limits/users/:userKey'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { userKey } = req.params;
-        if (!validUserKey(userKey)) return sendBadRequest(res, 'Invalid user');
-        const user = await getQuotaUser(userKey);
-        if (!user) return sendNotFound(res, 'User');
-        res.json(user);
-      } catch (error) {
-        return sendInternalError(res, error, 'load user usage');
-      }
+      const { userKey } = req.params;
+      if (!validUserKey(userKey)) throw new ServiceError('BAD_REQUEST', 'Invalid user');
+      const user = await getQuotaUser(userKey);
+      if (!user) throw new ServiceError('NOT_FOUND', 'User not found');
+      res.json(user);
     }
   );
 
@@ -240,24 +225,20 @@ export default function registerAdminUsageLimitRoutes(app) {
     buildServerPath('/api/admin/usage/limits/users/:userKey/reset'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { userKey } = req.params;
-        if (!validUserKey(userKey)) return sendBadRequest(res, 'Invalid user');
-        const { modelId, window } = req.body || {};
-        if (window !== undefined && window !== null && !WINDOWS.includes(window)) {
-          return sendBadRequest(res, 'window must be day, week or month');
-        }
-        if (modelId !== undefined && modelId !== null && typeof modelId !== 'string') {
-          return sendBadRequest(res, 'Invalid modelId');
-        }
-        await getQuotaLedger().reset(userKey, getCurrentWindows(), {
-          modelId: modelId || undefined,
-          window: window || undefined
-        });
-        res.json((await getQuotaUser(userKey)) || { userKey });
-      } catch (error) {
-        return sendInternalError(res, error, 'reset user usage');
+      const { userKey } = req.params;
+      if (!validUserKey(userKey)) throw new ServiceError('BAD_REQUEST', 'Invalid user');
+      const { modelId, window } = req.body || {};
+      if (window !== undefined && window !== null && !WINDOWS.includes(window)) {
+        throw new ServiceError('BAD_REQUEST', 'window must be day, week or month');
       }
+      if (modelId !== undefined && modelId !== null && typeof modelId !== 'string') {
+        throw new ServiceError('BAD_REQUEST', 'Invalid modelId');
+      }
+      await getQuotaLedger().reset(userKey, getCurrentWindows(), {
+        modelId: modelId || undefined,
+        window: window || undefined
+      });
+      res.json((await getQuotaUser(userKey)) || { userKey });
     }
   );
 
@@ -277,11 +258,7 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       200: { description: Group rows }
    */
   app.get(buildServerPath('/api/admin/usage/limits/models'), adminAuth, async (req, res) => {
-    try {
-      res.json({ items: await getModelOverview(), resets: getCurrentWindows() });
-    } catch (error) {
-      return sendInternalError(res, error, 'load model usage');
-    }
+    res.json({ items: await getModelOverview(), resets: getCurrentWindows() });
   });
 
   /**
@@ -311,22 +288,14 @@ export default function registerAdminUsageLimitRoutes(app) {
     const threshold = numberParam('threshold');
     const limit = numberParam('limit');
     const invalid = threshold.error || limit.error;
-    if (invalid) return sendBadRequest(res, invalid);
+    if (invalid) throw new ServiceError('BAD_REQUEST', invalid);
     if (threshold.value !== undefined && (threshold.value < 0 || threshold.value > 1)) {
-      return sendBadRequest(res, 'threshold must be between 0 and 1');
+      throw new ServiceError('BAD_REQUEST', 'threshold must be between 0 and 1');
     }
-    try {
-      res.json(await listNearLimitUsers({ threshold: threshold.value, limit: limit.value }));
-    } catch (error) {
-      return sendInternalError(res, error, 'load users near their limits');
-    }
+    res.json(await listNearLimitUsers({ threshold: threshold.value, limit: limit.value }));
   });
 
   app.get(buildServerPath('/api/admin/usage/limits/groups'), adminAuth, async (req, res) => {
-    try {
-      res.json({ items: await getGroupOverview() });
-    } catch (error) {
-      return sendInternalError(res, error, 'load group usage');
-    }
+    res.json({ items: await getGroupOverview() });
   });
 }
