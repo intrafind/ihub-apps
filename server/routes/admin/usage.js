@@ -124,10 +124,10 @@ export default function registerAdminUsageRoutes(app) {
   app.get(
     buildServerPath('/api/admin/usage/summary'),
     adminAuth,
-    queryRoute(
-      async params => ({ ...(await getUsageSummary(params)), dataStart: await getDataStart() }),
-      'load usage summary'
-    )
+    queryRoute(async params => ({
+      ...(await getUsageSummary(params)),
+      dataStart: await getDataStart()
+    }))
   );
 
   /**
