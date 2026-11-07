@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import { withFileLock } from './fileLock.js';
+import { ServiceError } from './ServiceError.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
@@ -467,7 +468,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
 
     for (const key of allowedUpdates) {
@@ -503,7 +504,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
   if (!(await findClientByIdFresh(clientsFilePath, clientId)).client) {
-    throw new Error(`OAuth client not found: ${clientId}`);
+    throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
   }
 
   // Generate new secret
@@ -514,7 +515,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     const client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
     client.clientSecret = hashedSecret;
     client.lastRotated = new Date().toISOString();
@@ -548,7 +549,7 @@ export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     const client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
     clientName = client.name;
     delete clientsConfig.clients[clientId];
