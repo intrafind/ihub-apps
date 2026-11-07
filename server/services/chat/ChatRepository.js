@@ -232,6 +232,9 @@ function normalizeTitle(title, maxLength = MAX_TITLE_LENGTH) {
   return deriveChatTitle(title, maxLength);
 }
 
+/** Longest title an LLM may give a chat (≈ six short words). */
+export const MAX_GENERATED_TITLE_LENGTH = 60;
+
 /**
  * Coerce a stored `runIds` value into a capped array of ids.
  *
@@ -1606,6 +1609,60 @@ export class ChatRepository {
         },
         etag
       );
+    });
+  }
+
+  /**
+   * The first exchange of a chat, when it is the one a background title is made
+   * from (#2314); `null` when the chat is not due a title.
+   *
+   * Due means: the chat exists, is kept (not temporary), was opened from the UI
+   * (not a scheduled task, the Responses API or a project test), carries no
+   * title the user set, and holds a user message answered by a successful
+   * assistant message. With `firstAnswerOnly` that answer must also be the
+   * chat's only one — that is what makes a title come once per chat without
+   * remembering that it did: it is asked for as the first answer lands, never
+   * on a later turn.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {boolean} [options.firstAnswerOnly=false] - Refuse a chat that has
+   *   more than one successful answer.
+   * @returns {Promise<{userText: string, assistantText: string}|null>}
+   */
+  async getFirstExchangeForTitle(chatId, { firstAnswerOnly = false } = {}) {
+    if (!this._usable(chatId, 'getFirstExchangeForTitle')) return null;
+    const chat = await this._readChat(chatId);
+    if (!chat || chat.temporary === true || chat.titleSetByUser === true) return null;
+    const via = chat.origin?.createdVia;
+    if (via && via !== 'ui') return null;
+    const { messages } = await this._readMessages(chatId);
+    const user = messages.find(m => m.role === 'user' && typeof m.content === 'string');
+    const answers = messages.filter(
+      m => m.role === 'assistant' && !m.error && typeof m.content === 'string' && m.content.trim()
+    );
+    if (!user?.content.trim() || answers.length === 0) return null;
+    if (firstAnswerOnly && answers.length !== 1) return null;
+    return { userText: user.content, assistantText: answers[0].content };
+  }
+
+  /**
+   * Store a generated title, unless the user has named the chat in the
+   * meantime. Touches nothing but the title: the chat keeps its place in the
+   * list and its unseen flag.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} title - Generated title, already sanitized.
+   * @returns {Promise<boolean>} Whether the title was stored.
+   */
+  async setGeneratedTitle(chatId, title) {
+    if (!this._usable(chatId, 'setGeneratedTitle')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat, etag } = await this._loadChat(chatId);
+      const next = normalizeTitle(title, MAX_GENERATED_TITLE_LENGTH);
+      if (!chat || !next || chat.titleSetByUser === true) return false;
+      await this._writeChat({ ...chat, title: next }, etag);
+      return true;
     });
   }
 

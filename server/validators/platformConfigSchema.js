@@ -519,6 +519,18 @@ export const platformConfigSchema = z
         maxChatsPerUser: z.number().prefault(200),
         maxMessagesPerChat: z.number().prefault(2000),
         temporaryRetentionHours: z.number().prefault(24),
+        // Background chat titles (#2314): after the first answer of a kept
+        // chat one small model call replaces the derived title. Off by default
+        // — it sends the first exchange of every chat to a model. `modelId`
+        // empty means the chat's own model; a configured model is used only
+        // for users whose groups may use it.
+        titles: z
+          .object({
+            enabled: z.boolean().prefault(false),
+            modelId: z.string().prefault('')
+          })
+          .passthrough()
+          .prefault({}),
         // Chat sharing: read-only links onto stored chats, gated by
         // features.chatSharing. The three `allow*` switches decide which
         // audiences an owner may pick; the caps bound what a link may be

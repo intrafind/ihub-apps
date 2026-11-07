@@ -123,6 +123,8 @@ administrator configures and reviews stored chats and the run ledger:
   and by the per-user limit, and how many chats are at or near the message
   limit. Computed with the same rules the sweep applies.
 - **Run ledger** — recorded runs by kind and status.
+- **Chat titles** — whether a model names chats after their first answer, and
+  which model (empty: the chat's own); see [Chat titles](#chat-titles).
 - **Settings** — `platform.chats` (including the temporary-chat window) and
   `platform.runLog` (enabled, identity mode,
   retention, daily cleanup, spill threshold, flush interval). Changes apply
@@ -267,7 +269,47 @@ button; on a touch screen, where nothing hovers, both are always visible.
   [API](#api). There is no undo. The row disappears immediately, everywhere it
   is listed, and comes back with an error message if the call fails.
 
-Chats the user never renames are titled from their first message.
+Chats the user never renames are titled from their first message, or — when
+[chat titles](#chat-titles) are on — by a model after the first answer.
+
+### Chat titles
+
+Off by default. With **Generate chat titles** on (Admin → Chat History, or
+`chats.titles.enabled`), a kept chat gets a short generated title as its first
+answer is stored. It goes into the chat's `title`, replacing the first-message
+title; there is no second field.
+
+- **Once per chat, without remembering it.** A title is asked for when the first
+  answer of a chat has just been stored, never on a later turn. A chat that was
+  temporary is titled when it is kept. A failed attempt is not retried: the
+  first-message title stays. Chats that already have several answers when the
+  setting is switched on keep the title they have.
+- **Never delays the chat.** It runs after the turn has ended and the answer is
+  stored, not awaited, with a 10 s limit and no retry. Any failure — no key, a
+  timeout, an empty answer — keeps the first-message title and logs a warning.
+- **A title the user set stays.** The write skips a chat whose `titleSetByUser`
+  is set. Clearing a title in the rename field makes it derivable again, but it
+  is not generated again.
+- **What leaves the installation.** Only the first user message and the first
+  answer, each cut to about 600 characters. No history, files or tool output.
+  The title itself is never written to the log.
+- **Which model.** `chats.titles.modelId` if it exists, can write text and the
+  user's groups may use it; otherwise the model the chat ran on, under the same
+  checks. Never the platform default or any other model, and a user whose
+  permissions are not resolved gets no title. Image, audio and speech models
+  are never used.
+- **Which chats.** Kept chats opened from the UI. Not temporary chats (a chat
+  is titled when it is kept), anonymous users, scheduled-task chats, Responses
+  API chats or project test chats. Chats answered through `@workflow` mentions
+  or transcription keep the first-message title.
+- **In the UI.** The title is written after the turn's stream has closed, so
+  the client looks at the chat list once more a few seconds after a first
+  answer; otherwise it appears with the next list fetch. A title being edited
+  in a rename field is not overwritten.
+
+No endpoint or data-model change. The call is recorded in usage with the chat's
+user but not as a ledger run, so the chat's delete cascade has nothing of it
+left behind.
 
 ### In the Outlook add-in
 
@@ -740,8 +782,9 @@ Details that matter:
   That is how the chat list marks "this one answered while you were away" — see
   [The chat history UI](#the-chat-history-ui).
 - **The title** is derived from the first user message — whitespace collapsed,
-  80 characters, ellipsis. A title the user set (`titleSetByUser`) is never
-  overwritten.
+  80 characters, ellipsis. With [chat titles](#chat-titles) switched on, a model
+  writes a headline into the same field when the first answer lands. A title the
+  user set (`titleSetByUser`) is never overwritten.
 - Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two tabs on
   one chat are ordinary, and an unlocked read-append-write would drop one tab's
   message.

@@ -628,6 +628,15 @@
         "sharingEnabledHelp": "The \"Allow sharing chats\" setting below."
       },
       "title": "Chat History",
+      "titles": {
+        "title": "Chat titles",
+        "description": "A chat is first named after its first message. With this on, a short model call after the first answer replaces that with a headline. A title a user set is never replaced.",
+        "enabled": "Generate chat titles",
+        "enabledHelp": "Sends the first message and the first answer of every chat (cut to about 600 characters each) to the title model below. Off by default.",
+        "modelId": "Title model",
+        "modelChat": "The chat's own model",
+        "modelIdHelp": "A small, cheap model is enough. It is used only for users whose groups may use it; for everyone else the chat's own model writes the title. No other model is ever used."
+      },
       "sharing": {
         "title": "Chat sharing",
         "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; the owner decides whether the files uploaded to it are shared too (by default they are not).",

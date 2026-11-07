@@ -1300,7 +1300,7 @@ These `platform.json` sections are documented with their feature:
 | Section          | What it configures                                                                 | Documentation                                         |
 | ---------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `setup`          | First-run onboarding: `configured` (set when the wizard completes) and `disabled` (never redirect to `/setup`; Admin → Platform → Advanced) | [Getting Started](GETTING_STARTED.md)                 |
-| `chats`          | Chat history and temporary chats: `enabled`, `retentionDays`, `maxChatsPerUser`, `maxMessagesPerChat`, `temporaryRetentionHours` | [Chat Persistence](chat-persistence.md#enabling)      |
+| `chats`          | Chat history and temporary chats: `enabled`, `retentionDays`, `maxChatsPerUser`, `maxMessagesPerChat`, `temporaryRetentionHours`, `titles` (`enabled`, `modelId` — generated chat titles, off by default) | [Chat Persistence](chat-persistence.md#enabling)      |
 | `runLog`         | The run ledger: identity mode, retention, flush interval, spill threshold          | [Run Ledger](run-ledger.md)                           |
 | `projects`       | Project limits, sharing audiences (`sharing.*`), item kinds, retention             | [Projects](projects.md#platform-settings)             |
 | `scheduledTasks` | Scheduled task limits, run retention (`runRetentionDays`, `maxRunsPerTask`), memory | [Scheduled Tasks](scheduled-tasks.md)                 |
