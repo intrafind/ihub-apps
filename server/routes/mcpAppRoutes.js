@@ -40,7 +40,7 @@ import mcpClientManager from '../services/mcp/McpClientManager.js';
 import { INTEGRATION_AUTH_REQUIRED } from '../services/integrations/auth/integrationAuthRequired.js';
 import { installedIntegrationById } from '../services/integrations/installedRefs.js';
 import interactionService from '../services/loop/InteractionService.js';
-import { authorizeInteraction } from '../services/loop/runAccess.js';
+import { authorizeInteraction as loadInteractionAccess } from '../services/loop/runAccess.js';
 import {
   answerViewToolApproval,
   isViewToolApproval,
@@ -423,7 +423,7 @@ export default function registerMcpAppRoutes(app) {
         ) {
           throw new ServiceError('NOT_FOUND', 'Approval not found');
         }
-        if (!(await authorizeInteraction(interaction, user))) {
+        if (!(await loadInteractionAccess(interaction, user))) {
           throw new ServiceError('FORBIDDEN', 'This approval belongs to another user');
         }
       }
