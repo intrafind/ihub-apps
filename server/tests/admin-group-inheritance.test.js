@@ -56,6 +56,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
 }));
 
 const { default: registerAdminGroupRoutes } = await import('../routes/admin/groups.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp() {
   const app = express();
@@ -65,6 +66,7 @@ function createTestApp() {
     next();
   });
   registerAdminGroupRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -195,5 +197,34 @@ describe('PUT /api/admin/groups/:groupId with inherits', () => {
 
     expect(response.status).toBe(200);
     expect((await readGroups()).editors.inherits).toEqual(['authenticated']);
+  });
+});
+
+describe('group routes answer errors in the shared shape', () => {
+  it('answers an unsafe id with BAD_REQUEST', async () => {
+    const response = await request(createTestApp()).delete('/api/admin/groups/bad%20id');
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('BAD_REQUEST');
+  });
+
+  it('refuses to delete a protected system group', async () => {
+    const response = await request(createTestApp()).delete('/api/admin/groups/admins');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(response.body.detail).toMatch(/protected system group/);
+  });
+
+  it('answers an unknown group with NOT_FOUND and an existing id with CONFLICT', async () => {
+    const missing = await request(createTestApp()).delete('/api/admin/groups/ghosts');
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: 'NOT_FOUND', detail: 'Group not found' });
+
+    const exists = await request(createTestApp())
+      .post('/api/admin/groups')
+      .send({ id: 'editors', name: 'Again', permissions: perms });
+    expect(exists.status).toBe(409);
+    expect(exists.body).toMatchObject({ code: 'CONFLICT', detail: 'Group ID already exists' });
   });
 });
