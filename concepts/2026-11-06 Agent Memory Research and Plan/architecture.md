@@ -894,7 +894,7 @@ const memorySchema = z.object({
 | `routes/auth.js:560-572` | nothing: `permissions` already ship on `/api/auth/status`; the client reads `permissions.memory` from `AuthContext` to show the Settings link |
 | migration (§7.4) | grant `admins`, `users`, `authenticated`; `anonymous: false` (V138 pattern, `V138__scheduled_tasks_defaults.js:46-51`) |
 
-### 7.4 Migrations (`server/migrations/V{NNN}__*.js`, forward-only, created with the `create-migration` skill; numbers are assigned at implementation time after `V227`)
+### 7.4 Migrations (`server/migrations/V{NNN}__*.js`, forward-only, created with the `create-migration` skill; numbers are assigned at merge time from the highest on disk, `V231` at this revision)
 
 | Phase | File | Precondition | What it does |
 |---|---|---|---|
