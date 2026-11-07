@@ -736,7 +736,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       if (!cfg.enabled || !cfg.signingKey?.publicKey) {
         throw new ServiceError(
           'NOT_FOUND',
-          'Browser extension is not enabled or has no signing key not found'
+          'Browser extension is not enabled or has no signing key'
         );
       }
 
@@ -779,14 +779,14 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       if (!cfg.enabled || !cfg.signingKey?.publicKey) {
         throw new ServiceError(
           'NOT_FOUND',
-          'Browser extension is not enabled or has no signing key not found'
+          'Browser extension is not enabled or has no signing key'
         );
       }
       const privateKeyPem = await readSigningPrivateKey();
       if (!privateKeyPem) {
         throw new ServiceError(
           'NOT_FOUND',
-          'Signing private key not found on disk. Re-enable the integration to regenerate it. not found'
+          'Signing private key not found on disk. Re-enable the integration to regenerate it.'
         );
       }
 
