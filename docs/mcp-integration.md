@@ -1262,8 +1262,11 @@ _see_. Both have to line up, and the tool list is default-deny.
 enabled installed integration the caller's groups grant
 (`permissions.integrations`: `*`, an installation id, a definition id or a
 `type:<type>` key), under the tool ids they have in a chat (`iFinder_search`,
-`jira_getTicket`, `<installation>__<action>`). The grant is checked again when
-the tool is called, so a permission change between list and call takes effect.
+`jira_getTicket`, `<installation>__<action>`). When the tool is called, the
+installation is checked again (it must still exist and be enabled) and so is the
+user's grant as the session saw it; a gateway session builds its tool list and
+permissions once, so a grant that is withdrawn keeps working until that session
+ends. Disabling or removing an installation takes effect on the next call.
 A tool whose approval policy needs a person (`always`, or `writes` for a write
 action) is refused for a gateway call, because nobody there can approve it.
 There is no separate tool grant and no carrier app.

@@ -13,8 +13,7 @@ import {
   buildAppGeneratorBrief,
   describeInstalledIntegrations,
   integrationsFromAnswer,
-  integrationsBlock,
-  schemaWithIntegrations
+  integrationsBlock
 } from '../services/appGenerator.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 
@@ -70,47 +69,61 @@ describe('the brief', () => {
     assert.deepEqual(integrations[0].actions, ['search', 'getContent']);
   });
 
-  it('lists them in the prompt and limits the answer to their ids', () => {
+  it('lists them in the prompt', () => {
     const brief = buildAppGeneratorBrief(shipped, 'de', 'en', integrations);
     assert.match(brief.prompt, /INTEGRATIONS:/);
     assert.match(brief.prompt, /- ifinder \(iFinder, search\)/);
-    assert.deepEqual(brief.outputSchema.properties.integrations.items.properties.id.enum, [
-      'ifinder',
-      'jira'
-    ]);
-    // The stored schema is not changed.
-    assert.equal('integrations' in shipped.outputSchema.properties, false);
+    assert.equal('outputSchema' in brief, false);
   });
 
   it('adds nothing when no integration is installed', () => {
     assert.equal(integrationsBlock([]), '');
     const brief = buildAppGeneratorBrief(shipped, 'en', 'en', []);
-    assert.equal('integrations' in brief.outputSchema.properties, false);
     assert.equal(brief.prompt, shipped.prompt.en);
-    assert.equal(schemaWithIntegrations(undefined, []).type, 'object');
   });
 });
 
 describe('integrationsFromAnswer', () => {
-  it('keeps installed ids once, with their action lists', () => {
+  const installed = [
+    { id: 'ifinder', actions: ['search', 'getContent'] },
+    { id: 'jira', actions: ['getTicket'] },
+    { id: 'mcp-server', actions: [] }
+  ];
+
+  it('keeps installed ids once, with their declared actions', () => {
     assert.deepEqual(
       integrationsFromAnswer(
         [
-          { id: 'ifinder', actions: ['search'] },
+          { id: 'ifinder', actions: ['search', 'search'] },
           { id: 'jira' },
           { id: 'ifinder' },
           { id: 'invented' },
           'jira'
         ],
-        ['ifinder', 'jira']
+        installed
       ),
       { ifinder: { actions: ['search'] }, jira: {} }
     );
   });
 
+  it('drops action names the integration does not declare', () => {
+    assert.deepEqual(
+      integrationsFromAnswer(
+        [
+          { id: 'ifinder', actions: ['get-issue', 'getContent'] },
+          { id: 'jira', actions: ['get-issue'] },
+          { id: 'mcp-server', actions: ['anything'] }
+        ],
+        installed
+      ),
+      { ifinder: { actions: ['getContent'] }, jira: {}, 'mcp-server': {} }
+    );
+  });
+
   it('answers nothing for an empty or malformed pick', () => {
-    assert.equal(integrationsFromAnswer(undefined, ['x']), undefined);
-    assert.equal(integrationsFromAnswer([{ id: 'nope' }], ['x']), undefined);
-    assert.equal(integrationsFromAnswer('x', ['x']), undefined);
+    assert.equal(integrationsFromAnswer(undefined, installed), undefined);
+    assert.equal(integrationsFromAnswer([{ id: 'nope' }], installed), undefined);
+    assert.equal(integrationsFromAnswer('x', installed), undefined);
+    assert.equal(integrationsFromAnswer([{ id: 'jira' }], undefined), undefined);
   });
 });

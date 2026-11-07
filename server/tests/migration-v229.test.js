@@ -58,14 +58,16 @@ test('iHub tools become actions of the ihub binding', () => {
     { id: 'a', tools: ['ask_user', 'schedule_task'] },
     INSTALLED
   );
-  assert.deepEqual(app.integrations, { ihub: { actions: ['ask_user', 'schedule_task'] } });
+  assert.deepEqual(app.integrations, {
+    ihub: { actions: ['ask_user', 'schedule_task'], required: false }
+  });
   assert.equal('tools' in app, false);
   assert.deepEqual(unmapped, []);
 });
 
 test('a base id binds the installation with every action', () => {
   const { app } = migrateApp({ id: 'a', tools: ['iFinder', 'jira'] }, INSTALLED);
-  assert.deepEqual(app.integrations, { ifinder: {}, jira: {} });
+  assert.deepEqual(app.integrations, { ifinder: { required: false }, jira: { required: false } });
 });
 
 test('kept tool ids of one installation become its action list', () => {
@@ -73,12 +75,14 @@ test('kept tool ids of one installation become its action list', () => {
     { id: 'a', tools: ['iFinder_search', 'iFinder_getContent'] },
     INSTALLED
   );
-  assert.deepEqual(app.integrations, { ifinder: { actions: ['search', 'getContent'] } });
+  assert.deepEqual(app.integrations, {
+    ifinder: { actions: ['search', 'getContent'], required: false }
+  });
 });
 
 test('a web search engine tool id binds the engine with its search action', () => {
   const { app } = migrateApp({ id: 'a', tools: ['braveSearch'] }, INSTALLED);
-  assert.deepEqual(app.integrations, { brave: { actions: ['search'] } });
+  assert.deepEqual(app.integrations, { brave: { actions: ['search'], required: false } });
 });
 
 test('installation ids, MCP tools, A2A agents and directories bind their installation', () => {
@@ -87,9 +91,9 @@ test('installation ids, MCP tools, A2A agents and directories bind their install
     INSTALLED
   );
   assert.deepEqual(app.integrations, {
-    drawio: {},
-    langdock: {},
-    'hr-directory': { actions: ['search_people'] }
+    drawio: { required: false },
+    langdock: { required: false },
+    'hr-directory': { actions: ['search_people'], required: false }
   });
 });
 
@@ -99,7 +103,7 @@ test('references that map to no installation are reported and removed', () => {
     INSTALLED
   );
   assert.deepEqual(unmapped, ['read_url', 'write_memory']);
-  assert.deepEqual(app.integrations, { ihub: { actions: ['ask_user'] } });
+  assert.deepEqual(app.integrations, { ihub: { actions: ['ask_user'], required: false } });
   assert.equal('tools' in app, false);
 });
 
@@ -120,6 +124,32 @@ test('an existing binding keeps its settings; a binding without a list keeps eve
     enabledByDefault: false
   });
   assert.deepEqual(app.integrations.jira, {});
+});
+
+test('a binding the migration adds is optional; an existing one keeps its own `required`', () => {
+  const { app } = migrateApp(
+    {
+      id: 'a',
+      tools: ['jira_getTicket', 'iFinder_search'],
+      integrations: { ifinder: { required: true } }
+    },
+    INSTALLED
+  );
+  assert.equal(app.integrations.jira.required, false);
+  assert.equal(app.integrations.ifinder.required, true);
+});
+
+test('Entra tool ids map to the entra installation', () => {
+  const installed = [...INSTALLED, { id: 'entra', definition: 'com.intrafind/entra-directory' }];
+  assert.deepEqual(resolveReference('entraPeopleSearch', installed), {
+    instanceId: 'entra',
+    actions: 'all'
+  });
+  assert.deepEqual(resolveReference('entraPeopleSearch_findUser', installed), {
+    instanceId: 'entra',
+    actions: ['findUser']
+  });
+  assert.equal(resolveReference('entraPeopleSearch_nope', installed), null);
 });
 
 test('an empty tools list is removed and nothing is bound', () => {
@@ -158,7 +188,7 @@ test('up rewrites the app files and warns about the unmapped tools', async () =>
   await up(ctx);
   assert.deepEqual(ctx.files['apps/one.json'], {
     id: 'one',
-    integrations: { ihub: { actions: ['ask_user'] } }
+    integrations: { ihub: { actions: ['ask_user'], required: false } }
   });
   assert.deepEqual(ctx.files['apps/two.json'], { id: 'two', integrations: { jira: {} } });
   assert.equal(ctx.warnings.length, 1);

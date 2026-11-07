@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { defaultEnabledRefs } from '../../../../shared/integrationDefaults.js';
+import { isStorageBindingKey } from '../../../../shared/storageBindings.js';
 
 /**
  * Whether a binding asks for no actions at all (`actions: []`): it binds the
@@ -47,14 +48,16 @@ export function appToolRefs(app) {
 }
 
 /**
- * Whether the app binds an integration for its tools, so any model it uses
- * must support function calling (the server's `appHasToolBindings`).
+ * Whether the app binds an integration that gives the model tools, so any
+ * model it uses must support function calling (the server's
+ * `appHasToolBindings`). Storage providers are picker references but bring no
+ * tools, and do not count.
  *
  * @param {Object} app
  * @returns {boolean}
  */
 export function appHasToolBindings(app) {
-  return appToolRefs(app).length > 0;
+  return appToolRefs(app).some(key => !isStorageBindingKey(key));
 }
 
 /**

@@ -568,16 +568,14 @@ export default function registerAdminPromptsRoutes(app) {
       if (!appGeneratorPrompt) {
         throw new ServiceError('NOT_FOUND', 'App-generator prompt not found');
       }
-      // The brief: the prompt plus the installed integrations the app may bind,
-      // and the schema of the answer (the wizard sends it as the response schema).
+      // The brief: the prompt plus the installed integrations the app may bind.
       const resolved = await installedIntegrationService.resolveAllEnabled(lang);
       const integrations = describeInstalledIntegrations(resolved, lang);
       const brief = buildAppGeneratorBrief(appGeneratorPrompt, lang, defaultLanguage, integrations);
       res.json({
         id: appGeneratorPrompt.id,
         prompt: brief.prompt,
-        outputSchema: brief.outputSchema,
-        integrationIds: integrations.map(integration => integration.id),
+        integrations: integrations.map(({ id, actions }) => ({ id, actions })),
         language: lang
       });
     }

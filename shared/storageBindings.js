@@ -29,6 +29,29 @@
 export const STORAGE_TYPE_BINDING = 'type:storage';
 
 /**
+ * The shipped storage providers' definition ids. A storage provider declares
+ * no actions: binding it offers its files in the chat's file picker and gives
+ * the model no tool.
+ */
+export const STORAGE_DEFINITION_IDS = Object.freeze([
+  'com.intrafind/google-drive',
+  'com.intrafind/nextcloud',
+  'com.intrafind/office365'
+]);
+
+/**
+ * Whether a binding key names storage that brings no tools: `type:storage` or
+ * a shipped storage definition id. (A binding by installation id cannot be
+ * told from here without the installation list.)
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isStorageBindingKey(key) {
+  return key === STORAGE_TYPE_BINDING || STORAGE_DEFINITION_IDS.includes(key);
+}
+
+/**
  * The bindings object of an app, or an empty object.
  * @param {Object|null|undefined} app
  * @returns {Object<string, Object>}

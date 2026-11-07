@@ -3,7 +3,7 @@
 
 /**
  * Snapshot of how an old tool reference (`ask_user`, `iFinder_search`,
- * `braveSearch`, `<installation>__<action>`, an installation id) maps to an
+ * `braveSearch`, `entraPeopleSearch_<function>`, `<installation>__<action>`, an installation id) maps to an
  * installed integration, as of V229/V230 (#3275). Not a migration. It is shared
  * by V229 and V230, never changes, and imports nothing: the migrations stay
  * reproducible. Do NOT replace it with application code.
@@ -36,6 +36,14 @@ const JIRA_ACTIONS = [
   'transitionTicket',
   'getAttachment'
 ];
+const ENTRA_ACTIONS = [
+  'findUser',
+  'getAllUserDetails',
+  'getUserManager',
+  'getUserGroups',
+  'getTeamMembers',
+  'getUserPhotoBase64'
+];
 const ENGINE_TOOL_IDS = {
   'com.intrafind/brave-search': 'braveSearch',
   'com.intrafind/staan-search': 'staanSearch',
@@ -63,6 +71,14 @@ export function resolveReference(ref, installed) {
     if (ref === 'jira') return { instanceId: jira.id, actions: 'all' };
     const name = ref.startsWith('jira_') ? ref.slice('jira_'.length) : null;
     if (name && JIRA_ACTIONS.includes(name)) return { instanceId: jira.id, actions: [name] };
+  }
+  const entra = byDefinition('com.intrafind/entra-directory');
+  if (entra) {
+    if (ref === 'entraPeopleSearch') return { instanceId: entra.id, actions: 'all' };
+    const name = ref.startsWith('entraPeopleSearch_')
+      ? ref.slice('entraPeopleSearch_'.length)
+      : null;
+    if (name && ENTRA_ACTIONS.includes(name)) return { instanceId: entra.id, actions: [name] };
   }
   for (const [definition, toolId] of Object.entries(ENGINE_TOOL_IDS)) {
     const engine = byDefinition(definition);

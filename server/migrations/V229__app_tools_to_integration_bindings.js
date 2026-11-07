@@ -26,6 +26,10 @@
  * - `tools` is removed from the app (also an empty list), and `tools` from
  *   `overriddenFields` of an app that inherits.
  *
+ * A binding this migration adds is `required: false`: an app that listed a
+ * tool of an installation that is switched off was still offered (without the
+ * tool), and a required binding would hide it.
+ *
  * A binding the app already has keeps its own settings; a binding with an
  * `actions` list gets the migrated actions added, one without a list keeps
  * offering every action. A group that holds the installation (`ihub`,
@@ -93,6 +97,11 @@ export function migrateApp(app, installed) {
     for (const [instanceId, pick] of picks) {
       const binding = plainObject(integrations[instanceId]) ? { ...integrations[instanceId] } : {};
       const existed = Object.hasOwn(integrations, instanceId);
+      // A binding without `required` is required, and an app whose required
+      // installation is disabled is hidden. An app that listed a tool whose
+      // installation is off was still offered, only without the tool: a binding
+      // this migration adds keeps that (`required: false`).
+      if (!existed) binding.required = false;
       if (pick === 'all') {
         delete binding.actions;
       } else if (!existed || Array.isArray(binding.actions)) {

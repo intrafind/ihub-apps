@@ -46,6 +46,24 @@ describe('boundIntegrationRefs', () => {
   });
 });
 
+describe('appHasToolBindings', () => {
+  it('does not count storage providers: they offer files, not tools', () => {
+    const app = {
+      integrations: {
+        'type:storage': { required: false },
+        'com.intrafind/nextcloud': {},
+        'com.intrafind/office365': {},
+        'com.intrafind/google-drive': {}
+      }
+    };
+    // still picker references, but an app that only attaches cloud files
+    // needs no tool-capable model
+    expect(boundIntegrationRefs(app)).toContain('type:storage');
+    expect(appHasToolBindings(app)).toBe(false);
+    expect(appHasToolBindings({ integrations: { ...app.integrations, jira: {} } })).toBe(true);
+  });
+});
+
 describe('appToolRefs', () => {
   it('lists the integrations the app binds, once each, and no leftover `tools`', () => {
     expect(

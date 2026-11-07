@@ -109,24 +109,66 @@ test('a document without tools is untouched', () => {
   assert.equal(migrateDocument(doc, INSTALLED).changed, false);
 });
 
-test('groups lose permissions.tools; the installations they named join integrations', () => {
+test('groups lose permissions.tools; no entry becomes an integration grant, each is reported', () => {
   const groups = {
     groups: {
-      power: { permissions: { tools: ['iFinder', 'braveSearch', 'bogus', '*'], integrations: [] } },
+      power: {
+        permissions: { tools: ['iFinder', 'braveSearch', 'bogus', '*'], integrations: ['jira'] }
+      },
       open: { permissions: { tools: ['iFinder'], integrations: ['*'] } },
       plain: { permissions: { apps: ['*'] } }
     }
   };
-  const { changed, unmapped } = migrateGroups(groups, INSTALLED);
+  const { changed, dropped } = migrateGroups(groups, INSTALLED);
   assert.equal(changed, true);
-  assert.deepEqual(groups.groups.power.permissions.integrations, ['ifinder', 'brave']);
+  // The group may use what it could use before, nothing more.
+  assert.deepEqual(groups.groups.power.permissions.integrations, ['jira']);
   assert.deepEqual(groups.groups.open.permissions.integrations, ['*']);
   assert.equal('tools' in groups.groups.power.permissions, false);
-  assert.deepEqual(unmapped, [
+  assert.deepEqual(dropped, [
+    { group: 'power', ref: 'iFinder', installation: 'ifinder' },
+    { group: 'power', ref: 'braveSearch', installation: 'brave' },
     { group: 'power', ref: 'bogus' },
-    { group: 'power', ref: '*', all: true }
+    { group: 'power', ref: '*', all: true },
+    { group: 'open', ref: 'iFinder', installation: 'ifinder' }
   ]);
   assert.equal('integrations' in groups.groups.plain.permissions, false);
+});
+
+test('a group without an integrations list does not gain one', () => {
+  const groups = { groups: { g: { permissions: { tools: ['jira'] } } } };
+  migrateGroups(groups, INSTALLED);
+  assert.equal('integrations' in groups.groups.g.permissions, false);
+});
+
+test('loop bodies kept inline are rewritten too', () => {
+  const doc = {
+    id: 'w',
+    nodes: [
+      {
+        id: 'loop',
+        type: 'loop',
+        config: {
+          body: [
+            { id: 'inner', type: 'prompt', config: { tools: ['iFinder_search', 'webSearch'] } },
+            {
+              id: 'deeper',
+              type: 'loop',
+              config: { body: [{ id: 'x', config: { tools: ['read_url'] } }] }
+            }
+          ]
+        }
+      }
+    ]
+  };
+  const { changed, unmapped } = migrateDocument(doc, INSTALLED);
+  assert.equal(changed, true);
+  assert.deepEqual(unmapped, []);
+  const [inner, deeper] = doc.nodes[0].config.body;
+  assert.equal('tools' in inner.config, false);
+  assert.equal(inner.config.webSearch, true);
+  assert.deepEqual(inner.config.integrations.ifinder.actions, ['search']);
+  assert.deepEqual(deeper.config.body[0].config.systemTools, ['read_url']);
 });
 
 test('up rewrites workflows, profiles and groups and reports leftover tool files', async () => {
@@ -141,8 +183,30 @@ test('up rewrites workflows, profiles and groups and reports leftover tool files
   await up(ctx);
   assert.equal(ctx.files['workflows/w.json'].nodes[0].config.webSearch, true);
   assert.equal('tools' in ctx.files['agents/profiles/p.json'], false);
-  assert.deepEqual(ctx.files['config/groups.json'].groups.g.permissions.integrations, ['drawio']);
-  assert.equal(ctx.warnings.length, 2);
+  assert.equal('integrations' in ctx.files['config/groups.json'].groups.g.permissions, false);
+  assert.equal(ctx.warnings.length, 3);
   assert.ok(ctx.warnings.some(w => /agents\/profiles\/p\.json.*"bogus"/.test(w)));
+  assert.ok(ctx.warnings.some(w => /group "g".*"drawio"/.test(w)));
   assert.ok(ctx.warnings.some(w => /tools\/custom\.json/.test(w)));
+});
+
+test('a disabled read_url tool file keeps the page reader off through the platform setting', async () => {
+  const ctx = fakeCtx({
+    'config/integrations.json': { installed: INSTALLED },
+    'config/platform.json': { defaultLanguage: 'en', webSearch: { other: 1 } },
+    'tools/read_url.json': { id: 'read_url', enabled: false }
+  });
+  await up(ctx);
+  assert.deepEqual(ctx.files['config/platform.json'].webSearch, { other: 1, pageReader: false });
+  assert.equal(ctx.files['config/platform.json'].defaultLanguage, 'en');
+});
+
+test('an enabled or missing read_url tool file leaves the platform setting alone', async () => {
+  const ctx = fakeCtx({
+    'config/integrations.json': { installed: INSTALLED },
+    'config/platform.json': { defaultLanguage: 'en' },
+    'tools/read_url.json': { id: 'read_url' }
+  });
+  await up(ctx);
+  assert.equal('webSearch' in ctx.files['config/platform.json'], false);
 });
