@@ -32,23 +32,16 @@ const DEFAULT_APP_COLOR = '#4f46e5';
 const DEFAULT_APP_ICON = 'chat-bubble';
 
 /**
- * The snapshot messages as the chat bubbles render them.
- *
- * Same mapping a reopened chat uses, plus the attachment placeholders: a
- * stored message carries an upload only as `{ type, name, bytes }`, the file
- * itself was never stored, so the viewer is told what is missing.
+ * The snapshot messages as the chat bubbles render them: the mapping a reopened
+ * chat uses. A user turn's attachments come out as the same views, each also
+ * saying whether this viewer may open the file (`shared`), so the share and the
+ * owner's chat show a file the same way.
  *
  * @param {Object[]} messages - Snapshot messages from the share.
  * @returns {Object[]}
  */
 function toViewerMessages(messages) {
-  return (messages || []).map(stored => {
-    const message = transformStoredMessage(stored);
-    if (Array.isArray(stored.attachments) && stored.attachments.length > 0) {
-      message.sharedAttachments = stored.attachments;
-    }
-    return message;
-  });
+  return (messages || []).map(transformStoredMessage);
 }
 
 function formatBytes(bytes) {
@@ -307,7 +300,7 @@ export default function SharedChatPage() {
   const [filesDrawerFileId, setFilesDrawerFileId] = useState(null);
   const hasSharedFiles =
     Boolean(uploadedSource) &&
-    messages.some(message => message.sharedAttachments?.some(attachment => attachment?.shared));
+    messages.some(message => message.attachments?.some(attachment => attachment?.shared === true));
   const filesContext = useMemo(
     () =>
       uploadedSource

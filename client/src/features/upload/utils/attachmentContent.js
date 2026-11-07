@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { saveBlobAs } from '../../../utils/externalNavigation';
-import { formatFileSize } from './cloudFileProcessing';
+import { isStoredStub } from './attachmentDescription';
 import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
+
+export {
+  contentLineFromInfo,
+  contentLineOf,
+  describeAttachment,
+  isStoredStub
+} from './attachmentDescription';
 
 /**
  * What an attachment of the composer is made of, and how to take it out again.
@@ -43,15 +50,6 @@ function dataUrlToBlob(dataUrl) {
 /** The file name without its last extension. */
 const stem = name => String(name || 'document').replace(/\.[^./\\]+$/, '') || 'document';
 
-/** Whether an attachment is a file the server holds and the browser never did. */
-export const isStoredStub = entry =>
-  entry?.serverStored === true &&
-  typeof entry.fileId === 'string' &&
-  Boolean(entry.fileId) &&
-  typeof entry.chatId === 'string' &&
-  Boolean(entry.chatId) &&
-  typeof entry.content !== 'string';
-
 /**
  * The file the attachment came from, for a download.
  *
@@ -87,57 +85,6 @@ export function downloadableText(entry) {
     blob: new Blob([text], { type: 'text/plain;charset=utf-8' }),
     name: `${stem(entry.fileName)}.txt`
   };
-}
-
-/** What the server read from a stored file: its numbers, not the browser's. */
-function describeStub(entry) {
-  const pageImages = entry.pageImageCount ?? 0;
-  return {
-    kind: 'document',
-    stub: true,
-    // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
-    textBytes: pageImages > 0 ? 0 : (entry.textBytes ?? 0),
-    pageImages,
-    truncated: entry.truncated === true,
-    originalKept: entry.hasOriginal === true
-  };
-}
-
-/** What the browser read from a document it holds. */
-function describeBrowserDocument(entry) {
-  return {
-    kind: 'document',
-    characters: typeof entry.content === 'string' ? entry.content.trim().length : 0,
-    pageImages: Array.isArray(entry.pageImages) ? entry.pageImages.length : 0,
-    // Only known once the server stored the file
-    truncated: entry.truncated === true,
-    originalKept: entry.serverStored === true ? entry.hasOriginal === true : null
-  };
-}
-
-/**
- * What the assistant gets from an attachment, in numbers the UI can say in words.
- *
- * @param {Object} entry
- * @returns {{kind: 'document'|'image'|'audio', characters?: number, textBytes?: number, stub?: boolean,
- *   pageImages?: number, truncated?: boolean, originalKept?: boolean|null, width?: number,
- *   height?: number}|null}
- */
-export function describeAttachment(entry) {
-  if (!entry || entry.loading) return null;
-  switch (entry.type) {
-    case 'document':
-      return isStoredStub(entry) ? describeStub(entry) : describeBrowserDocument(entry);
-    case 'image':
-      return {
-        kind: 'image',
-        ...(entry.width && entry.height ? { width: entry.width, height: entry.height } : {})
-      };
-    case 'audio':
-      return { kind: 'audio' };
-    default:
-      return null;
-  }
 }
 
 /** Whether the original file (or the image as sent) can be downloaded from this chip. */
@@ -189,62 +136,4 @@ export async function saveAttachmentText(entry) {
     new Blob([text], { type: 'text/plain;charset=utf-8' }),
     `${stem(entry.fileName)}.txt`
   );
-}
-
-/** The parts of the sentence a document's chip says, in the order they are said. */
-function documentContentParts(info, t) {
-  const parts = [];
-  if (info.stub && info.textBytes > 0) {
-    parts.push(
-      t('attachedFiles.content.textServer', 'Text extracted on the server: {{size}}', {
-        size: formatFileSize(info.textBytes)
-      })
-    );
-  }
-  if (info.characters > 0) {
-    parts.push(
-      t('attachedFiles.content.text', 'Text extracted: {{count}} characters', {
-        count: info.characters.toLocaleString()
-      })
-    );
-  }
-  if (info.pageImages > 0) {
-    parts.push(
-      t(
-        'attachedFiles.content.pageImages',
-        'scan without text: {{count}} page image(s) sent instead',
-        { count: info.pageImages }
-      )
-    );
-  }
-  if (info.truncated) parts.push(t('attachedFiles.content.truncated', 'shortened to fit'));
-  if (info.originalKept === false) {
-    parts.push(t('attachedFiles.content.textOnly', 'only the text is kept in this chat'));
-  }
-  if (parts.length === 0) {
-    parts.push(t('attachedFiles.content.noText', 'No text could be read from this file'));
-  }
-  return parts;
-}
-
-/**
- * What the assistant gets from an attachment, as the line the chip shows.
- *
- * @param {Object} entry - a composer attachment
- * @param {Function} t - the translation function
- * @returns {string|null}
- */
-export function contentLineOf(entry, t) {
-  const info = describeAttachment(entry);
-  if (!info) return null;
-  if (info.kind === 'document') return documentContentParts(info, t).join(' · ');
-  if (info.kind === 'image') {
-    return info.width
-      ? t('attachedFiles.content.imageSized', 'Image sent to the model as {{width}}×{{height}}', {
-          width: info.width,
-          height: info.height
-        })
-      : t('attachedFiles.content.image', 'Image sent to the model');
-  }
-  return t('attachedFiles.content.audio', 'Audio sent to the model');
 }

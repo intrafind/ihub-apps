@@ -31,12 +31,25 @@ optionally the original. Scopes:
   kept or the text was shortened. A file that came from a cloud storage or an integration (such as an
   iFinder document opened from a link) has buttons to **download the original** and, for a document,
   **the extracted text** as `<name>.txt`; a local file is the user's own already and has none.
+- **Files in a message.** The files of a sent message are shown as cards above it, never as markup
+  inside its text: a message's content is exactly the text that was typed. A card shows the name,
+  the type and, while the original is kept, the size. For a message sent in the current session it
+  also says what the assistant got from the file (the same line as the composer chip) and an image
+  has a thumbnail. After a reload the same cards show name, type and size: the server stores
+  neither the images nor the audio of a message, and a stored document opens in the Files drawer
+  with a click or Enter. Audio is a card without a player. More than four cards fold into **+N more
+  files** (more than three on a narrow screen). In a shared chat a card follows the share: a file
+  the owner did not share is marked as such and does not open.
+- **Which files a model takes.** Images are offered only when the selected model has vision, audio
+  only when it takes audio (or is a transcription model); documents are offered to every model
+  but a transcription one. An image attached before the model was switched to one without vision
+  stops the message with a note, as audio does.
 - **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
   (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
   **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,
   size, pages and storage state (original saved, original removed, text only), a preview of the text
   the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
-  file chip under a message opens the file in the drawer. In the Outlook task pane, while a mail is
+  file card above a message opens the file in the drawer. In the Outlook task pane, while a mail is
   being written, **Attach to email** attaches the file to it.
 - **Task editor.** A scheduled task's form has an **Attached files** section to upload and remove
   files. Files from a connected system with `refreshOnRun` are set through the API; if a refresh

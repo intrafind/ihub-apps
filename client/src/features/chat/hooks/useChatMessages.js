@@ -5,6 +5,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
 import { storedSourceSet } from '../../../../../shared/sources/index.js';
+import { toAttachmentViews } from '../messageAttachments/attachmentViews';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -73,8 +74,10 @@ export function transformStoredMessage(msg) {
   if (msg.role === 'user' && msg.metadata?.inputMode === 'voice') {
     message.metadata = { inputMode: 'voice' };
   }
+  // What a user turn carried: the same views a turn sent in this session gets, so it looks
+  // the same before and after a reload (and in a shared chat, where each also says `shared`).
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
-    message.attachments = msg.attachments;
+    message.attachments = toAttachmentViews({ stored: msg.attachments });
   }
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
@@ -207,6 +210,9 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
   const addUserMessage = useCallback((content, metadata = {}) => {
     const { rawContent, imageData, fileData, audioData, ...rest } = metadata;
     const id = `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // `imageData` / `fileData` / `audioData` stay on the message for resending and for the
+    // context estimate; what the bubble shows of them is `attachments`.
+    const attachments = toAttachmentViews({ live: { fileData, imageData, audioData } });
     const userMessage = {
       id,
       role: 'user',
@@ -214,6 +220,7 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
       imageData,
       fileData,
       audioData,
+      ...(attachments.length > 0 ? { attachments } : {}),
       ...rest
     };
 
