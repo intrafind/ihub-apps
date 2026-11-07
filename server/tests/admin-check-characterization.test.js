@@ -115,7 +115,12 @@ function runMiddleware(mw, user) {
     json: jest.fn()
   };
   const next = jest.fn();
-  mw({ user }, res, next);
+  try {
+    mw({ user }, res, next);
+  } catch (error) {
+    // A refusal is a thrown ServiceError, which the error middleware answers.
+    res.statusCode = error.status;
+  }
   return { next: next.mock.calls.length > 0, status: res.statusCode };
 }
 
