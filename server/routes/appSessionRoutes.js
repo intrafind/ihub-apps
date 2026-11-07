@@ -6,7 +6,6 @@ import { authOptional } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
 import { startSessionSchema } from '../validators/index.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { ServiceError } from '../utils/ServiceError.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -17,9 +16,6 @@ export default function registerAppSessionStartRoute(app) {
     validate(startSessionSchema),
     async (req, res) => {
       const { sessionId, type, metadata } = req.body;
-      if (!sessionId) {
-        throw new ServiceError('BAD_REQUEST', 'Session ID is required');
-      }
       const enrichedMetadata = {
         ...metadata,
         userAgent: req.headers['user-agent'] || metadata?.userAgent || 'unknown',
