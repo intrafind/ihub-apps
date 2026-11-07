@@ -13,7 +13,14 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-const state = { enabled: true, client: null, updateError: null, listError: null };
+const state = {
+  enabled: true,
+  client: null,
+  updateError: null,
+  listError: null,
+  algorithm: 'RS256',
+  keyPair: null
+};
 
 const realManager = await import('../utils/oauthClientManager.js');
 jest.unstable_mockModule('../utils/oauthClientManager.js', () => ({
@@ -40,8 +47,14 @@ jest.unstable_mockModule('../services/oauth/CimdGovernanceService.js', () => ({
 }));
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
-    getPlatform: () => ({ oauth: { enabled: { clients: state.enabled } } })
+    getPlatform: () => ({
+      oauth: { enabled: { clients: state.enabled } },
+      jwt: { algorithm: state.algorithm }
+    })
   }
+}));
+jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
+  default: { getRSAKeyPair: () => state.keyPair }
 }));
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
@@ -61,6 +74,8 @@ beforeEach(() => {
   state.client = null;
   state.updateError = null;
   state.listError = null;
+  state.algorithm = 'RS256';
+  state.keyPair = null;
 });
 
 describe('OAuth client administration routes: errors', () => {
@@ -99,5 +114,20 @@ describe('OAuth client administration routes: errors', () => {
     const res = await request(app).get('/api/admin/oauth/clients').expect(500);
     expect(res.body.code).toBe('INTERNAL_ERROR');
     expect(res.body.detail).not.toMatch(/srv|contents/);
+  });
+
+  it('answers the public key downloads with BAD_REQUEST for another algorithm and NOT_FOUND without a key', async () => {
+    state.algorithm = 'HS256';
+    const wrong = await request(app).get('/api/admin/oauth/public-key/pem').expect(400);
+    expect(wrong.body.code).toBe('BAD_REQUEST');
+    expect(wrong.body.detail).toContain('HS256');
+
+    state.algorithm = 'RS256';
+    const none = await request(app).get('/api/admin/oauth/public-key/base64').expect(404);
+    expect(none.body).toMatchObject({ code: 'NOT_FOUND', detail: 'RSA public key not available' });
+
+    state.keyPair = { publicKey: '-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----' };
+    const ok = await request(app).get('/api/admin/oauth/public-key/base64').expect(200);
+    expect(ok.text).toBe('abc');
   });
 });
