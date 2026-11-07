@@ -825,6 +825,14 @@ used to be an HTML or plain text page.
   `PAYLOAD_TOO_LARGE` for a template file over the limit, `SERVICE_UNAVAILABLE` / `TIMEOUT` when the document
   renderer is busy or too slow (before: a plain `error` text), and `INTERNAL_ERROR` with a fixed text for an
   unexpected failure; the cause is in the server log.
+- The change history (`/api/admin/changes*`), usage limits (`/api/admin/usage-limits*`), Nextcloud embed,
+  Microsoft Office add-in and Copilot agent administration endpoints, the example apps of an installed integration
+  and the app session and usage endpoints answer in this shape: `BAD_REQUEST` for an invalid id, resource or
+  value (the reason is in `detail`), `NOT_FOUND` for an unknown snapshot or installation, `CONFLICT` for an
+  installation whose definition is not loaded or an app id that already exists, the existing
+  `COPILOT_AGENT_DISABLED`, `COPILOT_REFERENCE_ID_MISSING` and `COPILOT_PUBLIC_HTTPS_REQUIRED` codes for a
+  Copilot package that cannot be built yet, and `INTERNAL_ERROR` with a fixed text for an unexpected failure;
+  the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
