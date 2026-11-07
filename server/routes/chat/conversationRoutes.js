@@ -10,7 +10,7 @@ import configCache from '../../configCache.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
@@ -74,30 +74,26 @@ export default function registerConversationRoutes(app) {
     buildServerPath('apps/:appId/conversations/:conversationId'),
     authRequired,
     async (req, res) => {
-      try {
-        const { appId, conversationId } = req.params;
-        const user = req.user;
+      const { appId, conversationId } = req.params;
+      const user = req.user;
 
-        const { data: apps = [] } = configCache.getApps() || {};
-        const appConfig = findByIdCaseInsensitive(apps, appId);
-        if (!appConfig) {
-          return sendNotFound(res, 'App');
-        }
-
-        const baseUrl = resolveBaseUrl(appConfig);
-        if (!baseUrl) {
-          return sendBadRequest(res, 'No base URL configured for conversation API');
-        }
-
-        await conversationApiService.deleteConversation(conversationId, {
-          user,
-          baseUrl
-        });
-
-        res.status(204).send();
-      } catch (error) {
-        return sendInternalError(res, error, 'delete conversation');
+      const { data: apps = [] } = configCache.getApps() || {};
+      const appConfig = findByIdCaseInsensitive(apps, appId);
+      if (!appConfig) {
+        throw new ServiceError('NOT_FOUND', 'App not found');
       }
+
+      const baseUrl = resolveBaseUrl(appConfig);
+      if (!baseUrl) {
+        throw new ServiceError('BAD_REQUEST', 'No base URL configured for conversation API');
+      }
+
+      await conversationApiService.deleteConversation(conversationId, {
+        user,
+        baseUrl
+      });
+
+      res.status(204).send();
     }
   );
 }
