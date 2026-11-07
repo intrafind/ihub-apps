@@ -209,6 +209,48 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * Refuse adding `added` projects to a chat unless the caller may use every one
+ * of them, user projects are switched on and the chat's app takes them.
+ *
+ * @param {import('express').Request} req - The request (`req.user`).
+ * @param {Object} chat - The chat the projects are attached to.
+ * @param {string[]} added - Project ids not attached yet.
+ * @param {Object} deps - Lazily imported project modules and the feature flag.
+ * @returns {Promise<void>}
+ * @throws {ServiceError} `USER_PROJECTS_DISABLED`, `APP_PROJECTS_DISABLED` or `NOT_FOUND`.
+ */
+async function assertMayAttach(
+  req,
+  chat,
+  added,
+  { access, loadProjectFor, projects, userProjectsConfigured }
+) {
+  if (!userProjectsConfigured) {
+    throw new ServiceError('USER_PROJECTS_DISABLED', 'User projects are switched off');
+  }
+  // The chat's app decides too: one that takes no personal projects gets
+  // none attached here either, as with a message (`resolveChatProjects`).
+  const app = chat.appId
+    ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
+    : null;
+  if (app && !appAllowsUserProjects(app)) {
+    throw new ServiceError('APP_PROJECTS_DISABLED', 'This app takes no projects');
+  }
+  access.ensurePrincipal(req);
+  const context = access.callerContext(req.user);
+  const loaded = await Promise.all(
+    added.map(id => loadProjectFor(req.user, id, { repository: projects }))
+  );
+  if (
+    loaded.some(
+      ({ project }) => !project || !access.permissionsFor(project, req.user, context).canUse
+    )
+  ) {
+    throw notFound('Project');
+  }
+}
+
+/**
  * Set the projects attached to a chat (`attachedProjectIds`): the projects the
  * chat's questions can draw on besides its own container. Taking one away is
  * always possible; adding one needs the right to use it, like attaching it
@@ -241,26 +283,12 @@ async function setChatAttachedProjects(req, repository, chat) {
   const stored = Array.isArray(chat.attachedProjectIds) ? chat.attachedProjectIds : [];
   const added = wanted.filter(id => !stored.includes(id) && id !== chat.projectId);
   if (added.length > 0) {
-    if (!isUserProjectsConfigured(configCache.getFeatures())) {
-      throw new ServiceError('USER_PROJECTS_DISABLED', 'User projects are switched off');
-    }
-    // The chat's app decides too: one that takes no personal projects gets
-    // none attached here either, as with a message (`resolveChatProjects`).
-    const app = chat.appId
-      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
-      : null;
-    if (app && !appAllowsUserProjects(app)) {
-      throw new ServiceError('APP_PROJECTS_DISABLED', 'This app takes no projects');
-    }
-    access.ensurePrincipal(req);
-    const projects = getProjectRepository();
-    const context = access.callerContext(req.user);
-    for (const id of added) {
-      const { project } = await loadProjectFor(req.user, id, { repository: projects });
-      if (!project || !access.permissionsFor(project, req.user, context).canUse) {
-        throw notFound('Project');
-      }
-    }
+    await assertMayAttach(req, chat, added, {
+      access,
+      loadProjectFor,
+      projects: getProjectRepository(),
+      userProjectsConfigured: isUserProjectsConfigured(configCache.getFeatures())
+    });
   }
   if (wanted.length > MAX_ATTACHED) {
     throw new ServiceError(
