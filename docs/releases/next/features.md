@@ -833,6 +833,14 @@ used to be an HTML or plain text page.
   `COPILOT_AGENT_DISABLED`, `COPILOT_REFERENCE_ID_MISSING` and `COPILOT_PUBLIC_HTTPS_REQUIRED` codes for a
   Copilot package that cannot be built yet, and `INTERNAL_ERROR` with a fixed text for an unexpected failure;
   the cause is in the server log.
+- The Office 365, Google Drive, Nextcloud and Jira integration endpoints (`/api/integrations/*`), the
+  storage-provider access check that guards them, the personal API key, connection and scope endpoints answer in
+  this shape: `AUTH_REQUIRED` for a missing session, `FORBIDDEN` for a caller or source that is not allowed,
+  `BAD_REQUEST` for an invalid id, `NOT_FOUND` for an unknown installation, key or feature, the existing
+  `STORAGE_PROVIDER_REQUIRED`, `STORAGE_PROVIDER_NOT_FOUND` and `INTEGRATION_NOT_GRANTED` codes for a storage
+  request without a usable provider, and `INTEGRATION_AUTH_REQUIRED` (409, with the Connect card details) when the
+  user has no usable connection. An unexpected failure answers 500 with a fixed text; the cause is in the server
+  log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
