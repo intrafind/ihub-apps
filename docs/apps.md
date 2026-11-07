@@ -1519,9 +1519,9 @@ Here are some practical examples of how to configure the settings for different 
 
 **Tools not executing:**
 
-- Ensure tools are defined as individual files under `contents/tools/`
-- Check that tool IDs match exactly (case-sensitive)
-- Verify user has permissions for the specified tools
+- Ensure the app binds the integration (`integrations`) and the action is not switched off on the installation
+- Verify the user's group is granted the integration (`permissions.integrations`)
+- Verify the model supports tool calling
 
 **Structured output validation errors:**
 

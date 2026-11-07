@@ -114,8 +114,8 @@ describe('a refresh that finds nothing changed', () => {
 });
 
 describe('getters on a cold cache', () => {
-  it('return { data, etag } for apps, tools and prompts', () => {
-    for (const getter of ['getApps', 'getTools', 'getPrompts']) {
+  it('return { data, etag } for apps and prompts', () => {
+    for (const getter of ['getApps', 'getPrompts']) {
       assert.deepEqual(configCache[getter](), { data: [], etag: null }, getter);
       assert.deepEqual(configCache[getter](true), { data: [], etag: null }, getter);
     }

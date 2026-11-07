@@ -40,7 +40,6 @@ import {
   grantResearchOnly,
   setUpWebSearch,
   tearDownWebSearch,
-  thirdPartyEngineTool,
   useWebSearch
 } from './helpers/webSearchEngines.js';
 
@@ -141,7 +140,7 @@ describe('an app with web search on', () => {
   });
 
   it('gets a third-party engine’s search tool', async () => {
-    useWebSearch({ installed: [engine('acme')], tools: [thirdPartyEngineTool('acme')] });
+    useWebSearch({ installed: [engine('acme')] });
     const offered = await getToolsForApp(app(), 'en', { modelProvider: 'mistral', user: STAFF });
     assert.deepEqual(ids(offered), ['acme__search', READ_URL_TOOL_ID]);
     const search = offered.find(t => t.id === 'acme__search');
@@ -198,7 +197,7 @@ describe('workflow nodes and web search tools', () => {
   });
 
   it('get a third-party engine’s search tool by binding its installation', async () => {
-    useWebSearch({ installed: [engine('acme')], tools: [thirdPartyEngineTool('acme')] });
+    useWebSearch({ installed: [engine('acme')] });
     assert.deepEqual(ids(await nodeTools({ integrations: { acme: {} } }, RESEARCHER)), [
       'acme__search'
     ]);

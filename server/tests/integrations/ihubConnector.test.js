@@ -41,7 +41,6 @@ const member = { id: 'member', groups: ['users'], permissions: everything };
 
 before(async () => {
   await integrationRegistry.ensureLoaded();
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
   // Members of users may use iHub's own tools (`permissions.integrations`, #3093).
   configCache.setCacheEntry('config/groups.json', {

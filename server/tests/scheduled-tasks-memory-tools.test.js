@@ -14,8 +14,6 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cleanup,
-  harnessTools,
-  ihubTool,
   principal,
   scriptedChatService,
   setPlatform,
@@ -49,7 +47,7 @@ import { getTaskRun, listTaskRuns } from '../tools/scheduledTaskTools.js';
 
 const MEMORY_TOOLS = ['read_memory', 'write_memory', 'list_task_runs', 'get_task_run'];
 
-before(() => setupHarness({ defaultTools: MEMORY_TOOLS }));
+before(() => setupHarness());
 after(() => teardownHarness());
 
 const ada = () => principal({ id: 'user-ada', name: 'Ada' });
@@ -602,23 +600,13 @@ describe('nothing an app or a task can do offers them', () => {
       enabled: true,
       integrations: { lookup: {}, ihub: { actions: ['list_task_runs', 'get_task_run'] } }
     };
-    // As the `ihub` installation lists them: actions the binding offers, so
-    // it is the scheduled-tasks gate that keeps them from the app.
-    const original = await harnessTools(MEMORY_TOOLS);
-    configCache.setCacheEntry('config/tools.json', [
-      await ihubTool('list_task_runs'),
-      await ihubTool('get_task_run'),
-      ...original
-    ]);
-    try {
-      const offered = await getToolsForApp(greedy, 'en', { user: ada() });
-      assert.deepEqual(
-        offered.map(tool => tool.id),
-        ['lookup']
-      );
-    } finally {
-      configCache.setCacheEntry('config/tools.json', original);
-    }
+    // The binding offers them: it is the scheduled-tasks gate that keeps them
+    // from the app.
+    const offered = await getToolsForApp(greedy, 'en', { user: ada() });
+    assert.deepEqual(
+      offered.map(tool => tool.id),
+      ['lookup']
+    );
   });
 
   it('a task cannot pick them, and they are not among the tools an app offers a task', async () => {

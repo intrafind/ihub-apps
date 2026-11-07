@@ -2,181 +2,53 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Tests for tool localization in toolLoader
- * Ensures that tools are always localized, preventing schema validation errors
+ * Localization of the platform tools (`loadPlatformTools`). A model provider
+ * rejects a tool whose description is still a `{ en, de }` object, so every
+ * description in a tool — the tool's own and every nested parameter's — must
+ * come out as a string, whatever language the caller passes.
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfiguredTools } from '../services/tools/catalog.js';
+import { loadPlatformTools } from '../services/tools/catalog.js';
+
+/** Every `description` found anywhere below `node`. */
+function descriptionsOf(node, found = []) {
+  if (Array.isArray(node)) {
+    node.forEach(item => descriptionsOf(item, found));
+  } else if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'description') found.push(value);
+      else descriptionsOf(value, found);
+    }
+  }
+  return found;
+}
 
 describe('Tool Localization', () => {
-  beforeEach(() => {
-    // ConfigCache is initialized by the server - no setup needed for tests
-  });
-
-  afterEach(() => {
-    // No cleanup needed as configCache manages its own state
-  });
-
-  it('should localize tools when language is provided', async () => {
-    const tools = await loadConfiguredTools('en');
-
-    // Verify tools are returned
-    assert.ok(Array.isArray(tools), 'Tools should be an array');
-
-    if (tools.length > 0) {
-      // Find a tool with nested descriptions (like enhancedWebSearch)
-      const enhancedWebSearch = tools.find(t => t.id === 'enhancedWebSearch');
-
-      if (enhancedWebSearch) {
-        // Check that description is localized (string, not object)
-        assert.strictEqual(
-          typeof enhancedWebSearch.description,
-          'string',
-          'Tool description should be a string, not an object'
-        );
-
-        // Check nested parameter descriptions
-        const queryParam = enhancedWebSearch.parameters?.properties?.query;
-        if (queryParam?.description) {
-          assert.strictEqual(
-            typeof queryParam.description,
-            'string',
-            'Parameter description should be a string, not an object'
-          );
+  for (const [label, language] of [
+    ['a language', 'en'],
+    ['German', 'de'],
+    ['null (the platform default)', null],
+    ['undefined', undefined],
+    ['an empty string', '']
+  ]) {
+    it(`localizes every description for ${label}`, () => {
+      const tools = loadPlatformTools(language);
+      assert.ok(tools.length > 0, 'the platform tools are loaded');
+      for (const tool of tools) {
+        assert.equal(typeof tool.description, 'string', `${tool.id} description`);
+        for (const description of descriptionsOf(tool.parameters)) {
+          assert.equal(typeof description, 'string', `${tool.id} parameter description`);
         }
       }
-    }
-  });
+    });
+  }
 
-  it('should localize tools when language is null (using platform default)', async () => {
-    const tools = await loadConfiguredTools(null);
-
-    // Verify tools are returned
-    assert.ok(Array.isArray(tools), 'Tools should be an array');
-
-    if (tools.length > 0) {
-      // Find a tool with parameters
-      const read_url = tools.find(t => t.id === 'read_url');
-
-      if (read_url) {
-        // Check that tool-level description is localized
-        assert.strictEqual(
-          typeof read_url.description,
-          'string',
-          'Tool description should be a string when language is null'
-        );
-
-        // Check nested parameter descriptions are also localized
-        const urlParam = read_url.parameters?.properties?.url;
-        if (urlParam?.description) {
-          assert.strictEqual(
-            typeof urlParam.description,
-            'string',
-            'Nested parameter description should be a string when language is null'
-          );
-        }
-      }
-    }
-  });
-
-  it('should localize tools when language is undefined', async () => {
-    const tools = await loadConfiguredTools(undefined);
-
-    // Verify tools are returned
-    assert.ok(Array.isArray(tools), 'Tools should be an array');
-
-    if (tools.length > 0) {
-      // Find ask_user tool which has deeply nested descriptions
-      const askUser = tools.find(t => t.id === 'ask_user');
-
-      if (askUser) {
-        // Check tool-level description
-        assert.strictEqual(
-          typeof askUser.description,
-          'string',
-          'Tool description should be a string when language is undefined'
-        );
-
-        // Check nested parameter descriptions
-        const questionParam = askUser.parameters?.properties?.question;
-        if (questionParam?.description) {
-          assert.strictEqual(
-            typeof questionParam.description,
-            'string',
-            'Parameter description should be a string when language is undefined'
-          );
-        }
-
-        // Check deeply nested descriptions (options.items.properties.value.description)
-        const optionsParam = askUser.parameters?.properties?.options;
-        if (optionsParam?.items?.properties?.value?.description) {
-          assert.strictEqual(
-            typeof optionsParam.items.properties.value.description,
-            'string',
-            'Deeply nested parameter description should be a string when language is undefined'
-          );
-        }
-      }
-    }
-  });
-
-  it('should localize tools when language is empty string', async () => {
-    const tools = await loadConfiguredTools('');
-
-    // Verify tools are returned
-    assert.ok(Array.isArray(tools), 'Tools should be an array');
-
-    if (tools.length > 0) {
-      // Check that at least one tool with parameters has localized descriptions
-      const toolWithParams = tools.find(
-        t => t.parameters?.properties && Object.keys(t.parameters.properties).length > 0
-      );
-
-      if (toolWithParams) {
-        // Tool description should be string
-        assert.strictEqual(
-          typeof toolWithParams.description,
-          'string',
-          'Tool description should be a string when language is empty string'
-        );
-
-        // At least one parameter should have a string description
-        const firstParam = Object.values(toolWithParams.parameters.properties)[0];
-        if (firstParam?.description) {
-          assert.strictEqual(
-            typeof firstParam.description,
-            'string',
-            'Parameter description should be a string when language is empty string'
-          );
-        }
-      }
-    }
-  });
-
-  it('should use German localization when language is "de"', async () => {
-    const tools = await loadConfiguredTools('de');
-
-    // Verify tools are returned
-    assert.ok(Array.isArray(tools), 'Tools should be an array');
-
-    if (tools.length > 0) {
-      // Find braveSearch tool which has German translations
-      const braveSearch = tools.find(t => t.id === 'braveSearch');
-
-      if (braveSearch) {
-        // Check that description is a German string (not English)
-        assert.strictEqual(
-          typeof braveSearch.description,
-          'string',
-          'Tool description should be a string for German'
-        );
-
-        // The description should be German, not English
-        // We can't assert exact text without coupling to config, but we can verify it's not the English version
-        assert.ok(braveSearch.description.length > 0, 'German description should not be empty');
-      }
-    }
+  it('uses the requested language', () => {
+    const english = loadPlatformTools('en').find(t => t.id === 'read_url');
+    const german = loadPlatformTools('de').find(t => t.id === 'read_url');
+    assert.ok(english && german, 'read_url is a platform tool');
+    assert.ok(german.description.length > 0);
   });
 });

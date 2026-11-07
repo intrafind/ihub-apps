@@ -50,7 +50,6 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => ({ features: { marketplace: true } }),
     getRegistries: () => ({ data: { registries: [] } }),
     getModels: () => ({ data: [] }),
-    getTools: () => ({ data: [] }),
     getApps: () => ({ data: [] }),
     refreshCacheEntry: async () => {},
     refreshAppsCache: async () => {},

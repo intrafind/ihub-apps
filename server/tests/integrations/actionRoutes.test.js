@@ -42,7 +42,6 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     refreshCredentialsCache: async () => {},
     getPlatform: () => ({}),
     getModels: () => ({ data: [] }),
-    getTools: () => ({ data: [] }),
     getApps: () => ({
       data: [
         { id: 'notes-app', name: { en: 'Notes app' }, integrations: { portal: {} } },

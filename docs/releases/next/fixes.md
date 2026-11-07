@@ -355,3 +355,12 @@ the other language (German/English), or joins alternatives with an explicit OR.
   and the prompt of the **iFinder Search** app.
 - Installations that kept the shipped iFinder Search app prompt get the new wording on upgrade. A
   prompt an admin changed is left as is; the upgrade log names it.
+
+## App Generator Creates Apps That Use Integrations
+
+The app generator (the creation wizard's **Generate with AI** step) wrote apps with a `tools` list, a
+field apps no longer have, so generated apps offered no tools. The generator now lists the installed
+integrations in its brief and answers with `integrations`; the wizard turns the answer into the
+app's `integrations` bindings (only installations that exist are kept). Migration V231 updates the
+stored `app-generator` prompt: it drops the `actions` example and the `tools` answer field and adds
+the fields the wizard applies; the rest of an edited prompt is left alone.

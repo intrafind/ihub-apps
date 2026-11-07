@@ -85,7 +85,6 @@ const BROWSERS = [
   { id: 'lost-browser', directory: 'gone' }
 ];
 
-configCache.setCacheEntry('config/tools.json', []);
 configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 // Which installations each group may use (`permissions.integrations`, #3093):
@@ -105,7 +104,6 @@ configCache.getGroups = () => ({
     }
   }
 });
-configCache.getTools = () => ({ data: [], etag: 'tools' });
 configCache.getA2aAgents = () => ({ data: { agents: [] } });
 configCache.getApps = () => ({ data: [], etag: 'apps' });
 configCache.getFeatures = () => ({ skills: false, appAsTool: false });

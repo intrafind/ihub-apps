@@ -84,7 +84,6 @@ before(async () => {
 });
 
 beforeEach(() => {
-  configCache.setCacheEntry('config/tools.json', []);
   setIntegrations();
 });
 
@@ -147,27 +146,6 @@ describe('the platform tools', () => {
       offered.some(t => [...AGENT_WORKSPACE, ...EVIDENCE].includes(t.id)),
       false
     );
-  });
-
-  it('give way to a tool file of the same id in contents/tools, enabled or not', async () => {
-    configCache.setCacheEntry('config/tools.json', [
-      {
-        id: 'write_artifact',
-        name: 'write_artifact',
-        description: { en: 'Our own wording' },
-        script: 'agentTools.js',
-        method: 'writeArtifact'
-      },
-      { id: 'read_inbox', name: 'read_inbox', script: 'agentTools.js', enabled: false }
-    ]);
-    const tools = await loadTools('en');
-    assert.equal(tools.find(t => t.id === 'write_artifact').description, 'Our own wording');
-    assert.equal(
-      tools.some(t => t.id === 'read_inbox'),
-      false,
-      'a disabled file keeps the tool off'
-    );
-    assert.equal(tools.filter(t => t.id === 'write_artifact').length, 1);
   });
 
   it('are not seeded into contents/tools by the initial setup, which would shadow them', async () => {

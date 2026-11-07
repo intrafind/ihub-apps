@@ -139,7 +139,7 @@ Migration **V211** turned every tool file an admin had created in `contents/tool
 
 The tool file is deleted. `passthrough`, `concurrency` and `requestDelayMs` are not carried over (logged). A file whose id cannot be kept as a tool id, or whose functions collide as action names, is left in place with a warning. Only built-in and custom (`custom/<id>`) definitions may fix tool ids; a definition from a registry cannot.
 
-A tool file put into `contents/tools/` by hand still loads as a plain tool (developers, see [Tool Calling](tool-calling.md)); an OpenAPI tool file does not any more (logged once).
+`contents/tools/` is not read any more (#3275): a tool file left there is reported at startup by migration V230 and stays unused. A custom tool is a custom integration (see [Custom integrations](#custom-integrations-add-manually)).
 
 ### Remote A2A agents
 

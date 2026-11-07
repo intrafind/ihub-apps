@@ -60,7 +60,6 @@ const DIRECTORIES = [
   }
 ];
 
-const state = { tools: [] };
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 // Who may use which directory: users the company directory (and one added
 // later), every signed-in user the federal one, hr its own; admins inherit
@@ -78,11 +77,9 @@ configCache.getGroups = () => ({
     }
   }
 });
-configCache.getTools = () => ({ data: state.tools, etag: 'tools' });
 configCache.getA2aAgents = () => ({ data: { agents: [] } });
 configCache.getApps = () => ({ data: [], etag: 'apps' });
 configCache.getFeatures = () => ({ skills: false, appAsTool: false });
-configCache.setCacheEntry('config/tools.json', []);
 configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
 
 const everything = { tools: new Set(['*']), apps: new Set(['*']) };
@@ -106,7 +103,6 @@ const ALL_DIRECTORIES = { [DEFINITION_ID]: {} };
 describe('people directory access', () => {
   beforeEach(() => {
     installDirectories(configCache, DIRECTORIES);
-    state.tools = [{ id: 'braveSearch', name: 'Brave', description: 'Search', enabled: true }];
   });
 
   it('offers tools for every enabled, usable directory, named after the directory', async () => {

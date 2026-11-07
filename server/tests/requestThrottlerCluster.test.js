@@ -117,7 +117,6 @@ async function runWorker() {
   initWorkerBus();
   const { default: configCache } = await import('../configCache.js');
   configCache.setCacheEntry('config/platform.json', {});
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/models.json', [
     { id: 'limited-model', enabled: true, concurrency: 1 },
     { id: 'unlimited-model', enabled: true }

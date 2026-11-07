@@ -38,8 +38,10 @@ import { abortChatRequest } from '../../sse.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import {
   FIXTURE_OPEN_GROUPS,
-  fixtureIntegrationTool,
-  fixtureIntegrations
+  fixtureIntegrations,
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
 } from '../helpers/integrationToolFixture.js';
 
 const MODEL_LIST = [
@@ -147,9 +149,8 @@ const APPS = [
 ];
 
 const TOOLS = [
-  fixtureIntegrationTool('lookup', {
+  fixtureTool('lookup', {
     description: 'Look up a record',
-    script: 'lookup.js',
     parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] }
   })
 ];
@@ -181,7 +182,7 @@ before(async () => {
   configCache.setCacheEntry('config/platform.json', { chats: { enabled: true } });
   configCache.setCacheEntry('config/apps.json', APPS);
   configCache.setCacheEntry('config/models.json', MODEL_LIST);
-  configCache.setCacheEntry('config/tools.json', TOOLS);
+  await registerFixtureTools(TOOLS);
   configCache.setCacheEntry('config/integrations.json', fixtureIntegrations('lookup'));
   configCache.setCacheEntry('config/groups.json', { groups: FIXTURE_OPEN_GROUPS });
   await configCache.loadAndCacheLocale('en');
@@ -189,6 +190,7 @@ before(async () => {
 });
 
 after(async () => {
+  await unregisterFixtureTools();
   await shutdownStorageBootstrap();
   // A ledger flush can still land while the directories go.
   const rm = dir => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });

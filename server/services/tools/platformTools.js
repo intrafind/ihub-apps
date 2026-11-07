@@ -17,17 +17,14 @@
  *   tools; an app or a workflow node that names it in `tools` gets it as well.
  *
  * They are plain tools — no `_integration` marker, not listed on the
- * Integrations page — loaded by `loadTools()` next to the configured tools,
- * so they behave as their tool files in `contents/tools/` did before
- * migration V199: agent runs attach them (`agents/runtime/agentToolRegistrar.js`),
+ * Integrations page — loaded by `loadTools()` next to the integration tools:
+ * agent runs attach them (`agents/runtime/agentToolRegistrar.js`),
  * workflow nodes and agent profiles name them in `systemTools` (exact id or
  * base id, `evidence`; apps cannot), a scheduled run with memory gets `read_memory` / `write_memory`, and
  * `runTool` runs them through their script like any tool file.
  *
  * The definitions are the shipped files in `server/defaults/tools/`, read
- * once: they are part of iHub, not of the admin's configuration. A file with
- * the same id in `contents/tools/` (one an admin edited, which V199 kept)
- * takes the place of the shipped definition, as a configured tool always did.
+ * once: they are part of iHub, not of the admin's configuration.
  *
  * @module services/tools/platformTools
  */

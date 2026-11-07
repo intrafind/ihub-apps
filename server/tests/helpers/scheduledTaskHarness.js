@@ -24,7 +24,13 @@ import { enhanceUserWithPermissions } from '../../utils/authorization.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import * as tasks from '../../services/scheduler/tasks/taskService.js';
 import { makeClient, sseResponse, openaiText, captureRunLog } from '../loop/helpers/llmFixtures.js';
-import { fixtureIntegrationTool, fixtureInstallation } from './integrationToolFixture.js';
+import {
+  fixtureInstallation,
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
+} from './integrationToolFixture.js';
+import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
 
 export const MODELS = [
   {
@@ -115,63 +121,39 @@ export const silent = { debug() {}, info() {}, warn() {}, error() {} };
 let baseDir = null;
 let ledger = null;
 
-/** A default tool definition, as shipped. */
-export async function toolDef(id) {
-  return JSON.parse(
-    await fs.readFile(new URL(`../../defaults/tools/${id}.json`, import.meta.url), 'utf8')
-  );
-}
-
-/** The actions of the `ihub` installation the harness apps bind. */
-const IHUB_HARNESS_ACTIONS = ['schedule_task', 'list_scheduled_tasks', 'update_scheduled_task'];
-
 /**
- * An iHub tool as the `ihub` installation lists it: the shipped definition
- * under its old tool id, with the integration marker.
+ * The fixture tools every harness registers: `lookup`, and `dangerous`, which
+ * always asks a person first. An app offers a tool only through a binding: the
+ * scheduling tools are actions of the real `ihub` installation, the memory
+ * tools are platform tools of workflows and agents.
  */
-export async function ihubTool(id) {
-  return fixtureIntegrationTool(id, {
-    ...(await toolDef(id)),
-    _integration: {
-      instanceId: 'ihub',
-      action: id,
-      definition: 'com.intrafind/ihub',
-      fixedToolId: true
-    }
-  });
-}
+const HARNESS_TOOLS = [
+  fixtureTool('lookup', {
+    description: 'Look up a record',
+    parameters: { type: 'object', properties: { key: { type: 'string' } } }
+  }),
+  fixtureTool('dangerous', {
+    description: 'Does something with side effects',
+    requiresApproval: true
+  })
+];
 
-/**
- * The tools every harness registers, plus the defaults a test asks for by id.
- * An app offers a tool only through a binding, so `lookup` and `dangerous` are
- * actions of fixture installations of their own and the scheduling tools are
- * actions of `ihub` (see {@link harnessIntegrations}).
- */
-export async function harnessTools(defaultToolIds = []) {
-  return [
-    fixtureIntegrationTool('lookup', {
-      description: 'Look up a record',
-      script: 'lookup.js',
-      parameters: { type: 'object', properties: { key: { type: 'string' } } }
-    }),
-    fixtureIntegrationTool('dangerous', {
-      description: 'Does something with side effects',
-      script: 'dangerous.js',
-      requiresApproval: true,
-      parameters: { type: 'object', properties: {} }
-    }),
-    ...(await Promise.all(IHUB_HARNESS_ACTIONS.map(ihubTool))),
-    ...(await Promise.all(defaultToolIds.map(toolDef)))
-  ];
-}
+/** Register the fixture tools (for a test file that brings up its own config). */
+export const registerHarnessTools = async () => {
+  await integrationRegistry.ensureLoaded();
+  await registerFixtureTools(HARNESS_TOOLS);
+};
 
-/** The installations behind {@link harnessTools}. */
+/** The installations the harness apps bind: the fixtures and the real `ihub`. */
 export function harnessIntegrations() {
   return {
     installed: [
       fixtureInstallation('lookup'),
       fixtureInstallation('dangerous'),
-      fixtureInstallation('ihub', { definition: 'com.intrafind/ihub' })
+      fixtureInstallation('ihub', {
+        definition: 'com.intrafind/ihub',
+        definitionVersion: integrationRegistry.get('com.intrafind/ihub').definition.version
+      })
     ],
     security: { blockPrivateIps: true, allowedHosts: [] }
   };
@@ -185,16 +167,15 @@ export function harnessIntegrations() {
  * @param {Object[]} [options.models]
  * @param {Object[]} [options.apps]
  * @param {Object} [options.users]
- * @param {string[]} [options.defaultTools] - Ids of shipped tool files to register (`read_memory`, …).
  * @returns {Promise<{baseDir: string, ledger: Object}>}
  */
 export async function setupHarness({
   platform = {},
   models = MODELS,
   apps = APPS,
-  users = {},
-  defaultTools = []
+  users = {}
 } = {}) {
+  await registerHarnessTools();
   baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-scheduled-memory-'));
   await bootstrapStorage({
     storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
@@ -208,7 +189,6 @@ export async function setupHarness({
   configCache.setCacheEntry('config/models.json', models);
   configCache.setCacheEntry('config/groups.json', GROUPS);
   configCache.setCacheEntry('config/users.json', { users });
-  configCache.setCacheEntry('config/tools.json', await harnessTools(defaultTools));
   configCache.setCacheEntry('config/integrations.json', harnessIntegrations());
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
@@ -226,6 +206,7 @@ export function setPlatform(platform = {}) {
 }
 
 export async function teardownHarness() {
+  await unregisterFixtureTools();
   await shutdownStorageBootstrap();
   const rm = dir => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   if (baseDir) await rm(baseDir);

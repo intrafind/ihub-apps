@@ -53,7 +53,7 @@ export function gatewayCallNeedsApproval(tool, platform) {
 /**
  * Coerce a possibly-localized value (`string` or `{ en, de, ... }`) to a plain
  * string for use as a JSON Schema `description`. Nested tool parameters may
- * still carry localized descriptions that `loadLocalTools` did not flatten.
+ * still carry localized descriptions.
  */
 function localizedToString(value) {
   if (typeof value === 'string') return value;

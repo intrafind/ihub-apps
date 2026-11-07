@@ -19,7 +19,7 @@ export default function registerAdminOverviewRoutes(app) {
   /**
    * GET /api/admin/overview/stats
    * Aggregated overview stats from configCache (in-memory, fast).
-   * Returns counts for apps, models, providers, sources, tools, users, groups,
+   * Returns counts for apps, models, providers, sources, users, groups,
    * plus auth mode, integration status and a disk-space summary.
    */
   app.get(buildServerPath('/api/admin/overview/stats'), adminAuth, async (req, res) => {
@@ -45,11 +45,6 @@ export default function registerAdminOverviewRoutes(app) {
       const allProjects =
         sourcesResult?.data || (Array.isArray(sourcesResult) ? sourcesResult : []);
       const enabledProjects = allProjects.filter(s => s.enabled !== false);
-
-      // Tools
-      const toolsResult = configCache.getTools(true);
-      const allTools = toolsResult?.data || (Array.isArray(toolsResult) ? toolsResult : []);
-      const enabledTools = allTools.filter(tl => tl.enabled !== false);
 
       // Groups
       const { data: groupsData } = configCache.getGroups() || { data: null };
@@ -120,7 +115,6 @@ export default function registerAdminOverviewRoutes(app) {
         models: { total: allModels.length, enabled: enabledModels.length },
         providers: { total: allProviders.length, enabled: enabledProviders.length },
         projects: { total: allProjects.length, enabled: enabledProjects.length },
-        tools: { total: allTools.length, enabled: enabledTools.length },
         groups: groupCount,
         users: userCount,
         integrations,

@@ -94,8 +94,8 @@ client registrations stay valid.
   name `braveSearch`) selects the tool only while that engine is installed, enabled and granted.
   V195 removes these ids from apps' `tools`; an app that had web search only through such an entry
   gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it named.
-  `read_url` entries stay: the page reader is a platform tool of web search, switched off with a
-  `contents/tools/read_url.json` that says `"enabled": false`.
+  `read_url` entries stay: the page reader is a platform tool of web search (a workflow node or
+  agent profile names it in `systemTools`).
 - **Access:** an engine is granted on the groups (`permissions.integrations`: its id or
   `type:web-search`); native search on the model needs no grant. `BRAVE_SEARCH_API_KEY` and
   `STAAN_API_KEY` still work for an installed engine.
@@ -144,7 +144,8 @@ belong to projects, the agent workspace and evidence tools to workflows and agen
 
 - **Switch them off on the `ihub` installation.** A file that was `enabled: false` is migrated into
   `actions.disabled`. A tool file an admin edited stays in `contents/tools/` with a warning and
-  keeps serving its tool until it is deleted; move the change over first.
+  is no longer read (the tool-file loader is retired, see "Tools Are Integrations Everywhere"); move
+  the change over first.
 - **The knowledge tools can no longer be switched off.** A disabled or edited `knowledge.json` is
   not read any more (V202 warns); every request that reaches a project gets them while the projects
   feature is on.
@@ -290,9 +291,8 @@ manually** builds and **Edit in builder** edits.
 - **Not carried over:** `passthrough`, `concurrency` and `requestDelayMs` (named in the log). A tool
   whose id cannot be kept, or whose functions collide as action names, stays in `contents/tools/`
   with a warning. Shipped and platform tools are not touched.
-- **OpenAPI tool files** are no longer read: one put back by hand is skipped with a warning. A
-  hand-written script tool file still loads as a plain tool but has no admin page; a platform tool
-  such as `read_url` is switched off in its file.
+- **Tool files in `contents/tools/`** are not read at all any more ("Tools Are Integrations
+  Everywhere").
 - **Admin pickers** (app and agent tool selectors, workflow tool and prompt nodes, agent memory)
   list every tool, not only tool files.
 
@@ -510,4 +510,9 @@ validation warning and offers nothing for the entries. API clients that read or 
 `/api/admin/apps`, `/api/admin/workflows` or agent profiles, that call `/api/tools`, or that rely on
 `permissions.tools` must use the bindings and group grants instead. A model must support tool calling
 when an app or node binds an integration (as it did for an app with `tools`). Tool files left in
-`contents/tools/` are reported and no longer used by anything.
+`contents/tools/` are reported by V230 and left in place; **iHub no longer loads `contents/tools/`**
+at all, so a hand-written script tool file or a platform tool switched off in its file (`read_url`
+with `"enabled": false`) has no effect: build the tool as a custom integration, and switch platform
+tools off by not naming them in `systemTools`. The app generator no longer offers or writes `tools`
+(V231 rewrites its prompt), lists the installed integrations in its brief and turns its answer's
+`integrations` into the app's bindings.

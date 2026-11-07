@@ -146,7 +146,7 @@ export function actionNameOf(toolDef) {
  * The resolved side effect of a tool and where it came from.
  *
  * 1. The installation's admin override (`actions.overrides[action].sideEffect`).
- * 2. The tool file's own `sideEffect` (per function, copied by `expandToolFunctions`).
+ * 2. A tool's own `sideEffect` (a platform tool's shipped definition).
  * 3. An integration action's declared side effect (definition, OpenAPI method).
  * 4. MCP annotations — **untrusted**, see the module docs.
  * 5. `readOnly: true` (iHub's own connectors) or an internal tool → `read`.

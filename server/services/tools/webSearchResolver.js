@@ -337,9 +337,7 @@ export async function resolveNativeWebSearchFallbackTools(directive, { app, lang
 
 /**
  * Pair an engine's search tool with the page reader, so the model can open
- * what it found. The reader is left out when an admin switched it off (a
- * `contents/tools/read_url.json` with `enabled: false`; `loadTools` keeps
- * such a file out of the list).
+ * what it found. The reader is left out when it is not in the tool list.
  * @param {Object} searchTool - Search tool definition to offer
  * @param {Object[]} allTools - All available tool definitions
  * @returns {Object[]} The search tool, followed by the page reader when available

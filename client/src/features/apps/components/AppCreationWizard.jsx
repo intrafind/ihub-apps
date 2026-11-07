@@ -8,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { buildAppPayloadFromWizard } from '../../admin/utils/appWizardPayload';
 import { fetchModels } from '../../../api';
+import { integrationsFromAnswer } from '../../../../../shared/appGenerator.js';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import {
   validateAppId,
@@ -672,6 +673,8 @@ function AIGenerationStep({ appData, updateAppData }) {
       const data = response.data;
       console.log('AI generation result:', JSON.stringify(data, null, 2));
       const generatedConfig = data.choices[0].message.content;
+      const localizedOf = value =>
+        typeof value === 'string' ? { [selectedLanguage]: value } : value;
 
       // Parse the generated JSON configuration
       try {
@@ -711,6 +714,17 @@ function AIGenerationStep({ appData, updateAppData }) {
             color: configJson.color || appData.color,
             icon: configJson.icon || appData.icon,
             variables: configJson.variables || appData.variables,
+            // A localized prompt template, web search and the integrations the
+            // generator picked from the installed ones (an app has no tool list).
+            ...(configJson.prompt ? { prompt: localizedOf(configJson.prompt) } : {}),
+            ...(configJson.websearch?.enabled === true ? { websearch: { enabled: true } } : {}),
+            ...(() => {
+              const integrations = integrationsFromAnswer(
+                configJson.integrations,
+                appGeneratorPrompt.integrationIds || []
+              );
+              return integrations ? { integrations } : {};
+            })(),
 
             // Mark as AI generated
             aiGenerated: true,

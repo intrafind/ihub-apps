@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { createCompletionRequest } from '../adapters/index.js';
-import { loadConfiguredTools } from '../services/tools/catalog.js';
+import { loadTools } from '../services/tools/catalog.js';
 import dotenv from 'dotenv';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
@@ -151,7 +151,7 @@ async function runRealIntegrationTests() {
   let tools = [];
 
   try {
-    tools = await loadConfiguredTools();
+    tools = await loadTools();
     logger.info(`✅ Loaded ${tools.length} tools`);
   } catch (error) {
     logger.info(`⚠️  Could not load tools: ${error.message}`);

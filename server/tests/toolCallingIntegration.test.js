@@ -3,7 +3,7 @@
 
 import assert from 'assert';
 import { getAdapter, createCompletionRequest } from '../adapters/index.js';
-import { loadConfiguredTools } from '../services/tools/catalog.js';
+import { loadPlatformTools } from '../services/tools/catalog.js';
 import logger from '../utils/logger.js';
 
 // Mock environment variables for testing
@@ -109,7 +109,7 @@ logger.info('📋 Test 2: Tool Loading and Configuration');
 
 let configuredTools = [];
 try {
-  configuredTools = await loadConfiguredTools();
+  configuredTools = await loadPlatformTools();
   logger.info(`✅ Loaded ${configuredTools.length} configured tools`);
 
   // Show first few tools for verification

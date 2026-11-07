@@ -35,7 +35,8 @@ import {
   deleteScheduledTask
 } from '../tools/scheduledTaskTools.js';
 import { makeClient, sseResponse, openaiText, captureRunLog } from './loop/helpers/llmFixtures.js';
-import { harnessIntegrations, harnessTools } from './helpers/scheduledTaskHarness.js';
+import { harnessIntegrations, registerHarnessTools } from './helpers/scheduledTaskHarness.js';
+import { unregisterFixtureTools } from './helpers/integrationToolFixture.js';
 
 const MODELS = [
   {
@@ -136,7 +137,7 @@ before(async () => {
       }
     }
   });
-  configCache.setCacheEntry('config/tools.json', await harnessTools());
+  await registerHarnessTools();
   configCache.setCacheEntry('config/integrations.json', harnessIntegrations());
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
@@ -144,6 +145,7 @@ before(async () => {
 });
 
 after(async () => {
+  await unregisterFixtureTools();
   await shutdownStorageBootstrap();
   const rm = dir => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   await rm(baseDir);

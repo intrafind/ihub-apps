@@ -6,8 +6,7 @@
 /**
  * Interactive clarification tools (`ask_user`, anything `requiresUserInput`)
  * survive a chat's `enabledTools` narrowing in `getToolsForApp` (an app that
- * binds the `ihub` installation) and `getToolsForNode` (a workflow node that
- * names one).
+ * binds the `ihub` installation).
  *
  * They are a system channel the agent loop drives to pause a turn and ask the
  * user a question — not a user-selectable capability. An app that binds one
@@ -19,46 +18,26 @@
  *
  * Run: node --test server/tests/toolLoader-interactive-tools.test.js
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
 import a2aClientManager from '../services/a2a/A2aClientManager.js';
 import { getToolsForApp } from '../services/tools/appTools.js';
+import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
 import {
   FIXTURE_OPEN_GROUPS,
   fixtureInstallation,
-  fixtureIntegrationTool
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
 } from './helpers/integrationToolFixture.js';
 
-const askUser = {
-  id: 'ask_user',
-  requiresUserInput: true,
-  name: { en: 'Ask User for Clarification' },
-  description: { en: 'Ask the user a clarifying question.' },
-  parameters: { type: 'object', properties: {}, required: [] }
-};
-const customInteractive = {
-  id: 'custom_prompt',
-  requiresUserInput: true,
-  name: { en: 'Custom Prompt' },
-  description: { en: 'Another interactive tool.' },
-  parameters: { type: 'object', properties: {}, required: [] }
-};
-const braveSearch = {
-  id: 'braveSearch',
-  name: { en: 'Brave Search' },
-  description: { en: 'Search the web.' },
-  parameters: { type: 'object', properties: {}, required: [] }
-};
-
-let tools = [];
-configCache.getTools = () => ({ data: tools });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getSources = () => ({ data: [] });
 // Keep the skills branch out of the way so the offered ids are exactly the
-// configured tools under test.
+// integration tools under test.
 configCache.getFeatures = () => ({ skills: false });
 mcpClientManager.listAllTools = async () => [];
 a2aClientManager.listAllTools = async () => [];
@@ -67,23 +46,23 @@ const ids = list => list.map(t => t.id).sort();
 
 describe('getToolsForApp keeps a bound interactive tool through enabledTools narrowing', () => {
   const user = { id: 'u', groups: ['users'] };
-  const interactive = fixtureIntegrationTool('ask_user', {
-    requiresUserInput: true,
-    _integration: { instanceId: 'ihub', definition: 'com.intrafind/ihub', fixedToolId: true }
-  });
-  const ordinary = fixtureIntegrationTool('lookup');
 
-  beforeEach(() => {
-    tools = [interactive, ordinary];
+  before(async () => {
+    await integrationRegistry.ensureLoaded();
+    await registerFixtureTools([fixtureTool('lookup')]);
     configCache.setCacheEntry('config/integrations.json', {
       installed: [
-        fixtureInstallation('ihub', { definition: 'com.intrafind/ihub' }),
+        fixtureInstallation('ihub', {
+          definition: 'com.intrafind/ihub',
+          definitionVersion: integrationRegistry.get('com.intrafind/ihub').definition.version
+        }),
         fixtureInstallation('lookup')
       ],
       security: { blockPrivateIps: true, allowedHosts: [] }
     });
     configCache.setCacheEntry('config/groups.json', { groups: { ...FIXTURE_OPEN_GROUPS } });
   });
+  after(() => unregisterFixtureTools());
 
   const app = {
     id: 'builder',

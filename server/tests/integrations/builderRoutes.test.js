@@ -37,8 +37,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     refreshCacheEntry: async () => {},
     refreshCredentialsCache: async () => {},
     getPlatform: () => ({}),
-    getModels: () => ({ data: [] }),
-    getTools: () => ({ data: [] })
+    getModels: () => ({ data: [] })
   },
   resolveEnvVarsInObject: value => value
 }));

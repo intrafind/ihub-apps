@@ -6,8 +6,8 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 /**
  * toolLoader's A2A guards:
  *
- * - an agent whose id is also a local tool's (base) id or an installed
- *   integration's id (an MCP server) is not selected by that id — the
+ * - an agent whose id is also a platform tool's (base) id or an installed
+ *   integration's id or tool prefix (an MCP server) is not selected by that id — the
  *   reference keeps its old meaning and the remote agent is never granted by
  *   accident (#2546 review);
  * - runTool hands the chat turn's abort signal to the A2A client, so a user
@@ -16,7 +16,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const a2aCallTool = jest.fn(async () => 'agent answer');
 
-const localTools = [{ id: 'jira_searchTickets', name: 'Jira search', script: 'jira.js' }];
 // The MCP server is an installed integration: its tools carry both markers.
 const mcpTools = [
   {
@@ -28,7 +27,8 @@ const mcpTools = [
 // The remote agents are installations too.
 const AGENT_DEF = 'com.intrafind/a2a-agent';
 const installed = [
-  { id: 'atlassian', definition: 'mcp/x', enabled: true },
+  // The server's own `toolPrefix` (`jira_`) takes the base id `jira` in the tool namespace.
+  { id: 'atlassian', definition: 'mcp/x', enabled: true, values: { toolPrefix: 'jira_' } },
   // `offline` is installed but down, so it lists no tools — its id still counts.
   { id: 'offline', definition: 'mcp/x', enabled: true },
   { id: 'jira', definition: AGENT_DEF, enabled: true },
@@ -45,7 +45,6 @@ const a2aTools = [
 
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
-    getTools: () => ({ data: localTools }),
     getPlatform: () => ({ defaultLanguage: 'en' }),
     getWorkflows: () => ({ data: [] }),
     getFeatures: () => ({}),
@@ -116,7 +115,7 @@ beforeEach(() => a2aCallTool.mockClear());
 describe('A2A agent ids that clash with a tool or installed integration id', () => {
   it('marks the clashing agents and leaves the others alone', async () => {
     const byId = new Map((await loadTools('en')).map(t => [t.id, t]));
-    // `jira` is also a local tool's base id; the other agents' ids are their own.
+    // `jira` is also the base id of an installed server's tools; the other agents' ids are their own.
     expect(byId.get('a2a__jira__ask')._a2a.idConflict).toBe(true);
     expect(byId.get('a2a__langdock__ask')._a2a.idConflict).toBeUndefined();
     // The manager's cached tool objects are not mutated.
@@ -127,7 +126,7 @@ describe('A2A agent ids that clash with a tool or installed integration id', () 
     const ids = async (systemTools, integrations) =>
       (await getToolsForNode({ systemTools, integrations }, 'en')).map(t => t.id);
     // The binding is the only way in: the id is unambiguous even where an
-    // agent shares a base id with a local tool.
+    // agent shares a base id with another installation's tools.
     expect(await ids([], { atlassian: {} })).toEqual(['atlassian__search']);
     expect(await ids([], { langdock: {} })).toEqual(['a2a__langdock__ask']);
     expect(await ids([], { jira: {} })).toEqual(['a2a__jira__ask']);

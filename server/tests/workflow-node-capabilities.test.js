@@ -18,8 +18,10 @@ import {
 import { SubWorkflowMaterializer } from '../services/workflow/SubWorkflowMaterializer.js';
 import {
   FIXTURE_OPEN_GROUPS,
-  fixtureIntegrationTool,
-  fixtureIntegrations
+  fixtureIntegrations,
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
 } from './helpers/integrationToolFixture.js';
 
 const template = {
@@ -87,14 +89,15 @@ describe('materialized planner tasks', () => {
 describe('getToolsForNode', () => {
   const user = { id: 'u', groups: ['users'] };
 
-  before(() => {
+  before(async () => {
+    await registerFixtureTools([fixtureTool('lookup')]);
     configCache.getFeatures = () => ({ skills: false, appAsTool: false });
     configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
-    configCache.setCacheEntry('config/tools.json', [fixtureIntegrationTool('lookup')]);
     configCache.setCacheEntry('config/integrations.json', fixtureIntegrations('lookup'));
     configCache.setCacheEntry('config/groups.json', { groups: { ...FIXTURE_OPEN_GROUPS } });
   });
-  after(() => {
+  after(async () => {
+    await unregisterFixtureTools();
     for (const timer of configCache.refreshTimers?.values?.() || []) clearTimeout(timer);
   });
 
