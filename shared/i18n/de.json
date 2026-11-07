@@ -9288,6 +9288,8 @@
     "TEAMS_AUTH_NOT_ENABLED": "Die Anmeldung mit Microsoft Teams ist nicht aktiviert.",
     "TEAMS_ACCOUNT_DISABLED": "Dieses Konto wurde deaktiviert.",
     "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Der Anmeldetoken von Microsoft Teams ist ungültig oder abgelaufen.",
+    "APP_ACCESS_DENIED": "Sie haben keinen Zugriff auf diese App.",
+    "MODEL_ACCESS_DENIED": "Sie haben keinen Zugriff auf dieses Modell.",
     "CONCURRENCY_LIMIT": "Das Limit gleichzeitiger Läufe ist erreicht.",
     "PROVIDER_IN_USE": "Der Anbieter wird noch von Modellen verwendet.",
     "PROJECTS_NOT_ALLOWED": "Ihre Gruppen dürfen keine Projekte verwenden.",
