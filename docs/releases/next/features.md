@@ -782,6 +782,9 @@ used to be an HTML or plain text page.
   (409) with the current version in `details.currentVersion` for a stale `expectedVersion`. The inbox editor
   now recognizes that conflict by its `code` and shows the reload hint. An unexpected failure answers 500 with
   a fixed text; the cause is in the server log.
+- The SSL administration endpoints (`/api/admin/ssl/config`) answer in this shape: `BAD_REQUEST` for an invalid
+  field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
+  unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
