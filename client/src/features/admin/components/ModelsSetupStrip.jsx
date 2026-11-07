@@ -13,7 +13,8 @@ import { getSetupSteps } from '../utils/modelsArea';
  * @param {Object} props
  * @param {Object} props.keyStatuses - Provider key statuses by provider id
  * @param {Array<Object>} props.models
- * @param {() => void} props.onConnect - Open the Providers tab
+ * @param {() => void} [props.onConnect] - Open the Providers tab; absent when the admin may not open it,
+ *   in which case the import dialog is offered instead (it creates a provider and stores its key)
  * @param {() => void} props.onImport - Open the import dialog
  * @param {() => void} props.onShowEnabled - Filter the list to what can be enabled
  */
@@ -29,10 +30,9 @@ function ModelsSetupStrip({ keyStatuses, models, onConnect, onImport, onShowEnab
   };
   const next = steps.find(step => !step.done);
   const cta = {
-    connect: {
-      label: t('admin.models.setup.connectAction', 'Add a provider key'),
-      onClick: onConnect
-    },
+    connect: onConnect
+      ? { label: t('admin.models.setup.connectAction', 'Add a provider key'), onClick: onConnect }
+      : { label: t('admin.models.setup.enableAction', 'Import models'), onClick: onImport },
     enable: {
       label: t('admin.models.setup.enableAction', 'Import models'),
       onClick: onImport

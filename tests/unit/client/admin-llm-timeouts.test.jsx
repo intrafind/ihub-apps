@@ -81,6 +81,16 @@ describe('LlmTimeoutsCard', () => {
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('shows a failed load next to the title even while collapsed', async () => {
+    makeAdminApiCall.mockRejectedValue(new Error('boom'));
+    render(<LlmTimeoutsCard />);
+    await flush();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('API error: boom');
+    expect(screen.queryByTestId('llm-timeouts-summary')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeVisible();
+  });
+
   it('keeps Save disabled until something changes', async () => {
     makeAdminApiCall.mockResolvedValue(payload());
     render(<LlmTimeoutsCard />);

@@ -10,10 +10,12 @@ import ProviderFormFields from '../components/ProviderFormFields';
 import { slugify } from '../utils/modelImport';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const access = useAdminPageAccess();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -92,7 +94,7 @@ function AdminProviderCreatePage() {
         <AdminBreadcrumb
           crumbs={[
             { label: 'Admin', href: '/admin' },
-            { label: 'Models', href: '/admin/models' },
+            ...(access.models ? [{ label: 'Models', href: '/admin/models' }] : []),
             { label: 'Providers', href: '/admin/providers' },
             { label: t('admin.providers.create.title', 'Create New Provider') }
           ]}

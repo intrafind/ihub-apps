@@ -15,6 +15,7 @@ import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import AdminLoadError from '../components/AdminLoadError';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
 import ModelsSetupStrip from '../components/ModelsSetupStrip';
@@ -103,6 +104,7 @@ function AdminModelsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const featureFlags = useFeatureFlags();
+  const access = useAdminPageAccess();
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
   const { statuses: keyStatuses, reload: reloadKeyStatus } = useApiKeyStatus('models');
@@ -529,7 +531,7 @@ function AdminModelsPage() {
             <ModelsSetupStrip
               keyStatuses={providerKeyStatuses}
               models={models}
-              onConnect={() => navigate('/admin/providers')}
+              onConnect={access.providers ? () => navigate('/admin/providers') : undefined}
               onImport={() => setImportDialog({ open: true, providerId: null })}
               onShowEnabled={() => setFilterEnabled('enabled')}
             />

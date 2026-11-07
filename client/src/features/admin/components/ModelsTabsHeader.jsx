@@ -4,7 +4,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminTabs from './AdminTabs';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 
 /**
  * Shared header (title + description + tabs) of the models area.
@@ -21,19 +21,22 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
  */
 function ModelsTabsHeader({ modelCount, providerCount, actions }) {
   const { t } = useTranslation();
-  const platformConfig = usePlatformConfig()?.platformConfig;
-  // The Providers page keeps its own permission (`admin.pages.providers`).
-  const showProviders = platformConfig?.admin?.pages?.providers !== false;
+  // Each page keeps its own permission (`admin.pages.models` / `admin.pages.providers`).
+  const access = useAdminPageAccess();
   const location = useLocation();
   const navigate = useNavigate();
 
   const tabs = [
-    {
-      id: 'models',
-      label: t('admin.models.tabs.models', 'Models'),
-      count: typeof modelCount === 'number' ? modelCount : undefined
-    },
-    ...(showProviders
+    ...(access.models
+      ? [
+          {
+            id: 'models',
+            label: t('admin.models.tabs.models', 'Models'),
+            count: typeof modelCount === 'number' ? modelCount : undefined
+          }
+        ]
+      : []),
+    ...(access.providers
       ? [
           {
             id: 'providers',

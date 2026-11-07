@@ -27,8 +27,9 @@ jest.mock('../../../client/src/features/admin/hooks/useApiKeyStatus', () => ({
 jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
   useFeatureFlags: () => ({ isEnabled: () => true })
 }));
+const mockPlatform = { admin: { pages: {} } };
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
-  usePlatformConfig: () => ({ platformConfig: { admin: { pages: {} } } })
+  usePlatformConfig: () => ({ platformConfig: mockPlatform })
 }));
 
 const mockT = (key, defaultOrOptions, options) => {
@@ -104,7 +105,10 @@ function renderPage() {
 
 const rowOf = async name => (await screen.findByText(name)).closest('tr');
 
-beforeEach(() => mockMakeAdminApiCall.mockReset());
+beforeEach(() => {
+  mockMakeAdminApiCall.mockReset();
+  mockPlatform.admin.pages = {};
+});
 
 test('shares the tab bar with Models and starts on Providers', async () => {
   renderPage();
@@ -148,9 +152,9 @@ test('Add provider opens the create page', async () => {
   expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/new');
 });
 
-test('entries of other categories wait in a collapsed group instead of leading the page', async () => {
+test('entries of other categories wait in one collapsed group instead of leading the page', async () => {
   renderPage();
-  const summary = await screen.findByText('Custom / Generic API Keys (1)');
+  const summary = await screen.findByText('Other credentials (1)');
   const group = summary.closest('details');
   expect(group).not.toHaveAttribute('open');
   expect(within(group).getByText('Old generic key')).toBeInTheDocument();
@@ -163,4 +167,14 @@ test('the timeouts for all providers are one summary line above the list', async
   expect(await screen.findByTestId('llm-timeouts-summary')).toHaveTextContent(
     'connect 30 s · stream idle 60 s'
   );
+});
+
+test('without the models page there is no link to it: the count is plain text, Import is gone, no Models tab', async () => {
+  mockPlatform.admin.pages = { models: false };
+  renderPage();
+  const row = await rowOf('Google');
+  expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+  expect(within(row).getByText(/1 linked, 1 enabled/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Import models' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: /Models/ })).not.toBeInTheDocument();
 });

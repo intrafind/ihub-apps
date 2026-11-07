@@ -1227,9 +1227,7 @@
       "backToList": "Zurück zu Anbietern",
       "category": {
         "llm": "LLM-Anbieter",
-        "cloudstorage": "Cloud-Speicher-Anbieter",
-        "custom": "Benutzerdefinierte / Generische API-Schlüssel",
-        "other": "Weitere Zugangsdaten ({{category}})"
+        "other": "Weitere Zugangsdaten"
       },
       "table": {
         "provider": "Anbieter",
@@ -1365,7 +1363,7 @@
       "ownTimeouts": "Setzt eigene Timeouts"
     },
     "models": {
-      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
+      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Modelle → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
       "title": "Modellverwaltung",
       "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
       "loadError": "Fehler beim Laden der Modelle",

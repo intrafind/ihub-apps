@@ -43,6 +43,8 @@ function LlmTimeoutsCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  // A failed load has nothing to summarise; it is shown beside the title, not inside the collapsed body.
+  const [loadError, setLoadError] = useState(null);
   const [open, setOpen] = useState(false);
 
   const apply = useCallback(data => {
@@ -59,7 +61,7 @@ function LlmTimeoutsCard() {
         if (!cancelled) apply(response.data);
       })
       .catch(error => {
-        if (!cancelled) setMessage({ type: 'error', text: getAdminApiErrorMessage(error) });
+        if (!cancelled) setLoadError(getAdminApiErrorMessage(error));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -126,6 +128,11 @@ function LlmTimeoutsCard() {
         >
           {t('admin.providers.timeouts.title', 'Timeouts for all providers')}
         </h2>
+        {loadError && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {loadError}
+          </p>
+        )}
         {!loading && Number.isFinite(effective.connectTimeoutMs ?? defaults.connectTimeoutMs) && (
           <p
             className="text-sm text-gray-600 dark:text-gray-400"

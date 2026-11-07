@@ -125,6 +125,17 @@ describe('tab bar', () => {
 });
 
 describe('setup strip', () => {
+  test('without the providers page, the connect step offers the import, which creates a provider', async () => {
+    mockPlatform.admin.pages = { providers: false };
+    renderPage({ models: [model('local-vllm')] });
+    const strip = await screen.findByTestId('models-setup');
+    expect(
+      within(strip).queryByRole('button', { name: 'Add a provider key' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(strip).getByRole('button', { name: 'Import models' }));
+    expect(screen.getByTestId('import-dialog')).toBeInTheDocument();
+  });
+
   test('a fresh install starts with connecting a provider', async () => {
     renderPage({ models: [model('local-vllm'), model('voxtral')] });
     const strip = await screen.findByTestId('models-setup');

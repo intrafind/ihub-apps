@@ -916,9 +916,7 @@
       "backToList": "Back to Providers",
       "category": {
         "llm": "LLM Providers",
-        "cloudstorage": "Cloud Storage Providers",
-        "custom": "Custom / Generic API Keys",
-        "other": "Other credentials ({{category}})"
+        "other": "Other credentials"
       },
       "table": {
         "provider": "Provider",
@@ -1054,7 +1052,7 @@
       "ownTimeouts": "Sets its own timeouts"
     },
     "models": {
-      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Providers). 0 turns a ceiling off.",
+      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Models → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
       "loadError": "Error loading models",

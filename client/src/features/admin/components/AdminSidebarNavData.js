@@ -100,8 +100,9 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           // (ModelsTabsHeader); the Providers tab keeps its own route and permission.
           key: 'models',
           label: t('admin.nav.models', 'Models'),
-          href: '/admin/models',
-          activeFor: ['/admin/providers'],
+          // Only one of the two pages may be hidden: the entry opens the one that is left.
+          href: showAdminPage('models') ? '/admin/models' : '/admin/providers',
+          activeFor: ['/admin/providers', '/admin/models'],
           icon: CpuChipIcon,
           visible: showAdminPage('models') || showAdminPage('providers')
         },

@@ -23,6 +23,8 @@ import {
 import AdminLoadError from '../components/AdminLoadError';
 import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
+import { isLlmProviderEntry } from '../utils/modelsArea';
 
 /** Linked model names shown in the list before "+N more". */
 const LINKED_MODEL_PREVIEW = 3;
@@ -85,6 +87,23 @@ function HealthBadge({ status }) {
 }
 
 /**
+ * The provider's model count as a link to the Models tab filtered to it, or plain text when the
+ * admin may not open the models page.
+ */
+function ModelsLink({ enabled, providerId, children, ...rest }) {
+  if (!enabled) return <div {...rest}>{children}</div>;
+  return (
+    <Link
+      to={`/admin/models?provider=${encodeURIComponent(providerId)}`}
+      onClick={e => e.stopPropagation()}
+      {...rest}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
  * One group of provider entries. Model providers are the page; entries of any other
  * category (left from before web search, storage and tools became integrations) stay
  * reachable under a collapsed heading instead of vanishing.
@@ -113,6 +132,8 @@ function AdminProvidersPage() {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const featureFlags = useFeatureFlags();
+  // The models page may be hidden (admin.pages.models): then its links are not offered.
+  const access = useAdminPageAccess();
   const { statuses: keyStatuses } = useApiKeyStatus('providers');
   const [providers, setProviders] = useState([]);
   const [models, setModels] = useState([]);
@@ -288,7 +309,7 @@ function AdminProvidersPage() {
 
   // Group providers by category
   const groupedProviders = filteredProviders.reduce((acc, provider) => {
-    const category = provider.category || 'llm';
+    const category = isLlmProviderEntry(provider) ? 'llm' : 'other';
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -298,15 +319,11 @@ function AdminProvidersPage() {
 
   // Model providers are the page; entries of any other category (left over from before web search,
   // storage and tools became integrations) sit in a collapsed group below.
-  const categoryOrder = ['llm', ...Object.keys(groupedProviders).filter(c => c !== 'llm')];
+  const categoryOrder = ['llm', 'other'];
   const categoryLabels = {
     llm: t('admin.providers.category.llm', 'LLM Providers'),
-    cloudstorage: t('admin.providers.category.cloudstorage', 'Cloud Storage Providers'),
-    custom: t('admin.providers.category.custom', 'Custom / Generic API Keys')
+    other: t('admin.providers.category.other', 'Other credentials')
   };
-  const otherCategoryLabel = category =>
-    categoryLabels[category] ||
-    t('admin.providers.category.other', 'Other credentials ({{category}})', { category });
 
   // Count how many LLM providers have enabled models (for "Test All" button visibility)
   const testableProviderCount = providers.filter(
@@ -389,7 +406,7 @@ function AdminProvidersPage() {
                   <CategorySection
                     key={category}
                     isLlm={isLlm}
-                    title={otherCategoryLabel(category)}
+                    title={categoryLabels[category]}
                     count={categoryProviders.length}
                   >
                     <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-x-auto">
@@ -513,9 +530,9 @@ function AdminProvidersPage() {
                                   {isLlm && (
                                     <td className="px-6 py-4">
                                       {linkedModels.length > 0 ? (
-                                        <Link
-                                          to={`/admin/models?provider=${encodeURIComponent(provider.id)}`}
-                                          onClick={e => e.stopPropagation()}
+                                        <ModelsLink
+                                          enabled={access.models}
+                                          providerId={provider.id}
                                           className="block rounded-sm text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-indigo-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                                           title={linkedModels.map(m => m.id).join('\n')}
                                         >
@@ -545,7 +562,7 @@ function AdminProvidersPage() {
                                                 }
                                               )}`}
                                           </div>
-                                        </Link>
+                                        </ModelsLink>
                                       ) : (
                                         <span className="text-sm text-gray-500 dark:text-gray-400">
                                           —
@@ -604,6 +621,7 @@ function AdminProvidersPage() {
                                         </button>
                                       )}
                                       {isLlm &&
+                                        access.models &&
                                         CUSTOM_PROVIDER_API_TYPES.includes(
                                           getProviderApiType(provider)
                                         ) && (
