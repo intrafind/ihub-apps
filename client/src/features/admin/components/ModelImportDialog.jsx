@@ -233,7 +233,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
         message: translateDiscoveryError(
           t,
           body.details?.messageKey,
-          body.error || getAdminApiErrorMessage(err)
+          body.detail || getAdminApiErrorMessage(err)
         ),
         details: body.details?.remediation
       });

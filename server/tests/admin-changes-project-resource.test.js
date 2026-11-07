@@ -37,6 +37,7 @@ function call(handler, params) {
   return new Promise(resolve => {
     const res = {
       statusCode: 200,
+      setHeader() {},
       status(code) {
         this.statusCode = code;
         return this;

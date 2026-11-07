@@ -17,6 +17,7 @@ import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
  * personalized start page, the apps browser, a content page (`defaultPageId`)
@@ -139,11 +140,7 @@ export default function registerAdminUIRoutes(app) {
         });
       } catch (error) {
         logger.error('Error uploading asset', { component: 'AdminUI', error });
-        res.status(500).json({
-          success: false,
-          message: 'Failed to upload asset',
-          error: error.message
-        });
+        sendErrorResponse(res, 500, 'Failed to upload asset');
       }
     }
   );
@@ -203,11 +200,7 @@ export default function registerAdminUIRoutes(app) {
       res.json({ success: true, assets });
     } catch (error) {
       logger.error('Error listing assets', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to load assets',
-        error: error.message
-      });
+      sendErrorResponse(res, 500, 'Failed to load assets');
     }
   });
 
@@ -255,11 +248,7 @@ export default function registerAdminUIRoutes(app) {
         });
       } catch (error) {
         logger.error('Error deleting asset', { component: 'AdminUI', error });
-        res.status(500).json({
-          success: false,
-          message: 'Failed to delete asset',
-          error: error.message
-        });
+        sendErrorResponse(res, 500, 'Failed to delete asset');
       }
     }
   );
@@ -277,11 +266,7 @@ export default function registerAdminUIRoutes(app) {
       });
     } catch (error) {
       logger.error('Error getting UI config', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get UI configuration',
-        error: error.message
-      });
+      sendErrorResponse(res, 500, 'Failed to get UI configuration');
     }
   });
 
@@ -321,11 +306,7 @@ export default function registerAdminUIRoutes(app) {
       });
     } catch (error) {
       logger.error('Error updating UI config', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update UI configuration',
-        error: error.message
-      });
+      sendErrorResponse(res, 500, 'Failed to update UI configuration');
     }
   });
 
@@ -357,11 +338,7 @@ export default function registerAdminUIRoutes(app) {
       });
     } catch (error) {
       logger.error('Error backing up UI config', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to backup UI configuration',
-        error: error.message
-      });
+      sendErrorResponse(res, 500, 'Failed to backup UI configuration');
     }
   });
 

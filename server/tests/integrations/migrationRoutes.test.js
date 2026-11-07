@@ -423,7 +423,7 @@ describe('POST _restore and _adopt', () => {
       request(app).post('/api/admin/integrations/installed/review/_adopt')
     ).expect(422);
     expect(res.body.code).toBe('ADOPT_INVALID');
-    expect(res.body.details.issues.map(d => d.key)).toContain('unknownField');
+    expect(res.body.errors.map(e => e.message)).toContain('unknownField: unknown install field');
   });
 });
 

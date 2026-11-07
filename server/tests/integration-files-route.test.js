@@ -290,7 +290,7 @@ describe('integration files routes', () => {
       const res = await request(appFor(GRANTED)).get(`${BASE}/d1`);
       assert.equal(res.status, 404);
       // The client tells "no details route" from "no such document" by this text.
-      assert.equal(res.body.error, 'This integration has no details');
+      assert.equal(res.body.detail, 'This integration has no details');
       assert.equal(res.body.code, 'DOCUMENT_DETAILS_UNAVAILABLE');
     });
 
@@ -298,7 +298,7 @@ describe('integration files routes', () => {
       const app = appFor(GRANTED);
       const failed = await request(app).get(`${BASE}/boom/content`);
       assert.equal(failed.status, 500);
-      assert.equal(failed.body.error, 'Integration content failed');
+      assert.equal(failed.body.detail, 'Integration content failed');
       assert.doesNotMatch(JSON.stringify(failed.body), /upstream exploded/);
 
       registerConnector({
@@ -319,19 +319,19 @@ describe('integration files routes', () => {
       });
       const bad = await request(app).get(`${BASE}/x/content`);
       assert.equal(bad.status, 502);
-      assert.equal(bad.body.error, 'Integration content failed');
+      assert.equal(bad.body.detail, 'Integration content failed');
       assert.doesNotMatch(JSON.stringify(bad.body), /ifinder-7/);
 
       const details = await request(app).get(`${BASE}/x`);
       assert.equal(details.status, 503);
-      assert.equal(details.body.error, 'Integration metadata failed');
+      assert.equal(details.body.detail, 'Integration metadata failed');
       assert.doesNotMatch(JSON.stringify(details.body), /10\.0\.0\.7/);
 
       // A 4xx keeps the connector's own words (the client shows or maps them)
       registerConnector({ id: 'ifinder', actions: {}, files: fakeFiles });
       const gone = await request(app).get(`${BASE}/gone/content`);
       assert.equal(gone.status, 404);
-      assert.equal(gone.body.error, 'Document not found');
+      assert.equal(gone.body.detail, 'Document not found');
     });
   });
 
@@ -461,9 +461,9 @@ describe('integration files routes', () => {
     it('content: a stream that fails before any byte is a 502, not a hang or a crash', async () => {
       const res = await request(appFor(GRANTED)).get(`${BASE}/reset-early/content`);
       assert.equal(res.status, 502);
-      assert.match(res.headers['content-type'], /application\/json/);
+      assert.match(res.headers['content-type'], /application\/problem\+json/);
       assert.equal(res.headers['content-disposition'], undefined);
-      assert.equal(res.body.error, 'Source content stream failed');
+      assert.equal(res.body.detail, 'Source content stream failed');
     });
 
     it('content: a stream that fails midway aborts the response', async () => {

@@ -121,11 +121,13 @@ function TeamsTab() {
         // Notify Teams that authentication is complete
         microsoftTeams.authentication.notifySuccess();
       } else {
-        throw new Error(response.data.error || t('teams.errors.authenticationFailed'));
+        throw new Error(response.data.detail || t('teams.errors.authenticationFailed'));
       }
     } catch (error) {
       console.error('Teams authentication error:', error);
-      setError(error.message || t('teams.errors.authenticationFailed'));
+      setError(
+        error.response?.data?.detail || error.message || t('teams.errors.authenticationFailed')
+      );
 
       // If SSO fails, we might need to trigger interactive authentication
       if (

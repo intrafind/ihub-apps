@@ -196,7 +196,7 @@ describe('PcmStreamPlayer', () => {
     await player.start(async () => ({
       ok: false,
       status: 403,
-      json: async () => ({ error: 'Not permitted', code: 'not-permitted' })
+      json: async () => ({ detail: 'Not permitted', code: 'not-permitted' })
     }));
     expect(errors[0]).toMatchObject({
       message: 'Not permitted',

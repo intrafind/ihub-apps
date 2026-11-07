@@ -66,7 +66,7 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       const body = err?.response?.data || {};
       setError({
         reason: body.details?.reason,
-        message: body.error || getAdminApiErrorMessage(err),
+        message: body.detail || getAdminApiErrorMessage(err),
         hint: body.details?.hint
       });
       setStep('error');

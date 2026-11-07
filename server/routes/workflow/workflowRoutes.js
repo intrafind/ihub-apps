@@ -48,6 +48,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const checkWorkflowsFeature = requireFeature('workflows');
 
 /** Where workflow definitions live, relative to `contents/`. */
@@ -1070,9 +1071,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         ephemeral: chatApp.ephemeral === true
       });
       if (!storage.stored) {
-        return res
-          .status(503)
-          .json({ error: 'Chat storage is unavailable', code: 'CHAT_STORAGE_UNAVAILABLE' });
+        return sendErrorResponse(res, 503, 'Chat storage is unavailable', {
+          code: 'CHAT_STORAGE_UNAVAILABLE'
+        });
       }
 
       const state = await workflowEngine.getState(executionId);

@@ -140,7 +140,7 @@ export default function AdminAgentMemoryPage() {
     } catch (err) {
       setBuilderStatus({
         kind: 'error',
-        msg: err?.response?.data?.message || err.message
+        msg: err?.response?.data?.detail || err.message
       });
     } finally {
       setBuilding(false);

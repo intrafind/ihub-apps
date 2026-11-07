@@ -199,7 +199,7 @@ function AdminModelsPage() {
     } catch (err) {
       // Server body: { error: headline, code, details: { remediation, messageKey } }
       const body = err?.response?.data || {};
-      const fallbackMessage = body.error || t('admin.models.testResults.failed', 'Test Failed');
+      const fallbackMessage = body.detail || t('admin.models.testResults.failed', 'Test Failed');
       setTestResults(prev => ({
         ...prev,
         [modelId]: {

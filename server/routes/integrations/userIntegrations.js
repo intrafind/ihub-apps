@@ -51,7 +51,11 @@ import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
 import { SAFE_ID_PATTERN, isValidId, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
-import { sendAuthRequired, sendInternalError } from '../../utils/responseHelpers.js';
+import {
+  sendAuthRequired,
+  sendInternalError,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
@@ -169,8 +173,7 @@ function checkPost(req, res) {
     return null;
   }
   if (isDelegated(req.user)) {
-    res.status(403).json({
-      error: 'Only an interactive session can manage integration connections',
+    sendErrorResponse(res, 403, 'Only an interactive session can manage integration connections', {
       code: 'INTERACTIVE_SESSION_REQUIRED'
     });
     return null;
@@ -178,12 +181,12 @@ function checkPost(req, res) {
   // A JSON body (even `{}`) is required: a cross-site HTML form cannot send
   // one without a CORS preflight.
   if (!req.is('application/json')) {
-    res.status(415).json({ error: 'Send a JSON body', code: 'JSON_REQUIRED' });
+    sendErrorResponse(res, 415, 'Send a JSON body', { code: 'JSON_REQUIRED' });
     return null;
   }
   const installationId = req.params.id;
   if (!isInstallationId(installationId)) {
-    res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+    sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
     return null;
   }
   return { installationId };
@@ -203,8 +206,7 @@ async function startConnect(req, res, { reconnect }) {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
 
   if (body.returnUrl !== undefined && !isValidReturnUrl(body.returnUrl, req)) {
-    return res.status(400).json({
-      error: 'returnUrl must be a path or an http(s) URL on this site',
+    return sendErrorResponse(res, 400, 'returnUrl must be a path or an http(s) URL on this site', {
       code: 'INVALID_RETURN_URL'
     });
   }
@@ -215,12 +217,11 @@ async function startConnect(req, res, { reconnect }) {
   // bindings, a storage provider's grant) is checked again when the flow starts.
   const allowed = Boolean(instance) && (mayUseIntegration(instance, req.user) || isAdmin(req.user));
   if (!instance || instance.enabled === false || !allowed) {
-    return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+    return sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
   }
   const descriptor = await describeInstallation(installationId).catch(() => null);
   if (!descriptor || descriptor.kind !== 'oauth-user') {
-    return res.status(400).json({
-      error: 'This integration does not take a personal connection',
+    return sendErrorResponse(res, 400, 'This integration does not take a personal connection', {
       code: 'NOT_CONNECTABLE'
     });
   }
@@ -250,13 +251,16 @@ async function startConnect(req, res, { reconnect }) {
         error: error.message
       });
       if (error.code === OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND) {
-        return res
-          .status(404)
-          .json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+        return sendErrorResponse(res, 404, 'Integration not found', {
+          code: 'INTEGRATION_NOT_FOUND'
+        });
       }
-      return res
-        .status(FLOW_ERROR_STATUS[error.code] || 400)
-        .json({ error: 'The sign-in could not be started', code: error.code });
+      return sendErrorResponse(
+        res,
+        FLOW_ERROR_STATUS[error.code] || 400,
+        'The sign-in could not be started',
+        { code: error.code }
+      );
     }
     return sendInternalError(res, error, 'start the integration sign-in');
   }
@@ -306,12 +310,12 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
 function appOfRequest(req, res) {
   const appId = req.query.app;
   if (typeof appId !== 'string' || !isValidId(appId)) {
-    res.status(400).json({ error: 'A valid app is required', code: 'INVALID_APP' });
+    sendErrorResponse(res, 400, 'A valid app is required', { code: 'INVALID_APP' });
     return null;
   }
   const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
   if (!app || app.enabled === false || !canUserAccessResource(req.user, 'apps', app.id)) {
-    res.status(404).json({ error: 'App not found', code: 'APP_NOT_FOUND' });
+    sendErrorResponse(res, 404, 'App not found', { code: 'APP_NOT_FOUND' });
     return null;
   }
   return app;
@@ -429,22 +433,21 @@ router.get('/preferences', authRequired, async (req, res) => {
 router.put('/preferences', authRequired, async (req, res) => {
   if (isAnonymous(req.user)) return sendAuthRequired(res);
   if (isDelegated(req.user)) {
-    return res.status(403).json({
-      error: 'Only an interactive session can change these preferences',
+    return sendErrorResponse(res, 403, 'Only an interactive session can change these preferences', {
       code: 'INTERACTIVE_SESSION_REQUIRED'
     });
   }
   if (!req.is('application/json')) {
-    return res.status(415).json({ error: 'Send a JSON body', code: 'JSON_REQUIRED' });
+    return sendErrorResponse(res, 415, 'Send a JSON body', { code: 'JSON_REQUIRED' });
   }
   const app = appOfRequest(req, res);
   if (!app) return;
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
   const repository = getIntegrationPreferencesRepository();
   if (!repository.isAvailable()) {
-    return res
-      .status(503)
-      .json({ error: 'Preferences cannot be stored here', code: 'PREFERENCES_UNAVAILABLE' });
+    return sendErrorResponse(res, 503, 'Preferences cannot be stored here', {
+      code: 'PREFERENCES_UNAVAILABLE'
+    });
   }
   try {
     // Preferences are bookkeeping, not content: keep them out of the audit log.
@@ -504,9 +507,9 @@ router.get('/:id', async (req, res, next) => {
           language: languageOf(req)
         });
         if (!integration) {
-          return res
-            .status(404)
-            .json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+          return sendErrorResponse(res, 404, 'Integration not found', {
+            code: 'INTEGRATION_NOT_FOUND'
+          });
         }
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ integration });
@@ -620,7 +623,7 @@ router.post('/:id/disconnect', requireFeature('integrations'), authRequired, asy
   const { installationId } = checked;
   const descriptor = await describeInstallation(installationId).catch(() => null);
   if (!descriptor || descriptor.kind !== 'oauth-user') {
-    return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
+    return sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
   }
   try {
     const result = await getIntegrationConnectionService().disconnect({

@@ -158,7 +158,7 @@ export default function AdminAgentInboxEditPage() {
       setRawBody(body);
       markSaved();
     } catch (err) {
-      const code = err?.response?.data?.error;
+      const code = err?.response?.data?.detail;
       setError(
         code === 'VERSION_CONFLICT'
           ? t(

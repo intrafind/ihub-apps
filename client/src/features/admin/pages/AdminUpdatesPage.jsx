@@ -216,7 +216,7 @@ function AdminUpdatesPage() {
     }, RESTART_POLL_MS);
   };
 
-  const errorText = error => error.response?.data?.error || error.message;
+  const errorText = error => error.response?.data?.detail || error.message;
 
   /** Online: download the release from GitHub; it is verified like any other archive. */
   const handleDownload = async () => {

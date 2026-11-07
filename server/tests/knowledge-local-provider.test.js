@@ -1813,9 +1813,13 @@ describe('chat route and projects', () => {
   /** Drive the POST chain from `validate()` on; `req.user` stands in for the auth middleware. */
   async function post({ appId, chatId, body, user = ADA }) {
     const req = { params: { appId, chatId }, body, headers: {}, query: {}, user: { ...user } };
-    const res = { statusCode: 200, body: null };
+    const res = { statusCode: 200, body: null, headers: {} };
     res.status = code => {
       res.statusCode = code;
+      return res;
+    };
+    res.setHeader = (name, value) => {
+      res.headers[name.toLowerCase()] = value;
       return res;
     };
     res.json = value => {
@@ -2080,20 +2084,20 @@ describe('chat route and projects', () => {
         chatId: 'chat-test-l10n-1',
         body: { testProjectId: 'handbook' }
       });
-      assert.equal(forbidden.res.body.error, 'localized:projectTestForbidden');
+      assert.equal(forbidden.res.body.detail, 'localized:projectTestForbidden');
       const missing = await postTest({
         user: ROOT,
         chatId: 'chat-test-l10n-2',
         body: { testProjectId: 'missing' }
       });
-      assert.equal(missing.res.body.error, 'localized:projectTestNotFound');
+      assert.equal(missing.res.body.detail, 'localized:projectTestNotFound');
       await chatWithMessage('chat-test-l10n-3', { createdVia: 'ui' });
       const foreign = await postTest({
         user: ROOT,
         chatId: 'chat-test-l10n-3',
         body: { testProjectId: 'handbook' }
       });
-      assert.equal(foreign.res.body.error, 'localized:projectTestChatMismatch');
+      assert.equal(foreign.res.body.detail, 'localized:projectTestChatMismatch');
     });
 
     it('keeps an @mention plain text in a test, where it would start a workflow otherwise', async () => {
@@ -2183,7 +2187,10 @@ describe('chat route and projects', () => {
           body: { messages: [{ role: 'user', content: 'hi' }], projectId: textProject.id }
         });
         assert.equal(res.statusCode, 409);
-        assert.deepEqual(res.body, { error: refusal.message, code: 'PROJECT_MISMATCH' });
+        assert.equal(res.headers['content-type'], 'application/problem+json');
+        assert.equal(res.body.detail, refusal.message);
+        assert.equal(res.body.code, 'PROJECT_MISMATCH');
+        assert.equal(res.body.status, 409);
       }
     );
   });

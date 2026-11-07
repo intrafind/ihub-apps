@@ -313,7 +313,7 @@ export default function AdminAgentEditPage() {
       markSaved();
       navigate('/admin/agents');
     } catch (err) {
-      setError(err?.response?.data?.message || err.message);
+      setError(err?.response?.data?.detail || err.message);
     } finally {
       setSaving(false);
     }

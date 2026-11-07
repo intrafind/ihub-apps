@@ -695,6 +695,7 @@ describe('Nextcloud: a refused access token on the storage routes', () => {
         expect(error.reason).toBe('expired');
 
         const res = {
+          setHeader: jest.fn(),
           status: jest.fn(function status(code) {
             this.statusCode = code;
             return this;
@@ -707,9 +708,9 @@ describe('Nextcloud: a refused access token on the storage routes', () => {
         expect(respondIfAuthRequired(res, error, 'nc-main')).toBe(true);
         expect(res.statusCode).toBe(409);
         expect(res.body).toMatchObject({
-          error: 'INTEGRATION_AUTH_REQUIRED',
-          integration: 'nc-main',
-          reason: 'expired'
+          code: 'INTEGRATION_AUTH_REQUIRED',
+          status: 409,
+          details: { integration: 'nc-main', reason: 'expired' }
         });
       }
     } finally {

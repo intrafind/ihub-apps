@@ -15,12 +15,40 @@ describe('check-api-guidelines', () => {
       'hand-rolled-error'
     ]);
     assert.deepEqual(rules("res.status(400).send({ error: 'Bad' });"), ['hand-rolled-error']);
+    // a variable status is as much an error body as a literal one
+    assert.deepEqual(rules('res.status(error.status).json({ error: error.message });'), [
+      'hand-rolled-error'
+    ]);
+    assert.deepEqual(rules("res.status(status || 500).json({ error: 'x' });"), [
+      'hand-rolled-error'
+    ]);
   });
 
   it('accepts a thrown ServiceError and a success body that has an error member', () => {
     assert.deepEqual(rules("throw new ServiceError('NOT_FOUND', 'Task not found');"), []);
     assert.deepEqual(rules("res.status(200).json({ ok: false, error: 'probe failed' });"), []);
+    assert.deepEqual(rules('res.status(201).json({ error: null });'), []);
     assert.deepEqual(rules('res.json({ error: null });'), []);
+  });
+
+  it('leaves an RFC 6749 / 6750 body (error plus error_description) alone', () => {
+    assert.deepEqual(
+      rules(
+        "res.status(401).json({\n  error: 'invalid_token',\n  error_description: 'Token expired'\n});"
+      ),
+      []
+    );
+    assert.deepEqual(
+      rules("res.status(401).json({ error: 'invalid_token', error_description: 'x' });"),
+      []
+    );
+    // the exception is for that body only: the next call is still flagged
+    assert.deepEqual(
+      rules(
+        "res.status(401).json({ error: 'a', error_description: 'x' });\nres.status(404).json({ error: 'b' });"
+      ),
+      ['hand-rolled-error']
+    );
   });
 
   it('flags success envelopes', () => {
@@ -91,6 +119,7 @@ describe('check-api-guidelines', () => {
     const source = "res.status(400).json({ error: 'invalid_request' });";
     assert.deepEqual(rules(source, 'server/routes/oauth.js'), []);
     assert.deepEqual(rules(source, 'server/routes/inference/responses.js'), []);
+    assert.deepEqual(rules(source, 'server/services/inference/errors.js'), []);
     assert.deepEqual(rules(source, 'server/routes/wellKnown.js'), []);
     assert.deepEqual(rules(source, 'server/routes/chats.js'), ['hand-rolled-error']);
   });

@@ -246,6 +246,7 @@ Office365Service.listItems = async (userId, driveId) => {
 async function itemsStatus(driveId) {
   let status = 200;
   const res = {
+    setHeader() {},
     status: code => ((status = code), res),
     json: () => res
   };
@@ -271,6 +272,7 @@ Office365Service.listItems = async () => {
   let status = 200;
   let body = null;
   const res = {
+    setHeader() {},
     status: code => ((status = code), res),
     json: payload => ((body = payload), res)
   };
@@ -278,10 +280,10 @@ Office365Service.listItems = async () => {
   check(
     'a missing connection answers 409 INTEGRATION_AUTH_REQUIRED with reason and connect route',
     status === 409 &&
-      body?.error === 'INTEGRATION_AUTH_REQUIRED' &&
-      body.integration === 'office365' &&
-      body.reason === 'expired' &&
-      body.connectUrl === '/api/integrations/office365/connect'
+      body?.code === 'INTEGRATION_AUTH_REQUIRED' &&
+      body.details?.integration === 'office365' &&
+      body.details.reason === 'expired' &&
+      body.details.connectUrl === '/api/integrations/office365/connect'
   );
 }
 
@@ -309,6 +311,7 @@ configCache.getIntegrations = () => ({
 async function callJson(handler, req) {
   const out = { status: 200 };
   const res = {
+    setHeader() {},
     status: code => ((out.status = code), res),
     json: body => ((out.body = body), res)
   };

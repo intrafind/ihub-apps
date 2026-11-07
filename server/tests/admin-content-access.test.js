@@ -260,7 +260,7 @@ describe('PUT /api/admin/content-access/:type/:id', () => {
       .send({ grant: ['sales', 'marketing'] });
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/marketing/);
+    expect(res.body.detail).toMatch(/marketing/);
     expect(state.writes).toHaveLength(0);
     expect(state.refreshed).toHaveLength(0);
     expect(state.snapshots).toHaveLength(0);
@@ -296,7 +296,7 @@ describe('PUT /api/admin/content-access/:type/:id', () => {
       .send({ revoke: ['admins'] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/wildcard/);
+    expect(res.body.detail).toMatch(/wildcard/);
     expect(state.writes).toHaveLength(0);
   });
 

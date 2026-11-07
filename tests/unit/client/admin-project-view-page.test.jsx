@@ -38,7 +38,7 @@ jest.mock('../../../client/src/api/adminApi', () => {
     testAdminProject: forward('testAdminProject'),
     fetchAdminProjectItemText: forward('fetchAdminProjectItemText'),
     updateAdminProjectItemText: forward('updateAdminProjectItemText'),
-    getAdminApiErrorMessage: err => err?.response?.data?.error ?? err?.message ?? 'error'
+    getAdminApiErrorMessage: err => err?.response?.data?.detail ?? err?.message ?? 'error'
   };
 });
 jest.mock('../../../client/src/features/projects/components/ProjectAppSelect', () => ({

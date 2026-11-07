@@ -2,27 +2,41 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * One error response shape for the whole API.
+ * One error response shape for the whole API: `application/problem+json` (RFC 9457)
+ * plus our `code`.
  *
  * ```json
- * { "error": "Scheduled task not found", "code": "NOT_FOUND", "details": { "taskId": "t1" } }
+ * {
+ *   "type": "urn:ihub:problem:NOT_FOUND",
+ *   "title": "Not found",
+ *   "status": 404,
+ *   "detail": "Scheduled task t1 not found",
+ *   "code": "NOT_FOUND",
+ *   "details": { "taskId": "t1" }
+ * }
  * ```
  *
- * - `code` (always): a registry code of `shared/apiErrors.js`. The client picks
- *   its message with the i18n key `apiErrors.<code>`.
- * - `details` (only when there is something to say): a plain object whose
- *   members are the interpolation parameters of that message. It never holds `code`.
- * - `error` (always): an English fallback text for callers without i18n. For a
- *   4xx it is the message that was thrown; for a 5xx the message too, when it
- *   passes `publicMessage`, else a fixed text. The real message is always logged.
+ * - `type`, `title`, `status`: the problem type (`urn:ihub:problem:<code>`), the English
+ *   text of the code, and the HTTP status again.
+ * - `detail`: what went wrong in this occurrence. For a 4xx it is the message that was
+ *   thrown; for a 5xx the message too, when it passes `publicMessage`, else the title.
+ *   The real message is always logged.
+ * - `code` (always): a registry code of `shared/apiErrors.js`. The client picks its
+ *   message with the i18n key `apiErrors.<code>`.
+ * - `details` (only when there is something to say): a plain object whose members are
+ *   the interpolation parameters of that message. It never holds `code`.
+ * - `errors` (validation only): `[{ pointer, code, message }]`, `pointer` being an
+ *   RFC 6901 JSON Pointer to the offending member.
  *
  * OAuth endpoints keep their RFC 6749 body, `{ error, error_description }`.
  *
  * @module utils/errorResponse
  */
 
-import { readFileSync } from 'node:fs';
 import { ZodError } from 'zod';
+// A JSON import, not a file read by URL: `import.meta` keeps a module out of reach of the
+// jest tests that load it through `pathSecurity` and `responseHelpers`.
+import en from '../../shared/i18n/en.json' with { type: 'json' };
 import {
   API_ERROR_CODES,
   GENERIC_ERROR_CODES,
@@ -32,9 +46,7 @@ import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { isLLMError } from '../services/loop/contracts/errors.js';
 import { ServiceError } from './ServiceError.js';
 
-const FALLBACK_TEXT = JSON.parse(
-  readFileSync(new URL('../../shared/i18n/en.json', import.meta.url), 'utf8')
-).apiErrors;
+const FALLBACK_TEXT = en.apiErrors;
 
 /** The generic code of an HTTP status, for errors that only carry a status. */
 const CODE_BY_STATUS = Object.freeze(
@@ -44,6 +56,17 @@ const CODE_BY_STATUS = Object.freeze(
       .map(([code, status]) => [status, code])
   )
 );
+
+/**
+ * The generic registry code of an HTTP status (`NOT_FOUND` for 404), for the places that
+ * answer with a status and a message only.
+ *
+ * @param {number} status
+ * @returns {string}
+ */
+export function codeOfStatus(status) {
+  return CODE_BY_STATUS[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST');
+}
 
 /** The RFC 6749 error code of an HTTP status, for OAuth endpoints. */
 function rfcCodeOf(status) {
@@ -62,6 +85,15 @@ function rfcCodeOf(status) {
  */
 export function fallbackText(code) {
   return FALLBACK_TEXT[code] || FALLBACK_TEXT.INTERNAL_ERROR;
+}
+
+/**
+ * The title of a problem: the English text of its code. A code the registry does not know
+ * (a protocol code of another subsystem, a code carried by a thrown error) takes the text
+ * of its status, so a 400 never reads "Internal error".
+ */
+function titleOf(code, status) {
+  return FALLBACK_TEXT[code] || fallbackText(codeOfStatus(status));
 }
 
 function httpStatusOf(error) {
@@ -152,25 +184,55 @@ function classifyLlm(error) {
   };
 }
 
+/** An RFC 6901 JSON Pointer for a Zod path (array) or a dotted path (string). */
+export function jsonPointer(path) {
+  const segments = Array.isArray(path) ? path : String(path ?? '').split('.');
+  return segments
+    .filter(segment => segment !== '')
+    .map(segment => `/${String(segment).replaceAll('~', '~0').replaceAll('/', '~1')}`)
+    .join('');
+}
+
 function classifyZod(error) {
   return {
     status: 400,
     code: 'VALIDATION_FAILED',
-    details: {
-      issues: error.issues.map(issue => ({
-        path: issue.path.join('.'),
-        code: issue.code,
-        message: issue.message
-      }))
-    },
+    errors: error.issues.map(issue => ({
+      pointer: jsonPointer(issue.path),
+      code: issue.code,
+      message: issue.message
+    })),
     message: fallbackText('VALIDATION_FAILED')
+  };
+}
+
+/**
+ * Splits `details.issues` (a list of `{ path, code?, message }`) into the `errors` member.
+ * A list of another shape stays in `details`.
+ */
+function splitIssues(details) {
+  const issues = details?.issues;
+  const listed =
+    Array.isArray(issues) &&
+    issues.length > 0 &&
+    issues.every(issue => issue && typeof issue === 'object' && typeof issue.message === 'string');
+  if (!listed) return { details };
+  const rest = { ...details };
+  delete rest.issues;
+  return {
+    details: Object.keys(rest).length ? rest : undefined,
+    errors: issues.map(issue => ({
+      pointer: jsonPointer(issue.path ?? issue.field),
+      code: typeof issue.code === 'string' ? issue.code : 'INVALID',
+      message: issue.message
+    }))
   };
 }
 
 // Errors of Express and its middleware (body-parser, ...) carry only a status; their
 // messages describe the request, not the server.
 function classifyHttp(error, status) {
-  const code = CODE_BY_STATUS[status] || (status >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST');
+  const code = codeOfStatus(status);
   return {
     status,
     code,
@@ -185,7 +247,7 @@ function classify(error) {
     return {
       status: error.status,
       code: error.code,
-      details: error.details,
+      ...splitIssues(error.details),
       message: error.message
     };
   }
@@ -201,6 +263,14 @@ function classify(error) {
   };
 }
 
+/** The problem type of a code: a stable identifier, not a URL to fetch. */
+export function problemType(code) {
+  return `urn:ihub:problem:${code}`;
+}
+
+/** Media type of every error body except the RFC 6749 one of the OAuth endpoints. */
+export const PROBLEM_CONTENT_TYPE = 'application/problem+json';
+
 /**
  * The response an error becomes.
  *
@@ -210,20 +280,46 @@ function classify(error) {
  * @returns {{status: number, body: Object, headers: Object<string, string>}}
  */
 export function toErrorResponse(error, { rfc = false } = {}) {
-  const { status, code, details, message } = classify(error);
+  const { status, code, details, errors, message } = classify(error);
   // A 4xx shows what was thrown. A 5xx shows it only when it is safe (publicMessage):
   // it may otherwise name paths, hosts, credentials or provider text. The real message
   // is always logged by the error middleware.
-  const text = (status >= 500 ? publicMessage(message) : message) || fallbackText(code);
+  const text = (status >= 500 ? publicMessage(message) : message) || titleOf(code, status);
   const headers = {};
   if (details?.retryAfterMs > 0)
     headers['Retry-After'] = String(Math.ceil(details.retryAfterMs / 1000));
   if (rfc) {
     return { status, body: { error: rfcCodeOf(status), error_description: text }, headers };
   }
+  headers['Content-Type'] = PROBLEM_CONTENT_TYPE;
   return {
     status,
-    body: { error: text, code, ...(details ? { details } : {}) },
+    body: {
+      type: problemType(code),
+      title: titleOf(code, status),
+      status,
+      detail: text,
+      code,
+      ...(details ? { details } : {}),
+      ...(errors ? { errors } : {})
+    },
     headers
   };
+}
+
+/**
+ * Answers a request with the error response of `error`, without throwing. For the
+ * places that must write the response themselves (inside a `try` whose `catch` would
+ * answer again, a stream that has not started); everywhere else, throw.
+ *
+ * @param {import('express').Response} res
+ * @param {unknown} error - A `ServiceError` or anything `toErrorResponse` understands
+ * @param {Object} [options]
+ * @param {boolean} [options.rfc=false]
+ * @returns {import('express').Response}
+ */
+export function sendProblem(res, error, options) {
+  const { status, body, headers } = toErrorResponse(error, options);
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  return res.status(status).json(body);
 }

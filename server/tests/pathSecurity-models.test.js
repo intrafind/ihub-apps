@@ -44,27 +44,35 @@ describe('Model API Path Security Integration', () => {
 
     it('should reject path traversal attempts', () => {
       let statusCalled = false;
-      let errorMessage = '';
+      let body = null;
+      let contentType = null;
       const mockRes = {
+        setHeader: (name, value) => {
+          if (name === 'Content-Type') contentType = value;
+        },
         status: code => {
           statusCalled = true;
           assert.strictEqual(code, 400);
           return mockRes;
         },
         json: data => {
-          errorMessage = data.error;
+          body = data;
         }
       };
 
       const result = validateIdForPath('../../../etc/passwd', 'model', mockRes);
       assert.strictEqual(result, false, 'Path traversal should be rejected');
       assert.strictEqual(statusCalled, true, 'Status should be set to 400');
-      assert.ok(errorMessage.includes('Invalid'), 'Error message should indicate invalid ID');
+      assert.strictEqual(contentType, 'application/problem+json');
+      assert.strictEqual(body.status, 400);
+      assert.strictEqual(body.code, 'BAD_REQUEST');
+      assert.ok(body.detail.includes('Invalid'), 'Detail should indicate invalid ID');
     });
 
     it('should reject double dots', () => {
       let statusCalled = false;
       const mockRes = {
+        setHeader() {},
         status: code => {
           statusCalled = true;
           return mockRes;
@@ -96,6 +104,7 @@ describe('Model API Path Security Integration', () => {
     it('should reject if any ID contains path traversal', () => {
       let statusCalled = false;
       const mockRes = {
+        setHeader() {},
         status: code => {
           statusCalled = true;
           return mockRes;

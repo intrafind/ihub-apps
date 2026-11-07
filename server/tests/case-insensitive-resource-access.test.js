@@ -58,6 +58,10 @@ function createMockReqRes(user, params) {
   const res = {
     statusCode: null,
     body: null,
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
     status(code) {
       this.statusCode = code;
       return this;
@@ -102,5 +106,6 @@ describe('appAccessRequired / modelAccessRequired (case-insensitive gate)', () =
     modelAccessRequired(req, res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(403);
+    expect(res.headers['Content-Type']).toBe('application/problem+json');
   });
 });

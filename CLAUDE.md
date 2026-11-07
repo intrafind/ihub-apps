@@ -70,7 +70,7 @@ Full rules: `docs/api-guidelines.md` (use the `api-design` skill when adding or 
 
 - Plural kebab-case nouns, camelCase query/path/body names. An operation that is not CRUD is an **`_action`** segment (`POST /tasks/{id}/_duplicate`, `POST /tasks/_preview`); never a bare verb.
 - Status carries success: `201` + `Location` on create, `204` on delete, `400` (not 422) for validation. No `{ success }` / `{ message }` envelope; the top level is always an object.
-- Errors: **throw** `ServiceError(code, …)` with a registry code from `shared/apiErrors.js`; never write `res.status(x).json({ error })`. Target body is `application/problem+json` (RFC 9457) plus `code`. OAuth endpoints keep RFC 6749.
+- Errors: **throw** `ServiceError(code, …)` with a registry code from `shared/apiErrors.js`; never write `res.status(x).json({ error })` (inside a `try` that would catch the throw, use `sendErrorResponse(res, status, message, { code })`). The body is `application/problem+json` (RFC 9457): `type`, `title`, `status`, `detail`, `code`, optional `details` and validation `errors`; clients read `detail` and branch on `code`. OAuth/bearer errors (`error_description`) and `/v1/*` keep their own formats.
 - Lists are `{ items, nextCursor }` with `limit` / `cursor`; no `page`, `offset`, `pageSize`, `after`.
 - Changes are additive. Breaking an endpoint with external callers needs `Deprecation` / `Sunset` headers; ask before adding a shim.
 

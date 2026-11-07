@@ -16,6 +16,7 @@ import {
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Same feature gate as the rest of the integrations page.
@@ -50,22 +51,22 @@ function requireConnectionOwner(req, res) {
   const platform = configCache.getPlatform() || {};
 
   if (platform.oauth?.enabled?.authz !== true) {
-    res.status(404).json({ error: 'The OAuth authorization server is not enabled' });
+    sendErrorResponse(res, 404, 'The OAuth authorization server is not enabled');
     return null;
   }
 
   if (!req.user?.id || req.user.id === 'anonymous') {
-    res.status(401).json({ error: 'Authentication required' });
+    sendErrorResponse(res, 401, 'Authentication required');
     return null;
   }
 
   if (req.user.isOAuthClient || req.user.isAgent === true) {
-    res.status(403).json({ error: 'Only an interactive session can manage connections' });
+    sendErrorResponse(res, 403, 'Only an interactive session can manage connections');
     return null;
   }
 
   if (DELEGATED_AUTH_MODES.has(req.user.authMode)) {
-    res.status(403).json({ error: 'Only an interactive session can manage connections' });
+    sendErrorResponse(res, 403, 'Only an interactive session can manage connections');
     return null;
   }
 
@@ -108,7 +109,7 @@ router.get('/', authRequired, (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to list connections', { component: 'Connections', error });
-    res.status(500).json({ error: 'Failed to list connected applications' });
+    sendErrorResponse(res, 500, 'Failed to list connected applications');
   }
 });
 
@@ -144,7 +145,7 @@ router.delete('/:clientId', authRequired, async (req, res) => {
   // against beyond ownership — which is checked below.
   const clientId = decodeURIComponent(req.params.clientId || '');
   if (!clientId) {
-    return res.status(400).json({ error: 'clientId is required' });
+    return sendErrorResponse(res, 400, 'clientId is required');
   }
 
   try {
@@ -153,7 +154,7 @@ router.delete('/:clientId', authRequired, async (req, res) => {
     // client is not this caller's business either.
     const owned = listConnectionsForUser(user.id).some(c => c.clientId === clientId);
     if (!owned) {
-      return res.status(404).json({ error: 'Connection not found' });
+      return sendErrorResponse(res, 404, 'Connection not found');
     }
 
     const result = await revokeConnection(clientId, user.id);
@@ -170,7 +171,7 @@ router.delete('/:clientId', authRequired, async (req, res) => {
     res.json({ success: true, ...result });
   } catch (error) {
     logger.error('Failed to revoke connection', { component: 'Connections', error });
-    res.status(500).json({ error: 'Failed to disconnect the application' });
+    sendErrorResponse(res, 500, 'Failed to disconnect the application');
   }
 });
 

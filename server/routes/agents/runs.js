@@ -24,7 +24,8 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   sendBadRequest,
   sendNotFound,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
@@ -148,10 +149,7 @@ async function authorizeRunAccess(req, res, runId) {
     ) {
       return true;
     }
-    res.status(403).json({
-      error: 'forbidden',
-      message: 'You are not allowed to access this run.'
-    });
+    sendErrorResponse(res, 403, 'You are not allowed to access this run.');
     return false;
   } catch (err) {
     logger.warn('Run authorization check failed', {
@@ -159,10 +157,7 @@ async function authorizeRunAccess(req, res, runId) {
       runId,
       error: err.message
     });
-    res.status(403).json({
-      error: 'forbidden',
-      message: 'Authorization check failed.'
-    });
+    sendErrorResponse(res, 403, 'Authorization check failed.');
     return false;
   }
 }
@@ -188,11 +183,12 @@ export default function registerAgentRunRoutes(app) {
         const maxConcurrent = profile.concurrency?.maxConcurrent ?? 1;
         const running = await countRunningProfileRuns(profileId);
         if (running >= maxConcurrent) {
-          return res.status(409).json({
-            error: 'CONCURRENCY_LIMIT',
-            message: `Profile ${profileId} already has ${running} running run(s); limit is ${maxConcurrent}`,
-            runningRuns: running
-          });
+          return sendErrorResponse(
+            res,
+            409,
+            `Profile ${profileId} already has ${running} running run(s); limit is ${maxConcurrent}`,
+            { code: 'CONCURRENCY_LIMIT', details: { runningRuns: running } }
+          );
         }
 
         const { brief, variables } = req.body || {};

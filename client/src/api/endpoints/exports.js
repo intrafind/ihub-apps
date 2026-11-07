@@ -23,7 +23,7 @@ const blobErrorMessage = async data => {
   if (!(data instanceof Blob)) return null;
   try {
     const body = JSON.parse(await data.text());
-    return typeof body?.error === 'string' ? body.error : null;
+    return typeof body?.detail === 'string' ? body.detail : null;
   } catch {
     return null;
   }

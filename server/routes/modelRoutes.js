@@ -11,7 +11,8 @@ import { authRequired } from '../middleware/authRequired.js';
 import {
   sendFailedOperationError,
   sendNotFound,
-  sendInternalError
+  sendInternalError,
+  sendErrorResponse
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
@@ -151,7 +152,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       ].sort((a, b) => a.localeCompare(b));
       const unknownType = requestedTypes.find(type => !MODEL_TYPES.has(type));
       if (unknownType !== undefined) {
-        return res.status(400).json({ error: `Unknown model type: ${unknownType}` });
+        return sendErrorResponse(res, 400, `Unknown model type: ${unknownType}`);
       }
       const requestedType = requestedTypes.join(',');
       const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));

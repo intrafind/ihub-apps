@@ -82,7 +82,9 @@ describe('MemoryEditor', () => {
 
   it('turns a conflict into a message with a reload that discards the edit', async () => {
     const conflict = Object.assign(new Error('x'), {
-      response: { data: { error: 'VERSION_CONFLICT', currentVersion: 5 } }
+      response: {
+        data: { detail: 'conflict', code: 'VERSION_CONFLICT', details: { currentVersion: 5 } }
+      }
     });
     const load = jest
       .fn()
@@ -367,7 +369,7 @@ describe('MemoryEditor', () => {
 
 describe('isVersionConflict', () => {
   it('recognizes the agent admin shape, the task API shape and a plain code', () => {
-    expect(isVersionConflict({ response: { data: { error: 'VERSION_CONFLICT' } } })).toBe(true);
+    expect(isVersionConflict({ response: { data: { code: 'VERSION_CONFLICT' } } })).toBe(true);
     expect(isVersionConflict({ code: 'VERSION_CONFLICT', status: 409 })).toBe(true);
     expect(
       isVersionConflict({ originalError: { response: { data: { code: 'VERSION_CONFLICT' } } } })
@@ -376,7 +378,7 @@ describe('isVersionConflict', () => {
 
   it('does not take other errors for conflicts', () => {
     expect(isVersionConflict(new Error('boom'))).toBe(false);
-    expect(isVersionConflict({ response: { data: { error: 'MEMORY_TOO_LONG' } } })).toBe(false);
+    expect(isVersionConflict({ response: { data: { code: 'MEMORY_TOO_LONG' } } })).toBe(false);
     expect(isVersionConflict(null)).toBe(false);
   });
 });

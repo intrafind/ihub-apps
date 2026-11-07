@@ -96,7 +96,9 @@ describe('AdminAgentMemoryPage', () => {
 
   it('tells the admin when the memory was changed elsewhere', async () => {
     writeAgentMemory.mockRejectedValue({
-      response: { data: { error: 'VERSION_CONFLICT', currentVersion: 5 } },
+      response: {
+        data: { detail: 'conflict', code: 'VERSION_CONFLICT', details: { currentVersion: 5 } }
+      },
       message: 'Request failed with status code 409'
     });
     await renderPage();

@@ -189,7 +189,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
         const data = err?.response?.data;
         setUpdateError({
           retry: UPDATE_RETRY_CODES.includes(data?.code),
-          message: data?.error || err?.message || ''
+          message: data?.detail || err?.message || ''
         });
       } else {
         alert(apiErrorMessage(err, t, `${action} failed`));

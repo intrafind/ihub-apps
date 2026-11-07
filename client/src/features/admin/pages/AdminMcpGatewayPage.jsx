@@ -153,7 +153,7 @@ function AdminMcpGatewayPage() {
       setMessage({
         type: 'error',
         text: t('admin.mcp.gateway.saveError', 'Save failed: {{error}}', {
-          error: err.response?.data?.error || err.message
+          error: err.response?.data?.detail || err.message
         })
       });
     } finally {
