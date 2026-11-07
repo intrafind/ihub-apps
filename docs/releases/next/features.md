@@ -777,6 +777,11 @@ used to be an HTML or plain text page.
 - The CORS administration endpoints (`/api/admin/cors/config`) answer in this shape: `BAD_REQUEST` for an invalid
   field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
   unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
+- The agent inbox administration endpoints (`/api/admin/agents/inboxes*`) answer in this shape: `BAD_REQUEST` for
+  an unsafe inbox id or a missing `body` or `text`, `NOT_FOUND` for an unknown inbox and `VERSION_CONFLICT`
+  (409) with the current version in `details.currentVersion` for a stale `expectedVersion`. The inbox editor
+  now recognizes that conflict by its `code` and shows the reload hint. An unexpected failure answers 500 with
+  a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
