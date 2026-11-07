@@ -129,6 +129,7 @@ jest.unstable_mockModule('../services/AuditLogService.js', () => ({
 
 const { default: registerAdminContentAccessRoutes } =
   await import('../routes/admin/contentAccess.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp(user) {
   const app = express();
@@ -138,6 +139,7 @@ function createTestApp(user) {
     next();
   });
   registerAdminContentAccessRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
