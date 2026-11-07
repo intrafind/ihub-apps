@@ -32,54 +32,18 @@
  * `jira`, …) in `permissions.integrations` is unchanged — whether the
  * groups of an app's users grant the installation stays the admin's choice.
  *
- * Self-contained: the action tables below are snapshots of the built-in
- * definitions as of this migration.
+ * Self-contained: the reference table lives in `support/toolReferences.js`, a
+ * frozen snapshot of the built-in definitions that both V229 and V230 share.
  */
 
 export const version = '229';
 export const description = 'app_tools_to_integration_bindings';
 
+import { resolveReference } from './support/toolReferences.js';
+
+export { resolveReference };
+
 const INTEGRATIONS_FILE = 'config/integrations.json';
-
-/** The tools of the `com.intrafind/ihub` installation (tool id = action name). */
-const IHUB_ACTIONS = [
-  'ask_user',
-  'schedule_task',
-  'list_scheduled_tasks',
-  'update_scheduled_task',
-  'delete_scheduled_task',
-  'run_scheduled_task_now',
-  'list_task_runs',
-  'get_task_run'
-];
-
-/** `com.intrafind/ifinder`: tool ids are `iFinder_<action>`, the base id is `iFinder`. */
-const IFINDER_ACTIONS = [
-  'search',
-  'getContent',
-  'getMetadata',
-  'discover',
-  'getFields',
-  'getFacetValues',
-  'listProfiles'
-];
-
-/** `com.intrafind/jira`: tool ids are `jira_<action>`, the base id is `jira`. */
-const JIRA_ACTIONS = [
-  'searchTickets',
-  'getTicket',
-  'addComment',
-  'getTransitions',
-  'transitionTicket',
-  'getAttachment'
-];
-
-/** The search tool id each built-in web search engine kept, by its definition. */
-const ENGINE_TOOL_IDS = {
-  'com.intrafind/brave-search': 'braveSearch',
-  'com.intrafind/staan-search': 'staanSearch',
-  'com.intrafind/qwant-search': 'qwantSearch'
-};
 
 export async function precondition(ctx) {
   const files = await ctx.listFiles('apps', '*.json');
@@ -88,60 +52,6 @@ export async function precondition(ctx) {
 
 function plainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Where a tool reference points.
- *
- * @param {string} ref - an entry of `app.tools`
- * @param {Array<{id: string, definition?: string}>} installed - the installations
- * @returns {{ instanceId: string, actions: string[]|'all' }|null} null when no installation owns it
- */
-export function resolveReference(ref, installed) {
-  const byDefinition = definition => installed.find(inst => inst?.definition === definition);
-
-  // iHub's own tools and the built-ins that kept their tool ids
-  const ihub = byDefinition('com.intrafind/ihub');
-  if (ihub && IHUB_ACTIONS.includes(ref)) return { instanceId: ihub.id, actions: [ref] };
-
-  const ifinder = byDefinition('com.intrafind/ifinder');
-  if (ifinder) {
-    if (ref === 'iFinder') return { instanceId: ifinder.id, actions: 'all' };
-    if (ref.startsWith('iFinder_') && IFINDER_ACTIONS.includes(ref.slice('iFinder_'.length))) {
-      return { instanceId: ifinder.id, actions: [ref.slice('iFinder_'.length)] };
-    }
-  }
-
-  const jira = byDefinition('com.intrafind/jira');
-  if (jira) {
-    if (ref === 'jira') return { instanceId: jira.id, actions: 'all' };
-    if (ref.startsWith('jira_') && JIRA_ACTIONS.includes(ref.slice('jira_'.length))) {
-      return { instanceId: jira.id, actions: [ref.slice('jira_'.length)] };
-    }
-  }
-
-  for (const [definition, toolId] of Object.entries(ENGINE_TOOL_IDS)) {
-    const engine = byDefinition(definition);
-    if (engine && ref === toolId) return { instanceId: engine.id, actions: ['search'] };
-  }
-
-  // The installation itself, or one of its tools by the `<id>__<action>` prefix
-  const whole = installed.find(inst => inst?.id === ref);
-  if (whole) return { instanceId: whole.id, actions: 'all' };
-  if (ref.startsWith('a2a__')) {
-    const agent = installed.find(inst => ref === `a2a__${inst?.id}`);
-    if (agent) return { instanceId: agent.id, actions: 'all' };
-    const skill = installed.find(inst => ref.startsWith(`a2a__${inst?.id}__`));
-    if (skill) {
-      return { instanceId: skill.id, actions: [ref.slice(`a2a__${skill.id}__`.length)] };
-    }
-  }
-  // The longest id first, so `a-b__x` is not read as installation `a`
-  const owner = [...installed]
-    .filter(inst => typeof inst?.id === 'string' && ref.startsWith(`${inst.id}__`))
-    .sort((a, b) => b.id.length - a.id.length)[0];
-  if (owner) return { instanceId: owner.id, actions: [ref.slice(`${owner.id}__`.length)] };
-  return null;
 }
 
 /**

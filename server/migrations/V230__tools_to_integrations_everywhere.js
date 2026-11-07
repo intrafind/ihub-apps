@@ -29,12 +29,16 @@
  * - **Tool files** (`contents/tools/*.json`): nothing selects them any more;
  *   each one found is reported and left in place.
  *
- * Self-contained: the tables below are snapshots of the built-in definitions
- * as of this migration.
+ * Self-contained: the reference table lives in `support/toolReferences.js`, a
+ * frozen snapshot of the built-in definitions that both V229 and V230 share.
  */
 
 export const version = '230';
 export const description = 'tools_to_integrations_everywhere';
+
+import { resolveReference } from './support/toolReferences.js';
+
+export { resolveReference };
 
 const INTEGRATIONS_FILE = 'config/integrations.json';
 const GROUPS_FILE = 'config/groups.json';
@@ -58,39 +62,6 @@ const SYSTEM_TOOLS = new Set([
   'read_url'
 ]);
 
-const IHUB_ACTIONS = [
-  'ask_user',
-  'schedule_task',
-  'list_scheduled_tasks',
-  'update_scheduled_task',
-  'delete_scheduled_task',
-  'run_scheduled_task_now',
-  'list_task_runs',
-  'get_task_run'
-];
-const IFINDER_ACTIONS = [
-  'search',
-  'getContent',
-  'getMetadata',
-  'discover',
-  'getFields',
-  'getFacetValues',
-  'listProfiles'
-];
-const JIRA_ACTIONS = [
-  'searchTickets',
-  'getTicket',
-  'addComment',
-  'getTransitions',
-  'transitionTicket',
-  'getAttachment'
-];
-const ENGINE_TOOL_IDS = {
-  'com.intrafind/brave-search': 'braveSearch',
-  'com.intrafind/staan-search': 'staanSearch',
-  'com.intrafind/qwant-search': 'qwantSearch'
-};
-
 export async function precondition(ctx) {
   for (const dir of ['workflows', 'agents/profiles', 'tools']) {
     if ((await ctx.listFiles(dir, '*.json')).length > 0) return true;
@@ -100,47 +71,6 @@ export async function precondition(ctx) {
 
 function plainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * The installation and actions a tool reference points at, or null.
- * @param {string} ref
- * @param {Array<{id: string, definition?: string}>} installed
- * @returns {{ instanceId: string, actions: string[]|'all' }|null}
- */
-export function resolveReference(ref, installed) {
-  const byDefinition = definition => installed.find(inst => inst?.definition === definition);
-  const ihub = byDefinition('com.intrafind/ihub');
-  if (ihub && IHUB_ACTIONS.includes(ref)) return { instanceId: ihub.id, actions: [ref] };
-  const ifinder = byDefinition('com.intrafind/ifinder');
-  if (ifinder) {
-    if (ref === 'iFinder') return { instanceId: ifinder.id, actions: 'all' };
-    const name = ref.startsWith('iFinder_') ? ref.slice('iFinder_'.length) : null;
-    if (name && IFINDER_ACTIONS.includes(name)) return { instanceId: ifinder.id, actions: [name] };
-  }
-  const jira = byDefinition('com.intrafind/jira');
-  if (jira) {
-    if (ref === 'jira') return { instanceId: jira.id, actions: 'all' };
-    const name = ref.startsWith('jira_') ? ref.slice('jira_'.length) : null;
-    if (name && JIRA_ACTIONS.includes(name)) return { instanceId: jira.id, actions: [name] };
-  }
-  for (const [definition, toolId] of Object.entries(ENGINE_TOOL_IDS)) {
-    const engine = byDefinition(definition);
-    if (engine && ref === toolId) return { instanceId: engine.id, actions: ['search'] };
-  }
-  const whole = installed.find(inst => inst?.id === ref);
-  if (whole) return { instanceId: whole.id, actions: 'all' };
-  if (ref.startsWith('a2a__')) {
-    const agent = installed.find(inst => ref === `a2a__${inst?.id}`);
-    if (agent) return { instanceId: agent.id, actions: 'all' };
-    const skill = installed.find(inst => ref.startsWith(`a2a__${inst?.id}__`));
-    if (skill) return { instanceId: skill.id, actions: [ref.slice(`a2a__${skill.id}__`.length)] };
-  }
-  const owner = [...installed]
-    .filter(inst => typeof inst?.id === 'string' && ref.startsWith(`${inst.id}__`))
-    .sort((a, b) => b.id.length - a.id.length)[0];
-  if (owner) return { instanceId: owner.id, actions: [ref.slice(`${owner.id}__`.length)] };
-  return null;
 }
 
 /**
