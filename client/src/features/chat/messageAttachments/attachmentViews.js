@@ -149,12 +149,12 @@ export function toAttachmentViews({ live, stored } = {}) {
   if (Array.isArray(stored)) {
     return stored
       .filter(entry => entry && typeof entry === 'object' && !Array.isArray(entry))
-      .map(fromStored);
+      .map((entry, index) => fromStored(entry, index));
   }
   if (!live) return [];
   return [...asList(live.fileData), ...asList(live.imageData), ...asList(live.audioData)]
     .filter(entry => entry && typeof entry === 'object')
-    .map(fromLive);
+    .map((entry, index) => fromLive(entry, index));
 }
 
 /**
