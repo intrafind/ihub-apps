@@ -8,11 +8,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { requestServerRestart } from '../../utils/processRestart.js';
-import {
-  sendInternalError,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import {
   UpdateRequestError,
   applyUpdate,
@@ -45,40 +41,34 @@ const CONTAINER_UPDATE_MESSAGE =
  */
 async function requireUpdatableInstallation(req, res, next) {
   if (isContainerInstallation()) {
-    return sendBadRequest(res, CONTAINER_UPDATE_MESSAGE);
+    throw new ServiceError('BAD_REQUEST', CONTAINER_UPDATE_MESSAGE);
   }
   if (!isBinaryInstallation()) {
-    return sendBadRequest(res, 'In-place updates are only available for binary installations');
+    throw new ServiceError(
+      'BAD_REQUEST',
+      'In-place updates are only available for binary installations'
+    );
   }
   if (!(await checkWritePermissions())) {
-    return sendErrorResponse(
-      res,
-      403,
+    throw new ServiceError(
+      'FORBIDDEN',
       'Insufficient write permissions on the installation directory'
     );
   }
   next();
 }
 
-function sendUpdateError(res, error, context) {
-  if (error instanceof UpdateRequestError) {
-    return sendErrorResponse(
-      res,
-      error.status,
-      error.message,
-      error.code ? { details: { code: error.code } } : {}
-    );
-  }
-  return sendInternalError(res, error, context);
-}
-
-/** Staging result: 200 when staged, 422 with the summary when the archive was rejected. */
+/**
+ * Staging result: the summary when staged; when the archive was rejected, an `ARCHIVE_REJECTED`
+ * (422) error that carries the summary in `details.summary`.
+ */
 function sendStageResult(res, summary) {
   if (summary.accepted) return res.json(summary);
-  return sendErrorResponse(res, 422, summary.problems.map(problem => problem.message).join('; '), {
-    code: 'ARCHIVE_REJECTED',
-    details: { summary }
-  });
+  throw new ServiceError(
+    'ARCHIVE_REJECTED',
+    summary.problems.map(problem => problem.message).join('; '),
+    { status: 422, details: { summary } }
+  );
 }
 
 function auditStage(req, summary, extra = '') {
@@ -150,11 +140,7 @@ export default function registerAdminUpdateRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/update/status'), adminAuth, async (req, res) => {
     // The update may be running on another cluster worker.
-    try {
-      res.json(await getUpdateStatusAnywhere());
-    } catch (error) {
-      return sendInternalError(res, error, 'get update status');
-    }
+    res.json(await getUpdateStatusAnywhere());
   });
 
   /**
@@ -178,7 +164,7 @@ export default function registerAdminUpdateRoutes(app) {
         return sendStageResult(res, summary);
       } catch (error) {
         auditFailure(req, 'import', 'github', error);
-        return sendUpdateError(res, error, 'download update');
+        throw error;
       }
     }
   );
@@ -195,11 +181,7 @@ export default function registerAdminUpdateRoutes(app) {
       // Refuse before multer writes anything when the declared size cannot fit.
       const declared = Number.parseInt(req.headers['content-length'] || '', 10);
       if (Number.isFinite(declared) && declared > 0) {
-        try {
-          await assertDiskSpaceFor(declared);
-        } catch (error) {
-          return sendUpdateError(res, error, 'stage uploaded update');
-        }
+        await assertDiskSpaceFor(declared);
       }
       next();
     },
@@ -207,16 +189,19 @@ export default function registerAdminUpdateRoutes(app) {
       uploadFields(req, res, error => {
         if (!error) return next();
         removeWorkDir(req.updateUploadDir);
-        if (error instanceof UpdateRequestError) return sendBadRequest(res, error.message);
+        if (error instanceof UpdateRequestError) return next(error);
         if (error.code === 'LIMIT_FILE_SIZE') {
-          return sendErrorResponse(
-            res,
-            413,
-            `The upload exceeds the limit of ${getUpdateSettings().maxUploadSizeMB} MB`,
-            { code: 'UPLOAD_TOO_LARGE' }
+          return next(
+            new ServiceError(
+              'PAYLOAD_TOO_LARGE',
+              `The upload exceeds the limit of ${getUpdateSettings().maxUploadSizeMB} MB`,
+              { cause: error }
+            )
           );
         }
-        return sendBadRequest(res, `Upload failed: ${error.message}`);
+        return next(
+          new ServiceError('BAD_REQUEST', `Upload failed: ${error.message}`, { cause: error })
+        );
       });
     },
     async (req, res) => {
@@ -232,7 +217,7 @@ export default function registerAdminUpdateRoutes(app) {
         return sendStageResult(res, summary);
       } catch (error) {
         auditFailure(req, 'import', 'upload', error);
-        return sendUpdateError(res, error, 'stage uploaded update');
+        throw error;
       } finally {
         removeWorkDir(req.updateUploadDir);
       }
@@ -255,7 +240,7 @@ export default function registerAdminUpdateRoutes(app) {
         return sendStageResult(res, summary);
       } catch (error) {
         auditFailure(req, 'import', 'local', error);
-        return sendUpdateError(res, error, 'stage update from file');
+        throw error;
       }
     }
   );
@@ -265,11 +250,7 @@ export default function registerAdminUpdateRoutes(app) {
    * Archives found in the installation's updates/ folder
    */
   app.get(buildServerPath('/api/admin/update/local-candidates'), adminAuth, async (req, res) => {
-    try {
-      res.json(await listLocalCandidates());
-    } catch (error) {
-      return sendInternalError(res, error, 'list update files');
-    }
+    res.json(await listLocalCandidates());
   });
 
   /**
@@ -281,19 +262,15 @@ export default function registerAdminUpdateRoutes(app) {
     adminAuth,
     requireUpdatableInstallation,
     async (req, res) => {
-      try {
-        await discardStaged();
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'update',
-          resourceId: 'staged',
-          summary: 'Discarded the staged update'
-        });
-        res.json({ success: true });
-      } catch (error) {
-        return sendUpdateError(res, error, 'discard staged update');
-      }
+      await discardStaged();
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'update',
+        resourceId: 'staged',
+        summary: 'Discarded the staged update'
+      });
+      res.json({ success: true }); // api-guidelines-ignore: existing success body, changed in its own API change
     }
   );
 
@@ -331,7 +308,7 @@ export default function registerAdminUpdateRoutes(app) {
         requestServerRestart();
       } catch (error) {
         auditFailure(req, 'execute', 'apply', error);
-        return sendUpdateError(res, error, 'apply update');
+        throw error;
       }
     }
   );
@@ -362,7 +339,7 @@ export default function registerAdminUpdateRoutes(app) {
         requestServerRestart();
       } catch (error) {
         auditFailure(req, 'execute', 'rollback', error);
-        return sendUpdateError(res, error, 'rollback update');
+        throw error;
       }
     }
   );

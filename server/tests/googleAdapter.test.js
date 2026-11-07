@@ -62,3 +62,22 @@ assert.ok(
 assert.ok(declaredParams.properties.message, 'message property must be preserved');
 assert.deepStrictEqual(declaredParams.required, ['message'], 'required must be preserved');
 logger.info('Google adapter MCP tool schema sanitization test passed');
+
+// Regression (#1690): the API key must travel in the x-goog-api-key header, never in the
+// URL — request URLs are logged on provider HTTP errors.
+const secretKey = 'AIzaSySECRET-KEY-123';
+const nonStreamReq = await GoogleAdapter.createCompletionRequest(model, messages, secretKey, {
+  stream: false
+});
+assert.ok(!nonStreamReq.url.includes(secretKey), 'non-streaming URL must not contain the API key');
+assert.ok(!/[?&]key=/.test(nonStreamReq.url), 'non-streaming URL must have no key= parameter');
+assert.strictEqual(nonStreamReq.headers['x-goog-api-key'], secretKey);
+
+const streamReq = await GoogleAdapter.createCompletionRequest(model, messages, secretKey, {
+  stream: true
+});
+assert.ok(!streamReq.url.includes(secretKey), 'streaming URL must not contain the API key');
+assert.ok(!/[?&]key=/.test(streamReq.url), 'streaming URL must have no key= parameter');
+assert.ok(streamReq.url.includes('alt=sse'), 'streaming URL keeps alt=sse');
+assert.strictEqual(streamReq.headers['x-goog-api-key'], secretKey);
+logger.info('Google adapter API key header test passed');

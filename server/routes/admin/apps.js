@@ -4,15 +4,9 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
-import {
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse,
-  sendInternalError,
-  sendFailedOperationError
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -33,19 +27,24 @@ import { getIntegrationStatus } from '../../integrationRegistry.js';
  * the file.
  *
  * @param {object} appConfig - App configuration from the request body.
- * @param {import('express').Response} res - Response used to send the 400.
- * @returns {boolean} `true` when the configuration is valid; `false` when a 400
- *   has been sent and the caller must stop.
+ * @throws {ServiceError} `VALIDATION_FAILED` (400) with the failed fields in `details.issues`
  */
-function ensureValidAppConfig(appConfig, res) {
+function assertValidAppConfig(appConfig) {
   const result = appConfigSchema.safeParse(appConfig);
-  if (result.success) return true;
-  sendBadRequest(
-    res,
+  if (result.success) return;
+  throw new ServiceError(
+    'VALIDATION_FAILED',
     `Invalid app configuration: ${describeIssues(result.error)}`,
-    result.error.issues
+    {
+      details: {
+        issues: result.error.issues.map(issue => ({
+          path: issue.path.join('.'),
+          code: issue.code,
+          message: issue.message
+        }))
+      }
+    }
   );
-  return false;
 }
 
 /**
@@ -298,13 +297,9 @@ export default function registerAdminAppsRoutes(app) {
    *               error: "Failed to fetch apps"
    */
   app.get(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
-    try {
-      const { data: apps, etag: appsEtag } = configCache.getApps(true);
-      res.setHeader('ETag', appsEtag);
-      res.json(apps);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch apps', error);
-    }
+    const { data: apps, etag: appsEtag } = configCache.getApps(true);
+    res.setHeader('ETag', appsEtag);
+    res.json(apps);
   });
 
   /**
@@ -355,14 +350,10 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/admin/apps/templates'), contentAdminAuth, async (req, res) => {
-    try {
-      const { data: apps, etag: appsEtag } = configCache.getApps(true);
-      const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
-      res.setHeader('ETag', appsEtag);
-      res.json(templates);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch template apps', error);
-    }
+    const { data: apps, etag: appsEtag } = configCache.getApps(true);
+    const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+    res.setHeader('ETag', appsEtag);
+    res.json(templates);
   });
 
   /**
@@ -385,11 +376,7 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Admin access required
    */
   app.get(buildServerPath('/api/admin/apps/integration-status'), contentAdminAuth, (req, res) => {
-    try {
-      res.json(getIntegrationStatus(configCache.getIntegrationContext()));
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch integration status', error);
-    }
+    res.json(getIntegrationStatus(configCache.getIntegrationContext()));
   });
 
   /**
@@ -460,58 +447,46 @@ export default function registerAdminAppsRoutes(app) {
     buildServerPath('/api/admin/apps/:appId/inheritance'),
     contentAdminAuth,
     async (req, res) => {
-      try {
-        const { appId } = req.params;
-
-        // Validate appId for security
-        if (!validateIdForPath(appId, 'app', res)) {
-          return;
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const app = apps.find(a => a.id === appId);
-
-        if (!app) {
-          return sendNotFound(res, 'App');
-        }
-
-        const inheritance = {
-          app: app,
-          parent: null,
-          children: []
-        };
-
-        if (app.parentId) {
-          inheritance.parent = apps.find(a => a.id === app.parentId);
-        }
-        inheritance.children = apps.filter(a => a.parentId === appId);
-        res.json(inheritance);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch app inheritance', error);
-      }
-    }
-  );
-
-  app.get(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
-    try {
       const { appId } = req.params;
 
       // Validate appId for security
-      if (!validateIdForPath(appId, 'app', res)) {
-        return;
-      }
+      assertValidId(appId, 'app');
 
       const { data: apps } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
-        return sendNotFound(res, 'App');
+        throw new ServiceError('NOT_FOUND', 'App not found');
       }
 
-      res.json(app);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch app', error);
+      const inheritance = {
+        app: app,
+        parent: null,
+        children: []
+      };
+
+      if (app.parentId) {
+        inheritance.parent = apps.find(a => a.id === app.parentId);
+      }
+      inheritance.children = apps.filter(a => a.parentId === appId);
+      res.json(inheritance);
     }
+  );
+
+  app.get(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
+    const { appId } = req.params;
+
+    // Validate appId for security
+    assertValidId(appId, 'app');
+
+    const { data: apps } = configCache.getApps(true);
+    const app = apps.find(a => a.id === appId);
+
+    if (!app) {
+      throw new ServiceError('NOT_FOUND', 'App not found');
+    }
+
+    res.json(app);
   });
 
   /**
@@ -600,56 +575,48 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.put(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
-    try {
-      const { appId } = req.params;
-      const updatedApp = req.body;
+    const { appId } = req.params;
+    const updatedApp = req.body;
 
-      // Validate appId for security
-      if (!validateIdForPath(appId, 'app', res)) {
-        return;
-      }
+    // Validate appId for security
+    assertValidId(appId, 'app');
 
-      if (!updatedApp.id || !updatedApp.name || !updatedApp.description) {
-        return sendBadRequest(res, 'Missing required fields');
-      }
-      if (updatedApp.id !== appId) {
-        return sendBadRequest(res, 'App ID cannot be changed');
-      }
-      if (!ensureValidAppConfig(updatedApp, res)) {
-        return;
-      }
-
-      // Find the actual file for this app ID (may not match ${appId}.json)
-      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-        createIfMissing: false
-      });
-      if (!appFilePath) {
-        return sendNotFound(res, 'App file');
-      }
-      const { data: currentApps } = configCache.getApps(true);
-      const oldApp = currentApps.find(a => a.id === appId);
-      await configStore.writeJson(appFilePath, updatedApp);
-      await configCache.refreshAppsCache();
-      if (oldApp) {
-        await saveSnapshot({
-          resource: 'app',
-          id: appId,
-          before: oldApp,
-          after: updatedApp,
-          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
-        });
-      }
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'app',
-        resourceId: appId,
-        summary: `Updated app ${appId}`
-      });
-      res.json({ message: 'App updated successfully', app: updatedApp });
-    } catch (error) {
-      sendFailedOperationError(res, 'update app', error);
+    if (!updatedApp.id || !updatedApp.name || !updatedApp.description) {
+      throw new ServiceError('BAD_REQUEST', 'Missing required fields');
     }
+    if (updatedApp.id !== appId) {
+      throw new ServiceError('BAD_REQUEST', 'App ID cannot be changed');
+    }
+    assertValidAppConfig(updatedApp);
+
+    // Find the actual file for this app ID (may not match ${appId}.json)
+    const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+      createIfMissing: false
+    });
+    if (!appFilePath) {
+      throw new ServiceError('NOT_FOUND', 'App file not found');
+    }
+    const { data: currentApps } = configCache.getApps(true);
+    const oldApp = currentApps.find(a => a.id === appId);
+    await configStore.writeJson(appFilePath, updatedApp);
+    await configCache.refreshAppsCache();
+    if (oldApp) {
+      await saveSnapshot({
+        resource: 'app',
+        id: appId,
+        before: oldApp,
+        after: updatedApp,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+    }
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'app',
+      resourceId: appId,
+      summary: `Updated app ${appId}`
+    });
+    res.json({ message: 'App updated successfully', app: updatedApp }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -738,45 +705,37 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
-    try {
-      const newApp = req.body;
-      if (!newApp.id || !newApp.name || !newApp.description) {
-        return sendBadRequest(res, 'Missing required fields');
-      }
-
-      // Validate newApp.id for security
-      if (!validateIdForPath(newApp.id, 'app', res)) {
-        return;
-      }
-      if (!ensureValidAppConfig(newApp, res)) {
-        return;
-      }
-
-      // Check for duplicate ID via configCache (covers filenames that differ from their ID)
-      const { data: existingApps } = configCache.getApps(true);
-      if (existingApps.some(a => a.id === newApp.id)) {
-        return sendErrorResponse(res, 409, 'App with this ID already exists');
-      }
-      try {
-        // Create-only: the file-exists check and the write are one step, so two
-        // concurrent creates cannot both decide the name is free.
-        await configStore.createJson(`apps/${newApp.id}.json`, newApp);
-      } catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-        return sendErrorResponse(res, 409, 'App with this ID already exists');
-      }
-      await configCache.refreshAppsCache();
-      await logAudit({
-        req,
-        action: 'create',
-        resource: 'app',
-        resourceId: newApp.id,
-        summary: `Created app ${newApp.id}`
-      });
-      res.json({ message: 'App created successfully', app: newApp });
-    } catch (error) {
-      return sendInternalError(res, error, 'create app');
+    const newApp = req.body;
+    if (!newApp.id || !newApp.name || !newApp.description) {
+      throw new ServiceError('BAD_REQUEST', 'Missing required fields');
     }
+
+    // Validate newApp.id for security
+    assertValidId(newApp.id, 'app');
+    assertValidAppConfig(newApp);
+
+    // Check for duplicate ID via configCache (covers filenames that differ from their ID)
+    const { data: existingApps } = configCache.getApps(true);
+    if (existingApps.some(a => a.id === newApp.id)) {
+      throw new ServiceError('CONFLICT', 'App with this ID already exists');
+    }
+    try {
+      // Create-only: the file-exists check and the write are one step, so two
+      // concurrent creates cannot both decide the name is free.
+      await configStore.createJson(`apps/${newApp.id}.json`, newApp);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      throw new ServiceError('CONFLICT', 'App with this ID already exists');
+    }
+    await configCache.refreshAppsCache();
+    await logAudit({
+      req,
+      action: 'create',
+      resource: 'app',
+      resourceId: newApp.id,
+      summary: `Created app ${newApp.id}`
+    });
+    res.json({ message: 'App created successfully', app: newApp }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -831,45 +790,39 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/apps/:appId/toggle'), contentAdminAuth, async (req, res) => {
-    try {
-      const { appId } = req.params;
+    const { appId } = req.params;
 
-      // Validate appId for security
-      if (!validateIdForPath(appId, 'app', res)) {
-        return;
-      }
+    // Validate appId for security
+    assertValidId(appId, 'app');
 
-      const { data: apps } = configCache.getApps(true);
-      const app = apps.find(a => a.id === appId);
-      if (!app) {
-        return sendNotFound(res, 'App');
-      }
-      const newEnabledState = !app.enabled;
-      app.enabled = newEnabledState;
-      // Find the actual file for this app ID (may not match ${appId}.json)
-      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-        createIfMissing: false
-      });
-      if (!appFilePath) {
-        return sendNotFound(res, 'App file');
-      }
-      await configStore.writeJson(appFilePath, app);
-      await configCache.refreshAppsCache();
-      await logAudit({
-        req,
-        action: 'toggle',
-        resource: 'app',
-        resourceId: appId,
-        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
-      });
-      res.json({
-        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        app: app,
-        enabled: newEnabledState
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'toggle app');
+    const { data: apps } = configCache.getApps(true);
+    const app = apps.find(a => a.id === appId);
+    if (!app) {
+      throw new ServiceError('NOT_FOUND', 'App not found');
     }
+    const newEnabledState = !app.enabled;
+    app.enabled = newEnabledState;
+    // Find the actual file for this app ID (may not match ${appId}.json)
+    const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+      createIfMissing: false
+    });
+    if (!appFilePath) {
+      throw new ServiceError('NOT_FOUND', 'App file not found');
+    }
+    await configStore.writeJson(appFilePath, app);
+    await configCache.refreshAppsCache();
+    await logAudit({
+      req,
+      action: 'toggle',
+      resource: 'app',
+      resourceId: appId,
+      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
+    });
+    res.json({
+      message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+      app: app,
+      enabled: newEnabledState
+    });
   });
 
   /**
@@ -919,57 +872,51 @@ export default function registerAdminAppsRoutes(app) {
     buildServerPath('/api/admin/apps/:appId/features/feedback'),
     contentAdminAuth,
     async (req, res) => {
-      try {
-        const { appId } = req.params;
-        const { enabled } = req.body || {};
+      const { appId } = req.params;
+      const { enabled } = req.body || {};
 
-        if (!validateIdForPath(appId, 'app', res)) {
-          return;
-        }
-        if (typeof enabled !== 'boolean') {
-          return sendBadRequest(res, 'Field "enabled" must be a boolean');
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const appConfig = apps.find(a => a.id === appId);
-        if (!appConfig) {
-          return sendNotFound(res, 'App');
-        }
-
-        const features = { ...appConfig.features };
-        if (enabled) {
-          // Absent means "follow the platform flag" — the default state, so an
-          // app that is switched back on carries no override at all.
-          delete features.feedback;
-        } else {
-          features.feedback = false;
-        }
-        const updatedApp = { ...appConfig, features };
-        if (Object.keys(features).length === 0) delete updatedApp.features;
-
-        const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-          createIfMissing: false
-        });
-        if (!appFilePath) {
-          return sendNotFound(res, 'App file');
-        }
-        await configStore.writeJson(appFilePath, updatedApp);
-        await configCache.refreshAppsCache();
-        await logAudit({
-          req,
-          action: 'update',
-          resource: 'app',
-          resourceId: appId,
-          summary: `${enabled ? 'Enabled' : 'Disabled'} response feedback for app ${appId}`
-        });
-        res.json({
-          message: `Feedback ${enabled ? 'enabled' : 'disabled'} for app ${appId}`,
-          appId,
-          enabled
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'update app feedback setting');
+      assertValidId(appId, 'app');
+      if (typeof enabled !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', 'Field "enabled" must be a boolean');
       }
+
+      const { data: apps } = configCache.getApps(true);
+      const appConfig = apps.find(a => a.id === appId);
+      if (!appConfig) {
+        throw new ServiceError('NOT_FOUND', 'App not found');
+      }
+
+      const features = { ...appConfig.features };
+      if (enabled) {
+        // Absent means "follow the platform flag" — the default state, so an
+        // app that is switched back on carries no override at all.
+        delete features.feedback;
+      } else {
+        features.feedback = false;
+      }
+      const updatedApp = { ...appConfig, features };
+      if (Object.keys(features).length === 0) delete updatedApp.features;
+
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
+        throw new ServiceError('NOT_FOUND', 'App file not found');
+      }
+      await configStore.writeJson(appFilePath, updatedApp);
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'app',
+        resourceId: appId,
+        summary: `${enabled ? 'Enabled' : 'Disabled'} response feedback for app ${appId}`
+      });
+      res.json({
+        message: `Feedback ${enabled ? 'enabled' : 'disabled'} for app ${appId}`,
+        appId,
+        enabled
+      });
     }
   );
 
@@ -1037,66 +984,59 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/apps/_reorder'), contentAdminAuth, async (req, res) => {
-    try {
-      const { ids: requestedIds } = req.body || {};
-      if (!Array.isArray(requestedIds) || requestedIds.length === 0) {
-        return sendBadRequest(res, 'ids must be a non-empty array of app ids');
-      }
-      if (new Set(requestedIds).size !== requestedIds.length) {
-        return sendBadRequest(res, 'ids must not contain duplicates');
-      }
-
-      // Same id validation as every other app route — these reach the filesystem.
-      const ids = validateIdsForPath(requestedIds, 'app', res);
-      if (!ids) {
-        return;
-      }
-
-      const { data: apps } = configCache.getApps(true);
-      const known = new Set(apps.map(a => a.id));
-      const unknown = ids.filter(id => !known.has(id));
-      if (unknown.length > 0) {
-        return sendBadRequest(res, `Unknown app ids: ${unknown.join(', ')}`);
-      }
-
-      const updated = [];
-
-      for (const [index, id] of ids.entries()) {
-        const order = index + 1;
-        const appFilePath = await configStore.resolveIdToPath('apps', id, {
-          createIfMissing: false
-        });
-        if (!appFilePath) {
-          logger.warn('App file not found', { component: 'AdminApps', id });
-          continue;
-        }
-        // Read the stored document, not the cached entry: the cache holds
-        // inheritance already merged in, and writing that back would freeze a
-        // child app's inherited fields into its own config.
-        const stored = await configStore.readJson(appFilePath);
-        if (!stored) {
-          logger.warn('App file not readable', { component: 'AdminApps', id });
-          continue;
-        }
-        if (stored.order === order) continue;
-        stored.order = order;
-        await configStore.writeJson(appFilePath, stored);
-        updated.push(id);
-      }
-
-      await configCache.refreshAppsCache();
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'app',
-        resourceId: updated.join(','),
-        summary: `Reordered ${ids.length} apps (${updated.length} changed)`
-      });
-
-      res.json({ message: 'App order updated successfully', ids, updated });
-    } catch (error) {
-      return sendInternalError(res, error, 'reorder apps');
+    const { ids: requestedIds } = req.body || {};
+    if (!Array.isArray(requestedIds) || requestedIds.length === 0) {
+      throw new ServiceError('BAD_REQUEST', 'ids must be a non-empty array of app ids');
     }
+    if (new Set(requestedIds).size !== requestedIds.length) {
+      throw new ServiceError('BAD_REQUEST', 'ids must not contain duplicates');
+    }
+
+    // Same id validation as every other app route — these reach the filesystem.
+    const ids = assertValidIds(requestedIds, 'app');
+
+    const { data: apps } = configCache.getApps(true);
+    const known = new Set(apps.map(a => a.id));
+    const unknown = ids.filter(id => !known.has(id));
+    if (unknown.length > 0) {
+      throw new ServiceError('BAD_REQUEST', `Unknown app ids: ${unknown.join(', ')}`);
+    }
+
+    const updated = [];
+
+    for (const [index, id] of ids.entries()) {
+      const order = index + 1;
+      const appFilePath = await configStore.resolveIdToPath('apps', id, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
+        logger.warn('App file not found', { component: 'AdminApps', id });
+        continue;
+      }
+      // Read the stored document, not the cached entry: the cache holds
+      // inheritance already merged in, and writing that back would freeze a
+      // child app's inherited fields into its own config.
+      const stored = await configStore.readJson(appFilePath);
+      if (!stored) {
+        logger.warn('App file not readable', { component: 'AdminApps', id });
+        continue;
+      }
+      if (stored.order === order) continue;
+      stored.order = order;
+      await configStore.writeJson(appFilePath, stored);
+      updated.push(id);
+    }
+
+    await configCache.refreshAppsCache();
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'app',
+      resourceId: updated.join(','),
+      summary: `Reordered ${ids.length} apps (${updated.length} changed)`
+    });
+
+    res.json({ message: 'App order updated successfully', ids, updated }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -1171,54 +1111,47 @@ export default function registerAdminAppsRoutes(app) {
     buildServerPath('/api/admin/apps/:appIds/_toggle'),
     contentAdminAuth,
     async (req, res) => {
-      try {
-        const { appIds } = req.params;
-        const { enabled } = req.body;
-        if (typeof enabled !== 'boolean') {
-          return sendBadRequest(res, 'Missing enabled flag');
-        }
-
-        // Validate appIds for security
-        const ids = validateIdsForPath(appIds, 'app', res);
-        if (!ids) {
-          return;
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
-        for (const id of resolvedIds) {
-          const app = apps.find(a => a.id === id);
-          if (!app) continue;
-          if (app.enabled !== enabled) {
-            app.enabled = enabled;
-            // Find the actual file for this app ID (may not match ${id}.json)
-            const appFilePath = await configStore.resolveIdToPath('apps', id, {
-              createIfMissing: false
-            });
-            if (!appFilePath) {
-              logger.warn('App file not found', { component: 'AdminApps', id });
-              continue;
-            }
-            await configStore.writeJson(appFilePath, app);
-          }
-        }
-
-        await configCache.refreshAppsCache();
-        await logAudit({
-          req,
-          action: 'toggle',
-          resource: 'app',
-          resourceId: resolvedIds.join(','),
-          summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
-        });
-        res.json({
-          message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
-          enabled,
-          ids: resolvedIds
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'toggle apps');
+      const { appIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', 'Missing enabled flag');
       }
+
+      // Validate appIds for security
+      const ids = assertValidIds(appIds, 'app');
+
+      const { data: apps } = configCache.getApps(true);
+      const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
+      for (const id of resolvedIds) {
+        const app = apps.find(a => a.id === id);
+        if (!app) continue;
+        if (app.enabled !== enabled) {
+          app.enabled = enabled;
+          // Find the actual file for this app ID (may not match ${id}.json)
+          const appFilePath = await configStore.resolveIdToPath('apps', id, {
+            createIfMissing: false
+          });
+          if (!appFilePath) {
+            logger.warn('App file not found', { component: 'AdminApps', id });
+            continue;
+          }
+          await configStore.writeJson(appFilePath, app);
+        }
+      }
+
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'toggle',
+        resource: 'app',
+        resourceId: resolvedIds.join(','),
+        summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
+      });
+      res.json({
+        message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids: resolvedIds
+      });
     }
   );
 
@@ -1277,44 +1210,38 @@ export default function registerAdminAppsRoutes(app) {
    *               error: "Failed to delete app"
    */
   app.delete(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
-    try {
-      const { appId } = req.params;
+    const { appId } = req.params;
 
-      // Validate appId for security
-      if (!validateIdForPath(appId, 'app', res)) {
-        return;
-      }
+    // Validate appId for security
+    assertValidId(appId, 'app');
 
-      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-        createIfMissing: false
-      });
-      if (!appFilePath) {
-        return sendNotFound(res, 'App');
-      }
-      const { data: currentApps } = configCache.getApps(true);
-      const deletedApp = currentApps.find(a => a.id === appId);
-      if (deletedApp) {
-        await saveSnapshot({
-          resource: 'app',
-          id: appId,
-          before: deletedApp,
-          after: null,
-          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
-        });
-      }
-      await configStore.remove(appFilePath);
-      await configCache.refreshAppsCache();
-      await removeMarketplaceInstallation('app', appId);
-      await logAudit({
-        req,
-        action: 'delete',
-        resource: 'app',
-        resourceId: appId,
-        summary: `Deleted app ${appId}`
-      });
-      res.json({ message: 'App deleted successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'delete app');
+    const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+      createIfMissing: false
+    });
+    if (!appFilePath) {
+      throw new ServiceError('NOT_FOUND', 'App not found');
     }
+    const { data: currentApps } = configCache.getApps(true);
+    const deletedApp = currentApps.find(a => a.id === appId);
+    if (deletedApp) {
+      await saveSnapshot({
+        resource: 'app',
+        id: appId,
+        before: deletedApp,
+        after: null,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+    }
+    await configStore.remove(appFilePath);
+    await configCache.refreshAppsCache();
+    await removeMarketplaceInstallation('app', appId);
+    await logAudit({
+      req,
+      action: 'delete',
+      resource: 'app',
+      resourceId: appId,
+      summary: `Deleted app ${appId}`
+    });
+    res.json({ message: 'App deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 }

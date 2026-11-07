@@ -86,10 +86,12 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 }));
 
 const { default: registerAdminAppsRoutes } = await import('../routes/admin/apps.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
 app.use(express.json());
 registerAdminAppsRoutes(app);
+app.use(errorHandler);
 
 function seed(...apps) {
   for (const key of Object.keys(store)) delete store[key];
@@ -122,11 +124,11 @@ describe('POST /api/admin/apps', () => {
       .send(redirectApp('tool', 'javascript:void(0)'));
 
     expect(res.status).toBe(400);
-    expect(res.body.detail).toMatch(/^Invalid app configuration: /);
-    expect(res.body.detail).toContain('redirectConfig.url: Redirect URL must use http or https');
-    expect(res.body.code).toBe('BAD_REQUEST');
-    expect(res.body.errors).toEqual(
-      expect.arrayContaining([expect.objectContaining({ pointer: '/redirectConfig/url' })])
+    expect(res.body.error).toMatch(/^Invalid app configuration: /);
+    expect(res.body.error).toContain('redirectConfig.url: Redirect URL must use http or https');
+    expect(res.body.code).toBe('VALIDATION_FAILED');
+    expect(res.body.details.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'redirectConfig.url' })])
     );
     expect(store['apps/tool.json']).toBeUndefined();
   });
@@ -137,7 +139,7 @@ describe('POST /api/admin/apps', () => {
       .send(chatApp('helper', { useManual: true }));
 
     expect(res.status).toBe(400);
-    expect(res.body.detail).toContain('useManual');
+    expect(res.body.error).toContain('useManual');
     expect(store['apps/helper.json']).toBeUndefined();
   });
 
@@ -145,7 +147,7 @@ describe('POST /api/admin/apps', () => {
     const res = await request(app).post('/api/admin/apps').send({ id: 'helper' });
 
     expect(res.status).toBe(400);
-    expect(res.body.detail).toBe('Missing required fields');
+    expect(res.body.error).toBe('Missing required fields');
   });
 });
 
@@ -173,7 +175,7 @@ describe('PUT /api/admin/apps/:appId', () => {
       .send({ ...existing, iframeConfig: { url: 'data:text/html,hello' } });
 
     expect(res.status).toBe(400);
-    expect(res.body.detail).toContain('iframeConfig.url: Iframe URL must use http or https');
+    expect(res.body.error).toContain('iframeConfig.url: Iframe URL must use http or https');
     expect(store['apps/embed.json']).toEqual(existing);
   });
 
@@ -185,7 +187,59 @@ describe('PUT /api/admin/apps/:appId', () => {
       .send(chatApp('helper', { color: 'blue' }));
 
     expect(res.status).toBe(400);
-    expect(res.body.detail).toContain('color:');
+    expect(res.body.error).toContain('color:');
     expect(store['apps/helper.json']).toEqual(chatApp('helper'));
+  });
+});
+
+describe('error responses of the app routes', () => {
+  test('answers a duplicate app with CONFLICT and stores nothing new', async () => {
+    seed(chatApp('helper'));
+
+    const res = await request(app).post('/api/admin/apps').send(chatApp('helper'));
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: 'App with this ID already exists', code: 'CONFLICT' });
+  });
+
+  test('answers an unknown app with NOT_FOUND and an unsafe id with BAD_REQUEST', async () => {
+    const missing = await request(app).get('/api/admin/apps/nope');
+    expect(missing.status).toBe(404);
+    expect(missing.body).toEqual({ error: 'App not found', code: 'NOT_FOUND' });
+
+    const unsafe = await request(app).get('/api/admin/apps/bad%20id');
+    expect(unsafe.status).toBe(400);
+    expect(unsafe.body.code).toBe('BAD_REQUEST');
+  });
+
+  test('refuses to change the id of an app', async () => {
+    seed(chatApp('helper'));
+
+    const res = await request(app).put('/api/admin/apps/helper').send(chatApp('other'));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'App ID cannot be changed', code: 'BAD_REQUEST' });
+  });
+
+  test('refuses a reorder with duplicates or unknown ids', async () => {
+    seed(chatApp('helper'));
+
+    const duplicates = await request(app)
+      .post('/api/admin/apps/_reorder')
+      .send({ ids: ['helper', 'helper'] });
+    expect(duplicates.status).toBe(400);
+    expect(duplicates.body.error).toBe('ids must not contain duplicates');
+
+    const unknown = await request(app)
+      .post('/api/admin/apps/_reorder')
+      .send({ ids: ['ghost'] });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.error).toBe('Unknown app ids: ghost');
+  });
+
+  test('answers a missing enabled flag with BAD_REQUEST', async () => {
+    const res = await request(app).post('/api/admin/apps/helper/_toggle').send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Missing enabled flag', code: 'BAD_REQUEST' });
   });
 });

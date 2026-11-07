@@ -27,6 +27,9 @@ export {
   getLinkedModels,
   isReservedProviderId,
   linkedModelProvider,
+  findModelProvider,
+  LLM_TIMEOUT_KEYS,
+  LLM_TIMEOUT_MAX_MS,
   MODEL_API_TYPES,
   providerEnvKeyName
 } from '../../shared/llmProviders.js';

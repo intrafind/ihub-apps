@@ -220,6 +220,22 @@ export function getModelProviderId(model) {
   return model?.providerId || model?.provider || null;
 }
 
+/**
+ * Transport ceilings, in milliseconds, that a provider entry, a model and the
+ * installation (`llm` in platform.json) can each set. Most specific wins:
+ * model, provider entry, installation, environment, built-in default.
+ */
+export const LLM_TIMEOUT_KEYS = Object.freeze(['connectTimeoutMs', 'streamIdleTimeoutMs']);
+
+/** Largest ceiling an admin can set (5 minutes); `0` disables the ceiling. */
+export const LLM_TIMEOUT_MAX_MS = 300000;
+
+/** The provider entry a model takes its API key and transport ceilings from. */
+export function findModelProvider(model, providers) {
+  const id = getModelProviderId(model);
+  return id ? (providers || []).find(provider => provider.id === id) : undefined;
+}
+
 /** Models whose API key comes from the provider entry `providerId`. */
 export function getLinkedModels(providerId, models) {
   return (models || []).filter(model => getModelProviderId(model) === providerId);

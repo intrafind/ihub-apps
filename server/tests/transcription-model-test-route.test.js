@@ -44,6 +44,7 @@ jest.unstable_mockModule('../websocket/realtimeTranscription.js', () => ({
 }));
 
 const { default: registerAdminModelsRoutes } = await import('../routes/admin/models.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { default: configCache } = await import('../configCache.js');
 
 beforeAll(() => {
@@ -59,6 +60,7 @@ afterAll(() => {
 const app = express();
 app.use(express.json());
 registerAdminModelsRoutes(app);
+app.use(errorHandler);
 
 const url = '/api/admin/models/voxtral-mini-realtime/test';
 
@@ -75,34 +77,15 @@ test('a working endpoint passes, and the key is not echoed', async () => {
   expect(tested).toContain('voxtral-mini-realtime');
 });
 
-test('a failing endpoint is a 502 carrying the reason when it is safe to show', async () => {
-  state.result = { ok: false, message: 'The endpoint refused the connection' };
-  const res = await request(app).post(url);
-  expect(res.status).toBe(502);
-  expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
-  expect(res.body).toEqual({
-    type: 'urn:ihub:problem:UPSTREAM_ERROR',
-    title: 'A connected service failed. Please try again later.',
-    status: 502,
-    detail: 'The endpoint refused the connection',
-    code: 'UPSTREAM_ERROR',
-    details: { reason: 'The endpoint refused the connection' }
-  });
-});
-
-test('a failing endpoint whose message names an address keeps it out of detail, and gives it to the admin in details.reason', async () => {
+test('a failing endpoint is a 502 carrying the reason', async () => {
   state.result = { ok: false, message: 'Connection failed: connect ECONNREFUSED' };
   const res = await request(app).post(url);
   expect(res.status).toBe(502);
-  expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
   expect(res.body).toEqual({
-    type: 'urn:ihub:problem:UPSTREAM_ERROR',
-    title: 'A connected service failed. Please try again later.',
-    status: 502,
-    // `detail` is filtered like every 5xx message; this is an admin route, so the operator
-    // still gets the provider's wording to fix the setup.
-    detail: 'A connected service failed. Please try again later.',
+    // The headline of a 5xx is shown only when it is safe to show (it may name a host); the
+    // reason stays in `details.remediation`, which is what the admin UI shows.
+    error: 'A connected service failed. Please try again later.',
     code: 'UPSTREAM_ERROR',
-    details: { reason: 'Connection failed: connect ECONNREFUSED' }
+    details: { remediation: 'Connection failed: connect ECONNREFUSED' }
   });
 });

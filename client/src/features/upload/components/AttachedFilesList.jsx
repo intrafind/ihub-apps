@@ -6,6 +6,14 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize } from '../utils/cloudFileProcessing';
 import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAudio';
+import {
+  canDownloadFile,
+  canDownloadText,
+  contentLineOf,
+  downloadableFile,
+  saveAttachmentFile,
+  saveAttachmentText
+} from '../utils/attachmentContent';
 
 // Auto-collapse the list by default once it reaches this many files. Below the
 // threshold the list stays fully expanded with no collapse chrome — a 1-3 file
@@ -63,8 +71,12 @@ function uploadErrorText(code, t) {
 
 /**
  * Standalone component that displays a list of attached files
- * with source icon, file type icon, name, size, and remove buttons. Audio that
- * was extracted from a video also gets a button to save it as a .wav file.
+ * with source icon, file type icon, name, size, what the assistant gets from it
+ * (the text read from a document, the page images of a scan, the size an image is
+ * sent in) and remove buttons. Audio that was extracted from a video also gets a
+ * button to save it as a .wav file, and a file that came from a cloud storage or
+ * an integration gets buttons to download the original and, for a document, the
+ * extracted text (a local file is the user's own already).
  * Always visible when files are attached, independent of uploader state.
  *
  * To keep the chat input reachable, the list:
@@ -85,6 +97,8 @@ export default function AttachedFilesList({
   const fileCount = files?.length || 0;
   const shouldDefaultCollapse = fileCount >= defaultCollapseThreshold;
   const [overrideExpanded, setOverrideExpanded] = useState(/** @type {boolean|null} */ (null));
+  // A download that failed (the server no longer has the original, or could not be reached)
+  const [downloadNotice, setDownloadNotice] = useState(/** @type {string|null} */ (null));
 
   // Reset the user's expand/collapse override when the number of files changes,
   // so the auto-collapse default re-applies when a 4th file lands (collapses) and
@@ -133,6 +147,22 @@ export default function AttachedFilesList({
     const source = file.source || 'local';
     if (source === 'local') return t('attachedFiles.sourceLocal', 'Local file');
     return t('attachedFiles.sourceCloud', 'Cloud file');
+  };
+
+  const download = async (task, file) => {
+    setDownloadNotice(null);
+    try {
+      if (!(await task(file))) throw new Error('save');
+    } catch (error) {
+      setDownloadNotice(
+        error?.status === 410 || error?.code === 'ORIGINAL_DISCARDED'
+          ? t(
+              'attachedFiles.downloadDiscarded',
+              'The original file is no longer stored; only its text is kept.'
+            )
+          : t('attachedFiles.downloadFailed', 'The download failed. Please try again.')
+      );
+    }
   };
 
   // Build the always-visible summary line for the collapsed header. Total size
@@ -287,6 +317,14 @@ export default function AttachedFilesList({
                       </output>
                     )}
                   </div>
+                  {contentLineOf(file, t) && (
+                    <div
+                      className="text-xs text-gray-500 dark:text-gray-400"
+                      data-testid="attached-file-content"
+                    >
+                      {contentLineOf(file, t)}
+                    </div>
+                  )}
                   {file.uploadState === 'uploading' && (
                     <progress
                       className="mt-1 block h-1.5 w-full overflow-hidden rounded-full accent-indigo-500"
@@ -315,6 +353,42 @@ export default function AttachedFilesList({
                   </button>
                 )}
 
+                {/* Downloads — only for a file from a cloud storage or an integration: a local
+                    file is the user's own already. The original is the file as it was handed
+                    over; the text is what the assistant reads from it. */}
+                {(file.source || 'local') !== 'local' && canDownloadFile(file) && (
+                  <button
+                    type="button"
+                    onClick={() => download(saveAttachmentFile, file)}
+                    className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    title={
+                      downloadableFile(file)?.kind === 'sent'
+                        ? t('attachedFiles.downloadSent', 'Download the image as sent to the model')
+                        : t('attachedFiles.downloadOriginal', 'Download original file')
+                    }
+                    aria-label={t('attachedFiles.downloadOriginalNamed', 'Download {{name}}', {
+                      name: file.fileName
+                    })}
+                  >
+                    <Icon name="download" size="sm" />
+                  </button>
+                )}
+                {(file.source || 'local') !== 'local' && canDownloadText(file) && (
+                  <button
+                    type="button"
+                    onClick={() => download(saveAttachmentText, file)}
+                    className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    title={t('attachedFiles.downloadText', 'Download the extracted text')}
+                    aria-label={t(
+                      'attachedFiles.downloadTextNamed',
+                      'Download the extracted text of {{name}}',
+                      { name: file.fileName }
+                    )}
+                  >
+                    <Icon name="document-text" size="sm" />
+                  </button>
+                )}
+
                 {/* Remove button */}
                 <button
                   type="button"
@@ -329,6 +403,16 @@ export default function AttachedFilesList({
               </div>
             ))}
           </div>
+
+          {downloadNotice && (
+            <p
+              role="alert"
+              className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400 border-t border-gray-200 dark:border-gray-700"
+              data-testid="attached-file-download-error"
+            >
+              {downloadNotice}
+            </p>
+          )}
 
           {/* Footer with file count and remove all button — stays outside the
               scroll region so it's always visible. */}

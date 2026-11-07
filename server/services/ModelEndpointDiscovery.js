@@ -20,6 +20,7 @@
  */
 
 import { httpFetch, redactUrlSecrets } from '../utils/httpConfig.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import logger from '../utils/logger.js';
 import {
   CONTEXT_WINDOW_MAX,
@@ -47,21 +48,27 @@ const DISCOVERY_TIMEOUT_MS = 15000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 
 /** Most entries returned to the browser. */
-const MAX_MODELS = 5000;
+export const MAX_MODELS = 5000;
 
 /**
  * Error raised for anything the admin has to fix: a bad URL, an endpoint that
  * rejects the key, a body that is not a model listing. `messageKey` is the
- * stable identifier the client translates; `status` is the HTTP status the
+ * stable identifier the client translates (`details.messageKey`, with the
+ * remediation text in `details.remediation`); `status` is the HTTP status the
  * route answers with.
  */
-export class ModelDiscoveryError extends Error {
+export class ModelDiscoveryError extends ServiceError {
   constructor(messageKey, message, { status = 502, details, upstreamStatus } = {}) {
-    super(message);
+    super('DISCOVERY_FAILED', message, {
+      status,
+      details: {
+        messageKey,
+        ...(details === undefined ? {} : { remediation: details }),
+        ...(upstreamStatus === undefined ? {} : { upstreamStatus })
+      }
+    });
     this.name = 'ModelDiscoveryError';
     this.messageKey = messageKey;
-    this.status = status;
-    this.details = details;
     this.upstreamStatus = upstreamStatus;
   }
 }

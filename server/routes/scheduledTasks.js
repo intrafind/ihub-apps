@@ -55,10 +55,8 @@ import { withUserFileLimit } from '../services/quota/quotaService.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import {
   ingestRequestFile,
-  isChatFileFailure,
   isMultipartRequest,
-  parseChatFileMultipart,
-  sendChatFileFailure
+  parseChatFileMultipart
 } from '../services/chatFiles/fileUploadRequest.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { canUserAccessResource } from '../utils/authorization.js';
@@ -135,12 +133,6 @@ function taskFileStore() {
     throw new ServiceError('STORAGE_UNAVAILABLE', 'File storage is unavailable');
   }
   return store;
-}
-
-/** Chat-file failures keep their own answer; everything else goes to the error middleware. */
-function sendTaskFileError(res, error, next) {
-  if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
-  return next(error);
 }
 
 function requestTimezone(req) {
@@ -487,95 +479,79 @@ export default function registerScheduledTaskRoutes(app) {
   // Files of the task definition, in the `task` scope of the chat-file store:
   // they stay until the task (or the file) is deleted and every run sees them.
 
-  app.get(`${base}/:taskId/files`, ...guard, async (req, res, next) => {
-    try {
-      assertValidId(req.params.taskId, 'task');
-      const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore();
-      res.json({ items: await store.list(scope) });
-    } catch (error) {
-      sendTaskFileError(res, error, next);
-    }
+  app.get(`${base}/:taskId/files`, ...guard, async (req, res) => {
+    assertValidId(req.params.taskId, 'task');
+    const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+    const store = taskFileStore();
+    res.json({ items: await store.list(scope) });
   });
 
-  app.post(`${base}/:taskId/files`, ...guard, fileLimiter, async (req, res, next) => {
-    try {
-      assertValidId(req.params.taskId, 'task');
-      tasks.assertPrincipal(req.user);
-      const { task, ownerId, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore();
-      const taskApp = findByIdCaseInsensitive(configCache.getApps()?.data || [], task.appId);
-      const policy = withUserFileLimit(chatFilePolicy(taskApp), req.user);
-      if (!policy.enabled) {
-        throw new ServiceError('UPLOADS_DISABLED', 'File uploads are disabled');
-      }
-      if (isMultipartRequest(req)) {
-        if (!(await parseChatFileMultipart(req, res, policy.quotas?.maxFileBytes))) return;
-      }
-      const file = await ingestRequestFile({
-        req,
-        scope,
-        ownerId,
-        appConfig: taskApp,
-        policy,
-        store,
-        user: req.user
-      });
-      audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
-      res.status(201).json({ file });
-    } catch (error) {
-      sendTaskFileError(res, error, next);
+  app.post(`${base}/:taskId/files`, ...guard, fileLimiter, async (req, res) => {
+    assertValidId(req.params.taskId, 'task');
+    tasks.assertPrincipal(req.user);
+    const { task, ownerId, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+    const store = taskFileStore();
+    const taskApp = findByIdCaseInsensitive(configCache.getApps()?.data || [], task.appId);
+    const policy = withUserFileLimit(chatFilePolicy(taskApp), req.user);
+    if (!policy.enabled) {
+      throw new ServiceError('UPLOADS_DISABLED', 'File uploads are disabled');
     }
+    if (isMultipartRequest(req)) {
+      await parseChatFileMultipart(req, res, policy.quotas?.maxFileBytes);
+    }
+    const file = await ingestRequestFile({
+      req,
+      scope,
+      ownerId,
+      appConfig: taskApp,
+      policy,
+      store,
+      user: req.user
+    });
+    audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
+    res.status(201).json({ file });
   });
 
-  app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res, next) => {
-    try {
-      assertValidId(req.params.taskId, 'task');
-      assertValidId(req.params.fileId, 'file');
-      const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore();
-      const { fileId } = req.params;
-      if (req.query.format === 'text') {
-        const text = await store.getText(scope, fileId);
-        if (!text) throw new ServiceError('NOT_FOUND', 'File not found');
-        return res.json({ file: text });
-      }
-      const original = await store.getOriginal(scope, fileId);
-      if (!original) throw new ServiceError('NOT_FOUND', 'File not found');
-      if (original.discarded) {
-        throw new ServiceError(
-          'ORIGINAL_DISCARDED',
-          'The original file is not stored; its extracted text is'
-        );
-      }
-      const download = req.query.download === '1' || req.query.download === 'true';
-      res.setHeader('Content-Type', servedMediaType(original.mimeType));
-      res.setHeader('Content-Length', String(original.data.length));
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.setHeader(
-        'Content-Disposition',
-        download ? buildContentDisposition(original.name) : 'inline'
+  app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.fileId, 'file');
+    const { scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+    const store = taskFileStore();
+    const { fileId } = req.params;
+    if (req.query.format === 'text') {
+      const text = await store.getText(scope, fileId);
+      if (!text) throw new ServiceError('NOT_FOUND', 'File not found');
+      return res.json({ file: text });
+    }
+    const original = await store.getOriginal(scope, fileId);
+    if (!original) throw new ServiceError('NOT_FOUND', 'File not found');
+    if (original.discarded) {
+      throw new ServiceError(
+        'ORIGINAL_DISCARDED',
+        'The original file is not stored; its extracted text is'
       );
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.send(original.data);
-    } catch (error) {
-      sendTaskFileError(res, error, next);
     }
+    const download = req.query.download === '1' || req.query.download === 'true';
+    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    res.setHeader('Content-Length', String(original.data.length));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader(
+      'Content-Disposition',
+      download ? buildContentDisposition(original.name) : 'inline'
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(original.data);
   });
 
-  app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res, next) => {
-    try {
-      assertValidId(req.params.taskId, 'task');
-      assertValidId(req.params.fileId, 'file');
-      const { task, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
-      const store = taskFileStore();
-      const deleted = await store.delete(scope, req.params.fileId);
-      if (!deleted) throw new ServiceError('NOT_FOUND', 'File not found');
-      audit(req, 'file-remove', task.id, 'Removed a file from scheduled task');
-      res.json({ deleted: true });
-    } catch (error) {
-      sendTaskFileError(res, error, next);
-    }
+  app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
+    assertValidId(req.params.taskId, 'task');
+    assertValidId(req.params.fileId, 'file');
+    const { task, scope } = await tasks.authorizeTaskFiles(req.user, req.params.taskId);
+    const store = taskFileStore();
+    const deleted = await store.delete(scope, req.params.fileId);
+    if (!deleted) throw new ServiceError('NOT_FOUND', 'File not found');
+    audit(req, 'file-remove', task.id, 'Removed a file from scheduled task');
+    res.json({ deleted: true });
   });
 
   app.get(`${base}/:taskId/runs`, ...guard, async (req, res) => {

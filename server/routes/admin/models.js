@@ -6,16 +6,12 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { isApiErrorCode } from '../../../shared/apiErrors.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
@@ -24,11 +20,7 @@ import { isTranscriptionModel } from '../../transcription/index.js';
 import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
-import {
-  discoverModels,
-  comparableUrl,
-  ModelDiscoveryError
-} from '../../services/ModelEndpointDiscovery.js';
+import { discoverModels, comparableUrl } from '../../services/ModelEndpointDiscovery.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   gatewayModelProvider,
@@ -55,46 +47,46 @@ const VOICE_SAMPLE_EXTENSIONS = new Set([
 ]);
 
 /**
- * The TTS model and its provider for a voices request, or an error response.
- * Disabled models are allowed, so voices can be set up before enabling.
+ * The TTS model and its provider for a voices request. Throws the error response when there is
+ * none. Disabled models are allowed, so voices can be set up before enabling.
  */
-function resolveVoicesModel(req, res) {
+function resolveVoicesModel(req) {
   const { modelId } = req.params;
-  if (!validateIdForPath(modelId, 'model', res)) return null;
+  assertValidId(modelId, 'model');
   const { data: models } = configCache.getModels(true);
   const model = models.find(m => m.id === modelId);
   if (!model) {
-    sendNotFound(res, 'Model');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'Model not found');
   }
   if (!isTtsModel(model)) {
-    sendErrorResponse(res, 400, 'Not a text-to-speech model', { code: 'NOT_TTS_MODEL' });
-    return null;
+    throw new ServiceError('NOT_TTS_MODEL', 'Not a text-to-speech model');
   }
   const provider = getTtsProvider(model.provider);
   if (!provider?.listVoices) {
-    sendErrorResponse(res, 501, `Provider "${model.provider}" does not manage voices`, {
-      code: 'VOICES_UNSUPPORTED'
-    });
-    return null;
+    throw new ServiceError(
+      'VOICES_UNSUPPORTED',
+      `Provider "${model.provider}" does not manage voices`
+    );
   }
   return { model, provider, cfg: provider.resolveUpstream(model) };
 }
 
-/** Upstream failures carry a safe message; anything else stays in the log. */
-function sendVoicesError(res, error, action) {
+/**
+ * The error a failed upstream voices call becomes. Upstream failures carry a safe message;
+ * anything else stays in the log.
+ *
+ * @param {Error} error - What the provider threw
+ * @param {string} action - What was attempted ("list voices")
+ * @returns {ServiceError} `UPSTREAM_ERROR` (502)
+ */
+function voicesError(error, action) {
   logger.error(`Text-to-speech voices: ${action} failed`, {
     component: 'ModelsRoutes',
     upstreamStatus: error.status,
     error: error.message
   });
   const message = error.name === 'TtsUpstreamError' ? error.message : `Could not ${action}`;
-  // An admin route: the provider's own wording is what the operator needs to fix the setup, and
-  // the 5xx filter on `detail` would hide it as soon as it names a host or says "token".
-  return sendErrorResponse(res, 502, message, {
-    code: 'UPSTREAM_ERROR',
-    details: { reason: message }
-  });
+  return new ServiceError('UPSTREAM_ERROR', message, { cause: error });
 }
 
 /**
@@ -349,29 +341,25 @@ export default function registerAdminModelsRoutes(app) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
-    try {
-      const { data: models, etag: modelsEtag } = configCache.getModels(true);
+    const { data: models, etag: modelsEtag } = configCache.getModels(true);
 
-      // Mask API keys in the response for security
-      const maskedModels = models.map(model => {
-        const maskedModel = { ...model };
-        if (maskedModel.apiKey) {
-          // Show masked value to indicate a key is set
-          maskedModel.apiKeyMasked = '••••••••';
-          maskedModel.apiKeySet = true;
-          // Remove the actual encrypted key from response
-          delete maskedModel.apiKey;
-        } else {
-          maskedModel.apiKeySet = false;
-        }
-        return maskedModel;
-      });
+    // Mask API keys in the response for security
+    const maskedModels = models.map(model => {
+      const maskedModel = { ...model };
+      if (maskedModel.apiKey) {
+        // Show masked value to indicate a key is set
+        maskedModel.apiKeyMasked = '••••••••';
+        maskedModel.apiKeySet = true;
+        // Remove the actual encrypted key from response
+        delete maskedModel.apiKey;
+      } else {
+        maskedModel.apiKeySet = false;
+      }
+      return maskedModel;
+    });
 
-      res.setHeader('ETag', modelsEtag);
-      res.json(maskedModels);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch all models');
-    }
+    res.setHeader('ETag', modelsEtag);
+    res.json(maskedModels);
   });
 
   /**
@@ -438,10 +426,10 @@ export default function registerAdminModelsRoutes(app) {
   app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
     const { url, providerId, apiType = 'openai', apiKey, gateway } = req.body || {};
     if (url !== undefined && url !== null && typeof url !== 'string') {
-      return sendBadRequest(res, 'Invalid URL');
+      throw new ServiceError('BAD_REQUEST', 'Invalid URL');
     }
     if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
-      return sendBadRequest(res, 'Invalid API key');
+      throw new ServiceError('BAD_REQUEST', 'Invalid API key');
     }
 
     let discoveryUrl = (url || '').trim();
@@ -450,68 +438,53 @@ export default function registerAdminModelsRoutes(app) {
     let discoveryGateway = typeof gateway === 'string' && gateway ? gateway : undefined;
     let discoveryKey = (apiKey || '').trim();
 
-    try {
-      if (providerId !== undefined && providerId !== null && providerId !== '') {
-        if (!validateIdForPath(providerId, 'provider', res)) {
-          return;
-        }
-        const { data: providers = [] } = configCache.getProviders(true);
-        const providerEntry = providers.find(p => p.id === providerId);
-        if (!providerEntry) {
-          return sendNotFound(res, 'Provider');
-        }
-        discoveryApiType = getProviderApiType(providerEntry);
-        discoveryGateway = isGatewayProvider(providerEntry) ? providerEntry.gateway : undefined;
-        if (!discoveryApiType) {
-          return sendBadRequest(res, `Provider "${providerId}" is not an LLM provider`);
-        }
-        if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
-        if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
-      } else if (typeof apiType !== 'string') {
-        return sendBadRequest(res, 'Invalid API type');
+    if (providerId !== undefined && providerId !== null && providerId !== '') {
+      assertValidId(providerId, 'provider');
+      const { data: providers = [] } = configCache.getProviders(true);
+      const providerEntry = providers.find(p => p.id === providerId);
+      if (!providerEntry) {
+        throw new ServiceError('NOT_FOUND', 'Provider not found');
       }
-
-      if (!discoveryUrl) {
-        return sendBadRequest(res, 'URL is required');
+      discoveryApiType = getProviderApiType(providerEntry);
+      discoveryGateway = isGatewayProvider(providerEntry) ? providerEntry.gateway : undefined;
+      if (!discoveryApiType) {
+        throw new ServiceError('BAD_REQUEST', `Provider "${providerId}" is not an LLM provider`);
       }
-
-      const result = await discoverModels({
-        url: discoveryUrl,
-        provider: discoveryApiType,
-        apiKey: discoveryKey,
-        gateway: discoveryGateway
-      });
-
-      // Flag listed models an existing config already points at (same remote
-      // model id on the same endpoint), so the admin does not import twice.
-      const { data: configured = [] } = configCache.getModels(true);
-      const existing = new Map();
-      for (const model of configured) {
-        existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
-      }
-      res.json({
-        apiType: result.provider,
-        modelsUrl: result.modelsUrl,
-        baseUrl: result.baseUrl,
-        azure: result.azure,
-        gateway: result.gateway || null,
-        models: result.models.map(model => ({
-          ...model,
-          existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
-        }))
-      });
-    } catch (error) {
-      if (error instanceof ModelDiscoveryError) {
-        return sendErrorResponse(res, error.status, error.message, {
-          details: {
-            remediation: error.details,
-            messageKey: error.messageKey,
-            upstreamStatus: error.upstreamStatus
-          }
-        });
-      }
-      return sendInternalError(res, error, 'discover models');
+      if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
+      if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+    } else if (typeof apiType !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid API type');
     }
+
+    if (!discoveryUrl) {
+      throw new ServiceError('BAD_REQUEST', 'URL is required');
+    }
+
+    const result = await discoverModels({
+      url: discoveryUrl,
+      provider: discoveryApiType,
+      apiKey: discoveryKey,
+      gateway: discoveryGateway
+    });
+
+    // Flag listed models an existing config already points at (same remote
+    // model id on the same endpoint), so the admin does not import twice.
+    const { data: configured = [] } = configCache.getModels(true);
+    const existing = new Map();
+    for (const model of configured) {
+      existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
+    }
+    res.json({
+      apiType: result.provider,
+      modelsUrl: result.modelsUrl,
+      baseUrl: result.baseUrl,
+      azure: result.azure,
+      gateway: result.gateway || null,
+      models: result.models.map(model => ({
+        ...model,
+        existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
+      }))
+    });
   });
 
   /**
@@ -538,384 +511,335 @@ export default function registerAdminModelsRoutes(app) {
    *         description: Admin authentication required
    */
   app.get(buildServerPath('/api/admin/models/_key-status'), adminAuth, async (req, res) => {
-    try {
-      const { data: models } = configCache.getModels(true);
-      // Entries rather than assignments: an id such as `__proto__` would set
-      // the prototype of a plain object instead of adding a property.
-      const entries = [];
-      for (const model of models) {
-        // Speech models resolve their credentials on their own path.
-        if (!isChatModel(model)) continue;
-        const enabled = model.enabled !== false;
-        if (model.provider === 'iassistant-conversation') {
-          entries.push([model.id, { state: 'keyless', source: 'none', envVar: null, enabled }]);
-          continue;
-        }
-        const { state, source, envVar } = inspectModelApiKey(model, { quiet: true });
-        entries.push([model.id, { state, source, envVar, enabled }]);
+    const { data: models } = configCache.getModels(true);
+    // Entries rather than assignments: an id such as `__proto__` would set
+    // the prototype of a plain object instead of adding a property.
+    const entries = [];
+    for (const model of models) {
+      // Speech models resolve their credentials on their own path.
+      if (!isChatModel(model)) continue;
+      const enabled = model.enabled !== false;
+      if (model.provider === 'iassistant-conversation') {
+        entries.push([model.id, { state: 'keyless', source: 'none', envVar: null, enabled }]);
+        continue;
       }
-      const statuses = Object.fromEntries(entries);
-      // Depends on providers and the environment as well as on the models, so
-      // it must not ride on the models' ETag.
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({ statuses });
-    } catch (error) {
-      return sendInternalError(res, error, 'read model key status');
+      const { state, source, envVar } = inspectModelApiKey(model, { quiet: true });
+      entries.push([model.id, { state, source, envVar, enabled }]);
     }
+    const statuses = Object.fromEntries(entries);
+    // Depends on providers and the environment as well as on the models, so
+    // it must not ride on the models' ETag.
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ statuses });
   });
 
   app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
-    try {
-      const { modelId } = req.params;
+    const { modelId } = req.params;
 
-      // Validate modelId for security
-      if (!validateIdForPath(modelId, 'model', res)) {
-        return;
-      }
+    // Validate modelId for security
+    assertValidId(modelId, 'model');
 
-      const { data: models, etag: modelsEtag } = configCache.getModels(true);
-      const model = models.find(m => m.id === modelId);
-      if (!model) {
-        return sendNotFound(res, 'Model');
-      }
-
-      // Mask API key in the response for security
-      const maskedModel = { ...model };
-      if (maskedModel.apiKey) {
-        // Show masked value to indicate a key is set
-        maskedModel.apiKeyMasked = '••••••••';
-        maskedModel.apiKeySet = true;
-        // Remove the actual encrypted key from response
-        delete maskedModel.apiKey;
-      } else {
-        maskedModel.apiKeySet = false;
-      }
-
-      res.setHeader('ETag', modelsEtag);
-      res.json(maskedModel);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch model');
+    const { data: models, etag: modelsEtag } = configCache.getModels(true);
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      throw new ServiceError('NOT_FOUND', 'Model not found');
     }
+
+    // Mask API key in the response for security
+    const maskedModel = { ...model };
+    if (maskedModel.apiKey) {
+      // Show masked value to indicate a key is set
+      maskedModel.apiKeyMasked = '••••••••';
+      maskedModel.apiKeySet = true;
+      // Remove the actual encrypted key from response
+      delete maskedModel.apiKey;
+    } else {
+      maskedModel.apiKeySet = false;
+    }
+
+    res.setHeader('ETag', modelsEtag);
+    res.json(maskedModel);
   });
 
   app.put(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
-    try {
-      const { modelId } = req.params;
-      const updatedModel = req.body;
+    const { modelId } = req.params;
+    const updatedModel = req.body;
 
-      // Validate modelId for security
-      if (!validateIdForPath(modelId, 'model', res)) {
-        return;
-      }
+    // Validate modelId for security
+    assertValidId(modelId, 'model');
 
-      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-      if (
-        !updatedModel.id ||
-        !getLocalizedContent(updatedModel.name, defaultLang) ||
-        !getLocalizedContent(updatedModel.description, defaultLang) ||
-        !updatedModel.provider
-      ) {
-        return sendBadRequest(res, 'Missing required fields');
-      }
-      if (updatedModel.id !== modelId) {
-        return sendBadRequest(res, 'Model ID cannot be changed');
-      }
-      const providerLinkError = applyProviderLink(updatedModel);
-      if (providerLinkError) {
-        return sendBadRequest(res, providerLinkError);
-      }
-
-      // Handle API key encryption
-      if (updatedModel.apiKey) {
-        // Check if this is a new key or unchanged masked value
-        if (updatedModel.apiKey !== '••••••••') {
-          // New key provided - encrypt it
-          try {
-            updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
-          } catch (error) {
-            return sendInternalError(res, error, 'encrypt API key');
-          }
-        } else {
-          // Masked value - need to preserve existing key
-          // CRITICAL FIX: Read the stored document, not the cache, to ensure we
-          // have the apiKey field. The cache might not have it due to TTL
-          // expiration or race conditions.
-          const storedModel = await configStore.readJson(await modelPath(modelId));
-          if (storedModel?.apiKey) {
-            // Preserve the existing encrypted API key
-            updatedModel.apiKey = storedModel.apiKey;
-          } else {
-            // Nothing stored to preserve, drop the masked placeholder
-            delete updatedModel.apiKey;
-          }
-        }
-      }
-
-      // Remove client-side helper fields
-      delete updatedModel.apiKeySet;
-      delete updatedModel.apiKeyMasked;
-
-      const limitsError = normalizeModelUsageLimits(updatedModel);
-      if (limitsError) return sendBadRequest(res, limitsError);
-
-      if (!isChatModel(updatedModel)) updatedModel.default = false;
-      if (updatedModel.default === true) {
-        const modelsResponse = configCache.getModels(true);
-        const allModels = modelsResponse.data || modelsResponse;
-        for (const model of allModels) {
-          if (model.id !== modelId && model.default === true) {
-            model.default = false;
-            await configStore.writeJson(await modelPath(model.id), model);
-          }
-        }
-      }
-      // Capture old model state before writing
-      const { data: currentModels } = configCache.getModels(true);
-      const oldModel = currentModels.find(m => m.id === modelId);
-
-      await configStore.writeJson(await modelPath(modelId), updatedModel);
-      await configCache.refreshModelsCache();
-      if (oldModel) {
-        await saveSnapshot({
-          resource: 'model',
-          id: modelId,
-          before: oldModel,
-          after: updatedModel,
-          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
-        });
-      }
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'model',
-        resourceId: modelId,
-        summary: `Updated model ${modelId}`
-      });
-      res.json({ message: 'Model updated successfully', model: updatedModel });
-    } catch (error) {
-      return sendInternalError(res, error, 'update model');
+    const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+    if (
+      !updatedModel.id ||
+      !getLocalizedContent(updatedModel.name, defaultLang) ||
+      !getLocalizedContent(updatedModel.description, defaultLang) ||
+      !updatedModel.provider
+    ) {
+      throw new ServiceError('BAD_REQUEST', 'Missing required fields');
     }
+    if (updatedModel.id !== modelId) {
+      throw new ServiceError('BAD_REQUEST', 'Model ID cannot be changed');
+    }
+    const providerLinkError = applyProviderLink(updatedModel);
+    if (providerLinkError) {
+      throw new ServiceError('BAD_REQUEST', providerLinkError);
+    }
+
+    // Handle API key encryption
+    if (updatedModel.apiKey) {
+      // Check if this is a new key or unchanged masked value
+      if (updatedModel.apiKey !== '••••••••') {
+        // New key provided - encrypt it
+        updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
+      } else {
+        // Masked value - need to preserve existing key
+        // CRITICAL FIX: Read the stored document, not the cache, to ensure we
+        // have the apiKey field. The cache might not have it due to TTL
+        // expiration or race conditions.
+        const storedModel = await configStore.readJson(await modelPath(modelId));
+        if (storedModel?.apiKey) {
+          // Preserve the existing encrypted API key
+          updatedModel.apiKey = storedModel.apiKey;
+        } else {
+          // Nothing stored to preserve, drop the masked placeholder
+          delete updatedModel.apiKey;
+        }
+      }
+    }
+
+    // Remove client-side helper fields
+    delete updatedModel.apiKeySet;
+    delete updatedModel.apiKeyMasked;
+
+    const limitsError = normalizeModelUsageLimits(updatedModel);
+    if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+
+    if (!isChatModel(updatedModel)) updatedModel.default = false;
+    if (updatedModel.default === true) {
+      const modelsResponse = configCache.getModels(true);
+      const allModels = modelsResponse.data || modelsResponse;
+      for (const model of allModels) {
+        if (model.id !== modelId && model.default === true) {
+          model.default = false;
+          await configStore.writeJson(await modelPath(model.id), model);
+        }
+      }
+    }
+    // Capture old model state before writing
+    const { data: currentModels } = configCache.getModels(true);
+    const oldModel = currentModels.find(m => m.id === modelId);
+
+    await configStore.writeJson(await modelPath(modelId), updatedModel);
+    await configCache.refreshModelsCache();
+    if (oldModel) {
+      await saveSnapshot({
+        resource: 'model',
+        id: modelId,
+        before: oldModel,
+        after: updatedModel,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+    }
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'model',
+      resourceId: modelId,
+      summary: `Updated model ${modelId}`
+    });
+    res.json({ message: 'Model updated successfully', model: updatedModel }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
-    try {
-      const newModel = req.body;
-      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-      if (
-        !newModel.id ||
-        !getLocalizedContent(newModel.name, defaultLang) ||
-        !getLocalizedContent(newModel.description, defaultLang) ||
-        !newModel.provider
-      ) {
-        return sendBadRequest(res, 'Missing required fields');
-      }
-
-      // Validate newModel.id for security
-      if (!validateIdForPath(newModel.id, 'model', res)) {
-        return;
-      }
-      const limitsError = normalizeModelUsageLimits(newModel);
-      if (limitsError) return sendBadRequest(res, limitsError);
-
-      const providerLinkError = applyProviderLink(newModel);
-      if (providerLinkError) {
-        return sendBadRequest(res, providerLinkError);
-      }
-
-      // Handle API key encryption
-      if (newModel.apiKey && newModel.apiKey !== '••••••••') {
-        // New key provided - encrypt it
-        try {
-          newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
-        } catch (error) {
-          return sendInternalError(res, error, 'encrypt API key');
-        }
-      } else if (newModel.apiKey === '••••••••') {
-        // Remove masked placeholder if no real key
-        delete newModel.apiKey;
-      }
-
-      // Remove client-side helper fields
-      delete newModel.apiKeySet;
-      delete newModel.apiKeyMasked;
-
-      // The duplicate check stays ahead of the default-demotion below: a 409
-      // must not leave every other model stripped of its default flag.
-      const newModelPath = `models/${newModel.id}.json`;
-      if ((await configStore.readJson(newModelPath)) !== null) {
-        return sendErrorResponse(res, 409, 'Model with this ID already exists');
-      }
-      if (!isChatModel(newModel)) newModel.default = false;
-      if (newModel.default === true) {
-        const modelsResponse = configCache.getModels(true);
-        const allModels = modelsResponse.data || modelsResponse;
-        for (const model of allModels) {
-          if (model.default === true) {
-            model.default = false;
-            await configStore.writeJson(await modelPath(model.id), model);
-          }
-        }
-      }
-      await configStore.writeJson(newModelPath, newModel);
-      await configCache.refreshModelsCache();
-      await logAudit({
-        req,
-        action: 'create',
-        resource: 'model',
-        resourceId: newModel.id,
-        summary: `Created model ${newModel.id}`
-      });
-      res.json({ message: 'Model created successfully', model: newModel });
-    } catch (error) {
-      return sendInternalError(res, error, 'create model');
+    const newModel = req.body;
+    const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+    if (
+      !newModel.id ||
+      !getLocalizedContent(newModel.name, defaultLang) ||
+      !getLocalizedContent(newModel.description, defaultLang) ||
+      !newModel.provider
+    ) {
+      throw new ServiceError('BAD_REQUEST', 'Missing required fields');
     }
+
+    // Validate newModel.id for security
+    assertValidId(newModel.id, 'model');
+    const limitsError = normalizeModelUsageLimits(newModel);
+    if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+
+    const providerLinkError = applyProviderLink(newModel);
+    if (providerLinkError) {
+      throw new ServiceError('BAD_REQUEST', providerLinkError);
+    }
+
+    // Handle API key encryption
+    if (newModel.apiKey && newModel.apiKey !== '••••••••') {
+      // New key provided - encrypt it
+      newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
+    } else if (newModel.apiKey === '••••••••') {
+      // Remove masked placeholder if no real key
+      delete newModel.apiKey;
+    }
+
+    // Remove client-side helper fields
+    delete newModel.apiKeySet;
+    delete newModel.apiKeyMasked;
+
+    // The duplicate check stays ahead of the default-demotion below: a 409
+    // must not leave every other model stripped of its default flag.
+    const newModelPath = `models/${newModel.id}.json`;
+    if ((await configStore.readJson(newModelPath)) !== null) {
+      throw new ServiceError('CONFLICT', 'Model with this ID already exists');
+    }
+    if (!isChatModel(newModel)) newModel.default = false;
+    if (newModel.default === true) {
+      const modelsResponse = configCache.getModels(true);
+      const allModels = modelsResponse.data || modelsResponse;
+      for (const model of allModels) {
+        if (model.default === true) {
+          model.default = false;
+          await configStore.writeJson(await modelPath(model.id), model);
+        }
+      }
+    }
+    await configStore.writeJson(newModelPath, newModel);
+    await configCache.refreshModelsCache();
+    await logAudit({
+      req,
+      action: 'create',
+      resource: 'model',
+      resourceId: newModel.id,
+      summary: `Created model ${newModel.id}`
+    });
+    res.json({ message: 'Model created successfully', model: newModel }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   app.post(buildServerPath('/api/admin/models/:modelId/toggle'), adminAuth, async (req, res) => {
-    try {
-      const { modelId } = req.params;
+    const { modelId } = req.params;
 
-      // Validate modelId for security
-      if (!validateIdForPath(modelId, 'model', res)) {
-        return;
-      }
+    // Validate modelId for security
+    assertValidId(modelId, 'model');
 
-      const { data: models } = configCache.getModels(true);
-      const model = models.find(m => m.id === modelId);
-      if (!model) {
-        return sendNotFound(res, 'Model');
-      }
-      const newEnabledState = !model.enabled;
-      model.enabled = newEnabledState;
-      if (!newEnabledState && model.default === true) {
-        const enabledModels = models.filter(
-          m => m.id !== modelId && m.enabled === true && isChatModel(m)
-        );
-        if (enabledModels.length > 0) {
-          enabledModels[0].default = true;
-          await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
-        }
-        model.default = false;
-      }
-      await configStore.writeJson(await modelPath(modelId), model);
-      await configCache.refreshModelsCache();
-      await logAudit({
-        req,
-        action: 'toggle',
-        resource: 'model',
-        resourceId: modelId,
-        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
-      });
-      res.json({
-        message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        model: model,
-        enabled: newEnabledState
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'toggle model');
+    const { data: models } = configCache.getModels(true);
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      throw new ServiceError('NOT_FOUND', 'Model not found');
     }
-  });
-
-  app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
-    try {
-      const { modelIds } = req.params;
-      const { enabled } = req.body;
-      if (typeof enabled !== 'boolean') {
-        return sendBadRequest(res, 'Missing enabled flag');
-      }
-
-      // Validate modelIds for security
-      const ids = validateIdsForPath(modelIds, 'model', res);
-      if (!ids) {
-        return;
-      }
-
-      const { data: models } = configCache.getModels(true);
-      const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
-
-      for (const id of resolvedIds) {
-        const model = models.find(m => m.id === id);
-        if (!model) continue;
-        model.enabled = enabled;
-        if (!enabled) {
-          model.default = false;
-        }
-        await configStore.writeJson(await modelPath(id), model);
-      }
-
-      // ensure at least one enabled model has default=true
-      const enabledModels = models.filter(m => m.enabled && isChatModel(m));
-      if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
+    const newEnabledState = !model.enabled;
+    model.enabled = newEnabledState;
+    if (!newEnabledState && model.default === true) {
+      const enabledModels = models.filter(
+        m => m.id !== modelId && m.enabled === true && isChatModel(m)
+      );
+      if (enabledModels.length > 0) {
         enabledModels[0].default = true;
         await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
       }
-
-      await configCache.refreshModelsCache();
-      await logAudit({
-        req,
-        action: 'toggle',
-        resource: 'model',
-        resourceId: resolvedIds.join(','),
-        summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
-      });
-      res.json({
-        message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
-        enabled,
-        ids: resolvedIds
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'toggle models');
+      model.default = false;
     }
+    await configStore.writeJson(await modelPath(modelId), model);
+    await configCache.refreshModelsCache();
+    await logAudit({
+      req,
+      action: 'toggle',
+      resource: 'model',
+      resourceId: modelId,
+      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
+    });
+    res.json({
+      message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+      model: model,
+      enabled: newEnabledState
+    });
+  });
+
+  app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
+    const { modelIds } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      throw new ServiceError('BAD_REQUEST', 'Missing enabled flag');
+    }
+
+    // Validate modelIds for security
+    const ids = assertValidIds(modelIds, 'model');
+
+    const { data: models } = configCache.getModels(true);
+    const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
+
+    for (const id of resolvedIds) {
+      const model = models.find(m => m.id === id);
+      if (!model) continue;
+      model.enabled = enabled;
+      if (!enabled) {
+        model.default = false;
+      }
+      await configStore.writeJson(await modelPath(id), model);
+    }
+
+    // ensure at least one enabled model has default=true
+    const enabledModels = models.filter(m => m.enabled && isChatModel(m));
+    if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
+      enabledModels[0].default = true;
+      await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
+    }
+
+    await configCache.refreshModelsCache();
+    await logAudit({
+      req,
+      action: 'toggle',
+      resource: 'model',
+      resourceId: resolvedIds.join(','),
+      summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
+    });
+    res.json({
+      message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
+      enabled,
+      ids: resolvedIds
+    });
   });
 
   app.delete(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
-    try {
-      const { modelId } = req.params;
+    const { modelId } = req.params;
 
-      // Validate modelId for security
-      if (!validateIdForPath(modelId, 'model', res)) {
-        return;
-      }
+    // Validate modelId for security
+    assertValidId(modelId, 'model');
 
-      const { data: models } = configCache.getModels(true);
-      const model = models.find(m => m.id === modelId);
-      if (!model) {
-        return sendNotFound(res, 'Model');
-      }
-      if (model.default === true) {
-        const otherModels = models.filter(
-          m => m.id !== modelId && m.enabled === true && isChatModel(m)
-        );
-        if (otherModels.length > 0) {
-          otherModels[0].default = true;
-          await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
-        }
-      }
-      if (!(await configStore.remove(await modelPath(modelId)))) {
-        return sendNotFound(res, 'Model file');
-      }
-      await configCache.refreshModelsCache();
-      await removeMarketplaceInstallation('model', modelId);
-      if (model) {
-        await saveSnapshot({
-          resource: 'model',
-          id: modelId,
-          before: model,
-          after: null,
-          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
-        });
-      }
-      await logAudit({
-        req,
-        action: 'delete',
-        resource: 'model',
-        resourceId: modelId,
-        summary: `Deleted model ${modelId}`
-      });
-      res.json({ message: 'Model deleted successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'delete model');
+    const { data: models } = configCache.getModels(true);
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      throw new ServiceError('NOT_FOUND', 'Model not found');
     }
+    if (model.default === true) {
+      const otherModels = models.filter(
+        m => m.id !== modelId && m.enabled === true && isChatModel(m)
+      );
+      if (otherModels.length > 0) {
+        otherModels[0].default = true;
+        await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
+      }
+    }
+    if (!(await configStore.remove(await modelPath(modelId)))) {
+      throw new ServiceError('NOT_FOUND', 'Model file not found');
+    }
+    await configCache.refreshModelsCache();
+    await removeMarketplaceInstallation('model', modelId);
+    if (model) {
+      await saveSnapshot({
+        resource: 'model',
+        id: modelId,
+        before: model,
+        after: null,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+    }
+    await logAudit({
+      req,
+      action: 'delete',
+      resource: 'model',
+      resourceId: modelId,
+      summary: `Deleted model ${modelId}`
+    });
+    res.json({ message: 'Model deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -938,9 +862,10 @@ export default function registerAdminModelsRoutes(app) {
     delete safeModel.apiKey;
     const provider = getTtsProvider(model.provider);
     if (!provider) {
-      return sendErrorResponse(res, 400, `Unsupported text-to-speech provider: ${model.provider}`, {
-        code: 'UNSUPPORTED_PROVIDER'
-      });
+      throw new ServiceError(
+        'UNSUPPORTED_TTS_PROVIDER',
+        `Unsupported text-to-speech provider: ${model.provider}`
+      );
     }
     const cfg = provider.resolveUpstream(model);
     let bytes = 0;
@@ -962,14 +887,14 @@ export default function registerAdminModelsRoutes(app) {
         error: error.message
       });
       const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
-      return sendErrorResponse(res, 502, message, {
-        code: 'UPSTREAM_ERROR',
-        details: { reason: message }
+      throw new ServiceError('UPSTREAM_ERROR', message, {
+        details: { remediation: message },
+        cause: error
       });
     }
     if (bytes === 0) {
-      return sendErrorResponse(res, 502, 'The text-to-speech model answered without any audio.', {
-        code: 'NO_AUDIO'
+      throw new ServiceError('NO_AUDIO', 'No audio was returned', {
+        details: { remediation: 'The text-to-speech model answered without any audio.' }
       });
     }
     const seconds = bytes / 2 / provider.sampleRate;
@@ -998,9 +923,8 @@ export default function registerAdminModelsRoutes(app) {
         provider: model.provider,
         error: result.message
       });
-      return sendErrorResponse(res, 502, result.message, {
-        code: 'UPSTREAM_ERROR',
-        details: { reason: result.message }
+      throw new ServiceError('UPSTREAM_ERROR', result.message, {
+        details: { remediation: result.message }
       });
     }
     return res.json({
@@ -1017,13 +941,12 @@ export default function registerAdminModelsRoutes(app) {
    * use: the provider's presets and the account's custom voices.
    */
   app.get(buildServerPath('/api/admin/models/:modelId/tts/voices'), adminAuth, async (req, res) => {
-    const resolved = resolveVoicesModel(req, res);
-    if (!resolved) return undefined;
+    const resolved = resolveVoicesModel(req);
     try {
       const voices = await resolved.provider.listVoices(resolved.cfg);
       return res.json({ voices });
     } catch (error) {
-      return sendVoicesError(res, error, 'list voices');
+      throw voicesError(error, 'list voices');
     }
   });
 
@@ -1037,35 +960,28 @@ export default function registerAdminModelsRoutes(app) {
     buildServerPath('/api/admin/models/:modelId/tts/voices'),
     adminAuth,
     async (req, res) => {
-      const resolved = resolveVoicesModel(req, res);
-      if (!resolved) return undefined;
+      const resolved = resolveVoicesModel(req);
       const { name, audio, filename, languages, gender } = req.body || {};
 
       const voiceName = typeof name === 'string' ? name.trim() : '';
       if (!voiceName || voiceName.length > 100) {
-        return sendErrorResponse(res, 400, 'name is required (at most 100 characters)', {
-          code: 'INVALID_NAME'
-        });
+        throw new ServiceError('BAD_REQUEST', 'name is required (at most 100 characters)');
       }
       if (typeof audio !== 'string' || !audio) {
-        return sendErrorResponse(res, 400, 'audio is required', { code: 'INVALID_AUDIO' });
+        throw new ServiceError('INVALID_AUDIO', 'audio is required');
       }
       const sample = Buffer.from(audio, 'base64');
       if (!sample.length) {
-        return sendErrorResponse(res, 400, 'audio is not valid base64', { code: 'INVALID_AUDIO' });
+        throw new ServiceError('INVALID_AUDIO', 'audio is not valid base64');
       }
       if (sample.length > MAX_VOICE_SAMPLE_BYTES) {
-        return sendErrorResponse(res, 413, 'The voice sample is too large', {
-          code: 'AUDIO_TOO_LARGE'
-        });
+        throw new ServiceError('PAYLOAD_TOO_LARGE', 'The voice sample is too large');
       }
       const safeName =
         typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '_').slice(-100) : '';
       const extension = safeName.includes('.') ? safeName.split('.').pop().toLowerCase() : 'wav';
       if (!VOICE_SAMPLE_EXTENSIONS.has(extension)) {
-        return sendErrorResponse(res, 400, 'Unsupported audio file type', {
-          code: 'INVALID_AUDIO'
-        });
+        throw new ServiceError('INVALID_AUDIO', 'Unsupported audio file type');
       }
       const voiceLanguages = Array.isArray(languages)
         ? [...new Set(languages.filter(l => TTS_LANGUAGES.includes(l)))]
@@ -1089,7 +1005,7 @@ export default function registerAdminModelsRoutes(app) {
         });
         return res.json({ voice });
       } catch (error) {
-        return sendVoicesError(res, error, 'create the voice');
+        throw voicesError(error, 'create the voice');
       }
     }
   );
@@ -1099,11 +1015,10 @@ export default function registerAdminModelsRoutes(app) {
     buildServerPath('/api/admin/models/:modelId/tts/voices/:voiceId'),
     adminAuth,
     async (req, res) => {
-      const resolved = resolveVoicesModel(req, res);
-      if (!resolved) return undefined;
+      const resolved = resolveVoicesModel(req);
       const { voiceId } = req.params;
       if (!/^[\w-]{1,100}$/.test(voiceId)) {
-        return sendErrorResponse(res, 400, 'Invalid voice id', { code: 'INVALID_VOICE' });
+        throw new ServiceError('BAD_REQUEST', 'Invalid voice id');
       }
       try {
         await resolved.provider.deleteVoice(resolved.cfg, voiceId);
@@ -1116,7 +1031,7 @@ export default function registerAdminModelsRoutes(app) {
         });
         return res.json({ deleted: voiceId });
       } catch (error) {
-        return sendVoicesError(res, error, 'delete the voice');
+        throw voicesError(error, 'delete the voice');
       }
     }
   );
@@ -1126,14 +1041,12 @@ export default function registerAdminModelsRoutes(app) {
       const { modelId } = req.params;
 
       // Validate modelId for security
-      if (!validateIdForPath(modelId, 'model', res)) {
-        return;
-      }
+      assertValidId(modelId, 'model');
 
       const { data: models } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
-        return sendNotFound(res, 'Model');
+        throw new ServiceError('NOT_FOUND', 'Model not found');
       }
 
       // A text-to-speech model is tested by speaking a short sentence.
@@ -1179,14 +1092,19 @@ export default function registerAdminModelsRoutes(app) {
         const { userMessage, errorMessage, messageKey } = describeModelTestFailure(testError);
         const mappedStatus = llmErrorToHttpStatus(testError);
         const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
-        sendErrorResponse(res, httpStatus, userMessage, {
-          code: testError.code,
-          details: { remediation: errorMessage, messageKey }
-        });
+        throw new ServiceError(
+          isApiErrorCode(testError.code) ? testError.code : 'UPSTREAM_ERROR',
+          userMessage,
+          {
+            status: httpStatus,
+            details: { remediation: errorMessage, messageKey },
+            cause: testError
+          }
+        );
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });
-      sendInternalError(res, error, 'test model');
+      throw error;
     }
   });
 }

@@ -49,8 +49,8 @@ Each model is defined with the following properties:
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
-| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); the installation default is `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
-| `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
+| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); empty uses the provider's value, else the installation default of `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
+| `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables). Empty: the provider's value, else the installation's — see [Stream deadlines](llm-client.md#tuning-the-ceilings)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `promptCaching`                | Object  | provider default | `{ "enabled": true \| false }` — whether iHub marks prompts for the provider's prompt cache. See [Prompt Caching](#prompt-caching) below |
@@ -342,6 +342,41 @@ requires one answers 401. The gateway does not
 support tool calling yet, so imported chat models have **Tool support** set to none. Raise it for
 a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
 Mistral backend.
+
+**Keeping the models in line with the gateway.** A gateway's models change over time: deployments
+are added and retired, a context window is corrected, a model moves to another dialect. On the
+provider's page (**Admin → Providers →** the gateway **→ Linked models**), **Sync with gateway**
+asks the gateway what it lists now and compares that with the models imported from it. Nothing
+changes until you apply your choice. The dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
+
+| Group                       | What it means                                                                                     | When applied                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Changed on the gateway**  | An imported model differs from the gateway: URL, adapter, context window or image input           | The model is updated to match; the old and new values are shown                  |
+| **New on the gateway**      | The gateway lists a model nobody imported                                                         | The model is imported, as in **Import from URL**                                 |
+| **No longer available**     | An enabled imported model the gateway no longer lists, or now lists as something iHub cannot run  | The model is **disabled**, not deleted: apps may still use it                    |
+
+Models iHub cannot run (embedding, NER) are never offered, a model you disabled yourself is not
+reported as gone, and a model you configured by hand for the same endpoint counts as imported. Using
+the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your choice and is not
+reported. A context window the gateway does not report is left as you set it. Each applied item has
+its own result, so one failure does not stop the others.
+
+Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
+
+Applying is done by the server, not by chaining model calls from the browser: it asks the gateway
+again, applies only the picks that still match what the gateway reports (anything else comes back
+`skipped`: run the sync again), and reads and writes each model's stored file. Each item has its own
+result and one failure does not stop the others. Every changed model is written to the audit log
+and the model's change history.
+
+| Endpoint                                                  | Purpose                                                                      |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `GET /api/admin/providers/{providerId}/_model-drift`      | The comparison: `{ modelsUrl, items }`. Writes nothing                        |
+| `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId, modelId? }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
+
+Both need an admin and answer `404` for an unknown provider, `400` for one that is no gateway or has
+no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the gateway cannot be asked, in
+which case nothing is changed.
 
 The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
 returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.

@@ -41,14 +41,8 @@
  */
 import { authenticatedOnly, authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
+import { assertValidId } from '../utils/pathSecurity.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendFailedOperationError,
-  sendNotFound
-} from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
 import { appAllowsUserProjects } from '../../shared/appProjects.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
@@ -64,11 +58,9 @@ import { ServiceError } from '../utils/ServiceError.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { withUserFileLimit } from '../services/quota/quotaService.js';
 import {
-  isChatFileFailure,
   isMultipartRequest,
   ingestRequestFile,
-  parseChatFileMultipart,
-  sendChatFileFailure
+  parseChatFileMultipart
 } from '../services/chatFiles/fileUploadRequest.js';
 import {
   canKeepChatHistory,
@@ -76,7 +68,6 @@ import {
   isChatStorageAvailable,
   resolveChatStorage
 } from '../services/chat/chatPersistence.js';
-import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
 import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
@@ -96,13 +87,6 @@ import { publicChatView } from '../services/chat/chatToolApproval.js';
 const COMPONENT = 'ChatRoutes';
 
 /**
- * Machine-readable code for "this installation keeps no chat history" — the
- * feature is off, an admin disabled `platform.chats`, or the storage provider
- * failed to come up. The client hides the history UI when it sees this.
- */
-const UNAVAILABLE_CODE = 'CHAT_PERSISTENCE_UNAVAILABLE';
-
-/**
  * How much of a submitted title survives to normalization. The global body
  * limit is megabytes and the repository normalizes by collapsing whitespace
  * with a regex over the whole string, so an unbounded title is cheap CPU for
@@ -112,70 +96,46 @@ const UNAVAILABLE_CODE = 'CHAT_PERSISTENCE_UNAVAILABLE';
 const TITLE_INPUT_WINDOW = MAX_TITLE_LENGTH * 4;
 
 /**
- * Report that durable chats are unavailable. 503 rather than 404: the routes
- * exist, they just cannot serve anything until storage and the feature flag
- * agree, and a retry may well succeed.
+ * A 404 for a missing (or, for a chat, someone else's) resource.
  *
- * @param {import('express').Response} res - Express response.
- * @returns {import('express').Response}
+ * @param {string} resource - Name for the message ("Chat", "File", ...).
+ * @returns {ServiceError}
  */
-function sendPersistenceUnavailable(res) {
-  return sendErrorResponse(res, 503, 'Chat persistence is unavailable', {
-    details: { code: UNAVAILABLE_CODE }
-  });
+function notFound(resource) {
+  return new ServiceError('NOT_FOUND', `${resource} not found`);
 }
 
 /**
- * Translate a storage failure into a response.
+ * The refusal when durable chats are unavailable. 503 rather than 404: the
+ * routes exist, they just cannot serve anything until storage and the feature
+ * flag agree, and a retry may well succeed. The client hides the history UI
+ * when it sees `CHAT_PERSISTENCE_UNAVAILABLE`.
  *
- * The storage errors that carry an `httpStatus` were designed for exactly
- * this hand-off (a lock timeout is a 503, an unusable key a 400), and a bad
- * paging cursor is the caller's mistake, not a server fault. Everything else
- * is a genuine 500.
- *
- * @param {import('express').Response} res - Express response.
- * @param {Error} error - The thrown error.
- * @param {string} operation - Operation name for the 500 message and the log.
- * @returns {import('express').Response}
+ * @returns {ServiceError}
  */
-function sendChatStorageError(res, error, operation) {
-  if (isChatFileFailure(error)) return sendChatFileFailure(res, error);
-  if (error instanceof StorageError) {
-    // Through the errors module rather than re-deriving the mapping here. The
-    // `INVALID_CURSOR` special case this replaces was one route knowing a
-    // contract code's status because the error did not carry it.
-    const status = storageHttpStatus(error);
-    if (status) {
-      return sendErrorResponse(res, status, error.message, {
-        details: { code: error.code, ...(error.details || {}) }
-      });
-    }
-  }
-  return sendFailedOperationError(res, operation, error);
+function persistenceUnavailable() {
+  return new ServiceError('CHAT_PERSISTENCE_UNAVAILABLE', 'Chat persistence is unavailable');
 }
 
 /**
- * The repository to serve this request from, or null once a 503 has been
- * sent. Both halves are checked: the policy answers "should we", the
+ * The repository to serve this request from; throws the 503 when there is
+ * none. Both halves are checked: the policy answers "should we", the
  * repository answers "can we" — a provider that came up without a document or
  * lock facet is configured-but-unusable.
  *
- * @param {import('express').Response} res - Express response.
  * @param {Object} [options]
  * @param {boolean} [options.history=false] - The route serves the history (the
  *   listing, a rename, keeping a chat), not just one stored chat: it also
  *   needs the installation to keep one.
- * @returns {import('../services/chat/ChatRepository.js').ChatRepository|null}
+ * @returns {import('../services/chat/ChatRepository.js').ChatRepository}
+ * @throws {ServiceError} `CHAT_PERSISTENCE_UNAVAILABLE` (503).
  */
-function requireRepository(res, { history = false } = {}) {
+function requireRepository({ history = false } = {}) {
   const repository = getChatRepository();
   const configured = history
     ? isChatHistoryConfigured(configCache.getFeatures(), configCache.getPlatform() || {})
     : isChatStorageAvailable();
-  if (!configured || !repository.isAvailable()) {
-    sendPersistenceUnavailable(res);
-    return null;
-  }
+  if (!configured || !repository.isAvailable()) throw persistenceUnavailable();
   return repository;
 }
 
@@ -249,13 +209,55 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * Refuse adding `added` projects to a chat unless the caller may use every one
+ * of them, user projects are switched on and the chat's app takes them.
+ *
+ * @param {import('express').Request} req - The request (`req.user`).
+ * @param {Object} chat - The chat the projects are attached to.
+ * @param {string[]} added - Project ids not attached yet.
+ * @param {Object} deps - Lazily imported project modules and the feature flag.
+ * @returns {Promise<void>}
+ * @throws {ServiceError} `USER_PROJECTS_DISABLED`, `APP_PROJECTS_DISABLED` or `NOT_FOUND`.
+ */
+async function assertMayAttach(
+  req,
+  chat,
+  added,
+  { access, loadProjectFor, projects, userProjectsConfigured }
+) {
+  if (!userProjectsConfigured) {
+    throw new ServiceError('USER_PROJECTS_DISABLED', 'User projects are switched off');
+  }
+  // The chat's app decides too: one that takes no personal projects gets
+  // none attached here either, as with a message (`resolveChatProjects`).
+  const app = chat.appId
+    ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
+    : null;
+  if (app && !appAllowsUserProjects(app)) {
+    throw new ServiceError('APP_PROJECTS_DISABLED', 'This app takes no projects');
+  }
+  access.ensurePrincipal(req);
+  const context = access.callerContext(req.user);
+  const loaded = await Promise.all(
+    added.map(id => loadProjectFor(req.user, id, { repository: projects }))
+  );
+  if (
+    loaded.some(
+      ({ project }) => !project || !access.permissionsFor(project, req.user, context).canUse
+    )
+  ) {
+    throw notFound('Project');
+  }
+}
+
+/**
  * Set the projects attached to a chat (`attachedProjectIds`): the projects the
  * chat's questions can draw on besides its own container. Taking one away is
  * always possible; adding one needs the right to use it, like attaching it
- * with a message does (`resolveChatProjects`). Sends the refusal itself and
- * returns null when the request cannot go on.
+ * with a message does (`resolveChatProjects`). Throws the refusal when the
+ * request cannot go on.
  */
-async function setChatAttachedProjects(req, res, repository, chat) {
+async function setChatAttachedProjects(req, repository, chat) {
   const [
     { attachedProjectsSchema, describeIssues },
     { getProjectRepository },
@@ -275,49 +277,28 @@ async function setChatAttachedProjects(req, res, repository, chat) {
     attachedProjectIds: req.body.attachedProjectIds
   });
   if (!parsed.success) {
-    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
-    return null;
+    throw new ServiceError('BAD_REQUEST', `Invalid request: ${describeIssues(parsed.error)}`);
   }
   const wanted = [...new Set(parsed.data.attachedProjectIds)];
   const stored = Array.isArray(chat.attachedProjectIds) ? chat.attachedProjectIds : [];
   const added = wanted.filter(id => !stored.includes(id) && id !== chat.projectId);
   if (added.length > 0) {
-    if (!isUserProjectsConfigured(configCache.getFeatures())) {
-      sendErrorResponse(res, 403, 'User projects are switched off', {
-        details: { code: 'USER_PROJECTS_DISABLED' }
-      });
-      return null;
-    }
-    // The chat's app decides too: one that takes no personal projects gets
-    // none attached here either, as with a message (`resolveChatProjects`).
-    const app = chat.appId
-      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
-      : null;
-    if (app && !appAllowsUserProjects(app)) {
-      sendErrorResponse(res, 403, 'This app takes no projects', {
-        details: { code: 'APP_PROJECTS_DISABLED' }
-      });
-      return null;
-    }
-    access.ensurePrincipal(req);
-    const projects = getProjectRepository();
-    const context = access.callerContext(req.user);
-    for (const id of added) {
-      const { project } = await loadProjectFor(req.user, id, { repository: projects });
-      if (!project || !access.permissionsFor(project, req.user, context).canUse) {
-        sendNotFound(res, 'Project');
-        return null;
-      }
-    }
+    await assertMayAttach(req, chat, added, {
+      access,
+      loadProjectFor,
+      projects: getProjectRepository(),
+      userProjectsConfigured: isUserProjectsConfigured(configCache.getFeatures())
+    });
   }
   if (wanted.length > MAX_ATTACHED) {
-    sendBadRequest(res, `A chat may have at most ${MAX_ATTACHED} projects attached`);
-    return null;
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `A chat may have at most ${MAX_ATTACHED} projects attached`
+    );
   }
   const { chat: updated } = await repository.setAttachedProjects(chat.id, wanted, MAX_ATTACHED);
   if (!updated) {
-    sendNotFound(res, 'Chat');
-    return null;
+    throw notFound('Chat');
   }
   return updated;
 }
@@ -333,483 +314,415 @@ async function setChatAttachedProjects(req, res, repository, chat) {
  */
 export default function registerChatRoutes(app) {
   app.get(buildServerPath('/api/chats'), authenticatedOnly, async (req, res) => {
-    try {
-      const repository = requireRepository(res, { history: true });
-      if (!repository) return;
-      const ownerId = await resolveOwnerId(req.user);
-      // The chat documents go out exactly as stored. App name, colour and icon
-      // are joined on the client from the apps list it already holds, so this
-      // endpoint stays independent of app configuration.
-      const { items, nextCursor } = await repository.listChats(ownerId, {
-        limit: req.query.limit,
-        cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
-      });
-      // A chat still marked running whose run died with its process is
-      // closed out here, so the list does not show it running forever.
-      // A paused turn's stored tool transcript stays on the server (#2945).
-      res.json({
-        items: (await settleInterruptedChats(items, { repository, runLog })).map(publicChatView),
-        nextCursor
-      });
-    } catch (error) {
-      sendChatStorageError(res, error, 'list chats');
-    }
+    const repository = requireRepository({ history: true });
+    const ownerId = await resolveOwnerId(req.user);
+    // The chat documents go out exactly as stored. App name, colour and icon
+    // are joined on the client from the apps list it already holds, so this
+    // endpoint stays independent of app configuration.
+    const { items, nextCursor } = await repository.listChats(ownerId, {
+      limit: req.query.limit,
+      cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
+    });
+    // A chat still marked running whose run died with its process is
+    // closed out here, so the list does not show it running forever.
+    // A paused turn's stored tool transcript stays on the server (#2945).
+    res.json({
+      items: (await settleInterruptedChats(items, { repository, runLog })).map(publicChatView),
+      nextCursor
+    });
   });
 
   app.get(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-      if (!access) return sendNotFound(res, 'Chat');
-      const { nonOwner } = access;
-      // Before the transcript is read, so an interrupted turn's closing answer
-      // is part of it — and the client does not re-attach to a dead run.
-      const chat = await settleInterruptedChat(access.chat, { repository, runLog });
-      let stored = await repository.getMessages(chatId);
-      // A workflow its chat was left waiting on may have been continued since.
-      if (await deliverResumedWorkflows(chat, stored.messages, { repository, runLog })) {
-        stored = await repository.getMessages(chatId);
-      }
-      // Opening a chat is what "seen" means — for its owner. Only write when
-      // the flag is actually set: the clear is a locked read-modify-write, and
-      // a plain read should not contend with a turn that is producing into
-      // this chat. An admin or a project member reading someone else's chat
-      // clears nothing: the owner has not seen the answer, and another's read
-      // should not tell them they have.
-      const seen =
-        chat.hasUnseenActivity && !nonOwner ? await repository.clearUnseen(chatId) : null;
-      // A scheduled run's chat, opened by its owner, is also the end of that
-      // run's notification on the Tasks page.
-      if (!nonOwner && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
-        markRunChatSeen(chat);
-      }
-      // `messages` is the array, not the stored envelope — a hydrating client
-      // should not have to reach through `messages.messages`. The document's
-      // schema version rides alongside it so a future migration is visible.
-      res.json({
-        chat: publicChatView(seen || chat),
-        messages: stored.messages,
-        version: stored.version
-      });
-    } catch (error) {
-      sendChatStorageError(res, error, 'get chat');
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access) throw notFound('Chat');
+    const { nonOwner } = access;
+    // Before the transcript is read, so an interrupted turn's closing answer
+    // is part of it — and the client does not re-attach to a dead run.
+    const chat = await settleInterruptedChat(access.chat, { repository, runLog });
+    let stored = await repository.getMessages(chatId);
+    // A workflow its chat was left waiting on may have been continued since.
+    if (await deliverResumedWorkflows(chat, stored.messages, { repository, runLog })) {
+      stored = await repository.getMessages(chatId);
     }
+    // Opening a chat is what "seen" means — for its owner. Only write when
+    // the flag is actually set: the clear is a locked read-modify-write, and
+    // a plain read should not contend with a turn that is producing into
+    // this chat. An admin or a project member reading someone else's chat
+    // clears nothing: the owner has not seen the answer, and another's read
+    // should not tell them they have.
+    const seen = chat.hasUnseenActivity && !nonOwner ? await repository.clearUnseen(chatId) : null;
+    // A scheduled run's chat, opened by its owner, is also the end of that
+    // run's notification on the Tasks page.
+    if (!nonOwner && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
+      markRunChatSeen(chat);
+    }
+    // `messages` is the array, not the stored envelope — a hydrating client
+    // should not have to reach through `messages.messages`. The document's
+    // schema version rides alongside it so a future migration is visible.
+    res.json({
+      chat: publicChatView(seen || chat),
+      messages: stored.messages,
+      version: stored.version
+    });
   });
 
   app.get(buildServerPath('/api/chats/:chatId/artifacts'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-      if (!access) return sendNotFound(res, 'Chat');
-      // Descriptors, never payloads: this is the index of what the
-      // conversation produced, and the bytes are a separate request per entry.
-      // The listing walks the artifact keys rather than the transcript, so it
-      // also sees one whose descriptor never landed on a message.
-      const items = await getArtifactRepository().list(repository.artifactScope(chatId));
-      res.json({ items });
-    } catch (error) {
-      sendChatStorageError(res, error, 'list chat artifacts');
-    }
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access) throw notFound('Chat');
+    // Descriptors, never payloads: this is the index of what the
+    // conversation produced, and the bytes are a separate request per entry.
+    // The listing walks the artifact keys rather than the transcript, so it
+    // also sees one whose descriptor never landed on a message.
+    const items = await getArtifactRepository().list(repository.artifactScope(chatId));
+    res.json({ items });
   });
 
   // Several artifacts as one ZIP: `{ artifactIds?: string[] }`, every one of
   // the chat's when omitted. A POST because the selection can be long; it
   // changes nothing. Authorized exactly like the single-artifact read below.
   app.post(buildServerPath('/api/chats/:chatId/artifacts/zip'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-      if (!access) return sendNotFound(res, 'Chat');
-      const scope = repository.artifactScope(chatId);
-      const artifacts = getArtifactRepository();
-      return await sendArtifactsZip(res, {
-        repository: artifacts,
-        scope,
-        descriptors: await artifacts.list(scope),
-        artifactIds: req.body?.artifactIds,
-        archiveName: zipNameFor(access.chat)
-      });
-    } catch (error) {
-      if (error instanceof ServiceError) throw error;
-      if (res.headersSent) return res.destroy(error);
-      return sendChatStorageError(res, error, 'zip chat artifacts');
-    }
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access) throw notFound('Chat');
+    const scope = repository.artifactScope(chatId);
+    const artifacts = getArtifactRepository();
+    // Once the archive has started streaming, a failure reaches the global
+    // handler with the headers sent, which closes the connection.
+    return await sendArtifactsZip(res, {
+      repository: artifacts,
+      scope,
+      descriptors: await artifacts.list(scope),
+      artifactIds: req.body?.artifactIds,
+      archiveName: zipNameFor(access.chat)
+    });
   });
 
   app.get(
     buildServerPath('/api/chats/:chatId/artifacts/:artifactId'),
     authRequired,
     async (req, res) => {
-      try {
-        const { chatId, artifactId } = req.params;
-        if (!validateIdForPath(chatId, 'chat', res)) return;
-        if (!validateIdForPath(artifactId, 'artifact', res)) return;
-        const repository = requireRepository(res);
-        if (!repository) return;
-        // The artifact is authorized through the chat that owns it, exactly
-        // like the transcript that names it: an artifact id is minted
-        // server-side and is never a capability on its own.
-        const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-        if (!access) return sendNotFound(res, 'Chat');
-        const artifact = await getArtifactRepository().get(
-          repository.artifactScope(chatId),
-          artifactId
-        );
-        if (!artifact) return sendNotFound(res, 'Artifact');
-        // Already the bytes: the store keeps payloads raw, so serving one is a
-        // read and a write, with no decode in between.
-        const body = artifact.data;
-        // An artifact document is written once and never modified, and its id
-        // is a fresh uuid, so the bytes behind this URL cannot change.
-        // `private` because the response is owner-scoped and a shared cache
-        // holding it would serve one user's content to another.
-        // A source file goes out as `text/plain` (see `servedMediaType`).
-        res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
-        res.setHeader('Content-Length', String(body.length));
-        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-        // Nothing here is a document to open in the browser's context; the
-        // client renders it from a blob it fetched itself.
-        res.setHeader('Content-Disposition', 'inline');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        return res.send(body);
-      } catch (error) {
-        return sendChatStorageError(res, error, 'get chat artifact');
-      }
+      const { chatId, artifactId } = req.params;
+      assertValidId(chatId, 'chat');
+      assertValidId(artifactId, 'artifact');
+      const repository = requireRepository();
+      // The artifact is authorized through the chat that owns it, exactly
+      // like the transcript that names it: an artifact id is minted
+      // server-side and is never a capability on its own.
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) throw notFound('Chat');
+      const artifact = await getArtifactRepository().get(
+        repository.artifactScope(chatId),
+        artifactId
+      );
+      if (!artifact) throw notFound('Artifact');
+      // Already the bytes: the store keeps payloads raw, so serving one is a
+      // read and a write, with no decode in between.
+      const body = artifact.data;
+      // An artifact document is written once and never modified, and its id
+      // is a fresh uuid, so the bytes behind this URL cannot change.
+      // `private` because the response is owner-scoped and a shared cache
+      // holding it would serve one user's content to another.
+      // A source file goes out as `text/plain` (see `servedMediaType`).
+      res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
+      res.setHeader('Content-Length', String(body.length));
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+      // Nothing here is a document to open in the browser's context; the
+      // client renders it from a blob it fetched itself.
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(body);
     }
   );
 
   app.post(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const fileStore = repository.fileStore();
-      if (!fileStore.isAvailable()) {
-        return sendPersistenceUnavailable(res);
-      }
-
-      const auth = await authorizeChat(chatId, req.user, { repository, intent: 'write' });
-      if (!auth.ok) return sendNotFound(res, 'Chat');
-
-      const owner = await resolveChatOwner(req.user, {
-        mode: auth.chat?.identityMode || runLog.identityMode()
-      });
-      if (!owner) {
-        return sendErrorResponse(res, 403, 'This chat has no owner to be stored under', {
-          details: { code: 'CHAT_OWNER_REQUIRED' }
-        });
-      }
-
-      const basePolicy = chatFilePolicy();
-      if (!basePolicy.enabled) {
-        return sendErrorResponse(res, 503, 'Chat file uploads are disabled', {
-          details: { code: 'UPLOADS_DISABLED' }
-        });
-      }
-
-      if (isMultipartRequest(req)) {
-        const parsed = await parseChatFileMultipart(req, res, basePolicy.maxFileBytes);
-        if (!parsed) return;
-      }
-
-      // A chat that exists keeps its app: the app decides the storage policy, so a
-      // request must not be able to pick a looser one for somebody's chat.
-      const requestedAppId =
-        auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
-      const chatApp = requestedAppId
-        ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
-        : null;
-      // The user's own file storage limit (group/user `usageLimits`).
-      const policy = withUserFileLimit(chatFilePolicy(chatApp), req.user);
-      if (!policy.enabled) {
-        return sendErrorResponse(res, 503, 'Chat file uploads are disabled', {
-          details: { code: 'UPLOADS_DISABLED' }
-        });
-      }
-
-      // Ensure the chat document exists if the user pre-uploads a file in the
-      // composer before sending the first message.
-      if (!auth.chat) {
-        const storage = resolveChatStorage({
-          features: configCache.getFeatures(),
-          platformConfig: configCache.getPlatform(),
-          user: req.user,
-          ephemeral: req.body?.ephemeral === true || req.body?.ephemeral === 'true'
-        });
-        await repository.ensureChat({
-          chatId,
-          ownerId: owner.id,
-          identityMode: owner.mode,
-          appId: requestedAppId,
-          origin: { createdVia: 'ui' },
-          temporary: storage.temporary
-        });
-      }
-
-      const descriptor = await ingestRequestFile({
-        req,
-        scope: repository.fileScope(chatId),
-        ownerId: owner.id,
-        appConfig: chatApp,
-        policy,
-        store: fileStore,
-        user: req.user
-      });
-      return res.status(201).json({ file: descriptor });
-    } catch (error) {
-      return sendChatStorageError(res, error, 'upload chat file');
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const fileStore = repository.fileStore();
+    if (!fileStore.isAvailable()) {
+      throw persistenceUnavailable();
     }
+
+    const auth = await authorizeChat(chatId, req.user, { repository, intent: 'write' });
+    if (!auth.ok) throw notFound('Chat');
+
+    const owner = await resolveChatOwner(req.user, {
+      mode: auth.chat?.identityMode || runLog.identityMode()
+    });
+    if (!owner) {
+      throw new ServiceError('CHAT_OWNER_REQUIRED', 'This chat has no owner to be stored under');
+    }
+
+    const basePolicy = chatFilePolicy();
+    if (!basePolicy.enabled) {
+      throw new ServiceError('UPLOADS_DISABLED', 'Chat file uploads are disabled');
+    }
+
+    if (isMultipartRequest(req)) {
+      await parseChatFileMultipart(req, res, basePolicy.maxFileBytes);
+    }
+
+    // A chat that exists keeps its app: the app decides the storage policy, so a
+    // request must not be able to pick a looser one for somebody's chat.
+    const requestedAppId =
+      auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
+    const chatApp = requestedAppId
+      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
+      : null;
+    // The user's own file storage limit (group/user `usageLimits`).
+    const policy = withUserFileLimit(chatFilePolicy(chatApp), req.user);
+    if (!policy.enabled) {
+      throw new ServiceError('UPLOADS_DISABLED', 'Chat file uploads are disabled');
+    }
+
+    // Ensure the chat document exists if the user pre-uploads a file in the
+    // composer before sending the first message.
+    if (!auth.chat) {
+      const storage = resolveChatStorage({
+        features: configCache.getFeatures(),
+        platformConfig: configCache.getPlatform(),
+        user: req.user,
+        ephemeral: req.body?.ephemeral === true || req.body?.ephemeral === 'true'
+      });
+      await repository.ensureChat({
+        chatId,
+        ownerId: owner.id,
+        identityMode: owner.mode,
+        appId: requestedAppId,
+        origin: { createdVia: 'ui' },
+        temporary: storage.temporary
+      });
+    }
+
+    const descriptor = await ingestRequestFile({
+      req,
+      scope: repository.fileScope(chatId),
+      ownerId: owner.id,
+      appConfig: chatApp,
+      policy,
+      store: fileStore,
+      user: req.user
+    });
+    return res.status(201).json({ file: descriptor });
   });
 
   app.get(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-      if (!access) return sendNotFound(res, 'Chat');
-      const items = await repository.fileStore().list(repository.fileScope(chatId));
-      return res.json({ items });
-    } catch (error) {
-      return sendChatStorageError(res, error, 'list chat files');
-    }
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access) throw notFound('Chat');
+    const items = await repository.fileStore().list(repository.fileScope(chatId));
+    return res.json({ items });
   });
 
   app.get(buildServerPath('/api/chats/:chatId/files/:fileId'), authRequired, async (req, res) => {
-    try {
-      const { chatId, fileId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      if (!validateIdForPath(fileId, 'file', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
-      if (!access) return sendNotFound(res, 'Chat');
+    const { chatId, fileId } = req.params;
+    assertValidId(chatId, 'chat');
+    assertValidId(fileId, 'file');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access) throw notFound('Chat');
 
-      const scope = repository.fileScope(chatId);
-      const fileStore = repository.fileStore();
-      if (req.query.format === 'text') {
-        const textFile = await fileStore.getText(scope, fileId);
-        if (!textFile) return sendNotFound(res, 'File');
-        if (req.query.raw === '1' || req.query.raw === 'true') {
-          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-          res.setHeader('X-Content-Type-Options', 'nosniff');
-          // Served as text/plain with nosniff: never interpreted as HTML.
-          // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
-          return res.send(textFile.text);
-        }
-        return res.json({ file: textFile });
+    const scope = repository.fileScope(chatId);
+    const fileStore = repository.fileStore();
+    if (req.query.format === 'text') {
+      const textFile = await fileStore.getText(scope, fileId);
+      if (!textFile) throw notFound('File');
+      if (req.query.raw === '1' || req.query.raw === 'true') {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // Served as text/plain with nosniff: never interpreted as HTML.
+        // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
+        return res.send(textFile.text);
       }
-
-      const original = await fileStore.getOriginal(scope, fileId);
-      if (!original) return sendNotFound(res, 'File');
-      if (original.discarded) {
-        return sendErrorResponse(
-          res,
-          410,
-          'The original file is no longer available; extracted text is still stored',
-          {
-            details: {
-              code: 'ORIGINAL_DISCARDED',
-              ...(original.originalDeletedAt
-                ? { originalDeletedAt: original.originalDeletedAt }
-                : {})
-            }
-          }
-        );
-      }
-
-      const body = original.data;
-      const download = req.query.download === '1' || req.query.download === 'true';
-      res.setHeader('Content-Type', servedMediaType(original.mimeType));
-      res.setHeader('Content-Length', String(body.length));
-      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-      res.setHeader(
-        'Content-Disposition',
-        download ? buildContentDisposition(original.name) : 'inline'
-      );
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      return res.send(body);
-    } catch (error) {
-      return sendChatStorageError(res, error, 'get chat file');
+      return res.json({ file: textFile });
     }
+
+    const original = await fileStore.getOriginal(scope, fileId);
+    if (!original) throw notFound('File');
+    if (original.discarded) {
+      throw new ServiceError(
+        'ORIGINAL_DISCARDED',
+        'The original file is no longer available; extracted text is still stored',
+        {
+          details: original.originalDeletedAt
+            ? { originalDeletedAt: original.originalDeletedAt }
+            : undefined
+        }
+      );
+    }
+
+    const body = original.data;
+    const download = req.query.download === '1' || req.query.download === 'true';
+    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    res.setHeader('Content-Length', String(body.length));
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.setHeader(
+      'Content-Disposition',
+      download ? buildContentDisposition(original.name) : 'inline'
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.send(body);
   });
 
   app.delete(
     buildServerPath('/api/chats/:chatId/files/:fileId'),
     authRequired,
     async (req, res) => {
-      try {
-        const { chatId, fileId } = req.params;
-        if (!validateIdForPath(chatId, 'chat', res)) return;
-        if (!validateIdForPath(fileId, 'file', res)) return;
-        const repository = requireRepository(res);
-        if (!repository) return;
-        const access = await loadOwnedChat(chatId, req.user, repository, 'write');
-        if (!access) return sendNotFound(res, 'Chat');
+      const { chatId, fileId } = req.params;
+      assertValidId(chatId, 'chat');
+      assertValidId(fileId, 'file');
+      const repository = requireRepository();
+      const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+      if (!access) throw notFound('Chat');
 
-        const scope = repository.fileScope(chatId);
-        const fileStore = repository.fileStore();
-        if (req.query.onlyOriginal === '1' || req.query.onlyOriginal === 'true') {
-          const updated = await fileStore.discardOriginal(scope, fileId, {
-            reason: 'user_deleted'
-          });
-          if (!updated) return sendNotFound(res, 'File');
-          return res.json({ file: updated });
-        }
-
-        const deleted = await fileStore.delete(scope, fileId);
-        return res.json({ deleted });
-      } catch (error) {
-        return sendChatStorageError(res, error, 'delete chat file');
+      const scope = repository.fileScope(chatId);
+      const fileStore = repository.fileStore();
+      if (req.query.onlyOriginal === '1' || req.query.onlyOriginal === 'true') {
+        const updated = await fileStore.discardOriginal(scope, fileId, {
+          reason: 'user_deleted'
+        });
+        if (!updated) throw notFound('File');
+        return res.json({ file: updated });
       }
+
+      const deleted = await fileStore.delete(scope, fileId);
+      return res.json({ deleted });
     }
   );
 
   app.patch(buildServerPath('/api/chats/:chatId'), authenticatedOnly, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const title = req.body?.title;
-      if (req.body && Object.hasOwn(req.body, 'projectId')) {
-        // A chat belongs to a project from its first turn on (`projectId` of
-        // the chat request); it is never moved into or out of one afterwards.
-        return sendBadRequest(res, 'A chat cannot be moved into or out of a project');
-      }
-      const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
-      const keep = req.body?.temporary === false;
-      if (typeof title !== 'string' && !hasAttached && !keep) {
-        return sendBadRequest(res, 'title is required and must be a string');
-      }
-      if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
-        // There is no way back into temporary: a kept chat that should not be
-        // kept is deleted, and a conversation that should be is a new chat.
-        return sendBadRequest(res, 'temporary can only be set to false');
-      }
-      if (keep && hasAttached) {
-        // Keeping writes the chat before the attached projects are even
-        // checked, so a change refused after it would leave the request failed
-        // but the chat kept. Two requests make each step all-or-nothing.
-        return sendBadRequest(res, 'Keep the chat and change its projects in separate requests');
-      }
-      // Only keeping needs a history to keep the chat in. A temporary chat —
-      // every chat while the history is off — can still be renamed and given
-      // attached projects.
-      const repository = requireRepository(res, { history: keep });
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'write');
-      if (!access) return sendNotFound(res, 'Chat');
-      let chat = access.chat;
-      // The scratch chat of a project test (#3309) is never kept: it may have
-      // answered from a project that is disabled, and would continue in the
-      // history without it.
-      if (keep && isProjectTestChat(chat)) {
-        return sendErrorResponse(
-          res,
-          409,
-          await getLocalizedError(
-            'projectTestChatNotKeepable',
-            {},
-            req.headers['accept-language']?.split(',')[0]
-          ),
-          { details: { code: 'PROJECT_TEST_CHAT_NOT_KEEPABLE' } }
-        );
-      }
-      if (keep && chat.temporary === true) {
-        // `authenticatedOnly` already keeps guests out; the policy is asked
-        // anyway so the one rule for "who has a history" stays in one place.
-        if (!canKeepChatHistory(req.user)) return sendNotFound(res, 'Chat');
-        chat = await repository.keepChat(chatId);
-        if (!chat) return sendNotFound(res, 'Chat');
-        // A temporary chat ran with its project's knowledge but was left off
-        // the project's page; kept, it belongs there like any chat.
-        if (chat.projectId) {
-          const { recordChatInProject } = await import('../services/knowledge/chatProjects.js');
-          await recordChatInProject(chat.projectId, chatId, { ownerId: chat.ownerId }).catch(() => {
-            /* the project may be gone; the chat is kept either way */
-          });
-        }
-      }
-      if (hasAttached) {
-        const attached = await setChatAttachedProjects(req, res, repository, chat);
-        if (!attached) return;
-        chat = attached;
-      }
-      if (typeof title === 'string') {
-        // The repository caps and marks the title as user-set so no later turn
-        // derives over it; an empty title clears that mark instead.
-        chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
-        if (!chat) return sendNotFound(res, 'Chat');
-      }
-      res.json({ chat: publicChatView(chat) });
-    } catch (error) {
-      sendChatStorageError(res, error, 'rename chat');
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const title = req.body?.title;
+    if (req.body && Object.hasOwn(req.body, 'projectId')) {
+      // A chat belongs to a project from its first turn on (`projectId` of
+      // the chat request); it is never moved into or out of one afterwards.
+      throw new ServiceError('BAD_REQUEST', 'A chat cannot be moved into or out of a project');
     }
+    const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
+    const keep = req.body?.temporary === false;
+    if (typeof title !== 'string' && !hasAttached && !keep) {
+      throw new ServiceError('BAD_REQUEST', 'title is required and must be a string');
+    }
+    if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
+      // There is no way back into temporary: a kept chat that should not be
+      // kept is deleted, and a conversation that should be is a new chat.
+      throw new ServiceError('BAD_REQUEST', 'temporary can only be set to false');
+    }
+    if (keep && hasAttached) {
+      // Keeping writes the chat before the attached projects are even
+      // checked, so a change refused after it would leave the request failed
+      // but the chat kept. Two requests make each step all-or-nothing.
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Keep the chat and change its projects in separate requests'
+      );
+    }
+    // Only keeping needs a history to keep the chat in. A temporary chat —
+    // every chat while the history is off — can still be renamed and given
+    // attached projects.
+    const repository = requireRepository({ history: keep });
+    const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+    if (!access) throw notFound('Chat');
+    let chat = access.chat;
+    // The scratch chat of a project test (#3309) is never kept: it may have
+    // answered from a project that is disabled, and would continue in the
+    // history without it.
+    if (keep && isProjectTestChat(chat)) {
+      throw new ServiceError(
+        'PROJECT_TEST_CHAT_NOT_KEEPABLE',
+        await getLocalizedError(
+          'projectTestChatNotKeepable',
+          {},
+          req.headers['accept-language']?.split(',')[0]
+        )
+      );
+    }
+    if (keep && chat.temporary === true) {
+      // `authenticatedOnly` already keeps guests out; the policy is asked
+      // anyway so the one rule for "who has a history" stays in one place.
+      if (!canKeepChatHistory(req.user)) throw notFound('Chat');
+      chat = await repository.keepChat(chatId);
+      if (!chat) throw notFound('Chat');
+      // A temporary chat ran with its project's knowledge but was left off
+      // the project's page; kept, it belongs there like any chat.
+      if (chat.projectId) {
+        const { recordChatInProject } = await import('../services/knowledge/chatProjects.js');
+        await recordChatInProject(chat.projectId, chatId, { ownerId: chat.ownerId }).catch(() => {
+          /* the project may be gone; the chat is kept either way */
+        });
+      }
+    }
+    if (hasAttached) {
+      chat = await setChatAttachedProjects(req, repository, chat);
+    }
+    if (typeof title === 'string') {
+      // The repository caps and marks the title as user-set so no later turn
+      // derives over it; an empty title clears that mark instead.
+      chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
+      if (!chat) throw notFound('Chat');
+    }
+    res.json({ chat: publicChatView(chat) });
   });
 
   app.delete(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {
-    try {
-      const { chatId } = req.params;
-      if (!validateIdForPath(chatId, 'chat', res)) return;
-      const repository = requireRepository(res);
-      if (!repository) return;
-      const access = await loadOwnedChat(chatId, req.user, repository, 'write');
-      if (!access) return sendNotFound(res, 'Chat');
-      // Stop the turn before erasing what records it. The sidebar deletes
-      // without stopping first, so a generating chat left the model call
-      // running and billing — and its next `runLog.append` re-created the very
-      // stream the cascade below had just deleted, because appending to an
-      // unknown stream creates it. What survived was an event stream carrying
-      // the conversation with no run summary to find it by, reaped only by the
-      // ledger's own age sweep. The same pair `POST /api/runs/:id/stop` uses,
-      // and cluster-aware for the same reason: the turn may be producing on
-      // another worker.
-      if (access.chat?.status === 'running' || access.chat?.activeRunId) {
-        abortChatRequest(
-          chatId,
-          await userAbortCause('chat_deleted', req.user, {
-            mode:
-              access.chat?.identityMode ||
-              (access.chat?.activeRunId &&
-                runLog.getRunMeta(access.chat.activeRunId)?.identityMode) ||
-              runLog.identityMode(),
-            ownerId: access.chat?.ownerId,
-            via: 'DELETE /api/chats/:chatId',
-            related: access.chat?.activeRunId ? { runId: access.chat.activeRunId } : undefined
-          })
-        );
-        await cancelChatWorkflow(chatId);
-      }
-      await deleteChatWithCascade(repository, chatId, {
-        deleteRun: runId => runLog.deleteRun(runId),
-        removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
-        component: COMPONENT
-      });
-      // The chat is gone, so its project's marker has nothing to list; the
-      // listing would prune it on its next read, the cascade does it now.
-      if (access.chat?.projectId) {
-        const { getProjectService } = await import('../services/projects/ProjectService.js');
-        await getProjectService()
-          .detachChat(access.chat.projectId, chatId)
-          .catch(() => {
-            /* the project may already be gone */
-          });
-      }
-      // True even when a concurrent delete won the race: the postcondition the
-      // caller asked for — this chat no longer exists — holds either way.
-      res.json({ deleted: true });
-    } catch (error) {
-      sendChatStorageError(res, error, 'delete chat');
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+    if (!access) throw notFound('Chat');
+    // Stop the turn before erasing what records it. The sidebar deletes
+    // without stopping first, so a generating chat left the model call
+    // running and billing — and its next `runLog.append` re-created the very
+    // stream the cascade below had just deleted, because appending to an
+    // unknown stream creates it. What survived was an event stream carrying
+    // the conversation with no run summary to find it by, reaped only by the
+    // ledger's own age sweep. The same pair `POST /api/runs/:id/stop` uses,
+    // and cluster-aware for the same reason: the turn may be producing on
+    // another worker.
+    if (access.chat?.status === 'running' || access.chat?.activeRunId) {
+      abortChatRequest(
+        chatId,
+        await userAbortCause('chat_deleted', req.user, {
+          mode:
+            access.chat?.identityMode ||
+            (access.chat?.activeRunId &&
+              runLog.getRunMeta(access.chat.activeRunId)?.identityMode) ||
+            runLog.identityMode(),
+          ownerId: access.chat?.ownerId,
+          via: 'DELETE /api/chats/:chatId',
+          related: access.chat?.activeRunId ? { runId: access.chat.activeRunId } : undefined
+        })
+      );
+      await cancelChatWorkflow(chatId);
     }
+    await deleteChatWithCascade(repository, chatId, {
+      deleteRun: runId => runLog.deleteRun(runId),
+      removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
+      component: COMPONENT
+    });
+    // The chat is gone, so its project's marker has nothing to list; the
+    // listing would prune it on its next read, the cascade does it now.
+    if (access.chat?.projectId) {
+      const { getProjectService } = await import('../services/projects/ProjectService.js');
+      await getProjectService()
+        .detachChat(access.chat.projectId, chatId)
+        .catch(() => {
+          /* the project may already be gone */
+        });
+    }
+    // True even when a concurrent delete won the race: the postcondition the
+    // caller asked for — this chat no longer exists — holds either way.
+    res.json({ deleted: true });
   });
 }

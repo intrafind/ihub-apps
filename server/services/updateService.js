@@ -35,6 +35,7 @@ import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { getContentsPath } from '../utils/contentsPath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import {
   buildUpdateInfo,
   compareVersions,
@@ -96,12 +97,18 @@ const IGNORED_TOP_LEVEL = new Set([
 export { UPDATE_RESTART_CODE };
 
 /** An update request the admin has to correct (bad input, missing confirmation). */
-export class UpdateRequestError extends Error {
-  constructor(message, { status = 400, code } = {}) {
-    super(message);
+export class UpdateRequestError extends ServiceError {
+  /**
+   * @param {string} message
+   * @param {Object} [options]
+   * @param {number} [options.status=400] - HTTP status
+   * @param {string} [options.code] - A code of `shared/apiErrors.js`; `CONFLICT` for a 409 and
+   *   `BAD_REQUEST` otherwise when none is given
+   * @param {Object} [options.details]
+   */
+  constructor(message, { status = 400, code, details } = {}) {
+    super(code || (status === 409 ? 'CONFLICT' : 'BAD_REQUEST'), message, { status, details });
     this.name = 'UpdateRequestError';
-    this.status = status;
-    this.code = code;
   }
 }
 
@@ -867,7 +874,7 @@ export async function assertDiskSpaceFor(archiveBytes) {
     throw new UpdateRequestError(
       `Not enough free disk space in the installation directory: ` +
         `${Math.round(disk.required / 1024 ** 2)} MB needed, ${Math.round(disk.available / 1024 ** 2)} MB free`,
-      { status: 507, code: 'disk-space' }
+      { status: 507, code: 'DISK_SPACE' }
     );
   }
 }
@@ -914,7 +921,7 @@ export async function stageArchive({
     await releaseLock(lock);
     throw new UpdateRequestError(
       'An update is already scheduled to be applied on restart; restart the server first',
-      { status: 409, code: 'update-pending' }
+      { status: 409, code: 'UPDATE_PENDING' }
     );
   }
   const scratch = await createWorkDir('stage');
@@ -1001,7 +1008,7 @@ export async function stageArchive({
       error instanceof ArchiveRejectedError ? `Archive rejected: ${error.message}` : error.message;
     setState({ status: 'error', progress: 0, error: message, message: 'Staging failed' });
     if (error instanceof ArchiveRejectedError) {
-      throw new UpdateRequestError(message, { status: 422, code: 'archive-rejected' });
+      throw new UpdateRequestError(message, { status: 422, code: 'ARCHIVE_REJECTED' });
     }
     throw error;
   } finally {
@@ -1426,20 +1433,20 @@ export async function applyUpdate({
   if (staged.requiresConfirmation?.downgrade && confirmDowngrade !== true) {
     throw new UpdateRequestError(
       `Version ${staged.version} is not newer than the running ${staged.currentVersion}; confirm the downgrade`,
-      { status: 409, code: 'confirm-downgrade' }
+      { status: 409, code: 'CONFIRM_DOWNGRADE' }
     );
   }
   if (staged.requiresConfirmation?.unsigned) {
     if (!getUpdateSettings().allowUnsigned) {
       throw new UpdateRequestError('Unsigned archives are not allowed on this server', {
         status: 403,
-        code: 'unsigned-not-allowed'
+        code: 'UNSIGNED_NOT_ALLOWED'
       });
     }
     if (String(confirmUnsigned || '').trim() !== String(staged.version)) {
       throw new UpdateRequestError(
         `The archive is not signed by a trusted key. Type the version (${staged.version}) to install it anyway`,
-        { status: 409, code: 'confirm-unsigned' }
+        { status: 409, code: 'CONFIRM_UNSIGNED' }
       );
     }
   }
@@ -1457,7 +1464,7 @@ export async function applyUpdate({
     await releaseLock(lock);
     throw new UpdateRequestError(
       'The staged update changed or is already scheduled; review it again before installing',
-      { status: 409, code: 'staged-changed' }
+      { status: 409, code: 'STAGED_CHANGED' }
     );
   }
   setState({ status: 'applying', progress: 10, message: 'Preparing update...', error: null });
@@ -1481,7 +1488,7 @@ export async function applyUpdate({
         throw new UpdateRequestError(
           `The configuration snapshot could not be written (${error.message}). ` +
             'Free disk space, or apply without a snapshot.',
-          { status: 507, code: 'config-snapshot-failed' }
+          { status: 507, code: 'CONFIG_SNAPSHOT_FAILED' }
         );
       }
       logger.warn('Applying update without a configuration snapshot', {
@@ -1577,7 +1584,7 @@ export async function rollback({ restoreConfig = false, inProcess = false } = {}
     await releaseLock(lock);
     throw new UpdateRequestError(
       'An update or rollback is already scheduled to be applied on restart',
-      { status: 409, code: 'update-pending' }
+      { status: 409, code: 'UPDATE_PENDING' }
     );
   }
   setState({ status: 'applying', progress: 0, message: 'Rolling back...', error: null });

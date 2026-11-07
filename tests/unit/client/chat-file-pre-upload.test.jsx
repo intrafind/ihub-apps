@@ -164,7 +164,7 @@ describe('chatFileUpload helpers', () => {
   });
 
   it('reads the refusal code from a raw axios error and from the wrapped API error', () => {
-    const body = { detail: 'No room', details: { code: 'QUOTA_CHAT_BYTES' } };
+    const body = { error: 'No room', code: 'QUOTA_CHAT_BYTES' };
     // Raw axios error
     expect(helpers.uploadErrorCode({ response: { data: body } })).toBe('QUOTA_CHAT_BYTES');
     // What `handleApiResponse` throws: the response only sits on `originalError`
@@ -176,7 +176,7 @@ describe('chatFileUpload helpers', () => {
     expect(
       helpers.uploadErrorCode(
         Object.assign(new Error('x'), {
-          originalError: { response: { data: { detail: 'x', details: { code: 'NO_TEXT' } } } }
+          originalError: { response: { data: { error: 'x', code: 'NO_TEXT' } } }
         })
       )
     ).toBe('NO_TEXT');
@@ -266,7 +266,7 @@ describe('useChatFilePreUpload', () => {
 
   it('keeps the file for an inline send when the server refuses it', async () => {
     mockUpload.mockRejectedValue({
-      response: { status: 413, data: { details: { code: 'QUOTA_CHAT_FILES' } } }
+      response: { status: 413, data: { code: 'QUOTA_CHAT_FILES' } }
     });
     const { result } = renderHook(() => useComposer());
     act(() => result.current.setSelectedFile(documentEntry()));

@@ -177,7 +177,7 @@ describe('TaskFilesSection', () => {
   it('uploads picked files to the task one by one and shows what the server refused', async () => {
     mockApi.uploadScheduledTaskFile
       .mockResolvedValueOnce({ file: { id: 'file_1' } })
-      .mockRejectedValueOnce({ response: { data: { details: { code: 'QUOTA_CHAT_FILES' } } } });
+      .mockRejectedValueOnce({ response: { data: { code: 'QUOTA_CHAT_FILES' } } });
     render(<TaskFilesSection taskId="task_1" />);
     await screen.findByTestId('task-files-section');
     const input = screen.getByTestId('task-files-input');

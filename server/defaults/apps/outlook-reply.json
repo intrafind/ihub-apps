@@ -103,7 +103,15 @@
       "enabled": true,
       "resizeImages": true,
       "maxFileSizeMB": 20,
-      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+      "supportedFormats": [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/tif"
+      ]
     },
     "fileUpload": {
       "enabled": true,
@@ -112,8 +120,12 @@
         "text/plain",
         "text/markdown",
         "text/csv",
+        "text/vtt",
         "application/json",
         "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
         "text/xml",
         "message/rfc822",
         "application/pdf",
@@ -125,7 +137,8 @@
         "application/vnd.ms-outlook",
         "application/vnd.oasis.opendocument.text",
         "application/vnd.oasis.opendocument.spreadsheet",
-        "application/vnd.oasis.opendocument.presentation"
+        "application/vnd.oasis.opendocument.presentation",
+        "text/*"
       ]
     },
     "allowMultiple": true

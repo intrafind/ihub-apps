@@ -243,13 +243,78 @@ export const MARKETPLACE_ERROR_CODES = Object.freeze({
   INTEGRITY_MISMATCH: 422
 });
 
-/** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
+/** Model administration: discovery, text-to-speech voices (`server/routes/admin/models.js`). */
+export const MODEL_ERROR_CODES = Object.freeze({
+  DISCOVERY_FAILED: 502,
+  NOT_TTS_MODEL: 400,
+  VOICES_UNSUPPORTED: 501,
+  INVALID_AUDIO: 400,
+  UNSUPPORTED_TTS_PROVIDER: 400,
+  NO_AUDIO: 502
+});
+
+/**
+ * Answers to the interactions of a run (`server/routes/runs.js`, `InteractionService`).
+ * `INVALID_DECISION` is shared with the scheduled tasks (`SCHEDULED_TASK_ERROR_CODES`).
+ */
+export const INTERACTION_ERROR_CODES = Object.freeze({
+  ANSWER_IN_PROGRESS: 409,
+  ANSWER_IN_CHAT: 409,
+  APPROVER_REQUIRED: 403,
+  UNAUTHORIZED_APPROVER: 403,
+  CANCELLED: 409,
+  EXPIRED: 410,
+  RUN_DELETED: 410,
+  INVALID_INPUT: 400,
+  INVALID_OPTION: 400,
+  NOT_PENDING: 409,
+  REASON_REQUIRED: 400,
+  SKIP_NOT_ALLOWED: 400
+});
+
+/** In-place updates (`server/routes/admin/update.js`, `updateService.js`). */
+export const UPDATE_ERROR_CODES = Object.freeze({
+  ARCHIVE_REJECTED: 422,
+  DISK_SPACE: 507,
+  UPDATE_PENDING: 409,
+  CONFIRM_DOWNGRADE: 409,
+  UNSIGNED_NOT_ALLOWED: 403,
+  CONFIRM_UNSIGNED: 409,
+  STAGED_CHANGED: 409,
+  CONFIG_SNAPSHOT_FAILED: 507
+});
+
+/** Durable chats and their files (`server/routes/chats.js`, `server/services/chatFiles`). */
 export const CHAT_ERROR_CODES = Object.freeze({
+  CHAT_PERSISTENCE_UNAVAILABLE: 503,
+  CHAT_OWNER_REQUIRED: 403,
+  USER_PROJECTS_DISABLED: 403,
+  APP_PROJECTS_DISABLED: 403,
+  PROJECT_TEST_CHAT_NOT_KEEPABLE: 409,
+  QUOTA_FILE_BYTES: 413,
+  QUOTA_CHAT_FILES: 413,
+  QUOTA_CHAT_BYTES: 413,
+  QUOTA_API_FILES: 413,
+  QUOTA_API_BYTES: 413,
+  QUOTA_USER_BYTES: 413,
+  QUOTA_SERVER_BYTES: 507,
+  BINARY_UPLOAD_NOT_ALLOWED: 400,
+  UNSUPPORTED_TYPE: 400,
+  SCAN_REJECTED: 400,
+  NO_TEXT: 400,
+  EXTRACTION_FAILED: 400,
+  SOURCE_FORBIDDEN: 403,
+  SOURCE_GONE: 404,
+  SOURCE_UNAVAILABLE: 400,
+  SOURCE_INVALID: 400,
+  SOURCE_FAILED: 502
+});
+
+/** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
+export const CHAT_SESSION_ERROR_CODES = Object.freeze({
   CLIENT_HISTORY_NOT_ALLOWED: 400,
   UNKNOWN_MESSAGE: 400,
-  ANSWER_IN_CHAT: 409,
   APP_NOT_FOUND: 404,
-  CHAT_OWNER_REQUIRED: 403,
   CHAT_STORAGE_UNAVAILABLE: 503,
   GUEST_COOKIE_MISSING: 404,
   INVALID_APP: 400,
@@ -267,17 +332,13 @@ export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
 
 /** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */
 export const PROJECT_ERROR_CODES = Object.freeze({
-  APP_PROJECTS_DISABLED: 403,
-  USER_PROJECTS_DISABLED: 403,
   PROJECTS_NOT_ALLOWED: 403,
   PROJECT_READ_ONLY: 403,
   PROJECT_MISMATCH: 409,
-  PROJECT_TEST_CHAT_NOT_KEEPABLE: 409,
   ITEMS_NOT_EDITABLE: 400,
   SHARE_TARGET_INVALID: 400,
   IFINDER_UNAVAILABLE: 503,
   IFINDER_WRITES_DISABLED: 403,
-  QUOTA_FILE_BYTES: 413,
   UPLOAD_TOO_LARGE: 413,
   COPILOT_AGENT_DISABLED: 409,
   COPILOT_REFERENCE_ID_MISSING: 409,
@@ -292,20 +353,7 @@ export const MISC_ERROR_CODES = Object.freeze({
   TEAMS_ACCOUNT_DISABLED: 403,
   TEAMS_INVALID_OR_EXPIRED_TOKEN: 401,
   CONCURRENCY_LIMIT: 409,
-  PROVIDER_IN_USE: 409,
-  ARCHIVE_REJECTED: 422,
-  NO_AUDIO: 502
-});
-
-/** Codes of the admin text-to-speech voice routes (`server/routes/admin/models.js`). */
-export const VOICE_ADMIN_ERROR_CODES = Object.freeze({
-  NOT_TTS_MODEL: 400,
-  VOICES_UNSUPPORTED: 501,
-  UNSUPPORTED_PROVIDER: 400,
-  INVALID_NAME: 400,
-  INVALID_AUDIO: 400,
-  AUDIO_TOO_LARGE: 413,
-  INVALID_VOICE: 400
+  PROVIDER_IN_USE: 409
 });
 
 /** Every code, with its default HTTP status. */
@@ -321,11 +369,14 @@ export const API_ERROR_CODES = Object.freeze({
   ...WORKFLOW_ERROR_CODES,
   ...BACKUP_ERROR_CODES,
   ...MARKETPLACE_ERROR_CODES,
+  ...MODEL_ERROR_CODES,
+  ...INTERACTION_ERROR_CODES,
+  ...UPDATE_ERROR_CODES,
   ...CHAT_ERROR_CODES,
+  ...CHAT_SESSION_ERROR_CODES,
   ...CLOUD_STORAGE_ERROR_CODES,
-  ...VOICE_ADMIN_ERROR_CODES,
-  ...MISC_ERROR_CODES,
-  ...PROJECT_ERROR_CODES
+  ...PROJECT_ERROR_CODES,
+  ...MISC_ERROR_CODES
 });
 
 /**

@@ -15,6 +15,7 @@
  * @module features/apps/utils/pendingDocument
  */
 import { contentTypeFromExtension } from '../../nextcloud-embed/utilities/nextcloudFileMeta';
+import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
 
 export const DOCUMENT_ID_PARAM = 'documentId';
 export const DOCUMENT_INTEGRATION_PARAM = 'integration';
@@ -120,6 +121,48 @@ export function appBindsIntegration(app, info) {
   return [info.id, info.definition, info.type ? `type:${info.type}` : null].some(
     key => typeof key === 'string' && Object.hasOwn(bindings, key)
   );
+}
+
+/**
+ * The keys of an app's bindings that stand for the integration a document comes from, and that
+ * give the chat tools (a binding with `actions: []` or iAssistant binds none). They are the tool
+ * references the chat's integration switch toggles.
+ *
+ * @param {Object} app - an entry of `GET /api/apps`
+ * @param {{id: string, definition?: string, type?: string|null}} info - the probe's answer
+ * @returns {string[]}
+ */
+export function boundToolRefsFor(app, info) {
+  if (!appBindsIntegration(app, info)) return [];
+  const toolRefs = new Set(boundIntegrationRefs(app));
+  return [info.id, info.definition, info.type ? `type:${info.type}` : null].filter(
+    key => typeof key === 'string' && Object.hasOwn(app.integrations, key) && toolRefs.has(key)
+  );
+}
+
+/** The definition whose documents the server can ingest into a chat by reference. */
+const SERVER_INGEST_DEFINITIONS = Object.freeze({ 'com.intrafind/ifinder': 'ifinder-document' });
+
+/**
+ * The `source` the chat's file endpoint takes (`POST /api/chats/:chatId/files`,
+ * `services/chatFiles/fileSources.js`) for a document of an installed integration, or `null` when
+ * the server cannot fetch from it: the server then fetches the original itself, with the user's own
+ * rights, stores it and extracts the text — the document never passes through the browser.
+ *
+ * @param {{definition?: string|null}|null} info - the probe's answer
+ * @param {{documentId: string, searchProfile?: string}} doc
+ * @returns {{kind: string, ref: Object}|null}
+ */
+export function serverFileSourceFor(info, doc) {
+  const kind = info?.definition ? SERVER_INGEST_DEFINITIONS[info.definition] : null;
+  if (!kind || !doc?.documentId) return null;
+  return {
+    kind,
+    ref: {
+      documentId: doc.documentId,
+      ...(doc.searchProfile ? { searchProfile: doc.searchProfile } : {})
+    }
+  };
 }
 
 /**

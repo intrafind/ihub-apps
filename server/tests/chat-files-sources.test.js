@@ -26,6 +26,7 @@ process.env.CONTENTS_DIR = 'contents';
 
 const harness = await import('./helpers/scheduledTaskHarness.js');
 const { default: registerRoutes } = await import('../routes/scheduledTasks.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const tasks = await import('../services/scheduler/tasks/taskService.js');
 const { executeTaskRun } = await import('../services/scheduler/tasks/taskExecution.js');
 const { registerItemKind, getItemKind } = await import('../services/projects/kinds/registry.js');
@@ -455,18 +456,21 @@ describe('task files from a connected system', () => {
   async function attach(user, taskId, body) {
     const route = routes.find(r => r.method === 'post' && r.routePath.endsWith('/:taskId/files'));
     const res = makeRes();
-    await route.handlers.at(-1)(
-      {
-        params: { taskId },
-        body,
-        query: {},
-        headers: {},
-        user,
-        ip: '127.0.0.1',
-        originalUrl: '/x'
-      },
-      res
-    );
+    const req = {
+      params: { taskId },
+      body,
+      query: {},
+      headers: {},
+      user,
+      ip: '127.0.0.1',
+      originalUrl: '/x'
+    };
+    try {
+      await route.handlers.at(-1)(req, res);
+    } catch (error) {
+      // What Express does with a thrown error: the global handler answers.
+      errorHandler(error, req, res, () => {});
+    }
     return res;
   }
 
