@@ -57,7 +57,7 @@ function fixture() {
 describe('CONTENT_ACCESS_TYPES', () => {
   it('covers the content lists and leaves models to the platform', () => {
     expect([...CONTENT_ACCESS_TYPES].sort()).toEqual(
-      ['apps', 'prompts', 'skills', 'tools', 'workflows'].sort()
+      ['apps', 'prompts', 'skills', 'workflows'].sort()
     );
     expect(CONTENT_ACCESS_TYPES).not.toContain('models');
   });

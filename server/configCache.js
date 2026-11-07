@@ -16,7 +16,6 @@ import { loadSkillsMetadata } from './services/skillLoader.js';
 import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import logger from './utils/logger.js';
-import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { areAppIntegrationsEnabled } from './integrationRegistry.js';
 import { getDefinitionTypes } from './services/integrations/integrationTypes.js';
@@ -25,60 +24,6 @@ import { resolveEnvVarsInObject } from './utils/envVars.js';
 import { applyIhubEnvOverrides, ENV_VAR_SKIP_PATHS_BY_KEY } from './utils/configOverrides.js';
 import { decryptCredentials, decryptPlatformSecrets } from './utils/configSecrets.js';
 import { etagForIds } from './utils/etag.js';
-
-/**
- * The approval fields of one expanded tool function: the function's own value
- * for each of `approval`, `sideEffect` and `dataFlow`, else the tool's. Keys
- * that neither sets are left out.
- *
- * @param {Object} fn - the function's config (`tool.functions[name]`)
- * @param {Object} tool - the tool file
- * @returns {{approval?: string, sideEffect?: string, dataFlow?: string}}
- */
-export function approvalFieldsOf(fn = {}, tool = {}) {
-  const out = {};
-  for (const key of ['approval', 'sideEffect', 'dataFlow']) {
-    const value = fn?.[key] ?? tool?.[key];
-    if (value !== undefined && value !== null) out[key] = value;
-  }
-  return out;
-}
-
-export function expandToolFunctions(tools = []) {
-  const expanded = [];
-  for (const tool of tools) {
-    if (tool.functions && typeof tool.functions === 'object') {
-      for (const [fn, cfg] of Object.entries(tool.functions)) {
-        // Always extract string value from name (support both string and multilingual object)
-        let toolName = tool.name;
-        if (typeof toolName === 'object') {
-          toolName = getLocalizedString(toolName, 'en', undefined, tool.id);
-        } else if (typeof toolName !== 'string') {
-          // Fallback to ID if name is neither string nor object
-          toolName = tool.id;
-        }
-
-        expanded.push({
-          ...tool,
-          id: `${tool.id}_${fn}`,
-          name: cfg.name || `${toolName}_${fn}`,
-          description: cfg.description || tool.description,
-          parameters: cfg.parameters || {},
-          method: fn,
-          // Inherit passthrough setting from function definition or tool
-          passthrough: cfg.passthrough || tool.passthrough || false,
-          // Approval policy (#2945): a function's own setting, else the
-          // tool's. Without these copies a per-function `approval` would be
-          // dropped and the call would run ungated.
-          ...approvalFieldsOf(cfg, tool)
-        });
-      }
-    } else {
-      expanded.push(tool);
-    }
-  }
-  return expanded;
-}
 
 /**
  * How long change events from the storage provider accumulate before the
@@ -107,7 +52,6 @@ const AGGREGATE_KEY_BY_NAMESPACE = Object.freeze({
   models: 'config/models.json',
   prompts: 'config/prompts.json',
   workflows: 'config/workflows.json',
-  tools: 'config/tools.json',
   agents: 'config/agents.json',
   projects: 'config/projects.json'
 });
@@ -176,11 +120,6 @@ const CONFIG_LOADERS = {
     label: 'agent profiles',
     load: ({ verbose }) => loadResources('agents', { includeDisabled: true, verbose }),
     emptyOnError: []
-  },
-  'config/tools.json': {
-    label: 'tools',
-    load: async ({ verbose }) =>
-      expandToolFunctions(await loadResources('tools', { includeDisabled: true, verbose }))
   },
   'config/projects.json': {
     label: 'admin projects',
@@ -286,7 +225,6 @@ class ConfigCache {
     this.criticalConfigs = [
       'config/models.json',
       'config/apps.json',
-      'config/tools.json',
       'config/styles.json',
       'config/prompts.json',
       'config/workflows.json',
@@ -865,13 +803,6 @@ class ConfigCache {
     }
     const hiddenIds = enabled.filter(app => !isAvailable(app)).map(app => app.id);
     return { data: available, etag: etagForIds(all.etag, hiddenIds, 'f') };
-  }
-
-  /**
-   * Get tools configuration
-   */
-  getTools(includeDisabled = false) {
-    return this._enabledList('config/tools.json', includeDisabled, 'Tools');
   }
 
   /**

@@ -40,8 +40,8 @@ leave durable artifacts behind.
 
 ## Auto-registered tools
 
-Every agent run gets these tools merged into its toolset (in addition to any
-configured per-node `tools`):
+Every agent run gets these platform tools merged into its toolset (in addition to
+what the profile or node binds under `integrations`, `systemTools` and `webSearch`):
 
 | Tool | Description |
 |---|---|
@@ -202,7 +202,7 @@ A `verifier` node supports two modes:
   `pass`; `FAIL`/`PARTIAL` branch `retry` **and** surface the concrete
   `failures` as `state.data._lastReviewGaps`, so a plan-and-review loop
   re-entry (see above) re-plans to close exactly those gaps — the
-  reconsideration path. List `config.tools` on an adversarial verifier to make
+  reconsideration path. Bind `integrations` (or name `systemTools`) on an adversarial verifier to make
   it **tool-enabled**: it then runs a real tool loop (search, fetch, re-check)
   before its verdict instead of judging from reading alone
   (`config.maxToolRounds` caps the rounds).

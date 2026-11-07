@@ -53,6 +53,7 @@ import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 import './OfficeChatPanel.css';
 
 // How long the popped-out chat waits for a quiet moment before telling the
@@ -1250,8 +1251,8 @@ function OfficeChatPanel({
                   selectedFile={fileUploadHandler.selectedFile}
                   showUploader={fileUploadHandler.showUploader}
                   onToggleUploader={fileUploadHandler.toggleUploader}
-                  enabledTools={selectedApp?.tools?.length ? enabledTools : null}
-                  onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
+                  enabledTools={appHasToolBindings(selectedApp) ? enabledTools : null}
+                  onEnabledToolsChange={appHasToolBindings(selectedApp) ? setEnabledTools : null}
                   websearchEnabled={websearchEnabled}
                   onWebsearchEnabledChange={
                     selectedApp?.websearch?.enabled ? setWebsearchEnabled : null

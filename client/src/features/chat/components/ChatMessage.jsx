@@ -81,6 +81,7 @@ import { useChatFiles } from '../contexts/ChatFilesContext';
 import { formatBytes } from '../utils/artifactFiles';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
 import { splitUserMessageContent } from '../../../utils/userMessageContent';
+import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 
 /** How an answer ends when it stopped before it was complete. */
 const INTERRUPTED_FINISH_REASONS = new Set(['length', 'connection_closed', 'error']);
@@ -416,7 +417,7 @@ function ChatMessage({
           : models;
 
       // Filter by tools requirement
-      if (app.tools && app.tools.length > 0) {
+      if (appHasToolBindings(app)) {
         availableModels = availableModels.filter(modelSupportsTools);
       }
 

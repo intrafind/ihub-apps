@@ -60,12 +60,12 @@ describe('model administration routes: errors', () => {
     const unsafe = await request(app).get('/api/admin/models/bad%20id').expect(400);
     expect(unsafe.body.code).toBe('BAD_REQUEST');
     const unknown = await request(app).get('/api/admin/models/nope').expect(404);
-    expect(unknown.body).toEqual({ error: 'Model not found', code: 'NOT_FOUND' });
+    expect(unknown.body).toMatchObject({ detail: 'Model not found', code: 'NOT_FOUND' });
   });
 
   it('answers a new model without the required fields with BAD_REQUEST', async () => {
     const res = await request(app).post('/api/admin/models').send({ id: 'x' }).expect(400);
-    expect(res.body).toEqual({ error: 'Missing required fields', code: 'BAD_REQUEST' });
+    expect(res.body).toMatchObject({ detail: 'Missing required fields', code: 'BAD_REQUEST' });
   });
 
   it('answers a failed discovery with DISCOVERY_FAILED and the key in details', async () => {
@@ -75,7 +75,7 @@ describe('model administration routes: errors', () => {
       .expect(400);
     expect(res.body.code).toBe('DISCOVERY_FAILED');
     expect(res.body.details).toMatchObject({ messageKey: 'invalidUrl' });
-    expect(typeof res.body.error).toBe('string');
+    expect(typeof res.body.detail).toBe('string');
   });
 
   it('answers a failed model test with the LLM code, the headline and the remediation', async () => {
@@ -84,7 +84,7 @@ describe('model administration routes: errors', () => {
     expect(res.body.code).toBe('AUTH_FAILED');
     expect(res.body.details).toMatchObject({ messageKey: expect.any(String) });
     expect(typeof res.body.details.remediation).toBe('string');
-    expect(typeof res.body.error).toBe('string');
+    expect(typeof res.body.detail).toBe('string');
   });
 
   it('hides the reason of an unexpected failure of a model test', async () => {

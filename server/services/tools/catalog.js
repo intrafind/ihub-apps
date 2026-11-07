@@ -3,8 +3,9 @@
 
 /**
  * The tool catalog: every tool the server knows, before any app or user narrows it.
- * The tools of `contents/tools/`, the platform tools, the tools of MCP servers, A2A
- * agents and installed integrations, and the ids of the tools skills and workflows add.
+ * The tools of the installed integrations (which include the MCP servers, the A2A
+ * agents and iHub's own `ask_user` and scheduled-task tools) and the platform tools
+ * of workflows and agents, and the ids of the tools skills and workflows add.
  */
 
 import configCache from '../../configCache.js';
@@ -14,47 +15,6 @@ import logger from '../../utils/logger.js';
 import { localizeTools } from '../../utils/toolLocalization.js';
 import { isKnowledgeTool } from '../knowledge/knowledgeTools.js';
 import { platformToolDefinitions } from './platformTools.js';
-
-/**
- * Load tools defined locally in contents/tools/
- * @param {string} language - Optional language for localization
- */
-export async function loadConfiguredTools(language = null) {
-  // Try to get tools from cache first
-  const { data: tools } = configCache.getTools();
-  if (!tools) {
-    logger.warn('Tools could not be loaded', { component: 'ToolLoader' });
-    return [];
-  }
-
-  // Always localize tools to ensure nested multilingual fields (like descriptions in schemas)
-  // are converted to strings. Use provided language or fall back to platform default.
-  const platformConfig = configCache.getPlatform() || {};
-  const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
-  const localized = localizeTools(tools, effectiveLanguage);
-
-  // OpenAPI tool files are gone: migration V211 turned every one into a
-  // custom integration, and nothing creates them any more. A file put back
-  // by hand has nothing to run it, so it is not offered.
-  const offered = [];
-  for (const tool of localized) {
-    if (tool?.type === 'openapi') {
-      if (!reportedOpenApiToolFiles.has(tool.id)) {
-        reportedOpenApiToolFiles.add(tool.id);
-        logger.warn(
-          'OpenAPI tool files are no longer supported; build the integration under Admin → Integrations → Add manually',
-          { component: 'ToolLoader', toolId: tool.id }
-        );
-      }
-      continue;
-    }
-    offered.push(tool);
-  }
-  return offered;
-}
-
-/** OpenAPI tool files already reported as unsupported, so each is logged once. */
-const reportedOpenApiToolFiles = new Set();
 
 /** Agent ids whose id clash has been logged, so each is reported once. */
 const reportedA2aIdConflicts = new Set();
@@ -138,52 +98,33 @@ export async function filterIntegrationToolsForUser(tools, user) {
 }
 
 /**
- * The platform tools — the workflow and agent tools (agent workspace,
- * evidence; see `services/tools/platformTools.js`) — localized, as plain
- * tools. A file in `contents/tools/` with the same id takes the place of the
- * shipped definition whether it is enabled or not, as a configured tool did
- * before migration V199: an admin-edited file V199 kept keeps serving its
- * tool, and one switched off (`enabled: false`) keeps it off.
+ * The platform tools — the agent workspace, the evidence tools and the page
+ * reader (see `services/tools/platformTools.js`) — localized. They belong to
+ * workflows and agents, not to an integration: nothing selects them by an app
+ * binding or exposes them over the gateways.
  *
  * @param {string|null} language
  * @returns {Object[]}
  */
-function loadPlatformTools(language) {
-  const { data: files } = configCache.getTools(true);
-  const configuredIds = new Set((files || []).map(tool => tool?.id));
+export function loadPlatformTools(language = null) {
   const platformConfig = configCache.getPlatform() || {};
   const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
-  return localizeTools(
-    platformToolDefinitions().filter(tool => !configuredIds.has(tool.id)),
-    effectiveLanguage
+  // The page reader can be switched off for the whole platform
+  // (`platform.webSearch.pageReader: false`, set by migration V230 from a
+  // `read_url` tool file that was disabled).
+  const pageReaderOff = platformConfig?.webSearch?.pageReader === false;
+  const definitions = platformToolDefinitions().filter(
+    tool => !(pageReaderOff && tool.id === 'read_url')
   );
+  return localizeTools(definitions, effectiveLanguage);
 }
 
 /**
- * iHub's local tools — every tool that is not an installed integration's: the
- * configured tools (`contents/tools/`) and the platform tools of workflows and
- * agents. The inbound MCP gateway offers these to the callers whose groups or
- * apps grant them, as it offered the tool files before migration V199.
- *
- * A leftover `contents/tools/knowledge.json` (an admin-edited copy V199 kept)
- * does not put a knowledge tool into the list: those ids are the projects'
- * (see {@link loadTools}).
- *
- * @param {string|null} [language] - Language for localization (platform default when absent)
- * @returns {Promise<Object[]>}
- */
-export async function loadLocalTools(language = null) {
-  const configured = await loadConfiguredTools(language);
-  const platform = loadPlatformTools(language);
-  return [...configured, ...platform].filter(tool => !isKnowledgeTool(tool.id));
-}
-
-/**
- * Load the tools a request can be offered by id: the configured tools
- * (`contents/tools/`), the platform tools of workflows and agents, and the
- * tools of the installed integrations (which include the MCP servers, the
- * remote A2A agents, the people directories and iHub's own `ask_user` and
- * scheduled-task tools). The first tool of an id wins, in that order.
+ * Load the tools a request can be offered by id: the platform tools of
+ * workflows and agents, and the tools of the installed integrations (which
+ * include the MCP servers, the remote A2A agents, the people directories and
+ * iHub's own `ask_user` and scheduled-task tools). The first tool of an id
+ * wins, in that order.
  *
  * The project knowledge tools (`knowledge_*`) are never in this list: they
  * belong to projects and come with the request's project scope
@@ -193,7 +134,7 @@ export async function loadLocalTools(language = null) {
  * @returns {Promise<Object[]>}
  */
 export async function loadTools(language = null) {
-  const local = await loadLocalTools(language);
+  const local = loadPlatformTools(language).filter(tool => !isKnowledgeTool(tool.id));
   // Installed integrations include the MCP servers, the remote A2A agents and
   // the people directories (their tools keep `_mcp`, `_a2a` and
   // `_peopleDirectory`).

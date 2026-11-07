@@ -165,14 +165,14 @@ describe('text-to-speech voices of a model', () => {
     state.failWith = new TtsUpstreamError('Mistral TTS failed (HTTP 422): sample too short');
     const res = await request(app).post(base).send({ name: 'Anna', audio: sample });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Mistral TTS failed (HTTP 422): sample too short');
+    expect(res.body.detail).toBe('Mistral TTS failed (HTTP 422): sample too short');
   });
 
   test('does not leak an unexpected error', async () => {
     state.failWith = new Error('ECONNREFUSED 10.0.0.5:443');
     const res = await request(app).get(base);
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Could not list voices');
+    expect(res.body.detail).toBe('Could not list voices');
   });
 
   test('deletes a voice by id, and refuses a malformed id', async () => {

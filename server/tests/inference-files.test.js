@@ -83,7 +83,6 @@ before(async () => {
   configCache.setCacheEntry('config/features.json', { chatPersistence: true });
   configCache.setCacheEntry('config/apps.json', APPS);
   configCache.setCacheEntry('config/models.json', MODELS);
-  configCache.setCacheEntry('config/tools.json', []);
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
 });

@@ -416,8 +416,8 @@ echo -n "searchprofile-standard" | base64
 
 The iFinder tools are the **actions** of the `ifinder` installation; there is no
 `contents/tools/iFinder.json` any more (migration V192 removes it). They keep their
-tool ids, so group tool grants (`permissions.tools` in `groups.json`) that name
-`iFinder` or `iFinder_*` keep working. An app gets the tools by binding the
+tool ids. Which groups may use them is the grant of the `ifinder` installation
+(`permissions.integrations`). An app gets the tools by binding the
 installation under `integrations`, naming the actions it wants without the
 `iFinder_` prefix (see [Application Setup](#application-setup)).
 

@@ -438,7 +438,7 @@ should not happen unattended (creating tickets, sending mail, …).
 ## Scheduling tools in apps
 
 Five tools let an app manage the user's tasks from a conversation. They are
-**opt-in**: an app offers them only when its `tools` list names them, and only
+**opt-in**: an app offers them only when it binds them (`"integrations": { "ihub": { "actions": ["schedule_task", …] } }`), and only
 to users who may use scheduled tasks.
 
 | Tool                      | What it does                                                                     |

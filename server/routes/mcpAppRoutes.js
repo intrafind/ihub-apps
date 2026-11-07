@@ -48,7 +48,6 @@ import {
 } from '../services/mcp/mcpViewToolApproval.js';
 import { isAuthRequiredError, isTokenRefreshError } from '../services/mcp/McpUserOAuthProvider.js';
 import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
-import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
   appsEnabledFor,
   buildAllowAttribute,
@@ -213,20 +212,24 @@ export async function resolveMcpApp(req, appId, toolId, { declaredView = false }
   const app = findByIdCaseInsensitive(apps, appId);
   if (!app) throw new McpAppAccessError(403, 'App not available');
 
-  const appTools = new Set(Array.isArray(app.tools) ? app.tools : []);
-  let found = null;
-  if (!toolVisibleInSet(toolId, appTools)) {
-    // An app that uses an MCP server as a whole lists the server's id, and
-    // only the tool's own `_mcp` marker says which server it belongs to. Look
-    // the tool up only for such an app, so a request for a tool the app does
-    // not offer never reaches an MCP server.
-    const usesMcpServer = [...appTools].some(id => mcpClientManager.hasServer?.(id));
-    found = usesMcpServer ? await mcpClientManager.findTool(toolId) : null;
-    if (!toolVisibleInSet(toolId, appTools, found?.tool?._mcp?.serverId)) {
-      throw new McpAppAccessError(403, 'Tool not available in this app');
-    }
-  } else {
-    found = await mcpClientManager.findTool(toolId);
+  // The app offers an MCP server's tools only by binding its installation
+  // (`app.integrations`). Look the tool up only for an app that binds one, so
+  // a request for a tool the app does not offer never reaches an MCP server.
+  const { boundInstanceIds, getIntegrationToolsForApp } =
+    await import('../services/integrations/integrationTools.js');
+  const usesMcpServer = boundInstanceIds(app).some(id => mcpClientManager.hasServer?.(id));
+  const found = usesMcpServer ? await mcpClientManager.findTool(toolId) : null;
+  const marker = found?.tool?._mcp
+    ? {
+        ...found.tool,
+        _integration: {
+          instanceId: found.tool._mcp.serverId,
+          action: found.tool._mcp.originalName
+        }
+      }
+    : null;
+  if (!marker || getIntegrationToolsForApp(app, [marker], { user }).length === 0) {
+    throw new McpAppAccessError(403, 'Tool not available in this app');
   }
   const rendersView = found?.tool._mcp?.ui?.resourceUri
     ? true

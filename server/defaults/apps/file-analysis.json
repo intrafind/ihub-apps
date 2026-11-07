@@ -86,7 +86,6 @@
   "autoStart": false,
   "enabled": true,
   "allowInheritance": false,
-  "tools": [],
   "greeting": {
     "en": {
       "title": "👋 Hello!",

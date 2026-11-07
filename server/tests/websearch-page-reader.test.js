@@ -22,7 +22,7 @@ import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import { getToolsForApp } from '../services/tools/appTools.js';
+import { getToolsForApp, getToolsForNode } from '../services/tools/appTools.js';
 import { loadTools } from '../services/tools/catalog.js';
 import {
   resolveNativeWebSearchFallbackTools,
@@ -90,26 +90,8 @@ describe('page reader alongside web search', () => {
     assert.deepEqual(ids(offered), []);
   });
 
-  it('is not offered when a tool file switches it off', async () => {
-    useWebSearch({ installed: [engine('qwant')], tools: [{ ...READER, enabled: false }] });
-    assert.equal(
-      (await loadTools('en')).some(t => t.id === READ_URL_TOOL_ID),
-      false
-    );
-    const native = await getToolsForApp(nativeApp(), 'en', {
-      modelProvider: 'anthropic',
-      user: STAFF
-    });
-    assert.deepEqual(ids(native), []);
-    const engineOnly = await getToolsForApp(webApp(), 'en', {
-      modelProvider: 'mistral',
-      user: STAFF
-    });
-    assert.deepEqual(ids(engineOnly), ['qwantSearch']);
-  });
-
-  it('is offered once when the app also lists it in tools', async () => {
-    const offered = await getToolsForApp(webApp({ tools: [READ_URL_TOOL_ID] }), 'en', {
+  it('is offered once when a node with web search also lists it in its tools', async () => {
+    const offered = await getToolsForNode({ ...webApp(), systemTools: [READ_URL_TOOL_ID] }, 'en', {
       modelProvider: 'mistral',
       user: STAFF
     });

@@ -152,12 +152,12 @@ async function runPrimary() {
     await ask(workers[1], { step: 'fail-next' });
     await ask(workers[0], { step: 'announce', entries: ['config/models.json'] });
     await settle();
-    await ask(workers[0], { step: 'announce', entries: ['config/tools.json'] });
+    await ask(workers[0], { step: 'announce', entries: ['config/skills.json'] });
     await settle();
 
     logs = await askAll({ step: 'log' });
     check('a reload failure does not wedge subsequent invalidations', () =>
-      assert.deepStrictEqual(logs[1].reloaded, ['config/tools.json'])
+      assert.deepStrictEqual(logs[1].reloaded, ['config/skills.json'])
     );
   } catch (error) {
     failed = true;

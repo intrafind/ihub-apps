@@ -164,11 +164,6 @@ function AppTemplateSelector({ onSelect, onClose }) {
                             {app.variables.length} variables
                           </span>
                         )}
-                        {app.tools?.length > 0 && (
-                          <span className="ml-3 text-xs text-gray-500">
-                            {app.tools.length} tools
-                          </span>
-                        )}
                       </div>
                     </div>
                     <Icon name="chevron-down" className="h-5 w-5 text-gray-500" />

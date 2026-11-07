@@ -11,7 +11,7 @@
  * (Unified Integrations concept §6.9): they are offered whenever the
  * projects feature is on and the request reaches a project, and never
  * otherwise. Their definitions are the shipped file, read here as data; no
- * installation, action switch or `contents/tools/` file adds, removes or
+ * installation or action switch adds, removes or
  * changes them. `runTool` hands a call to {@link runKnowledgeTool}, which runs
  * the implementation in `server/tools/knowledge.js`; that resolves the
  * request's scope again on every call, so the model cannot reach a project

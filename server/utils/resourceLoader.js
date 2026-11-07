@@ -233,7 +233,6 @@ const RESOURCE_TYPES_BY_DIRECTORY = [
   ['apps/', 'app'],
   ['models/', 'model'],
   ['prompts/', 'prompt'],
-  ['tools/', 'tool'],
   ['sources/', 'source'],
   ['config/groups', 'group'],
   ['config/', 'config']

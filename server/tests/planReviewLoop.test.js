@@ -96,8 +96,9 @@ async function run() {
       'memory-compose is a toolless prompt with _isMemoryComposer marker',
       memComposeNode?.type === 'prompt' &&
         memComposeNode?.config?._isMemoryComposer === true &&
-        Array.isArray(memComposeNode?.config?.tools) &&
-        memComposeNode.config.tools.length === 0
+        !memComposeNode?.config?.integrations &&
+        !memComposeNode?.config?.systemTools?.length &&
+        !memComposeNode?.config?.webSearch
     );
     check(
       'memory-compose outputSchema has flat fields (Gemini-compatible)',

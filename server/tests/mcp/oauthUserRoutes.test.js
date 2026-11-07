@@ -51,7 +51,7 @@ const OPEN_GROUPS = {
 
 const state = {
   platform: { anonymousAuth: { enabled: false }, auth: {} },
-  apps: [{ id: 'assistant', tools: ['okta'] }],
+  apps: [{ id: 'assistant', integrations: { okta: {} } }],
   integrations: oktaInstallation(),
   groups: OPEN_GROUPS
 };
@@ -199,7 +199,7 @@ beforeEach(async () => {
     new IntegrationConnectionService({ documents: scratch.documents, flowStore })
   );
   state.platform = { anonymousAuth: { enabled: false }, auth: {} };
-  state.apps = [{ id: 'assistant', tools: ['okta'] }];
+  state.apps = [{ id: 'assistant', integrations: { okta: {} } }];
   state.integrations = oktaInstallation();
   state.groups = OPEN_GROUPS;
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
@@ -438,7 +438,7 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     // A stable public URL: supertest listens on a new port per request, and only
     // the admin's sign-in may move the registration to another base.
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
-    state.apps = [{ id: 'assistant', tools: ['okta'], integrations: { okta: {} } }];
+    state.apps = [{ id: 'assistant', integrations: { okta: {} } }];
     state.groups = {
       users: { id: 'users', permissions: { integrations: ['type:people-directory'] } },
       admins: { id: 'admins', permissions: { integrations: [], adminAccess: true } }
@@ -722,7 +722,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
 
   beforeEach(async () => {
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'https://ihub.example.com' } };
-    state.apps = [{ id: 'assistant', tools: ['evil', 'corp'] }];
+    state.apps = [{ id: 'assistant', integrations: { evil: {}, corp: {} } }];
     state.integrations = installationsOf(['evil', 'corp']);
     await mcpClientManager.initialize({ servers: [EVIL, CORP] });
     sdk.discoverOAuthServerInfo.mockImplementation(async serverUrl =>

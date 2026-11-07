@@ -8,7 +8,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { loadLocalTools } from '../tools/catalog.js';
 import { runTool } from '../tools/runTool.js';
 import {
   filterDirectoryToolsForUser,
@@ -17,7 +16,6 @@ import {
 import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
-import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -55,7 +53,7 @@ export function gatewayCallNeedsApproval(tool, platform) {
 /**
  * Coerce a possibly-localized value (`string` or `{ en, de, ... }`) to a plain
  * string for use as a JSON Schema `description`. Nested tool parameters may
- * still carry localized descriptions that `loadLocalTools` did not flatten.
+ * still carry localized descriptions.
  */
 function localizedToString(value) {
   if (typeof value === 'string') return value;
@@ -243,37 +241,35 @@ export function buildAppInputSchema(app) {
   return { type: 'object', properties, required };
 }
 
+const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
+
 /**
- * Determine whether a caller may see a given iHub tool. iHub scopes tools
- * through the apps that reference them, so `visibleToolIds` is the union of
- * tool ids across the apps this caller can access (see ./permissions.js).
+ * Whether the gateway offers an installed integration's action as an MCP tool.
+ * The integrations are the tools (#3275): every action of an enabled
+ * installation the caller's groups grant (`permissions.integrations`, checked
+ * by `filterIntegrationToolsForUser` and again at call time) is offered, with
+ * the approval policy of the action (`gatewayCallNeedsApproval`).
  *
- * Default-deny: a tool the caller has no app-granted access to is never
- * exposed, even with the `mcp:tools:*` scopes. This closes the gap where
- * OAuth client-credentials tokens (which carry no group `tools` permission)
- * would otherwise see every tool on the platform.
+ * Four kinds stay out:
+ * - the actions of an outbound MCP server (`_mcp`) and the skills of a remote
+ *   A2A agent (`_a2a`, #2546): iHub is their client, not a proxy that hands
+ *   the credentials of those servers and agents to inbound callers;
+ * - the admin LDAP browser (`_ldapBrowser`): it returns raw directory entries
+ *   and stays in iHub's own chat, where its calls are audited per admin;
+ * - iHub's own chat tools (`com.intrafind/ihub`: `ask_user`, the scheduled-task
+ *   tools): they work through the chat loop (pausing for an answer, the
+ *   scheduled-task gate), which a gateway call does not have.
+ *
+ * @param {Object} tool - a tool of an installed integration
+ * @param {Object} expose - the gateway's `expose` switches
+ * @returns {boolean}
  */
-function isToolAllowed(tool, expose, visibleToolIds) {
+export function isToolAllowed(tool, expose) {
   if (!expose.tools) return false;
-  // workflow_/source_/skill tools are surfaced as their own MCP tool/resource
-  // types, not as raw tools.
-  if (tool.id?.startsWith('workflow_')) return false;
-  if (tool.id?.startsWith('source_')) return false;
-  // The project knowledge tools are scoped per request; over MCP the
-  // projects are resources of their own.
-  if (tool.id?.startsWith('knowledge_')) return false;
-  if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
-  // Never re-expose tools discovered from external (outbound) MCP servers —
-  // that would proxy another server's tools (and their credentials) to inbound
-  // callers. loadLocalTools already excludes these, but guard anyway.
-  if (tool._mcp) return false;
-  // Likewise for skills of remote A2A agents (#2546): iHub is their client,
-  // not a proxy that hands its agent credentials to inbound callers.
-  if (tool._a2a) return false;
-  // The admin LDAP browser returns raw directory entries; it stays in iHub's
-  // own chat, where its calls are audited per admin.
-  if (tool._ldapBrowser) return false;
-  return toolVisibleInSet(tool.id, visibleToolIds, undefined, undefined, tool._peopleDirectory?.id);
+  if (!tool._integration) return false;
+  if (tool._mcp || tool._a2a || tool._ldapBrowser) return false;
+  if (tool._integration.definition === IHUB_DEFINITION_ID) return false;
+  return true;
 }
 
 function isAppAllowed(app, user, expose) {
@@ -330,31 +326,40 @@ export async function buildMcpServer({ user, platform }) {
     registeredResourceCount += 1;
   };
 
-  // ---- Tools (iHub-native, local-only) ------------------------------------
-  // loadLocalTools (the configured tools and the platform tools of workflows
-  // and agents) excludes outbound MCP-discovered tools so the gateway never
-  // re-proxies another server's tools to inbound callers.
+  // ---- Tools (the actions of the installed integrations) ------------------
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
-    const visibleToolIds = await getVisibleToolIds(user, platform);
     const language = platform?.defaultLanguage || 'en';
-    const localTools = await loadLocalTools(language);
-    // People directory tools are iHub's own (its connection, not a proxied
-    // server's), offered to callers whose groups grant the installation
-    // (`permissions.integrations`). They are actions of the
-    // `com.intrafind/ldap-directory` installations; the other installed
-    // integrations — the LDAP browser included — stay out, as before.
-    const { discoverIntegrationTools, filterIntegrationToolsForUser } =
-      await import('../integrations/integrationTools.js');
-    const directoryTools = filterDirectoryToolsForUser(
+    const {
+      discoverIntegrationTools,
+      filterIntegrationToolsForUser,
+      getIntegrationToolsForApp,
+      userMayUse
+    } = await import('../integrations/integrationTools.js');
+    let tools = filterDirectoryToolsForUser(
       filterIntegrationToolsForUser(
-        (await discoverIntegrationTools(language)).filter(tool => tool._peopleDirectory),
+        (await discoverIntegrationTools(language)).filter(tool => isToolAllowed(tool, expose)),
         user
       ),
       user
     );
-    const tools = [...localTools, ...directoryTools];
+    // A machine client (client credentials, static key) holds no group grants:
+    // its permissions are `integrations: ['*']`, bounded by the apps it may
+    // use. An integration reaches it only through the binding of such an app.
+    // A user-delegated token (authorization code, personal API key) whose
+    // client names `allowedApps` is bounded the same way, on top of the
+    // user's own grants.
+    const clientApps = user.clientAllowedApps;
+    const clientNarrowsApps =
+      Array.isArray(clientApps) && clientApps.length > 0 && !clientApps.includes('*');
+    let reachable = null;
+    if (user.isOAuthClient || clientNarrowsApps) {
+      const { data: apps = [] } = await configCache.getAppsForUser(user, platform);
+      reachable = new Set(
+        apps.flatMap(app => getIntegrationToolsForApp(app, tools, { user }).map(tool => tool.id))
+      );
+      tools = tools.filter(tool => reachable.has(tool.id));
+    }
     for (const tool of tools) {
-      if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
       registerTool(
         tool.id,
         {
@@ -365,16 +370,14 @@ export async function buildMcpServer({ user, platform }) {
           if (!tokenScopes.includes(MCP_SCOPES.TOOLS_CALL)) {
             return toolErrorResult('insufficient_scope: mcp:tools:call required');
           }
-          // Re-check visibility at call time so a permission change between
+          // Re-check the grant at call time so a permission change between
           // list and call can't be exploited.
+          const instance = installedIntegrationById(tool._integration.instanceId);
           if (
-            !toolVisibleInSet(
-              tool.id,
-              visibleToolIds,
-              undefined,
-              undefined,
-              tool._peopleDirectory?.id
-            ) ||
+            !instance ||
+            instance.enabled === false ||
+            !userMayUse(instance, user) ||
+            (reachable && !reachable.has(tool.id)) ||
             (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id))
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');

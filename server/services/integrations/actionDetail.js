@@ -121,8 +121,8 @@ function appName(app, language) {
  *
  * - **Apps**: by `app.integrations` (the installation, its definition or its
  *   type; an `actions` list must name the action, an action that binds only
- *   explicitly needs one), or by naming the tool in `app.tools`.
- * - **Workflows**: a node whose `config.tools` selects the tool.
+ *   explicitly needs one).
+ * - **Workflows**: a node whose `config.integrations` binds the action, like an app.
  * - **Scheduled tasks**: a task whose tools select it; a task that keeps its
  *   app's tools (`enabledTools: null`) when its app binds the action.
  *
@@ -148,7 +148,6 @@ export async function bindingsOf(resolved, action, toolDef, language = 'en', dep
       const binds = named ? binding.actions.includes(action.name) : !action.bindExplicitly;
       if (binds) via = bindingKeyFor(app, instance) === instance.id ? 'installation' : 'definition';
     }
-    if (!via && Array.isArray(app.tools) && isToolSelected(toolDef, app.tools)) via = 'tools';
     if (!via) continue;
     appIds.add(app.id);
     if (apps.length < MAX_BINDINGS) {
@@ -159,9 +158,13 @@ export async function bindingsOf(resolved, action, toolDef, language = 'en', dep
   const workflows = [];
   for (const workflow of deps.workflows || configCache.getWorkflows(true)?.data || []) {
     const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
-    const uses = nodes.some(
-      node => Array.isArray(node?.config?.tools) && isToolSelected(toolDef, node.config.tools)
-    );
+    const uses = nodes.some(node => {
+      const binding = appBindingFor({ integrations: node?.config?.integrations }, instance);
+      if (!binding) return false;
+      return Array.isArray(binding.actions)
+        ? binding.actions.includes(action.name)
+        : !action.bindExplicitly;
+    });
     if (uses && workflows.length < MAX_BINDINGS) {
       workflows.push({
         id: workflow.id,

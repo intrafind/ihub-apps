@@ -47,8 +47,8 @@ async function run() {
   {
     let toolLoopArgs = null;
     const promptExecutor = {
-      getAgentTools: async ids =>
-        ids.map(id => ({ id, name: id, parameters: { type: 'object', properties: {} } })),
+      getAgentTools: async ({ systemTools = [] }) =>
+        systemTools.map(id => ({ id, name: id, parameters: { type: 'object', properties: {} } })),
       executeLLMWithTools: async args => {
         toolLoopArgs = args;
         return {
@@ -63,7 +63,11 @@ async function run() {
     const exec = new VerifierNodeExecutor({ llmClient: stubLlmClient, promptExecutor });
     const node = {
       id: 'verify1',
-      config: { mode: 'adversarial', tools: ['web_search'], criteria: 'All claims must be sourced' }
+      config: {
+        mode: 'adversarial',
+        systemTools: ['read_url'],
+        criteria: 'All claims must be sourced'
+      }
     };
     const result = await exec.execute(node, stateWith('a report with claims'), { language: 'en' });
 

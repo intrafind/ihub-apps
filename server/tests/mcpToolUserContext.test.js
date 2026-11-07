@@ -18,7 +18,6 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
  */
 
 const runTool = jest.fn(async () => ({ ok: true }));
-const loadLocalTools = jest.fn();
 
 // Provide every named export the tool modules have — ESM link-checks all of them
 // even though only a couple are used on the tools-only code path.
@@ -26,8 +25,6 @@ jest.unstable_mockModule('../services/tools/appTools.js', () => ({
   getToolsForApp: jest.fn(async () => [])
 }));
 jest.unstable_mockModule('../services/tools/catalog.js', () => ({
-  loadConfiguredTools: jest.fn(async () => []),
-  loadLocalTools,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
   localizeTools: jest.fn(tools => tools)
@@ -41,12 +38,17 @@ jest.unstable_mockModule('../services/tools/webSearchResolver.js', () => ({
   READ_URL_TOOL_ID: 'read_url'
 }));
 
-jest.unstable_mockModule('../services/mcp/permissions.js', () => ({
-  getVisibleToolIds: async () => new Set(['iFinder']),
-  // Real base-id logic: `iFinder_search` matches the visible base id `iFinder`.
-  toolVisibleInSet: (toolId, set) =>
-    set instanceof Set && (set.has('*') || set.has(toolId) || set.has(toolId.split('_')[0])),
-  getVisibleProjectIds: async () => new Set()
+// The tool is an action of the installed `iFinder` integration, granted to the caller.
+const discoverIntegrationTools = jest.fn(async () => []);
+jest.unstable_mockModule('../services/integrations/integrationTools.js', () => ({
+  discoverIntegrationTools,
+  filterIntegrationToolsForUser: tools => tools,
+  getIntegrationToolsForApp: () => [],
+  userMayUse: () => true
+}));
+jest.unstable_mockModule('../services/integrations/installedRefs.js', () => ({
+  installedIntegrationById: id => ({ id, enabled: true }),
+  installedIntegrationRefs: () => []
 }));
 
 const { buildMcpServer } = await import('../services/mcp/McpServerService.js');
@@ -54,6 +56,7 @@ const { MCP_SCOPES } = await import('../services/mcp/scopes.js');
 
 const iFinderSearchTool = {
   id: 'iFinder_search',
+  _integration: { instanceId: 'iFinder', action: 'search', definition: 'com.intrafind/ifinder' },
   description: 'Search for documents in iFinder',
   parameters: {
     type: 'object',
@@ -66,7 +69,7 @@ const iFinderSearchTool = {
 };
 
 async function connectGateway(user) {
-  loadLocalTools.mockResolvedValue([iFinderSearchTool]);
+  discoverIntegrationTools.mockResolvedValue([iFinderSearchTool]);
   const platform = {
     defaultLanguage: 'en',
     mcpServer: { expose: { tools: true, apps: false, workflows: false, resources: false } }
@@ -81,7 +84,7 @@ async function connectGateway(user) {
 describe('MCP gateway native tool calls carry user context', () => {
   beforeEach(() => {
     runTool.mockClear();
-    loadLocalTools.mockReset();
+    discoverIntegrationTools.mockReset();
   });
 
   const user = {

@@ -284,7 +284,7 @@ view for such a call. The MCP App routes answer an unconnected server with
 (never 401, which would read as an expired iHub session).
 
 The calling user is always the authenticated one. Every entry point that
-turns a request into tool parameters — `POST /api/tools/:toolId`, A2A
+turns a request into tool parameters — A2A
 `message/send` and `message/stream`, the inbound MCP gateway — drops `user`,
 `chatId`, `appConfig` and iHub's other context keys from the caller's input
 and sets them itself, so no request can name another user and run a tool
@@ -461,16 +461,19 @@ by default, or some of them by action name:
 }
 ```
 
-Listing a server id or a prefixed tool id in `app.tools` (`["drawio"]`,
-`["drawio__create_diagram"]`) no longer selects anything. The group grant
-(`permissions.integrations`) and the binding's action list apply in the chat and
-in `GET /api/tools?appId=`; an app whose installation is missing or disabled
+An app has no tool list of its own: the binding is the only way in (the
+`tools` field was removed in #3275, migration V229 turned its entries into
+bindings). The group grant
+(`permissions.integrations`) and the binding's action list apply in the chat;
+an app whose installation is missing or disabled
 is not offered to users. In the chat's **+** menu each installation is one
 toggle. See [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 
-Group grants in `groups.json` (`permissions.tools`) still accept the
-installation id (or the prefix base) to grant all of a server's tools, for
-the MCP gateway and `/api/tools`.
+The group grant of the installation (`permissions.integrations`) is the only
+grant: the former group-level `permissions.tools` and the `/api/tools` routes
+were removed in #3275 (migration V230 turned a tool grant into a grant of its
+installation). An outbound MCP server's tools are not re-exposed by iHub's own
+gateway.
 
 ### MCP Apps — interactive views
 
@@ -1253,49 +1256,43 @@ Files travel both ways; the full behaviour is described in [Chat and Scheduled-T
 ### Who sees which tool
 
 Scopes decide what a token may _do_; group permissions decide what it may
-_see_. Both have to line up, and the tool list is default-deny — a tool the
-caller has no grant for is never listed, even with `mcp:tools:read`.
+_see_. Both have to line up, and the tool list is default-deny.
 
-A caller sees a tool when either of these holds:
+**The integrations are the tools.** The gateway lists the actions of every
+enabled installed integration the caller's groups grant
+(`permissions.integrations`: `*`, an installation id, a definition id or a
+`type:<type>` key), under the tool ids they have in a chat (`iFinder_search`,
+`jira_getTicket`, `<installation>__<action>`). When the tool is called, the
+installation is checked again (it must still exist and be enabled) and so is the
+user's grant as the session saw it; a gateway session builds its tool list and
+permissions once, so a grant that is withdrawn keeps working until that session
+ends. Disabling or removing an installation takes effect on the next call.
+A tool whose approval policy needs a person (`always`, or `writes` for a write
+action) is refused for a gateway call, because nobody there can approve it.
+There is no separate tool grant and no carrier app.
 
-- **An app they can access declares it.** Tool access is scoped through
-  apps: if `app.tools` contains `iFinder_getContent` and the caller may
-  use that app, the tool is visible. A disabled app grants nothing —
-  `configCache.getApps()` filters `enabled: false` before permissions are
-  computed.
-- **Their group grants it directly** via `permissions.tools` in
-  `groups.json`. This is the path for callers who need a tool over MCP or
-  A2A without an app in the way.
+Left out, as before:
 
-```json
-{
-  "groups": {
-    "mcp-power-users": {
-      "permissions": {
-        "apps": [],
-        "tools": ["iFinder"]
-      }
-    }
-  }
-}
-```
+- the actions of an outbound **MCP server** and the skills of a remote **A2A
+  agent** — iHub is their client, not a proxy that hands their credentials to
+  inbound callers;
+- iHub's own chat tools (**iHub** installation: `ask_user`, the scheduled-task
+  tools) — they work through the chat loop, which a gateway call does not have;
+- the **LDAP browser** — it returns raw directory entries and stays in iHub's
+  own chat, where its calls are audited per admin;
+- the project knowledge tools (projects are resources of their own), skill
+  tools, and the platform tools of workflows and agents (`write_artifact`,
+  `evidence_*`, …) — they are not integrations.
 
-Granting the base id (`iFinder`) covers every function of that tool —
-`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`,
-`iFinder_discover`. Granting `iFinder_search` covers only that one. `["*"]`
-grants every tool on the platform.
-
-`permissions.tools` is empty for every group after upgrade, so behaviour is
-unchanged until an operator opts a group in. Grant it deliberately: a direct
-tool grant lets an MCP client call integrations such as iFinder, Jira and
-Entra **as the user**, with no app prompt or system prompt mediating the
-call. It does not change which tools a chat app may use — that is still the
-app's own `tools` list.
-
-The same rule decides which tools a user may run with a direct REST call,
-`POST /api/tools/:toolId`: a tool an app they can access declares, or one
-their group grants. Admins may run every tool that way. Any other tool
-answers `403`.
+Grant deliberately. The shipped groups hold `integrations: ["*"]`, so after
+the upgrade a user-delegated token reaches every integration its user may use
+(before, a tool grant was opt-in); narrow the lists in `groups.json` if the
+gateway should offer less. A machine client (client credentials, static key)
+holds no group grant: it reaches an integration only through the binding of an
+app in its `allowedApps`. An MCP client calling iFinder, Jira or Entra runs **as
+the user**, with no app prompt or system prompt mediating the call. The
+gateway's `expose.tools` switch (Admin → MCP gateway) turns the tool list off
+as a whole.
 
 ### Session model
 
@@ -1452,7 +1449,7 @@ back to the generic definition and why. The endpoint and the OAuth URLs are
 carried over verbatim, trailing slash included. The
 `auth` block becomes the sign-in mode (credential references kept),
 `allowedTools` becomes `actions.enabled`, the `security` block is merged,
-apps that listed the server or its tools in `tools` get an `integrations`
+apps that listed the server or its tools in their former `tools` get an `integrations`
 binding instead, and `mcpServers.json` is deleted. A server whose id another,
 non-MCP installation already holds (an integration installed from the catalog)
 is not moved: the migration writes it to

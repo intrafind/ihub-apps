@@ -52,12 +52,6 @@ export const magicPromptSchema = {
   })
 };
 
-export const runToolSchema = {
-  params: z.object({ toolId: z.string().min(1) }),
-  body: z.record(z.any()).optional(),
-  query: z.record(z.any()).optional()
-};
-
 export const chatTestSchema = {
   params: z.object({ modelId: z.string().min(1) })
 };

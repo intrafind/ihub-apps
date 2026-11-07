@@ -67,7 +67,7 @@ before(async () => {
 
 after(async () => {
   configCache.getFeatures = originalGetFeatures;
-  tearDownWebSearch();
+  await tearDownWebSearch();
   await shutdownStorageBootstrap();
   fs.rmSync(baseDir, { recursive: true, force: true });
 });

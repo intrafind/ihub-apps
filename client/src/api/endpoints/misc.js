@@ -68,27 +68,6 @@ export const sendSessionStart = async sessionData => {
   );
 };
 
-// Tools (basic version without language support)
-/**
- * Tools the current user may see. With `appId`, the tools that app offers are
- * listed too, whatever the user's group grants say — the chat's tools menu
- * uses this to name the app's tools and group them by MCP server.
- */
-export const fetchToolsBasic = async (options = {}) => {
-  const { skipCache = false, appId } = options;
-  const cacheKey = skipCache
-    ? null
-    : appId
-      ? buildCacheKey(CACHE_KEYS.TOOLS, { appId })
-      : CACHE_KEYS.TOOLS;
-
-  return handleApiResponse(
-    () => apiClient.get('/tools', appId ? { params: { appId } } : undefined),
-    cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
-  );
-};
-
 // The scopes the user can pick per integration of an app (iFinder search
 // profiles, iAssistants). Not cached: the list is per user, and the server
 // keeps its own short cache of what iFinder answers.

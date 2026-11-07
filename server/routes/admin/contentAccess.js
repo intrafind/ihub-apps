@@ -50,8 +50,6 @@ function findContent(type, id) {
       return findByIdCaseInsensitive(configCache.getPrompts(true)?.data, id);
     case 'workflows':
       return findByIdCaseInsensitive(configCache.getWorkflows(true)?.data, id);
-    case 'tools':
-      return findByIdCaseInsensitive(configCache.getTools(true)?.data, id);
     case 'skills': {
       const target = id.toLowerCase();
       const skill = (configCache.getSkills()?.data || []).find(
@@ -164,7 +162,7 @@ function buildView(req, groupsData, type, contentId) {
  *       properties:
  *         type:
  *           type: string
- *           enum: [apps, prompts, skills, tools, workflows]
+ *           enum: [apps, prompts, skills, workflows]
  *         id:
  *           type: string
  *           description: The content id as configured
@@ -205,7 +203,7 @@ export default function registerAdminContentAccessRoutes(app) {
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [apps, prompts, skills, tools, workflows]
+   *           enum: [apps, prompts, skills, workflows]
    *       - in: path
    *         name: id
    *         required: true
@@ -272,7 +270,7 @@ export default function registerAdminContentAccessRoutes(app) {
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [apps, prompts, skills, tools, workflows]
+   *           enum: [apps, prompts, skills, workflows]
    *       - in: path
    *         name: id
    *         required: true

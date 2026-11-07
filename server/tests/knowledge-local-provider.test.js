@@ -184,7 +184,6 @@ before(async () => {
   configCache.setCacheEntry('config/models.json', [
     { id: 'small', name: 'Small', contextWindow: 8000 }
   ]);
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/projects.json', []);
 
   setTextReader(async (_project, item) => {

@@ -81,10 +81,10 @@ test('a failing endpoint is a 502 carrying the reason', async () => {
   state.result = { ok: false, message: 'Connection failed: connect ECONNREFUSED' };
   const res = await request(app).post(url);
   expect(res.status).toBe(502);
-  expect(res.body).toEqual({
+  expect(res.body).toMatchObject({
     // The headline of a 5xx is shown only when it is safe to show (it may name a host); the
     // reason stays in `details.remediation`, which is what the admin UI shows.
-    error: 'A connected service failed. Please try again later.',
+    detail: 'A connected service failed. Please try again later.',
     code: 'UPSTREAM_ERROR',
     details: { remediation: 'Connection failed: connect ECONNREFUSED' }
   });

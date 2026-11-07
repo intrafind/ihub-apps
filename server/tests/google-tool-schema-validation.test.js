@@ -8,7 +8,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfiguredTools } from '../services/tools/catalog.js';
+import { loadTools } from '../services/tools/catalog.js';
 import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
 
 describe('Google Gemini Tool Schema Validation', () => {
@@ -19,7 +19,7 @@ describe('Google Gemini Tool Schema Validation', () => {
     // 3. Tools are converted to Google format
     // 4. Google API should receive valid schemas (descriptions as strings, not objects)
 
-    const tools = await loadConfiguredTools(null);
+    const tools = await loadTools(null);
 
     // Convert to Google format (same as what the Google adapter does)
     const googleTools = convertToolsFromGeneric(tools, 'google');
@@ -45,7 +45,7 @@ describe('Google Gemini Tool Schema Validation', () => {
   });
 
   it('should not have object descriptions in Google-formatted tools when language is undefined', async () => {
-    const tools = await loadConfiguredTools(undefined);
+    const tools = await loadTools(undefined);
     const googleTools = convertToolsFromGeneric(tools, 'google');
 
     for (const toolGroup of googleTools) {
@@ -66,7 +66,7 @@ describe('Google Gemini Tool Schema Validation', () => {
   });
 
   it('should not have object descriptions in Google-formatted tools when language is empty string', async () => {
-    const tools = await loadConfiguredTools('');
+    const tools = await loadTools('');
     const googleTools = convertToolsFromGeneric(tools, 'google');
 
     for (const toolGroup of googleTools) {
@@ -89,7 +89,7 @@ describe('Google Gemini Tool Schema Validation', () => {
   it('should handle ask_user tool with deeply nested schemas', async () => {
     // The ask_user tool has very deeply nested schemas with descriptions at multiple levels
     // This is the most complex test case
-    const tools = await loadConfiguredTools(null);
+    const tools = await loadTools(null);
 
     const askUserTool = tools.find(t => t.id === 'ask_user');
     if (!askUserTool) {

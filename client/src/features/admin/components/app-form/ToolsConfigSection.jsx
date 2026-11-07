@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
-import ToolsSelector from '../../../../shared/components/ToolsSelector';
 import { ApprovalModeSelect } from '../ToolApprovalFields';
 
 /** Whether the model decides to use the app's tools or must call one first. */
@@ -10,7 +9,7 @@ function ToolChoiceSelect({ toolChoice, onChange }) {
   const { t } = useTranslation();
 
   return (
-    <div className="mt-6">
+    <div>
       <label
         htmlFor="app-tool-choice"
         className="block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -74,9 +73,6 @@ function ToolApprovalOverride({ toolApproval, onChange }) {
 }
 
 function ToolsConfigSection({
-  selectedTools,
-  onToolsChange,
-  mcpToolIds = [],
   toolChoice,
   onToolChoiceChange,
   toolApproval,
@@ -92,22 +88,13 @@ function ToolsConfigSection({
             {t('admin.apps.edit.tools', 'Tools')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.apps.edit.toolsDesc', 'Configure which tools are available for this app')}
+            {t(
+              'admin.apps.edit.toolsDesc',
+              'How the model uses the tools of the integrations this app binds'
+            )}
           </p>
         </div>
         <div className="mt-5 md:mt-0 md:col-span-2">
-          <ToolsSelector
-            selectedTools={selectedTools}
-            onToolsChange={onToolsChange}
-            excludeToolIds={[
-              'braveSearch',
-              'qwantSearch',
-              'staanSearch',
-              'enhancedWebSearch',
-              'read_url',
-              ...mcpToolIds
-            ]}
-          />
           <ToolChoiceSelect toolChoice={toolChoice} onChange={onToolChoiceChange} />
           {onToolApprovalChange && (
             <ToolApprovalOverride toolApproval={toolApproval} onChange={onToolApprovalChange} />

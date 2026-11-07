@@ -88,7 +88,7 @@
           "en": "[Step {{_currentStep}}/{{_totalNodes}}] Execute the following search queries and compile results:\n\nResearch Plan: {{researchPlan}}\n\nUse braveSearch for each planned query. After all searches, summarize the key findings.",
           "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Führen Sie die folgenden Suchanfragen aus und stellen Sie die Ergebnisse zusammen:\n\nForschungsplan: {{researchPlan}}\n\nVerwenden Sie braveSearch für jede geplante Anfrage. Fassen Sie nach allen Suchen die wichtigsten Ergebnisse zusammen."
         },
-        "tools": ["braveSearch"],
+        "integrations": { "type:web-search": { "actions": ["search"] } },
         "maxIterations": 8,
         "outputVariable": "searchResults"
       },

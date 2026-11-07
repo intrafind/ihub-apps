@@ -61,7 +61,9 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "sendChatHistory": true,
-  "tools": ["ask_user"],
+  "integrations": {
+    "ihub": { "actions": ["ask_user"] }
+  },
   "skills": ["skill-builder"],
   "skillSettings": {
     "enabled": true,

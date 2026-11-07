@@ -68,7 +68,6 @@ before(async () => {
   configCache.getSkills = () => ({ data: skills, etag: 'e' });
   configCache.getFeatures = () => ({ skills: true });
   configCache.getPlatform = () => ({ defaultLanguage: 'en' });
-  configCache.getTools = () => ({ data: [] });
   configCache.getSources = () => ({ data: [] });
   mcpClientManager.listAllTools = async () => [];
 });

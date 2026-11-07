@@ -194,7 +194,6 @@ approving. Both may come later.
 | ------------------------------------------------------------------------ | --------- |
 | Inference API (OpenAI-compatible), app-as-tool, MCP gateway, A2A gateway | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
 | A client that does not draw the card (an integration posting to the chat API without `toolApprovalCapable: true`, or a chat request without an open stream) | Same: `APPROVAL_REQUIRED_NO_USER`. |
-| `POST /api/tools/:id` called by a program (OAuth client, personal API key, an app using a user's token) | 403 `APPROVAL_REQUIRED_NO_USER`. A person calling a tool directly chose the call and is not asked. |
 | An MCP App view in a host that cannot show the card (an embed, a shared chat, Office) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool. |
 | Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |
 | Scheduled tasks                                                          | Unchanged flow: the run pauses for the task owner, who approves from the run's chat or the task page. **Always allow for this task** still applies. The gate now uses the same resolver, so every mode above applies to scheduled runs too. |
@@ -204,12 +203,7 @@ The loop policy `interactions.headlessFallback` decides the no-person case for t
 groups) and refuses otherwise, `fail` ends the run with an error.
 
 Calls nobody's model decided on are not gated: a workflow **tool node** (the author chose the
-call), a direct `POST /api/tools/:id` by a signed-in person (they chose it), and admin tools such
-as building agent memory from a tool.
-
-A signed-in person calling `POST /api/tools/:id` is not asked for approval: they chose the call
-themselves. Programs calling it (OAuth clients, personal API keys, an app acting with a user's
-token, agents) are refused gated tools with `APPROVAL_REQUIRED_NO_USER`.
+call) and admin tools such as building agent memory from a tool.
 
 ## MCP App views
 

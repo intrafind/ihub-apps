@@ -26,13 +26,7 @@ import { hasIdCaseInsensitive } from './resourceLookup.js';
  * The permission lists that describe content access. `models` is left out on
  * purpose: which models a group may use is a platform decision, not content.
  */
-export const CONTENT_ACCESS_TYPES = Object.freeze([
-  'apps',
-  'prompts',
-  'skills',
-  'tools',
-  'workflows'
-]);
+export const CONTENT_ACCESS_TYPES = Object.freeze(['apps', 'prompts', 'skills', 'workflows']);
 
 /**
  * A refused change, carrying the HTTP status the route should answer with.

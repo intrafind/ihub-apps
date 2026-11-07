@@ -164,7 +164,6 @@ before(async () => {
   configCache.setCacheEntry('config/agents.json', []);
   configCache.setCacheEntry('config/projects.json', []);
   configCache.setCacheEntry('config/models.json', []);
-  configCache.setCacheEntry('config/tools.json', []);
   registerKeyProvider(
     'local-file',
     () => new LocalFileKeyProvider({ readMasterKey: () => MASTER, readPreviousKey: () => null })

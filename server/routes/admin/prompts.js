@@ -26,6 +26,11 @@ import { serializeUserPrompt } from '../../services/prompts/userPromptView.js';
 import { loadUsers } from '../../utils/userManager.js';
 import { localUsersFile } from '../../utils/contentsPath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
+import {
+  buildAppGeneratorBrief,
+  describeInstalledIntegrations
+} from '../../services/appGenerator.js';
 
 /**
  * The file a prompt id lives in.
@@ -250,7 +255,15 @@ export function slugifyPromptId(name) {
  *           example: "app-generator"
  *         prompt:
  *           type: string
- *           description: Localized prompt text for the specified language
+ *           description: Localized prompt text for the specified language, followed by the installed integrations the generated app may bind
+ *         outputSchema:
+ *           type: object
+ *           description: JSON schema of the generated app configuration; `integrations` is limited to the installed integrations
+ *         integrationIds:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: The enabled installations the prompt lists
  *         language:
  *           type: string
  *           description: Language code used for localization
@@ -474,7 +487,8 @@ export default function registerAdminPromptsRoutes(app) {
    *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
    *
    *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
-   *       and returns the prompt text rather than the full configuration object.
+   *       and returns the prompt text (with the installed integrations the app may bind) and the
+   *       schema of the answer, rather than the full configuration object.
    *     tags:
    *       - Admin - Prompts
    *     security:
@@ -554,9 +568,16 @@ export default function registerAdminPromptsRoutes(app) {
       if (!appGeneratorPrompt) {
         throw new ServiceError('NOT_FOUND', 'App-generator prompt not found');
       }
-      const promptText =
-        appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
-      res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
+      // The brief: the prompt plus the installed integrations the app may bind.
+      const resolved = await installedIntegrationService.resolveAllEnabled(lang);
+      const integrations = describeInstalledIntegrations(resolved, lang);
+      const brief = buildAppGeneratorBrief(appGeneratorPrompt, lang, defaultLanguage, integrations);
+      res.json({
+        id: appGeneratorPrompt.id,
+        prompt: brief.prompt,
+        integrations: integrations.map(({ id, actions }) => ({ id, actions })),
+        language: lang
+      });
     }
   );
 

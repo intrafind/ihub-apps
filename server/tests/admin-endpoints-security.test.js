@@ -86,7 +86,6 @@ jest.mock('../configCache.js', () => ({
     getUI: () => ({ data: {}, etag: 'test-etag' }),
     getProviders: () => ({ data: [], etag: 'test-etag' }),
     getSources: () => ({ data: [], etag: 'test-etag' }),
-    getTools: () => ({ data: [], etag: 'test-etag' }),
     getOAuthClients: () => ({ data: [], etag: 'test-etag' }),
     getGroups: () => ({ data: mockGroupPermissions.groups, etag: 'test-etag' }),
     refreshAll: jest.fn(),

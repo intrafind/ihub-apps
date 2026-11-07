@@ -131,7 +131,6 @@ before(async () => {
   registry.contentsDirOverride = path.join(root, 'contents');
   await registry.reload();
 
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/a2aAgents.json', { agents: [] });
   configCache.setCacheEntry('config/platform.json', {});
   // Who may use what (#3093): by installation id, by definition id, by type.

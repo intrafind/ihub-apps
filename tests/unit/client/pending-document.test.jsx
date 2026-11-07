@@ -695,7 +695,7 @@ describe('useIntegrationDocumentAttachment', () => {
       "%s is the server's limit on storing: the browser attaches the document",
       async (_, status, code) => {
         uploadChatFile.mockRejectedValue({
-          response: { status, data: code ? { details: { code } } : {} }
+          response: { status, data: code ? { code } : {} }
         });
         fetchIntegrationFileContent.mockResolvedValue(
           blobResponse('application/pdf', 'report.pdf')

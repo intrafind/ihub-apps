@@ -18,6 +18,12 @@ import '../../services/integrations/protocols/native/connectors/register.js';
 import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
 import { publishDefinitionTypes } from '../../services/integrations/integrationTypes.js';
 import mcpClientManager from '../../services/mcp/McpClientManager.js';
+import {
+  fixtureDefinitionId,
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
+} from './integrationToolFixture.js';
 
 /** The shipped engine definitions by installation id. */
 export const ENGINE_DEFINITIONS = Object.freeze({
@@ -26,8 +32,8 @@ export const ENGINE_DEFINITIONS = Object.freeze({
   qwant: 'com.intrafind/qwant-search'
 });
 
-/** A third-party engine definition (`type: web-search`) used by the tests. */
-export const THIRD_PARTY_DEFINITION = 'org.acme/web-search';
+/** A third-party engine (`type: web-search`, installation `acme`, tool `acme__search`) used by the tests. */
+export const THIRD_PARTY_DEFINITION = fixtureDefinitionId('acme__search');
 
 /** Every group may use every integration. */
 export const OPEN_GROUPS = Object.freeze({
@@ -59,37 +65,25 @@ export function engine(id, extra = {}) {
   };
 }
 
-/**
- * The search tool of a third-party engine as discovery would list it
- * (`<id>__search`), to put into `config/tools.json` — the test has no
- * definition folder for it.
- * @param {string} id
- */
-export function thirdPartyEngineTool(id) {
-  return {
-    id: `${id}__search`,
-    name: `Acme: Search the web`,
-    description: 'Search the web with Acme.',
-    type: 'integration',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string' },
-        maxResults: { type: 'integer', minimum: 1, maximum: 50, default: 10 }
-      },
-      required: ['query']
-    },
-    _integration: { instanceId: id, action: 'search', definition: THIRD_PARTY_DEFINITION }
-  };
-}
-
 /** Load the shipped definitions once and publish the third-party engine type next to them. */
 export async function setUpWebSearch() {
   await integrationRegistry.ensureLoaded();
-  publishDefinitionTypes([
-    ...integrationRegistry.list(),
-    { definition: { id: THIRD_PARTY_DEFINITION, type: 'web-search' } }
+  await registerFixtureTools([
+    fixtureTool('acme__search', {
+      action: 'search',
+      type: 'web-search',
+      description: 'Search the web with Acme.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          maxResults: { type: 'integer', minimum: 1, maximum: 50, default: 10 }
+        },
+        required: ['query']
+      }
+    })
   ]);
+  publishDefinitionTypes(integrationRegistry.list());
   mcpClientManager.listAllTools = async () => [];
   configCache.getFeatures = () => ({ skills: false, appAsTool: false });
   configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
@@ -101,19 +95,18 @@ export async function setUpWebSearch() {
  * @param {Object} [options]
  * @param {Object[]} [options.installed] - `config/integrations.json` → `installed`
  * @param {Object} [options.groups] - `config/groups.json` → `groups`
- * @param {Object[]} [options.tools] - `config/tools.json` (tool files)
  */
-export function useWebSearch({ installed = [], groups = OPEN_GROUPS, tools = [] } = {}) {
+export function useWebSearch({ installed = [], groups = OPEN_GROUPS } = {}) {
   configCache.setCacheEntry('config/integrations.json', {
     installed: structuredClone(installed),
     security: { blockPrivateIps: true, allowedHosts: [] }
   });
   configCache.setCacheEntry('config/groups.json', { groups: structuredClone(groups) });
-  configCache.setCacheEntry('config/tools.json', structuredClone(tools));
 }
 
 /** Stop the config cache's refresh timers (call in `after`). */
-export function tearDownWebSearch() {
+export async function tearDownWebSearch() {
+  await unregisterFixtureTools();
   for (const timer of configCache.refreshTimers?.values?.() || []) clearTimeout(timer);
 }
 
