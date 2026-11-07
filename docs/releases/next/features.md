@@ -752,6 +752,10 @@ used to be an HTML or plain text page.
   user id, a missing username or a password that is required or too short, `NOT_FOUND` for an unknown user,
   `CONFLICT` for a username that exists and `FORBIDDEN` for deleting the last admin user (the reason is in
   `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The page administration endpoints (`/api/admin/pages*`) answer in this shape: `BAD_REQUEST` for an unsafe,
+  missing or mismatched page id and for a content or title key that is not a language code, `NOT_FOUND` for an
+  unknown page and `CONFLICT` for a page id that exists (the reason is in `detail`). An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
