@@ -8,8 +8,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import Icon from '../../../shared/components/Icon';
 import ReorderableList from '../components/ReorderableList';
 import ResourceSelector from '../components/ResourceSelector';
-import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
-import { fetchAdminApps } from '../../../api';
+import { makeAdminApiCall, getAdminApiErrorMessage, fetchAdminApps } from '../../../api/adminApi';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 

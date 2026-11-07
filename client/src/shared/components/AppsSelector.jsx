@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
-import { fetchAdminApps } from '../../api/endpoints/admin';
+import { fetchAdminApps } from '../../api/adminApi';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
 /**

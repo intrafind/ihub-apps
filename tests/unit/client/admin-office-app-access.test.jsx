@@ -18,16 +18,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 
 const mockMakeAdminApiCall = jest.fn();
+const mockFetchAdminApps = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args),
+  fetchAdminApps: (...args) => mockFetchAdminApps(...args),
   getAdminApiErrorMessage: err => err?.message || ''
-}));
-
-const mockFetchAdminApps = jest.fn();
-jest.mock('../../../client/src/api', () => ({
-  __esModule: true,
-  fetchAdminApps: (...args) => mockFetchAdminApps(...args)
 }));
 
 // `runtimeBasePath` reads `import.meta.env`, which the CJS test transform cannot parse.

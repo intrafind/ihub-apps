@@ -6,7 +6,6 @@ export * from './endpoints/apps';
 export * from './endpoints/models';
 export * from './endpoints/config';
 export * from './endpoints/prompts';
-export * from './endpoints/admin';
 export * from './endpoints/skills';
 export * from './endpoints/userSkills';
 export * from './endpoints/misc';

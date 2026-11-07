@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo } from 'react';
-import { fetchAdminApps } from '../../../api';
+import { fetchAdminApps } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
