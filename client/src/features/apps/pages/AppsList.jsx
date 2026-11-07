@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useApps from '../../../shared/hooks/useApps';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +12,21 @@ import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import Icon from '../../../shared/components/Icon';
 import NextcloudSelectionBanner from '../../nextcloud-embed/components/NextcloudSelectionBanner';
+import PendingDocumentBanner from '../components/PendingDocumentBanner';
+import usePendingDocumentCheck from '../hooks/usePendingDocumentCheck';
+import {
+  appCanTakeDocument,
+  pendingDocumentQuery,
+  readPendingDocument,
+  withoutPendingDocument
+} from '../utils/pendingDocument';
 
 // Instead of fixed values, we'll calculate based on viewport
 function AppsList() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { resetHeaderColor, uiConfig } = useUIConfig();
 
   // Favorite apps (kept in sync across components + tabs by the hook)
@@ -69,6 +78,51 @@ function AppsList() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const recentAppIds = useMemo(() => getRecentAppIds(), []);
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+
+  // A document waiting for an app (`/apps?documentId=…&source=…`, e.g. "Open in iHub" from
+  // iFinder). It stays in the URL while the user browses and travels on to the app they pick,
+  // where AppChat attaches it and strips it. One the user cannot read is not handed on: the
+  // banner says why, and the app opens without it.
+  const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
+  const documentCheck = usePendingDocumentCheck(pendingDocument);
+  const documentUnusable = ['unavailable', 'noAccess', 'notFound'].includes(documentCheck.status);
+  const readableDocument = pendingDocument && !documentUnusable ? pendingDocument : null;
+  // Which apps can take it needs the integration's answer (its id, definition and type are what an
+  // app's bindings name); without one (the check failed) every app is offered.
+  const documentApps = useMemo(
+    () =>
+      readableDocument && documentCheck.info
+        ? apps.filter(app => appCanTakeDocument(app, documentCheck.info))
+        : [],
+    [readableDocument, documentCheck.info, apps]
+  );
+  // An installed integration whose documents no app can receive (none binds it): every app would
+  // refuse the document, so the picker says so and hands nothing on. A provider that is not an
+  // installation (`project`) has no definition and keeps going to every app.
+  const noAppForDocument = Boolean(
+    readableDocument &&
+    !loading &&
+    apps.length > 0 &&
+    documentCheck.info?.definition &&
+    documentApps.length === 0
+  );
+  const documentForApp = noAppForDocument ? null : readableDocument;
+  const [onlyDocumentApps, setOnlyDocumentApps] = useState(true);
+  const canRestrictToDocumentApps = documentApps.length > 0;
+  const restrictToDocumentApps = canRestrictToDocumentApps && onlyDocumentApps;
+
+  const dismissPendingDocument = useCallback(() => {
+    const rest = withoutPendingDocument(searchParams).toString();
+    navigate(rest ? `/apps?${rest}` : '/apps', { replace: true });
+  }, [navigate, searchParams]);
+
+  const openApp = useCallback(
+    appId => {
+      const query = pendingDocumentQuery(documentForApp);
+      navigate(query ? `/apps/${appId}?${query}` : `/apps/${appId}`);
+    },
+    [navigate, documentForApp]
+  );
 
   // Only display categories that contain at least one app, with smart hiding logic
   const availableCategories = useMemo(() => {
@@ -227,6 +281,9 @@ function AppsList() {
         // Safety check
         if (!app) return false;
 
+        // A pending document narrows the picker to apps that can take it
+        if (restrictToDocumentApps && !documentApps.includes(app)) return false;
+
         // Category filtering
         if (categoriesConfig.enabled && selectedCategory !== 'all') {
           const appCategory = app.category || 'utility'; // Default to 'utility' if no category
@@ -270,7 +327,9 @@ function AppsList() {
     currentLanguage,
     searchConfig.enabled,
     categoriesConfig.enabled,
-    selectedCategory
+    selectedCategory,
+    restrictToDocumentApps,
+    documentApps
   ]);
 
   // Memoized sorted apps to avoid recomputing on every render
@@ -413,6 +472,16 @@ function AppsList() {
     <div ref={containerRef} className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
       <NextcloudSelectionBanner />
       <div className="max-w-6xl mx-auto">
+        {pendingDocument && (
+          <PendingDocumentBanner
+            status={noAppForDocument ? 'noApp' : documentCheck.status}
+            title={documentCheck.title || pendingDocument.prefill}
+            onDismiss={dismissPendingDocument}
+            canRestrict={canRestrictToDocumentApps}
+            restrict={restrictToDocumentApps}
+            onRestrictChange={setOnlyDocumentApps}
+          />
+        )}
         {/* Page header */}
         <div className="flex flex-col items-center text-center mb-8">
           {uiConfig?.icons?.appsListLogo && (
@@ -546,7 +615,7 @@ function AppsList() {
                   >
                     <button
                       type="button"
-                      onClick={() => navigate(`/apps/${app.id}`)}
+                      onClick={() => openApp(app.id)}
                       aria-label={name}
                       className="absolute inset-0 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />

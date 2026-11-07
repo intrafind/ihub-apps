@@ -38,7 +38,7 @@ function useWorkflowList() {
       setWorkflows(response.data || []);
     } catch (err) {
       console.error('Failed to fetch workflows:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to load workflows');
+      setError(err.response?.data?.detail || err.message || 'Failed to load workflows');
       setWorkflows([]);
     } finally {
       setLoading(false);

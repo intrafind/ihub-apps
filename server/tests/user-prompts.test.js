@@ -970,7 +970,14 @@ describe('the admin prompt routes answer errors in the shared shape', () => {
   it('answers an unknown prompt with NOT_FOUND and an unsafe id with BAD_REQUEST', async () => {
     const missing = await drive(route.adminGet, { user: ROOT, params: { promptId: 'nope' } });
     assert.equal(missing.statusCode, 404);
-    assert.deepEqual(missing.body, { error: 'Prompt not found', code: 'NOT_FOUND' });
+    assert.equal(missing.headers['content-type'], 'application/problem+json');
+    assert.deepEqual(missing.body, {
+      type: 'urn:ihub:problem:NOT_FOUND',
+      title: 'The requested resource was not found.',
+      status: 404,
+      detail: 'Prompt not found',
+      code: 'NOT_FOUND'
+    });
     const unsafe = await drive(route.adminGet, { user: ROOT, params: { promptId: '../x' } });
     assert.equal(unsafe.statusCode, 400);
     assert.equal(unsafe.body.code, 'BAD_REQUEST');

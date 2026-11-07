@@ -9,6 +9,7 @@ import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Gate behind the integrations feature flag (consistent with the Office add-in)
@@ -55,7 +56,7 @@ router.get('/config', (req, res) => {
   const cfg = platform?.browserExtension;
 
   if (!cfg?.enabled) {
-    return res.status(404).json({ error: 'Browser extension integration is not enabled' });
+    return sendErrorResponse(res, 404, 'Browser extension integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);

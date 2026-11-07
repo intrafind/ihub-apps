@@ -13,6 +13,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { ServiceError } from './ServiceError.js';
 
+import { sendErrorResponse } from './responseHelpers.js';
 /**
  * Regular expression that allows only safe characters for IDs:
  * - Letters (a-z, A-Z)
@@ -82,9 +83,11 @@ export function isValidId(id) {
 export function validateIdForPath(id, idType, res) {
   if (!isValidId(id)) {
     if (res) {
-      res.status(400).json({
-        error: `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
-      });
+      sendErrorResponse(
+        res,
+        400,
+        `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
+      );
     }
     return false;
   }
@@ -187,18 +190,18 @@ export function validateIdsForPath(ids, idType, res) {
   } else if (Array.isArray(ids)) {
     idArray = ids;
   } else {
-    res.status(400).json({
-      error: `Invalid ${idType} IDs format. Expected string or array.`
-    });
+    sendErrorResponse(res, 400, `Invalid ${idType} IDs format. Expected string or array.`);
     return false;
   }
 
   // Validate each ID
   for (const id of idArray) {
     if (!isValidId(id)) {
-      res.status(400).json({
-        error: `Invalid ${idType} ID '${id}'. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
-      });
+      sendErrorResponse(
+        res,
+        400,
+        `Invalid ${idType} ID '${id}'. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
+      );
       return false;
     }
   }

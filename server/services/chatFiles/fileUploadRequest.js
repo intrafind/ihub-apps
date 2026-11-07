@@ -10,7 +10,7 @@
  * @module services/chatFiles/fileUploadRequest
  */
 import multer from 'multer';
-import { sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { ChatFileQuotaError } from './ChatFileRepository.js';
 import { ChatFileError, ingestChatFile } from './ChatFileService.js';
 import { ingestFromSource } from './fileSources.js';
@@ -33,7 +33,9 @@ export function isMultipartRequest(req) {
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {number} maxFileBytes
- * @returns {Promise<boolean>} True when parsed, false when an error response was sent.
+ * @returns {Promise<void>}
+ * @throws {ChatFileQuotaError} `QUOTA_FILE_BYTES` (413) when the file is over the limit.
+ * @throws {ServiceError} `BAD_REQUEST` for more than one file or an unreadable upload.
  */
 export function parseChatFileMultipart(req, res, maxFileBytes) {
   const upload = multer({
@@ -46,49 +48,23 @@ export function parseChatFileMultipart(req, res, maxFileBytes) {
     }
   }).single('file');
 
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     upload(req, res, error => {
-      if (!error) return resolve(true);
+      if (!error) return resolve();
       if (error?.code === 'LIMIT_FILE_SIZE') {
-        sendErrorResponse(
-          res,
-          413,
-          `A file may be at most ${Math.floor(maxFileBytes / (1024 * 1024)) || 1} MB`,
-          { details: { code: 'QUOTA_FILE_BYTES', limit: maxFileBytes } }
+        return reject(
+          new ChatFileQuotaError(
+            'QUOTA_FILE_BYTES',
+            `A file may be at most ${Math.floor(maxFileBytes / (1024 * 1024)) || 1} MB`,
+            { limit: maxFileBytes }
+          )
         );
-        return resolve(false);
       }
       if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
-        sendBadRequest(res, 'Send at most one file in the "file" field');
-        return resolve(false);
+        return reject(new ServiceError('BAD_REQUEST', 'Send at most one file in the "file" field'));
       }
-      sendBadRequest(res, error.message || 'Invalid multipart upload');
-      return resolve(false);
+      return reject(new ServiceError('BAD_REQUEST', error.message || 'Invalid multipart upload'));
     });
-  });
-}
-
-/**
- * Whether an error is an expected ingest refusal (quota, unsupported type, …)
- * that carries its own status and code.
- *
- * @param {unknown} error
- * @returns {boolean}
- */
-export function isChatFileFailure(error) {
-  return error instanceof ChatFileQuotaError || error instanceof ChatFileError;
-}
-
-/**
- * Send an ingest refusal as a JSON error.
- *
- * @param {import('express').Response} res
- * @param {ChatFileQuotaError|ChatFileError} error
- * @returns {import('express').Response}
- */
-export function sendChatFileFailure(res, error) {
-  return sendErrorResponse(res, error.status || 400, error.message, {
-    details: { code: error.code, ...(error.details || {}) }
   });
 }
 

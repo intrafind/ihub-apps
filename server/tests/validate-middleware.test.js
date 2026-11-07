@@ -50,24 +50,28 @@ describe('validate() with the global error middleware', () => {
     assert.deepEqual(await res.json(), { name: 'a', n: 3 });
   });
 
-  it('answers a body failure as 400 VALIDATION_FAILED with details.issues', async () => {
+  it('answers a body failure as 400 VALIDATION_FAILED with an errors list', async () => {
     const res = await postBody({ name: '', n: 'x' });
     assert.equal(res.status, 400);
+    assert.match(res.headers.get('content-type'), /^application\/problem\+json/);
     const body = await res.json();
     assert.equal(body.code, 'VALIDATION_FAILED');
-    assert.equal(typeof body.error, 'string');
-    assert.ok(Array.isArray(body.details.issues));
-    assert.deepEqual(body.details.issues.map(i => i.path).sort(), ['n', 'name']);
-    for (const issue of body.details.issues) {
-      assert.deepEqual(Object.keys(issue).sort(), ['code', 'message', 'path']);
+    assert.equal(body.type, 'urn:ihub:problem:VALIDATION_FAILED');
+    assert.equal(body.status, 400);
+    assert.equal(typeof body.detail, 'string');
+    assert.ok(Array.isArray(body.errors));
+    assert.deepEqual(body.errors.map(e => e.pointer).sort(), ['/n', '/name']);
+    for (const error of body.errors) {
+      assert.deepEqual(Object.keys(error).sort(), ['code', 'message', 'pointer']);
     }
-    assert.equal(body.details.code, undefined, 'details never carries the code');
+    assert.equal(body.details, undefined, 'the issues live in errors, not in details');
+    assert.equal(body.error, undefined, 'the old error member is gone');
   });
 
   it('answers query and params failures the same way', async () => {
     const query = await fetch(`${base}/query?page=0`);
     assert.equal(query.status, 400);
-    assert.equal((await query.json()).details.issues[0].path, 'page');
+    assert.equal((await query.json()).errors[0].pointer, '/page');
     const params = await fetch(`${base}/params/abc`);
     assert.equal(params.status, 400);
     assert.equal((await params.json()).code, 'VALIDATION_FAILED');

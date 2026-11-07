@@ -357,7 +357,10 @@ describe('installed instances', () => {
         .send({ ...payload, id: 'y', values: { baseUrl: 'ftp://x', maxRows: 99 } })
     ).expect(400);
     expect(bad.body.code).toBe('INVALID_VALUES');
-    expect(bad.body.details.issues.map(d => d.key).sort()).toEqual(['baseUrl', 'maxRows']);
+    expect(bad.body.errors.map(e => e.pointer).sort()).toEqual([
+      '/values/baseUrl',
+      '/values/maxRows'
+    ]);
     const reserved = await admin(
       request(app)
         .post('/api/admin/integrations/installed')
@@ -378,7 +381,7 @@ describe('installed instances', () => {
         .post('/api/admin/integrations/installed')
         .send({ ...payload, id: 'z', values: { baseUrl: 'https://x.org', apiToken: 'leak' } })
     ).expect(400);
-    expect(sensitive.body.details.issues[0].key).toBe('apiToken');
+    expect(sensitive.body.errors[0].pointer).toBe('/values/apiToken');
   });
 
   it('refuses allowedGroups on install, update and test, naming the group page (#3093)', async () => {
@@ -388,8 +391,8 @@ describe('installed instances', () => {
         .send({ ...payload, allowedGroups: ['admins'] })
     ).expect(400);
     expect(install.body.code).toBe('ALLOWED_GROUPS_REMOVED');
-    expect(install.body.error).toMatch(/Admin → Groups/);
-    expect(install.body.error).toMatch(/permissions\.integrations/);
+    expect(install.body.detail).toMatch(/Admin → Groups/);
+    expect(install.body.detail).toMatch(/permissions\.integrations/);
     expect(state.integrations.installed).toEqual([]);
 
     await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
@@ -444,7 +447,7 @@ describe('installed instances', () => {
         .post('/api/admin/integrations/installed')
         .send({ ...payload, id: 'nosecret', auth: { mode: 'service-account' } })
     ).expect(400);
-    expect(missing.body.details.issues[0].key).toBe('apiToken');
+    expect(missing.body.errors[0].pointer).toBe('/values/apiToken');
     // updating without a new secret keeps the stored credential
     await admin(
       request(app)

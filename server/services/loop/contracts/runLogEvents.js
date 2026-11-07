@@ -296,7 +296,7 @@ export const sourceSchema = z.object({
   publishedDate: z.string().optional(),
   fileName: z.string().optional(),
   type: z.string().optional(),
-  /** Handle for the provider's content actions (`GET /api/sources/:provider/*`). */
+  /** Handle for the provider's content actions (`GET /api/integrations/:integration/files/*`). */
   ref: z.object({ id: z.string(), scope: z.string().optional() }).optional(),
   read: z
     .object({

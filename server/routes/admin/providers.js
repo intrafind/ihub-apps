@@ -5,24 +5,45 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { isValidId, validateIdForPath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
-import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { getProxyConfig, redactUrlSecrets } from '../../utils/httpConfig.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
+  GATEWAY_API_TYPES,
+  GATEWAY_KINDS,
   getLinkedModels,
   getProviderApiType,
   inspectProviderApiKey,
   isCustomLlmProvider,
+  isGatewayProvider,
   isReservedProviderId,
-  linkedModelProvider
+  linkedModelProvider,
+  LLM_TIMEOUT_KEYS,
+  LLM_TIMEOUT_MAX_MS,
+  resolveProviderApiKey
 } from '../../services/llmProviders.js';
-import { stripTrailingSlashes } from '../../services/ModelEndpointDiscovery.js';
+import {
+  discoverModels,
+  MAX_MODELS,
+  ModelDiscoveryError,
+  stripTrailingSlashes
+} from '../../services/ModelEndpointDiscovery.js';
+import { computeGatewayDrift } from '../../services/gatewayDrift.js';
+import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
@@ -31,13 +52,36 @@ const PROVIDERS_FILE = 'config/providers.json';
 const PROVIDER_CATEGORIES = ['llm', 'custom'];
 
 /**
+ * Validate the transport ceilings of an LLM provider entry, in place: each is a
+ * whole number of milliseconds from 0 (no ceiling) to 5 minutes. An empty value
+ * removes the key, so the provider inherits the installation's.
+ *
+ * @param {Object} provider - Provider entry from the request body
+ * @returns {string|null} Error message, or null when the ceilings are valid
+ */
+function normalizeProviderTimeouts(provider) {
+  for (const key of LLM_TIMEOUT_KEYS) {
+    const value = provider[key];
+    if (value === undefined || value === null || value === '') {
+      delete provider[key];
+    } else if (!Number.isInteger(value) || value < 0 || value > LLM_TIMEOUT_MAX_MS) {
+      return `${key} must be a whole number of milliseconds between 0 and ${LLM_TIMEOUT_MAX_MS}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Validate and tidy the editable fields of a provider entry, in place.
  *
  * `name` and `description` are plain strings (V141 converted the per-language
  * objects). A custom LLM provider needs the `apiType` its endpoint speaks and
  * may carry a `baseUrl` used to list its models; a built-in LLM provider's API
  * type is its id, so an `apiType` on it is dropped. Other categories have
- * neither field.
+ * neither field. A custom LLM provider may name the `gateway` it points at
+ * (an iFinder Model Gateway), which fixes the API types it can have. An LLM
+ * provider may also set `connectTimeoutMs` / `streamIdleTimeoutMs`, the
+ * transport ceilings its models inherit (see normalizeProviderTimeouts).
  *
  * @param {Object} provider - Provider entry from the request body
  * @returns {string|null} Error message, or null when the entry is valid
@@ -59,13 +103,29 @@ function normalizeProviderFields(provider) {
   if ((provider.category || 'llm') !== 'llm') {
     delete provider.apiType;
     delete provider.baseUrl;
+    delete provider.gateway;
+    for (const key of LLM_TIMEOUT_KEYS) delete provider[key];
     return null;
   }
 
+  const timeoutError = normalizeProviderTimeouts(provider);
+  if (timeoutError) return timeoutError;
+
   if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
     delete provider.apiType;
+    delete provider.gateway;
   } else if (!CUSTOM_PROVIDER_API_TYPES.includes(provider.apiType)) {
     return `API type must be one of: ${CUSTOM_PROVIDER_API_TYPES.join(', ')}`;
+  } else if (
+    provider.gateway === undefined ||
+    provider.gateway === null ||
+    provider.gateway === ''
+  ) {
+    delete provider.gateway;
+  } else if (!GATEWAY_KINDS.includes(provider.gateway)) {
+    return `Gateway must be one of: ${GATEWAY_KINDS.join(', ')}`;
+  } else if (!GATEWAY_API_TYPES.includes(provider.apiType)) {
+    return `A model gateway provider must use the API type ${GATEWAY_API_TYPES.join(' or ')}`;
   }
 
   if (provider.baseUrl === undefined || provider.baseUrl === null || provider.baseUrl === '') {
@@ -85,12 +145,14 @@ function normalizeProviderFields(provider) {
  * Point every model linked to a custom LLM provider at the provider's API
  * type, so changing it on the provider changes it for all of its models. A
  * Google transcription model keeps its speech backend (linkedModelProvider).
+ * A gateway provider is left alone: its models speak different dialects (a
+ * Mistral model next to an OpenAI one), each imported with its own adapter.
  *
  * @param {Object} provider - The saved provider entry
  * @returns {Promise<string[]>} Ids of the models rewritten
  */
 async function syncLinkedModelsApiType(provider) {
-  if (!isCustomLlmProvider(provider)) return [];
+  if (!isCustomLlmProvider(provider) || isGatewayProvider(provider)) return [];
   const apiType = getProviderApiType(provider);
   const { data: models = [] } = configCache.getModels(true);
   const updated = [];
@@ -136,6 +198,115 @@ function describeOutboundPath(providerId) {
   };
 
   return { proxy, proxyEnabled, endpoint: endpoints[providerId] || null };
+}
+
+/**
+ * Ask a model gateway provider's gateway what it lists now and compare that with the models
+ * imported from it. Shared by the drift report and by the sync that applies it, so both see
+ * the same thing and fail the same way.
+ *
+ * @param {string} providerId
+ * @returns {Promise<{ provider: Object, modelsUrl: string, items: Array<Object> }>}
+ * @throws {ServiceError} `BAD_REQUEST` for an unusable id, a provider that is no gateway or has no
+ *   base URL, `NOT_FOUND` for an unknown provider, `UPSTREAM_ERROR` when the gateway cannot be asked
+ */
+async function loadGatewayDrift(providerId) {
+  if (!isValidId(providerId)) throw new ServiceError('BAD_REQUEST', 'Invalid provider ID');
+
+  const { data: providers = [] } = configCache.getProviders(true);
+  const provider = providers.find(p => p.id === providerId);
+  if (!provider) throw new ServiceError('NOT_FOUND', `Provider ${providerId} not found`);
+  if (!isGatewayProvider(provider)) {
+    throw new ServiceError('BAD_REQUEST', `Provider ${providerId} is not a model gateway`, {
+      details: { providerId }
+    });
+  }
+  if (!provider.baseUrl) {
+    throw new ServiceError('BAD_REQUEST', `Provider ${providerId} has no base URL`, {
+      details: { providerId }
+    });
+  }
+
+  let listing;
+  try {
+    listing = await discoverModels({
+      url: provider.baseUrl,
+      provider: getProviderApiType(provider),
+      apiKey: resolveProviderApiKey(provider) || '',
+      gateway: provider.gateway
+    });
+  } catch (error) {
+    if (!(error instanceof ModelDiscoveryError)) throw error;
+    // A URL the admin has to fix is theirs (400); anything else is the gateway's.
+    throw new ServiceError(error.status === 400 ? 'BAD_REQUEST' : 'UPSTREAM_ERROR', error.message, {
+      status: error.status,
+      details: {
+        reason: error.messageKey,
+        upstreamStatus: error.upstreamStatus,
+        hint: error.details
+      }
+    });
+  }
+
+  const { data: models = [] } = configCache.getModels(true);
+  return {
+    provider,
+    modelsUrl: listing.modelsUrl,
+    items: computeGatewayDrift({
+      provider,
+      models,
+      entries: listing.models,
+      modelsUrl: listing.modelsUrl
+    })
+  };
+}
+
+/** Models are stored one file each; sync reads and writes those files, not the config cache. */
+const modelStore = {
+  read: async id => configStore.readJson(await configStore.resolveIdToPath('models', id)),
+  write: async (id, model) =>
+    configStore.writeJson(await configStore.resolveIdToPath('models', id), model)
+};
+
+/** Most picks one sync request may carry: as many as a listing is read with. */
+const MAX_SYNC_PICKS = MAX_MODELS;
+
+/**
+ * The picks of a sync request: `{ items: [{ kind, remoteId, modelId? }] }`. A `changed` or
+ * `removed` pick names the iHub model in `modelId`: several iHub models can share one remote id.
+ *
+ * @throws {ServiceError} `BAD_REQUEST` for anything else
+ */
+function picksOf(body) {
+  const list = body?.items;
+  if (!Array.isArray(list) || list.length > MAX_SYNC_PICKS) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `items must be a list of at most ${MAX_SYNC_PICKS} picks`
+    );
+  }
+  const textOf = (value, max) =>
+    typeof value === 'string' && value.length > 0 && value.length <= max;
+  for (const pick of list) {
+    const kind = pick?.kind;
+    const valid =
+      pick &&
+      typeof pick === 'object' &&
+      ['added', 'changed', 'removed'].includes(kind) &&
+      textOf(pick.remoteId, 200) &&
+      (kind === 'added' ? pick.modelId === undefined : textOf(pick.modelId, 100));
+    if (!valid) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Each pick needs a kind and a remoteId, and a changed or removed pick the modelId of the model'
+      );
+    }
+  }
+  return list.map(({ kind, remoteId, modelId }) => ({
+    kind,
+    remoteId,
+    ...(modelId ? { modelId } : {})
+  }));
 }
 
 export default function registerAdminProvidersRoutes(app) {
@@ -202,6 +373,210 @@ export default function registerAdminProvidersRoutes(app) {
       } catch (error) {
         return sendInternalError(res, error, 'fetch provider schema');
       }
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/providers/{providerId}/_model-drift:
+   *   get:
+   *     summary: Compare a model gateway with the models imported from it (Admin)
+   *     description: |
+   *       Reads the model listing of an iFinder Model Gateway provider (its base URL
+   *       and stored project key) and compares it with the models linked to the
+   *       provider. Changes nothing: every item names what an admin could do. To apply
+   *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
+   *       replay it through the model endpoints, which read the config cache and can
+   *       write back a stale copy.
+   *
+   *       Item kinds: `added` (listed, not imported; `model` is a preview of the config
+   *       that would be created, the sync builds it again from a fresh listing),
+   *       `changed` (an imported model differs from the gateway; carries `changes` as
+   *       `{ field, from, to }`), `removed` (an enabled imported model the gateway no
+   *       longer lists, or lists as something iHub cannot run; `reason` is `missing` or
+   *       `unsupported`; the offer is to disable it).
+   *
+   *       `changed` and `removed` items name the iHub model in `modelId`. Several iHub
+   *       models can share one `remoteId` (a clone keeps it), each is its own item.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The drift report; `items` is empty when everything matches
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 modelsUrl:
+   *                   type: string
+   *                 items:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       kind:
+   *                         type: string
+   *                         enum: [added, changed, removed]
+   *                       remoteId:
+   *                         type: string
+   *                       modelId:
+   *                         type: string
+   *                         description: The iHub model (changed and removed)
+   *                       name:
+   *                         type: string
+   *                         description: Display name (added)
+   *                       model:
+   *                         type: object
+   *                         description: Model config to create (added)
+   *                       reason:
+   *                         type: string
+   *                         enum: [missing, unsupported]
+   *                       changes:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           properties:
+   *                             field:
+   *                               type: string
+   *                             from: {}
+   *                             to: {}
+   *       400:
+   *         description: "`BAD_REQUEST`: the provider is not a model gateway, has no base URL, or its URL is unusable"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   *       502:
+   *         description: "`UPSTREAM_ERROR`: the gateway could not be reached or rejected the request; `details.reason` names why (`authenticationFailed`, `apiKeyRequired`, `connectionRefused`, …)"
+   */
+  app.get(
+    buildServerPath('/api/admin/providers/:providerId/_model-drift'),
+    adminAuth,
+    async (req, res) => {
+      const { modelsUrl, items } = await loadGatewayDrift(req.params.providerId);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ modelsUrl, items });
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/providers/{providerId}/_sync-models:
+   *   post:
+   *     summary: Apply a pick of the gateway drift to the models (Admin)
+   *     description: |
+   *       Applies the items an admin picked from `GET /admin/providers/{providerId}/_model-drift`.
+   *       The server asks the gateway again and applies only picks that still match what it
+   *       reports now; it never takes a model config from the request. `added` creates the
+   *       model, `changed` sets the changed fields on the stored model, `removed` disables
+   *       the model (it is never deleted). A `changed` or `removed` pick names the iHub
+   *       model in `modelId`, because several iHub models can share one `remoteId`.
+   *
+   *       The request succeeds as a whole when it is understood: each item has its own
+   *       outcome, and one failure does not stop the others.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [items]
+   *             properties:
+   *               items:
+   *                 type: array
+   *                 maxItems: 5000
+   *                 items:
+   *                   type: object
+   *                   required: [kind, remoteId]
+   *                   properties:
+   *                     kind:
+   *                       type: string
+   *                       enum: [added, changed, removed]
+   *                     remoteId:
+   *                       type: string
+   *                     modelId:
+   *                       type: string
+   *                       description: The iHub model; required for `changed` and `removed`
+   *     responses:
+   *       200:
+   *         description: One outcome per picked item, in the order they were applied
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 items:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       kind:
+   *                         type: string
+   *                       remoteId:
+   *                         type: string
+   *                       modelId:
+   *                         type: string
+   *                       status:
+   *                         type: string
+   *                         enum: [applied, skipped, failed]
+   *                       detail:
+   *                         type: string
+   *                         description: "Why an item was not applied; `changedSinceReview` for a skipped one"
+   *       400:
+   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is not a model gateway or has no base URL"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   *       502:
+   *         description: "`UPSTREAM_ERROR`: the gateway could not be asked; nothing was changed"
+   */
+  app.post(
+    buildServerPath('/api/admin/providers/:providerId/_sync-models'),
+    adminAuth,
+    async (req, res) => {
+      const picks = picksOf(req.body);
+      const { items } = await loadGatewayDrift(req.params.providerId);
+      const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
+
+      const results = await applyGatewayDrift({
+        picks,
+        items,
+        store: {
+          ...modelStore,
+          audit: (action, id, summary) =>
+            logAudit({ req, action, resource: 'model', resourceId: id, summary }),
+          snapshot: (id, before, after) =>
+            saveSnapshot({ resource: 'model', id, before, after, admin })
+        }
+      });
+      // One refresh for the whole batch, after every file is written.
+      if (results.some(result => result.status === 'applied')) {
+        await configCache.refreshModelsCache();
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ items: results });
     }
   );
 
@@ -329,6 +704,24 @@ export default function registerAdminProvidersRoutes(app) {
       const validationError = normalizeProviderFields(updatedProvider);
       if (validationError) {
         return sendBadRequest(res, validationError);
+      }
+
+      // A gateway provider's models speak different dialects (Mistral next to
+      // OpenAI, a realtime speech backend). Taking the gateway setting away would
+      // move them all to the provider's one API type — a realtime model would end
+      // up on the OpenAI batch transcriber — so refuse while that would happen.
+      if (isGatewayProvider(providers[index]) && !isGatewayProvider(updatedProvider)) {
+        const { data: models = [] } = configCache.getModels(true);
+        const apiType = getProviderApiType(updatedProvider);
+        const affected = getLinkedModels(providerId, models).filter(
+          model => linkedModelProvider(apiType, model) !== model.provider
+        );
+        if (affected.length > 0) {
+          return sendBadRequest(
+            res,
+            `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
+          );
+        }
       }
 
       providers[index] = updatedProvider;
@@ -495,10 +888,12 @@ export default function registerAdminProvidersRoutes(app) {
       const { data: models = [] } = configCache.getModels(true);
       const linkedModels = getLinkedModels(providerId, models).map(m => m.id);
       if (linkedModels.length > 0) {
-        return res.status(409).json({
-          error: `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
-          linkedModels
-        });
+        return sendErrorResponse(
+          res,
+          409,
+          `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
+          { code: 'PROVIDER_IN_USE', details: { linkedModels } }
+        );
       }
 
       // Load current providers

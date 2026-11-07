@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { setAuthCookie } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 // jwks-rsa pulls in jose (pure ESM) internally via a synchronous require(), so
 // a static top-level import here would blow up as soon as anything imports
 // this file — e.g. for route registration — under Jest's CJS-style module
@@ -240,11 +241,7 @@ export async function teamsTokenExchange(req, res) {
         {},
         language
       );
-      return res.status(400).json({
-        success: false,
-        error: errorMessage,
-        errorKey: 'TEAMS_SSO_TOKEN_REQUIRED'
-      });
+      return sendErrorResponse(res, 400, errorMessage, { code: 'TEAMS_SSO_TOKEN_REQUIRED' });
     }
 
     const platform = configCache.getPlatform() || {};
@@ -256,11 +253,7 @@ export async function teamsTokenExchange(req, res) {
         {},
         language
       );
-      return res.status(400).json({
-        success: false,
-        error: errorMessage,
-        errorKey: 'TEAMS_AUTH_NOT_ENABLED'
-      });
+      return sendErrorResponse(res, 400, errorMessage, { code: 'TEAMS_AUTH_NOT_ENABLED' });
     }
 
     // Verify the Teams SSO token
@@ -314,11 +307,7 @@ export async function teamsTokenExchange(req, res) {
         {},
         language
       );
-      return res.status(403).json({
-        success: false,
-        error: errorMessage,
-        errorKey: 'TEAMS_ACCOUNT_DISABLED'
-      });
+      return sendErrorResponse(res, 403, errorMessage, { code: 'TEAMS_ACCOUNT_DISABLED' });
     }
 
     const errorMessage = await errorHandler.getLocalizedError(
@@ -326,11 +315,7 @@ export async function teamsTokenExchange(req, res) {
       {},
       language
     );
-    res.status(401).json({
-      success: false,
-      error: errorMessage,
-      errorKey: 'TEAMS_INVALID_OR_EXPIRED_TOKEN'
-    });
+    sendErrorResponse(res, 401, errorMessage, { code: 'TEAMS_INVALID_OR_EXPIRED_TOKEN' });
   }
 }
 

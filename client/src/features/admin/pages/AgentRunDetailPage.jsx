@@ -112,7 +112,7 @@ export default function AgentRunDetailPage() {
       await cancelAgentRun(runId, 'user_cancelled');
       refetch();
     } catch (err) {
-      setActionError(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.detail || err.message);
     }
   }
 
@@ -122,7 +122,7 @@ export default function AgentRunDetailPage() {
       await resumeAgentRun(runId);
       refetch();
     } catch (err) {
-      setActionError(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.detail || err.message);
     }
   }
 
@@ -137,7 +137,7 @@ export default function AgentRunDetailPage() {
       await answerInteraction(runId, checkpoint.id, { value: response }, { channel: 'run_page' });
       refetch();
     } catch (err) {
-      setActionError(err?.response?.data?.error || err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.detail || err.message);
     }
   }
 

@@ -3,7 +3,7 @@
 
 /**
  * The backup routes answer errors through the global error middleware:
- * `{ error, code, details? }`, with the ZIP headers of the export dropped
+ * as `application/problem+json` with a `code`, with the ZIP headers of the export dropped
  * when the export fails before a byte was sent.
  *
  * Run: node --test server/tests/backup-routes-errors.test.js
@@ -11,6 +11,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { importConfig, exportConfig } from '../routes/admin/backup.js';
+import { readFileSync } from 'node:fs';
 import errorHandler from '../middleware/errorHandler.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { runHandler } from './helpers/runHandler.js';
@@ -42,12 +43,21 @@ function responseDouble() {
   };
 }
 
+const en = JSON.parse(readFileSync(new URL('../../shared/i18n/en.json', import.meta.url), 'utf8'));
+
 describe('backup routes errors', () => {
   it('answers an import without a file with BAD_REQUEST', async () => {
     const res = responseDouble();
     await runHandler(importConfig, { headers: {}, user: { id: 'admin' } }, res);
     assert.equal(res.statusCode, 400);
-    assert.deepEqual(res.body, { error: 'No ZIP file uploaded', code: 'BAD_REQUEST' });
+    assert.equal(res.getHeader('content-type'), 'application/problem+json');
+    assert.deepEqual(res.body, {
+      type: 'urn:ihub:problem:BAD_REQUEST',
+      title: en.apiErrors.BAD_REQUEST,
+      status: 400,
+      detail: 'No ZIP file uploaded',
+      code: 'BAD_REQUEST'
+    });
   });
 
   it('answers a failed export with JSON, without the ZIP headers', async () => {
@@ -65,6 +75,9 @@ describe('backup routes errors', () => {
     errorHandler(forwarded, req, res, () => {});
     assert.equal(res.statusCode, 500);
     assert.equal(res.body.code, 'INTERNAL_ERROR');
+    // the JSON error replaces the ZIP headers; it does not inherit them
+    assert.equal(res.getHeader('content-type'), 'application/problem+json');
+    assert.equal(res.getHeader('content-disposition'), undefined);
   });
 
   it('shows the message and details of an IMPORT_FAILED error', () => {
@@ -79,9 +92,13 @@ describe('backup routes errors', () => {
     errorHandler(error, { headers: {} }, res, () => {});
     assert.equal(res.statusCode, 500);
     assert.deepEqual(res.body, {
-      error: 'Failed to activate the imported configuration',
+      type: 'urn:ihub:problem:IMPORT_FAILED',
+      title: res.body.title,
+      status: 500,
+      detail: 'Failed to activate the imported configuration',
       code: 'IMPORT_FAILED',
       details: { hint: 'The disk is full.', reason: 'ENOSPC' }
     });
+    assert.ok(res.body.title);
   });
 });

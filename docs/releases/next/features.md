@@ -1,5 +1,41 @@
 # Features — Unreleased
 
+## Upload Types Start With All Their Formats Selected
+
+In **Admin → Apps → Upload Configuration**, turning on an upload type (images, files, audio or
+video) now selects **Use entire category** straight away, so the app accepts every format of that
+type. Uncheck it to pick individual formats; your selection stays as it was and you remove what you
+do not want. Before, a newly enabled type started with a short default list.
+
+Unchecking **Use entire category** now also works when every format is selected.
+
+**Migration:** on the first start with this version, every enabled upload type that has no format
+list, or still has one of the old defaults the editor and the chat used, is moved to the entire
+category of its type (for documents that includes HTML, CSS, JavaScript and **Any text file**).
+Format lists you chose yourself, and types that are turned off, are left alone.
+
+## iFinder Model Gateway as a Model Source
+
+iHub can use the **iFinder Model Gateway** as a built-in model source. Under **Admin → Models →
+Import from URL**, tick **This endpoint is an iFinder Model Gateway**, enter the gateway root and a
+project API key, and iHub lists the models the project may use.
+
+- **Detected, not guessed:** chat, vision and realtime-speech models are recognised from what the
+  gateway reports for each model, with the context window. Embedding and NER models are listed but
+  cannot be picked.
+- **Right dialect per model:** Mistral models use the Mistral adapter, OpenAI and Azure models the
+  provider's API type. All calls go through the gateway's auto-select route, so a model survives a
+  backend being replaced.
+- **Tool calling:** the gateway does not support it yet, so imported models have tool support off.
+- **Existing providers:** **Admin → Providers** has a new **Model gateway** setting for turning a
+  provider into a gateway provider.
+- **Sync with gateway:** on a gateway provider's page, **Sync with gateway** compares what the
+  gateway lists now with the models imported from it: new models, changed context window, image
+  input, URL or adapter, and models that are gone. Changes and gone models start ticked, new
+  models start unticked (importing one makes it available), and nothing happens until you apply. A model that is gone is disabled, never deleted.
+
+See [Models](../../models.md#importing-models-from-an-endpoint).
+
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
 **Admin → Integrations** is one platform for everything iHub connects to. An integration is a
@@ -387,8 +423,8 @@ or two columns stay ordinary lines. Tagged PDFs still use their structure tree.
 ## Share a Single File as a Link, Optionally Embedded
 
 A generated file — a web page, image, document or code file — can now be shared on its own, like a
-chat, without the conversation it came from. Open the Artifacts panel, select the file and choose
-**Share**.
+chat, without the conversation it came from. Choose **Share** on the file's card in the chat, in the
+file viewer, or in the Artifacts panel.
 
 - **Same audiences and limits as chat links:** specific users, anyone signed in, or anyone with the
   link, each with an expiry, an open limit and **Revoke**. Only that one file opens through the link;
@@ -523,27 +559,39 @@ See [Admin UI → Documentation](../../admin-ui.md#documentation).
 
 ## One Error Response Shape for the API
 
-Errors that the server's routes do not answer themselves — a request body that is too large, a body
-that is not valid JSON, an unexpected failure — are now answered as JSON instead of an HTML or plain
-text page. Every such response has the same body:
+Every error the API answers is now `application/problem+json`, the standard format of RFC 9457, with
+the same members everywhere. That includes the errors the server's routes do not answer themselves
+— a request body that is too large, a body that is not valid JSON, an unexpected failure — which
+used to be an HTML or plain text page.
 
 ```json
-{ "error": "…", "code": "PAYLOAD_TOO_LARGE", "details": { "type": "entity.too.large" } }
+{
+  "type": "urn:ihub:problem:PAYLOAD_TOO_LARGE",
+  "title": "The request is too large.",
+  "status": 413,
+  "detail": "request entity too large",
+  "code": "PAYLOAD_TOO_LARGE",
+  "details": { "type": "entity.too.large" }
+}
 ```
 
 - `code` is a stable, machine-readable code; the web app shows its own translated message for it
-  (English and German).
-- `error` is an English text for scripts and other API callers. For a server error (5xx) it carries
-  the real message only if it is safe to show (no file paths, hosts, URLs, credentials, SQL or stack
-  details, at most 200 characters); otherwise it is a fixed text. The real reason is always written
-  to the log.
-- OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep their standard `{ error, error_description }`
-  body.
-- Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in
-  `details.issues` (a list of `{ path, code, message }`), instead of `{ error: "Invalid request",
-  details: [...] }`. This covers the chat, tool-run, feedback, session-start, magic-prompt and MCP
-  app endpoints; `error` now reads "Some of the entered data is not valid." and `details` is an
-  object, not a list.
+  (English and German). A client should branch on `code`, never on the text.
+- `title` is the English text of the code and the same for every occurrence; `status` repeats the
+  HTTP status; `type` is a stable identifier (`urn:ihub:problem:<code>`), not an address to fetch.
+- `detail` is the English text of this occurrence, for scripts and other API callers. For a server
+  error (5xx) it carries the real message only if it is safe to show (no file paths, hosts, URLs,
+  credentials, SQL or stack details, at most 200 characters); otherwise it is the `title`. The real
+  reason is always written to the log.
+- `details` (optional) holds what the message needs or what the caller can act on, such as
+  `retryAfterMs`, `currentVersion`, `linkedModels` or `integrationId`.
+- OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) and bearer-token errors keep their standard
+  `{ error, error_description }` body, and the OpenAI-compatible endpoints (`/v1/*`) keep the OpenAI
+  error object.
+- Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in `errors`,
+  a list of `{ pointer, code, message }` where `pointer` is a JSON Pointer to the offending member
+  (`/schedule/cron`), instead of `{ error: "Invalid request", details: [...] }`. This covers the
+  chat, tool-run, feedback, session-start, magic-prompt and MCP app endpoints.
 - The chat sharing endpoints (`/api/chats/:chatId/shares`, `/api/shares/*`, `/api/users/lookup`) answer
   in this shape. The codes they already had (`CHAT_SHARING_UNAVAILABLE`, `SHARE_MODE_DISABLED`,
   `CHAT_TEMPORARY`, `ORIGINAL_DISCARDED`, …) moved from `details.code` to the top-level `code`; an
@@ -621,8 +669,66 @@ text page. Every such response has the same body:
   `INTEGRITY_MISMATCH`) used to answer `500` without a code; they now carry their code and answer `403`
   and `422`. A registry that cannot be created for another reason than a duplicate or an invalid config
   (for example a storage failure) answers `500` instead of `400`.
+- The model administration endpoints (`/api/admin/models*`) answer in this shape: `NOT_FOUND`,
+  `BAD_REQUEST`, `CONFLICT` (a model id that exists) and the failures below. The model discovery
+  (`_discover`) answers `DISCOVERY_FAILED` with the stable reason in `details.messageKey` and the remediation
+  text in `details.remediation` (`details.upstreamStatus` when the endpoint answered); before, these were
+  top-level `messageKey`, `upstreamStatus` and a string `details`. The model connectivity test answers with
+  the LLM error code (for example `AUTH_FAILED`), the headline in `error`, and the remediation text and
+  `messageKey` in `details`. The text-to-speech voice routes use `NOT_TTS_MODEL`, `VOICES_UNSUPPORTED`,
+  `INVALID_AUDIO`, `PAYLOAD_TOO_LARGE`, `UPSTREAM_ERROR` and `NO_AUDIO` instead of the former lower-case codes
+  (`not-tts-model`, `voices-unsupported`, `invalid-audio`, `audio-too-large`, `upstream-error`, `no-audio`).
+  The headline of a failed text-to-speech or transcription test is shown only when it is safe to show (it may
+  name a host); the reason stays in `details.remediation`, which the admin page shows.
+- The run endpoints (`/api/runs*`, answering an interaction, human events) answer in this shape:
+  `NOT_FOUND` (a run or an interaction), `FORBIDDEN`, `BAD_REQUEST` (an unsafe id) and
+  `VALIDATION_FAILED` with the failed fields in `details.issues` for a malformed answer or human event
+  (before: one `error` text and a `details` object of `formErrors` / `fieldErrors`). The refusals of an
+  answer keep their own status and code, now translated by the web app: `EXPIRED` and `RUN_DELETED`
+  (410), `CANCELLED`, `NOT_PENDING`, `ANSWER_IN_PROGRESS` and `ANSWER_IN_CHAT` (409),
+  `APPROVER_REQUIRED` and `UNAUTHORIZED_APPROVER` (403), and `INVALID_DECISION`, `INVALID_INPUT`,
+  `INVALID_OPTION`, `REASON_REQUIRED` and `SKIP_NOT_ALLOWED` (400).
+- The app administration endpoints (`/api/admin/apps*`) answer in this shape: `NOT_FOUND` (an app or its
+  file), `BAD_REQUEST` (a missing field, an unsafe or changed id, a bad reorder list), `CONFLICT` (an app id
+  that exists) and `VALIDATION_FAILED` for an app configuration that does not match the schema. The
+  `error` text still names the failed fields; the failed fields are in `details.issues`
+  (`{ path, code, message }`, `path` a dotted string) instead of a bare `details` list with `path` arrays.
+- The in-place update endpoints (`/api/admin/update*`) answer in this shape: `BAD_REQUEST` for an installation
+  that cannot be updated in place or an invalid request, `FORBIDDEN` for a missing write permission,
+  `CONFLICT` for an update operation that is already running or no staged update, and
+  `PAYLOAD_TOO_LARGE` for an upload over the limit. The codes the update already used are now upper case
+  registry codes at the top level (before: lower case in `details.code`) and translated by the web app:
+  `DISK_SPACE` and `CONFIG_SNAPSHOT_FAILED` (507), `UPDATE_PENDING`, `CONFIRM_DOWNGRADE`,
+  `CONFIRM_UNSIGNED` and `STAGED_CHANGED` (409), `UNSIGNED_NOT_ALLOWED` (403) and `ARCHIVE_REJECTED` (422).
+  A rejected archive keeps its `error` text; its staging summary moved from `summary` to `details.summary`.
+- The chat endpoints (`/api/chats*`) and the file uploads of chats and scheduled tasks answer in this shape.
+  The codes these routes already sent in `details.code` are now registry codes at the top level, with the
+  web app's messages: `CHAT_PERSISTENCE_UNAVAILABLE` (503), `CHAT_OWNER_REQUIRED`, `USER_PROJECTS_DISABLED`
+  and `APP_PROJECTS_DISABLED` (403), `PROJECT_TEST_CHAT_NOT_KEEPABLE` (409), `ORIGINAL_DISCARDED` (410, with
+  `details.originalDeletedAt`), the upload refusals `QUOTA_FILE_BYTES`, `QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`,
+  `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES` (413) and `QUOTA_SERVER_BYTES` (507),
+  `BINARY_UPLOAD_NOT_ALLOWED`, `UNSUPPORTED_TYPE`, `SCAN_REJECTED`, `NO_TEXT` and `EXTRACTION_FAILED` (400),
+  and the refusals of a file from a connected system `SOURCE_FORBIDDEN` (403), `SOURCE_GONE` (404),
+  `SOURCE_UNAVAILABLE` and `SOURCE_INVALID` (400) and `SOURCE_FAILED` (502). Storage failures answer with
+  their storage code (`INVALID_CURSOR` for a bad paging cursor, 400). Details of a refusal (a quota's
+  `limit`, `used` and `size`) stay in `details`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
+- The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
+  `TOKEN_EXPIRED`, `FORBIDDEN`), the admin routes for providers, groups, UI, translations and usage
+  limits, the agent run and artifact routes, the project and
+  project item routes, the chat session, history and short-link routes, the voice routes of the chat
+  (`/api/voice/*`), the integration connection routes, the Teams sign-in and the feature gate. The `success: false`
+  flag and the separate `message` member are gone from their error bodies: the text is `detail`.
+  A conflict names what the caller needs in `details` (`currentVersion` of a `VERSION_CONFLICT`,
+  `linkedModels` of a provider that is still used by models, `runningRuns` of a `CONCURRENCY_LIMIT`,
+  the `summary` of a rejected update archive). A failed model test carries its remediation text in
+  `details.remediation` and its `messageKey` in `details.messageKey`.
+- Reading the sections above: where one says `error`, the member is now `detail`, and a list that
+  is described as `details.issues` is now the `errors` list.
+- The voice routes of the chat (`/api/voice/*`) keep their own kebab-case codes (`invalid-voice`,
+  `not-permitted`, …): they are shared with the voice WebSocket and the voice dock of the web app, not
+  part of the code registry.
 
 See [Error Responses](../../error-responses.md).
 
@@ -728,3 +834,108 @@ session.
   signed in with it.
 - Display only: who may do what is still decided by the groups of the current session, and nothing
   is added to `users.json`.
+
+## Open a Document from Another System: Choose the App in iHub
+
+A link such as `/apps?documentId=<id>&integration=ifinder` (optionally `&searchProfile=<id>` and
+`&prefill=…`) now opens the app list with the document waiting. Before, the system linking to iHub
+— for example the "Open in iHub" action of an iFinder hit — had to know the target app up front.
+The link names the **integration** the document comes from; the earlier `source` parameter is
+gone.
+
+- **Pick an app:** a banner names the document and the app you choose opens with it attached. The
+  link is followed in a new tab, and after signing in, as well. `/start?documentId=…` hands over to
+  the same list.
+- **Only apps that bind the integration:** an app is offered when it binds the integration the
+  document comes from (iFinder under **Admin → Apps → Edit → Installed integrations**); the binding
+  is what lets it receive the document, whatever its local upload settings are. An app that never
+  opted into iFinder never receives an iFinder document. A checkbox in the banner, on by default,
+  turns the filter off; it is left out when no app qualifies.
+- **The link keeps its `integration`:** the sign-in clean-up of the page removed `integration` from every address, which dropped the document before the list could use it. It now removes `integration` only next to a sign-in error (`integration_error`).
+- **The integration is switched on:** the chat opens with the integration's tools on, even when your saved default for the app has them off, because the link came from that system. The app list narrows as soon as the integration answers, without waiting for the document's details.
+- **The server fetches the document:** an iFinder document is attached by reference. The server
+  fetches the original with your own iFinder permissions, stores it with the chat and extracts the
+  text, like an upload without the upload; it never passes through your browser. Whether the
+  original is kept or only the text is the usual upload storage mode. Images and audio, which a
+  model needs as bytes, are still fetched in the browser and attached as an image or audio.
+- **Clear errors:** an integration that is not available to you, a document you may not read, or
+  one that no longer exists is reported in the banner before you choose an app, and the app then
+  opens without it. A document that fails to attach in the chat now says so instead of silently
+  attaching nothing.
+- **Nothing is attached twice:** the parameters are removed from the address once the app has
+  used them, so a refresh does not attach the document again. `send`, `model` and `var_*` are not
+  passed on from the list.
+- **API:** installed integrations that declare the `files` capability hand over documents by
+  reference, as resources of the integration: `GET /api/integrations/:integration/files` (the
+  probe), `/files/:id` (the document's details), `/files/:id/content` and
+  `/files/:id/content/:filename` (the same bytes under a name for a browser or viewer). The id is a
+  URL-encoded path segment; `scope` and `format` are query parameters. They answer `404` when the integration is not installed or configured and `403` when the user's
+  groups do not grant it (an upstream `401` is answered as `403`, so it never reads as an expired
+  iHub session). These routes are the one way to a source's content and details for Preview,
+  Download, Add to email, Details and Open in App: the old `GET /api/sources/:provider/content` and
+  `/metadata` are removed, and `project` documents answer the same routes under their own access
+  rules. The integrations feature switch does not apply to them. iFinder 1.2.0 is the first
+  integration to declare the capability.
+  A chat file fetched from an iFinder document needs the same grant: a user whose groups may not use
+  iFinder gets `403 SOURCE_FORBIDDEN`. The same applies to the sources of an iAssistant answer, which
+  carry `provider: ifinder`: preview, download and details of a citation need the grant of the
+  `ifinder` installation, so a group that may use the iAssistant but not iFinder gets
+  `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
+
+See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).
+
+## Attachments: See What the Assistant Gets and Download It
+
+Each attachment under the composer now says what the assistant gets from the file: the characters of
+text extracted from a document, the page images sent instead for a scan without a text layer, or the
+size an image is sent in. Once the server stored the file, it also says when only the text is kept
+or the text was shortened.
+
+- **Download after attaching:** a file that came from a cloud storage or an integration, such as an
+  iFinder document opened from a link, has buttons to download the original file and, for a document,
+  the extracted text (from the stored file when the server fetched it). A local file is yours already and has none. Images and audio from these sources
+  keep their original for the download.
+  
+## LLM Timeouts Configurable for All Providers and Per Provider
+
+A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with
+"stopped sending stream chunks for 60000 ms", and raising the limit meant editing `platform.json` and
+restarting, or changing every model. The two transport limits now have a place in the admin UI at every level:
+
+- **Admin → Models → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
+  response headers, default 30 s) and the **stream idle timeout** (longest silence between two chunks of a
+  running stream, default 60 s) for the whole installation.
+- **Provider page:** a **Timeouts** section gives all models of one provider their own values, so every Google
+  thinking model can share one ceiling. A field left empty uses the installation value.
+- **Model page:** unchanged, and still the most specific level. Its fields now say what an empty value means.
+
+The order is model, provider, installation, environment variable (`LLM_CONNECT_TIMEOUT_MS`,
+`LLM_STREAM_IDLE_TIMEOUT_MS`), built-in default. Values run from 0 to 300000 ms; `0` turns a limit off. Changes
+apply to the next request — no restart. No migration is needed: providers without the new fields behave as before.
+
+See [LLM client → Tuning the ceilings](../../llm-client.md#tuning-the-ceilings).
+
+## Models and Providers in One Admin Area
+
+Web search, storage and tools are integrations now, so **Providers** is only the connection to a model
+endpoint. It no longer has a page of its own in the menu. **AI Workspace → Models** has two tabs, **Models**
+and **Providers**, and each links to the other.
+
+- **Models tab:** the provider column names the provider (a custom provider's name, not `openai`) and links to
+  it; filter by **Provider**, **Type** and **Status** (kept in the address); **Add New Model** and
+  **Import models** are the primary actions, **Upload Config**, **Install from Marketplace**, **Enable All**
+  and **Disable All** moved into a **⋮** menu.
+- **Set up your models:** a three-step strip (a provider with a key, an enabled model, a default model) replaces
+  the "Get started" panel and goes away when the steps are done.
+- **Providers tab:** each row's model count opens the Models tab for that provider, **Import models** opens the
+  import for it, and a ⏱ marks a provider with its own timeouts. The description and status columns are gone
+  (the description is a tooltip, a disabled provider is tagged). **Timeouts for all providers** is one summary
+  line you can open with **Edit**.
+- **Provider page:** **Add model** creates a model with the provider already chosen.
+- **Add provider** always creates an LLM provider; the category choice is gone. Entries of other categories
+  that an older installation still has stay reachable under a collapsed **Other credentials** group.
+
+Nothing else changes: addresses (`/admin/models`, `/admin/providers`), permissions (`admin.pages.providers`
+still decides whether the **Providers** tab is shown), data files and the API stay as they are.
+
+See [Admin UI → Managing Models](../../admin-ui.md#managing-models).

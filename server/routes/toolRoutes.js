@@ -13,7 +13,7 @@ import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/a
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
-import { sendInternalError } from '../utils/responseHelpers.js';
+import { sendInternalError, sendErrorResponse } from '../utils/responseHelpers.js';
 import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
 import { getVisibleToolIds } from '../services/mcp/permissions.js';
 import { isToolSelected } from '../utils/toolSelection.js';
@@ -132,7 +132,7 @@ export default function registerToolRoutes(app) {
       const caller = resolveCaller(req, platformConfig);
       try {
         if (!caller || !(await mayRunTool(caller, platformConfig, toolId))) {
-          return res.status(403).json({ error: 'Tool not available' });
+          return sendErrorResponse(res, 403, 'Tool not available');
         }
       } catch (error) {
         return sendInternalError(res, error, `authorize tool ${toolId}`);
@@ -151,10 +151,12 @@ export default function registerToolRoutes(app) {
               getInstallation: installedIntegrationById
             })
           ) {
-            return res.status(403).json({
-              error: 'This tool needs a person’s approval and cannot be run by this client',
-              code: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
-            });
+            return sendErrorResponse(
+              res,
+              403,
+              'This tool needs a person’s approval and cannot be run by this client',
+              { code: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER }
+            );
           }
         } catch (error) {
           return sendInternalError(res, error, `check approval of tool ${toolId}`);

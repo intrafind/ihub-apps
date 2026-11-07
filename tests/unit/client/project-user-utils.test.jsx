@@ -73,7 +73,7 @@ const t = (key, defaultOrOptions, maybeOptions) => {
 
 /** An error as `handleApiResponse` throws it. */
 const apiError = (status, data) =>
-  Object.assign(new Error(data?.error || 'failed'), {
+  Object.assign(new Error(data?.detail || 'failed'), {
     status,
     originalError: { response: { status, data } }
   });
@@ -538,14 +538,14 @@ describe('project errors', () => {
   test('finds the code in details or at the top level', () => {
     expect(
       projectErrorDetails(
-        apiError(413, { error: 'x', details: { code: 'QUOTA_FILES', limit: 25 } })
+        apiError(413, { detail: 'x', details: { code: 'QUOTA_FILES', limit: 25 } })
       )
     ).toMatchObject({
       code: 'QUOTA_FILES',
       status: 413,
       details: { limit: 25 }
     });
-    expect(projectErrorDetails(apiError(409, { error: 'x', code: 'PROJECT_MISMATCH' })).code).toBe(
+    expect(projectErrorDetails(apiError(409, { detail: 'x', code: 'PROJECT_MISMATCH' })).code).toBe(
       'PROJECT_MISMATCH'
     );
   });
@@ -571,7 +571,7 @@ describe('project errors', () => {
     expect(
       projectErrorMessage(apiError(503, { details: { code: 'STORAGE_UNAVAILABLE' } }), t)
     ).toBe('Projects are not available on this installation.');
-    expect(projectErrorMessage(apiError(400, { error: 'Odd input' }), t)).toBe('Odd input');
+    expect(projectErrorMessage(apiError(400, { detail: 'Odd input' }), t)).toBe('Odd input');
   });
 
   test('explains failed items by their code', () => {

@@ -15,6 +15,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Admin routes for governing clients identified by a metadata document.
  *
@@ -72,13 +73,13 @@ const LIST_FIELDS = Object.freeze([
 function requireCimdClient(req, res) {
   const platform = configCache.getPlatform() || {};
   if (!platform.oauth?.enabled?.clients) {
-    res.status(400).json({ success: false, error: 'OAuth clients are not enabled on this server' });
+    sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
     return null;
   }
 
   const clientId = decodeClientId(req.params.encodedClientId);
   if (!clientId) {
-    res.status(400).json({ success: false, error: 'Invalid client identifier' });
+    sendErrorResponse(res, 400, 'Invalid client identifier');
     return null;
   }
 
@@ -116,12 +117,12 @@ export default function registerAdminOAuthCimdRoutes(app) {
 
         const client = getCimdClientRow(context.clientId, context.platform);
         if (!client) {
-          return res.status(404).json({ success: false, error: 'Client not found' });
+          return sendErrorResponse(res, 404, 'Client not found');
         }
         res.json({ success: true, client });
       } catch (error) {
         logger.error('[OAuth Admin] Get CIMD client error', { component: 'OAuthAdmin', error });
-        res.status(500).json({ success: false, error: 'Failed to load the client' });
+        sendErrorResponse(res, 500, 'Failed to load the client');
       }
     }
   );
@@ -186,7 +187,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
         }
 
         if (Object.keys(patch).length === 0) {
-          return res.status(400).json({ success: false, error: 'No policy fields to update' });
+          return sendErrorResponse(res, 400, 'No policy fields to update');
         }
 
         // `null` is the way a field is handed back to the global default, so it
@@ -195,31 +196,30 @@ export default function registerAdminOAuthCimdRoutes(app) {
           const value = patch[field];
           if (value === null || value === undefined) continue;
           if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
-            return res
-              .status(400)
-              .json({ success: false, error: `${field} must be an array of strings` });
+            return sendErrorResponse(res, 400, `${field} must be an array of strings`);
           }
         }
 
         if (patch.active !== undefined && typeof patch.active !== 'boolean') {
-          return res.status(400).json({ success: false, error: 'active must be a boolean' });
+          return sendErrorResponse(res, 400, 'active must be a boolean');
         }
 
         if (
           patch.approvalState !== undefined &&
           !['pending', 'approved', 'auto'].includes(patch.approvalState)
         ) {
-          return res.status(400).json({ success: false, error: 'Invalid approval state' });
+          return sendErrorResponse(res, 400, 'Invalid approval state');
         }
 
         if (patch.tokenExpirationMinutes !== undefined && patch.tokenExpirationMinutes !== null) {
           const minutes = Number(patch.tokenExpirationMinutes);
           const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
           if (!Number.isFinite(minutes) || minutes < 1 || minutes > maxExpiration) {
-            return res.status(400).json({
-              success: false,
-              error: `Token expiration must be between 1 and ${maxExpiration} minutes`
-            });
+            return sendErrorResponse(
+              res,
+              400,
+              `Token expiration must be between 1 and ${maxExpiration} minutes`
+            );
           }
           patch.tokenExpirationMinutes = minutes;
         }
@@ -318,7 +318,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
           component: 'OAuthAdmin',
           error
         });
-        res.status(500).json({ success: false, error: 'Failed to save the client policy' });
+        sendErrorResponse(res, 500, 'Failed to save the client policy');
       }
     }
   );
@@ -359,9 +359,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
       try {
         const platform = configCache.getPlatform() || {};
         if (!platform.oauth?.enabled?.clients) {
-          return res
-            .status(400)
-            .json({ success: false, error: 'OAuth clients are not enabled on this server' });
+          return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
         }
 
         // A stored client id is a plain string and a CIMD one is a URL; both
@@ -373,7 +371,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
           clientId = '';
         }
         if (!clientId) {
-          return res.status(400).json({ success: false, error: 'Invalid client identifier' });
+          return sendErrorResponse(res, 400, 'Invalid client identifier');
         }
 
         const result = await revokeConnectionsForClient(clientId);
@@ -389,9 +387,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
         res.json({ success: true, ...result });
       } catch (error) {
         logger.error('[OAuth Admin] Bulk revoke error', { component: 'OAuthAdmin', error });
-        res
-          .status(500)
-          .json({ success: false, error: "Failed to revoke the client's connections" });
+        sendErrorResponse(res, 500, "Failed to revoke the client's connections");
       }
     }
   );

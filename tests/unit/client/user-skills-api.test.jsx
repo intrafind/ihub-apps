@@ -202,7 +202,7 @@ describe('writes', () => {
       Promise.reject({
         response: {
           status: 409,
-          data: { error: 'Conflict', code: 'REVISION_CONFLICT' }
+          data: { detail: 'Conflict', code: 'REVISION_CONFLICT' }
         },
         config: {}
       })

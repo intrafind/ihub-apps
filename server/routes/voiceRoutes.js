@@ -17,6 +17,7 @@ import {
 import { detectSpeechLanguage, normalizeLanguage } from '../tts/language.js';
 import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
 
@@ -152,22 +153,21 @@ export default function registerVoiceRoutes(app) {
       voice: requestedVoice
     } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
-      return res.status(400).json({ error: 'text is required', code: 'invalid-text' });
+      return sendErrorResponse(res, 400, 'text is required', { code: 'invalid-text' });
     }
     if (text.length > MAX_INPUT_CHARACTERS) {
-      return res.status(413).json({ error: 'text is too long', code: 'text-too-long' });
+      return sendErrorResponse(res, 413, 'text is too long', { code: 'text-too-long' });
     }
     if (modelId !== undefined && typeof modelId !== 'string') {
-      return res.status(400).json({ error: 'modelId must be a string', code: 'invalid-model' });
+      return sendErrorResponse(res, 400, 'modelId must be a string', { code: 'invalid-model' });
     }
     if (languageFixed !== undefined && typeof languageFixed !== 'boolean') {
-      return res
-        .status(400)
-        .json({ error: 'languageFixed must be a boolean', code: 'invalid-language' });
+      return sendErrorResponse(res, 400, 'languageFixed must be a boolean', {
+        code: 'invalid-language'
+      });
     }
     if (languageFixed === true && typeof languageHint !== 'string') {
-      return res.status(400).json({
-        error: 'language is required when languageFixed is true',
+      return sendErrorResponse(res, 400, 'language is required when languageFixed is true', {
         code: 'invalid-language'
       });
     }
@@ -175,21 +175,21 @@ export default function registerVoiceRoutes(app) {
       requestedVoice !== undefined &&
       (typeof requestedVoice !== 'string' || requestedVoice.length > MAX_VOICE_ID_LENGTH)
     ) {
-      return res.status(400).json({ error: 'voice must be a string', code: 'invalid-voice' });
+      return sendErrorResponse(res, 400, 'voice must be a string', { code: 'invalid-voice' });
     }
 
     const resolved = resolveTtsModel({ modelId, user: req.user, platform });
     if (!resolved.ok) {
-      return res.status(resolved.status).json({ error: resolved.error, code: resolved.code });
+      return sendErrorResponse(res, resolved.status, resolved.error, { code: resolved.code });
     }
     const { model, provider } = resolved;
 
     const speechKey = speechSlotKey(req);
     const running = speechInFlight.get(speechKey) || 0;
     if (running >= MAX_CONCURRENT_SPEECH_PER_USER) {
-      return res
-        .status(429)
-        .json({ error: 'Too many speech requests at once', code: 'too-many-requests' });
+      return sendErrorResponse(res, 429, 'Too many speech requests at once', {
+        code: 'too-many-requests'
+      });
     }
     speechInFlight.set(speechKey, running + 1);
     let slotReleased = false;
@@ -207,13 +207,13 @@ export default function registerVoiceRoutes(app) {
     // the one the language chooses.
     const voice = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
     if (voice && !(await configuredVoices(model, platform, req.user)).has(voice)) {
-      return res.status(400).json({ error: 'Unknown voice for this model', code: 'invalid-voice' });
+      return sendErrorResponse(res, 400, 'Unknown voice for this model', { code: 'invalid-voice' });
     }
 
     const maxCharacters = platform.speech?.tts?.maxCharacters || DEFAULT_MAX_CHARACTERS;
     const { chunks, characters, truncated } = prepareSpeech(text, { maxCharacters });
     if (!chunks.length) {
-      return res.status(422).json({ error: 'Nothing to read aloud', code: 'no-speakable-text' });
+      return sendErrorResponse(res, 422, 'Nothing to read aloud', { code: 'no-speakable-text' });
     }
 
     // One voice for the whole message: its language decides it once. A caller
@@ -275,7 +275,7 @@ export default function registerVoiceRoutes(app) {
         // The provider finished without a single sample: a failure, reported
         // like any other before the first byte rather than as empty audio.
         logger.error('Read aloud returned no audio', summary);
-        return res.status(502).json({ error: 'No audio was returned', code: 'no-audio' });
+        return sendErrorResponse(res, 502, 'No audio was returned', { code: 'no-audio' });
       }
       res.end();
       logger.info('Read aloud finished', summary);
@@ -300,7 +300,7 @@ export default function registerVoiceRoutes(app) {
         // Upstream messages are built to be safe to show (no hosts, no keys);
         // anything else is a bug whose details belong in the log only.
         const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
-        return res.status(502).json({ error: message, code: 'upstream-error' });
+        return sendErrorResponse(res, 502, message, { code: 'upstream-error' });
       }
       res.destroy(error);
     }
@@ -311,7 +311,7 @@ export default function registerVoiceRoutes(app) {
     try {
       const azure = (configCache.getPlatform() || {}).speech?.azure || {};
       if (!azure.enabled) {
-        return res.status(503).json({ error: 'Azure Speech is not enabled' });
+        return sendErrorResponse(res, 503, 'Azure Speech is not enabled');
       }
       if (!azure.subscriptionKey) {
         return res.json({ token: null, region: azure.region || '' });
@@ -321,7 +321,7 @@ export default function registerVoiceRoutes(app) {
         region: azure.region
       });
       if (!result.ok) {
-        return res.status(502).json({ error: result.error });
+        return sendErrorResponse(res, 502, result.error);
       }
       return res.json({ token: result.token, region: result.region });
     } catch (error) {
@@ -329,7 +329,7 @@ export default function registerVoiceRoutes(app) {
         component: 'VoiceRoutes',
         error: error.message
       });
-      return res.status(500).json({ error: 'Failed to issue Azure Speech token' });
+      return sendErrorResponse(res, 500, 'Failed to issue Azure Speech token');
     }
   });
 }

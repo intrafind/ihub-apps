@@ -58,8 +58,8 @@ When sharing links with support users or creating automated workflows, you can u
 | `outfmt` | No | Set output format (`markdown`, `text`, `json`, `html`) | `outfmt=json` |
 | `history` | No | Include chat history in requests (`true`/`false`) | `history=true` |
 | `var_*` | No | Set app variables | `var_date=2024-01-01` |
-| `documentId` | No | Attach an iFinder document (requires `source=ifinder`) | `documentId=doc-12345` |
-| `source` | No | Document source; must be `ifinder` to trigger attachment | `source=ifinder` |
+| `documentId` | No | Attach a document of an integration (requires `integration`) | `documentId=doc-12345` |
+| `integration` | No | The installed integration the document comes from | `integration=ifinder` |
 | `searchProfile` | No | iFinder search profile used to resolve the document | `searchProfile=default` |
 
 > **Note:** `prefill` works on its own (without `send=true`) to simply pre-populate
@@ -118,62 +118,112 @@ Create webhooks or buttons in external systems:
 </a>
 ```
 
-## iFinder Document Attachment
+## Document Attachment from an Integration
 
-In addition to the message parameters above, the chat URL can pre-attach an
-iFinder document to the conversation. This powers the "Open in App" flow from
-iFinder, but the parameters can be used in any link.
+In addition to the message parameters above, the chat URL can pre-attach a document
+that an installed integration hands over by reference (the `files` capability of its
+definition; today the built-in **iFinder** integration, installation id `ifinder`). This powers
+"Open in App" and the "Open in iHub" action of iFinder, but the parameters can be used in any
+link.
 
 ### Syntax
 
 ```
-/apps/{app-id}?documentId={id}&source=ifinder
+/apps/{app-id}?documentId={id}&integration=ifinder
 ```
 
-The `source=ifinder` parameter is **required** to trigger the attachment — the
-`documentId` is ignored unless `source` is exactly `ifinder`.
+`integration` is the id of the installed integration and is **required**: `documentId` is
+ignored without it. (The earlier `source` parameter is gone; a link that still uses it attaches
+nothing.)
 
 ### Parameters
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `documentId` | Yes | The iFinder document identifier to fetch and attach |
-| `source` | Yes | Must be `ifinder` to trigger the document attachment |
+| `documentId` | Yes | The document's id in the integration |
+| `integration` | Yes | The installation id of the integration (`ifinder`) |
 | `searchProfile` | No | iFinder search profile used to resolve the document download link |
+| `prefill` | No | Prompt text; also the document's display name while it loads |
 
 ### How It Works
 
-1. The page loads and shows a loading placeholder in the attachment area.
-2. The document is fetched server-side via the iFinder proxy
-   (`GET /api/sources/ifinder/content`), which resolves the download link and
-   streams the binary. If the binary fetch fails, the text content is fetched as
-   a fallback.
-3. The document is processed through the same pipeline as an uploaded file and
-   attached to the chat.
-4. The `documentId`, `source`, and `searchProfile` parameters are removed from
-   the URL to prevent re-fetching on refresh.
+The document is attached **by reference**: the server fetches it, the browser never holds it.
 
-When sent to the backend, the attached document is passed as a `documentIds`
-array, so the chat request always carries the document context.
+1. The page loads and shows a loading placeholder in the attachment area.
+2. The integration is asked whether it hands documents to you
+   (`GET /api/integrations/{integration}/files`): it must be installed, switched on and
+   configured, and granted to your groups (`permissions.integrations`). The app must **bind the
+   integration** (`app.integrations`); its local upload settings do not matter, as they do not for
+   the files of a storage provider.
+3. **On the server (iFinder, when the chat keeps files on the server):** the chat posts the
+   reference to its file endpoint (`POST /api/chats/{chatId}/files` with
+   `{ "source": { "kind": "ifinder-document", "ref": { "documentId": …, "searchProfile": … } } }`).
+   The server fetches the **original file** with your own iFinder permissions (never iFinder's
+   generated preview; only when iFinder fails to serve the original does it take the text iFinder
+   keeps), stores it with the chat and extracts the text itself, exactly as for an upload, only
+   without the upload. Whether the original is kept or only the text is the usual
+   `uploads.storageMode` of the platform or the app (see [Chat files](chat-files.md)). The composer
+   shows a stub, the stored file, with what the server read; the message names it by id.
+4. **In the browser (the exception):** a file the server cannot read as a document — an **image**
+   or **audio**, which a model needs as bytes — and a chat that keeps no files on the server are
+   fetched through `GET /api/integrations/{integration}/files/{id}/content` and attached the way
+   the Nextcloud embed attaches its files: an image needs a model that sees, audio one that hears,
+   anything else is a document that keeps its original next to the extracted text.
+5. The `documentId`, `integration` and `searchProfile` parameters are removed from the URL to
+   prevent re-fetching on refresh. If the document cannot be attached, a system message in the chat
+   says why: the integration is not available to you, access was denied, the document was not
+   found, the app does not use the integration, the selected model cannot take this kind of file,
+   or the fetch failed.
+
+The attachment chip says what the assistant gets (the text the server extracted, or the page images
+of a scan) and has buttons to download the original and the extracted text from the stored file.
+
+While the `documentId` parameter is still in the URL, messages sent to the backend also carry the
+document id as a `documentIds` array (the iAssistant uses it as its retrieval scope). Once the
+parameters are removed after step 5, later messages no longer include `documentIds`; the document
+stays in the chat as the attachment that was added.
+
+### Letting the user choose the app
+
+When the link does not know the target app, point it at the app list instead:
+
+```
+/apps?documentId={id}&integration=ifinder[&searchProfile={id}][&prefill=...]
+```
+
+`/start` with the same parameters redirects to `/apps`. The list shows a banner with the
+document, asks the integration (with the signed-in user's own rights) whether it hands documents
+to this user and whether the document can be read, and passes `documentId`, `integration`,
+`searchProfile` and `prefill` on to the app the user picks, where the attachment works as above.
+`send`, `model` and `var_*` are **not** passed on, so no app auto-sends because of the choice.
+
+- **Which apps are offered:** chat apps that **bind the integration** (`app.integrations`: the
+  installation id, its definition id or `type:<type>`). The binding is what lets an app receive the
+  integration's documents; an app that never opted into the integration does not. The checkbox
+  "Only show apps that can use this document" is on by default and left out when no app qualifies.
+- **Errors:** an integration that is not installed, not configured or not granted to the user, a
+  document the user cannot read (`401`/`403`) or that does not exist (`404`) is reported in the
+  banner; apps then open without the document.
+- A refresh on `/apps` keeps the pending document; picking an app consumes it.
 
 ### Examples
 
 #### Attach a document and pre-fill a prompt
 
 ```
-/apps/chat?documentId=doc-12345&source=ifinder&prefill=Summarize%20this%20document
+/apps/chat?documentId=doc-12345&integration=ifinder&prefill=Summarize%20this%20document
 ```
 
 #### Attach a document, pre-fill, and auto-send
 
 ```
-/apps/chat?documentId=doc-12345&source=ifinder&prefill=Summarize%20this%20document&send=true
+/apps/chat?documentId=doc-12345&integration=ifinder&prefill=Summarize%20this%20document&send=true
 ```
 
 #### Attach a document using a specific search profile
 
 ```
-/apps/chat?documentId=doc-12345&searchProfile=default&source=ifinder
+/apps/chat?documentId=doc-12345&searchProfile=default&integration=ifinder
 ```
 
 > **Note:** Only a single `documentId` is supported via the URL. The `prefill`

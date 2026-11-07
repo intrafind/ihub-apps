@@ -40,7 +40,7 @@ beforeEach(() => {
 
 function serverError() {
   const error = new Error('Internal Server Error');
-  error.response = { status: 500, data: { error: 'Internal Server Error' } };
+  error.response = { status: 500, data: { detail: 'Internal Server Error' } };
   return error;
 }
 

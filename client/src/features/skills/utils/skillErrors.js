@@ -107,7 +107,7 @@ export function skillErrorMessage(error, t) {
     default:
       return (
         error?.originalMessage ||
-        responseData(error)?.error ||
+        responseData(error)?.detail ||
         error?.message ||
         t('skills.errors.generic', 'Something went wrong. Please try again.')
       );

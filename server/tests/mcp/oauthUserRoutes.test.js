@@ -465,8 +465,9 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     sdk.discoverOAuthServerInfo.mockRejectedValueOnce(new Error('boom <script>'));
     const discovery = await startFlow();
     expect(discovery.status).toBe(502);
-    expect(discovery.body).toEqual({
-      error: 'The sign-in could not be started',
+    expect(discovery.body).toMatchObject({
+      status: 502,
+      detail: 'The sign-in could not be started',
       code: 'discovery_failed'
     });
     sdk.registerClient.mockRejectedValueOnce(new Error('registration refused'));

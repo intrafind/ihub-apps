@@ -22,8 +22,8 @@ jest.mock('../../../client/src/api', () => ({
   fetchProjectsConfig: () => Promise.resolve({})
 }));
 const mockFetchSourceContent = jest.fn();
-jest.mock('../../../client/src/api/endpoints/sources', () => ({
-  fetchSourceContent: (...args) => mockFetchSourceContent(...args)
+jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
+  fetchIntegrationFileContent: (...args) => mockFetchSourceContent(...args)
 }));
 jest.mock('../../../client/src/features/documentPreview/components/PdfPassageViewer', () => ({
   __esModule: true,

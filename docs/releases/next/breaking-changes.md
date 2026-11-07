@@ -396,7 +396,7 @@ one of them get `404`.
 | Area | Removed |
 | --- | --- |
 | Authentication | `POST /api/auth/users` (use `POST /api/admin/auth/users`), `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`, `GET /api/auth/ntlm/status` (the providers are in `GET /api/auth/status`), `POST /api/auth/teams/config` |
-| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/sources/ifinder/content` and `/metadata`), `GET /api/integrations/jira/test` |
+| iFinder, Jira | `GET /api/integrations/ifinder/document`, `.../document/content`, `.../document/metadata` (use `GET /api/integrations/ifinder/files/:id/content` and `/files/:id`), `GET /api/integrations/jira/test` |
 | Workflows | `POST /api/workflows/executions/:id/resume` (answer checkpoints through `/api/runs/:id/interactions/:id/answer`, restart with `.../restart`), `GET /api/workflows/:id/versions`, `PUT /api/workflows/:id/activate/:version`, `GET /api/workflows/triggers`, `POST /api/workflows/:id/trigger`. The webhook route `POST /api/workflows/:workflowId/webhooks/:triggerId` stays |
 | Agents | `GET /api/agents/profiles`, `GET /api/agents/profiles/:profileId`, `GET /api/agents/profiles/:profileId/artifacts` |
 | Admin | `GET /api/admin/auth/test`, `GET /api/admin/oauth/cimd-clients` (`GET /api/admin/oauth/clients` carries them), `POST /api/admin/oauth/clients/:id/introspect-token`, `GET`/`PUT /api/admin/logging/level` (use `/api/admin/logging/config`), `POST /api/admin/skills/validate`, `GET /api/admin/update/check` (use `GET /api/admin/version/check-update`) |
@@ -415,7 +415,9 @@ own that read one of the removed names have to switch.
 ## MCP Gateway: The Legacy SSE Transport Is Gone
 
 `GET /mcp/sse` and `POST /mcp/messages` (the 2024-11-05 HTTP+SSE transport) are removed; the
-gateway speaks Streamable HTTP on `/mcp` only. The **SSE (legacy)** toggle on **Admin → MCP
+gateway speaks Streamable HTTP on `/mcp` only. Both old paths answer `410 Gone` with a JSON-RPC
+error that names Streamable HTTP and a bridge, so a client still configured for them says what to
+change. The **SSE (legacy)** toggle on **Admin → MCP
 gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the "MCP endpoint
 (SSE)" row of the personal API keys page are gone. V223 deletes `mcpServer.transports.sse` from
 `platform.json`.
@@ -458,3 +460,40 @@ registry you added yourself, or one with that id that you pointed elsewhere, is 
 **Before upgrading:** to get updates for an item installed from the examples registry, install it
 again from the official marketplace (the same id replaces the local copy) or detach it. Automation
 that fetched `examples/catalog.json` from GitHub must use the marketplace catalog instead.
+
+## Error Responses Are `application/problem+json`: `error` Is Now `detail`
+
+Every error response of the API now has the standard problem format of RFC 9457, with the media type
+`application/problem+json`. The English text of an error moved from the `error` member to `detail`,
+and the members that used to sit next to it moved into `details`:
+
+```json
+{
+  "type": "urn:ihub:problem:NOT_FOUND",
+  "title": "The requested resource was not found.",
+  "status": 404,
+  "detail": "Scheduled task t1 not found",
+  "code": "NOT_FOUND",
+  "details": { "taskId": "t1" }
+}
+```
+
+- `error` no longer exists in error bodies of `/api/*`; read `detail`. `message` and the `success:
+  false` flag are gone as well.
+- `code` is the member to branch on. Codes that were kebab-case or missing in some routes are now
+  upper-case registry codes (for example `NOT_TTS_MODEL`, `INVALID_AUDIO`, `PROVIDER_IN_USE`).
+- Lists of field problems are in `errors` (`[{ pointer, code, message }]`) instead of `details.issues`
+  or a bare list in `details`.
+- Routes that carried their specific code in `details.code` (projects, uploads, iFinder collections,
+  the Copilot agent, the delete-project refusal) now answer it as `code`; `details` never holds a code.
+- Extras that were at the top level moved into `details`: `currentVersion`, `linkedModels`,
+  `runningRuns`, `integrationId`, `summary`, and the `integration` and `connectUrl` of an
+  integration that needs a sign-in.
+- Not affected: the OAuth and well-known endpoints, bearer-token errors (`error` with
+  `error_description`), and the OpenAI-compatible `/v1/*` endpoints, which keep the formats of their
+  specifications.
+
+**Before upgrading:** Scripts, integrations and API-key clients that read `error` (or `message`) from
+a failed call must read `detail`, and should branch on `code`. A client that checks the response
+content type for exactly `application/json` must also accept `application/problem+json`. The web
+app, the Office add-ins and the browser extension ship with the server and need no change.

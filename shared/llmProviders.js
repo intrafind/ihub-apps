@@ -40,6 +40,29 @@ export const CUSTOM_PROVIDER_API_TYPES = Object.freeze([
 ]);
 
 /**
+ * Gateway kinds a custom LLM provider can declare in `gateway`. The
+ * iFinder Model Gateway (ifinder/model-gateway in the iFinder repo) is an
+ * OpenAI-compatible reverse proxy in front of vLLM, Azure OpenAI and Mistral
+ * deployments. It lists its models on `/v1/gateway/models` — with the
+ * endpoints and modalities each serves — and serves inference under
+ * `/v1/gateway/proxy/`, so the plain "…/models" and "…/chat/completions"
+ * conventions of other endpoints do not apply to it.
+ */
+export const IFINDER_GATEWAY = 'ifinder-model-gateway';
+
+/** Values the `gateway` field of a provider entry accepts. */
+export const GATEWAY_KINDS = Object.freeze([IFINDER_GATEWAY]);
+
+/**
+ * API types a gateway provider can declare: the dialect its OpenAI-typed
+ * models are called with. `openai` for a gateway in front of hosted models,
+ * `local` (the vLLM adapter) when the backends are mostly self-hosted vLLM.
+ * Models the gateway reports as Mistral dialect always use the `mistral`
+ * adapter, whatever the provider declares.
+ */
+export const GATEWAY_API_TYPES = Object.freeze(['openai', 'local']);
+
+/**
  * API types whose speech-to-text models iHub can run: they speak the OpenAI
  * audio API (`/audio/transcriptions`), served by
  * server/transcription/openaiTranscribeProvider.js. Model import turns a
@@ -94,6 +117,32 @@ export function linkedModelProvider(apiType, model) {
     : apiType;
 }
 
+/**
+ * Adapters a model linked to a gateway provider may use: the OpenAI-compatible
+ * ones, the Mistral dialect, and the vLLM realtime speech backend. The
+ * gateway fronts backends of different dialects, so unlike a model of any
+ * other custom provider, such a model keeps its own `provider`.
+ */
+export const GATEWAY_MODEL_PROVIDERS = Object.freeze([
+  'openai',
+  'local',
+  'mistral',
+  'vllm-realtime'
+]);
+
+/**
+ * The `provider` of a model linked to a gateway provider with API type
+ * `apiType`: the model's own adapter when it is one a gateway offers, else the
+ * provider's API type.
+ *
+ * @param {string} apiType - API type of the gateway provider
+ * @param {Object} model - Model config (`provider`)
+ * @returns {string}
+ */
+export function gatewayModelProvider(apiType, model) {
+  return GATEWAY_MODEL_PROVIDERS.includes(model?.provider) ? model.provider : apiType;
+}
+
 /** True for an ID a new provider entry cannot take (see MODEL_API_TYPES). */
 export function isReservedProviderId(id) {
   return MODEL_API_TYPES.includes(id);
@@ -107,6 +156,11 @@ export function isCustomLlmProvider(provider) {
     typeof provider.apiType === 'string' &&
     !BUILT_IN_LLM_PROVIDERS.includes(provider.id)
   );
+}
+
+/** True for a custom LLM provider that points at an iFinder Model Gateway. */
+export function isGatewayProvider(provider) {
+  return Boolean(provider && provider.gateway === IFINDER_GATEWAY && isCustomLlmProvider(provider));
 }
 
 /**
@@ -135,15 +189,20 @@ const KEY_REQUIRED_HOSTS = Object.freeze(['api.openai.com']);
  *   server at a custom `url`) and not linked to a custom provider entry: the
  *   same kind of endpoint, reached through the OpenAI API type. Linked models
  *   keep their key requirement — that provider exists to hold one.
+ * - A model linked to an iFinder Model Gateway provider, whatever its dialect:
+ *   a gateway without projects is open, so no key is the normal case there.
+ *   One that does need a key answers 401 when the model is called.
  *
  * This only decides what happens when no key is found anywhere; a configured
  * key is always sent.
  *
  * @param {Object} model - Model config (`provider`, `providerId`, `url`)
+ * @param {Object} [providerEntry] - The provider entry the model is linked to, when it has one
  * @returns {boolean}
  */
-export function allowsMissingApiKey(model) {
+export function allowsMissingApiKey(model, providerEntry) {
   if (!model) return false;
+  if (isGatewayProvider(providerEntry)) return true;
   if (model.provider === 'local') return true;
   if (model.provider !== 'openai' || model.providerId || typeof model.url !== 'string') {
     return false;
@@ -159,6 +218,22 @@ export function allowsMissingApiKey(model) {
 /** Id of the provider entry a model takes its API key from. */
 export function getModelProviderId(model) {
   return model?.providerId || model?.provider || null;
+}
+
+/**
+ * Transport ceilings, in milliseconds, that a provider entry, a model and the
+ * installation (`llm` in platform.json) can each set. Most specific wins:
+ * model, provider entry, installation, environment, built-in default.
+ */
+export const LLM_TIMEOUT_KEYS = Object.freeze(['connectTimeoutMs', 'streamIdleTimeoutMs']);
+
+/** Largest ceiling an admin can set (5 minutes); `0` disables the ceiling. */
+export const LLM_TIMEOUT_MAX_MS = 300000;
+
+/** The provider entry a model takes its API key and transport ceilings from. */
+export function findModelProvider(model, providers) {
+  const id = getModelProviderId(model);
+  return id ? (providers || []).find(provider => provider.id === id) : undefined;
 }
 
 /** Models whose API key comes from the provider entry `providerId`. */

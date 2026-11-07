@@ -142,6 +142,11 @@ function useAppSettings(
   // doc. A ref rather than state: nothing renders from it, and it has to be
   // readable by the very effect run that sets it.
   const initializedForRef = useRef(null);
+  // The app whose settings have been applied, readable during render (the ref above is not):
+  // `selectedModel` still names the previous app's model for the render in which a new app has
+  // loaded and this effect has not run yet. A consumer that depends on the selected model waits
+  // until this names its app.
+  const [settingsInitializedFor, setSettingsInitializedFor] = useState(null);
 
   // Initialize settings from app data when app loads
   useEffect(() => {
@@ -290,6 +295,9 @@ function useAppSettings(
           setSelectedModel(chatSettings.modelId);
       }
     }
+
+    // Batched with the setters above: the render that shows this app's model shows this too.
+    setSettingsInitializedFor(settingsAppId);
   }, [
     app,
     settingsAppId,
@@ -391,6 +399,9 @@ function useAppSettings(
     // Loading states
     modelsLoading,
     stylesLoading,
+
+    // The app the settings above were last initialized for (null before the first)
+    settingsInitializedFor,
 
     // Convenience objects
     settings,

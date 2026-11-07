@@ -98,7 +98,7 @@ export async function mockSharedChatWithArtifacts(page) {
       const [contentType, body] = CONTENT[match[1]];
       return route.fulfill({ status: 200, headers: { 'Content-Type': contentType }, body });
     }
-    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+    return route.fulfill({ status: 404, json: { detail: 'Not found', code: 'NOT_FOUND' } });
   });
   return { zipRequests };
 }

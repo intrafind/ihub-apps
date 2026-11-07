@@ -53,7 +53,6 @@ import office365Routes from '../routes/integrations/office365.js';
 import googledriveRoutes from '../routes/integrations/googledrive.js';
 import nextcloudRoutes from '../routes/integrations/nextcloud.js';
 import ifinderRoutes from '../routes/integrations/ifinder.js';
-import sourceRoutes from '../routes/sources.js';
 import officeAddinRoutes from '../routes/integrations/officeAddin.js';
 import browserExtensionRoutes from '../routes/integrations/browserExtension.js';
 import personalApiKeyRoutes from '../routes/integrations/personalApiKeys.js';
@@ -61,6 +60,7 @@ import connectionRoutes from '../routes/integrations/connections.js';
 import userIntegrationRoutes from '../routes/integrations/userIntegrations.js';
 import integrationRequestRoutes from '../routes/integrations/integrationRequests.js';
 import integrationScopeRoutes from '../routes/integrations/scopes.js';
+import integrationFilesRoutes from '../routes/integrations/files.js';
 import nextcloudEmbedRoutes from '../routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from '../routes/office.js';
 import registerNextcloudEmbedPageRoutes from '../routes/nextcloudEmbedPages.js';
@@ -156,13 +156,14 @@ const ROUTE_STEPS = [
   // the user integrations, whose GET /:id hands ids it does not know on.
   app => app.use(buildApiPath('/integrations/requests'), integrationRequestRoutes),
   app => app.use(buildApiPath('/integrations'), userIntegrationRoutes),
+  // Documents by reference from an installed integration (the `files` capability).
+  app => app.use(buildApiPath('/integrations'), integrationFilesRoutes),
   app => app.use(buildApiPath('/integrations/jira'), jiraRoutes),
   app => app.use(buildApiPath('/integrations/office365'), office365Routes),
   app => app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes),
   app => app.use(buildApiPath('/integrations/nextcloud'), nextcloudRoutes),
   app => app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes),
   // One route for every source provider's actions (preview, download, details).
-  app => app.use(buildApiPath('/sources'), sourceRoutes),
   app => app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes),
   app => app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes),
   app => app.use(buildApiPath('/integrations/api-keys'), personalApiKeyRoutes),

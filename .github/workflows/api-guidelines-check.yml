@@ -1,0 +1,64 @@
+# API Guidelines Check
+#
+# docs/api-guidelines.md sets the REST rules of the server API. The API predates them, so
+# existing code breaks them in many places. This check is a ratchet: it fails only on
+# lines a pull request adds or changes, so new code meets the rules and old code is fixed
+# as it is touched.
+#
+# check: runs scripts/check-api-guidelines.js on every PR. It reports
+#   hand-written error bodies, { success } / { message } envelopes, status 422, verbs in
+#   route paths (use an _action segment), non-kebab-case path segments, and page / offset /
+#   snake_case query parameters, as inline annotations on the diff. A line with a reason to
+#   break a rule carries "// api-guidelines-ignore: <reason>".
+#
+# There is deliberately no `paths:` filter: the job is a required status check, and a
+# required check that a PR never triggers would block that PR forever. A PR without
+# server changes passes in a few seconds ("No changed server files to check").
+
+name: API Guidelines Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-guidelines-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: API guidelines
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Fetch current base branch
+        run: git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Check changed server lines against the API guidelines
+        run: |
+          set -euo pipefail
+          git diff --unified=0 --diff-filter=ACMR --no-color --end-of-options \
+            "origin/${BASE_REF}...HEAD" -- server | node scripts/check-api-guidelines.js
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}

@@ -74,7 +74,7 @@ export const handleApiResponse = async (
       } catch (error) {
         // Create user-friendly error messages
         let userMessage =
-          error.response?.data?.error || error.message || 'An unexpected error occurred';
+          error.response?.data?.detail || error.message || 'An unexpected error occurred';
         let userFriendlyMessage = userMessage;
 
         // Handle specific error types with better messages
@@ -87,15 +87,10 @@ export const handleApiResponse = async (
         } else if (error.response?.status === 401) {
           // For authentication errors, prioritize the server's message if it's more descriptive
           if (
-            error.response?.data?.message &&
-            error.response.data.message !== 'Authentication required'
+            error.response?.data?.detail &&
+            error.response.data.detail !== 'Authentication required'
           ) {
-            userFriendlyMessage = error.response.data.message;
-          } else if (
-            error.response?.data?.error &&
-            error.response.data.error !== 'Authentication required'
-          ) {
-            userFriendlyMessage = error.response.data.error;
+            userFriendlyMessage = error.response.data.detail;
           } else {
             userFriendlyMessage = 'Authentication required. Please log in to access this resource.';
           }

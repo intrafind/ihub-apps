@@ -415,7 +415,7 @@ function AdminCredentialsPage() {
       setMessage({
         type: 'error',
         text: t('admin.credentials.saveError', 'Save failed: {{error}}', {
-          error: err.response?.data?.error || err.message
+          error: err.response?.data?.detail || err.message
         })
       });
     } finally {
@@ -440,7 +440,7 @@ function AdminCredentialsPage() {
       setMessage({
         type: 'error',
         text: t('admin.credentials.deleteError', 'Delete failed: {{error}}', {
-          error: err.response?.data?.error || err.message
+          error: err.response?.data?.detail || err.message
         })
       });
     }

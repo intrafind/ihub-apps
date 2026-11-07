@@ -39,7 +39,14 @@ import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
 
 // Import our custom hooks and components
-import { fetchSourceFile } from '../../chat/sources/sourceActions';
+import useIntegrationDocumentAttachment from '../hooks/useIntegrationDocumentAttachment';
+import {
+  DOCUMENT_ID_PARAM,
+  DOCUMENT_INTEGRATION_PARAM,
+  DOCUMENT_SCOPE_PARAM,
+  isChatReadyForDocument,
+  readPendingDocument
+} from '../utils/pendingDocument';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useVoiceMode from '../../voice/hooks/useVoiceMode';
@@ -48,7 +55,6 @@ import VoiceModeDock from '../../voice/components/VoiceModeDock';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useChatFilePreUpload from '../../chat/hooks/useChatFilePreUpload';
-import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
@@ -86,11 +92,9 @@ import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import {
-  processDocumentFile,
   decodeAudioFileToBuffer,
   recordingToAudioAttachment
 } from '../../upload/utils/fileProcessing';
-import { extractionOptionsOf } from '../../upload/utils/extractionOptions';
 import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
 import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors';
 import { startLiveTranscription } from '../../../utils/liveTranscription';
@@ -314,9 +318,8 @@ function AppChat({
   }, []);
   const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
-  const documentId = searchParams.get('documentId');
-  const searchProfileParam = searchParams.get('searchProfile');
-  const documentSource = searchParams.get('source');
+  const pendingDocument = useMemo(() => readPendingDocument(searchParams), [searchParams]);
+  const documentId = pendingDocument?.documentId ?? null;
   // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
   // the project rides on the chat request as `projectId`.
   const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
@@ -472,7 +475,8 @@ function AppChat({
     setImageAspectRatio,
     setImageQuality,
     setIntegrationScopes,
-    modelsLoading
+    modelsLoading,
+    settingsInitializedFor
   } = useAppSettings(appId, app, { chatSettings, isolated: embedded, withTranscription: true });
 
   // Where the chat's integrations search and whom they ask (#3050): the "+"
@@ -1352,6 +1356,10 @@ function AppChat({
     // devices lost, so on a phone the handoff from the start page failed
     // while on a desktop the 100 ms below always covered it.
     if (modelsLoading || !selectedModel) return;
+    // A document the link names is attached first: a message sent while it loads would go out
+    // without it. The attach removes its parameters from the address when it is done, which runs
+    // this effect again.
+    if (pendingDocument) return;
 
     autoSendTriggered.current = true;
     autoSendPending.current = false;
@@ -1381,84 +1389,43 @@ function AppChat({
     navigate,
     modelsLoading,
     selectedModel,
-    showStartForm
+    showStartForm,
+    pendingDocument
   ]);
 
-  // Fetch and attach the document when navigated from "Open in App": the
-  // source's provider (`source`), its id and scope, fetched through the one
-  // provider route (`GET /api/sources/:provider/content`) with the user's own
-  // permissions.
-  const documentAttached = useRef(false);
-  useEffect(() => {
-    if (documentAttached.current || !app || !documentSource || !documentId) return;
-    if (!/^[\w.-]{1,100}$/.test(documentSource)) return;
-
-    documentAttached.current = true;
-    const source = {
-      provider: documentSource,
-      ref: searchProfileParam ? { id: documentId, scope: searchProfileParam } : { id: documentId }
-    };
-    const displayType =
-      documentSource === 'ifinder'
-        ? 'iFinder Document'
-        : t('sources.documentFromSource', 'Document');
-
-    const fetchAndAttach = async () => {
-      // Show loading placeholder immediately
-      fileUploadHandler.setSelectedFile({
-        type: 'document',
-        source: documentSource,
-        fileName: prefillMessage || t('attachedFiles.loading', 'Loading document...'),
-        fileSize: 0,
-        fileType: 'application/octet-stream',
-        loading: true,
-        displayType
-      });
-
-      try {
-        const file = await fetchSourceFile(source, prefillMessage || 'document');
-
-        // Process through the same pipeline as uploaded files
-        const { content, pageImages } = await processDocumentFile(
-          file,
-          extractionOptionsOf(app?.upload?.fileUpload)
-        );
-
-        const fileData = {
-          type: 'document',
-          source: documentSource,
-          [ORIGINAL_FILE]: file,
-          content,
-          pageImages: pageImages || [],
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          displayType
-        };
-
-        fileUploadHandler.setSelectedFile(fileData);
-      } catch (err) {
-        console.error('Failed to fetch and attach the document:', err);
-        fileUploadHandler.clearSelectedFile();
-      }
-
-      // Clean source params from URL to prevent re-fetch
-      const newSearch = new URLSearchParams(searchParams);
-      ['documentId', 'searchProfile', 'source'].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-    };
-
-    void fetchAndAttach();
-  }, [
+  // Attach the document a link names (`?documentId=…&integration=…`, "Open in App" or a link from
+  // another system) the way the Nextcloud embed attaches its files: the original, through the
+  // integration, as an image, audio or document attachment — and say so when it cannot be attached.
+  useIntegrationDocumentAttachment({
+    pending: pendingDocument,
+    // This chat's own app and the model its settings picked: not the previous app's, which the
+    // settings still hold for the render in which a new app has loaded and its settings are not
+    // initialized yet. The model decides what an image or audio needs, so with no model there is
+    // nothing to attach to; the attach starts as soon as one is selected.
+    appId,
+    chatId,
+    ready: isChatReadyForDocument({
+      app,
+      appId,
+      modelsLoading,
+      settingsInitializedFor,
+      model: currentModelObject
+    }),
     app,
-    documentSource,
-    documentId,
-    searchProfileParam,
-    prefillMessage,
+    currentModel: currentModelObject,
     fileUploadHandler,
-    searchParams,
-    navigate
-  ]);
+    addSystemMessage,
+    serverFiles: { enabled: chatFileUploads.enabled, ephemeral },
+    onIntegrationBound: refs => setEnabledTools(prev => [...new Set([...(prev || []), ...refs])]),
+    onConsumed: () => {
+      // Clean the link's parameters from the URL to prevent a second attach on refresh
+      const newSearch = new URLSearchParams(searchParams);
+      [DOCUMENT_ID_PARAM, DOCUMENT_SCOPE_PARAM, DOCUMENT_INTEGRATION_PARAM].forEach(k =>
+        newSearch.delete(k)
+      );
+      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    }
+  });
 
   // Auto-start conversation if app.autoStart is enabled
   const autoStartTriggered = useRef(false);
@@ -1982,9 +1949,11 @@ function AppChat({
       if (!targetAppId || !source?.ref?.id) return;
       const params = new URLSearchParams({
         prefill: source.title || '',
-        documentId: source.ref.id,
-        ...(source.ref.scope ? { searchProfile: source.ref.scope } : {}),
-        source: source.provider
+        [DOCUMENT_ID_PARAM]: source.ref.id,
+        ...(source.ref.scope ? { [DOCUMENT_SCOPE_PARAM]: source.ref.scope } : {}),
+        // The system the document comes from: the installation id, which is the provider id
+        // of an integration's sources.
+        [DOCUMENT_INTEGRATION_PARAM]: source.provider
       });
       const targetPath = `/apps/${targetAppId}?${params.toString()}`;
       if (embedded) openInNewTab(targetPath);

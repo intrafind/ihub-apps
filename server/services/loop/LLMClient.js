@@ -54,6 +54,7 @@ import { resolveProviderName, resolveOperation } from '../../telemetry/providerM
 import runLogSingleton, { hashPayload } from './RunLog.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError } from './contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { findModelProvider } from '../../../shared/llmProviders.js';
 import {
   runWithRetries,
   isTransientHttpStatus,
@@ -151,10 +152,12 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 /**
  * Resolve one transport ceiling, most specific source first: the model's own
- * override, then the value the client was constructed with (the embedding/test
- * seam), then the platform config, then the env default. Read per call rather
- * than cached in the constructor because the singleton below is built at
- * module load, before `configCache` has read platform.json.
+ * override, then its provider entry's (`providers.json`), then the value the
+ * client was constructed with (the embedding/test seam), then the platform
+ * config, then the env default. Read per call rather than cached in the
+ * constructor because the singleton below is built at module load, before
+ * `configCache` has read platform.json, and so an admin's change applies to the
+ * next request without a restart.
  *
  * @param {object|undefined} model - resolved model config
  * @param {number|undefined} constructed - value passed to the constructor
@@ -164,6 +167,8 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
  */
 function resolveTimeoutMs(model, constructed, key, envDefault) {
   if (Number.isFinite(model?.[key])) return model[key];
+  const providerValue = findModelProvider(model, configCache.getProviders(true).data)?.[key];
+  if (Number.isFinite(providerValue)) return providerValue;
   if (Number.isFinite(constructed)) return constructed;
   const platform = configCache.getPlatform() || {};
   if (Number.isFinite(platform.llm?.[key])) return platform.llm[key];
@@ -1389,9 +1394,9 @@ export class LLMClient {
                 `This request did not stream, so the provider withholds its headers until the ` +
                 `whole answer is ready — a slow generation looks the same as an unreachable ` +
                 `host here. Stream the request, or raise llm.connectTimeoutMs in ` +
-                `platform.json / connectTimeoutMs on model ${model.id}.`
+                `platform.json / connectTimeoutMs on model ${model.id} or its provider.`
               : `Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs on model ` +
-                `${model.id}, if this endpoint is reachable but slow to answer.`),
+                `${model.id} or its provider, if this endpoint is reachable but slow to answer.`),
           {
             code: LLM_ERROR_CODES.TIMEOUT,
             providerCode: 'CONNECT_TIMEOUT',

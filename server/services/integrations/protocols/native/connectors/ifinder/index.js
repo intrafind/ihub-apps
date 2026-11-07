@@ -12,6 +12,7 @@ import path from 'node:path';
 import * as iFinderTool from '../../../../../../tools/iFinder.js';
 import iFinderScopes from '../../../../scopes/iFinderScopes.js';
 import iFinderService from '../../../../iFinderService.js';
+import files from './files.js';
 import iAssistantService from '../../../../iAssistantService.js';
 import iAssistantProfileResolver from '../../../../iAssistantProfileResolver.js';
 import { clearExchangedTokenCache } from '../../../../iFinderTokenProvider.js';
@@ -218,6 +219,8 @@ const connector = {
     listProfiles: action('listProfiles')
   },
   test,
+  /** Documents by reference: `GET /api/integrations/ifinder/files/*` (routes/integrations/files.js). */
+  files,
   /** The search profile picker of the chat (#3050), unchanged. */
   scopeProvider() {
     return iFinderScopes;

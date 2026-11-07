@@ -143,7 +143,7 @@ mockFetch.mockImplementation(
           stream.end();
         },
         fail(status, error, code) {
-          resolve({ ok: false, status, json: async () => ({ error, code }) });
+          resolve({ ok: false, status, json: async () => ({ detail: error, code }) });
         }
       };
       init.signal?.addEventListener('abort', () =>

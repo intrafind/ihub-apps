@@ -157,8 +157,12 @@ test.describe('Chat E2E Tests', () => {
     await page.route('/api/chat/**', route => {
       route.fulfill({
         status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Internal server error' })
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          detail: 'Internal server error',
+          code: 'INTERNAL_ERROR',
+          status: 500
+        })
       });
     });
 

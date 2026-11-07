@@ -925,7 +925,7 @@
             loadApp();
           }
         } else {
-          currentError = data.error || t('invalidCredentials');
+          currentError = data.detail || t('invalidCredentials');
           renderAuthUI(root);
         }
       })

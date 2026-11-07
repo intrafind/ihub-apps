@@ -157,5 +157,8 @@ test('sendLLMError — defaultStatus override and non-LLMError fallback', () => 
   const generic = fakeRes();
   sendLLMError(generic, new TypeError('not an llm error'), { context: 'unit test' });
   assert.equal(generic.statusCode, 500);
-  assert.deepEqual(generic.body, { error: 'Internal server error' });
+  assert.equal(generic.headers['content-type'], 'application/problem+json');
+  assert.equal(generic.body.status, 500);
+  assert.equal(generic.body.code, 'INTERNAL_ERROR');
+  assert.equal(generic.body.detail, 'Internal server error');
 });

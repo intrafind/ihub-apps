@@ -186,3 +186,37 @@ test('following a link to another app waits for that app, rather than initializi
 
   expect(result.current.websearchEnabled).toBe(false);
 });
+
+test("names the app its settings were applied for — a model that is still the previous app's is not the new app's", async () => {
+  const seen = [];
+  const rendered = renderHook(
+    ({ app }) => {
+      const settings = useAppSettings(app?.id ?? 'a', app, {});
+      seen.push({
+        app: app?.id ?? null,
+        initializedFor: settings.settingsInitializedFor,
+        model: settings.selectedModel
+      });
+      return settings;
+    },
+    { initialProps: { app: null } }
+  );
+  await waitFor(() => expect(rendered.result.current.modelsLoading).toBe(false));
+  expect(rendered.result.current.settingsInitializedFor).toBeNull();
+
+  await act(async () => {
+    rendered.rerender({ app: makeApp({ id: 'a' }) });
+  });
+  expect(rendered.result.current.settingsInitializedFor).toBe('a');
+  expect(rendered.result.current.selectedModel).toBeTruthy();
+
+  seen.length = 0;
+  await act(async () => {
+    rendered.rerender({ app: makeApp({ id: 'b' }) });
+  });
+  expect(rendered.result.current.settingsInitializedFor).toBe('b');
+  // The render in which app b has loaded but its settings are not applied yet still carries a's:
+  // that is the render a consumer of the selected model must not act on.
+  const transient = seen.find(entry => entry.app === 'b' && entry.initializedFor === 'a');
+  expect(transient).toBeTruthy();
+});

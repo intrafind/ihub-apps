@@ -316,12 +316,12 @@ describe('package.zip', () => {
   test('is refused until the agent can work', async () => {
     let res = await get('/api/admin/copilot-agent/package.zip');
     expect(res.status).toBe(409);
-    expect(res.body.details.code).toBe('COPILOT_AGENT_DISABLED');
+    expect(res.body.code).toBe('COPILOT_AGENT_DISABLED');
 
     await post('/api/admin/copilot-agent/enable');
     res = await get('/api/admin/copilot-agent/package.zip');
     expect(res.status).toBe(409);
-    expect(res.body.details.code).toBe('COPILOT_REFERENCE_ID_MISSING');
+    expect(res.body.code).toBe('COPILOT_REFERENCE_ID_MISSING');
   });
 
   test('is refused while iHub is reached over plain http', async () => {
@@ -332,7 +332,7 @@ describe('package.zip', () => {
     expect(status.body.packageReady).toBe(false);
     const res = await get('/api/admin/copilot-agent/package.zip');
     expect(res.status).toBe(409);
-    expect(res.body.details.code).toBe('COPILOT_PUBLIC_HTTPS_REQUIRED');
+    expect(res.body.code).toBe('COPILOT_PUBLIC_HTTPS_REQUIRED');
 
     state.platform.mcpServer.publicUrl = 'https://ihub.contoso.com/';
     expect((await get('/api/admin/copilot-agent/status')).body.packageReady).toBe(true);

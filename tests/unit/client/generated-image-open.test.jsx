@@ -47,4 +47,30 @@ describe('GeneratedImage click', () => {
     expect(screen.queryByRole('button', { name: 'Open image 1' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download image' })).toBeInTheDocument();
   });
+
+  it('offers Share for a stored image only when sharing is available', async () => {
+    const { fetchChatArtifact } = require('../../../client/src/api');
+    fetchChatArtifact.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
+    const createObjectURL = jest.fn(() => 'blob:img');
+    global.URL.createObjectURL = createObjectURL;
+    global.URL.revokeObjectURL = jest.fn();
+    const shareArtifact = jest.fn();
+    const image = { id: 'img-1', mimeType: 'image/png' };
+    const { unmount } = render(
+      <ArtifactViewerContext.Provider value={{ openArtifact: jest.fn(), shareArtifact }}>
+        <GeneratedImage image={image} chatId="c1" index={0} />
+      </ArtifactViewerContext.Provider>
+    );
+    fireEvent.click(await screen.findByTestId('generated-image-share'));
+    expect(shareArtifact).toHaveBeenCalledWith(expect.objectContaining({ id: 'img-1' }));
+    unmount();
+
+    // A live picture has no stored id, so there is nothing to share yet.
+    render(
+      <ArtifactViewerContext.Provider value={{ openArtifact: jest.fn(), shareArtifact }}>
+        <GeneratedImage image={{ mimeType: 'image/png', data: 'AAAA' }} chatId="c1" index={0} />
+      </ArtifactViewerContext.Provider>
+    );
+    expect(screen.queryByTestId('generated-image-share')).not.toBeInTheDocument();
+  });
 });

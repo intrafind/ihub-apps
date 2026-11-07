@@ -39,6 +39,7 @@
  *
  * @module services/loop/InteractionService
  */
+import { ServiceError } from '../../utils/ServiceError.js';
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
@@ -142,12 +143,15 @@ function isInteractionRecord(value) {
   return typeof value.id === 'string' && value.id.length > 0 && typeof value.status === 'string';
 }
 
-export class InteractionError extends Error {
+/**
+ * A refused or failed answer to an interaction. A `ServiceError`, so a route lets it propagate:
+ * `code` is one of the interaction codes of `shared/apiErrors.js` (or a generic one) and
+ * `status` the HTTP status the global error middleware answers with.
+ */
+export class InteractionError extends ServiceError {
   constructor(message, code, status = 400) {
-    super(message);
+    super(code, message, { status });
     this.name = 'InteractionError';
-    this.code = code;
-    this.status = status;
   }
 }
 

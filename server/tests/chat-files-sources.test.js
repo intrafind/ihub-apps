@@ -26,6 +26,7 @@ process.env.CONTENTS_DIR = 'contents';
 
 const harness = await import('./helpers/scheduledTaskHarness.js');
 const { default: registerRoutes } = await import('../routes/scheduledTasks.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const tasks = await import('../services/scheduler/tasks/taskService.js');
 const { executeTaskRun } = await import('../services/scheduler/tasks/taskExecution.js');
 const { registerItemKind, getItemKind } = await import('../services/projects/kinds/registry.js');
@@ -248,6 +249,15 @@ describe('iFinder documents', () => {
   const calls = [];
   let responses;
   let restoreKind;
+  let restoreIntegrations;
+
+  // The grant GET /api/integrations/ifinder/files/* checks: the installation exists and the
+  // user's groups grant it (`permissions.integrations`).
+  const granted = () => {
+    const user = ada();
+    user.permissions = { ...user.permissions, integrations: new Set(['ifinder']) };
+    return user;
+  };
 
   // What the real provider returns for a download: the body as a Node stream.
   const stream = chunks => {
@@ -263,10 +273,23 @@ describe('iFinder documents', () => {
     return { contentType: 'application/pdf', stream: body };
   };
 
-  before(() => {
-    const original = getItemKind('ifinder-document');
-    restoreKind = () => registerItemKind(original);
-    registerItemKind({ ...original, enabled: () => true });
+  before(async () => {
+    const { default: configCache } = await import('../configCache.js');
+    const original = configCache.getIntegrations;
+    configCache.getIntegrations = () => ({
+      data: {
+        installed: [
+          { id: 'ifinder', definition: 'com.intrafind/ifinder', enabled: true, values: {} }
+        ]
+      },
+      etag: 'test'
+    });
+    restoreIntegrations = () => {
+      configCache.getIntegrations = original;
+    };
+    const originalKind = getItemKind('ifinder-document');
+    restoreKind = () => registerItemKind(originalKind);
+    registerItemKind({ ...originalKind, enabled: () => true });
     setIfinderProviderForTests({
       async content({ ref, user, format }) {
         calls.push({ ref, userId: user?.id, format });
@@ -279,10 +302,19 @@ describe('iFinder documents', () => {
   after(() => {
     setIfinderProviderForTests(null);
     restoreKind();
+    restoreIntegrations();
   });
   beforeEach(() => {
     calls.length = 0;
     responses = {};
+  });
+
+  it('refuses a user whose groups do not grant iFinder, without asking iFinder', async () => {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+      status: 403,
+      code: 'SOURCE_FORBIDDEN'
+    });
+    assert.deepEqual(calls, []);
   });
 
   it('downloads the original with the reading user and the search profile', async () => {
@@ -290,7 +322,7 @@ describe('iFinder documents', () => {
     const content = stream([body.subarray(0, 5), body.subarray(5)]);
     content.contentDisposition = 'attachment; filename="Quarterly Report.pdf"';
     responses.original = content;
-    const fetched = await fetchSourceFile({ source: IFINDER, user: ada() });
+    const fetched = await fetchSourceFile({ source: IFINDER, user: granted() });
     assert.deepEqual(calls, [
       { ref: { id: 'doc-1', scope: 'sp' }, userId: 'user-ada', format: 'original' }
     ]);
@@ -305,14 +337,14 @@ describe('iFinder documents', () => {
       contentType: 'application/pdf',
       fileName: 'a.pdf'
     };
-    assert.equal((await fetchSourceFile({ source: IFINDER, user: ada() })).name, 'a.pdf');
+    assert.equal((await fetchSourceFile({ source: IFINDER, user: granted() })).name, 'a.pdf');
     responses.original = {
       body: Buffer.from('x'),
       contentType: 'application/pdf',
       contentDisposition: "attachment; filename*=UTF-8''Bericht%20M%C3%A4rz.pdf"
     };
     assert.equal(
-      (await fetchSourceFile({ source: IFINDER, user: ada() })).name,
+      (await fetchSourceFile({ source: IFINDER, user: granted() })).name,
       'Bericht März.pdf'
     );
   });
@@ -320,7 +352,7 @@ describe('iFinder documents', () => {
   it('falls back to the text when the document has no download link', async () => {
     responses.original = Object.assign(new Error('no link'), { code: 'SOURCE_GONE' });
     responses.text = { body: 'Extracted text of the document', contentType: 'text/plain' };
-    const fetched = await fetchSourceFile({ source: IFINDER, user: ada() });
+    const fetched = await fetchSourceFile({ source: IFINDER, user: granted() });
     assert.deepEqual(
       calls.map(c => c.format),
       ['original', 'text']
@@ -332,7 +364,7 @@ describe('iFinder documents', () => {
     const target = { type: 'chat', id: 'chat-ifinder-text' };
     const stored = await ingestFromSource({
       source: IFINDER,
-      user: ada(),
+      user: granted(),
       scope: target,
       ownerId: 'user-ada',
       policy: chatFilePolicy(),
@@ -347,19 +379,19 @@ describe('iFinder documents', () => {
   it('stops a download that grows past the size cap and refuses a buffered one', async () => {
     const content = stream([Buffer.alloc(8), Buffer.alloc(8), Buffer.alloc(8)]);
     responses.original = content;
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 }), {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted(), maxBytes: 10 }), {
       status: 413,
       code: 'QUOTA_FILE_BYTES'
     });
     assert.equal(content.stream.destroyed, true, 'the stream is closed, not read to the end');
     responses.original = { body: Buffer.alloc(11), contentType: 'application/pdf' };
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 }), {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted(), maxBytes: 10 }), {
       status: 413,
       code: 'QUOTA_FILE_BYTES'
     });
     responses.original = { body: Buffer.alloc(10), contentType: 'application/pdf' };
     assert.equal(
-      (await fetchSourceFile({ source: IFINDER, user: ada(), maxBytes: 10 })).bytes.length,
+      (await fetchSourceFile({ source: IFINDER, user: granted(), maxBytes: 10 })).bytes.length,
       10
     );
   });
@@ -367,22 +399,22 @@ describe('iFinder documents', () => {
   it('maps what iFinder says when the text fallback fails too', async () => {
     responses.original = new Error('no link');
     responses.text = new ProjectError('SOURCE_FORBIDDEN', 'No access to this document');
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted() }), {
       status: 403,
       code: 'SOURCE_FORBIDDEN'
     });
     responses.text = new ProjectError('SOURCE_GONE', 'The document is gone');
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted() }), {
       status: 404,
       code: 'SOURCE_GONE'
     });
     responses.text = new ProjectError('SOURCE_TIMEOUT', 'iFinder timed out');
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted() }), {
       status: 504,
       code: 'SOURCE_UNAVAILABLE'
     });
     responses.text = new Error('socket hang up');
-    await assert.rejects(fetchSourceFile({ source: IFINDER, user: ada() }), error => {
+    await assert.rejects(fetchSourceFile({ source: IFINDER, user: granted() }), error => {
       assert.equal(error.status, 502);
       assert.equal(error.code, 'SOURCE_FAILED');
       assert.match(error.message, /ifinder-document/);
@@ -396,7 +428,7 @@ describe('iFinder documents', () => {
       code: 'SOURCE_FORBIDDEN'
     });
     await assert.rejects(
-      fetchSourceFile({ source: { kind: 'ifinder-document', ref: {} }, user: ada() }),
+      fetchSourceFile({ source: { kind: 'ifinder-document', ref: {} }, user: granted() }),
       { status: 400, code: 'SOURCE_INVALID' }
     );
     assert.deepEqual(calls, []);
@@ -424,18 +456,21 @@ describe('task files from a connected system', () => {
   async function attach(user, taskId, body) {
     const route = routes.find(r => r.method === 'post' && r.routePath.endsWith('/:taskId/files'));
     const res = makeRes();
-    await route.handlers.at(-1)(
-      {
-        params: { taskId },
-        body,
-        query: {},
-        headers: {},
-        user,
-        ip: '127.0.0.1',
-        originalUrl: '/x'
-      },
-      res
-    );
+    const req = {
+      params: { taskId },
+      body,
+      query: {},
+      headers: {},
+      user,
+      ip: '127.0.0.1',
+      originalUrl: '/x'
+    };
+    try {
+      await route.handlers.at(-1)(req, res);
+    } catch (error) {
+      // What Express does with a thrown error: the global handler answers.
+      errorHandler(error, req, res, () => {});
+    }
     return res;
   }
 
@@ -455,7 +490,7 @@ describe('task files from a connected system', () => {
     remote.fail = new ProjectError('SOURCE_GONE', 'gone');
     const gone = await attach(user, task.id, { source: SOURCE });
     assert.equal(gone.statusCode, 404);
-    assert.equal(gone.body.details?.code ?? gone.body.code, 'SOURCE_GONE');
+    assert.equal(gone.body.code, 'SOURCE_GONE');
     await cleanup(user);
   });
 

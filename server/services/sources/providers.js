@@ -5,7 +5,7 @@
  * Source providers: the systems that can act on the sources they own —
  * return a document's content for Preview, Download, Add to email and Open in
  * App, and its details — through one route
- * (`GET /api/sources/:provider/content|metadata`, `routes/sources.js`).
+ * (`GET /api/integrations/:integration/files/:id[/content]`, `routes/integrations/files.js`).
  *
  * A provider is code on the server, registered by its integration; a source
  * gets content actions when its `provider` has one registered and it carries

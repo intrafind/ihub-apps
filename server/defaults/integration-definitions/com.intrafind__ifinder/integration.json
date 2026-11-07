@@ -1,11 +1,22 @@
 {
   "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
   "id": "com.intrafind/ifinder",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.2.0",
+      "date": "2026-11-06",
+      "summary": {
+        "en": "Documents can be opened from outside: an app that binds iFinder receives a document that a link names (\"Open in iHub\"), with the original file, images included.",
+        "de": "Dokumente lassen sich von außen öffnen: Eine App, die iFinder bindet, erhält ein Dokument, das ein Link nennt („In iHub öffnen“), mit der Originaldatei, auch Bilder."
+      },
+      "notes": {
+        "features": "releases/1.2.0/features.md"
+      }
+    },
     {
       "version": "1.1.0",
       "date": "2026-11-02",
@@ -59,7 +70,7 @@
   "auth": {
     "modes": ["none"]
   },
-  "capabilities": ["tools", "scopes", "sources", "search"],
+  "capabilities": ["tools", "scopes", "sources", "search", "files"],
   "install": [
     {
       "key": "baseUrl",

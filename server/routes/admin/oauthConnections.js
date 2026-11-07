@@ -9,6 +9,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Admin routes for OAuth connections — the grants behind the clients.
  *
@@ -61,10 +62,7 @@ export default function registerAdminOAuthConnectionRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const { clientId, userId, host, page, pageSize } = req.query;
@@ -80,7 +78,7 @@ export default function registerAdminOAuthConnectionRoutes(app) {
       });
     } catch (error) {
       logger.error('[OAuth Admin] List connections error', { component: 'OAuthAdmin', error });
-      res.status(500).json({ success: false, error: 'Failed to list OAuth connections' });
+      sendErrorResponse(res, 500, 'Failed to list OAuth connections');
     }
   });
 
@@ -123,10 +121,7 @@ export default function registerAdminOAuthConnectionRoutes(app) {
         const oauthConfig = platform.oauth || {};
 
         if (!oauthConfig.enabled?.clients) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth clients are not enabled on this server'
-          });
+          return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
         }
 
         // Both come from the URL path, but neither is used to build one: they
@@ -136,14 +131,12 @@ export default function registerAdminOAuthConnectionRoutes(app) {
         const userId = decodeURIComponent(req.params.userId || '');
 
         if (!clientId || !userId) {
-          return res
-            .status(400)
-            .json({ success: false, error: 'clientId and userId are required' });
+          return sendErrorResponse(res, 400, 'clientId and userId are required');
         }
 
         const result = await revokeConnection(clientId, userId);
         if (!result.revoked) {
-          return res.status(404).json({ success: false, error: 'Connection not found' });
+          return sendErrorResponse(res, 404, 'Connection not found');
         }
 
         logAudit({
@@ -157,7 +150,7 @@ export default function registerAdminOAuthConnectionRoutes(app) {
         res.json({ success: true, ...result });
       } catch (error) {
         logger.error('[OAuth Admin] Revoke connection error', { component: 'OAuthAdmin', error });
-        res.status(500).json({ success: false, error: 'Failed to revoke the connection' });
+        sendErrorResponse(res, 500, 'Failed to revoke the connection');
       }
     }
   );

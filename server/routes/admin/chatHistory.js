@@ -18,7 +18,12 @@
 import { z } from 'zod';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import {
+  sendBadRequest,
+  sendInternalError,
+  sendNotFound,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
 import logger from '../../utils/logger.js';
@@ -426,7 +431,7 @@ export default function registerAdminChatHistoryRoutes(app) {
         return sendBadRequest(res, "Invalid target; expected 'chats', 'ledger' or 'all'");
       }
       if (retentionRunning) {
-        return res.status(409).json({ error: 'A retention run is already in progress' });
+        return sendErrorResponse(res, 409, 'A retention run is already in progress');
       }
       retentionRunning = true;
       try {

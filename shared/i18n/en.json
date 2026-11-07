@@ -32,7 +32,25 @@
     },
     "stored": "Saved to this chat",
     "templateReady": "can be used as a template",
-    "uploading": "Uploading {{name}}"
+    "uploading": "Uploading {{name}}",
+    "downloadOriginal": "Download original file",
+    "downloadOriginalNamed": "Download {{name}}",
+    "downloadSent": "Download the image as sent to the model",
+    "downloadText": "Download the extracted text",
+    "downloadTextNamed": "Download the extracted text of {{name}}",
+    "content": {
+      "text": "Text extracted: {{count}} characters",
+      "pageImages": "scan without text: {{count}} page image(s) sent instead",
+      "noText": "No text could be read from this file",
+      "imageSized": "Image sent to the model as {{width}}×{{height}}",
+      "image": "Image sent to the model",
+      "audio": "Audio sent to the model",
+      "truncated": "shortened to fit",
+      "textOnly": "only the text is kept in this chat",
+      "textServer": "Text extracted on the server: {{size}}"
+    },
+    "downloadDiscarded": "The original file is no longer stored; only its text is kept.",
+    "downloadFailed": "The download failed. Please try again."
   },
   "app": {
     "title": "iHub Apps",
@@ -132,7 +150,8 @@
     "export": "Export",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "moreActions": "More actions"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -246,6 +265,18 @@
     "appsList": {
       "title": "AI Apps",
       "subtitle": "Choose an application to start a conversation",
+      "pendingDocument": {
+        "title": "Choose an app to open “{{name}}” in",
+        "description": "The document is attached to the chat as soon as the app opens.",
+        "untitled": "the document",
+        "onlyDocumentApps": "Only show apps that can use this document",
+        "dismiss": "Dismiss",
+        "unavailable": "The system this document comes from is not available to you.",
+        "noAccess": "You do not have access to this document.",
+        "notFound": "This document could not be found. It may have been moved or deleted.",
+        "noApp": "No app can use documents from this system. Ask an administrator to add the integration to an app.",
+        "continueWithout": "You can still pick an app and start without the document."
+      },
       "nextcloudSelection": {
         "description": "Pick an app below to start a chat — your selected files will be attached automatically."
       },
@@ -863,6 +894,24 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts for all providers",
+        "description": "Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.",
+        "connect": "Connect timeout (ms)",
+        "connectHint": "Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.",
+        "streamIdle": "Stream idle timeout (ms)",
+        "streamIdleHint": "Longest silence between two chunks of a stream that is already running. Raise it for thinking models. 0 turns it off.",
+        "save": "Save timeouts",
+        "reset": "Reset",
+        "saved": "Timeouts saved. They apply to the next request.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Apply to all models of this provider. Leave a field empty to use the installation value; a model can still set its own. 0 turns a ceiling off.",
+        "inherited": "Inherited: {{value}} ms (installation)",
+        "off": "off",
+        "summary": "connect {{connect}} · stream idle {{idle}}",
+        "edit": "Edit",
+        "hide": "Hide"
+      },
       "title": "Provider Credentials",
       "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
@@ -885,8 +934,7 @@
       "backToList": "Back to Providers",
       "category": {
         "llm": "LLM Providers",
-        "cloudstorage": "Cloud Storage Providers",
-        "custom": "Custom / Generic API Keys"
+        "other": "Other credentials"
       },
       "table": {
         "provider": "Provider",
@@ -959,12 +1007,14 @@
         "id": "ID",
         "description": "Description",
         "apiType": "API type",
-        "baseUrl": "Base URL"
+        "baseUrl": "Base URL",
+        "gateway": "Model gateway"
       },
       "hints": {
         "apiType": "Which API the endpoint speaks. Gateways such as T-Systems LLM Hub are OpenAI-compatible; choose vLLM for a self-hosted vLLM server.",
         "apiTypeBuiltIn": "Built-in providers always speak their own API.",
-        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models."
+        "baseUrl": "Optional. The API base the provider’s models are listed from when importing models.",
+        "gateway": "Choose iFinder Model Gateway when the base URL is a gateway. Models are then listed from /v1/gateway/models and called through /v1/gateway/proxy. The API key is the gateway project key."
       },
       "apiTypes": {
         "openai": "OpenAI-compatible (OpenAI, LLM Hub, LM Studio, …)",
@@ -981,10 +1031,46 @@
         "import": "Import models",
         "none": "No models are linked to this provider.",
         "count": "{{count}} linked, {{enabled}} enabled",
-        "more": "+{{count}} more"
-      }
+        "more": "+{{count}} more",
+        "add": "Add model"
+      },
+      "gateway": {
+        "none": "None (regular endpoint)",
+        "ifinder": "iFinder Model Gateway"
+      },
+      "sync": {
+        "title": "Sync with gateway",
+        "subtitle": "Compare the gateway’s models with the models imported from it. Nothing changes until you apply your choice.",
+        "button": "Sync with gateway",
+        "loading": "Asking the gateway…",
+        "applying": "Applying…",
+        "retry": "Try again",
+        "apply": "Apply {{count}}",
+        "inSync": "The models are in sync with the gateway.",
+        "changed": "Changed on the gateway",
+        "changedHint": "The model is updated to match the gateway.",
+        "added": "New on the gateway",
+        "addedHint": "Tick the models to import. They are enabled when imported.",
+        "removed": "No longer available",
+        "removedHint": "The model is disabled, not deleted: apps may still use it.",
+        "importedAs": "{{remoteId}} → imported as {{id}}",
+        "reasonMissing": "The gateway no longer lists this model.",
+        "reasonUnsupported": "The gateway now lists this model as something iHub cannot run.",
+        "doneSummary": "{{ok}} applied, {{failed}} not applied.",
+        "fields": {
+          "url": "URL",
+          "provider": "Adapter",
+          "contextWindow": "Context window",
+          "supportsVision": "Image input"
+        },
+        "skipped": "The gateway changed since you looked. Run the sync again."
+      },
+      "add": "Add provider",
+      "import": "Import models",
+      "ownTimeouts": "Sets its own timeouts"
     },
     "models": {
+      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Models → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
       "loadError": "Error loading models",
@@ -1290,18 +1376,44 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID."
         },
-        "unsupported": "iHub cannot run this model from this provider"
+        "unsupported": "iHub cannot run this model from this provider",
+        "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
+        "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one.",
+        "models": "Import models"
       },
-      "getStarted": {
-        "title": "Add the models your apps use",
-        "description": "Import the models of a provider such as OpenAI, Anthropic, Google, Mistral or your own endpoint, or configure a model by hand.",
-        "import": "Import from provider",
-        "importHint": "List the models of a provider and pick the ones to add.",
-        "create": "Create new model",
-        "createHint": "Enter the endpoint and settings yourself.",
-        "marketplacePrefix": "Or install a ready-made model from",
-        "marketplace": "the Marketplace"
-      }
+      "areaTitle": "Models",
+      "areaSubtitle": "Connect AI providers and choose the models your apps can use",
+      "tabs": {
+        "models": "Models",
+        "providers": "Providers",
+        "aria": "Models sections"
+      },
+      "providerFilter": "Provider",
+      "filterAllProviders": "All providers",
+      "typeFilter": "Type",
+      "filterAllTypes": "All types",
+      "types": {
+        "chat": "Chat",
+        "transcription": "Transcription",
+        "tts": "Text-to-speech"
+      },
+      "providerOwnTimeouts": "This provider sets its own timeouts",
+      "fromMarketplace": "Install from Marketplace",
+      "setup": {
+        "title": "Set up your models",
+        "connect": "Connect a provider",
+        "enable": "Enable models",
+        "default": "Choose a default model",
+        "connectAction": "Add a provider key",
+        "enableAction": "Import models",
+        "defaultAction": "Show enabled models",
+        "connectHint": "Models need a provider with an API key (or an endpoint that needs none).",
+        "enableHint": "Import the models of a provider, or switch on one below.",
+        "defaultHint": "Open a model and tick “Default” so apps without a model of their own have one.",
+        "done": "(done)",
+        "todo": "(to do)"
+      },
+      "moreActions": "More model actions"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -6006,6 +6118,7 @@
     "openInCanvas": "Open in Canvas",
     "generatedImage": "Generated image",
     "downloadImage": "Download image",
+    "shareImage": "Share image",
     "imageNotPersisted": "Image not available",
     "copyLink": "Copy link",
     "linkCopied": "Link copied!",
@@ -6067,7 +6180,9 @@
       "notKept": "This file was not kept with the chat",
       "slides": "{{count}} slides",
       "sheets": "{{count}} sheets",
-      "open": "Open"
+      "open": "Open",
+      "share": "Share",
+      "shareNamed": "Share {{name}}"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -7581,6 +7696,13 @@
     "loading": "Loading…",
     "detailsUnavailable": "No further details are available.",
     "documentFromSource": "Document",
+    "documentNoAccess": "The document could not be attached: you do not have access to it.",
+    "documentNotFound": "The document could not be attached: it was not found. It may have been moved or deleted.",
+    "documentAttachFailed": "The document could not be attached. Please try again.",
+    "documentUnavailable": "The document could not be attached: the system it comes from is not available to you.",
+    "documentModelCannot": "The document could not be attached: the selected model cannot take this kind of file.",
+    "documentAppNotBound": "The document could not be attached: this app does not use the system it comes from.",
+    "documentFromIntegration": "{{name}} document",
     "project": "Project"
   },
   "prompts": {
@@ -9095,6 +9217,9 @@
     "INVALID_REASON": "The reason must be text.",
     "REASON_TOO_LONG": "The reason is too long.",
     "INTEGRATION_NOT_FOUND": "The integration was not found.",
+    "INTEGRATION_NOT_CONFIGURED": "The integration is not configured.",
+    "INTEGRATION_NOT_GRANTED": "You are not allowed to use this integration.",
+    "DOCUMENT_DETAILS_UNAVAILABLE": "This integration has no details for its documents.",
     "SKILL_NAME_TAKEN": "A global skill with this name already exists. Choose another name.",
     "SKILL_NAME_RESERVED": "This name is reserved for a system skill. Choose another name.",
     "EXECUTION_NOT_FINISHED": "The workflow execution has not finished yet.",
@@ -9114,6 +9239,84 @@
     "INCOMPATIBLE_IHUB_VERSION": "This iHub version is not compatible with the item.",
     "CODE_NOT_TRUSTED": "The registry is not trusted for code. Mark it as trusted for code to install this item.",
     "CODE_INTEGRITY_REQUIRED": "The catalog lists no hash for a code file of the item.",
-    "INTEGRITY_MISMATCH": "A file of the item does not match the hash the catalog lists."
+    "INTEGRITY_MISMATCH": "A file of the item does not match the hash the catalog lists.",
+    "DISCOVERY_FAILED": "The model list of the endpoint could not be read.",
+    "NOT_TTS_MODEL": "The model is not a text-to-speech model.",
+    "VOICES_UNSUPPORTED": "The provider of this model does not manage voices.",
+    "INVALID_AUDIO": "The audio is missing or not valid.",
+    "UNSUPPORTED_TTS_PROVIDER": "The text-to-speech provider is not supported.",
+    "NO_AUDIO": "The model answered without any audio.",
+    "ANSWER_IN_PROGRESS": "The interaction is being answered right now.",
+    "ANSWER_IN_CHAT": "Answer this approval in its chat.",
+    "APPROVER_REQUIRED": "An approver is required to answer this interaction.",
+    "UNAUTHORIZED_APPROVER": "You are not one of the approvers of this interaction.",
+    "CANCELLED": "The interaction was cancelled.",
+    "EXPIRED": "The interaction has expired.",
+    "RUN_DELETED": "The run of this interaction was deleted.",
+    "INVALID_INPUT": "The answer does not match what the interaction asks for.",
+    "INVALID_OPTION": "The chosen option is not one of the offered options.",
+    "NOT_PENDING": "The interaction is no longer waiting for an answer.",
+    "REASON_REQUIRED": "A reason is required to reject.",
+    "SKIP_NOT_ALLOWED": "This question cannot be skipped.",
+    "ARCHIVE_REJECTED": "The update archive was rejected.",
+    "DISK_SPACE": "There is not enough free disk space for the update.",
+    "UPDATE_PENDING": "An update is already scheduled to be applied on restart. Restart the server first.",
+    "CONFIRM_DOWNGRADE": "The staged version is not newer than the running one. Confirm the downgrade to continue.",
+    "UNSIGNED_NOT_ALLOWED": "Unsigned archives are not allowed on this server.",
+    "CONFIRM_UNSIGNED": "The archive is not signed by a trusted key. Type its version to install it anyway.",
+    "STAGED_CHANGED": "The staged update changed or is already scheduled. Review it again before installing.",
+    "CONFIG_SNAPSHOT_FAILED": "The configuration snapshot could not be written. Free disk space, or apply without a snapshot.",
+    "CHAT_PERSISTENCE_UNAVAILABLE": "Chat history is not available on this installation.",
+    "CHAT_OWNER_REQUIRED": "This chat has no owner to be stored under.",
+    "USER_PROJECTS_DISABLED": "Personal projects are switched off.",
+    "APP_PROJECTS_DISABLED": "This app takes no projects.",
+    "PROJECT_TEST_CHAT_NOT_KEEPABLE": "The test chat of a project cannot be kept.",
+    "QUOTA_FILE_BYTES": "The file is larger than the allowed size.",
+    "QUOTA_CHAT_FILES": "This chat already has the maximum number of uploaded files.",
+    "QUOTA_CHAT_BYTES": "The uploaded files of this chat exceed the storage quota.",
+    "QUOTA_API_FILES": "You already have the maximum number of files in the Inference API.",
+    "QUOTA_API_BYTES": "Your Inference API files exceed the storage quota.",
+    "QUOTA_USER_BYTES": "Your uploaded file storage quota is used up.",
+    "QUOTA_SERVER_BYTES": "The server's file upload storage is full.",
+    "BINARY_UPLOAD_NOT_ALLOWED": "Binary file uploads are disabled; upload the extracted text only.",
+    "UNSUPPORTED_TYPE": "This file type is not supported.",
+    "SCAN_REJECTED": "The security scanner rejected the file.",
+    "NO_TEXT": "The file contains no text.",
+    "EXTRACTION_FAILED": "The text could not be extracted from the file.",
+    "SOURCE_FORBIDDEN": "You may not attach files from this connected system.",
+    "SOURCE_GONE": "The file no longer exists in the connected system.",
+    "SOURCE_UNAVAILABLE": "The connected system is not available.",
+    "SOURCE_INVALID": "The file reference is not valid.",
+    "SOURCE_FAILED": "The file could not be fetched from the connected system.",
+    "APP_NOT_FOUND": "The app does not exist or is not available to you.",
+    "CHAT_STORAGE_UNAVAILABLE": "Chats cannot be saved right now. Please try again later.",
+    "GUEST_COOKIE_MISSING": "The guest session was not found. Reload the page and try again.",
+    "INVALID_APP": "The app is not valid for this request.",
+    "PREFERENCES_UNAVAILABLE": "Preferences cannot be loaded or saved right now.",
+    "FEATURE_DISABLED": "This feature is turned off.",
+    "CLIENT_HISTORY_NOT_ALLOWED": "The chat history is kept by the server. Send only the new message.",
+    "UNKNOWN_MESSAGE": "The message to continue from is not in this chat.",
+    "STORAGE_PROVIDER_NOT_FOUND": "The storage provider does not exist.",
+    "STORAGE_PROVIDER_REQUIRED": "A storage provider is required.",
+    "INVALID_RETURN_URL": "The return address is not allowed.",
+    "NOT_CONNECTABLE": "This integration cannot be connected by a user.",
+    "TEAMS_SSO_TOKEN_REQUIRED": "A Microsoft Teams sign-in token is required.",
+    "TEAMS_AUTH_NOT_ENABLED": "Sign-in with Microsoft Teams is not enabled.",
+    "TEAMS_ACCOUNT_DISABLED": "This account has been disabled.",
+    "TEAMS_INVALID_OR_EXPIRED_TOKEN": "The Microsoft Teams sign-in token is invalid or has expired.",
+    "CONCURRENCY_LIMIT": "The limit of runs at the same time is reached.",
+    "PROVIDER_IN_USE": "The provider is still used by models.",
+    "PROJECTS_NOT_ALLOWED": "Your groups may not use projects.",
+    "PROJECT_READ_ONLY": "This project is read-only for you.",
+    "PROJECT_MISMATCH": "The item belongs to a different project or is still being processed.",
+    "ITEMS_NOT_EDITABLE": "The items of this project cannot be edited here.",
+    "SHARE_TARGET_INVALID": "The share target is not valid.",
+    "IFINDER_UNAVAILABLE": "iFinder is not available right now.",
+    "IFINDER_WRITES_DISABLED": "Writing to iFinder collections is turned off.",
+    "UPLOAD_TOO_LARGE": "The upload is too large.",
+    "COPILOT_AGENT_DISABLED": "The Microsoft 365 Copilot agent is turned off.",
+    "COPILOT_REFERENCE_ID_MISSING": "The Copilot agent has no reference ID yet.",
+    "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
+    "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration."
   }
 }

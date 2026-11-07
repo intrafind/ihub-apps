@@ -32,10 +32,10 @@ jest.mock('../../../client/src/api', () => ({
   answerInteraction: jest.fn()
 }));
 
-jest.mock('../../../client/src/api/endpoints/sources', () => ({
+jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
   __esModule: true,
-  fetchSourceContent: jest.fn(),
-  fetchSourceMetadata: jest.fn(() => Promise.resolve({}))
+  fetchIntegrationFileContent: jest.fn(),
+  fetchIntegrationFileMetadata: jest.fn(() => Promise.resolve({}))
 }));
 
 jest.mock('../../../client/src/features/chat/components/StreamingMarkdown', () => ({

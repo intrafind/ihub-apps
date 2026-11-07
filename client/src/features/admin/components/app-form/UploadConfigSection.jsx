@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useState } from 'react';
 import MimeTypeSelector from '../MimeTypeSelector';
 import { updateIn } from '../../utils/nestedUpdate';
 
@@ -120,9 +121,17 @@ const UPLOAD_TYPE_CONFIGS = {
 function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined }) {
   const config = UPLOAD_TYPE_CONFIGS[uploadKey];
   const typeConfig = app.upload?.[uploadKey] || {};
+  // Set when the admin turns this type on here: it then starts with the entire format category
+  // selected, to be narrowed down by unchecking. A type that was already on keeps its formats.
+  const [justEnabled, setJustEnabled] = useState(false);
 
   const updateTypeConfig = patch =>
     onChange('upload', updateIn(app.upload || {}, [uploadKey], { ...typeConfig, ...patch }));
+
+  const handleEnabledChange = enabled => {
+    setJustEnabled(enabled);
+    updateTypeConfig({ enabled });
+  };
 
   return (
     <div>
@@ -130,7 +139,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
         <input
           type="checkbox"
           checked={typeConfig.enabled || false}
-          onChange={e => updateTypeConfig({ enabled: e.target.checked })}
+          onChange={e => handleEnabledChange(e.target.checked)}
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
         />
         <label className="ml-2 block text-sm font-medium text-gray-900">
@@ -210,6 +219,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
               selectedFormats={typeConfig.supportedFormats || config.defaultFormats}
               onChange={newFormats => updateTypeConfig({ supportedFormats: newFormats })}
               defaultFormats={config.defaultFormats}
+              selectEntireCategory={justEnabled && !typeConfig.supportedFormats}
             />
           </div>
         </div>

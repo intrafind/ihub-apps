@@ -207,7 +207,10 @@ export const INTEGRATION_ERROR_CODES = Object.freeze({
   JSON_REQUIRED: 415,
   INVALID_REASON: 400,
   REASON_TOO_LONG: 400,
-  INTEGRATION_NOT_FOUND: 404
+  INTEGRATION_NOT_FOUND: 404,
+  INTEGRATION_NOT_CONFIGURED: 404,
+  INTEGRATION_NOT_GRANTED: 403,
+  DOCUMENT_DETAILS_UNAVAILABLE: 404
 });
 
 /** Workflow executions (`server/routes/workflow/workflowRoutes.js`). */
@@ -240,6 +243,119 @@ export const MARKETPLACE_ERROR_CODES = Object.freeze({
   INTEGRITY_MISMATCH: 422
 });
 
+/** Model administration: discovery, text-to-speech voices (`server/routes/admin/models.js`). */
+export const MODEL_ERROR_CODES = Object.freeze({
+  DISCOVERY_FAILED: 502,
+  NOT_TTS_MODEL: 400,
+  VOICES_UNSUPPORTED: 501,
+  INVALID_AUDIO: 400,
+  UNSUPPORTED_TTS_PROVIDER: 400,
+  NO_AUDIO: 502
+});
+
+/**
+ * Answers to the interactions of a run (`server/routes/runs.js`, `InteractionService`).
+ * `INVALID_DECISION` is shared with the scheduled tasks (`SCHEDULED_TASK_ERROR_CODES`).
+ */
+export const INTERACTION_ERROR_CODES = Object.freeze({
+  ANSWER_IN_PROGRESS: 409,
+  ANSWER_IN_CHAT: 409,
+  APPROVER_REQUIRED: 403,
+  UNAUTHORIZED_APPROVER: 403,
+  CANCELLED: 409,
+  EXPIRED: 410,
+  RUN_DELETED: 410,
+  INVALID_INPUT: 400,
+  INVALID_OPTION: 400,
+  NOT_PENDING: 409,
+  REASON_REQUIRED: 400,
+  SKIP_NOT_ALLOWED: 400
+});
+
+/** In-place updates (`server/routes/admin/update.js`, `updateService.js`). */
+export const UPDATE_ERROR_CODES = Object.freeze({
+  ARCHIVE_REJECTED: 422,
+  DISK_SPACE: 507,
+  UPDATE_PENDING: 409,
+  CONFIRM_DOWNGRADE: 409,
+  UNSIGNED_NOT_ALLOWED: 403,
+  CONFIRM_UNSIGNED: 409,
+  STAGED_CHANGED: 409,
+  CONFIG_SNAPSHOT_FAILED: 507
+});
+
+/** Durable chats and their files (`server/routes/chats.js`, `server/services/chatFiles`). */
+export const CHAT_ERROR_CODES = Object.freeze({
+  CHAT_PERSISTENCE_UNAVAILABLE: 503,
+  CHAT_OWNER_REQUIRED: 403,
+  USER_PROJECTS_DISABLED: 403,
+  APP_PROJECTS_DISABLED: 403,
+  PROJECT_TEST_CHAT_NOT_KEEPABLE: 409,
+  QUOTA_FILE_BYTES: 413,
+  QUOTA_CHAT_FILES: 413,
+  QUOTA_CHAT_BYTES: 413,
+  QUOTA_API_FILES: 413,
+  QUOTA_API_BYTES: 413,
+  QUOTA_USER_BYTES: 413,
+  QUOTA_SERVER_BYTES: 507,
+  BINARY_UPLOAD_NOT_ALLOWED: 400,
+  UNSUPPORTED_TYPE: 400,
+  SCAN_REJECTED: 400,
+  NO_TEXT: 400,
+  EXTRACTION_FAILED: 400,
+  SOURCE_FORBIDDEN: 403,
+  SOURCE_GONE: 404,
+  SOURCE_UNAVAILABLE: 400,
+  SOURCE_INVALID: 400,
+  SOURCE_FAILED: 502
+});
+
+/** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
+export const CHAT_SESSION_ERROR_CODES = Object.freeze({
+  CLIENT_HISTORY_NOT_ALLOWED: 400,
+  UNKNOWN_MESSAGE: 400,
+  APP_NOT_FOUND: 404,
+  CHAT_STORAGE_UNAVAILABLE: 503,
+  GUEST_COOKIE_MISSING: 404,
+  INVALID_APP: 400,
+  PREFERENCES_UNAVAILABLE: 503,
+  FEATURE_DISABLED: 403
+});
+
+/** Codes of the cloud storage connection routes (`server/routes/integrations`). */
+export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
+  STORAGE_PROVIDER_NOT_FOUND: 404,
+  STORAGE_PROVIDER_REQUIRED: 400,
+  INVALID_RETURN_URL: 400,
+  NOT_CONNECTABLE: 400
+});
+
+/** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */
+export const PROJECT_ERROR_CODES = Object.freeze({
+  PROJECTS_NOT_ALLOWED: 403,
+  PROJECT_READ_ONLY: 403,
+  PROJECT_MISMATCH: 409,
+  ITEMS_NOT_EDITABLE: 400,
+  SHARE_TARGET_INVALID: 400,
+  IFINDER_UNAVAILABLE: 503,
+  IFINDER_WRITES_DISABLED: 403,
+  UPLOAD_TOO_LARGE: 413,
+  COPILOT_AGENT_DISABLED: 409,
+  COPILOT_REFERENCE_ID_MISSING: 409,
+  COPILOT_PUBLIC_HTTPS_REQUIRED: 409,
+  INTEGRATION_AUTH_REQUIRED: 409
+});
+
+/** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
+export const MISC_ERROR_CODES = Object.freeze({
+  TEAMS_SSO_TOKEN_REQUIRED: 400,
+  TEAMS_AUTH_NOT_ENABLED: 400,
+  TEAMS_ACCOUNT_DISABLED: 403,
+  TEAMS_INVALID_OR_EXPIRED_TOKEN: 401,
+  CONCURRENCY_LIMIT: 409,
+  PROVIDER_IN_USE: 409
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -252,7 +368,15 @@ export const API_ERROR_CODES = Object.freeze({
   ...INTEGRATION_ERROR_CODES,
   ...WORKFLOW_ERROR_CODES,
   ...BACKUP_ERROR_CODES,
-  ...MARKETPLACE_ERROR_CODES
+  ...MARKETPLACE_ERROR_CODES,
+  ...MODEL_ERROR_CODES,
+  ...INTERACTION_ERROR_CODES,
+  ...UPDATE_ERROR_CODES,
+  ...CHAT_ERROR_CODES,
+  ...CHAT_SESSION_ERROR_CODES,
+  ...CLOUD_STORAGE_ERROR_CODES,
+  ...PROJECT_ERROR_CODES,
+  ...MISC_ERROR_CODES
 });
 
 /**

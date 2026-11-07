@@ -9,8 +9,11 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   CUSTOM_PROVIDER_API_TYPES,
+  GATEWAY_API_TYPES,
+  IFINDER_GATEWAY,
   getProviderApiType,
   isCustomLlmProvider,
+  isGatewayProvider,
   isReservedProviderId,
   providerEnvKeyName
 } from '../../../../../shared/llmProviders.js';
@@ -44,7 +47,9 @@ const EMPTY_NEW_PROVIDER = {
   idEdited: false,
   description: '',
   apiType: 'openai',
-  apiKey: ''
+  apiKey: '',
+  // Set to IFINDER_GATEWAY when the endpoint is an iFinder Model Gateway.
+  gateway: ''
 };
 
 function typeLabel(t, type) {
@@ -189,6 +194,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   const apiType =
     providerChoice === NEW_PROVIDER ? newProvider.apiType : getProviderApiType(existingProvider);
   const targetProviderId = providerChoice === NEW_PROVIDER ? newProvider.id : providerChoice;
+  const isGateway =
+    providerChoice === NEW_PROVIDER
+      ? newProvider.gateway === IFINDER_GATEWAY
+      : isGatewayProvider(existingProvider);
 
   const discover = async e => {
     e?.preventDefault();
@@ -198,7 +207,12 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     try {
       const body =
         providerChoice === NEW_PROVIDER
-          ? { url: url.trim(), apiType: newProvider.apiType, apiKey: newProvider.apiKey }
+          ? {
+              url: url.trim(),
+              apiType: newProvider.apiType,
+              apiKey: newProvider.apiKey,
+              ...(newProvider.gateway ? { gateway: newProvider.gateway } : {})
+            }
           : { url: url.trim(), providerId: providerChoice, apiKey: providerKey };
       const response = await makeAdminApiCall('/admin/models/_discover', {
         method: 'POST',
@@ -218,10 +232,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       setDiscoveryError({
         message: translateDiscoveryError(
           t,
-          body.messageKey,
-          body.error || getAdminApiErrorMessage(err)
+          body.details?.messageKey,
+          body.detail || getAdminApiErrorMessage(err)
         ),
-        details: body.details
+        details: body.details?.remediation
       });
     } finally {
       setDiscovering(false);
@@ -345,6 +359,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           method: 'POST',
           body: buildImportedModelConfig(isAzure ? { ...model, id: deploymentOf(model) } : model, {
             id,
+            // A gateway model carries the adapter of its own dialect (`modelProvider`).
             apiType: discovery.apiType,
             providerId: targetProviderId,
             modelsUrl: discovery.modelsUrl,
@@ -385,7 +400,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           </option>
           {importableProviders.map(p => (
             <option key={p.id} value={p.id}>
-              {getLocalizedContent(p.name, lang) || p.id} — {apiTypeLabel(t, getProviderApiType(p))}
+              {getLocalizedContent(p.name, lang) || p.id} —{' '}
+              {isGatewayProvider(p)
+                ? t('admin.providers.gateway.ifinder', 'iFinder Model Gateway')
+                : apiTypeLabel(t, getProviderApiType(p))}
             </option>
           ))}
         </select>
@@ -441,6 +459,26 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
             />
           </div>
           <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                id="import-provider-gateway"
+                type="checkbox"
+                checked={newProvider.gateway === IFINDER_GATEWAY}
+                onChange={e => {
+                  updateNewProvider('gateway', e.target.checked ? IFINDER_GATEWAY : '');
+                  if (e.target.checked && !GATEWAY_API_TYPES.includes(newProvider.apiType)) {
+                    updateNewProvider('apiType', 'openai');
+                  }
+                }}
+                className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              {t(
+                'admin.models.import.gatewayCheckbox',
+                'This endpoint is an iFinder Model Gateway'
+              )}
+            </label>
+          </div>
+          <div className="sm:col-span-2">
             <label htmlFor="import-provider-api-type" className={LABEL}>
               {t('admin.providers.fields.apiType', 'API type')}
             </label>
@@ -450,7 +488,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
               onChange={e => updateNewProvider('apiType', e.target.value)}
               className={FIELD}
             >
-              {CUSTOM_PROVIDER_API_TYPES.map(type => (
+              {(isGateway ? GATEWAY_API_TYPES : CUSTOM_PROVIDER_API_TYPES).map(type => (
                 <option key={type} value={type}>
                   {apiTypeLabel(t, type)}
                 </option>
@@ -470,6 +508,11 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
             <div>
               {t('admin.providers.fields.apiType', 'API type')}:{' '}
               <span className="font-medium">{apiTypeLabel(t, apiType)}</span>
+              {isGateway && (
+                <span className="ml-2 font-medium">
+                  ({t('admin.providers.gateway.ifinder', 'iFinder Model Gateway')})
+                </span>
+              )}
             </div>
             {existingProvider.apiKeySet && (
               <div className="mt-1">
@@ -493,17 +536,24 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           value={url}
           onChange={e => setUrl(e.target.value)}
           placeholder={
-            apiType === 'local'
-              ? 'http://localhost:8080/v1'
-              : 'https://llm-server.llmhub.t-systems.net/v2'
+            isGateway
+              ? 'https://gateway.example.com:9614'
+              : apiType === 'local'
+                ? 'http://localhost:8080/v1'
+                : 'https://llm-server.llmhub.t-systems.net/v2'
           }
           className={FIELD}
         />
         <p className={HINT}>
-          {t(
-            'admin.models.import.urlHint',
-            'The API base (…/v1), its /models listing or a chat completions URL. iHub reads the model list from /models.'
-          )}
+          {isGateway
+            ? t(
+                'admin.models.import.gatewayUrlHint',
+                'The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one.'
+              )
+            : t(
+                'admin.models.import.urlHint',
+                'The API base (…/v1), its /models listing or a chat completions URL. iHub reads the model list from /models.'
+              )}
         </p>
       </div>
 
