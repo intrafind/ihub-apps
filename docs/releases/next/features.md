@@ -423,8 +423,8 @@ or two columns stay ordinary lines. Tagged PDFs still use their structure tree.
 ## Share a Single File as a Link, Optionally Embedded
 
 A generated file — a web page, image, document or code file — can now be shared on its own, like a
-chat, without the conversation it came from. Open the Artifacts panel, select the file and choose
-**Share**.
+chat, without the conversation it came from. Choose **Share** on the file's card in the chat, in the
+file viewer, or in the Artifacts panel.
 
 - **Same audiences and limits as chat links:** specific users, anyone signed in, or anyone with the
   link, each with an expiry, an open limit and **Revoke**. Only that one file opens through the link;

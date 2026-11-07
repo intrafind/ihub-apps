@@ -139,7 +139,10 @@ export default function ArtifactViewerHost({
     [fetchBlob, customFetch, chatId]
   );
 
-  const context = useMemo(() => ({ openArtifact }), [openArtifact]);
+  const context = useMemo(
+    () => ({ openArtifact, shareArtifact: onShare || null }),
+    [openArtifact, onShare]
+  );
   const list = siblings || collected;
   const url = opened && newTabUrl && !isLiveArtifact(opened) ? newTabUrl(opened) : null;
 

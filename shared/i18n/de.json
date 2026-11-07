@@ -578,6 +578,7 @@
     "openInCanvas": "In Canvas öffnen",
     "generatedImage": "Generiertes Bild",
     "downloadImage": "Bild herunterladen",
+    "shareImage": "Bild teilen",
     "imageNotPersisted": "Bild nicht verfügbar",
     "copyLink": "Link kopieren",
     "linkCopied": "Link kopiert!",
@@ -639,7 +640,9 @@
       "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert",
       "slides": "{{count}} Folien",
       "sheets": "{{count}} Tabellenblätter",
-      "open": "Öffnen"
+      "open": "Öffnen",
+      "share": "Teilen",
+      "shareNamed": "{{name}} teilen"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
