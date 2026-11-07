@@ -15,8 +15,8 @@ export function a2aAgentReference(agentId) {
 /**
  * The remote source a tool belongs to — an MCP server (`_mcp`), a remote
  * A2A agent (`_a2a`) or an installed integration (`_integration`) — as `{ key, id, name, kind }`, or null for a tool of
- * iHub itself. `key` is unique across both kinds; `id` is the reference an app
- * stores in `app.tools` to enable the whole source — for an A2A agent marked
+ * iHub itself. `key` is unique across both kinds; `id` is the reference that
+ * enables the whole source — for an A2A agent marked
  * `_a2a.idConflict` (its id is also a tool's or MCP server's) that is
  * `a2a__<agentId>`, since the bare id selects the tool or server.
  *

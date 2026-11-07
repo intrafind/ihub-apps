@@ -56,16 +56,10 @@
       "sendChatHistory": {
         "type": "boolean"
       },
-      "tools": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
       "category": {
         "type": "string"
       }
     },
-    "required": ["id", "name", "description", "sendChatHistory", "tools", "category", "system"]
+    "required": ["id", "name", "description", "sendChatHistory", "category", "system"]
   }
 }

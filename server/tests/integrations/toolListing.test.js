@@ -63,31 +63,27 @@ const listFor = async ({ app, groups = ['analysts'], grants = [] }) => {
 
 describe('installed integration tools in the tool listing', () => {
   it('lists the actions the binding allows', async () => {
-    const app = {
-      id: 'chat',
-      tools: ['braveSearch'],
-      integrations: { portal: { actions: ['search'] } }
-    };
-    expect(await listFor({ app })).toEqual(['braveSearch', 'portal__search']);
+    const app = { id: 'chat', integrations: { portal: { actions: ['search'] } } };
+    expect(await listFor({ app })).toEqual(['portal__search']);
   });
 
   it('lists every action when the binding names none', async () => {
-    const app = { id: 'chat', tools: [], integrations: { portal: {} } };
+    const app = { id: 'chat', integrations: { portal: {} } };
     expect(await listFor({ app })).toEqual(['portal__purge', 'portal__search']);
   });
 
   it("lists nothing of an installation the user's groups do not grant", async () => {
-    const app = { id: 'chat', tools: ['braveSearch'], integrations: { portal: {} } };
-    expect(await listFor({ app, groups: ['guests'] })).toEqual(['braveSearch']);
+    const app = { id: 'chat', integrations: { portal: {} } };
+    expect(await listFor({ app, groups: ['guests'] })).toEqual([]);
   });
 
-  it('lists nothing of an installation the app does not bind', async () => {
+  it('lists nothing of an installation the app does not bind, whatever a leftover `tools` names', async () => {
     const app = { id: 'chat', tools: ['braveSearch', 'portal'] };
-    expect(await listFor({ app })).toEqual(['braveSearch']);
+    expect(await listFor({ app })).toEqual([]);
   });
 
   it('keeps an explicit tool grant on the instance id for a user whose groups grant the installation', async () => {
-    const app = { id: 'chat', tools: [] };
+    const app = { id: 'chat' };
     expect(await listFor({ app, groups: ['analysts'], grants: ['portal'] })).toEqual([
       'portal__purge',
       'portal__search'
@@ -95,7 +91,7 @@ describe('installed integration tools in the tool listing', () => {
   });
 
   it('lists nothing for a tool grant holder whose groups do not grant the installation', async () => {
-    const app = { id: 'chat', tools: [] };
+    const app = { id: 'chat' };
     expect(await listFor({ app, groups: ['guests'], grants: ['portal'] })).toEqual([]);
     expect(await listFor({ app, groups: ['guests'], grants: ['*'] })).toEqual(['braveSearch']);
   });

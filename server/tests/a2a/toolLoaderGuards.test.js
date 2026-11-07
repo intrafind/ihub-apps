@@ -107,7 +107,7 @@ jest.unstable_mockModule('../../services/a2a/A2aClientManager.js', () => ({
   default: { callTool: a2aCallTool, listAllTools: async () => a2aTools }
 }));
 
-const { getToolsForApp } = await import('../../services/tools/appTools.js');
+const { getToolsForNode } = await import('../../services/tools/appTools.js');
 const { loadTools } = await import('../../services/tools/catalog.js');
 const { runTool } = await import('../../services/tools/runTool.js');
 
@@ -123,15 +123,15 @@ describe('A2A agent ids that clash with a tool or installed integration id', () 
     expect(a2aTools[0]._a2a.idConflict).toBeUndefined();
   });
 
-  it('keeps an app reference meaning the local tool or installed integration only', async () => {
+  it('keeps a node reference meaning the local tool or installed integration only', async () => {
     const ids = async (tools, integrations) =>
-      (await getToolsForApp({ id: 'app', tools, integrations }, 'en')).map(t => t.id);
+      (await getToolsForNode(tools, { id: 'node', integrations }, 'en')).map(t => t.id);
     expect(await ids(['jira'])).toEqual(['jira_searchTickets']);
     // An installed integration's tools come through the binding, not a tool reference.
     expect(await ids(['atlassian'])).toEqual([]);
     expect(await ids([], { atlassian: {} })).toEqual(['atlassian__search']);
-    // A remote agent is bound like any installation; its references in
-    // `tools` select nothing any more.
+    // A remote agent is bound like any installation; its references in a
+    // node's `tools` select nothing any more.
     expect(await ids(['langdock'])).toEqual([]);
     expect(await ids(['a2a__jira__ask'])).toEqual([]);
     expect(await ids([], { langdock: {} })).toEqual(['a2a__langdock__ask']);

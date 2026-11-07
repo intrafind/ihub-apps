@@ -23,9 +23,9 @@ describe('filterModelsForApp', () => {
     ]);
   });
 
-  it('keeps models that can take tools, and only those, for an app with tools', () => {
+  it('keeps models that can take tools, and only those, for an app that binds an integration', () => {
     // "none" is a non-empty string: a truthiness check would keep it.
-    expect(ids(filterModelsForApp(models, { id: 'agent', tools: ['read_url'] }))).toEqual([
+    expect(ids(filterModelsForApp(models, { id: 'agent', integrations: { jira: {} } }))).toEqual([
       'chooser',
       'forced'
     ]);
@@ -50,7 +50,7 @@ describe('transcription models', () => {
   const withLive = [...models, live];
 
   it('stay selectable in an app with tools: they never answer a prompt', () => {
-    expect(filterModelsForApp(withLive, { tools: ['braveSearch'] }).map(m => m.id)).toEqual([
+    expect(filterModelsForApp(withLive, { integrations: { jira: {} } }).map(m => m.id)).toEqual([
       'chooser',
       'forced',
       'gemini-live'

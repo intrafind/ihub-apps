@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The tools an app offers a chat: its own `tools`, the tools its skills,
- * workflows, knowledge projects and integrations add, and web search.
+ * The tools an app offers a chat: the tools of the integrations it binds
+ * (`app.integrations`), and the ones its skills, workflows, knowledge projects
+ * and web search add.
  */
 
 import configCache from '../../configCache.js';
@@ -121,41 +122,64 @@ function buildWorkflowToolParams(workflow, language = 'en') {
 export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
- * Get tools applicable to a specific app
+ * Get tools applicable to a specific app: the tools of the integrations it
+ * binds under `app.integrations` (the group's grant of the installation plus
+ * the binding's action list), and the ones its web search, projects, chat,
+ * workflows, apps and skills add. An app has no tool list of its own (#3275).
+ *
  * @param {Object} app - app configuration object
  * @param {string} language - Optional language for localization
  * @param {Object} context - Context object (user, chatId, etc.) for source tool generation
  */
 export async function getToolsForApp(app, language = null, context = {}) {
+  return offeredTools(app, language, context, null);
+}
+
+/**
+ * Get the tools a workflow node or an agent run names by id (`config.tools`):
+ * the way tool references were read before apps lost their `tools` list. The
+ * node is a pseudo-app (`nodeApp`: its project links and skills) next to the
+ * references; everything `getToolsForApp` adds for an app comes along.
+ *
+ * A reference selects a tool by its exact id (`braveSearch`), its base id
+ * (`jira` for `jira_searchTickets`, `evidence` for `evidence_*`), an MCP server
+ * or people directory id, or an A2A agent reference (see `isToolSelected`).
+ * An installed integration's tools come through this path only where the tool
+ * kept its id (`ask_user`, `iFinder_*`, an engine's search tool) or is a
+ * people directory's, and only while the installation's own enabled and
+ * group-grant checks pass (`filterIntegrationToolsForUser`); a node binds
+ * the others through `nodeApp.integrations`.
+ *
+ * @param {string[]} toolRefs - The node's tool references
+ * @param {Object} nodeApp - `{ projects, skills, _skillIds, integrations }`
+ * @param {string|null} language
+ * @param {Object} context - `{ user, chatId, enabledTools }`
+ */
+export async function getToolsForNode(toolRefs, nodeApp = {}, language = null, context = {}) {
+  return offeredTools(nodeApp, language, context, Array.isArray(toolRefs) ? toolRefs : []);
+}
+
+async function offeredTools(app, language, context, toolRefs) {
   // Get static tools from tool definitions
   const allTools = await loadTools(language);
   let appTools = [];
 
-  if (Array.isArray(app.tools) && app.tools.length > 0) {
-    // An installed integration's tools come only through `app.integrations`
-    // (below), where the group grant (`permissions.integrations`) and the
-    // binding's action list are checked; an `app.tools` reference to one does not bypass that.
-    //
-    // Three exceptions keep old references working, each once the
-    // installation's own enabled and group-grant checks pass
-    // (`filterIntegrationToolsForUser` below): the search tool of a web search
-    // engine, by its exact id (`braveSearch`, `staanSearch`, `qwantSearch`, a
-    // third-party engine's `<id>__search`) — a workflow node, or an app, that
-    // lists one keeps getting it while that engine is installed, enabled and
-    // granted; the installation id selects nothing here; the people
-    // directories, whose tools a directory id selects as before
-    // (`isToolSelected`); and every other built-in action that kept its tool
-    // id (`fixedToolId`: iHub's own `ask_user` and scheduled-task tools,
-    // `iFinder_*`, `jira_*`, …), read as the plain tool it was — exact id or
-    // base id (`iFinder`), never the installation id. The platform tools of
-    // workflows and agents (`write_artifact`, `evidence_*`, …) and the page
-    // reader `read_url` are plain tools and selected like any tool file. An
-    // LDAP browser's tools come only through a binding.
+  if (toolRefs && toolRefs.length > 0) {
+    // The people directories' tools a directory id selects, the search tool of
+    // a web search engine by its exact id (`braveSearch`, `staanSearch`,
+    // `qwantSearch`, a third-party engine's `<id>__search`) and every other
+    // built-in action that kept its tool id (`fixedToolId`: iHub's own
+    // `ask_user` and scheduled-task tools, `iFinder_*`, `jira_*`, …), read as
+    // the plain tool it was — exact id or base id, never the installation id.
+    // The platform tools of workflows and agents (`write_artifact`,
+    // `evidence_*`, …) and the page reader `read_url` are plain tools and
+    // selected like any tool file. An LDAP browser's tools come only through
+    // a binding.
     const selected = allTools.filter(t => {
-      if (!t._integration) return isToolSelected(t, app.tools);
-      if (t._peopleDirectory) return isToolSelected(t, app.tools);
-      if (isWebSearchEngineTool(t)) return app.tools.includes(t.id);
-      if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, app.tools);
+      if (!t._integration) return isToolSelected(t, toolRefs);
+      if (t._peopleDirectory) return isToolSelected(t, toolRefs);
+      if (isWebSearchEngineTool(t)) return toolRefs.includes(t.id);
+      if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, toolRefs);
       return false;
     });
     appTools = filterBrowserToolsForUser(
@@ -168,15 +192,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     // Filter by enabledTools if provided in context. Interactive clarification
     // tools (`ask_user`, anything `requiresUserInput`) are a system channel the
-    // loop drives, not a user-selectable capability, so an app that grants one
-    // keeps it whatever the chat's narrowing says — otherwise disabling it (or
-    // a stale saved selection that predates it) strips the model's only way to
-    // ask a question, and the interview loops instead of pausing for the user.
-    if (
-      context.enabledTools !== undefined &&
-      context.enabledTools !== null &&
-      Array.isArray(context.enabledTools)
-    ) {
+    // loop drives, not a user-selectable capability, so a node that names one
+    // keeps it whatever the narrowing says.
+    if (Array.isArray(context.enabledTools)) {
       appTools = appTools.filter(
         t => isInteractiveTool(t) || isToolSelected(t, context.enabledTools)
       );
@@ -201,7 +219,16 @@ export async function getToolsForApp(app, language = null, context = {}) {
       if (Array.isArray(context.enabledTools)) {
         // By the key the app binds it with, too: a definition id or a type
         // key (`type:storage`) is what the chat's tools menu sends for it.
-        bound = bound.filter(t => isBoundToolEnabled(app, t, context.enabledTools));
+        // Interactive clarification tools (`ask_user`, anything
+        // `requiresUserInput`) are a system channel the loop drives, not a
+        // user-selectable capability, so an app that binds one keeps it
+        // whatever the chat's narrowing says — otherwise disabling it (or a
+        // stale saved selection that predates it) strips the model's only way
+        // to ask a question, and the interview loops instead of pausing for
+        // the user.
+        bound = bound.filter(
+          t => isInteractiveTool(t) || isBoundToolEnabled(app, t, context.enabledTools)
+        );
       }
       appTools = appTools.concat(bound.filter(t => !appTools.some(a => a.id === t.id)));
     } catch (error) {
@@ -218,13 +245,13 @@ export async function getToolsForApp(app, language = null, context = {}) {
     context.model,
     context.user
   );
-  // An app may also list the page reader in `tools` — offer it only once.
+  // A node may also name the page reader in its tool list — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
   // Add the project knowledge tools when the projects feature is on and the
   // request reaches a project (#1036): one shipped definition, a scope per
-  // request in its description. They belong to projects, so neither `tools`
-  // nor an integration adds or removes them.
+  // request in its description. They belong to projects, so no integration
+  // binding adds or removes them.
   if (hasProjectScope(app) && context.user) {
     try {
       const knowledgeTools = await knowledgeToolsFor({

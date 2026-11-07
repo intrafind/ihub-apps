@@ -23,7 +23,7 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
 import { applyIntegrationScopes } from '../../chat/RequestBuilder.js';
 import { actionTracker } from '../../../actionTracker.js';
-import { getToolsForApp } from '../../tools/appTools.js';
+import { getToolsForNode } from '../../tools/appTools.js';
 import { runTool } from '../../tools/runTool.js';
 import {
   resolveNativeWebSearchProvider,
@@ -1389,10 +1389,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   async getAgentTools(toolIds, language, _context) {
-    // Create a minimal app config for getToolsForApp
+    // A minimal pseudo-app for the node: its project links and skills; the
+    // node's own tool references are read by `getToolsForNode`.
     const skillIds = Array.isArray(_context._skillIds) ? _context._skillIds : [];
     const appConfig = {
-      tools: toolIds,
       // The node's project links, so the knowledge tools are offered (#1036).
       projects: Array.isArray(_context.projectLinks) ? _context.projectLinks : [],
       // The node's list, an empty one included, marks this as a workflow node:
@@ -1407,7 +1407,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       enabledTools: toolIds
     };
 
-    return await getToolsForApp(appConfig, language, toolContext);
+    return await getToolsForNode(toolIds, appConfig, language, toolContext);
   }
 
   /**

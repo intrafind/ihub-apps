@@ -21,7 +21,7 @@ Get tool calling working in under 10 minutes with this simple example.
 
 ### Enable a Tool for Your App
 
-Add a `tools` property to your app configuration:
+An app gets tools from the integrations it binds (`integrations`) and from its `websearch` configuration; it has no tool list of its own (the `tools` field was removed in #3275). This app turns on web search:
 
 ```json
 {
@@ -247,12 +247,12 @@ called, not when the module loads.
 
 ### 5. App Integration
 
-Add the tool to your app configuration:
+Tools are provided by integrations; a custom tool is a custom integration (see [Integrations](integrations.md#custom-integrations-add-manually)). Bind the installation in your app configuration:
 
 ```json
 {
   "id": "weather-assistant",
-  "tools": ["weatherLookup"],
+  "integrations": { "weather": {} },
   "system": {
     "en": "You are a weather assistant. Use the weatherLookup tool to provide current weather information."
   }
@@ -352,7 +352,7 @@ Configuration:
 App usage:
 ```json
 {
-  "tools": ["documentManager.search", "documentManager.getContent"]
+  "integrations": { "document-manager": { "actions": ["search", "getContent"] } }
 }
 ```
 
@@ -486,7 +486,7 @@ Combine multiple tools for complex workflows:
 ```json
 {
   "id": "document-processor",
-  "tools": ["pdfExtractor", "textAnalyzer", "summaryGenerator"],
+  "integrations": { "pdf-extractor": {}, "text-analyzer": {}, "summary-generator": {} },
   "system": {
     "en": "Process documents by first extracting content, then analyzing it, and finally generating summaries. Chain tools as needed."
   }
@@ -510,7 +510,7 @@ and some answer from memory when the app wanted them to look something up. Set
 ```json
 {
   "id": "research-assistant",
-  "tools": ["iFinder.search"],
+  "integrations": { "ifinder": { "actions": ["search"] } },
   "toolChoice": "required"
 }
 ```
@@ -1051,7 +1051,7 @@ Each tool file in `contents/tools/` (named `<toolId>.json`) uses the following f
 
 | Field | Description |
 |-------|-------------|
-| `id` | Unique identifier referenced by apps in their `tools` array |
+| `id` | Unique identifier referenced by workflow nodes and agent profiles in their `tools` list |
 | `name` | Localized display name object (e.g., `{"en": "..."}`) |
 | `description` | Localized short description object |
 | `script` | The script file in `server/tools/` implementing the tool |
@@ -1164,7 +1164,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 | `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from `app.tools`; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their former tool list are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from the app's former tool list; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
 
 ### `iFinder`
 
@@ -1198,9 +1198,9 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 iHub's own tools keep the ids they always had; there are no tool files for them in `contents/tools/` any more (migration V199 retired them, and initial setup no longer copies them there). Each belongs to the feature that uses it (Unified Integrations concept §6.9):
 
-- **Asking the user and scheduled tasks — the iHub integration.** `ask_user` and the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run` are the actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). The installation cannot be removed or disabled; its **Settings** switch single actions off for every app (the former `enabled: false` of a tool file); groups grant it on **Admin → Groups**. Apps list the tools in `tools` by id (`"ask_user"`); `"ihub"` itself selects nothing. `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
-- **Project knowledge — projects.** `knowledge_search`, `knowledge_read` and `knowledge_list` come with every request that reaches a project (a linked, attached or workflow project the user may use) while the projects feature is on, and never otherwise. Neither the app's `tools` nor an integration adds, removes or switches them off; the definition ships with iHub (`server/defaults/tools/knowledge.json`, read in place) and a `contents/tools/knowledge.json` is not read. See [Projects → The knowledge tools](projects.md#the-knowledge-tools).
-- **Earlier turns of a chat — stored chats.** `chat_sources_list` / `chat_sources_read`, `chat_files_list` / `chat_files_read` and `chat_artifacts_list` / `chat_artifacts_read` let the model look up the sources earlier answers found, the files uploaded to the chat and the files its turns created. Each pair comes with a turn of a stored chat that has something of its kind and sends its history, and never otherwise. Like the knowledge tools, neither `tools` nor an integration adds or removes them; the definitions ship with iHub (`server/defaults/tools/chat_*.json`, read in place). See [Chat Persistence → What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model).
+- **Asking the user and scheduled tasks — the iHub integration.** `ask_user` and the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run` are the actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). The installation cannot be removed or disabled; its **Settings** switch single actions off for every app (the former `enabled: false` of a tool file); groups grant it on **Admin → Groups**. Apps bind the installation (`"integrations": { "ihub": { "actions": ["ask_user"] } }`); the tool ids stay. `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
+- **Project knowledge — projects.** `knowledge_search`, `knowledge_read` and `knowledge_list` come with every request that reaches a project (a linked, attached or workflow project the user may use) while the projects feature is on, and never otherwise. No integration binding adds, removes or switches them off; the definition ships with iHub (`server/defaults/tools/knowledge.json`, read in place) and a `contents/tools/knowledge.json` is not read. See [Projects → The knowledge tools](projects.md#the-knowledge-tools).
+- **Earlier turns of a chat — stored chats.** `chat_sources_list` / `chat_sources_read`, `chat_files_list` / `chat_files_read` and `chat_artifacts_list` / `chat_artifacts_read` let the model look up the sources earlier answers found, the files uploaded to the chat and the files its turns created. Each pair comes with a turn of a stored chat that has something of its kind and sends its history, and never otherwise. Like the knowledge tools, no integration binding adds or removes them; the definitions ship with iHub (`server/defaults/tools/chat_*.json`, read in place). See [Chat Persistence → What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model).
 - **Agent workspace and evidence — workflows and agents.** `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done` and `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport` are plain tools, not integration actions, and are not listed on the Integrations page. Workflow nodes, agent profiles and apps name them in `tools` by exact id or base id (`"evidence"`), agent runs attach them, a scheduled run with memory gets `read_memory` / `write_memory`, and group grants (`permissions.tools`) select them, also for the inbound MCP gateway. A tool file of the same id in `contents/tools/` takes the place of the shipped definition: one with `enabled: false` switches the tool off (migration V202 writes such a file for a tool that was switched off on the `ihub` installation).
 - **Documentation**: [Ask User Tool](ask-user-tool.md), [Projects](projects.md), [Scheduled Tasks](scheduled-tasks.md)
 

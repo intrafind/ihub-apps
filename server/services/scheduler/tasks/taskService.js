@@ -19,7 +19,6 @@ import configCache from '../../../configCache.js';
 import { canUserAccessResource } from '../../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 import { getLocalizedString } from '../../../utils/localize.js';
-import { isToolSelected } from '../../../utils/toolSelection.js';
 import logger from '../../../utils/logger.js';
 import runLog from '../../loop/RunLog.js';
 import { resolvePrincipal } from '../../loop/runIdentity.js';
@@ -226,7 +225,7 @@ async function loadToolSelector() {
 
 /**
  * The tool ids an app offers a user — what a task may narrow its tools to.
- * `selectedByApp` tells the tools the app lists itself (which a task can
+ * `selectedByApp` tells the tools the app binds itself (which a task can
  * switch off) from the ones it gets injected. With `select` (a chat's
  * `enabledTools`), each tool also says whether those references select it
  * (`selected`), which is how "Schedule this…" ticks the chat's tools.
@@ -246,12 +245,9 @@ export async function toolsOfferedByApp(app, user, language = 'en', { select } =
   return tools.map(tool => ({
     id: tool.id,
     name: localizedName(tool.name, language) || tool.id,
-    // Read the way the run reads the app's `tools` (directory, MCP server
-    // and agent references included), so a task can narrow exactly these.
-    // An installed integration's tool is here only because the app binds
-    // it (`app.integrations`) or names it in `tools`.
-    selectedByApp:
-      Boolean(tool._integration) || isToolSelected(tool, Array.isArray(app.tools) ? app.tools : []),
+    // An installed integration's tool is here only because the app binds it
+    // (`app.integrations`), so a task can narrow exactly these.
+    selectedByApp: Boolean(tool._integration),
     // Whether a run pauses for the owner's approval before calling it: the
     // policy `getToolsForApp` stamped on the tool (#2945).
     requiresApproval: requiresApproval(tool),

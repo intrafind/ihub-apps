@@ -34,16 +34,27 @@ export function boundIntegrationRefs(app) {
 }
 
 /**
- * Every tool reference an app offers a chat: the ids in its `tools` and the
- * integrations it binds for their tools. The chat's tools menu toggles among
- * them; which of them a new chat starts with is {@link appDefaultToolRefs}.
+ * Every tool reference an app offers a chat: the integrations it binds for
+ * their tools (an app gets tools only through `app.integrations`). The chat's
+ * tools menu toggles among them; which of them a new chat starts with is
+ * {@link appDefaultToolRefs}.
  *
  * @param {Object} app
  * @returns {string[]}
  */
 export function appToolRefs(app) {
-  const listed = Array.isArray(app?.tools) ? app.tools : [];
-  return [...new Set([...listed, ...boundIntegrationRefs(app)])];
+  return [...new Set(boundIntegrationRefs(app))];
+}
+
+/**
+ * Whether the app binds an integration for its tools, so any model it uses
+ * must support function calling (the server's `appHasToolBindings`).
+ *
+ * @param {Object} app
+ * @returns {boolean}
+ */
+export function appHasToolBindings(app) {
+  return appToolRefs(app).length > 0;
 }
 
 /**

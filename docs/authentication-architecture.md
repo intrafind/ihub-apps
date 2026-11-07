@@ -520,7 +520,7 @@ Besides `apps`, `prompts` and `models`, a group may carry `workflows`,
 `skills`, `tools` and `integrations`. `tools` grants a tool directly over the
 MCP and A2A gateways without an app declaring it — see
 [MCP Integration](mcp-integration.md#who-sees-which-tool). It has no effect
-on chat, where an app's own `tools` list still decides what the model may
+on chat, where the integrations an app binds decide what the model may
 call.
 
 `integrations` lists the installed integrations members may use: `*`,

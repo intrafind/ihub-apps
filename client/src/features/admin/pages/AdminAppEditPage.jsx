@@ -95,7 +95,6 @@ function AdminAppEditPage() {
       enabled: true,
       variables: [],
       starterPrompts: [],
-      tools: [],
       greeting: {
         en: {
           title: '👋 Hello!',
@@ -162,7 +161,6 @@ function AdminAppEditPage() {
       // Ensure all configuration sections exist with defaults
       const appWithDefaults = {
         ...data,
-        tools: data.tools || [],
         greeting: data.greeting || {
           en: {
             title: '👋 Hello!',

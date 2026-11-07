@@ -138,7 +138,7 @@ id — **Admin → Apps → Edit → Installed integrations** writes it, exactly
 [Integrations: binding an installed integration](apps.md#integrations-binding-an-installed-integration)):
 
 ```jsonc
-{ "id": "support-desk", "integrations": { "langdock": {} }, "tools": ["braveSearch"] }
+{ "id": "support-desk", "integrations": { "langdock": {}, "brave": { "actions": ["search"] } } }
 ```
 
 `"langdock": {}` offers every skill the installation has enabled; `"langdock": { "actions":
@@ -148,9 +148,9 @@ and the binding's actions apply in the chat and in `GET /api/tools?appId=`; an
 app whose installation is missing or disabled does not offer the agent. In the chat's tool menu
 each agent is one toggle.
 
-Listing an agent in `tools` selects nothing any more: `"langdock"`, `"a2a__langdock"` and
-`"a2a__langdock__ask"` are ignored there (V194 rewrote such entries into bindings), and the app
-editor's former **Remote A2A agents** picker is gone.
+An app has no `tools` list any more (#3275): the binding is the only way in. V194 rewrote
+`"langdock"`, `"a2a__langdock"` and `"a2a__langdock__ask"` entries into bindings, V229 does the same
+for any that remained, and the app editor's former **Remote A2A agents** picker is gone.
 
 ### Ids shared with tools or installed integrations
 
@@ -175,7 +175,7 @@ base id, then only `a2a__langdock` means the agent) for all its skills, or an ex
 one — just as an installed integration's id (an MCP server's `"drawio"`) grants all its tools and
 a base id (`"iFinder"`) a tool's functions. The grants are read wherever group tool grants are
 evaluated: the tool list (`GET /api/tools`) and the MCP gateway's permission check. As for every
-tool, which tools an app can call is decided by the app's own bindings and `tools` list; the group
+tool, which tools an app can call is decided by the app's own bindings; the group
 grant decides what users see in the tool list. iHub's own MCP gateway and A2A endpoint never
 re-export remote agents: a remote agent's credentials stay with iHub.
 

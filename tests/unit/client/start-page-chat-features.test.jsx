@@ -29,7 +29,7 @@ const mockApp = {
   description: { en: 'General chat' },
   color: '#4f46e5',
   icon: 'chat',
-  tools: ['braveSearch', 'jira'],
+  integrations: { braveSearch: {}, jira: {} },
   websearch: { enabled: true, enabledByDefault: false },
   features: { magicPrompt: { enabled: true } }
 };

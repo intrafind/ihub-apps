@@ -36,6 +36,11 @@ import {
 } from './helpers/llmFixtures.js';
 import { abortChatRequest } from '../../sse.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import {
+  FIXTURE_OPEN_GROUPS,
+  fixtureIntegrationTool,
+  fixtureIntegrations
+} from '../helpers/integrationToolFixture.js';
 
 const MODEL_LIST = [
   {
@@ -126,7 +131,7 @@ const APPS = [
     id: 'agent',
     name: { en: 'Agent' },
     system: { en: 'Use the lookup tool.' },
-    tools: ['lookup'],
+    integrations: { lookup: {} },
     preferredModel: 'oa',
     enabled: true
   },
@@ -142,13 +147,11 @@ const APPS = [
 ];
 
 const TOOLS = [
-  {
-    id: 'lookup',
-    name: 'lookup',
+  fixtureIntegrationTool('lookup', {
     description: 'Look up a record',
     script: 'lookup.js',
     parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] }
-  }
+  })
 ];
 
 const ADA = {
@@ -179,6 +182,8 @@ before(async () => {
   configCache.setCacheEntry('config/apps.json', APPS);
   configCache.setCacheEntry('config/models.json', MODEL_LIST);
   configCache.setCacheEntry('config/tools.json', TOOLS);
+  configCache.setCacheEntry('config/integrations.json', fixtureIntegrations('lookup'));
+  configCache.setCacheEntry('config/groups.json', { groups: FIXTURE_OPEN_GROUPS });
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
 });

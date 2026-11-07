@@ -13,10 +13,10 @@ import { appUsesProjects, isProjectsConfigured } from '../projects/projectSettin
  * visible source set from the apps they can access (the same filter the web UI
  * applies via `configCache.getAppsForUser`).
  *
- * Tools are derived the same way, plus an explicit group-level `tools`
- * permission for callers who need a tool directly over MCP/A2A without going
- * through an app (`groups.json` → `permissions.tools`). That grant covers only
- * the gateways; which tools a chat app may call is still declared by the app.
+ * Tools are granted by the group-level `tools` permission for callers who need
+ * a tool directly over MCP/A2A (`groups.json` → `permissions.tools`). That
+ * grant covers only the gateways; which tools a chat app may call is declared
+ * by the integrations it binds (`app.integrations`).
  *
  * This is the authorization barrier for the gateway: without it, any caller
  * holding `mcp:tools:read` / `mcp:resources:read` would see every tool and
@@ -37,15 +37,14 @@ async function getAccessibleApps(user, platform) {
 }
 
 /**
- * Set of tool ids the user may use: the group-level `tools` grant unioned with
- * the tools declared by every app they can access. Both the exact tool id and
- * its base id (the part before the first underscore, e.g. `jira` for
- * `jira_searchTickets`) are included so function-style tools match.
+ * Set of tool ids the user may use: the group-level `tools` grant. Both the
+ * exact tool id and its base id (the part before the first underscore, e.g.
+ * `jira` for `jira_searchTickets`) match function-style tools.
  *
  * A group granting the base id (`iFinder`) therefore covers all of that tool's
  * functions; granting `iFinder_search` covers only that one.
  */
-export async function getVisibleToolIds(user, platform) {
+export async function getVisibleToolIds(user, _platform) {
   const ids = new Set();
 
   // Direct grant — lets an operator expose a tool over MCP/A2A without having
@@ -57,13 +56,6 @@ export async function getVisibleToolIds(user, platform) {
     }
   }
 
-  const apps = await getAccessibleApps(user, platform);
-  for (const app of apps) {
-    if (!Array.isArray(app.tools)) continue;
-    for (const t of app.tools) {
-      if (typeof t === 'string' && t) ids.add(t);
-    }
-  }
   return ids;
 }
 

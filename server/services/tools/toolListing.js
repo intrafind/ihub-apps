@@ -37,24 +37,6 @@ function allowedToolsFor(user, platformConfig) {
 }
 
 /**
- * Whether a tool no group grant covers is listed because the app the chat
- * runs in offers it: an installed integration's tool the app gets
- * (`getIntegrationToolsForApp`), a built-in action under its old tool id
- * (`ask_user`, `read_url`) the app's `tools` name, as `getToolsForApp`
- * offers it, or any other tool the app's `tools` reference.
- *
- * @param {Object} tool
- * @param {Set<Object>} appIntegrationTools - the app's integration tools
- * @param {Array<string>} appToolRefs - the app's `tools`
- * @returns {boolean}
- */
-function isListedThroughApp(tool, appIntegrationTools, appToolRefs) {
-  if (!tool._integration) return isToolSelected(tool, appToolRefs);
-  if (appIntegrationTools.has(tool)) return true;
-  return Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs);
-}
-
-/**
  * Get tools filtered by user permissions with user-specific ETag
  * @param {Object} user - User object with permissions
  * @param {Object} platformConfig - Platform configuration
@@ -129,8 +111,8 @@ function toolsEtagWithIntegrations(toolsEtag) {
 
 /**
  * The tools a user's group grants list, plus the tools of the app the chat
- * runs in. A group grant reads like an app's `tools` reference, as it does
- * for the MCP gateway (`getVisibleToolIds`): besides the exact tool id
+ * runs in. A group grant reads like a tool reference (`isToolSelected`), as it
+ * does for the MCP gateway (`getVisibleToolIds`): besides the exact tool id
  * (case-insensitive), a base id covers a function-style tool's functions,
  * an MCP server id that server's tools and an A2A agent id that agent's
  * skills.
@@ -150,7 +132,6 @@ async function filterToolsByGrants(tools, allowedTools, { user, platformConfig, 
   // listed too — otherwise the menu cannot name them or tell which MCP
   // server they belong to.
   const app = appId ? await configCache.getAppForUserById(user, platformConfig, appId) : null;
-  const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
   // An installed integration's tools are listed as the chat gets them
   // (`getIntegrationToolsForApp`): only when the app binds the
   // installation, the user's groups grant it (`permissions.integrations`)
@@ -160,7 +141,5 @@ async function filterToolsByGrants(tools, allowedTools, { user, platformConfig, 
     const { getIntegrationToolsForApp } = await import('../integrations/integrationTools.js');
     appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
   }
-  return tools.filter(
-    tool => granted.has(tool) || isListedThroughApp(tool, appIntegrationTools, appToolRefs)
-  );
+  return tools.filter(tool => granted.has(tool) || appIntegrationTools.has(tool));
 }

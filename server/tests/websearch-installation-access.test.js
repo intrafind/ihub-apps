@@ -12,7 +12,7 @@
  *   with the page reader next to it where the provider takes function tools;
  *   on other models it offers the search tool of the app's engine (`auto` or
  *   a named one) with the page reader, or nothing while no engine is available;
- * - a workflow node (or an app) that lists `braveSearch` / `qwantSearch` /
+ * - a workflow node that lists `braveSearch` / `qwantSearch` /
  *   `read_url` in `tools` gets the engine tool only while that engine is
  *   installed, enabled and granted, and the page reader always (a platform
  *   tool); a node's generic `webSearch` falls back to the first engine the
@@ -25,7 +25,7 @@
 import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getToolsForApp } from '../services/tools/appTools.js';
+import { getToolsForApp, getToolsForNode } from '../services/tools/appTools.js';
 import {
   resolveAppNativeWebSearch,
   resolveNativeWebSearchFallbackTools,
@@ -203,14 +203,23 @@ describe('tools that name a web search tool', () => {
     assert.deepEqual(ids(await nodeTools(['acme'], RESEARCHER)), []);
   });
 
-  it('in an app: the engine tool by id even without app.websearch, narrowed like any tool', async () => {
+  it('in a node: narrowed like any tool by the chat’s selection', async () => {
     useWebSearch({ installed: [engine('qwant')] });
-    const offered = await getToolsForApp({ id: 'a', tools: ['qwantSearch', 'read_url'] }, 'en', {
+    const offered = await getToolsForNode(['qwantSearch', 'read_url'], { id: 'n' }, 'en', {
       modelProvider: 'mistral',
       user: STAFF,
       enabledTools: ['read_url']
     });
     assert.deepEqual(ids(offered), [READ_URL_TOOL_ID]);
+  });
+
+  it('an app has no tool list: the engine tool comes with app.websearch only', async () => {
+    useWebSearch({ installed: [engine('qwant')] });
+    const offered = await getToolsForApp({ id: 'a', tools: ['qwantSearch', 'read_url'] }, 'en', {
+      modelProvider: 'mistral',
+      user: STAFF
+    });
+    assert.deepEqual(ids(offered), []);
   });
 
   it('a workflow node’s generic webSearch falls back to the first engine the user may use', async () => {

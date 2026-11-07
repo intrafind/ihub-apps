@@ -19,7 +19,7 @@ const scratch = await scratchDocuments();
 const runTool = jest.fn(async () => 'ok');
 const loadedTools = [
   { id: 'okta__get_my_profile', _mcp: { serverId: 'okta' } },
-  { id: 'jira_searchTickets' },
+  { id: 'jira_searchTickets', _integration: { instanceId: 'jira', action: 'searchTickets' } },
   { id: 'a2a__desk__ask', _a2a: { agentId: 'desk' } }
 ];
 let apps = [];
@@ -31,6 +31,13 @@ jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
   loadLocalTools: jest.fn(async () => []),
   loadTools: jest.fn(async () => loadedTools)
+}));
+// The app's binding rules, reduced to this fixture: the app binds the
+// installation by id (the group grant and the action list are tested with the
+// integrations).
+jest.unstable_mockModule('../../services/integrations/integrationTools.js', () => ({
+  getIntegrationToolsForApp: (app, tools) =>
+    tools.filter(tool => app?.integrations?.[tool._integration?.instanceId])
 }));
 jest.unstable_mockModule('../../services/tools/runTool.js', () => ({
   runTool
@@ -140,6 +147,8 @@ describe('POST /api/tools/:toolId permissions', () => {
   const call = toolId => request(app).post(`/api/tools/${toolId}`).send({});
 
   it('refuses a tool neither the groups nor an app of the caller grant', async () => {
+    // An app has no tool list: naming the tool does not offer it.
+    apps = [{ id: 'support', tools: ['jira_searchTickets'] }];
     const res = await call('jira_searchTickets');
     expect(res.status).toBe(403);
     expect(runTool).not.toHaveBeenCalled();
@@ -154,8 +163,8 @@ describe('POST /api/tools/:toolId permissions', () => {
     expect(runTool).not.toHaveBeenCalled();
   });
 
-  it('runs a tool an app the caller can open lists', async () => {
-    apps = [{ id: 'support', tools: ['jira'] }];
+  it('runs the tool of an integration an app the caller can open binds', async () => {
+    apps = [{ id: 'support', integrations: { jira: {} } }];
     expect((await call('jira_searchTickets')).status).toBe(200);
     expect(runTool).toHaveBeenCalledWith('jira_searchTickets', expect.any(Object));
   });

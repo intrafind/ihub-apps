@@ -24,6 +24,7 @@ import { enhanceUserWithPermissions } from '../../utils/authorization.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import * as tasks from '../../services/scheduler/tasks/taskService.js';
 import { makeClient, sseResponse, openaiText, captureRunLog } from '../loop/helpers/llmFixtures.js';
+import { fixtureIntegrationTool, fixtureInstallation } from './integrationToolFixture.js';
 
 export const MODELS = [
   {
@@ -50,13 +51,11 @@ export const APPS = [
     id: 'digest',
     name: { en: 'Digest' },
     system: { en: 'You write digests.' },
-    tools: [
-      'lookup',
-      'dangerous',
-      'schedule_task',
-      'list_scheduled_tasks',
-      'update_scheduled_task'
-    ],
+    integrations: {
+      lookup: {},
+      dangerous: {},
+      ihub: { actions: ['schedule_task', 'list_scheduled_tasks', 'update_scheduled_task'] }
+    },
     preferredModel: 'oa',
     enabled: true
   },
@@ -76,6 +75,9 @@ export const APPS = [
   }
 ];
 
+/** The installations of {@link harnessIntegrations}: what the harness groups may use, and no more. */
+const HARNESS_INTEGRATION_GRANTS = ['lookup', 'dangerous', 'ihub'];
+
 export const GROUPS = {
   groups: {
     users: {
@@ -84,10 +86,19 @@ export const GROUPS = {
         apps: ['digest', 'plain', 'notools'],
         models: ['*'],
         prompts: [],
+        integrations: HARNESS_INTEGRATION_GRANTS,
         scheduledTasks: true
       }
     },
-    noTasks: { id: 'noTasks', permissions: { apps: ['digest'], models: ['*'], prompts: [] } }
+    noTasks: {
+      id: 'noTasks',
+      permissions: {
+        apps: ['digest'],
+        models: ['*'],
+        prompts: [],
+        integrations: HARNESS_INTEGRATION_GRANTS
+      }
+    }
   }
 };
 
@@ -111,29 +122,59 @@ export async function toolDef(id) {
   );
 }
 
-/** The tools every harness registers, plus the defaults a test asks for by id. */
+/** The actions of the `ihub` installation the harness apps bind. */
+const IHUB_HARNESS_ACTIONS = ['schedule_task', 'list_scheduled_tasks', 'update_scheduled_task'];
+
+/**
+ * An iHub tool as the `ihub` installation lists it: the shipped definition
+ * under its old tool id, with the integration marker.
+ */
+export async function ihubTool(id) {
+  return fixtureIntegrationTool(id, {
+    ...(await toolDef(id)),
+    _integration: {
+      instanceId: 'ihub',
+      action: id,
+      definition: 'com.intrafind/ihub',
+      fixedToolId: true
+    }
+  });
+}
+
+/**
+ * The tools every harness registers, plus the defaults a test asks for by id.
+ * An app offers a tool only through a binding, so `lookup` and `dangerous` are
+ * actions of fixture installations of their own and the scheduling tools are
+ * actions of `ihub` (see {@link harnessIntegrations}).
+ */
 export async function harnessTools(defaultToolIds = []) {
   return [
-    {
-      id: 'lookup',
-      name: 'lookup',
+    fixtureIntegrationTool('lookup', {
       description: 'Look up a record',
       script: 'lookup.js',
       parameters: { type: 'object', properties: { key: { type: 'string' } } }
-    },
-    {
-      id: 'dangerous',
-      name: 'dangerous',
+    }),
+    fixtureIntegrationTool('dangerous', {
       description: 'Does something with side effects',
       script: 'dangerous.js',
       requiresApproval: true,
       parameters: { type: 'object', properties: {} }
-    },
-    await toolDef('schedule_task'),
-    await toolDef('list_scheduled_tasks'),
-    await toolDef('update_scheduled_task'),
+    }),
+    ...(await Promise.all(IHUB_HARNESS_ACTIONS.map(ihubTool))),
     ...(await Promise.all(defaultToolIds.map(toolDef)))
   ];
+}
+
+/** The installations behind {@link harnessTools}. */
+export function harnessIntegrations() {
+  return {
+    installed: [
+      fixtureInstallation('lookup'),
+      fixtureInstallation('dangerous'),
+      fixtureInstallation('ihub', { definition: 'com.intrafind/ihub' })
+    ],
+    security: { blockPrivateIps: true, allowedHosts: [] }
+  };
 }
 
 /**
@@ -168,6 +209,7 @@ export async function setupHarness({
   configCache.setCacheEntry('config/groups.json', GROUPS);
   configCache.setCacheEntry('config/users.json', { users });
   configCache.setCacheEntry('config/tools.json', await harnessTools(defaultTools));
+  configCache.setCacheEntry('config/integrations.json', harnessIntegrations());
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
   interactionService.onAnswer(interaction => tasks.applyApprovalAnswer(interaction));

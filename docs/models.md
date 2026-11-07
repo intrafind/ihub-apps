@@ -138,7 +138,7 @@ so leave the flag unset for them.
 
 ### Tools
 
-Apps can optionally specify a list of tool identifiers via the `tools` property.
+Apps get tools from the integrations they bind under `integrations` (and from `websearch`).
 Tool definitions are loaded from individual JSON files under `contents/tools/` (one file per tool, named `<toolId>.json`) or discovered from Model Context Protocol (MCP) servers installed as integrations under **Admin → Integrations** (`contents/config/integrations.json`; an app gets their tools by binding the installation under `integrations`, see [MCP Integration](mcp-integration.md)). Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `webSearch` tool, which performs a provider-configured web search. Additional tools provide direct access to specific search providers such as Brave (`braveSearch`) when the corresponding API key is configured.
 For example, an app configured for web browsing can enable the `webSearch` tool for its prompts.
 

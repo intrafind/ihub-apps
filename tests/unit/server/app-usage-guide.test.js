@@ -99,6 +99,22 @@ describe('usage guide generation prompt', () => {
     expect(describeAppForGuide(off, 'en', catalog)).not.toContain('Knowledge the assistant');
   });
 
+  it('names the integrations the app binds for tools, not scope-only bindings', () => {
+    const bound = {
+      ...app,
+      integrations: { jira: {}, ifinder: { actions: [] }, 'type:storage': { actions: ['list'] } }
+    };
+    const catalog = { integrations: [{ id: 'jira', label: 'Jira Cloud' }] };
+    const description = describeAppForGuide(bound, 'en', catalog);
+
+    expect(description).toContain('Integrations whose tools the assistant can use:');
+    expect(description).toContain('- Jira Cloud');
+    expect(description).toContain('- type:storage');
+    expect(description).not.toContain('ifinder');
+    // The retired `tools` list is not read.
+    expect(describeAppForGuide({ ...app, tools: ['ask_user'] }, 'en')).not.toContain('ask_user');
+  });
+
   it('asks for the guide in the language, without quoting the instructions', () => {
     const [system, user] = buildUsageGuideMessages(app, 'de');
 

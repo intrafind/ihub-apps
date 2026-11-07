@@ -461,8 +461,9 @@ by default, or some of them by action name:
 }
 ```
 
-Listing a server id or a prefixed tool id in `app.tools` (`["drawio"]`,
-`["drawio__create_diagram"]`) no longer selects anything. The group grant
+An app has no tool list of its own: the binding is the only way in (the
+`tools` field was removed in #3275, migration V229 turned its entries into
+bindings). The group grant
 (`permissions.integrations`) and the binding's action list apply in the chat and
 in `GET /api/tools?appId=`; an app whose installation is missing or disabled
 is not offered to users. In the chat's **+** menu each installation is one
@@ -1258,11 +1259,12 @@ caller has no grant for is never listed, even with `mcp:tools:read`.
 
 A caller sees a tool when either of these holds:
 
-- **An app they can access declares it.** Tool access is scoped through
-  apps: if `app.tools` contains `iFinder_getContent` and the caller may
-  use that app, the tool is visible. A disabled app grants nothing —
-  `configCache.getApps()` filters `enabled: false` before permissions are
-  computed.
+- **An app they can access binds it** (REST `POST /api/tools/:toolId`
+  only): the app binds the tool's installation under `integrations`, the
+  caller's groups grant the installation and the binding offers the action.
+  A disabled app grants nothing — `configCache.getApps()` filters
+  `enabled: false` before permissions are computed. The MCP gateway lists
+  only the tools a group grants directly.
 - **Their group grants it directly** via `permissions.tools` in
   `groups.json`. This is the path for callers who need a tool over MCP or
   A2A without an app in the way.
@@ -1290,10 +1292,10 @@ unchanged until an operator opts a group in. Grant it deliberately: a direct
 tool grant lets an MCP client call integrations such as iFinder, Jira and
 Entra **as the user**, with no app prompt or system prompt mediating the
 call. It does not change which tools a chat app may use — that is still the
-app's own `tools` list.
+app's own `integrations` bindings.
 
 The same rule decides which tools a user may run with a direct REST call,
-`POST /api/tools/:toolId`: a tool an app they can access declares, or one
+`POST /api/tools/:toolId`: a tool an app they can access binds, or one
 their group grants. Admins may run every tool that way. Any other tool
 answers `403`.
 
@@ -1452,7 +1454,7 @@ back to the generic definition and why. The endpoint and the OAuth URLs are
 carried over verbatim, trailing slash included. The
 `auth` block becomes the sign-in mode (credential references kept),
 `allowedTools` becomes `actions.enabled`, the `security` block is merged,
-apps that listed the server or its tools in `tools` get an `integrations`
+apps that listed the server or its tools in their former `tools` get an `integrations`
 binding instead, and `mcpServers.json` is deleted. A server whose id another,
 non-MCP installation already holds (an integration installed from the catalog)
 is not moved: the migration writes it to

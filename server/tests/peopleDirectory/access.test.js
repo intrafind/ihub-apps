@@ -16,7 +16,7 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import configCache from '../../configCache.js';
 import '../../services/integrations/protocols/native/connectors/register.js';
-import { getToolsForApp } from '../../services/tools/appTools.js';
+import { getToolsForApp, getToolsForNode } from '../../services/tools/appTools.js';
 import { loadTools } from '../../services/tools/catalog.js';
 import { runTool } from '../../services/tools/runTool.js';
 import { mayRunTool } from '../../routes/toolRoutes.js';
@@ -248,11 +248,10 @@ describe('people directory access', () => {
 
     it('let a scheduled task pick the directory tools an app binds', async () => {
       const { toolsOfferedByApp } = await import('../../services/scheduler/tasks/taskService.js');
-      const app = { id: 'people', integrations: ALL_DIRECTORIES, tools: ['braveSearch'] };
+      const app = { id: 'people', integrations: ALL_DIRECTORIES };
       const offered = await toolsOfferedByApp(app, member, 'en');
       const search = offered.find(tool => tool.id === 'x500bund__search_people');
       assert.equal(search.selectedByApp, true);
-      assert.equal(offered.find(tool => tool.id === 'braveSearch').selectedByApp, true);
     });
 
     it('narrow an app that binds a directory', async () => {
@@ -266,14 +265,21 @@ describe('people directory access', () => {
       assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', {})), []);
     });
 
-    it('narrow an app that still lists a directory in `tools`', async () => {
+    it('narrow a workflow node that lists a directory in its tools', async () => {
+      const node = { id: 'people' };
+      assert.deepEqual(
+        directoryToolIds(await getToolsForNode(['x500bund', 'hr'], node, 'en', { user: member })),
+        ['x500bund__get_person', 'x500bund__list_units', 'x500bund__search_people']
+      );
+      assert.deepEqual(
+        directoryToolIds(await getToolsForNode(['x500bund', 'hr'], node, 'en', { user: outsider })),
+        []
+      );
+    });
+
+    it('offer an app that still lists a directory in `tools` nothing', async () => {
       const app = { id: 'people', tools: ['x500bund', 'hr'] };
-      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: member })), [
-        'x500bund__get_person',
-        'x500bund__list_units',
-        'x500bund__search_people'
-      ]);
-      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: outsider })), []);
+      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: member })), []);
     });
 
     it('refuse a direct tool run, for admins too', async () => {

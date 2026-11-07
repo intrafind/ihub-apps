@@ -6,10 +6,11 @@ import { jest } from '@jest/globals';
 /**
  * Group-level `tools` permission.
  *
- * Tool visibility on the MCP/A2A gateways used to come only from the apps a
- * caller could access, so exposing a tool directly over MCP meant enabling a
- * carrier app whose only job was to hold the permission. `getVisibleToolIds`
- * now unions the group grant with the app-derived set.
+ * Tool visibility on the MCP/A2A gateways used to come from the apps a caller
+ * could access, so exposing a tool directly over MCP meant enabling a carrier
+ * app whose only job was to hold the permission. `getVisibleToolIds` is the
+ * group grant alone: apps have no tool list any more (#3275), the integrations
+ * they bind are checked where the tool is run (`mayRunTool`).
  */
 
 const appsForUser = { value: [] };
@@ -52,14 +53,16 @@ describe('getVisibleToolIds', () => {
     expect(toolVisibleInSet('iFinder_search', visible)).toBe(false);
   });
 
-  it('unions the group grant with tools declared by accessible apps', async () => {
-    appsForUser.value = [{ id: 'doc-actions', tools: ['jira_searchTickets'] }];
+  it('is the group grant alone: the apps a caller can open add nothing', async () => {
+    appsForUser.value = [
+      { id: 'doc-actions', tools: ['jira_searchTickets'], integrations: { jira: {} } }
+    ];
     const user = { id: 'u1', permissions: { tools: new Set(['iFinder']) } };
 
     const visible = await getVisibleToolIds(user, platform);
 
     expect(toolVisibleInSet('iFinder_search', visible)).toBe(true);
-    expect(toolVisibleInSet('jira_searchTickets', visible)).toBe(true);
+    expect(toolVisibleInSet('jira_searchTickets', visible)).toBe(false);
   });
 
   it('stays default-deny when the group grants nothing', async () => {
@@ -72,11 +75,12 @@ describe('getVisibleToolIds', () => {
   });
 
   it('tolerates a user with no tools permission at all', async () => {
-    appsForUser.value = [{ id: 'doc-actions', tools: ['iFinder_getMetadata'] }];
+    appsForUser.value = [{ id: 'doc-actions', integrations: { ifinder: {} } }];
 
     const visible = await getVisibleToolIds({ id: 'u1', permissions: {} }, platform);
 
-    expect(toolVisibleInSet('iFinder_getMetadata', visible)).toBe(true);
+    expect(visible.size).toBe(0);
+    expect(toolVisibleInSet('iFinder_getMetadata', visible)).toBe(false);
     expect(toolVisibleInSet('iFinder_search', visible)).toBe(false);
   });
 

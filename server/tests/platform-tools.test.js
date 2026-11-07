@@ -9,7 +9,7 @@
  * (`read_url`) are plain tools owned by those features,
  * not actions of the iHub integration. Everything that resolves them by id
  * keeps working as it did with their tool files: workflow prompt nodes and
- * agent runs, apps, group grants, `runTool`, a scheduled run's memory tools;
+ * agent runs, group grants, `runTool`, a scheduled run's memory tools;
  * and a file of the same id in `contents/tools/` still takes their place.
  *
  * Run: node --test server/tests/platform-tools.test.js
@@ -135,10 +135,17 @@ describe('the platform tools', () => {
         `${id} is loaded`
       );
     }
-    const offered = await getToolsForApp({ id: 'a', tools: ['write_artifact', 'evidence'] }, 'en', {
-      user: member
-    });
-    assert.deepEqual(ids(offered), ['write_artifact', ...EVIDENCE].sort());
+    // They belong to workflows and agents: an app, which gets tools only
+    // through the integrations it binds, does not offer them (#3275).
+    const offered = await getToolsForApp(
+      { id: 'a', tools: ['write_artifact', 'evidence'], integrations: { ihub: {} } },
+      'en',
+      { user: member }
+    );
+    assert.equal(
+      offered.some(t => [...AGENT_WORKSPACE, ...EVIDENCE].includes(t.id)),
+      false
+    );
   });
 
   it('give way to a tool file of the same id in contents/tools, enabled or not', async () => {

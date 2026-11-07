@@ -48,10 +48,10 @@ function resolveCaller(req, platformConfig) {
 /**
  * Whether the caller may run a tool directly. The rule is the MCP gateway's
  * (`services/mcp/permissions.js`): a tool the caller's groups grant
- * (`permissions.tools`, `*` for all) or an app they can open lists, read the
- * way an app's `tools` are read — exact id, base id of a function-style tool,
- * MCP server id, A2A agent reference, people directory (see
- * `isToolSelected`). An admin, who can grant themselves any tool, runs every
+ * (`permissions.tools`, `*` for all; read by `isToolSelected` — exact id, base
+ * id of a function-style tool, MCP server id, A2A agent reference, people
+ * directory) or an app they can open offers through the integration it binds
+ * (`app.integrations`). An admin, who can grant themselves any tool, runs every
  * tool (testing a tool this way is how tool authors check it) — except a
  * people directory's tool, whose group grant (`permissions.integrations`)
  * holds for every caller, and an LDAP browser's tool, whose grant and own
@@ -78,7 +78,21 @@ export async function mayRunTool(user, platformConfig, toolId) {
   // directory it belongs to; a tool that is not in the list (workflow_,
   // source_, …) is judged by id.
   const tool = (tools || []).find(t => t.id === toolId) || { id: toolId };
-  return isToolSelected(tool, visible);
+  if (isToolSelected(tool, visible)) return true;
+  return appOffersIntegrationTool(user, platformConfig, tool);
+}
+
+/**
+ * Whether an app the user can open offers an installed integration's tool: it
+ * binds the installation, the user's groups grant it and the binding allows
+ * the action (`getIntegrationToolsForApp`).
+ */
+async function appOffersIntegrationTool(user, platformConfig, tool) {
+  if (!tool._integration) return false;
+  const { getIntegrationToolsForApp } =
+    await import('../services/integrations/integrationTools.js');
+  const { data: apps = [] } = await configCache.getAppsForUser(user, platformConfig);
+  return (apps || []).some(app => getIntegrationToolsForApp(app, [tool], { user }).length > 0);
 }
 
 export default function registerToolRoutes(app) {

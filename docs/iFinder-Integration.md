@@ -177,7 +177,7 @@ The last four are the **discovery** surface; see
 ### Binding the tools to an app
 
 The tools are the actions of the `ifinder` installation, so an app does not list
-them in `tools`. It binds the installation under `integrations`, naming the
+them in a tool list. It binds the installation under `integrations`, naming the
 actions it wants (the tool ids without the `iFinder_` prefix), or none for all
 of them:
 

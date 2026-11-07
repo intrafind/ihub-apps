@@ -51,13 +51,17 @@ test('a chat in the upgraded iFinder Search app starts with the iFinder tools on
   expect(result.current.enabledTools).toEqual(['ifinder']);
 });
 
-test("the app's own tools come first, and bindings without tools stay off the list", async () => {
+test('bindings without tools stay off the list', async () => {
   const { result } = await settled({
     id: 'research',
-    tools: ['ask_user', 'braveSearch'],
-    integrations: { ifinder: {}, iassistant: {}, jira: { actions: [] } }
+    integrations: {
+      ihub: { actions: ['ask_user'] },
+      ifinder: {},
+      iassistant: {},
+      jira: { actions: [] }
+    }
   });
-  expect(result.current.enabledTools).toEqual(['ask_user', 'braveSearch', 'ifinder']);
+  expect(result.current.enabledTools).toEqual(['ihub', 'ifinder']);
 });
 
 test('the settings this browser kept survive the mount, and its integration state stays until imported', async () => {
@@ -67,7 +71,7 @@ test('the settings this browser kept survive the mount, and its integration stat
     'ai_hub_app_settings_research',
     JSON.stringify({ selectedStyle: 'brief', enabledTools: ['jira'] })
   );
-  const app = { id: 'research', tools: ['braveSearch'] };
+  const app = { id: 'research', integrations: { jira: {} } };
   const { result } = renderHook(() => useAppSettings(app.id, app));
   await waitFor(() => expect(result.current.modelsLoading).toBe(false));
   await waitFor(() => expect(result.current.selectedStyle).toBe('brief'));

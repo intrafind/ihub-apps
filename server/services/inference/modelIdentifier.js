@@ -25,6 +25,7 @@
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { filterModelsForApp } from '../chat/RequestBuilder.js';
+import { appHasToolBindings } from '../integrations/appIntegrationRefs.js';
 import { findByIdCaseInsensitive, hasIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { InferenceApiError } from './errors.js';
@@ -104,11 +105,7 @@ function appNeedsTools(app) {
     Array.isArray(app?.apps) &&
     app.apps.length > 0 &&
     isFeatureEnabled('appAsTool', configCache.getFeatures());
-  return (
-    (Array.isArray(app?.tools) && app.tools.length > 0) ||
-    appToolsActive ||
-    app?.websearch?.enabled === true
-  );
+  return appHasToolBindings(app) || appToolsActive || app?.websearch?.enabled === true;
 }
 
 /**
