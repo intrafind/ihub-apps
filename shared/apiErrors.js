@@ -363,7 +363,8 @@ export const MISC_ERROR_CODES = Object.freeze({
   CONCURRENCY_LIMIT: 409,
   PROVIDER_IN_USE: 409,
   APP_ACCESS_DENIED: 403,
-  MODEL_ACCESS_DENIED: 403
+  MODEL_ACCESS_DENIED: 403,
+  USER_VALIDATION_FAILED: 403
 });
 
 /** Every code, with its default HTTP status. */

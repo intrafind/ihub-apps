@@ -12,7 +12,7 @@ import logger from '../utils/logger.js';
 import { setAuthCookie } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
-import { sendErrorResponse } from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 // jwks-rsa pulls in jose (pure ESM) internally via a synchronous require(), so
 // a static top-level import here would blow up as soon as anything imports
 // this file — e.g. for route registration — under Jest's CJS-style module
@@ -231,31 +231,18 @@ export async function teamsAuthMiddleware(req, res, next) {
 export async function teamsTokenExchange(req, res) {
   const errorHandler = new ErrorHandler();
   const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+  const refuse = async code =>
+    new ServiceError(code, await errorHandler.getLocalizedError(code, {}, language));
+
+  // Request validation first: these refusals are not sign-in failures.
+  const { ssoToken } = req.body;
+  if (!ssoToken) throw await refuse('TEAMS_SSO_TOKEN_REQUIRED');
+
+  const platform = configCache.getPlatform() || {};
+  const teamsConfig = platform.teamsAuth || {};
+  if (!teamsConfig.enabled) throw await refuse('TEAMS_AUTH_NOT_ENABLED');
 
   try {
-    const { ssoToken } = req.body;
-
-    if (!ssoToken) {
-      const errorMessage = await errorHandler.getLocalizedError(
-        'TEAMS_SSO_TOKEN_REQUIRED',
-        {},
-        language
-      );
-      return sendErrorResponse(res, 400, errorMessage, { code: 'TEAMS_SSO_TOKEN_REQUIRED' });
-    }
-
-    const platform = configCache.getPlatform() || {};
-    const teamsConfig = platform.teamsAuth || {};
-
-    if (!teamsConfig.enabled) {
-      const errorMessage = await errorHandler.getLocalizedError(
-        'TEAMS_AUTH_NOT_ENABLED',
-        {},
-        language
-      );
-      return sendErrorResponse(res, 400, errorMessage, { code: 'TEAMS_AUTH_NOT_ENABLED' });
-    }
-
     // Verify the Teams SSO token
     const tokenData = await verifyTeamsToken(ssoToken, teamsConfig);
 
@@ -301,21 +288,8 @@ export async function teamsTokenExchange(req, res) {
   } catch (error) {
     logger.error('Teams token exchange error', { component: 'TeamsAuth', error });
 
-    if (isAccountDisabledError(error)) {
-      const errorMessage = await errorHandler.getLocalizedError(
-        'TEAMS_ACCOUNT_DISABLED',
-        {},
-        language
-      );
-      return sendErrorResponse(res, 403, errorMessage, { code: 'TEAMS_ACCOUNT_DISABLED' });
-    }
-
-    const errorMessage = await errorHandler.getLocalizedError(
-      'TEAMS_INVALID_OR_EXPIRED_TOKEN',
-      {},
-      language
-    );
-    sendErrorResponse(res, 401, errorMessage, { code: 'TEAMS_INVALID_OR_EXPIRED_TOKEN' });
+    if (isAccountDisabledError(error)) throw await refuse('TEAMS_ACCOUNT_DISABLED');
+    throw await refuse('TEAMS_INVALID_OR_EXPIRED_TOKEN');
   }
 }
 
