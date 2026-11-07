@@ -4,12 +4,11 @@
 import multer from 'multer';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { ASSET_SLOTS, referencedAssets } from '../../validators/documentTemplateSchema.js';
 import {
-  DocumentTemplateError,
   deleteTemplate,
   getTemplate,
   listTemplates,
@@ -19,7 +18,7 @@ import {
   saveTemplateAsset
 } from '../../services/documents/templates/DocumentTemplateService.js';
 import { renderTemplateSample } from '../../services/documents/templates/templateSamples.js';
-import { DocumentGenerationError } from '../../services/documents/renderService.js';
+import { toDocumentServiceError } from '../../services/documents/documentHttpErrors.js';
 
 /**
  * Admin API for document templates (`contents/document-templates/<id>/`).
@@ -66,18 +65,24 @@ const ASSET_TYPES = {
   potx: 'application/vnd.openxmlformats-officedocument.presentationml.template'
 };
 
-function fail(res, error, operation) {
-  if (error instanceof DocumentTemplateError) {
-    return sendErrorResponse(res, error.status, error.message);
-  }
-  if (error instanceof DocumentGenerationError) {
-    return sendErrorResponse(res, error.code === 'busy' ? 503 : 422, error.message);
-  }
-  logger.error(`Document template ${operation} failed`, {
-    component: 'AdminDocumentTemplates',
-    error
-  });
-  return sendErrorResponse(res, 500, `The document template could not be ${operation}.`);
+/**
+ * Runs a handler; the document services' errors keep their status, anything else is logged
+ * and answered as a 500 that names the operation but not the cause.
+ */
+function handle(operation, handler) {
+  return async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (raw) {
+      const error = toDocumentServiceError(raw);
+      if (error instanceof ServiceError) throw error;
+      logger.error(`Document template ${operation} failed`, {
+        component: 'AdminDocumentTemplates',
+        error
+      });
+      throw new ServiceError('INTERNAL_ERROR', `The document template could not be ${operation}.`);
+    }
+  };
 }
 
 /** The file a template has in a slot (font slots: the family's face). */
@@ -125,104 +130,111 @@ async function describeFiles(template) {
   return out;
 }
 
-export default function registerAdminDocumentTemplatesRoutes(app) {
-  const base = buildServerPath('/api/admin/document-templates');
-
-  app.get(base, adminAuth, async (req, res) => {
-    try {
-      res.json({ templates: await listTemplates({ includeDisabled: true }) });
-    } catch (error) {
-      fail(res, error, 'loaded');
-    }
-  });
-
-  app.post(base, adminAuth, async (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    try {
-      const template = await saveTemplate(String(body.id || ''), body, { create: true });
-      res.status(201).json({ template });
-    } catch (error) {
-      fail(res, error, 'created');
-    }
-  });
-
-  app.get(`${base}/:id`, adminAuth, async (req, res) => {
-    try {
-      const template = await getTemplate(req.params.id, { includeDisabled: true });
-      if (!template) return sendErrorResponse(res, 404, 'Template not found.');
-      res.json({ template, files: await describeFiles(template) });
-    } catch (error) {
-      fail(res, error, 'loaded');
-    }
-  });
-
-  app.put(`${base}/:id`, adminAuth, async (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    try {
-      const template = await saveTemplate(req.params.id, body);
-      res.json({ template, files: await describeFiles(template) });
-    } catch (error) {
-      fail(res, error, 'saved');
-    }
-  });
-
-  app.delete(`${base}/:id`, adminAuth, async (req, res) => {
-    try {
-      await deleteTemplate(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      fail(res, error, 'deleted');
-    }
-  });
-
-  app.post(`${base}/:id/files/:slot`, adminAuth, (req, res) => {
-    upload.single('file')(req, res, async uploadError => {
-      if (uploadError) {
-        return sendErrorResponse(
-          res,
-          uploadError.code === 'LIMIT_FILE_SIZE' ? 413 : 400,
-          uploadError.code === 'LIMIT_FILE_SIZE' ? 'The file is too large.' : 'Invalid upload.'
-        );
+/** Runs the multipart upload middleware; its failures are answered as ServiceErrors. */
+function receiveUpload(req, res) {
+  return new Promise((resolve, reject) => {
+    upload.single('file')(req, res, uploadError => {
+      if (!uploadError) return resolve();
+      if (uploadError.code === 'LIMIT_FILE_SIZE') {
+        return reject(new ServiceError('PAYLOAD_TOO_LARGE', 'The file is too large.'));
       }
-      if (!Object.hasOwn(ASSET_SLOTS, req.params.slot)) {
-        return sendErrorResponse(res, 400, 'Unknown template file slot.');
-      }
-      if (!req.file?.buffer) return sendErrorResponse(res, 400, 'No file uploaded.');
-      try {
-        const result = await saveTemplateAsset(req.params.id, {
-          slot: req.params.slot,
-          data: req.file.buffer,
-          originalName: req.file.originalname,
-          family: req.body?.family,
-          face: req.body?.face || 'normal'
-        });
-        res.json({
-          template: result.template,
-          file: result.file,
-          info: result.info,
-          files: await describeFiles(result.template)
-        });
-      } catch (error) {
-        fail(res, error, 'saved');
-      }
+      reject(new ServiceError('BAD_REQUEST', 'Invalid upload.'));
     });
   });
+}
 
-  app.delete(`${base}/:id/files/:slot`, adminAuth, async (req, res) => {
-    try {
+export default function registerAdminDocumentTemplatesRoutes(app) {
+  const base = buildServerPath('/api/admin/document-templates');
+  const bodyOf = req => (req.body && typeof req.body === 'object' ? req.body : {});
+
+  app.get(
+    base,
+    adminAuth,
+    handle('loaded', async (req, res) => {
+      res.json({ templates: await listTemplates({ includeDisabled: true }) });
+    })
+  );
+
+  app.post(
+    base,
+    adminAuth,
+    handle('created', async (req, res) => {
+      const body = bodyOf(req);
+      const template = await saveTemplate(String(body.id || ''), body, { create: true });
+      res.status(201).json({ template });
+    })
+  );
+
+  app.get(
+    `${base}/:id`,
+    adminAuth,
+    handle('loaded', async (req, res) => {
+      const template = await getTemplate(req.params.id, { includeDisabled: true });
+      if (!template) throw new ServiceError('NOT_FOUND', 'Template not found.');
+      res.json({ template, files: await describeFiles(template) });
+    })
+  );
+
+  app.put(
+    `${base}/:id`,
+    adminAuth,
+    handle('saved', async (req, res) => {
+      const template = await saveTemplate(req.params.id, bodyOf(req));
+      res.json({ template, files: await describeFiles(template) });
+    })
+  );
+
+  app.delete(
+    `${base}/:id`,
+    adminAuth,
+    handle('deleted', async (req, res) => {
+      await deleteTemplate(req.params.id);
+      res.json({ success: true });
+    })
+  );
+
+  app.post(
+    `${base}/:id/files/:slot`,
+    adminAuth,
+    handle('saved', async (req, res) => {
+      await receiveUpload(req, res);
+      if (!Object.hasOwn(ASSET_SLOTS, req.params.slot)) {
+        throw new ServiceError('BAD_REQUEST', 'Unknown template file slot.');
+      }
+      if (!req.file?.buffer) throw new ServiceError('BAD_REQUEST', 'No file uploaded.');
+      const result = await saveTemplateAsset(req.params.id, {
+        slot: req.params.slot,
+        data: req.file.buffer,
+        originalName: req.file.originalname,
+        family: req.body?.family,
+        face: req.body?.face || 'normal'
+      });
+      res.json({
+        template: result.template,
+        file: result.file,
+        info: result.info,
+        files: await describeFiles(result.template)
+      });
+    })
+  );
+
+  app.delete(
+    `${base}/:id/files/:slot`,
+    adminAuth,
+    handle('saved', async (req, res) => {
       const template = await removeTemplateAsset(req.params.id, {
         slot: req.params.slot,
         family: req.query.family,
         face: req.query.face
       });
       res.json({ template, files: await describeFiles(template) });
-    } catch (error) {
-      fail(res, error, 'saved');
-    }
-  });
+    })
+  );
 
-  app.get(`${base}/:id/files/:slot`, adminAuth, async (req, res) => {
-    try {
+  app.get(
+    `${base}/:id/files/:slot`,
+    adminAuth,
+    handle('loaded', async (req, res) => {
       const template = await getTemplate(req.params.id, { includeDisabled: true });
       const name = template
         ? assetInSlot(template, req.params.slot, {
@@ -231,7 +243,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
           })
         : null;
       if (!name || !referencedAssets(template).includes(name)) {
-        return sendErrorResponse(res, 404, 'File not found.');
+        throw new ServiceError('NOT_FOUND', 'File not found.');
       }
       const data = await readTemplateAsset(template.id, name);
       const extension = name.split('.').pop();
@@ -243,17 +255,17 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
         res.setHeader('Content-Disposition', buildContentDisposition(name));
       }
       res.send(data);
-    } catch (error) {
-      fail(res, error, 'loaded');
-    }
-  });
+    })
+  );
 
-  app.post(`${base}/:id/sample/:format`, adminAuth, async (req, res) => {
-    const format = req.params.format;
-    if (!SAMPLE_TYPES[format]) return sendErrorResponse(res, 400, 'Unknown sample format.');
-    try {
+  app.post(
+    `${base}/:id/sample/:format`,
+    adminAuth,
+    handle('rendered', async (req, res) => {
+      const format = req.params.format;
+      if (!SAMPLE_TYPES[format]) throw new ServiceError('BAD_REQUEST', 'Unknown sample format.');
       const template = await getTemplate(req.params.id, { includeDisabled: true });
-      if (!template) return sendErrorResponse(res, 404, 'Template not found.');
+      if (!template) throw new ServiceError('NOT_FOUND', 'Template not found.');
       const language = typeof req.body?.language === 'string' ? req.body.language : 'en';
       const { buffer, filename } = await renderTemplateSample(template, format, language);
       res.setHeader('Content-Type', SAMPLE_TYPES[format]);
@@ -261,8 +273,6 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
       res.setHeader('Cache-Control', 'no-store');
       if (format !== 'png') res.setHeader('Content-Disposition', buildContentDisposition(filename));
       res.send(buffer);
-    } catch (error) {
-      fail(res, error, 'rendered');
-    }
-  });
+    })
+  );
 }
