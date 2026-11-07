@@ -813,6 +813,11 @@ used to be an HTML or plain text page.
   SSRF guard blocks. The UI endpoints no longer answer an error with `{ success: false, message }`, and a UI
   configuration that is missing a section or has an invalid value answers `BAD_REQUEST` again instead of 500. An
   unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The public page (`/api/pages/{id}`), renderer (`/api/renderers*`) and magic prompt (`/api/magic-prompt`)
+  endpoints answer in this shape: `NOT_FOUND` for an unknown page, page file, renderer or app, `AUTH_REQUIRED` /
+  `FORBIDDEN` for a protected page or a model the caller may not use, `BAD_REQUEST` for an invalid id or a
+  missing input and, for a failing model call, the LLM code with its canonical status. An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
