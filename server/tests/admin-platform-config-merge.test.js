@@ -67,6 +67,7 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 }));
 
 const { default: registerAdminConfigRoutes } = await import('../routes/admin/configs.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp() {
   const app = express();
@@ -76,6 +77,7 @@ function createTestApp() {
     next();
   });
   registerAdminConfigRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -355,7 +357,8 @@ describe('POST /api/admin/configs/platform proxyAuth.sharedSecretHeader', () => 
         .send({ ...stored, proxyAuth: { ...stored.proxyAuth, sharedSecretHeader } });
 
       expect(response.status).toBe(400);
-      expect(JSON.stringify(response.body)).toContain('proxyAuth.sharedSecretHeader');
+      expect(response.body.code).toBe('BAD_REQUEST');
+      expect(response.body.detail).toContain('proxyAuth.sharedSecretHeader');
       expect(await readPlatform()).toEqual(stored);
     }
   );
@@ -367,5 +370,38 @@ describe('POST /api/admin/configs/platform proxyAuth.sharedSecretHeader', () => 
 
     expect(response.status).toBe(200);
     expect((await readPlatform()).proxyAuth.sharedSecretHeader).toBe('X-Gate');
+  });
+});
+
+describe('POST /api/admin/configs/platform answers refusals in the shared shape', () => {
+  beforeEach(async () => {
+    state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-platform-cfg-errors-'));
+    await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
+    await fs.writeFile(platformPath(), JSON.stringify({ auth: { mode: 'local' } }));
+  });
+
+  afterEach(async () => {
+    await fs.rm(state.rootDir, { recursive: true, force: true });
+  });
+
+  test('a body that is not an object is BAD_REQUEST', async () => {
+    const response = await request(createTestApp())
+      .post('/api/admin/configs/platform')
+      .set('Content-Type', 'application/json')
+      .send('"text"');
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('BAD_REQUEST');
+  });
+
+  test('a default language that is not a language code is BAD_REQUEST and stores nothing', async () => {
+    const response = await request(createTestApp())
+      .post('/api/admin/configs/platform')
+      .send({ defaultLanguage: '../../etc/passwd' });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(response.body.detail).toContain('defaultLanguage');
+    expect(await readPlatform()).toEqual({ auth: { mode: 'local' } });
   });
 });
