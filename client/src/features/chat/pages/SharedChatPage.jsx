@@ -41,7 +41,7 @@ const DEFAULT_APP_ICON = 'chat-bubble';
  * @returns {Object[]}
  */
 function toViewerMessages(messages) {
-  return (messages || []).map(transformStoredMessage);
+  return (messages || []).map(stored => transformStoredMessage(stored));
 }
 
 function formatBytes(bytes) {
