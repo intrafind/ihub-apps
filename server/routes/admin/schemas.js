@@ -3,11 +3,7 @@
 
 import { getJsonSchemaByType, getAllJsonSchemas } from '../../utils/schemaExport.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import {
-  sendFailedOperationError,
-  sendBadRequest,
-  sendNotFound
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { buildServerPath } from '../../utils/basePath.js';
 
 /**
@@ -54,12 +50,8 @@ import { buildServerPath } from '../../utils/basePath.js';
  */
 export default function registerAdminSchemasRoutes(app) {
   app.get(buildServerPath('/api/admin/schemas'), adminAuth, async (req, res) => {
-    try {
-      const schemas = getAllJsonSchemas();
-      res.json(schemas);
-    } catch (error) {
-      sendFailedOperationError(res, 'retrieve schemas', error);
-    }
+    const schemas = getAllJsonSchemas();
+    res.json(schemas);
   });
 
   /**
@@ -99,26 +91,21 @@ export default function registerAdminSchemasRoutes(app) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/admin/schemas/:type'), adminAuth, async (req, res) => {
-    try {
-      const { type } = req.params;
+    const { type } = req.params;
 
-      const allowedTypes = ['app', 'model', 'prompt', 'group', 'platform', 'user'];
-      if (!allowedTypes.includes(type)) {
-        return sendBadRequest(
-          res,
-          'Invalid schema type',
-          `Schema type must be one of: ${allowedTypes.join(', ')}`
-        );
-      }
-
-      const schema = getJsonSchemaByType(type);
-      if (!schema) {
-        return sendNotFound(res, `Schema for type: ${type}`);
-      }
-
-      res.json(schema);
-    } catch (error) {
-      sendFailedOperationError(res, 'retrieve schema', error);
+    const allowedTypes = ['app', 'model', 'prompt', 'group', 'platform', 'user'];
+    if (!allowedTypes.includes(type)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid schema type. Schema type must be one of: ${allowedTypes.join(', ')}`
+      );
     }
+
+    const schema = getJsonSchemaByType(type);
+    if (!schema) {
+      throw new ServiceError('NOT_FOUND', `Schema for type: ${type} not found`);
+    }
+
+    res.json(schema);
   });
 }
