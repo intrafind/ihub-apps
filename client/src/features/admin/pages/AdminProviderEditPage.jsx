@@ -16,6 +16,7 @@ import {
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
 import ProviderTimeoutFields from '../components/ProviderTimeoutFields';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -26,6 +27,7 @@ function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { providerId } = useParams();
+  const access = useAdminPageAccess();
 
   // Constants
   const API_KEY_PLACEHOLDER = '••••••••';
@@ -191,6 +193,7 @@ function AdminProviderEditPage() {
         <AdminBreadcrumb
           crumbs={[
             { label: 'Admin', href: '/admin' },
+            ...(access.models ? [{ label: 'Models', href: '/admin/models' }] : []),
             { label: 'Providers', href: '/admin/providers' },
             { label: formData?.name || providerId }
           ]}
@@ -353,6 +356,25 @@ function AdminProviderEditPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {access.models && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate('/admin/models/new', {
+                        state: {
+                          // A built-in provider is its own API type; a custom one links by id.
+                          templateModel: isBuiltIn
+                            ? { provider: providerId }
+                            : { provider: getProviderApiType(initialData), providerId }
+                        }
+                      })
+                    }
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
+                  >
+                    <Icon name="plus" className="w-4 h-4" />
+                    {t('admin.providers.linkedModels.add', 'Add model')}
+                  </button>
+                )}
                 {canSync && (
                   <button
                     type="button"

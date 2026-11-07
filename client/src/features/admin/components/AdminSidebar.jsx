@@ -53,7 +53,7 @@ function NavItem({ item, isCollapsed }) {
   const isActive =
     item.href === '/admin'
       ? location.pathname === '/admin'
-      : location.pathname.startsWith(item.href);
+      : [item.href, ...(item.activeFor || [])].some(href => location.pathname.startsWith(href));
 
   const Icon = item.icon;
 
