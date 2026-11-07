@@ -22,7 +22,6 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getPlatform: () => ({ defaultLanguage: 'en' }),
     getFeatures: () => ({}),
     getApps: () => ({ data: [] }),
-    getTools: () => ({ data: [] }),
     getModels: () => ({ data: [] }),
     getSources: () => ({ data: [] })
   }

@@ -6,8 +6,7 @@
  * (`com.intrafind/ihub`): the installation exists whether or not
  * `integrations.json` holds it, cannot be removed or disabled, serves
  * `ask_user` and the scheduled-task tools — and nothing else — under their old
- * ids with their flags, and an app's `tools` list still selects them (exact id
- * or base id, never the installation id). The knowledge tools belong to
+ * ids with their flags, and an app gets them by binding the installation. The knowledge tools belong to
  * projects and the agent workspace and evidence tools to workflows and agents:
  * the installation's action switches do not reach them.
  */
@@ -42,7 +41,6 @@ const member = { id: 'member', groups: ['users'], permissions: everything };
 
 before(async () => {
   await integrationRegistry.ensureLoaded();
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
   // Members of users may use iHub's own tools (`permissions.integrations`, #3093).
   configCache.setCacheEntry('config/groups.json', {
@@ -143,22 +141,29 @@ describe('iHub tools', () => {
     }
   });
 
-  it('is selected by its tool id or base id, not by the installation id', async () => {
+  it('is selected by its tool id, and an app gets it only by binding the installation', async () => {
     const tools = await loadTools('en');
     const askUser = tools.find(t => t.id === 'ask_user');
     assert.equal(isToolSelected({ id: askUser.id }, ['ask_user']), true);
     assert.equal(isToolSelected({ id: askUser.id }, ['schedule_task']), false);
     const offered = await getToolsForApp(
-      { id: 'a', tools: ['ask_user', 'knowledge', 'write_artifact'] },
+      { id: 'a', integrations: { ihub: { actions: ['ask_user'] } } },
       'en',
       { user: member }
     );
-    // `knowledge` selects nothing without a project: the knowledge tools come
-    // with the request's projects, not with `tools`.
-    assert.deepEqual(offered.map(t => t.id).sort(), ['ask_user', 'write_artifact']);
-    // `ihub` itself selects nothing: the installation id is not a tool reference here.
+    assert.deepEqual(offered.map(t => t.id).sort(), ['ask_user']);
+    // An app has no `tools` list: naming a tool there offers nothing.
     assert.deepEqual(
-      await getToolsForApp({ id: 'b', tools: ['ihub'] }, 'en', { user: member }),
+      await getToolsForApp({ id: 'b', tools: ['ask_user', 'write_artifact'] }, 'en', {
+        user: member
+      }),
+      []
+    );
+    // Without the group's grant of the installation the binding offers nothing.
+    assert.deepEqual(
+      await getToolsForApp({ id: 'c', integrations: { ihub: {} } }, 'en', {
+        user: { id: 'guest', groups: ['nobody'], permissions: everything }
+      }),
       []
     );
   });
@@ -180,15 +185,13 @@ describe('iHub tools', () => {
     });
     try {
       const offered = await getToolsForApp(
-        { id: 'a', tools: ['ask_user', 'write_artifact'] },
+        { id: 'a', integrations: { ihub: { actions: ['ask_user'] } } },
         'en',
-        {
-          user: member
-        }
+        { user: member }
       );
       assert.deepEqual(
         offered.map(t => t.id),
-        ['write_artifact']
+        []
       );
     } finally {
       configCache.setCacheEntry('config/integrations.json', {

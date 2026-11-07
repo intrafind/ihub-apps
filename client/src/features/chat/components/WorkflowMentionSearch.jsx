@@ -32,7 +32,7 @@ const NO_INTEGRATIONS = [];
  * @param {string} props.query - Current search query (text after '@')
  * @param {Function} props.onClose - Close the dropdown
  * @param {Function} props.onSelect - Called with workflow id when selected
- * @param {Object} props.app - Current app configuration (to filter by app.tools)
+ * @param {Object} props.app - Current app configuration (to filter by its workflows)
  * @param {Array<{id: string, name: string, description?: string, on: boolean}>} [props.integrations]
  *   The integrations of the picker; picking one switches it on in this chat
  * @param {(id: string) => void} [props.onSelectIntegration]

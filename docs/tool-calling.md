@@ -21,7 +21,7 @@ Get tool calling working in under 10 minutes with this simple example.
 
 ### Enable a Tool for Your App
 
-Add a `tools` property to your app configuration:
+An app gets tools from the integrations it binds (`integrations`) and from its `websearch` configuration; it has no tool list of its own (the `tools` field was removed in #3275). This app turns on web search:
 
 ```json
 {
@@ -103,61 +103,57 @@ call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frame
 
 ### Tool Registration and Discovery
 
-> **Custom tools are built as integrations.** The supported way to add a tool is **Admin →
-> Integrations → Add manually**, the integration builder, which takes an OpenAPI document, an
-> HTTP request, a script, an MCP server or an A2A agent as its source (see
-> [Integrations → Custom integrations](integrations.md#custom-integrations-add-manually)). The
-> **Admin → Tools** page is gone, and OpenAPI tool files in `contents/tools/` are no longer read
-> (migration V211 turned existing ones into custom integrations). The tool-file sections below
-> describe what developers can still put in `contents/tools/` by hand: script tools and the
-> shipped platform tools.
+Every tool a model can call is an action of an installed integration (#3275); nothing lists tools by
+id any more, and there are no tool files in `contents/tools/` (the loader was retired: migration V230
+reports leftover files and leaves them in place, nothing reads them).
 
-Tools are registered through three methods:
+> **Custom tools are built as integrations.** Add one under **Admin → Integrations → Add manually**,
+> the integration builder, which takes an OpenAPI document, an HTTP request, a script, an MCP server
+> or an A2A agent as its source (see
+> [Integrations → Custom integrations](integrations.md#custom-integrations-add-manually)). An app,
+> workflow node or agent profile gets the tool by binding the installation (`integrations`).
 
-1. **Static Configuration** (one JSON file per tool under `contents/tools/`; script tools only for
-   new tools, see above)
-2. **MCP Server Discovery** (Model Context Protocol; MCP servers are installed integrations)
-3. **Dynamic Registration** (Runtime API)
+Tools reach a request in three ways:
+
+1. **Installed integrations**: their actions are discovered from the definition (built-in, OpenAPI,
+   HTTP, script) or from the remote server (MCP servers, A2A agents).
+2. **Platform tools**: the agent workspace, the evidence tools and `read_url`, shipped with iHub in
+   `server/defaults/tools/` and read in place; workflow nodes and agent profiles name them in
+   `systemTools`.
+3. **Feature tools**: project knowledge, stored-chat lookups and skills come with the feature, not
+   from a binding.
 
 ## Tool Development Lifecycle
 
 ### 1. Tool Definition
 
-Create a tool definition file at `contents/tools/weatherLookup.json`:
+A tool is declared as an **action** of an integration: a name, a description for the model, a JSON
+schema for the parameters, a side effect (`read`, `write`, `destructive`) and an approval mode. In the
+integration builder (**Admin → Integrations → Add manually**) you fill these in per action; a
+shipped definition writes them in its `integration.json`. This is the parameter schema of a weather
+action:
 
 ```json
 {
-  "id": "weatherLookup",
-  "name": {
-    "en": "Weather Lookup",
-    "de": "Wetter-Abfrage"
-  },
-  "description": {
-    "en": "Get current weather for any location",
-    "de": "Aktuelles Wetter für jeden Ort abrufen"
-  },
-  "script": "weatherLookup.js",
+  "name": "weatherLookup",
+  "description": { "en": "Get current weather for a location", "de": "Aktuelles Wetter für einen Ort abrufen" },
+  "sideEffect": "read",
   "parameters": {
     "type": "object",
     "properties": {
-      "location": {
-        "type": "string",
-        "description": "City name or coordinates"
-      },
-      "units": {
-        "type": "string",
-        "enum": ["celsius", "fahrenheit"],
-        "default": "celsius"
-      }
+      "location": { "type": "string", "description": "City name or coordinates" },
+      "units": { "type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius" }
     },
     "required": ["location"]
   }
 }
 ```
 
+The tool id the model sees is `<installationId>__<action>` (`weather__weatherLookup`).
+
 ### 2. Tool Implementation
 
-Create the implementation script in `server/tools/weatherLookup.js`:
+For a **Script** integration the builder writes a connector module whose `actions.<name>.run(args, ctx)` does the work (see [Code-based integrations](integrations.md#code-based-integrations-script)). The function body below is the same logic, shown as a plain function:
 
 ```javascript
 export async function execute(params) {
@@ -207,52 +203,19 @@ export async function execute(params) {
 
 ### 3. Testing and Validation
 
-Test your tool independently before integration. A direct call runs only a tool the caller may
-use: admins run every tool; other users need the tool granted to one of their groups
-(`permissions.tools` in `groups.json`) or listed by an app they can open, and get `403` otherwise.
+Test your tool independently before integration. There is no direct tool API (the `/api/tools`
+routes were removed in #3275): test an action under **Admin → Integrations → the installation →
+Actions** (the action tester), or with **Test in chat**. An inbound MCP client reaches the same
+actions through the MCP gateway (see [MCP Integration](mcp-integration.md#who-sees-which-tool)).
 
-```bash
-# Test tool execution
-curl -X POST http://localhost:3000/api/tools/weatherLookup \
-  -H "Content-Type: application/json" \
-  -d '{
-    "params": {
-      "location": "London",
-      "units": "celsius"
-    }
-  }'
-```
+### 4. App Integration
 
-### 4. Startup Check
-
-At startup the server checks every enabled script-backed tool without calling
-it: the script must exist in `server/tools/`, it must load (the same `import()`
-a tool call does, so a missing package or an error while loading shows up), and
-it must export what the definition declares — the default export for a plain
-tool, one named export per entry of `functions` (or the configured `method`) for
-a multi-function tool. A problem is logged as a warning and never stops the
-server; calls to that tool fail until the script is fixed or the tool is
-disabled (disabled tools are not checked):
-
-```text
-warn  Tool script cannot be used  script=weatherLookup.js problem=load-failed reason=Cannot find package 'node-fetch' …
-warn  Some tool scripts cannot be used; calls to these tools will fail until they are fixed or the tools are disabled  scripts=25 ok=24 problems=1
-```
-
-A tool whose script file is missing is reported when the tools load (and
-counted in the summary). Whether a tool is *configured* — API keys, credentials —
-is not part of the check. Write tool scripts so that importing them has no side
-effects that fail without configuration: read credentials when the tool is
-called, not when the module loads.
-
-### 5. App Integration
-
-Add the tool to your app configuration:
+Tools are provided by integrations; a custom tool is a custom integration (see [Integrations](integrations.md#custom-integrations-add-manually)). Bind the installation in your app configuration:
 
 ```json
 {
   "id": "weather-assistant",
-  "tools": ["weatherLookup"],
+  "integrations": { "weather": {} },
   "system": {
     "en": "You are a weather assistant. Use the weatherLookup tool to provide current weather information."
   }
@@ -352,7 +315,7 @@ Configuration:
 App usage:
 ```json
 {
-  "tools": ["documentManager.search", "documentManager.getContent"]
+  "integrations": { "document-manager": { "actions": ["search", "getContent"] } }
 }
 ```
 
@@ -486,7 +449,7 @@ Combine multiple tools for complex workflows:
 ```json
 {
   "id": "document-processor",
-  "tools": ["pdfExtractor", "textAnalyzer", "summaryGenerator"],
+  "integrations": { "pdf-extractor": {}, "text-analyzer": {}, "summary-generator": {} },
   "system": {
     "en": "Process documents by first extracting content, then analyzing it, and finally generating summaries. Chain tools as needed."
   }
@@ -510,7 +473,7 @@ and some answer from memory when the app wanted them to look something up. Set
 ```json
 {
   "id": "research-assistant",
-  "tools": ["iFinder.search"],
+  "integrations": { "ifinder": { "actions": ["search"] } },
   "toolChoice": "required"
 }
 ```
@@ -903,12 +866,12 @@ function calculateTotals(invoice) {
 
 **Error: Tool not found**
 ```
-Error: Tool 'myTool' not found in configuration
+Error: Tool 'myTool' not found
 ```
 **Solution**: 
-- Verify a tool file exists at `contents/tools/<toolId>.json`
+- Verify the integration is installed and enabled (**Admin → Integrations → Installed**) and that the action is not switched off
+- Verify the app, node or profile binds the installation and the user's group is granted it (`permissions.integrations`)
 - Check tool ID matches exactly (case-sensitive)
-- Restart server after adding new tools
 
 **Error: Parameter validation failed**
 ```
@@ -1018,20 +981,15 @@ describe('MyTool', () => {
 ```
 
 **2. Integration Testing**
-```bash
-# Test tool through API
-curl -X POST http://localhost:3000/api/tools/myTool \
-  -H "Content-Type: application/json" \
-  -d '{"params": {"query": "test"}}'
-```
+Run the action from **Admin → Integrations → the installation → Actions** (the action tester).
 
 **3. End-to-End Testing**
 Test complete workflow from chat interface through tool execution.
 
 ### Tool Development Checklist
 
-- [ ] Tool definition file in `contents/tools/`
-- [ ] Implementation script in `server/tools/`, exporting what the definition declares (see [Startup check](#4-startup-check))
+- [ ] Integration installed with the action declared (description, parameters, side effect, approval)
+- [ ] Implementation (script connector, OpenAPI operation or HTTP request)
 - [ ] Parameter validation implemented
 - [ ] Error handling for all edge cases
 - [ ] Authentication/authorization checks
@@ -1045,28 +1003,21 @@ Test complete workflow from chat interface through tool execution.
 
 ## Tool Configuration Reference
 
-### Tool File Field Reference
+### Action Field Reference
 
-Each tool file in `contents/tools/` (named `<toolId>.json`) uses the following fields:
+Each action of an integration definition uses these fields (the builder writes them for you):
 
 | Field | Description |
 |-------|-------------|
-| `id` | Unique identifier referenced by apps in their `tools` array |
-| `name` | Localized display name object (e.g., `{"en": "..."}`) |
-| `description` | Localized short description object |
-| `script` | The script file in `server/tools/` implementing the tool |
+| `name` | The action's name; the tool id is `<installationId>__<action>` unless the definition fixes a `toolId` |
+| `title` / `description` | Localized display name and the description the model receives |
 | `parameters` | JSON schema describing the tool input |
-| `provider` | Provider restriction (e.g., `"google"`, `"openai-responses"`) |
-| `isSpecialTool` | If `true`, handled by the provider API rather than executed server-side |
-| `concurrency` | Maximum number of concurrent executions (optional) |
+| `sideEffect` | `read`, `write` or `destructive` (drives [tool approval](tool-approval.md)) |
+| `dataFlow` | Where the data goes (optional) |
+| `toolId` | A fixed tool id (built-in and custom definitions only) |
 
-### Provider-Handled Tools (`isSpecialTool`)
-
-Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider. This is a general mechanism admins can use to register an arbitrary provider-handled tool with no script.
-
-Native web search (Google Search grounding, OpenAI Web Search, Anthropic Web Search) does **not** use this mechanism — see [Native Web Search Resolution](#native-web-search-resolution) below.
-
-These tools do not have a `script` file because no server-side code runs.
+Native web search (Google Search grounding, OpenAI Web Search, Anthropic Web Search) is not a tool: the
+provider handles it, see [Native Web Search Resolution](#native-web-search-resolution) below.
 
 ## Native Web Search Resolution
 
@@ -1164,7 +1115,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 | `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from `app.tools`; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their former tool list are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from the app's former tool list; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
 
 ### `iFinder`
 
@@ -1198,10 +1149,10 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 iHub's own tools keep the ids they always had; there are no tool files for them in `contents/tools/` any more (migration V199 retired them, and initial setup no longer copies them there). Each belongs to the feature that uses it (Unified Integrations concept §6.9):
 
-- **Asking the user and scheduled tasks — the iHub integration.** `ask_user` and the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run` are the actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). The installation cannot be removed or disabled; its **Settings** switch single actions off for every app (the former `enabled: false` of a tool file); groups grant it on **Admin → Groups**. Apps list the tools in `tools` by id (`"ask_user"`); `"ihub"` itself selects nothing. `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
-- **Project knowledge — projects.** `knowledge_search`, `knowledge_read` and `knowledge_list` come with every request that reaches a project (a linked, attached or workflow project the user may use) while the projects feature is on, and never otherwise. Neither the app's `tools` nor an integration adds, removes or switches them off; the definition ships with iHub (`server/defaults/tools/knowledge.json`, read in place) and a `contents/tools/knowledge.json` is not read. See [Projects → The knowledge tools](projects.md#the-knowledge-tools).
-- **Earlier turns of a chat — stored chats.** `chat_sources_list` / `chat_sources_read`, `chat_files_list` / `chat_files_read` and `chat_artifacts_list` / `chat_artifacts_read` let the model look up the sources earlier answers found, the files uploaded to the chat and the files its turns created. Each pair comes with a turn of a stored chat that has something of its kind and sends its history, and never otherwise. Like the knowledge tools, neither `tools` nor an integration adds or removes them; the definitions ship with iHub (`server/defaults/tools/chat_*.json`, read in place). See [Chat Persistence → What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model).
-- **Agent workspace and evidence — workflows and agents.** `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done` and `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport` are plain tools, not integration actions, and are not listed on the Integrations page. Workflow nodes, agent profiles and apps name them in `tools` by exact id or base id (`"evidence"`), agent runs attach them, a scheduled run with memory gets `read_memory` / `write_memory`, and group grants (`permissions.tools`) select them, also for the inbound MCP gateway. A tool file of the same id in `contents/tools/` takes the place of the shipped definition: one with `enabled: false` switches the tool off (migration V202 writes such a file for a tool that was switched off on the `ihub` installation).
+- **Asking the user and scheduled tasks — the iHub integration.** `ask_user` and the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run` are the actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). The installation cannot be removed or disabled; its **Settings** switch single actions off for every app (the former `enabled: false` of a tool file); groups grant it on **Admin → Groups**. Apps bind the installation (`"integrations": { "ihub": { "actions": ["ask_user"] } }`); the tool ids stay. `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
+- **Project knowledge — projects.** `knowledge_search`, `knowledge_read` and `knowledge_list` come with every request that reaches a project (a linked, attached or workflow project the user may use) while the projects feature is on, and never otherwise. No integration binding adds, removes or switches them off; the definition ships with iHub (`server/defaults/tools/knowledge.json`, read in place) and a `contents/tools/knowledge.json` is not read. See [Projects → The knowledge tools](projects.md#the-knowledge-tools).
+- **Earlier turns of a chat — stored chats.** `chat_sources_list` / `chat_sources_read`, `chat_files_list` / `chat_files_read` and `chat_artifacts_list` / `chat_artifacts_read` let the model look up the sources earlier answers found, the files uploaded to the chat and the files its turns created. Each pair comes with a turn of a stored chat that has something of its kind and sends its history, and never otherwise. Like the knowledge tools, no integration binding adds or removes them; the definitions ship with iHub (`server/defaults/tools/chat_*.json`, read in place). See [Chat Persistence → What earlier turns give the model](chat-persistence.md#what-earlier-turns-give-the-model).
+- **Agent workspace and evidence — workflows and agents.** `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done` and `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport` are plain tools, not integration actions, and are not listed on the Integrations page. Workflow nodes and agent profiles name them in `systemTools` by exact id or base id (`"evidence"`), agent runs attach them and a scheduled run with memory gets `read_memory` / `write_memory`. Apps cannot offer them and the inbound MCP gateway does not expose them.
 - **Documentation**: [Ask User Tool](ask-user-tool.md), [Projects](projects.md), [Scheduled Tasks](scheduled-tasks.md)
 
 ## Related Documentation

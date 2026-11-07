@@ -664,13 +664,12 @@ describe('connection status (pure)', () => {
     const instance = { id: 'jira', definition: 'com.intrafind/jira' };
     const bindingKeyFor = (app, inst) =>
       app.integrations && Object.hasOwn(app.integrations, inst.id) ? inst.id : null;
-    const tools = [{ id: 'jira__searchTickets', _integration: { instanceId: 'jira' } }];
+    assert.equal(appUsesIntegration({ integrations: { jira: {} } }, instance, bindingKeyFor), true);
     assert.equal(
-      appUsesIntegration({ integrations: { jira: {} } }, instance, tools, bindingKeyFor),
-      true
+      appUsesIntegration({ integrations: { other: {} } }, instance, bindingKeyFor),
+      false
     );
-    assert.equal(appUsesIntegration({ tools: ['jira'] }, instance, tools, bindingKeyFor), true);
-    assert.equal(appUsesIntegration({ tools: ['other'] }, instance, tools, bindingKeyFor), false);
+    assert.equal(appUsesIntegration({}, instance, bindingKeyFor), false);
   });
 });
 

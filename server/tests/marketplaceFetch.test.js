@@ -26,8 +26,7 @@ import http from 'node:http';
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({}),
-    getModels: () => ({ data: [] }),
-    getTools: () => ({ data: [] })
+    getModels: () => ({ data: [] })
   }
 }));
 

@@ -43,7 +43,7 @@ const mockApp = {
   description: { en: 'General chat' },
   color: '#4f46e5',
   icon: 'chat',
-  tools: ['braveSearch', 'jira'],
+  integrations: { braveSearch: {}, jira: {} },
   websearch: { enabled: true, enabledByDefault: false },
   features: { magicPrompt: { enabled: true } }
 };
@@ -53,13 +53,6 @@ const mockModelList = [{ id: 'gpt', name: { en: 'GPT' } }];
 jest.mock('../../../client/src/api', () => ({
   fetchAppDetails: jest.fn(() => Promise.resolve(mockApp)),
   fetchModels: jest.fn(() => Promise.resolve(mockModelList)),
-  // The server localizes tool metadata, so names arrive as plain strings.
-  fetchToolsBasic: jest.fn(() =>
-    Promise.resolve([
-      { id: 'braveSearch', name: 'Brave Search' },
-      { id: 'jira', name: 'Jira' }
-    ])
-  ),
   generateMagicPrompt: jest.fn(() => Promise.resolve({ prompt: 'enhanced' }))
 }));
 
@@ -151,12 +144,11 @@ it('starts the chat with the caller’s parameters and runs its hook first', asy
 });
 
 it('starts an app that binds iFinder with the iFinder tools on', async () => {
-  // The upgraded iFinder Search app: no `tools`, an `ifinder` binding. The
+  // The upgraded iFinder Search app: an `ifinder` binding. The
   // binding is the reference that keeps its tools in the chat's narrowing.
   const api = require('../../../client/src/api');
   api.fetchAppDetails.mockResolvedValueOnce({
     ...mockApp,
-    tools: [],
     integrations: { ifinder: { scopePicker: 'menu' }, iassistant: {} }
   });
   await renderStarter();
@@ -203,7 +195,7 @@ it('starts another app on its own model, not the one picked for the previous app
     Promise.resolve({
       ...mockApp,
       id,
-      tools: [],
+      integrations: undefined,
       websearch: { enabled: false },
       preferredModel: id === 'chat' ? 'gpt' : 'claude'
     })

@@ -6,7 +6,6 @@ import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerStaticRoutes from '../routes/staticRoutes.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
-import registerToolRoutes from '../routes/toolRoutes.js';
 import registerMcpAppRoutes from '../routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from '../routes/mcpOAuth.js';
 import registerIntegrationOAuthCallback from '../routes/integrations/oauthCallback.js';
@@ -85,7 +84,6 @@ const ROUTE_STEPS = [
   app => registerMcpServerRoutes(app),
   app => registerGeneralRoutes(app, { getLocalizedError }),
   app => registerModelRoutes(app, { getLocalizedError }),
-  app => registerToolRoutes(app),
   app => registerMcpAppRoutes(app),
   app => registerMcpOAuthRoutes(app),
   app => registerIntegrationOAuthCallback(app),

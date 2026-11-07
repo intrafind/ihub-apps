@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
+import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 
 function AppConfigForm({
   app,
@@ -41,7 +42,7 @@ function AppConfigForm({
   let filteredModels = availableModels;
 
   // Filter by tools requirement
-  if (app?.tools && app.tools.length > 0) {
+  if (appHasToolBindings(app)) {
     filteredModels = filteredModels.filter(modelSupportsTools);
   }
 

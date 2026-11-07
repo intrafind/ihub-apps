@@ -9,7 +9,7 @@
  * (`read_url`) are plain tools owned by those features,
  * not actions of the iHub integration. Everything that resolves them by id
  * keeps working as it did with their tool files: workflow prompt nodes and
- * agent runs, apps, group grants, `runTool`, a scheduled run's memory tools;
+ * agent runs, group grants, `runTool`, a scheduled run's memory tools;
  * and a file of the same id in `contents/tools/` still takes their place.
  *
  * Run: node --test server/tests/platform-tools.test.js
@@ -23,8 +23,10 @@ import configCache from '../configCache.js';
 import '../services/integrations/protocols/native/connectors/register.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
 import { getToolsForApp } from '../services/tools/appTools.js';
-import { loadLocalTools, loadTools } from '../services/tools/catalog.js';
+import { loadTools } from '../services/tools/catalog.js';
 import { runTool } from '../services/tools/runTool.js';
+import { buildMcpServer } from '../services/mcp/McpServerService.js';
+import { MCP_SCOPES } from '../services/mcp/scopes.js';
 import {
   PLATFORM_TOOL_FILE_IDS,
   PLATFORM_TOOL_IDS,
@@ -35,7 +37,6 @@ import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExe
 import { getAgentToolIds } from '../agents/runtime/agentToolRegistrar.js';
 import { addMemoryTools } from '../services/scheduler/tasks/runMemory.js';
 import { copyDefaultConfiguration } from '../utils/setupUtils.js';
-import { getToolsForUser } from '../services/tools/toolListing.js';
 
 const AGENT_WORKSPACE = [
   'create_task',
@@ -83,7 +84,6 @@ before(async () => {
 });
 
 beforeEach(() => {
-  configCache.setCacheEntry('config/tools.json', []);
   setIntegrations();
 });
 
@@ -135,31 +135,17 @@ describe('the platform tools', () => {
         `${id} is loaded`
       );
     }
-    const offered = await getToolsForApp({ id: 'a', tools: ['write_artifact', 'evidence'] }, 'en', {
-      user: member
-    });
-    assert.deepEqual(ids(offered), ['write_artifact', ...EVIDENCE].sort());
-  });
-
-  it('give way to a tool file of the same id in contents/tools, enabled or not', async () => {
-    configCache.setCacheEntry('config/tools.json', [
-      {
-        id: 'write_artifact',
-        name: 'write_artifact',
-        description: { en: 'Our own wording' },
-        script: 'agentTools.js',
-        method: 'writeArtifact'
-      },
-      { id: 'read_inbox', name: 'read_inbox', script: 'agentTools.js', enabled: false }
-    ]);
-    const tools = await loadTools('en');
-    assert.equal(tools.find(t => t.id === 'write_artifact').description, 'Our own wording');
-    assert.equal(
-      tools.some(t => t.id === 'read_inbox'),
-      false,
-      'a disabled file keeps the tool off'
+    // They belong to workflows and agents: an app, which gets tools only
+    // through the integrations it binds, does not offer them (#3275).
+    const offered = await getToolsForApp(
+      { id: 'a', tools: ['write_artifact', 'evidence'], integrations: { ihub: {} } },
+      'en',
+      { user: member }
     );
-    assert.equal(tools.filter(t => t.id === 'write_artifact').length, 1);
+    assert.equal(
+      offered.some(t => [...AGENT_WORKSPACE, ...EVIDENCE].includes(t.id)),
+      false
+    );
   });
 
   it('are not seeded into contents/tools by the initial setup, which would shadow them', async () => {
@@ -179,7 +165,11 @@ describe('the platform tools', () => {
 describe('resolving the platform tools by id', () => {
   const executor = new PromptNodeExecutor({ llmClient: { complete: async () => ({}) } });
   const nodeTools = toolIds =>
-    executor.getAgentTools(toolIds, 'en', { user: member, chatId: 'c1', _skillIds: [] });
+    executor.getAgentTools({ systemTools: toolIds }, 'en', {
+      user: member,
+      chatId: 'c1',
+      _skillIds: []
+    });
 
   it('a workflow prompt node gets the tools it names, a base id included', async () => {
     assert.deepEqual(
@@ -198,23 +188,20 @@ describe('resolving the platform tools by id', () => {
     assert.deepEqual(resolved, ['create_task', 'list_tasks', 'read_memory', 'write_memory']);
   });
 
-  it('a group grant lists them by exact or base id', async () => {
-    const grantee = { id: 'g', groups: ['users'], permissions: { tools: new Set(['evidence']) } };
-    const { data } = await getToolsForUser(grantee, { defaultLanguage: 'en' }, 'en');
-    assert.deepEqual(ids(data), [...EVIDENCE].sort());
-  });
-
-  it('the inbound MCP gateway lists them with iHub’s local tools, not the iHub actions', async () => {
-    const local = await loadLocalTools('en');
-    assert.deepEqual(
-      ids(local.filter(tool => [...AGENT_WORKSPACE, ...EVIDENCE].includes(tool.id))),
-      [...AGENT_WORKSPACE, ...EVIDENCE].sort()
-    );
-    assert.equal(
-      local.some(tool => tool._integration || tool.id === 'ask_user'),
-      false,
-      'installed integrations stay out of the gateway'
-    );
+  it('the inbound MCP gateway does not list them: it offers integrations only', async () => {
+    const server = await buildMcpServer({
+      user: {
+        id: 'g',
+        groups: ['users'],
+        scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL],
+        permissions: { ...everything, integrations: new Set(['*']) }
+      },
+      platform: { defaultLanguage: 'en', mcpServer: { expose: { tools: true } } }
+    });
+    const registered = Object.keys(server._registeredTools);
+    for (const id of [...AGENT_WORKSPACE, ...EVIDENCE, 'read_url']) {
+      assert.equal(registered.includes(id), false, `${id} is not exposed`);
+    }
   });
 
   it('runTool runs them through their script', async () => {

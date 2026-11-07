@@ -140,11 +140,11 @@ function assertValidAppConfig(appConfig) {
  *         allowEmptyContent:
  *           type: boolean
  *           description: Allow empty submissions
- *         tools:
- *           type: array
- *           description: Available tool names
- *           items:
- *             type: string
+ *         integrations:
+ *           type: object
+ *           description: Installed integrations the app binds (an installation id, a definition id or `type:<type>`), each with an optional `actions` list; the app's tools come from them
+ *           additionalProperties:
+ *             type: object
  *         outputSchema:
  *           description: Structured output schema
  *         category:
@@ -269,7 +269,7 @@ export default function registerAdminAppsRoutes(app) {
    *                   en: "Code Reviewer"
    *                 parentId: "chat-assistant"
    *                 inheritanceLevel: 1
-   *                 overriddenFields: ["system", "tools"]
+   *                 overriddenFields: ["system", "preferredModel"]
    *                 enabled: true
    *       401:
    *         description: Authentication required

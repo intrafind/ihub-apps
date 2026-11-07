@@ -221,10 +221,8 @@ function AppFormEditor({
                 other installed integration, each in one place (#3061) */}
             <IntegrationsConfigSection app={app} onChange={onChange} />
 
-            {/* Tools Configuration */}
+            {/* Tool use and approval (the tools themselves come from the integrations above) */}
             <ToolsConfigSection
-              selectedTools={app.tools || []}
-              onToolsChange={tools => handleInputChange('tools', tools)}
               toolChoice={app.toolChoice}
               onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
               toolApproval={app.toolApproval}

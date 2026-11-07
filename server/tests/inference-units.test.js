@@ -60,7 +60,7 @@ const findModel = id => MODELS.find(m => m.id.toLowerCase() === String(id).toLow
 const APPS = [
   { id: 'summarizer', preferredModel: 'gpt', allowedModels: ['gpt', 'claude', 'notools'] },
   { id: 'locked', preferredModel: 'gpt', disallowModelSelection: true },
-  { id: 'tooling', tools: ['webSearch'], preferredModel: 'gpt' },
+  { id: 'tooling', integrations: { jira: { required: false } }, preferredModel: 'gpt' },
   { id: 'nda', preferredModel: 'gpt', outputSchema: { type: 'object' } },
   { id: 'redirect', type: 'redirect' }
 ];

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
+import { appHasToolBindings } from '../shared/utils/boundIntegrationRefs.js';
 
 /** A transcription model: answers audio with its transcript, never a prompt. */
 export const isTranscriptionModel = model => model?.modelType === 'transcription';
@@ -14,7 +15,7 @@ export const isTranscriptionModel = model => model?.modelType === 'transcription
  *
  * Applies, in order:
  *   1. app.allowedModels — restrict to listed model IDs
- *   2. app.tools / app.websearch.enabled — require model.supportsTools (not of a
+ *   2. a bound integration / app.websearch.enabled — require model.supportsTools (not of a
  *      transcription model: it never answers a prompt, so it uses no tools)
  *   3. app.settings.model.filter — match arbitrary model properties
  *
@@ -30,7 +31,7 @@ export function filterModelsForApp(models, app) {
     filtered = filtered.filter(model => app.allowedModels.includes(model.id));
   }
 
-  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
+  if (appHasToolBindings(app) || app?.websearch?.enabled) {
     filtered = filtered.filter(model => isTranscriptionModel(model) || modelSupportsTools(model));
   }
 

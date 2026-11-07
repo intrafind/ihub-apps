@@ -21,7 +21,6 @@
     "verify": "gemini-3.1-pro"
   },
   "maxIterations": 20,
-  "tools": [],
   "apps": [],
   "skills": [],
   "memory": {

@@ -1,5 +1,5 @@
 {
-  "description": "Regression fixture for #2973: the tool ids getToolsForApp returns for apps bound to the built-in integrations. Captured before the legacy branches of the tool loader are removed (#2913); a refactor that changes one of these lists changes what apps offer their models. Installations get their definition's current version in the test; everything else is as here.",
+  "description": "Regression fixture for #2973: the tool ids getToolsForApp returns for apps bound to the built-in integrations. Captured before the legacy branches of the tool loader were removed (#2913); apps carry no `tools` list since #3275; a refactor that changes one of these lists changes what apps offer their models. Installations get their definition's current version in the test; everything else is as here.",
   "user": {
     "id": "fixture-user",
     "groups": ["research"],
@@ -97,23 +97,23 @@
   ],
   "cases": [
     {
-      "name": "iFinder app: base id in tools and the installation bound",
+      "name": "a leftover `tools` list selects nothing (the field was removed in #3275)",
       "app": {
-        "id": "a1",
-        "tools": ["iFinder"],
-        "integrations": {
-          "ifinder": {}
-        }
+        "id": "a5",
+        "tools": [
+          "iFinder",
+          "iFinder_search",
+          "ifinder",
+          "ihub",
+          "ask_user",
+          "jira",
+          "braveSearch",
+          "read_url",
+          "write_memory",
+          "evidence"
+        ]
       },
-      "expectedToolIds": [
-        "iFinder_search",
-        "iFinder_getContent",
-        "iFinder_getMetadata",
-        "iFinder_discover",
-        "iFinder_getFields",
-        "iFinder_getFacetValues",
-        "iFinder_listProfiles"
-      ]
+      "expectedToolIds": []
     },
     {
       "name": "iFinder bound, every action",
@@ -146,22 +146,6 @@
       "expectedToolIds": ["iFinder_search", "iFinder_getContent"]
     },
     {
-      "name": "iFinder tool ids in tools, no binding (kept tool ids)",
-      "app": {
-        "id": "a4",
-        "tools": ["iFinder_search", "iFinder_getMetadata"]
-      },
-      "expectedToolIds": ["iFinder_search", "iFinder_getMetadata"]
-    },
-    {
-      "name": "the iFinder installation id in tools selects nothing",
-      "app": {
-        "id": "a5",
-        "tools": ["ifinder"]
-      },
-      "expectedToolIds": []
-    },
-    {
       "name": "iAssistant bound for its model: no tool (ask is bound explicitly only)",
       "app": {
         "id": "a6",
@@ -186,29 +170,6 @@
         }
       },
       "expectedToolIds": ["iassistant__ask"]
-    },
-    {
-      "name": "iassistant__ask in tools without a binding selects nothing",
-      "app": {
-        "id": "a7b",
-        "tools": ["iassistant__ask"]
-      },
-      "expectedToolIds": []
-    },
-    {
-      "name": "Jira base id in tools (kept tool ids)",
-      "app": {
-        "id": "a8",
-        "tools": ["jira"]
-      },
-      "expectedToolIds": [
-        "jira_searchTickets",
-        "jira_getTicket",
-        "jira_addComment",
-        "jira_getTransitions",
-        "jira_transitionTicket",
-        "jira_getAttachment"
-      ]
     },
     {
       "name": "Jira bound, every action",
@@ -331,51 +292,27 @@
       "expectedToolIds": []
     },
     {
-      "name": "an engine's tool id in tools",
-      "app": {
-        "id": "a17",
-        "tools": ["braveSearch"]
-      },
-      "expectedToolIds": ["braveSearch"]
-    },
-    {
-      "name": "iHub tools by id (scheduled tasks on)",
+      "name": "iHub tools bound by action (scheduled tasks on)",
       "app": {
         "id": "a18",
-        "tools": ["ask_user", "schedule_task", "list_scheduled_tasks"]
+        "integrations": {
+          "ihub": {
+            "actions": ["ask_user", "schedule_task", "list_scheduled_tasks"]
+          }
+        }
       },
       "expectedToolIds": ["ask_user", "schedule_task", "list_scheduled_tasks"]
-    },
-    {
-      "name": "the ihub installation id selects nothing",
-      "app": {
-        "id": "a19",
-        "tools": ["ihub"]
-      },
-      "expectedToolIds": []
-    },
-    {
-      "name": "platform tools by id and base id",
-      "app": {
-        "id": "a20",
-        "tools": ["read_url", "write_memory", "evidence"]
-      },
-      "expectedToolIds": [
-        "evidence_collect",
-        "evidence_validateQuotesFastPath",
-        "evidence_composeReport",
-        "read_url",
-        "write_memory"
-      ]
     },
     {
       "name": "research app: iHub, iFinder, iAssistant ask, Jira and web search",
       "app": {
         "id": "a21",
-        "tools": ["ask_user", "iFinder_search"],
         "integrations": {
+          "ihub": {
+            "actions": ["ask_user"]
+          },
           "ifinder": {
-            "actions": ["getContent"]
+            "actions": ["search", "getContent"]
           },
           "iassistant": {
             "actions": ["ask"]
@@ -410,8 +347,10 @@
       "name": "research app narrowed by the chat's tool selection",
       "app": {
         "id": "a22",
-        "tools": ["ask_user", "iFinder_search"],
         "integrations": {
+          "ihub": {
+            "actions": ["ask_user"]
+          },
           "ifinder": {},
           "iassistant": {
             "actions": ["ask"]
@@ -422,6 +361,22 @@
         "enabledTools": ["iFinder_search", "iassistant"]
       },
       "expectedToolIds": ["iFinder_search", "ask_user", "iassistant__ask"]
+    },
+    {
+      "name": "iHub's ask_user survives the chat's tool narrowing",
+      "app": {
+        "id": "a23",
+        "integrations": {
+          "ihub": {
+            "actions": ["ask_user"]
+          },
+          "ifinder": {}
+        }
+      },
+      "context": {
+        "enabledTools": ["iFinder_search"]
+      },
+      "expectedToolIds": ["iFinder_search", "ask_user"]
     }
   ]
 }

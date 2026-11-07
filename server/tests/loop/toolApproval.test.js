@@ -4,8 +4,7 @@
 /**
  * Tool approval resolver (#2945): precedence (platform → tool / installation
  * → action → app, strictest wins), tighten-only app overrides, untrusted MCP
- * annotations, keys by the action's original name, `expandToolFunctions`
- * copying the per-function flags, and the segment planner giving gated calls
+ * annotations, keys by the action's original name, and the segment planner giving gated calls
  * their own batch.
  */
 import test from 'node:test';
@@ -20,7 +19,6 @@ import {
   _resetLoggedLoosening
 } from '../../utils/toolApproval.js';
 import { needsApproval, stricterMode } from '../../../shared/toolApproval.js';
-import { approvalFieldsOf, expandToolFunctions } from '../../configCache.js';
 import { planToolBatches } from '../../services/loop/segmentPlanner.js';
 
 const silent = () => {
@@ -208,33 +206,6 @@ test('stamping returns copies with the policy and is idempotent', () => {
   assert.equal(resolveToolApproval(stamped[1], null, {}).approval, 'always');
   // Interactive tools never need approval.
   assert.equal(toolNeedsApproval({ id: 'ask_user', interactive: true, approval: 'always' }), false);
-});
-
-test('expandToolFunctions copies approval, sideEffect and dataFlow per function', () => {
-  const [search, create] = expandToolFunctions([
-    {
-      id: 'crm',
-      name: 'CRM',
-      approval: 'writes',
-      dataFlow: 'external',
-      functions: {
-        search: { description: 'Find', sideEffect: 'read' },
-        create: { description: 'Create', sideEffect: 'write', approval: 'always' }
-      }
-    }
-  ]);
-  assert.equal(search.id, 'crm_search');
-  assert.deepEqual(
-    { approval: search.approval, sideEffect: search.sideEffect, dataFlow: search.dataFlow },
-    { approval: 'writes', sideEffect: 'read', dataFlow: 'external' }
-  );
-  assert.deepEqual(
-    { approval: create.approval, sideEffect: create.sideEffect },
-    { approval: 'always', sideEffect: 'write' }
-  );
-  assert.equal(needsApproval(resolveToolApproval(search, null, {})), false);
-  assert.equal(needsApproval(resolveToolApproval(create, null, {})), true);
-  assert.deepEqual(approvalFieldsOf({}, {}), {});
 });
 
 test('platform defaults: unknown keys and modes are dropped and refused on save', () => {

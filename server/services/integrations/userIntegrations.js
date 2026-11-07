@@ -39,7 +39,6 @@
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import credentialService from '../CredentialService.js';
-import { isToolSelected } from '../../utils/toolSelection.js';
 import { sortWebSearchEngines, WEB_SEARCH_TYPE } from '../search/webSearchEngines.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
 import {
@@ -328,15 +327,13 @@ export function sharedWithOf(instance, user, language) {
 
 /**
  * The enabled actions of each installation, from the tool list the models
- * are offered (`catalog.loadTools`), grouped by installation id, and the
- * tools themselves (to find the apps that name them in `app.tools`).
+ * are offered (`catalog.loadTools`), grouped by installation id.
  *
  * @param {string} language
- * @returns {Promise<{actions: Map<string, Array<{name: string, title: string, description: string, sideEffect: string}>>, tools: Map<string, Object[]>}>}
+ * @returns {Promise<{actions: Map<string, Array<{name: string, title: string, description: string, sideEffect: string}>>}>}
  */
 async function actionsByInstallation(language) {
   const actions = new Map();
-  const toolsById = new Map();
   let tools = [];
   try {
     const { loadTools } = await import('../tools/catalog.js');
@@ -346,7 +343,7 @@ async function actionsByInstallation(language) {
       component: COMPONENT,
       error: error.message
     });
-    return { actions, tools: toolsById };
+    return { actions };
   }
   for (const tool of tools) {
     const marker = tool?._integration;
@@ -359,9 +356,8 @@ async function actionsByInstallation(language) {
       sideEffect: tool.sideEffect || 'unknown'
     });
     actions.set(marker.instanceId, list);
-    toolsById.set(marker.instanceId, [...(toolsById.get(marker.instanceId) || []), tool]);
   }
-  return { actions, tools: toolsById };
+  return { actions };
 }
 
 /** The distinct side effects of a list of actions, in a stable order. */
@@ -392,22 +388,17 @@ async function appsOfUser(user) {
 
 /**
  * Whether an app uses an installation: it binds it (`app.integrations`: its
- * id, its definition id or its type key), names one of its tools in
- * `app.tools`, or — a web search engine — names it in `app.websearch.provider`
- * (`auto` uses the engine `autoEngineId`).
+ * id, its definition id or its type key), or — a web search engine — names it
+ * in `app.websearch.provider` (`auto` uses the engine `autoEngineId`).
  *
  * @param {Object} app
  * @param {Object} instance
- * @param {Object[]} tools - The installation's tools
  * @param {Function} bindingKeyFor - `integrationTools.bindingKeyFor`
  * @param {string|null} autoEngineId - The web search engine `auto` picks for this user
  * @returns {boolean}
  */
-export function appUsesIntegration(app, instance, tools, bindingKeyFor, autoEngineId = null) {
+export function appUsesIntegration(app, instance, bindingKeyFor, autoEngineId = null) {
   if (bindingKeyFor(app, instance) !== null) return true;
-  if (Array.isArray(app?.tools) && app.tools.length > 0) {
-    if ((tools || []).some(tool => isToolSelected(tool, app.tools))) return true;
-  }
   if (app?.websearch?.enabled === true && typeOfInstallation(instance) === WEB_SEARCH_TYPE) {
     const provider = app.websearch.provider || 'auto';
     if (provider === instance.id) return true;
@@ -538,7 +529,7 @@ export async function listUserIntegrations({ user, language = 'en', only } = {})
         .map(resolved => resolved.instance)
         .filter(instance => typeOfInstallation(instance) === WEB_SEARCH_TYPE)
     )[0]?.id || null;
-  const [{ actions, tools }, userApps, runtime] = await Promise.all([
+  const [{ actions }, userApps, runtime] = await Promise.all([
     actionsByInstallation(language),
     appsOfUser(user),
     // Loaded lazily, like the tool loader: both reach the protocol adapters.
@@ -560,9 +551,7 @@ export async function listUserIntegrations({ user, language = 'en', only } = {})
       const { instance } = resolved;
       try {
         const apps = userApps
-          .filter(app =>
-            appUsesIntegration(app, instance, tools.get(instance.id), bindingKeyFor, autoEngineId)
-          )
+          .filter(app => appUsesIntegration(app, instance, bindingKeyFor, autoEngineId))
           .map(app => ({ id: app.id, name: localized(app.name, language, app.id) || app.id }))
           .sort((a, b) => a.name.localeCompare(b.name));
         return await entryFor({ ...resolved, language }, user, {

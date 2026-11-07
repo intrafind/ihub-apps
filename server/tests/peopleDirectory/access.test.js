@@ -16,10 +16,9 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import configCache from '../../configCache.js';
 import '../../services/integrations/protocols/native/connectors/register.js';
-import { getToolsForApp } from '../../services/tools/appTools.js';
+import { getToolsForApp, getToolsForNode } from '../../services/tools/appTools.js';
 import { loadTools } from '../../services/tools/catalog.js';
 import { runTool } from '../../services/tools/runTool.js';
-import { mayRunTool } from '../../routes/toolRoutes.js';
 import { buildMcpServer } from '../../services/mcp/McpServerService.js';
 import { MCP_SCOPES } from '../../services/mcp/scopes.js';
 import {
@@ -29,7 +28,6 @@ import {
   resolveDirectory
 } from '../../services/peopleDirectory/PeopleDirectoryService.js';
 import { DEFINITION_ID, installDirectories } from './installations.js';
-import { getToolsForUser } from '../../services/tools/toolListing.js';
 
 const DIRECTORIES = [
   {
@@ -62,7 +60,6 @@ const DIRECTORIES = [
   }
 ];
 
-const state = { tools: [] };
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 // Who may use which directory: users the company directory (and one added
 // later), every signed-in user the federal one, hr its own; admins inherit
@@ -80,11 +77,9 @@ configCache.getGroups = () => ({
     }
   }
 });
-configCache.getTools = () => ({ data: state.tools, etag: 'tools' });
 configCache.getA2aAgents = () => ({ data: { agents: [] } });
 configCache.getApps = () => ({ data: [], etag: 'apps' });
 configCache.getFeatures = () => ({ skills: false, appAsTool: false });
-configCache.setCacheEntry('config/tools.json', []);
 configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
 
 const everything = { tools: new Set(['*']), apps: new Set(['*']) };
@@ -108,7 +103,6 @@ const ALL_DIRECTORIES = { [DEFINITION_ID]: {} };
 describe('people directory access', () => {
   beforeEach(() => {
     installDirectories(configCache, DIRECTORIES);
-    state.tools = [{ id: 'braveSearch', name: 'Brave', description: 'Search', enabled: true }];
   });
 
   it('offers tools for every enabled, usable directory, named after the directory', async () => {
@@ -204,55 +198,12 @@ describe('people directory access', () => {
       assert.equal(mayUseDirectory(enhanced, 'corp'), false);
     });
 
-    it('narrow the /api/tools listing, even with a "*" tool grant', async () => {
-      const forMember = await getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
-      assert.deepEqual(directoryToolIds(forMember.data), [
-        'corp__get_person',
-        'corp__search_people',
-        'x500bund__get_person',
-        'x500bund__list_units',
-        'x500bund__search_people'
-      ]);
-      assert.ok(forMember.data.some(tool => tool.id === 'braveSearch'));
-      const forOutsider = await getToolsForUser(outsider, { defaultLanguage: 'en' }, 'en');
-      assert.deepEqual(directoryToolIds(forOutsider.data), []);
-    });
-
-    it('change the /api/tools ETag when the directories change, even with the same tool ids', async () => {
-      const platform = { defaultLanguage: 'en' };
-      const before = await getToolsForUser(member, platform, 'en');
-      installDirectories(
-        configCache,
-        DIRECTORIES.map(directory =>
-          directory.id === 'x500bund' ? { ...directory, name: { en: 'Renamed' } } : directory
-        )
-      );
-      const after = await getToolsForUser(member, platform, 'en');
-      assert.deepEqual(
-        after.data.map(tool => tool.id),
-        before.data.map(tool => tool.id)
-      );
-      assert.notEqual(after.etag, before.etag);
-    });
-
-    it('keep a quoted tools ETag a single valid entity tag', async () => {
-      const getTools = configCache.getTools;
-      configCache.getTools = () => ({ data: state.tools, etag: '"tools-1"' });
-      try {
-        const { etag } = await getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
-        assert.match(etag, /^"[^"]+"$/);
-      } finally {
-        configCache.getTools = getTools;
-      }
-    });
-
     it('let a scheduled task pick the directory tools an app binds', async () => {
       const { toolsOfferedByApp } = await import('../../services/scheduler/tasks/taskService.js');
-      const app = { id: 'people', integrations: ALL_DIRECTORIES, tools: ['braveSearch'] };
+      const app = { id: 'people', integrations: ALL_DIRECTORIES };
       const offered = await toolsOfferedByApp(app, member, 'en');
       const search = offered.find(tool => tool.id === 'x500bund__search_people');
       assert.equal(search.selectedByApp, true);
-      assert.equal(offered.find(tool => tool.id === 'braveSearch').selectedByApp, true);
     });
 
     it('narrow an app that binds a directory', async () => {
@@ -266,22 +217,19 @@ describe('people directory access', () => {
       assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', {})), []);
     });
 
-    it('narrow an app that still lists a directory in `tools`', async () => {
-      const app = { id: 'people', tools: ['x500bund', 'hr'] };
-      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: member })), [
+    it('narrow a workflow node that binds a directory', async () => {
+      const node = { integrations: { x500bund: {}, hr: {} } };
+      assert.deepEqual(directoryToolIds(await getToolsForNode(node, 'en', { user: member })), [
         'x500bund__get_person',
         'x500bund__list_units',
         'x500bund__search_people'
       ]);
-      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: outsider })), []);
+      assert.deepEqual(directoryToolIds(await getToolsForNode(node, 'en', { user: outsider })), []);
     });
 
-    it('refuse a direct tool run, for admins too', async () => {
-      const platform = { defaultLanguage: 'en' };
-      assert.equal(await mayRunTool(member, platform, 'corp__search_people'), true);
-      assert.equal(await mayRunTool(outsider, platform, 'x500bund__search_people'), false);
-      assert.equal(await mayRunTool(admin, platform, 'hr__search_people'), false);
-      assert.equal(await mayRunTool(admin, platform, 'braveSearch'), true);
+    it('offer an app that still lists a directory in `tools` nothing', async () => {
+      const app = { id: 'people', tools: ['x500bund', 'hr'] };
+      assert.deepEqual(directoryToolIds(await getToolsForApp(app, 'en', { user: member })), []);
     });
 
     it('narrow the MCP gateway', async () => {

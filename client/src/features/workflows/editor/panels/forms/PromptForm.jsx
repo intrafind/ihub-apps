@@ -7,7 +7,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchAdminToolCatalog } from '../../../../../api/integrationsAdminApi';
+import CapabilityFields from '../../../../../shared/components/CapabilityFields';
 import ProjectPicker from '../../../../admin/components/ProjectPicker';
 
 function PromptForm({ config, onChange }) {
@@ -34,7 +34,6 @@ function PromptForm({ config, onChange }) {
     }
   };
 
-  const fetchToolsFn = useCallback(() => fetchAdminToolCatalog(), []);
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   const inputClass =
@@ -71,14 +70,7 @@ function PromptForm({ config, onChange }) {
         onChange={v => onChange({ ...config, maxTokens: v })}
         min={1}
       />
-      <ResourcePicker
-        label="Tools"
-        fetchFn={fetchToolsFn}
-        value={config.tools}
-        onChange={v => onChange({ ...config, tools: v })}
-        multi
-        placeholder="Search tools..."
-      />
+      <CapabilityFields value={config} onChange={patch => onChange({ ...config, ...patch })} />
       <FormField
         label="Max Web Searches"
         type="number"

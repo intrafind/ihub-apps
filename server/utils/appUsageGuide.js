@@ -99,17 +99,25 @@ function describeAttachments(app, storageInstallationIds) {
     .join(', ');
 }
 
-/** Lines naming the tools the app's assistant can call. */
-function describeTools(app, tools, text) {
-  const toolIds = Array.isArray(app.tools) ? app.tools : [];
-  if (toolIds.length === 0) return [];
-  const described = toolIds.map(id => {
-    const tool = tools.find(t => t.id === id);
-    const name = text(tool?.name) || id;
-    const description = text(tool?.description);
-    return description ? `- ${name}: ${description}` : `- ${name}`;
-  });
-  return ['Tools the assistant can use:', ...described];
+/**
+ * Lines naming the integrations the app binds (`app.integrations`), whose
+ * tools the app's assistant can call. A binding key is an installation id, a
+ * definition id or a type key; `integrations` names the installed ones.
+ */
+function describeIntegrations(app, integrations, text) {
+  const bindings =
+    app.integrations && typeof app.integrations === 'object' && !Array.isArray(app.integrations)
+      ? Object.entries(app.integrations)
+      : [];
+  const described = bindings
+    // `actions: []` binds an integration for its scopes only: it offers no tools.
+    .filter(([, binding]) => !(Array.isArray(binding?.actions) && binding.actions.length === 0))
+    .map(([key]) => {
+      const installed = integrations.find(integration => integration.id === key);
+      return `- ${text(installed?.label || installed?.name) || key}`;
+    });
+  if (described.length === 0) return [];
+  return ['Integrations whose tools the assistant can use:', ...described];
 }
 
 /** Lines for the switches a user sees in the chat. */
@@ -128,16 +136,16 @@ function describeChatFeatures(app) {
  *
  * @param {object} app - App configuration (may be an unsaved draft).
  * @param {string} language - Language code the descriptions are taken in.
- * @param {{tools?: Array<object>, projects?: Array<object>, storageInstallationIds?: string[]}} [catalog] -
- *   Configured tools and projects, to name the ones the app uses, and the ids
- *   of the enabled storage provider installations, to tell whether the app
- *   offers files from cloud storage.
+ * @param {{integrations?: Array<object>, projects?: Array<object>, storageInstallationIds?: string[]}} [catalog] -
+ *   Installed integrations and projects, to name the ones the app uses, and
+ *   the ids of the enabled storage provider installations, to tell whether
+ *   the app offers files from cloud storage.
  * @returns {string} Plain-text description.
  */
 export function describeAppForGuide(
   app,
   language,
-  { tools = [], projects = [], storageInstallationIds = [] } = {}
+  { integrations = [], projects = [], storageInstallationIds = [] } = {}
 ) {
   const text = value => getLocalizedContent(value, language, 'en').trim();
   const lines = [];
@@ -167,7 +175,7 @@ export function describeAppForGuide(
   }
 
   add('The user can attach', describeAttachments(app, storageInstallationIds));
-  lines.push(...describeTools(app, tools, text));
+  lines.push(...describeIntegrations(app, integrations, text));
 
   // An app with projects switched off answers from none of its links.
   const projectIds = (appUsesProjects(app) && Array.isArray(app.projects) ? app.projects : [])
@@ -185,7 +193,7 @@ export function describeAppForGuide(
  *
  * @param {object} app - App configuration (may be an unsaved draft).
  * @param {string} language - Language code the guide is written in.
- * @param {{tools?: Array<object>, projects?: Array<object>}} [catalog] - See describeAppForGuide.
+ * @param {{integrations?: Array<object>, projects?: Array<object>}} [catalog] - See describeAppForGuide.
  * @returns {Array<{role: string, content: string}>}
  */
 export function buildUsageGuideMessages(app, language, catalog = {}) {

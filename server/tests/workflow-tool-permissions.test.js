@@ -54,7 +54,6 @@ const ADMIN = {
 };
 const ANONYMOUS = { id: 'anonymous', groups: ['admins'], permissions: { workflows: new Set() } };
 
-configCache.getTools = () => ({ data: [] });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getSources = () => ({ data: [] });
 configCache.getFeatures = () => ({ skills: false });

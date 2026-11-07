@@ -35,6 +35,8 @@ import {
   deleteScheduledTask
 } from '../tools/scheduledTaskTools.js';
 import { makeClient, sseResponse, openaiText, captureRunLog } from './loop/helpers/llmFixtures.js';
+import { harnessIntegrations, registerHarnessTools } from './helpers/scheduledTaskHarness.js';
+import { unregisterFixtureTools } from './helpers/integrationToolFixture.js';
 
 const MODELS = [
   {
@@ -53,13 +55,11 @@ const APPS = [
     id: 'digest',
     name: { en: 'Digest' },
     system: { en: 'You write digests.' },
-    tools: [
-      'lookup',
-      'dangerous',
-      'schedule_task',
-      'list_scheduled_tasks',
-      'update_scheduled_task'
-    ],
+    integrations: {
+      lookup: {},
+      dangerous: {},
+      ihub: { actions: ['schedule_task', 'list_scheduled_tasks', 'update_scheduled_task'] }
+    },
     preferredModel: 'oa',
     enabled: true
   },
@@ -72,19 +72,25 @@ const APPS = [
   }
 ];
 
-const toolDef = async id =>
-  JSON.parse(await fs.readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8'));
-
 const GROUPS = {
   groups: {
     users: {
       id: 'users',
-      permissions: { apps: ['digest'], models: ['*'], prompts: [], scheduledTasks: true }
+      permissions: {
+        apps: ['digest'],
+        models: ['*'],
+        prompts: [],
+        integrations: ['*'],
+        scheduledTasks: true
+      }
     },
-    noTasks: { id: 'noTasks', permissions: { apps: ['digest'], models: ['*'], prompts: [] } },
+    noTasks: {
+      id: 'noTasks',
+      permissions: { apps: ['digest'], models: ['*'], prompts: [], integrations: ['*'] }
+    },
     lostApp: {
       id: 'lostApp',
-      permissions: { apps: ['secret'], models: ['*'], scheduledTasks: true }
+      permissions: { apps: ['secret'], models: ['*'], integrations: ['*'], scheduledTasks: true }
     }
   }
 };
@@ -131,32 +137,15 @@ before(async () => {
       }
     }
   });
-  configCache.setCacheEntry('config/tools.json', [
-    {
-      id: 'lookup',
-      name: 'lookup',
-      description: 'Look up a record',
-      script: 'lookup.js',
-      parameters: { type: 'object', properties: { key: { type: 'string' } } }
-    },
-    {
-      id: 'dangerous',
-      name: 'dangerous',
-      description: 'Does something with side effects',
-      script: 'dangerous.js',
-      requiresApproval: true,
-      parameters: { type: 'object', properties: {} }
-    },
-    await toolDef('schedule_task'),
-    await toolDef('list_scheduled_tasks'),
-    await toolDef('update_scheduled_task')
-  ]);
+  await registerHarnessTools();
+  configCache.setCacheEntry('config/integrations.json', harnessIntegrations());
   await configCache.loadAndCacheLocale('en');
   ledger = await captureRunLog();
   interactionService.onAnswer(interaction => tasks.applyApprovalAnswer(interaction));
 });
 
 after(async () => {
+  await unregisterFixtureTools();
   await shutdownStorageBootstrap();
   const rm = dir => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   await rm(baseDir);

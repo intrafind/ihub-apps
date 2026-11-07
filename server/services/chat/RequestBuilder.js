@@ -14,7 +14,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { getScopeProvider } from '../integrations/scopes/index.js';
-import { appDefaultEnabledTools } from '../integrations/appIntegrationRefs.js';
+import { appDefaultEnabledTools, appHasToolBindings } from '../integrations/appIntegrationRefs.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
@@ -314,14 +314,14 @@ export function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement (app.tools, app.apps — apps invoked as tools —
-  // or websearch config all require tool support). app.apps only counts while
+  // Filter by tools requirement (a bound integration, app.apps — apps invoked as
+  // tools — or websearch config all require tool support). app.apps only counts while
   // the appAsTool feature is enabled: with the flag off no app__* tools are
   // generated, so a configured-but-inactive delegation must not shrink the
   // model list.
   const appToolsActive =
     app?.apps && app.apps.length > 0 && isFeatureEnabled('appAsTool', configCache.getFeatures());
-  if ((app?.tools && app.tools.length > 0) || appToolsActive || app?.websearch?.enabled) {
+  if (appHasToolBindings(app) || appToolsActive || app?.websearch?.enabled) {
     availableModels = availableModels.filter(modelSupportsTools);
   }
 
@@ -484,7 +484,7 @@ class RequestBuilder {
         // If models exist but none passed the app-specific filters
         else if (
           filteredModels.length === 0 &&
-          (app.allowedModels || app.tools || app.settings?.model?.filter)
+          (app.allowedModels || appHasToolBindings(app) || app.settings?.model?.filter)
         ) {
           errorCode = 'noCompatibleModels';
         }

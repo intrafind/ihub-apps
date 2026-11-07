@@ -18,7 +18,6 @@ const FALLBACK_SUBJECT = {
   apps: 'this app',
   prompts: 'this prompt',
   skills: 'this skill',
-  tools: 'this tool',
   workflows: 'this workflow'
 };
 
@@ -26,7 +25,6 @@ const FALLBACK_SUBJECT_PLURAL = {
   apps: 'apps',
   prompts: 'prompts',
   skills: 'skills',
-  tools: 'tools',
   workflows: 'workflows'
 };
 
@@ -48,7 +46,7 @@ const FALLBACK_SUBJECT_PLURAL = {
  * the content through a parent group says so in the search results.
  *
  * @param {object} props
- * @param {'apps'|'prompts'|'skills'|'tools'|'workflows'} props.resourceType - Permission list the content lives in
+ * @param {'apps'|'prompts'|'skills'|'workflows'} props.resourceType - Permission list the content lives in
  * @param {string} props.resourceId - The content's id
  * @param {boolean} [props.isNew=false] - The content has not been saved yet; nothing to grant
  * @param {string} [props.className] - Extra classes for the outer card
@@ -177,17 +175,11 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     }
   };
 
-  const description =
-    resourceType === 'tools'
-      ? t(
-          'admin.contentAccess.descriptionTools',
-          "Choose which groups may call this tool directly over the MCP and A2A gateways. Changes are saved immediately. In chat, an app's own tool list decides what the model may call."
-        )
-      : t(
-          'admin.contentAccess.description',
-          'Choose which groups can use {{subject}}. Changes are saved immediately.',
-          { subject }
-        );
+  const description = t(
+    'admin.contentAccess.description',
+    'Choose which groups can use {{subject}}. Changes are saved immediately.',
+    { subject }
+  );
 
   const renderBody = () => {
     if (!canLoad) {

@@ -68,7 +68,6 @@ export function resolveGroupInheritance(groupsConfig) {
         models: new Set(),
         workflows: new Set(),
         skills: new Set(),
-        tools: new Set(),
         integrations: new Set(),
         adminAccess: false,
         contentAdmin: false,
@@ -104,11 +103,6 @@ export function resolveGroupInheritance(groupsConfig) {
         // Merge skills
         if (Array.isArray(parentPerms.skills)) {
           parentPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
-        }
-
-        // Merge tools
-        if (Array.isArray(parentPerms.tools)) {
-          parentPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
         }
 
         // Merge integrations (installation ids, definition ids, `type:<type>`, `*`)
@@ -155,9 +149,6 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.skills)) {
         ownPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
       }
-      if (Array.isArray(ownPerms.tools)) {
-        ownPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
-      }
       if (Array.isArray(ownPerms.integrations)) {
         ownPerms.integrations.forEach(key => mergedPermissions.integrations.add(key));
       }
@@ -186,7 +177,6 @@ export function resolveGroupInheritance(groupsConfig) {
           models: Array.from(mergedPermissions.models),
           workflows: Array.from(mergedPermissions.workflows),
           skills: Array.from(mergedPermissions.skills),
-          tools: Array.from(mergedPermissions.tools),
           integrations: Array.from(mergedPermissions.integrations),
           adminAccess: mergedPermissions.adminAccess,
           contentAdmin: mergedPermissions.contentAdmin,
@@ -291,7 +281,6 @@ export function loadGroupPermissions() {
       models: group.permissions?.models || [],
       workflows: group.permissions?.workflows || [],
       skills: group.permissions?.skills || [],
-      tools: group.permissions?.tools || [],
       integrations: group.permissions?.integrations || [],
       adminAccess: group.permissions?.adminAccess || false,
       contentAdmin: group.permissions?.contentAdmin || false,
@@ -409,7 +398,6 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     models: new Set(),
     workflows: new Set(),
     skills: new Set(),
-    tools: new Set(),
     integrations: new Set(),
     adminAccess: false,
     contentAdmin: false,
@@ -462,15 +450,6 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       permissions.skills.add('*');
     } else if (Array.isArray(groupPerms.skills)) {
       groupPerms.skills.forEach(skill => permissions.skills.add(skill));
-    }
-
-    // Handle wildcards and specific permissions for tools. Unlike the other
-    // entries this grants *direct* tool access over the MCP/A2A gateways only —
-    // which tools a chat app may call is still declared by the app itself.
-    if (groupPerms.tools?.includes('*')) {
-      permissions.tools.add('*');
-    } else if (Array.isArray(groupPerms.tools)) {
-      groupPerms.tools.forEach(tool => permissions.tools.add(tool));
     }
 
     // Integrations the group may use: `*`, installation ids, definition ids

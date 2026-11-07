@@ -311,7 +311,7 @@ describe('LLM provider CRUD', () => {
     addModel({ ...baseModel, id: 'llmhub-a', provider: 'openai', providerId: 'llmhub' });
     const refused = await request(app).delete('/api/admin/providers/llmhub');
     expect(refused.status).toBe(409);
-    expect(refused.body.linkedModels).toEqual(['llmhub-a']);
+    expect(refused.body.details.linkedModels).toEqual(['llmhub-a']);
 
     delete store['models/llmhub-a.json'];
     const deleted = await request(app).delete('/api/admin/providers/llmhub');

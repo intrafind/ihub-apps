@@ -58,8 +58,7 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
    *     summary: Every tool an app, workflow or agent can name
    *     description: |
    *       The tool ids the admin pickers offer (app and agent editors, workflow tool and
-   *       prompt nodes, agent memory): the platform tools of workflows and agents, tool files
-   *       left in `contents/tools/`, and every available action of the enabled installed
+   *       prompt nodes, agent memory): the platform tools of workflows and agents, and every available action of the enabled installed
    *       integrations (custom ones included), each with the installation it belongs to.
    *       Not filtered by the admin's own group grants.
    *     tags:

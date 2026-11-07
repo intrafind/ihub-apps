@@ -29,7 +29,6 @@
     "contentMaxLength": 3000,
     "enabledByDefault": false
   },
-  "tools": [],
   "skillSettings": {
     "enabled": true
   },

@@ -43,7 +43,7 @@ export async function generateUsageGuide({ app, language, user }) {
   const result = await llmClient.complete({
     model,
     messages: buildUsageGuideMessages(app, language, {
-      tools: configCache.getTools().data || [],
+      integrations: configCache.getIntegrations?.()?.data?.installed || [],
       projects: configCache.getProjects(true).data || [],
       storageInstallationIds: listCloudStorageProviders()
         .filter(provider => provider.enabled !== false)

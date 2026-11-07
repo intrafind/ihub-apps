@@ -21,7 +21,7 @@ const app = {
   color: '#4F46E5',
   icon: 'search',
   system: { en: 'Research things.' },
-  tools: ['read_url']
+  integrations: { ifinder: {} }
 };
 
 describe('app toolChoice', () => {
@@ -46,6 +46,11 @@ describe('app toolChoice', () => {
 
   it('is a known app key (kept by the admin editor and inheritance)', () => {
     assert.ok(knownAppKeys.includes('toolChoice'));
+  });
+
+  it('has no tool list of its own: tools come from the bound integrations (#3275)', () => {
+    assert.equal(knownAppKeys.includes('tools'), false);
+    assert.equal(appConfigSchema.safeParse({ ...app, tools: ['read_url'] }).success, false);
   });
 });
 

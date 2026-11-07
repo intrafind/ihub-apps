@@ -15,8 +15,8 @@ const mockApps = [
     id: 'mixed',
     name: { en: 'Mixed' },
     system: { en: 'You are a helpful assistant.' },
-    tools: ['drawio'],
     integrations: {
+      drawio: {},
       jira: { enabledByDefault: false },
       nextcloud: { enabledByDefault: true },
       iassistant: { actions: ['ask'] }

@@ -70,7 +70,6 @@ const stubs = {
     data: { groups: { everyone: { id: 'everyone', permissions: { skills: ['*'] } } } }
   }),
   getStyles: () => ({}),
-  getTools: () => ({ data: [] }),
   getSources: () => ({ data: [] })
 };
 

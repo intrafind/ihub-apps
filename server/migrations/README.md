@@ -69,11 +69,12 @@ next fresh install, while already-migrated installations retain the old result.
 
 ### Acceptable imports inside a migration
 
-| Allowed                                       | Why                                   |
-| --------------------------------------------- | ------------------------------------- |
-| Node.js built-ins (`fs`, `path`, `crypto`, …) | Stable, versioned with Node           |
-| `../migrations/utils.js`                      | Stable migration-utility helpers only |
-| `ctx.*` methods from the migration context    | Injected by the runner                |
+| Allowed                                       | Why                                         |
+| --------------------------------------------- | ------------------------------------------- |
+| Node.js built-ins (`fs`, `path`, `crypto`, …) | Stable, versioned with Node                 |
+| `../migrations/utils.js`                      | Stable migration-utility helpers only       |
+| `./support/*.js` frozen snapshots             | Shared by several migrations, never changed |
+| `ctx.*` methods from the migration context    | Injected by the runner                      |
 
 ---
 

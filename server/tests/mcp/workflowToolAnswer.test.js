@@ -22,8 +22,6 @@ jest.unstable_mockModule('../../services/tools/appTools.js', () => ({
   MAX_SKILL_NAME_ENUM: 100
 }));
 jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
-  loadConfiguredTools: jest.fn(async () => []),
-  loadLocalTools: jest.fn(async () => []),
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
   localizeTools: jest.fn(tools => tools),

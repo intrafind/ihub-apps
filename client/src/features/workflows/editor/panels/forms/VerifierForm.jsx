@@ -6,6 +6,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
+import CapabilityFields from '../../../../../shared/components/CapabilityFields';
 
 function VerifierForm({ config, onChange, variables }) {
   const fetchModelsFn = useCallback(() => fetchModels(), []);
@@ -37,6 +38,13 @@ function VerifierForm({ config, onChange, variables }) {
         onChange={v => onChange({ ...config, modelId: v })}
         placeholder="Search models..."
       />
+      {config.mode === 'adversarial' && (
+        <CapabilityFields
+          value={config}
+          onChange={patch => onChange({ ...config, ...patch })}
+          showWebSearch={false}
+        />
+      )}
       <FormField
         label="Input Variable"
         value={config.inputVariable}

@@ -7,9 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { buildAppPayloadFromWizard } from '../../admin/utils/appWizardPayload';
-import { fetchToolsBasic, fetchModels } from '../../../api';
-import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
-import { collapseMcpTools } from '../../chat/utils/groupToolsByMcpServer';
+import { fetchModels } from '../../../api';
+import { integrationsFromAnswer } from '../../../../../shared/appGenerator.js';
+import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import {
   validateAppId,
   APP_ID_MAX_LENGTH,
@@ -38,7 +38,6 @@ function AppCreationWizard({ onClose, templateApp = null }) {
     messagePlaceholder: { en: '' },
     variables: [],
     starterPrompts: [],
-    tools: [],
     allowEmptyContent: false,
     sendChatHistory: true,
     category: 'utility',
@@ -110,12 +109,6 @@ function AppCreationWizard({ onClose, templateApp = null }) {
       component: VariablesStep
     },
     {
-      id: 'tools',
-      title: t('admin.apps.wizard.tools.title', 'Tools'),
-      description: t('admin.apps.wizard.tools.description', 'Select available tools'),
-      component: ToolsStep
-    },
-    {
       id: 'advanced',
       title: t('admin.apps.wizard.advanced.title', 'Advanced Settings'),
       description: t('admin.apps.wizard.advanced.description', 'Configure advanced features'),
@@ -183,9 +176,8 @@ function AppCreationWizard({ onClose, templateApp = null }) {
           missingFields.push('system');
         }
         break;
-      // Variables and tools are optional
+      // Variables are optional
       case 'variables':
-      case 'tools':
       case 'advanced':
         break;
       case 'review':
@@ -681,6 +673,8 @@ function AIGenerationStep({ appData, updateAppData }) {
       const data = response.data;
       console.log('AI generation result:', JSON.stringify(data, null, 2));
       const generatedConfig = data.choices[0].message.content;
+      const localizedOf = value =>
+        typeof value === 'string' ? { [selectedLanguage]: value } : value;
 
       // Parse the generated JSON configuration
       try {
@@ -720,7 +714,17 @@ function AIGenerationStep({ appData, updateAppData }) {
             color: configJson.color || appData.color,
             icon: configJson.icon || appData.icon,
             variables: configJson.variables || appData.variables,
-            tools: configJson.tools || appData.tools,
+            // A localized prompt template, web search and the integrations the
+            // generator picked from the installed ones (an app has no tool list).
+            ...(configJson.prompt ? { prompt: localizedOf(configJson.prompt) } : {}),
+            ...(configJson.websearch?.enabled === true ? { websearch: { enabled: true } } : {}),
+            ...(() => {
+              const integrations = integrationsFromAnswer(
+                configJson.integrations,
+                appGeneratorPrompt.integrationIds || []
+              );
+              return integrations ? { integrations } : {};
+            })(),
 
             // Mark as AI generated
             aiGenerated: true,
@@ -1468,122 +1472,7 @@ function VariablesStep({ appData, updateAppData }) {
   );
 }
 
-// Step 6: Tools
-function ToolsStep({ appData, updateAppData }) {
-  const { t, i18n } = useTranslation();
-  const [availableTools, setAvailableTools] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    // Load available tools
-    const loadTools = async () => {
-      try {
-        const tools = await fetchToolsBasic();
-        // An MCP server is picked as a whole, never tool by tool.
-        setAvailableTools(
-          collapseMcpTools(tools, name => getLocalizedContent(name, i18n.language))
-        );
-      } catch (error) {
-        console.error('Failed to load tools:', error);
-      }
-    };
-    void loadTools();
-  }, [i18n.language]);
-
-  const toggleTool = toolId => {
-    const currentTools = appData.tools || [];
-    const isSelected = currentTools.includes(toolId);
-
-    if (isSelected) {
-      updateAppData({ tools: currentTools.filter(id => id !== toolId) });
-    } else {
-      updateAppData({ tools: [...currentTools, toolId] });
-    }
-  };
-
-  const filteredTools = availableTools.filter(
-    tool =>
-      String(tool.name || '')
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      String(tool.description || '')
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-  );
-
-  return (
-    <div className="space-y-6">
-      <div className="text-sm text-gray-600">
-        {t(
-          'admin.apps.wizard.tools.instruction',
-          'Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.'
-        )}
-      </div>
-
-      {/* Search input */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon name="search" className="h-5 w-5 text-gray-500" />
-        </div>
-        <input
-          type="text"
-          placeholder={t('admin.apps.wizard.tools.searchPlaceholder', 'Search tools...')}
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          autoComplete="off"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-600"
-            aria-label={t('common.clearSearch', 'Clear search')}
-          >
-            <Icon name="x" className="h-5 w-5" />
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-3 max-h-96 overflow-y-auto">
-        {filteredTools.map(tool => (
-          <label
-            key={tool.id}
-            className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
-          >
-            <input
-              type="checkbox"
-              checked={appData.tools?.includes(tool.id) || false}
-              onChange={() => toggleTool(tool.id)}
-              className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
-            />
-            <div className="ml-3 flex-1">
-              <div className="text-sm font-medium text-gray-900">{tool.name}</div>
-              {tool.description && (
-                <div className="text-sm text-gray-500 line-clamp-2">{tool.description}</div>
-              )}
-            </div>
-          </label>
-        ))}
-      </div>
-
-      {availableTools.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <Icon name="cog" className="h-8 w-8 mx-auto mb-2" />
-          <p>{t('admin.apps.wizard.tools.noTools', 'No tools available')}</p>
-        </div>
-      )}
-
-      {filteredTools.length === 0 && availableTools.length > 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <Icon name="search" className="h-8 w-8 mx-auto mb-2" />
-          <p>{t('admin.apps.wizard.tools.noResults', 'No tools match your search')}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Step 7: Advanced Settings
+// Step 6: Advanced Settings
 function AdvancedSettingsStep({ appData, updateAppData }) {
   const { t } = useTranslation();
 
@@ -1668,7 +1557,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
   );
 }
 
-// Step 8: Review
+// Step 7: Review
 function ReviewStep({ appData, templateApp }) {
   const { t } = useTranslation();
 
@@ -1705,9 +1594,6 @@ function ReviewStep({ appData, templateApp }) {
             </div>
             <div>
               <span className="text-gray-500">Variables:</span> {appData.variables?.length || 0}
-            </div>
-            <div>
-              <span className="text-gray-500">Tools:</span> {appData.tools?.length || 0}
             </div>
           </div>
 

@@ -45,11 +45,10 @@ import {
   neutralizeNotes,
   prepareRunMemory
 } from '../services/scheduler/tasks/runMemory.js';
-import { harnessTools } from './helpers/scheduledTaskHarness.js';
 
 const MEMORY_TOOLS = ['read_memory', 'write_memory', 'list_task_runs', 'get_task_run'];
 
-before(() => setupHarness({ defaultTools: MEMORY_TOOLS }));
+before(() => setupHarness());
 after(() => teardownHarness());
 
 const ada = () => principal({ id: 'user-ada', name: 'Ada' });
@@ -311,13 +310,13 @@ describe('when the model cannot be given tools', () => {
     await cleanup(ada());
   });
 
-  it('a tool an admin removed is skipped, and the instruction falls back to the notes', async () => {
+  it('a tool an admin switched off is skipped, and the instruction falls back to the notes', async () => {
     const task = await newTask();
-    const original = await harnessTools(MEMORY_TOOLS);
-    configCache.setCacheEntry(
-      'config/tools.json',
-      original.filter(tool => tool.id !== 'list_task_runs')
-    );
+    const original = configCache.getIntegrations().data;
+    const switchedOff = structuredClone(original);
+    const ihub = switchedOff.installed.find(instance => instance.id === 'ihub');
+    ihub.actions.disabled = ['list_task_runs'];
+    configCache.setCacheEntry('config/integrations.json', switchedOff);
     try {
       const { run, requests } = await runTask(task, [openaiText(['ok'])]);
       const names = toolNamesOf(requests[0]);
@@ -327,7 +326,7 @@ describe('when the model cannot be given tools', () => {
       assert.equal(run.memory.toolsOffered, false);
       assert.match(systemOf(requests[0]), /only record of earlier runs/);
     } finally {
-      configCache.setCacheEntry('config/tools.json', original);
+      configCache.setCacheEntry('config/integrations.json', original);
     }
     await cleanup(ada());
   });

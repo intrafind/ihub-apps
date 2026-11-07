@@ -47,7 +47,7 @@ import { getTaskRun, listTaskRuns } from '../tools/scheduledTaskTools.js';
 
 const MEMORY_TOOLS = ['read_memory', 'write_memory', 'list_task_runs', 'get_task_run'];
 
-before(() => setupHarness({ defaultTools: MEMORY_TOOLS }));
+before(() => setupHarness());
 after(() => teardownHarness());
 
 const ada = () => principal({ id: 'user-ada', name: 'Ada' });
@@ -591,15 +591,17 @@ describe('nothing an app or a task can do offers them', () => {
     );
   });
 
-  it('an app that lists them does not get them', async () => {
+  it('an app that binds them does not get them', async () => {
     const greedy = {
       id: 'greedy',
       name: { en: 'Greedy' },
       system: { en: 'x' },
       preferredModel: 'oa',
       enabled: true,
-      tools: ['lookup', 'list_task_runs', 'get_task_run']
+      integrations: { lookup: {}, ihub: { actions: ['list_task_runs', 'get_task_run'] } }
     };
+    // The binding offers them: it is the scheduled-tasks gate that keeps them
+    // from the app.
     const offered = await getToolsForApp(greedy, 'en', { user: ada() });
     assert.deepEqual(
       offered.map(tool => tool.id),

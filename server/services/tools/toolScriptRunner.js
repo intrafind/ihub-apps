@@ -7,8 +7,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
  * Run a function of one of iHub's tool scripts (`server/tools/<script>`).
  *
  * The one place a tool script is imported and called: `runTool`
- * runs the plain tools (the platform tools of workflows and agents, a tool
- * file in `contents/tools/`) through it, and a custom integration's connector
+ * runs the platform tools of workflows and agents through it, and a custom integration's connector
  * module reaches it as `ctx.runToolScript` (see `NativeAdapter.run`). The
  * connectors migration V211 generated from admin-created tool files call the
  * script the tool file named this way, so the migrated actions run exactly

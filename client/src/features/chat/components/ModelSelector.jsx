@@ -11,6 +11,7 @@ import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/mo
 import { isTranscriptionModel } from '../../../utils/modelFiltering';
 import useMyUsage, { mostUrgentBucket } from '../../../shared/hooks/useMyUsage';
 import { formatTimeUntil, windowLabel } from '../../../shared/utils/usageFormat';
+import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -41,7 +42,7 @@ function ModelSelector({
   let filteredModels = availableModels;
 
   // Filter by tools requirement (a transcription model uses no tools)
-  if (app?.tools && app.tools.length > 0) {
+  if (appHasToolBindings(app)) {
     filteredModels = filteredModels.filter(
       model => isTranscriptionModel(model) || modelSupportsTools(model)
     );

@@ -22,7 +22,6 @@ import { appConfigSchema, knownAppKeys } from './validators/appConfigSchema.js';
 import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
 import { workflowConfigSchema, knownWorkflowKeys } from './validators/workflowConfigSchema.js';
 import { agentProfileSchema, knownAgentProfileKeys } from './validators/agentProfileSchema.js';
-import { warnAboutMissingToolScripts } from './services/tools/toolScriptCheck.js';
 import logger from './utils/logger.js';
 
 /**
@@ -61,24 +60,6 @@ function ensureOneDefaultModel(models) {
   return models;
 }
 
-// Create the models resource loader
-/**
- * Warn about tools whose script is missing. A diagnostic must never take tool
- * loading down with it.
- *
- * @param {Array} tools - Loaded tool definitions
- */
-function checkToolScripts(tools) {
-  try {
-    warnAboutMissingToolScripts(tools);
-  } catch (error) {
-    logger.warn('Could not check the tool scripts', {
-      component: 'ResourceLoaders',
-      error: error?.message
-    });
-  }
-}
-
 /**
  * - `resourceName`: the name in log lines
  * - `directory`: under `contents/`
@@ -113,12 +94,6 @@ export const RESOURCE_LOADERS = {
     resourceName: 'Agent Profiles',
     directory: 'agents/profiles',
     validateItem: createSchemaValidator(agentProfileSchema, knownAgentProfileKeys)
-  },
-  tools: {
-    resourceName: 'Tools',
-    directory: 'tools',
-    validateItem: createValidator(['id', 'name']),
-    inspect: checkToolScripts
   },
   // Admin projects, the successor of `config/sources.json` (#1036): configuration
   // an admin links to apps, workflows and agents. User projects are runtime data

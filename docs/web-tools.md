@@ -115,13 +115,13 @@ definition id, or `type:web-search` for every engine; see
 **Search the web** action an admin switched off; a named engine is used or not
 at all, so an app set to one engine never silently answers from another.
 
-The engine tools keep the ids they always had, so an app or a **workflow node**
-can still list `braveSearch`, `staanSearch`, `qwantSearch` (or a third-party
-engine's `<id>__search`) or `read_url` in its `tools` (the shipped
-`claude-style-agent` and `research-assistant` workflows do). An engine tool is
-served by exact id while its engine is installed, enabled and granted; the
-engine's installation id (`brave`) selects nothing in `tools`. A node's generic
-`webSearch` marker resolves to native search where the model runs it, and
+An app gets web search through its `websearch` configuration. A **workflow
+node** or agent profile has no tool list (#3275): it binds an engine like any
+integration (`"integrations": { "type:web-search": { "actions": ["search"] } }`,
+or one engine's installation id), names the page reader in `systemTools`
+(`["read_url"]`; the shipped `claude-style-agent` and `research-assistant`
+workflows do) and may set `webSearch: true`. An engine's tool is served while
+its engine is installed, enabled and granted. A node's `webSearch: true` resolves to native search where the model runs it, and
 otherwise to the search tool of the first engine the user may use (`auto`);
 with no engine it adds nothing. Web search for an *app*, though, is configured
 in `websearch` as above.
@@ -557,7 +557,7 @@ web search feature, read from `server/defaults/tools/read_url.json` (see
 Qwant is the keyless counterpart to `braveSearch`. It returns the same result
 shape, so an app can switch `websearch.provider` between the two without the
 model seeing a different contract. Like `braveSearch`, it is injected from the
-app's `websearch` config rather than listed in the app's `tools` array.
+app's `websearch` config.
 
 **Parameters**:
 
@@ -586,8 +586,7 @@ app's `websearch` config rather than listed in the app's `tools` array.
 Staan is the second keyed engine alongside `braveSearch`. It returns the same
 result shape as the other two, so an app can switch `websearch.provider`
 between them without the model seeing a different contract, and like them it is
-injected from the app's `websearch` config rather than listed in the app's
-`tools` array. Two things set it apart:
+injected from the app's `websearch` config. Two things set it apart:
 
 - It answers requests from data-centre IP ranges, so it works on the cloud
   hosting where Qwant is blocked.
@@ -727,7 +726,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V204 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
+**Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). A workflow node can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V204 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 

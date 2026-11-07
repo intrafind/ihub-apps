@@ -266,8 +266,8 @@ export const nodeConfigSchema = z.object({
        */
       thinking: nodeThinkingSchema,
       /**
-       * Cap on provider-run web searches per model call when the node's tools
-       * include the generic `webSearch` marker and the model has native search
+       * Cap on provider-run web searches per model call when the node sets
+       * `webSearch: true` and the model has native search
        * (Anthropic `max_uses`). Defaults to 5.
        */
       maxWebSearches: z.number().int().min(1).max(50).optional(),

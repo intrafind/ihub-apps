@@ -46,8 +46,8 @@ What changes for every one of them:
   became `"integrations": { "com.intrafind/ldap-directory": {} }`. The MCP server and remote agent
   pickers of the app editor are gone; bind the installation instead.
 - **Tool files.** `contents/tools/iFinder.json`, the Jira tool file (`"script": "jira.js"`) and
-  `entraPeopleSearch.json` are deleted; the installations own the tools. Tool ids are unchanged, and
-  group tool grants naming `iFinder` or `iFinder_*` keep working.
+  `entraPeopleSearch.json` are deleted; the installations own the tools. Tool ids are unchanged. Group tool grants were removed later
+  (see "Tools Are Integrations Everywhere").
 - **An id another installation already holds.** An MCP server, A2A agent or people directory whose
   id is taken is not moved: it is kept in `contents/config/mcpServers.unmigrated.json`,
   `a2aAgents.unmigrated.json` or `peopleDirectories.unmigrated.json` with a warning in the log.
@@ -94,8 +94,8 @@ client registrations stay valid.
   name `braveSearch`) selects the tool only while that engine is installed, enabled and granted.
   V195 removes these ids from apps' `tools`; an app that had web search only through such an entry
   gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it named.
-  `read_url` entries stay: the page reader is a platform tool of web search, switched off with a
-  `contents/tools/read_url.json` that says `"enabled": false`.
+  `read_url` entries stay: the page reader is a platform tool of web search (a workflow node or
+  agent profile names it in `systemTools`).
 - **Access:** an engine is granted on the groups (`permissions.integrations`: its id or
   `type:web-search`); native search on the model needs no grant. `BRAVE_SEARCH_API_KEY` and
   `STAAN_API_KEY` still work for an installed engine.
@@ -144,15 +144,16 @@ belong to projects, the agent workspace and evidence tools to workflows and agen
 
 - **Switch them off on the `ihub` installation.** A file that was `enabled: false` is migrated into
   `actions.disabled`. A tool file an admin edited stays in `contents/tools/` with a warning and
-  keeps serving its tool until it is deleted; move the change over first.
+  is no longer read (the tool-file loader is retired, see "Tools Are Integrations Everywhere"); move
+  the change over first.
 - **The knowledge tools can no longer be switched off.** A disabled or edited `knowledge.json` is
   not read any more (V202 warns); every request that reaches a project gets them while the projects
   feature is on.
 - **Workspace and evidence tools** are no longer listed under the iHub integration. One that was
   switched off stays off: V202 writes its tool file with `enabled: false`. A single evidence
   function cannot be switched off on its own; V202 names one in a warning.
-- **Apps and groups need no change:** `tools: ["ask_user"]` and `permissions.tools` grants keep
-  working. `tools: ["ihub"]` and `tools: ["knowledge"]` select nothing.
+- **Apps bind the installation:** an app's `tools: ["ask_user"]` becomes
+  `integrations.ihub` (see "Tools Are Integrations Everywhere"); `tools: ["knowledge"]` selects nothing.
 - **The `ihub` installation cannot be removed or disabled:** `DELETE
   /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
@@ -283,16 +284,15 @@ manually** builds and **Edit in builder** edits.
   the same script in `server/tools/`, one action per function; an OpenAPI tool becomes an `openapi`
   integration with its document copied (or its URL kept) and its credential sent as before. Every
   action keeps its **tool id** (`myTool`, `myTool_search`), so apps, workflows, agent profiles,
-  group tool grants, the MCP and A2A gateways and app approval overrides keep working. `enabled`,
+  the MCP and A2A gateways and app approval overrides keep working. `enabled`,
   `approval`, `sideEffect` and `dataFlow` move onto the installation and its actions; apps that
   listed a tool bind its integration instead (`app.integrations`); groups with an explicit
   integrations list get the new installations. The tool file is deleted.
 - **Not carried over:** `passthrough`, `concurrency` and `requestDelayMs` (named in the log). A tool
   whose id cannot be kept, or whose functions collide as action names, stays in `contents/tools/`
   with a warning. Shipped and platform tools are not touched.
-- **OpenAPI tool files** are no longer read: one put back by hand is skipped with a warning. A
-  hand-written script tool file still loads as a plain tool but has no admin page; a platform tool
-  such as `read_url` is switched off in its file.
+- **Tool files in `contents/tools/`** are not read at all any more ("Tools Are Integrations
+  Everywhere").
 - **Admin pickers** (app and agent tool selectors, workflow tool and prompt nodes, agent memory)
   list every tool, not only tool files.
 
@@ -460,6 +460,64 @@ registry you added yourself, or one with that id that you pointed elsewhere, is 
 **Before upgrading:** to get updates for an item installed from the examples registry, install it
 again from the official marketplace (the same id replaces the local copy) or detach it. Automation
 that fetched `examples/catalog.json` from GitHub must use the marketplace catalog instead.
+
+## Tools Are Integrations Everywhere
+
+Every tool is an action of an installed integration, so nothing in iHub lists tools by id any more
+(#3275). What changes:
+
+- **Apps** have no `tools` list. An app gets tools only through `integrations` (the group's grant of
+  the installation plus the binding's action list) and its `websearch` configuration. The field is
+  gone from the app schema, the app editor (the **Tools** card keeps **Tool use** and **Approval
+  before tool calls**), the creation wizard, the app generator prompt and the built-in apps.
+- **Workflow nodes, planner task templates and agent profiles** have no `tools` list either. They
+  bind `integrations` like an app, set `webSearch: true` for web search, and name the platform tools
+  of workflows and agents (`write_artifact`, `read_memory`, `evidence`, `read_url`, …) in
+  `systemTools`; those are plain tools, not integrations. The workflow and agent editors offer the
+  three fields. A `tool` step still names one action by its tool id.
+- **The MCP gateway exposes the integrations.** It lists the actions of every enabled installation
+  the caller's groups are granted (`permissions.integrations`), under the tool ids they have in a
+  chat, and checks the grant again at call time. The shipped groups hold `integrations: ["*"]`,
+  so a user-delegated token now reaches every integration its user may use: narrow the groups'
+  `integrations` lists if the gateway should offer less. A machine client (client credentials, static
+  key) reaches an integration only through the binding of an app in its `allowedApps`. Outbound MCP servers, remote A2A agents and the
+  LDAP browser are still not re-exposed; neither are project, skill and platform tools.
+- **`permissions.tools` is gone** from groups (schema, group editor, `/api/admin/groups`, content
+  access). A group's access to an integration is its `permissions.integrations` grant.
+- **`GET /api/tools` and `/api/tools/:toolId` are removed.** There is no direct tool API: use an
+  integration's action tester in Admin, or the MCP gateway.
+
+Migrations V229 (apps) and V230 (workflows, agent profiles, groups) rewrite the existing files on the
+first start:
+
+| Entry in `tools` | Becomes |
+| --- | --- |
+| `ask_user`, `schedule_task`, `list_scheduled_tasks`, … | `"integrations": { "ihub": { "actions": [...] } }` |
+| `iFinder`, `jira` | the binding of that installation with every action |
+| `iFinder_search`, `jira_getTicket`, `braveSearch`, `<installationId>__<action>` | the binding of that installation with those actions |
+| an installation id (an MCP server, a people directory, `a2a__<agentId>`) | the binding of that installation with every action |
+| `webSearch` (workflow nodes, agent profiles) | `webSearch: true` |
+| `write_artifact`, `read_memory`, `evidence`, `read_url`, … (workflow nodes, agent profiles) | `systemTools` |
+| anything else (an app naming a platform tool, an id nobody installed) | removed, **logged as a warning with the file name** |
+
+A group's `permissions.tools` entry that names an installation's tools adds that installation to the
+group's `integrations`, so what the group could reach stays reachable; entries that map to no
+installation are logged. An existing binding keeps its settings. A binding still needs the group
+grant of the installation (`permissions.integrations`), so check **Admin → Groups** for the
+installations an app or workflow now binds.
+
+**Before upgrading:** check the startup log of both migrations for removed entries. An app, node or
+profile that still has `tools` after the upgrade (a restored backup, a hand-edited file) logs a
+validation warning and offers nothing for the entries. API clients that read or write `tools` on
+`/api/admin/apps`, `/api/admin/workflows` or agent profiles, that call `/api/tools`, or that rely on
+`permissions.tools` must use the bindings and group grants instead. A model must support tool calling
+when an app or node binds an integration (as it did for an app with `tools`). Tool files left in
+`contents/tools/` are reported by V230 and left in place; **iHub no longer loads `contents/tools/`**
+at all, so a hand-written script tool file or a platform tool switched off in its file (`read_url`
+with `"enabled": false`) has no effect: build the tool as a custom integration, and switch platform
+tools off by not naming them in `systemTools`. The app generator no longer offers or writes `tools`
+(V231 rewrites its prompt), lists the installed integrations in its brief and turns its answer's
+`integrations` into the app's bindings.
 
 ## Error Responses Are `application/problem+json`: `error` Is Now `detail`
 
