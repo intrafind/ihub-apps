@@ -36,6 +36,9 @@ const flush = () =>
     await Promise.resolve();
   });
 
+/** The card starts collapsed to a summary line; Edit opens its fields. */
+const openCard = () => fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
 const payload = (saved = {}) => ({
   data: {
     saved,
@@ -53,6 +56,7 @@ describe('LlmTimeoutsCard', () => {
     makeAdminApiCall.mockResolvedValue(payload({ connectTimeoutMs: 45000 }));
     render(<LlmTimeoutsCard />);
     await flush();
+    openCard();
 
     expect(screen.getByLabelText('Connect timeout (ms)')).toHaveValue(45000);
     const idle = screen.getByLabelText('Stream idle timeout (ms)');
@@ -60,10 +64,28 @@ describe('LlmTimeoutsCard', () => {
     expect(idle).toHaveAttribute('placeholder', '60000');
   });
 
+  it('starts collapsed to one summary line and opens with Edit', async () => {
+    makeAdminApiCall.mockResolvedValue(payload({ streamIdleTimeoutMs: 0 }));
+    render(<LlmTimeoutsCard />);
+    await flush();
+
+    expect(screen.getByTestId('llm-timeouts-summary')).toHaveTextContent(
+      'connect 30 s · stream idle off'
+    );
+    expect(screen.getByLabelText('Connect timeout (ms)')).not.toBeVisible();
+    const toggle = screen.getByRole('button', { name: 'Edit' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText('Connect timeout (ms)')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('keeps Save disabled until something changes', async () => {
     makeAdminApiCall.mockResolvedValue(payload());
     render(<LlmTimeoutsCard />);
     await flush();
+    openCard();
 
     const save = screen.getByRole('button', { name: 'Save timeouts' });
     expect(save).toBeDisabled();
@@ -77,6 +99,7 @@ describe('LlmTimeoutsCard', () => {
     makeAdminApiCall.mockResolvedValueOnce(payload({ connectTimeoutMs: 45000 }));
     render(<LlmTimeoutsCard />);
     await flush();
+    openCard();
 
     makeAdminApiCall.mockResolvedValueOnce(payload({ streamIdleTimeoutMs: 0 }));
     fireEvent.change(screen.getByLabelText('Connect timeout (ms)'), { target: { value: '' } });
@@ -98,6 +121,7 @@ describe('LlmTimeoutsCard', () => {
     makeAdminApiCall.mockResolvedValueOnce(payload());
     render(<LlmTimeoutsCard />);
     await flush();
+    openCard();
 
     makeAdminApiCall.mockRejectedValueOnce(new Error('too large'));
     fireEvent.change(screen.getByLabelText('Connect timeout (ms)'), { target: { value: '5' } });

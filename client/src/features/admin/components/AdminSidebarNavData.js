@@ -5,7 +5,6 @@ import {
   CalendarDaysIcon,
   HomeIcon,
   CpuChipIcon,
-  BoltIcon,
   SparklesIcon,
   LanguageIcon,
   Cog6ToothIcon,
@@ -97,18 +96,14 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           visible: showAdminPage('apps')
         },
         {
+          // Models and the providers serving them are one area with two tabs
+          // (ModelsTabsHeader); the Providers tab keeps its own route and permission.
           key: 'models',
           label: t('admin.nav.models', 'Models'),
           href: '/admin/models',
+          activeFor: ['/admin/providers'],
           icon: CpuChipIcon,
-          visible: showAdminPage('models')
-        },
-        {
-          key: 'providers',
-          label: t('admin.nav.providers', 'Providers'),
-          href: '/admin/providers',
-          icon: BoltIcon,
-          visible: showAdminPage('providers')
+          visible: showAdminPage('models') || showAdminPage('providers')
         },
         {
           key: 'prompts',

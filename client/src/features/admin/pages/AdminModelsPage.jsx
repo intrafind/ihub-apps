@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -14,89 +14,13 @@ import { translateModelTestMessage } from '../utils/modelTestMessages';
 import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
-import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-
-/**
- * Below this many configured models the page leads with the ways to add one.
- * A fresh install ships only the disabled local models.
- */
-const GET_STARTED_THRESHOLD = 5;
-
-/**
- * The two ways to add models, as large buttons in the middle of the page, so an
- * admin of a fresh install sees what to do first.
- */
-function GetStartedPanel({ t, onCreate, onImport, marketplaceLink }) {
-  const choice =
-    'flex flex-1 flex-col items-center gap-2 rounded-lg border-2 px-6 py-6 text-center focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2';
-  return (
-    <section
-      aria-labelledby="models-get-started"
-      className="mx-auto mt-8 max-w-3xl rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 sm:p-8 text-center shadow-xs"
-    >
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-        <Icon name="cpu-chip" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-      </div>
-      <h2
-        id="models-get-started"
-        className="mt-4 text-xl font-semibold text-gray-900 dark:text-gray-100"
-      >
-        {t('admin.models.getStarted.title', 'Add the models your apps use')}
-      </h2>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        {t(
-          'admin.models.getStarted.description',
-          'Import the models of a provider such as OpenAI, Anthropic, Google, Mistral or your own endpoint, or configure a model by hand.'
-        )}
-      </p>
-      <div className="mt-6 flex flex-col gap-4 sm:flex-row">
-        <button
-          type="button"
-          onClick={onImport}
-          className={`${choice} border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700`}
-        >
-          <Icon name="link" className="h-6 w-6" />
-          <span className="text-base font-semibold">
-            {t('admin.models.getStarted.import', 'Import from provider')}
-          </span>
-          <span className="text-xs text-indigo-100">
-            {t(
-              'admin.models.getStarted.importHint',
-              'List the models of a provider and pick the ones to add.'
-            )}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onCreate}
-          className={`${choice} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`}
-        >
-          <Icon name="plus" className="h-6 w-6" />
-          <span className="text-base font-semibold">
-            {t('admin.models.getStarted.create', 'Create new model')}
-          </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {t('admin.models.getStarted.createHint', 'Enter the endpoint and settings yourself.')}
-          </span>
-        </button>
-      </div>
-      {marketplaceLink && (
-        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          {t('admin.models.getStarted.marketplacePrefix', 'Or install a ready-made model from')}{' '}
-          <button
-            type="button"
-            onClick={marketplaceLink}
-            className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-          >
-            {t('admin.models.getStarted.marketplace', 'the Marketplace')}
-          </button>
-        </p>
-      )}
-    </section>
-  );
-}
+import ModelsTabsHeader from '../components/ModelsTabsHeader';
+import ModelsSetupStrip from '../components/ModelsSetupStrip';
+import MoreActionsMenu from '../components/MoreActionsMenu';
+import { describeModelProvider } from '../utils/modelsArea';
+import { apiTypeLabel } from '../utils/modelImport';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -139,6 +63,40 @@ function StatusCell({ model, t }) {
   );
 }
 
+/**
+ * The provider a model takes its key from: its name, linking to the provider's page, and a
+ * marker when that provider sets its own timeouts. A model that uses no provider entry shows its
+ * API type.
+ */
+function ProviderCell({ model, providers, language, t }) {
+  const { entry, name } = describeModelProvider(model, providers, language);
+  if (!entry) return <span>{model.provider ? apiTypeLabel(t, model.provider) : '-'}</span>;
+  const ownTimeouts =
+    Number.isFinite(entry.connectTimeoutMs) || Number.isFinite(entry.streamIdleTimeoutMs);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Link
+        to={`/admin/providers/${entry.id}`}
+        onClick={event => event.stopPropagation()}
+        className="text-indigo-600 dark:text-indigo-400 hover:underline"
+      >
+        {name}
+      </Link>
+      {ownTimeouts && (
+        <span
+          title={t('admin.models.providerOwnTimeouts', 'This provider sets its own timeouts')}
+          className="text-xs text-gray-500 dark:text-gray-400"
+        >
+          <span aria-hidden="true">⏱</span>
+          <span className="sr-only">
+            {t('admin.models.providerOwnTimeouts', 'This provider sets its own timeouts')}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 function AdminModelsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -146,16 +104,22 @@ function AdminModelsPage() {
   const location = useLocation();
   const featureFlags = useFeatureFlags();
   const [models, setModels] = useState([]);
+  const [providers, setProviders] = useState([]);
   const { statuses: keyStatuses, reload: reloadKeyStatus } = useApiKeyStatus('models');
+  const { statuses: providerKeyStatuses, reload: reloadProviderKeyStatus } =
+    useApiKeyStatus('providers');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
+  const [filterProvider, setFilterProvider] = useFilterState('provider', 'all');
+  const [filterType, setFilterType] = useFilterState('type', 'all');
   const [testingModel, setTestingModel] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const uploadInputRef = useRef(null);
   // The Providers page opens the import dialog for one provider through
   // navigation state ({ importProviderId }).
   const [importDialog, setImportDialog] = useState(() =>
@@ -166,12 +130,18 @@ function AdminModelsPage() {
 
   const loadModels = async () => {
     reloadKeyStatus();
+    reloadProviderKeyStatus();
     try {
       setLoading(true);
       setError(null);
-      const response = await makeAdminApiCall('/admin/models');
+      // The provider list only adds names and a count; a failure there never blocks the models.
+      const [response, providersResponse] = await Promise.all([
+        makeAdminApiCall('/admin/models'),
+        makeAdminApiCall('/admin/providers').catch(() => ({ data: [] }))
+      ]);
       const data = response.data;
       setModels(Array.isArray(data) ? data : []);
+      setProviders(Array.isArray(providersResponse.data) ? providersResponse.data : []);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
       setModels([]);
@@ -330,8 +300,25 @@ function AdminModelsPage() {
       (filterEnabled === 'enabled' && model.enabled) ||
       (filterEnabled === 'disabled' && !model.enabled);
 
-    return matchesSearch && matchesFilter;
+    const matchesProvider =
+      filterProvider === 'all' || describeModelProvider(model, providers).id === filterProvider;
+    const matchesType = filterType === 'all' || (model.modelType || 'chat') === filterType;
+
+    return matchesSearch && matchesFilter && matchesProvider && matchesType;
   });
+
+  // Providers the models actually use, for the filter: an entry's name, else its id / API type.
+  const providerOptions = [
+    ...new Map(
+      models.map(model => {
+        const { id, name } = describeModelProvider(model, providers, currentLanguage);
+        return [id, name || id];
+      })
+    )
+  ]
+    .filter(([id]) => id)
+    .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+    .map(([value, label]) => ({ value, label }));
 
   const columns = [
     {
@@ -346,7 +333,9 @@ function AdminModelsPage() {
       header: t('admin.models.provider', 'Provider'),
       sortable: true,
       hideBelow: 'md',
-      render: m => m.provider || '-'
+      sortAccessor: m =>
+        describeModelProvider(m, providers, currentLanguage).name || m.provider || '',
+      render: m => <ProviderCell model={m} providers={providers} language={currentLanguage} t={t} />
     },
     {
       key: 'apiKey',
@@ -467,20 +456,15 @@ function AdminModelsPage() {
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="sm:flex sm:items-center">
-          <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-              {t('admin.models.title', 'Model Management')}
-            </h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              {t('admin.models.subtitle', 'Configure and manage AI models for your applications')}
-            </p>
-          </div>
-          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-            <div className="flex flex-wrap gap-2">
+        <ModelsTabsHeader
+          modelCount={loading ? undefined : models.length}
+          providerCount={loading ? undefined : providers.length}
+          actions={
+            <>
               <button
+                type="button"
                 onClick={() => navigate('/admin/models/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.models.addNew', 'Add New Model')}
@@ -491,91 +475,135 @@ function AdminModelsPage() {
                 className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
                 <Icon name="link" className="h-4 w-4 mr-2" />
-                {t('admin.models.import.button', 'Import from URL')}
+                {t('admin.models.import.models', 'Import models')}
               </button>
-              <UploadConfigButton
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept=".json,application/json"
                 onChange={handleUploadConfig}
-                uploading={uploading}
-                title={t('admin.models.uploadConfig', 'Upload Model Config')}
-                uploadingLabel={t('admin.models.uploading', 'Uploading...')}
-                label={t('admin.models.uploadConfig', 'Upload Config')}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+                disabled={uploading}
               />
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                onClick={enableAllModels}
-              >
-                {t('admin.common.enableAll', 'Enable All')}
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                onClick={disableAllModels}
-              >
-                {t('admin.common.disableAll', 'Disable All')}
-              </button>
-            </div>
+              <MoreActionsMenu
+                label={t('admin.models.moreActions', 'More model actions')}
+                items={[
+                  {
+                    id: 'upload',
+                    label: uploading
+                      ? t('admin.models.uploading', 'Uploading...')
+                      : t('admin.models.uploadConfig', 'Upload Config'),
+                    disabled: uploading,
+                    onSelect: () => uploadInputRef.current?.click()
+                  },
+                  ...(featureFlags.isEnabled('marketplace', true)
+                    ? [
+                        {
+                          id: 'marketplace',
+                          label: t('admin.models.fromMarketplace', 'Install from Marketplace'),
+                          onSelect: () => navigate('/admin/marketplace?type=model')
+                        }
+                      ]
+                    : []),
+                  {
+                    id: 'enableAll',
+                    label: t('admin.common.enableAll', 'Enable All'),
+                    onSelect: enableAllModels
+                  },
+                  {
+                    id: 'disableAll',
+                    label: t('admin.common.disableAll', 'Disable All'),
+                    destructive: true,
+                    onSelect: disableAllModels
+                  }
+                ]}
+              />
+            </>
+          }
+        />
+
+        <div role="tabpanel" id="tabpanel-models" aria-labelledby="tab-models">
+          {!loading && (
+            <ModelsSetupStrip
+              keyStatuses={providerKeyStatuses}
+              models={models}
+              onConnect={() => navigate('/admin/providers')}
+              onImport={() => setImportDialog({ open: true, providerId: null })}
+              onShowEnabled={() => setFilterEnabled('enabled')}
+            />
+          )}
+
+          <div className="flex flex-wrap items-end gap-3">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
+            />
+            <FilterSelect
+              ariaLabel={t('admin.models.providerFilter', 'Provider')}
+              value={filterProvider}
+              onChange={setFilterProvider}
+              options={[
+                { value: 'all', label: t('admin.models.filterAllProviders', 'All providers') },
+                ...providerOptions
+              ]}
+            />
+            <FilterSelect
+              ariaLabel={t('admin.models.typeFilter', 'Type')}
+              value={filterType}
+              onChange={setFilterType}
+              options={[
+                { value: 'all', label: t('admin.models.filterAllTypes', 'All types') },
+                { value: 'chat', label: t('admin.models.types.chat', 'Chat') },
+                {
+                  value: 'transcription',
+                  label: t('admin.models.types.transcription', 'Transcription')
+                },
+                { value: 'tts', label: t('admin.models.types.tts', 'Text-to-speech') }
+              ]}
+            />
+            <FilterSelect
+              ariaLabel={t('admin.models.statusLabel', 'Status')}
+              value={filterEnabled}
+              onChange={setFilterEnabled}
+              options={[
+                { value: 'all', label: t('admin.models.filterAll', 'All Models') },
+                { value: 'enabled', label: t('admin.models.filterEnabled', 'Enabled Only') },
+                { value: 'disabled', label: t('admin.models.filterDisabled', 'Disabled Only') }
+              ]}
+            />
           </div>
-        </div>
 
-        {!loading && models.length < GET_STARTED_THRESHOLD && (
-          <GetStartedPanel
-            t={t}
-            onCreate={() => navigate('/admin/models/new')}
-            onImport={() => setImportDialog({ open: true, providerId: null })}
-            marketplaceLink={
-              featureFlags.isEnabled('marketplace', true)
-                ? () => navigate('/admin/marketplace?type=model')
-                : null
-            }
-          />
-        )}
-
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <SearchInput
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
-          />
-          <FilterSelect
-            label={t('admin.models.statusLabel', 'Status')}
-            value={filterEnabled}
-            onChange={setFilterEnabled}
-            options={[
-              { value: 'all', label: t('admin.models.filterAll', 'All Models') },
-              { value: 'enabled', label: t('admin.models.filterEnabled', 'Enabled Only') },
-              { value: 'disabled', label: t('admin.models.filterDisabled', 'Disabled Only') }
-            ]}
-          />
-        </div>
-
-        <div className="mt-6">
-          <DataTable
-            columns={columns}
-            data={filteredModels}
-            getRowId={m => m.id}
-            actions={actions}
-            loading={loading}
-            getRowExpansion={getRowExpansion}
-            onRowClick={model => {
-              setSelectedModel(model);
-              setShowModelDetails(true);
-            }}
-            empty={{
-              icon: 'cpu-chip',
-              title: t('admin.models.noModels', 'No models found'),
-              description: t('admin.models.noModelsDesc', 'Get started by creating a new model.'),
-              action: (
-                <button
-                  onClick={() => navigate('/admin/models/new')}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.models.addNew', 'Add New Model')}
-                </button>
-              )
-            }}
-          />
+          <div className="mt-6">
+            <DataTable
+              columns={columns}
+              data={filteredModels}
+              getRowId={m => m.id}
+              actions={actions}
+              loading={loading}
+              getRowExpansion={getRowExpansion}
+              onRowClick={model => {
+                setSelectedModel(model);
+                setShowModelDetails(true);
+              }}
+              empty={{
+                icon: 'cpu-chip',
+                title: t('admin.models.noModels', 'No models found'),
+                description: t('admin.models.noModelsDesc', 'Get started by creating a new model.'),
+                action: (
+                  <button
+                    onClick={() => navigate('/admin/models/new')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <Icon name="plus" className="h-4 w-4 mr-2" />
+                    {t('admin.models.addNew', 'Add New Model')}
+                  </button>
+                )
+              }}
+            />
+          </div>
         </div>
 
         <ModelDetailsPopup
