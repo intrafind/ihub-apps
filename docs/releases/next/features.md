@@ -855,6 +855,11 @@ used to be an HTML or plain text page.
   `PREFERENCES_UNAVAILABLE` as before, and a failed sign-in start answers the new `INTEGRATION_CONNECT_FAILED`
   with the flow's own reason (`discovery_failed`, `public_url_mismatch`, ...) in `details.reason` (before: the
   reason as `code`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The route guards answer in this shape too: the admin guard (`FORBIDDEN`, 403), the content admin guard
+  (`AUTH_REQUIRED` for a missing sign-in, `FORBIDDEN` for a user who may not edit content), the sign-in guards
+  (`AUTH_REQUIRED`, 401), the app and model access guards (`APP_ACCESS_DENIED` / `MODEL_ACCESS_DENIED`, 403; now
+  in the code registry) and the rate limiters (`RATE_LIMITED`, 429, with `Retry-After` as before). Every guard
+  still fails closed: a refused request never reaches the route behind it.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
