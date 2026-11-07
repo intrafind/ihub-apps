@@ -306,7 +306,7 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
     } catch (err) {
       console.error('Failed to start workflow:', err);
       setError(
-        err.response?.data?.error ||
+        err.response?.data?.detail ||
           err.message ||
           t('workflows.startError', 'Failed to start workflow')
       );

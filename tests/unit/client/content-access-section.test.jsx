@@ -15,7 +15,7 @@ const mockUpdateContentAccess = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchContentAccess: (...args) => mockFetchContentAccess(...args),
   updateContentAccess: (...args) => mockUpdateContentAccess(...args),
-  getAdminApiErrorMessage: err => err?.response?.data?.error || err?.message || 'failed'
+  getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || 'failed'
 }));
 
 jest.mock('react-i18next', () => ({
@@ -149,7 +149,7 @@ describe('ContentAccessSection', () => {
   test('shows the server error when a change is refused and keeps the previous state', async () => {
     mockFetchContentAccess.mockResolvedValue(VIEW);
     mockUpdateContentAccess.mockRejectedValueOnce({
-      response: { data: { error: 'not one of your groups' } }
+      response: { data: { detail: 'not one of your groups' } }
     });
 
     render(<ContentAccessSection resourceType="apps" resourceId="chat" />);

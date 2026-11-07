@@ -241,7 +241,7 @@ describe('list and delete', () => {
     const dependencies = [{ type: 'app', id: 'chat', name: 'Chat' }];
     expect(
       dependenciesFromDeleteError({
-        response: { data: { details: { code: 'PROJECT_IN_USE', dependencies } } }
+        response: { data: { code: 'PROJECT_IN_USE', details: { dependencies } } }
       })
     ).toEqual(dependencies);
     expect(dependenciesFromDeleteError(new Error('boom'))).toBeNull();

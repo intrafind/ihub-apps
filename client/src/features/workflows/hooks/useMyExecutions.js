@@ -64,7 +64,7 @@ function useMyExecutions(options = {}) {
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       console.error('Failed to fetch executions:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to load executions');
+      setError(err.response?.data?.detail || err.message || 'Failed to load executions');
       setExecutions([]);
     } finally {
       if (inFlightAbortRef.current === controller) {

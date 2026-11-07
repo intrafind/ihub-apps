@@ -54,7 +54,7 @@ async function mockShares(page) {
         body: PAGE
       });
     }
-    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+    return route.fulfill({ status: 404, json: { detail: 'Not found', code: 'NOT_FOUND' } });
   });
 
   await page.route(new RegExp(`/api/shares/${ARTIFACT_SHARE}(/|$|\\?)`), async route => {
@@ -85,7 +85,7 @@ async function mockShares(page) {
         body: PAGE
       });
     }
-    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+    return route.fulfill({ status: 404, json: { detail: 'Not found', code: 'NOT_FOUND' } });
   });
 }
 

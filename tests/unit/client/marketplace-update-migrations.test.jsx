@@ -323,7 +323,7 @@ test('a migration lock (409) is reported in the dialog, which stays open', async
   const error = new Error('Request failed with status code 409');
   error.response = {
     status: 409,
-    data: { error: 'The migration lock of "govdata" is held', code: 'MIGRATION_LOCKED' }
+    data: { detail: 'The migration lock of "govdata" is held', code: 'MIGRATION_LOCKED' }
   };
   mockApi.updateMarketplaceItem.mockRejectedValue(error);
   const dialog = await openUpdateDialog();

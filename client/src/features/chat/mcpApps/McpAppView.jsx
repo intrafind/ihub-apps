@@ -61,7 +61,7 @@ function loadResource(appId, toolId) {
 }
 
 function errorMessage(error) {
-  return error?.response?.data?.error || error?.message || 'Request failed';
+  return error?.response?.data?.detail || error?.message || 'Request failed';
 }
 
 /**

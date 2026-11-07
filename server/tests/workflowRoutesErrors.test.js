@@ -3,7 +3,7 @@
 
 /**
  * The workflow execution routes answer errors through the global error
- * middleware (`{ error, code, details? }`): a missing or foreign execution, an
+ * middleware (`application/problem+json`: `{ type, title, status, detail, code, details? }`): a missing or foreign execution, an
  * unsafe id, a delete of a running execution, and a cancel the engine refuses.
  *
  * Native ESM, so `jest.unstable_mockModule` + dynamic imports. Run with
@@ -78,12 +78,25 @@ beforeEach(() => {
 describe('workflow execution routes', () => {
   it('answers an unsafe execution id with BAD_REQUEST', async () => {
     const res = await request(app).delete('/api/workflows/executions/bad%20id').expect(400);
-    expect(res.body).toEqual({ error: 'Invalid executionId', code: 'BAD_REQUEST' });
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toEqual({
+      type: 'urn:ihub:problem:BAD_REQUEST',
+      title: 'The request is not valid.',
+      status: 400,
+      detail: 'Invalid executionId',
+      code: 'BAD_REQUEST'
+    });
   });
 
   it('answers an unknown execution with NOT_FOUND', async () => {
     const res = await request(app).post('/api/workflows/executions/nope/cancel').expect(404);
-    expect(res.body).toEqual({ error: 'Execution not found', code: 'NOT_FOUND' });
+    expect(res.body).toEqual({
+      type: 'urn:ihub:problem:NOT_FOUND',
+      title: 'The requested resource was not found.',
+      status: 404,
+      detail: 'Execution not found',
+      code: 'NOT_FOUND'
+    });
   });
 
   it('refuses someone else’s execution with FORBIDDEN', async () => {
@@ -135,7 +148,8 @@ describe('workflow execution routes', () => {
       .patch('/api/workflows/executions/run1')
       .send({ archived: 'yes' })
       .expect(400);
-    expect(res.body.error).toBe('archived must be a boolean');
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(res.body.detail).toBe('archived must be a boolean');
   });
 });
 
@@ -145,7 +159,13 @@ describe('workflow webhook route', () => {
   it('answers an unknown trigger with NOT_FOUND', async () => {
     webhooks.ref = null;
     const res = await hook().send('{}').expect(404);
-    expect(res.body).toEqual({ error: 'Webhook trigger not found', code: 'NOT_FOUND' });
+    expect(res.body).toEqual({
+      type: 'urn:ihub:problem:NOT_FOUND',
+      title: 'The requested resource was not found.',
+      status: 404,
+      detail: 'Webhook trigger not found',
+      code: 'NOT_FOUND'
+    });
   });
 
   it('refuses a trigger without a secret and a wrong signature with AUTH_REQUIRED', async () => {
@@ -155,12 +175,24 @@ describe('workflow webhook route', () => {
 
     webhooks.ref = { trigger: { config: { secret: 's' }, verifyRawSignature: () => false } };
     const badSignature = await hook().send('{}').expect(401);
-    expect(badSignature.body).toEqual({ error: 'Invalid signature', code: 'AUTH_REQUIRED' });
+    expect(badSignature.body).toEqual({
+      type: 'urn:ihub:problem:AUTH_REQUIRED',
+      title: 'Authentication required. Please sign in.',
+      status: 401,
+      detail: 'Invalid signature',
+      code: 'AUTH_REQUIRED'
+    });
   });
 
   it('refuses a body that is not JSON with BAD_REQUEST', async () => {
     webhooks.ref = { trigger: { config: { secret: 's' }, verifyRawSignature: () => true } };
     const res = await hook().set('content-type', 'text/plain').send('not json').expect(400);
-    expect(res.body).toEqual({ error: 'Invalid JSON body', code: 'BAD_REQUEST' });
+    expect(res.body).toEqual({
+      type: 'urn:ihub:problem:BAD_REQUEST',
+      title: 'The request is not valid.',
+      status: 400,
+      detail: 'Invalid JSON body',
+      code: 'BAD_REQUEST'
+    });
   });
 });

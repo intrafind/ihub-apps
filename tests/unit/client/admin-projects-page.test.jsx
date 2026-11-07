@@ -189,8 +189,8 @@ describe('AdminProjectsPage', () => {
         response: {
           status: 400,
           data: {
+            code: 'PROJECT_IN_USE',
             details: {
-              code: 'PROJECT_IN_USE',
               dependencies: [{ type: 'workflow', id: 'review', name: 'Review flow' }]
             }
           }

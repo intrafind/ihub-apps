@@ -19,7 +19,7 @@ function importErrorText(error, t) {
   const data = error?.response?.data;
   if (data?.code !== 'IMPORT_FAILED') return apiErrorMessage(error, t, error?.message);
   const { hint, reason } = data.details || {};
-  return [data.error, hint, reason && `(${reason})`].filter(Boolean).join(' ');
+  return [data.detail, hint, reason && `(${reason})`].filter(Boolean).join(' ');
 }
 
 function AdminBackupPage() {

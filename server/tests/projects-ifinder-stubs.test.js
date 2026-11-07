@@ -118,7 +118,7 @@ describe('adding a collection to the projects', () => {
     assert.equal((await addCollection(ADA, { collectionId: ID(1) })).statusCode, 201);
     const twice = await addCollection(ADA, { collectionId: ID(1) });
     assert.equal(twice.statusCode, 409);
-    assert.equal(twice.body.details.code, 'COLLECTION_ALREADY_ADDED');
+    assert.equal(twice.body.code, 'COLLECTION_ALREADY_ADDED');
     const foreign = await addCollection(ADA, { collectionId: ID(2) });
     assert.equal(foreign.statusCode, 404, 'iFinder answers 404 for a collection of someone else');
     assert.equal((await addCollection(ADA, { collectionId: 'nope' })).statusCode, 400);
@@ -204,7 +204,7 @@ describe('changing a stub', () => {
       body: { name: 'New' }
     });
     assert.equal(renamed.statusCode, 403, JSON.stringify(renamed.body));
-    assert.equal(renamed.body.details.code, 'IFINDER_WRITES_DISABLED');
+    assert.equal(renamed.body.code, 'IFINDER_WRITES_DISABLED');
     assert.equal(ifinder.state.collections.get(ID(1)).name, 'Old');
     const configured = await drive(route.patch, {
       user: ADA,
@@ -344,7 +344,7 @@ describe('the iFinder picker of a project', () => {
 
     const refused = await drive(search, { user: ADA, query: { q: 'lease', profile: 'secret' } });
     assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
-    assert.equal(refused.body.details.code, 'INTEGRATION_SCOPE_NOT_ALLOWED');
+    assert.equal(refused.body.code, 'INTEGRATION_SCOPE_NOT_ALLOWED');
   });
 
   it('stores an iFinder item only with a profile the caller may search in', async () => {
@@ -380,7 +380,7 @@ describe('the iFinder picker of a project', () => {
         body
       });
       assert.equal(refused.statusCode, 403, `${kind}: ${JSON.stringify(refused.body)}`);
-      assert.equal(refused.body.details.code, 'SOURCE_FORBIDDEN');
+      assert.equal(refused.body.code, 'SOURCE_FORBIDDEN');
     }
     const allowed = await add({ searchProfile: 'legal' });
     assert.ok(allowed.statusCode < 300, JSON.stringify(allowed.body));

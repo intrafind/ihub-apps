@@ -21,7 +21,7 @@ function describeError(error, t) {
       { status: status || '–' }
     );
   }
-  return error.response?.data?.error || error.message;
+  return error.response?.data?.detail || error.message;
 }
 
 /**

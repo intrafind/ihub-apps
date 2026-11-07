@@ -255,11 +255,15 @@ describe('per-user OAuth servers', () => {
     connectionForUser.mockRejectedValue(authRequired());
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({
-      error: 'auth_required',
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toMatchObject({
+      status: 409,
       code: 'INTEGRATION_AUTH_REQUIRED',
-      integration: 'excalidraw',
-      connectUrl: '/api/integrations/excalidraw/connect'
+      detail: 'auth_required',
+      details: {
+        integration: 'excalidraw',
+        connectUrl: '/api/integrations/excalidraw/connect'
+      }
     });
   });
 

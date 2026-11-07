@@ -24,6 +24,7 @@ import {
   rotatePersonalKey
 } from '../../utils/personalApiKeyManager.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Gate all personal key routes behind the integrations feature flag
@@ -42,17 +43,17 @@ function requireKeyManager(req, res) {
   const platform = configCache.getPlatform() || {};
 
   if (!isPersonalKeysEnabled(platform)) {
-    res.status(404).json({ error: 'Personal API keys are not enabled' });
+    sendErrorResponse(res, 404, 'Personal API keys are not enabled');
     return null;
   }
 
   if (!req.user?.id || req.user.id === 'anonymous') {
-    res.status(401).json({ error: 'Authentication required' });
+    sendErrorResponse(res, 401, 'Authentication required');
     return null;
   }
 
   if (!canUserManagePersonalKeys(req.user, platform)) {
-    res.status(403).json({ error: 'You are not allowed to create API keys' });
+    sendErrorResponse(res, 403, 'You are not allowed to create API keys');
     return null;
   }
 
@@ -65,14 +66,14 @@ function requireKeyManager(req, res) {
  */
 function handleError(res, error, action) {
   if (error instanceof PersonalKeyError) {
-    return res.status(error.status).json({ error: error.message });
+    return sendErrorResponse(res, error.status, error.message);
   }
 
   logger.error(`Personal API key ${action} failed`, {
     component: 'PersonalApiKeys',
     error
   });
-  return res.status(500).json({ error: `Failed to ${action} API key` });
+  return sendErrorResponse(res, 500, `Failed to ${action} API key`);
 }
 
 /**

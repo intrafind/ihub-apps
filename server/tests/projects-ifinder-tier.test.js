@@ -574,7 +574,7 @@ describe('opening a collection', () => {
     ifinder.state.collectionsStatus = 503;
     const res = await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
     assert.equal(res.statusCode, 503);
-    assert.equal(res.body.details.code, 'IFINDER_UNAVAILABLE');
+    assert.equal(res.body.code, 'IFINDER_UNAVAILABLE');
   });
 
   it('stays dark while user projects are off, and under the ihub policy', async () => {
@@ -582,7 +582,7 @@ describe('opening a collection', () => {
     configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
     const off = await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
     assert.equal(off.statusCode, 403);
-    assert.equal(off.body.details.code, 'USER_PROJECTS_DISABLED');
+    assert.equal(off.body.code, 'USER_PROJECTS_DISABLED');
     configCache.setCacheEntry('config/features.json', {
       projects: true,
       userProjects: true,
@@ -677,7 +677,7 @@ describe('the write allow-list', () => {
         }
       });
       assert.equal(res.statusCode, 403, `${keyOf(entry)}: ${JSON.stringify(res.body)}`);
-      assert.equal(res.body.details?.code, 'PROJECT_READ_ONLY', entry.routePath);
+      assert.equal(res.body.code, 'PROJECT_READ_ONLY', entry.routePath);
     }
     assert.equal(ifinder.requests.length, 0, 'the refusal comes before any lookup');
     assert.equal((await repository.listOwned(ADA.id)).length, before);
@@ -757,7 +757,7 @@ describe('the write allow-list', () => {
       params: { projectId: pid(77), itemId: 'itm_x' }
     });
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details.code, 'PROJECT_READ_ONLY');
+    assert.equal(res.body.code, 'PROJECT_READ_ONLY');
     assert.equal(ifinder.requests.length, 0);
   });
 });

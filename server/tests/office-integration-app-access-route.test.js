@@ -163,7 +163,7 @@ describe('PUT /config with allowedApps', () => {
     const res = await put({ allowedApps: ['summarizer'] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/no OAuth client/);
+    expect(res.body.detail).toMatch(/no OAuth client/);
     expect(state.calls).toEqual([]);
   });
 

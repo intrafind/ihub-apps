@@ -68,6 +68,7 @@ import { zSafeId } from '../validators/common.js';
 import validate from '../validators/validate.js';
 import logger from '../utils/logger.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 const COMPONENT = 'McpApps';
 
 /** Largest `?csp=` value accepted for the sandbox page. */
@@ -228,13 +229,17 @@ function sendError(res, error, action) {
     error = authRequiredAccessError(error.serverId);
   }
   if (error instanceof McpAppAccessError) {
-    return res.status(error.status).json({ error: error.message, ...error.extra });
+    const { code, ...details } = error.extra;
+    return sendErrorResponse(res, error.status, error.message, {
+      code,
+      details: Object.keys(details).length ? details : undefined
+    });
   }
   if (isTokenRefreshError(error)) {
-    return res.status(503).json({ error: 'auth_refresh_failed', code: error.code });
+    return sendErrorResponse(res, 503, 'auth_refresh_failed', { code: error.code });
   }
   logger.warn(`MCP App ${action} failed`, { component: COMPONENT, error: error.message });
-  return res.status(502).json({ error: error.message || `MCP App ${action} failed` });
+  return sendErrorResponse(res, 502, error.message || `MCP App ${action} failed`);
 }
 
 /**
@@ -319,7 +324,7 @@ export default function registerMcpAppRoutes(app) {
           tool: viewTool
         } = await resolveMcpApp(req, appId, toolId);
         if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
-          return res.status(413).json({ error: 'Tool arguments too large' });
+          return sendErrorResponse(res, 413, 'Tool arguments too large');
         }
         const outcome = await run(async conn => {
           // Visibility: only tools of this same server that list "app".
@@ -357,10 +362,10 @@ export default function registerMcpAppRoutes(app) {
           return { result: await conn.callToolRaw(name, args) };
         });
         if (outcome.forbidden) {
-          return res.status(403).json({ error: `Tool ${name} is not callable from this app` });
+          return sendErrorResponse(res, 403, `Tool ${name} is not callable from this app`);
         }
         if (outcome.gate?.status === 'refused') {
-          return res.status(403).json({ error: outcome.gate.message, code: outcome.gate.code });
+          return sendErrorResponse(res, 403, outcome.gate.message, { code: outcome.gate.code });
         }
         if (outcome.gate?.status === 'awaiting') {
           // Nothing ran: the host shows the card and answers with
@@ -399,10 +404,10 @@ export default function registerMcpAppRoutes(app) {
             view.appId !== appId ||
             view.viewToolId !== toolId
           ) {
-            return res.status(404).json({ error: 'Approval not found' });
+            return sendErrorResponse(res, 404, 'Approval not found');
           }
           if (!(await authorizeInteraction(interaction, user))) {
-            return res.status(403).json({ error: 'This approval belongs to another user' });
+            return sendErrorResponse(res, 403, 'This approval belongs to another user');
           }
         }
         const answered = await answerViewToolApproval({
@@ -426,7 +431,11 @@ export default function registerMcpAppRoutes(app) {
               return conn.callToolRaw(callName, callArgs);
             })
         });
-        return res.status(answered.status).json(answered.body);
+        return answered.status >= 400
+          ? sendErrorResponse(res, answered.status, answered.body.error, {
+              code: answered.body.code
+            })
+          : res.status(answered.status).json(answered.body);
       } catch (error) {
         return sendError(res, error, 'tool call approval');
       }
@@ -480,7 +489,7 @@ export default function registerMcpAppRoutes(app) {
         const result = await run(conn => conn.readResource(uri));
         const contents = Array.isArray(result?.contents) ? result.contents : [];
         if (jsonByteLength(contents) > MAX_UI_RESOURCE_BYTES) {
-          return res.status(413).json({ error: 'Resource too large' });
+          return sendErrorResponse(res, 413, 'Resource too large');
         }
         return res.json({ contents });
       } catch (error) {

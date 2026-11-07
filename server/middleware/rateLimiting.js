@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { recordRateLimitHit } from '../telemetry/metrics.js';
 import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 /**
  * Rate limiting middleware configuration for API protection
  * Creates configurable rate limiters based on platform configuration
@@ -94,10 +95,9 @@ function createRateLimiter(
     ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
     limit: finalConfig.limit || 500, // 500 requests default
-    message: finalConfig.message || {
-      error: `Too many ${type.toLowerCase()} requests from this IP, please try again later.`,
-      retryAfter: `${Math.ceil((finalConfig.windowMs || 1 * 60 * 1000) / 60000)} minutes`
-    },
+    message:
+      finalConfig.message ||
+      `Too many ${type.toLowerCase()} requests from this IP, please try again later.`,
     standardHeaders: finalConfig.standardHeaders !== undefined ? finalConfig.standardHeaders : true,
     legacyHeaders: finalConfig.legacyHeaders !== undefined ? finalConfig.legacyHeaders : false,
     skipSuccessfulRequests:
@@ -113,7 +113,15 @@ function createRateLimiter(
       } catch {
         // never break the request because of a metrics failure
       }
-      res.status(options.statusCode).send(options.message);
+      // `Retry-After` is already set by the limiter, with the exact wait. A configured message
+      // may still be a plain string or an object of an older configuration.
+      const text =
+        typeof options.message === 'string'
+          ? options.message
+          : (options.message?.error ?? options.message?.message);
+      sendErrorResponse(res, options.statusCode, text || 'Too many requests', {
+        code: 'RATE_LIMITED'
+      });
     }
   });
 }

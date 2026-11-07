@@ -259,7 +259,7 @@ export default function OcrPage() {
       setStatus('processing');
     } catch (err) {
       setStatus('error');
-      setErrorMessage(err.response?.data?.error || err.message || 'Failed to start OCR');
+      setErrorMessage(err.response?.data?.detail || err.message || 'Failed to start OCR');
     }
   };
 

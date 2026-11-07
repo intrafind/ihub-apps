@@ -66,7 +66,7 @@ export function ErrorNote({ error }) {
       role="alert"
       className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
     >
-      {error?.response?.data?.error ||
+      {error?.response?.data?.detail ||
         error?.message ||
         t('admin.usage.reports.loadFailed', 'Could not load usage data')}
     </div>

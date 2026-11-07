@@ -310,6 +310,52 @@ export const CHAT_ERROR_CODES = Object.freeze({
   SOURCE_FAILED: 502
 });
 
+/** Codes of the chat routes (`server/routes/chat`, `server/routes/chats.js`) that the client already tells apart. */
+export const CHAT_SESSION_ERROR_CODES = Object.freeze({
+  CLIENT_HISTORY_NOT_ALLOWED: 400,
+  UNKNOWN_MESSAGE: 400,
+  APP_NOT_FOUND: 404,
+  CHAT_STORAGE_UNAVAILABLE: 503,
+  GUEST_COOKIE_MISSING: 404,
+  INVALID_APP: 400,
+  PREFERENCES_UNAVAILABLE: 503,
+  FEATURE_DISABLED: 403
+});
+
+/** Codes of the cloud storage connection routes (`server/routes/integrations`). */
+export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
+  STORAGE_PROVIDER_NOT_FOUND: 404,
+  STORAGE_PROVIDER_REQUIRED: 400,
+  INVALID_RETURN_URL: 400,
+  NOT_CONNECTABLE: 400
+});
+
+/** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */
+export const PROJECT_ERROR_CODES = Object.freeze({
+  PROJECTS_NOT_ALLOWED: 403,
+  PROJECT_READ_ONLY: 403,
+  PROJECT_MISMATCH: 409,
+  ITEMS_NOT_EDITABLE: 400,
+  SHARE_TARGET_INVALID: 400,
+  IFINDER_UNAVAILABLE: 503,
+  IFINDER_WRITES_DISABLED: 403,
+  UPLOAD_TOO_LARGE: 413,
+  COPILOT_AGENT_DISABLED: 409,
+  COPILOT_REFERENCE_ID_MISSING: 409,
+  COPILOT_PUBLIC_HTTPS_REQUIRED: 409,
+  INTEGRATION_AUTH_REQUIRED: 409
+});
+
+/** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
+export const MISC_ERROR_CODES = Object.freeze({
+  TEAMS_SSO_TOKEN_REQUIRED: 400,
+  TEAMS_AUTH_NOT_ENABLED: 400,
+  TEAMS_ACCOUNT_DISABLED: 403,
+  TEAMS_INVALID_OR_EXPIRED_TOKEN: 401,
+  CONCURRENCY_LIMIT: 409,
+  PROVIDER_IN_USE: 409
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -326,7 +372,11 @@ export const API_ERROR_CODES = Object.freeze({
   ...MODEL_ERROR_CODES,
   ...INTERACTION_ERROR_CODES,
   ...UPDATE_ERROR_CODES,
-  ...CHAT_ERROR_CODES
+  ...CHAT_ERROR_CODES,
+  ...CHAT_SESSION_ERROR_CODES,
+  ...CLOUD_STORAGE_ERROR_CODES,
+  ...PROJECT_ERROR_CODES,
+  ...MISC_ERROR_CODES
 });
 
 /**

@@ -130,7 +130,7 @@ describe('POST /api/admin/groups with inherits', () => {
     const response = await create(['ghosts']);
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/Parent group not found: ghosts/);
+    expect(response.body.detail).toMatch(/Parent group not found: ghosts/);
     expect((await readGroups()).qa).toBeUndefined();
   });
 
@@ -177,7 +177,7 @@ describe('PUT /api/admin/groups/:groupId with inherits', () => {
     const response = await update('anonymous', ['editors']);
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/Circular dependency/);
+    expect(response.body.detail).toMatch(/Circular dependency/);
     expect((await readGroups()).anonymous.inherits).toBeUndefined();
   });
 

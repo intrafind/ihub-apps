@@ -390,7 +390,13 @@ describe('creating a share', () => {
     const chatId = await seedChat(ADA);
     const stranger = await createShare(GRACE, chatId, { mode: 'authenticated' });
     assert.equal(stranger.statusCode, 404);
-    assert.deepEqual(stranger.body, { error: 'Chat not found', code: 'NOT_FOUND' });
+    assert.deepEqual(stranger.body, {
+      type: 'urn:ihub:problem:NOT_FOUND',
+      title: 'The requested resource was not found.',
+      status: 404,
+      detail: 'Chat not found',
+      code: 'NOT_FOUND'
+    });
     const admin = await createShare(ROOT, chatId, { mode: 'authenticated' });
     assert.equal(admin.statusCode, 404, 'the admin read bypass does not extend to publishing');
   });
@@ -426,7 +432,7 @@ describe('creating a share', () => {
     const badMode = await createShare(ADA, full, { mode: 'everyone' });
     assert.equal(badMode.statusCode, 400);
     assert.equal(badMode.body.code, 'VALIDATION_FAILED');
-    assert.equal(badMode.body.details.issues[0].path, 'mode');
+    assert.equal(badMode.body.errors[0].pointer, '/mode');
     assert.equal(
       (await createShare(ADA, full, { mode: 'authenticated', surprise: true })).statusCode,
       400
@@ -1031,7 +1037,13 @@ describe('artifacts as one ZIP', () => {
       user: ANONYMOUS
     });
     assert.equal(beyond.statusCode, 404);
-    assert.deepEqual(beyond.body, { error: 'Artifact not found', code: 'NOT_FOUND' });
+    assert.deepEqual(beyond.body, {
+      type: 'urn:ihub:problem:NOT_FOUND',
+      title: 'The requested resource was not found.',
+      status: 404,
+      detail: 'Artifact not found',
+      code: 'NOT_FOUND'
+    });
   });
 
   it('serves a source file as plain text, never as script', async () => {
