@@ -1035,7 +1035,8 @@ class ChatService {
             user,
             chatModel: model,
             appId: app?.id,
-            language
+            language,
+            firstAnswerOnly: true
           });
         }
       }

@@ -275,20 +275,21 @@ Chats the user never renames are titled from their first message, or — when
 ### Chat titles
 
 Off by default. With **Generate chat titles** on (Admin → Chat History, or
-`chats.titles.enabled`), a kept chat gets a short generated title after its
-first answer has been stored, replacing the derived one:
+`chats.titles.enabled`), a kept chat gets a short generated title as its first
+answer is stored. It goes into the chat's `title`, replacing the first-message
+title; there is no second field.
 
-- **Once per chat.** The claim is stored on the chat (`titleClaimedAt`) under
-  the chat lock, so two workers or a duplicate completion event cannot both
-  generate, and a failed attempt is not retried. A title the user resets to
-  empty is derived again but never regenerated.
+- **Once per chat, without remembering it.** A title is asked for when the first
+  answer of a chat has just been stored, never on a later turn. A chat that was
+  temporary is titled when it is kept. A failed attempt is not retried: the
+  first-message title stays. Chats that already have several answers when the
+  setting is switched on keep the title they have.
 - **Never delays the chat.** It runs after the turn has ended and the answer is
   stored, not awaited, with a 10 s limit and no retry. Any failure — no key, a
-  timeout, an empty answer — keeps the derived title and logs a warning.
-- **A rename always wins.** The generated title is written only if the chat's
-  `titleSource` is still `derived` and its title is the one seen at the claim,
-  checked under the lock. A rename made while the model was still answering
-  stays.
+  timeout, an empty answer — keeps the first-message title and logs a warning.
+- **A title the user set stays.** The write skips a chat whose `titleSetByUser`
+  is set. Clearing a title in the rename field makes it derivable again, but it
+  is not generated again.
 - **What leaves the installation.** Only the first user message and the first
   answer, each cut to about 600 characters. No history, files or tool output.
   The title itself is never written to the log.
@@ -300,15 +301,15 @@ first answer has been stored, replacing the derived one:
 - **Which chats.** Kept chats opened from the UI. Not temporary chats (a chat
   is titled when it is kept), anonymous users, scheduled-task chats, Responses
   API chats or project test chats. Chats answered through `@workflow` mentions
-  or transcription keep the derived title.
+  or transcription keep the first-message title.
 - **In the UI.** The title is written after the turn's stream has closed, so
   the client looks at the chat list once more a few seconds after a first
   answer; otherwise it appears with the next list fetch. A title being edited
   in a rename field is not overwritten.
 
-No endpoint changes: the chat resource gains an additive `titleSource` field.
-The call is recorded in usage with the chat's user but not as a ledger run, so
-the chat's delete cascade has nothing of it left behind.
+No endpoint or data-model change. The call is recorded in usage with the chat's
+user but not as a ledger run, so the chat's delete cascade has nothing of it
+left behind.
 
 ### In the Outlook add-in
 
@@ -684,8 +685,6 @@ index can answer "list my chats" without scanning:
   settings,             // how the chat is being answered — see below
   variables?,           // the app variables the chat was given — see below
   title, titleSetByUser,
-  titleSource,          // 'derived' | 'llm' | 'user' — where the title came from
-  titleClaimedAt?,      // set once the one generated title was claimed — see Chat titles
   createdAt, lastMessageAt,
   messageCount,
   activeRunId,          // the run producing right now, null between turns
@@ -783,11 +782,9 @@ Details that matter:
   That is how the chat list marks "this one answered while you were away" — see
   [The chat history UI](#the-chat-history-ui).
 - **The title** is derived from the first user message — whitespace collapsed,
-  80 characters, ellipsis (`titleSource: 'derived'`). With
-  [chat titles](#chat-titles) switched on, a model replaces it once with a
-  headline (`'llm'`). A title the user set (`titleSetByUser`, `'user'`) is never
-  overwritten. Chats stored before `titleSource` existed are read from
-  `titleSetByUser` alone.
+  80 characters, ellipsis. With [chat titles](#chat-titles) switched on, a model
+  writes a headline into the same field when the first answer lands. A title the
+  user set (`titleSetByUser`) is never overwritten.
 - Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two tabs on
   one chat are ordinary, and an unlocked read-append-write would drop one tab's
   message.

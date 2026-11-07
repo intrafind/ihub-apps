@@ -522,7 +522,7 @@ export default function ChatHistoryPage() {
     async (chat, title) => {
       setEditingId(null);
       setActionError(null);
-      patchChatInCache(chat.id, { title, titleSetByUser: true, titleSource: 'user' });
+      patchChatInCache(chat.id, { title, titleSetByUser: true });
       try {
         const result = await renameChat(chat.id, title);
         if (typeof result?.chat?.title === 'string') {

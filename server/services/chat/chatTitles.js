@@ -4,13 +4,12 @@
 /**
  * Chat titles — a short name for a chat, written in the background (#2314).
  *
- * A kept chat starts out with a derived title (its first message, cut). After
+ * A kept chat starts out with a derived title (its first message, cut). When
  * the first answer of that chat has been stored, and only when an admin turned
- * `chats.titles` on, one small model call replaces the derived title with a
- * headline. The call never delays or fails the chat: it runs after the turn has
- * ended, once per chat (the claim is stored on the chat), and any failure
- * leaves the derived title in place. A title the user set is never replaced —
- * not even when the rename happens while the model is still answering.
+ * `chats.titles` on, one small model call writes a headline into the same
+ * `title` field. The call never delays or fails the chat: it runs after the turn
+ * has ended, and any failure leaves the derived title in place. A title the user
+ * set (`titleSetByUser`) is never replaced.
  *
  * What may leave the installation is decided here: only the first user message
  * and the first answer, each cut short, go to the model; the model is the one
@@ -153,16 +152,26 @@ export function resolveTitleModel({ configuredId, chatModel, user }) {
  * @param {Object|null} params.chatModel - The model the chat ran on.
  * @param {string} [params.appId] - App id, for the usage record.
  * @param {string} [params.language] - UI language, for the model call.
+ * @param {boolean} [params.firstAnswerOnly=false] - Only when the answer just
+ *   stored is the chat's first (the end of a turn). Off when a temporary chat
+ *   is kept, which may hold several answers and has not been titled yet.
  * @returns {Promise<{status: 'done'|'skipped'|'failed', title?: string}>}
  */
-export async function generateChatTitle({ repository, chatId, user, chatModel, appId, language }) {
+export async function generateChatTitle({
+  repository,
+  chatId,
+  user,
+  chatModel,
+  appId,
+  language,
+  firstAnswerOnly = false
+}) {
   try {
     const settings = chatTitleSettings(configCache.getPlatform?.() || {});
     if (!settings.enabled || isAnonymousUser(user) || !repository || !chatId) {
       return { status: 'skipped' };
     }
-    // Before the claim, so a chat nobody may title is not used up: a later
-    // turn (or the chat being kept) can still get one.
+    // Before reading the chat: no model this user may use, no work.
     const model = resolveTitleModel({ configuredId: settings.modelId, chatModel, user });
     if (!model) {
       logger.info('Chat title skipped: no model this user may use', {
@@ -171,8 +180,8 @@ export async function generateChatTitle({ repository, chatId, user, chatModel, a
       });
       return { status: 'skipped' };
     }
-    const claim = await repository.claimGeneratedTitle(chatId);
-    if (!claim) return { status: 'skipped' };
+    const exchange = await repository.getFirstExchangeForTitle(chatId, { firstAnswerOnly });
+    if (!exchange) return { status: 'skipped' };
 
     const startedAt = Date.now();
     // `autoRun: false`: the call carries the user's words, and a standalone
@@ -180,7 +189,7 @@ export async function generateChatTitle({ repository, chatId, user, chatModel, a
     // still count, through `options.user`.
     const response = await llmClient.complete({
       model,
-      messages: buildTitleMessages(claim),
+      messages: buildTitleMessages(exchange),
       options: { maxTokens: TITLE_MAX_TOKENS, user },
       timeoutMs: TITLE_TIMEOUT_MS,
       retries: 0,
@@ -196,19 +205,17 @@ export async function generateChatTitle({ repository, chatId, user, chatModel, a
       });
       return { status: 'failed' };
     }
-    const { applied } = await repository.setGeneratedTitle(chatId, title, {
-      expectedTitle: claim.title
-    });
+    const stored = await repository.setGeneratedTitle(chatId, title);
     // The title itself is the user's content: lengths only in the log.
     logger.info('Chat title generated', {
       component: COMPONENT,
       chatId,
       modelId: model.id,
-      applied,
+      stored,
       titleLength: title.length,
       durationMs: Date.now() - startedAt
     });
-    return applied ? { status: 'done', title } : { status: 'skipped' };
+    return stored ? { status: 'done', title } : { status: 'skipped' };
   } catch (error) {
     logger.warn('Chat title generation failed', {
       component: COMPONENT,

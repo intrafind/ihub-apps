@@ -33,18 +33,19 @@ let completeImpl;
 const original = {};
 
 function fakeRepository({
-  claim = { title: 'Derived', userText: 'Hallo Welt', assistantText: 'Hi' }
+  exchange = { userText: 'Hallo Welt', assistantText: 'Hi' },
+  stored = true
 } = {}) {
-  const calls = { claim: 0, set: [] };
+  const calls = { exchange: [], set: [] };
   return {
     calls,
-    async claimGeneratedTitle() {
-      calls.claim += 1;
-      return claim;
+    async getFirstExchangeForTitle(chatId, options) {
+      calls.exchange.push({ chatId, options });
+      return exchange;
     },
-    async setGeneratedTitle(chatId, title, options) {
-      calls.set.push({ chatId, title, options });
-      return { applied: true, chat: { id: chatId, title } };
+    async setGeneratedTitle(chatId, title) {
+      calls.set.push({ chatId, title });
+      return stored;
     }
   };
 }
@@ -192,13 +193,21 @@ describe('generateChatTitle', () => {
     ...overrides
   });
 
-  it('stores the generated title, against the derived title seen at the claim', async () => {
+  it('stores the generated title in the chat', async () => {
     const repository = fakeRepository();
     const result = await generateChatTitle(params({ repository }));
     assert.deepEqual(result, { status: 'done', title: 'Heizung Besichtigung' });
-    assert.deepEqual(repository.calls.set, [
-      { chatId: 'chat-1', title: 'Heizung Besichtigung', options: { expectedTitle: 'Derived' } }
-    ]);
+    assert.deepEqual(repository.calls.set, [{ chatId: 'chat-1', title: 'Heizung Besichtigung' }]);
+  });
+
+  it('passes firstAnswerOnly on to the repository', async () => {
+    const repository = fakeRepository();
+    await generateChatTitle(params({ repository, firstAnswerOnly: true }));
+    await generateChatTitle(params({ repository }));
+    assert.deepEqual(
+      repository.calls.exchange.map(call => call.options),
+      [{ firstAnswerOnly: true }, { firstAnswerOnly: false }]
+    );
   });
 
   it('calls the model once, bounded, without a ledger run, as chat-title', async () => {
@@ -221,25 +230,27 @@ describe('generateChatTitle', () => {
     assert.equal(completeCalls[0].model.id, 'small');
   });
 
-  it('makes no call when the feature is off, the user is anonymous or no model is allowed', async () => {
+  it('reads and calls nothing when the feature is off, the user is anonymous or no model is allowed', async () => {
     platform.chats.titles.enabled = false;
     const off = fakeRepository();
     assert.equal((await generateChatTitle(params({ repository: off }))).status, 'skipped');
-    assert.equal(off.calls.claim, 0, 'off: not even a claim');
+    assert.equal(off.calls.exchange.length, 0);
 
     platform.chats.titles.enabled = true;
     const anonymous = fakeRepository();
     await generateChatTitle(params({ repository: anonymous, user: { id: 'anonymous' } }));
-    assert.equal(anonymous.calls.claim, 0);
+    assert.equal(anonymous.calls.exchange.length, 0);
 
     const noModel = fakeRepository();
     await generateChatTitle(params({ repository: noModel, user: userWith('other') }));
-    assert.equal(noModel.calls.claim, 0, 'no model: the chat is not used up');
+    assert.equal(noModel.calls.exchange.length, 0);
     assert.equal(completeCalls.length, 0);
   });
 
-  it('makes no call when the claim is refused', async () => {
-    const result = await generateChatTitle(params({ repository: fakeRepository({ claim: null }) }));
+  it('makes no call when the chat is not due a title', async () => {
+    const result = await generateChatTitle(
+      params({ repository: fakeRepository({ exchange: null }) })
+    );
     assert.equal(result.status, 'skipped');
     assert.equal(completeCalls.length, 0);
   });
@@ -262,16 +273,15 @@ describe('generateChatTitle', () => {
 
   it('never throws, even when the repository does', async () => {
     const repository = {
-      async claimGeneratedTitle() {
-        throw new Error('lock timeout');
+      async getFirstExchangeForTitle() {
+        throw new Error('storage down');
       }
     };
     assert.deepEqual(await generateChatTitle(params({ repository })), { status: 'failed' });
   });
 
-  it('reports a title that lost to a rename as skipped', async () => {
-    const repository = fakeRepository();
-    repository.setGeneratedTitle = async () => ({ applied: false, chat: null });
+  it('reports a title the chat did not take (the user named it meanwhile) as skipped', async () => {
+    const repository = fakeRepository({ stored: false });
     assert.deepEqual(await generateChatTitle(params({ repository })), { status: 'skipped' });
   });
 });

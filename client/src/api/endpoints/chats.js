@@ -33,7 +33,7 @@ import { createFileApi } from '../utils/fileApi';
  * @param {number} [options.limit] - Page size; the server defaults to 30 and caps at 100.
  * @param {string|null} [options.cursor] - `nextCursor` from a previous page.
  * @returns {Promise<{ items: Object[], nextCursor: string|null }>} the response body, where each
- *   item is `{ id, ownerId, appId, modelId, title, titleSetByUser, titleSource, createdAt, lastMessageAt,
+ *   item is `{ id, ownerId, appId, modelId, title, titleSetByUser, createdAt, lastMessageAt,
  *   messageCount, activeRunId, hasUnseenActivity, status, runIds }`
  */
 export const fetchChats = async (options = {}) => {

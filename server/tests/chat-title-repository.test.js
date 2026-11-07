@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Background chat titles (#2314): the repository half — where a title came
- * from (`titleSource`), the once-only claim and the compare-and-set write that
- * lets a manual rename always win.
+ * Background chat titles (#2314): the repository half — when a chat is due a
+ * generated title, and the write that puts it into the same `title` field a
+ * rename and the first-message title use, never over one the user set.
  *
  * Driven against a real filesystem storage provider, like
- * `chat-persistence-repository.test.js`: the claim's guarantee is only as good
- * as the lock and the etag-conditional write underneath it.
+ * `chat-persistence-repository.test.js`.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -16,7 +15,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { ChatRepository, titleSourceOf } from '../services/chat/ChatRepository.js';
+import { ChatRepository } from '../services/chat/ChatRepository.js';
 
 const OWNER = 'user-1';
 const CHAT_ID = 'chat-1';
@@ -64,86 +63,23 @@ async function seedAnsweredChat(repository, overrides = {}) {
   });
 }
 
-describe('ChatRepository: title source', () => {
-  it('a new chat starts derived and the first user message names it', async () => {
-    await withRepository(async ({ repository }) => {
-      const created = await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER });
-      assert.equal(created.titleSource, 'derived');
-      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'Hello there', runId: 'r' });
-      const chat = await repository.getChat(CHAT_ID);
-      assert.equal(chat.title, 'Hello there');
-      assert.equal(titleSourceOf(chat), 'derived');
-    });
-  });
-
-  it('a rename is a user title, and clearing it resets to derived', async () => {
+describe('ChatRepository: getFirstExchangeForTitle', () => {
+  it('hands back the first user message and the first answer', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository);
-      const renamed = await repository.renameChat(CHAT_ID, 'My heating mail');
-      assert.equal(renamed.titleSource, 'user');
-      assert.equal(renamed.titleSetByUser, true);
-      const cleared = await repository.renameChat(CHAT_ID, '');
-      assert.equal(cleared.titleSource, 'derived');
-      assert.equal(cleared.titleSetByUser, false);
+      const exchange = await repository.getFirstExchangeForTitle(CHAT_ID);
+      assert.match(exchange.userText, /landlord/);
+      assert.match(exchange.assistantText, /inspection/);
     });
   });
 
-  it('reads a chat stored before the field existed', () => {
-    assert.equal(titleSourceOf({ titleSetByUser: true, title: 'x' }), 'user');
-    assert.equal(titleSourceOf({ titleSetByUser: false, title: 'x' }), 'derived');
-    assert.equal(titleSourceOf({ title: 'x' }), 'derived');
-    assert.equal(titleSourceOf({ title: 'x', titleSource: 'llm' }), 'llm');
-    assert.equal(titleSourceOf(null), 'derived');
-  });
-});
-
-describe('ChatRepository: claimGeneratedTitle', () => {
-  it('hands back the first exchange once', async () => {
+  it('is not due for a missing chat, a chat without an answer or a failed answer', async () => {
     await withRepository(async ({ repository }) => {
-      await seedAnsweredChat(repository);
-      const claim = await repository.claimGeneratedTitle(CHAT_ID);
-      assert.ok(claim);
-      assert.match(claim.userText, /landlord/);
-      assert.match(claim.assistantText, /inspection/);
-      assert.equal(claim.title, (await repository.getChat(CHAT_ID)).title);
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null, 'second claim is refused');
-    });
-  });
-
-  it('of concurrent claims exactly one wins', async () => {
-    await withRepository(async ({ repository }) => {
-      await seedAnsweredChat(repository);
-      const claims = await Promise.all(
-        Array.from({ length: 5 }, () => repository.claimGeneratedTitle(CHAT_ID))
-      );
-      assert.equal(claims.filter(Boolean).length, 1);
-    });
-  });
-
-  it('of two workers on one volume exactly one wins', async () => {
-    const first = await openRepository();
-    const second = await openRepository(first.baseDir);
-    try {
-      await seedAnsweredChat(first.repository);
-      const claims = await Promise.all([
-        first.repository.claimGeneratedTitle(CHAT_ID),
-        second.repository.claimGeneratedTitle(CHAT_ID)
-      ]);
-      assert.equal(claims.filter(Boolean).length, 1);
-    } finally {
-      await first.provider.shutdown();
-      await second.provider.shutdown();
-      await fs.rm(first.baseDir, { recursive: true, force: true });
-    }
-  });
-
-  it('is refused for a missing chat, a user title and a chat without an answer', async () => {
-    await withRepository(async ({ repository }) => {
-      assert.equal(await repository.claimGeneratedTitle('chat-missing'), null);
+      assert.equal(await repository.getFirstExchangeForTitle('chat-missing'), null);
 
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER });
       await repository.appendMessage(CHAT_ID, { role: 'user', content: 'Hi', runId: 'r' });
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null, 'no answer yet');
+      assert.equal(await repository.getFirstExchangeForTitle(CHAT_ID), null, 'no answer yet');
 
       await repository.appendMessage(CHAT_ID, {
         role: 'assistant',
@@ -151,99 +87,117 @@ describe('ChatRepository: claimGeneratedTitle', () => {
         runId: 'r',
         error: { code: 'X', message: 'boom' }
       });
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null, 'a failed answer');
-
-      await repository.appendMessage(CHAT_ID, { role: 'assistant', content: 'ok', runId: 'r2' });
-      await repository.renameChat(CHAT_ID, 'Mine');
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null, 'user-set title');
+      assert.equal(await repository.getFirstExchangeForTitle(CHAT_ID), null, 'a failed answer');
     });
   });
 
-  it('is refused for temporary chats, and allowed once the chat is kept', async () => {
+  it('is not due once the user has named the chat', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedAnsweredChat(repository);
+      await repository.renameChat(CHAT_ID, 'Mine');
+      assert.equal(await repository.getFirstExchangeForTitle(CHAT_ID), null);
+      // Clearing the title hands the naming back.
+      await repository.renameChat(CHAT_ID, '');
+      assert.ok(await repository.getFirstExchangeForTitle(CHAT_ID));
+    });
+  });
+
+  it('with firstAnswerOnly is due for the first answer and for no later one', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedAnsweredChat(repository);
+      assert.ok(await repository.getFirstExchangeForTitle(CHAT_ID, { firstAnswerOnly: true }));
+
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'And then?', runId: 'r2' });
+      await repository.appendMessage(CHAT_ID, { role: 'assistant', content: 'More.', runId: 'r2' });
+      assert.equal(
+        await repository.getFirstExchangeForTitle(CHAT_ID, { firstAnswerOnly: true }),
+        null,
+        'the second answer never asks for a title'
+      );
+      // Without the flag — a chat being kept — a chat with several answers is still due.
+      const kept = await repository.getFirstExchangeForTitle(CHAT_ID);
+      assert.match(kept.assistantText, /inspection/, 'made from the first answer');
+    });
+  });
+
+  it('is not due for a temporary chat, and is once the chat is kept', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository, { temporary: true });
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null);
+      assert.equal(await repository.getFirstExchangeForTitle(CHAT_ID), null);
       await repository.keepChat(CHAT_ID);
-      assert.ok(await repository.claimGeneratedTitle(CHAT_ID));
+      assert.ok(await repository.getFirstExchangeForTitle(CHAT_ID));
     });
   });
 
-  it('is refused for chats opened by a task, the Responses API or a project test', async () => {
+  it('is not due for chats opened by a task, the Responses API or a project test', async () => {
     for (const createdVia of ['scheduled-task', 'responses-api', 'project-test']) {
       await withRepository(async ({ repository }) => {
         await seedAnsweredChat(repository, { origin: { createdVia } });
-        assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null, createdVia);
+        assert.equal(await repository.getFirstExchangeForTitle(CHAT_ID), null, createdVia);
       });
     }
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository, { origin: { createdVia: 'ui' } });
-      assert.ok(await repository.claimGeneratedTitle(CHAT_ID));
+      assert.ok(await repository.getFirstExchangeForTitle(CHAT_ID));
     });
   });
 });
 
 describe('ChatRepository: setGeneratedTitle', () => {
-  it('replaces the derived title and leaves the rest of the chat alone', async () => {
+  it('writes into the title field and leaves the rest of the chat alone', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository);
       const before = await repository.getChat(CHAT_ID);
-      const claim = await repository.claimGeneratedTitle(CHAT_ID);
-      const { applied, chat } = await repository.setGeneratedTitle(CHAT_ID, 'Heating inspection', {
-        expectedTitle: claim.title
-      });
-      assert.equal(applied, true);
-      assert.equal(chat.title, 'Heating inspection');
-      assert.equal(chat.titleSource, 'llm');
-      assert.equal(chat.titleSetByUser, false);
-      assert.equal(chat.lastMessageAt, before.lastMessageAt);
-      assert.equal(chat.hasUnseenActivity, before.hasUnseenActivity);
-      assert.equal(chat.messageCount, before.messageCount);
+      assert.equal(await repository.setGeneratedTitle(CHAT_ID, 'Heating inspection'), true);
+      const after = await repository.getChat(CHAT_ID);
+      assert.equal(after.title, 'Heating inspection');
+      assert.equal(after.titleSetByUser, false, 'a generated title is not a user title');
+      assert.equal(after.lastMessageAt, before.lastMessageAt);
+      assert.equal(after.hasUnseenActivity, before.hasUnseenActivity);
+      assert.equal(after.messageCount, before.messageCount);
+      assert.deepEqual(
+        Object.keys(after)
+          .filter(key => /title/i.test(key))
+          .sort(),
+        ['title', 'titleSetByUser'],
+        'no second title field'
+      );
     });
   });
 
-  it('loses to a rename that happened while the model was answering', async () => {
+  it('never replaces a title the user set', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository);
-      const claim = await repository.claimGeneratedTitle(CHAT_ID);
-      // The user renames to exactly the derived text: only the source tells
-      // the two apart, which is why the check is not on the title alone.
-      await repository.renameChat(CHAT_ID, claim.title);
-      const { applied, chat } = await repository.setGeneratedTitle(CHAT_ID, 'Generated', {
-        expectedTitle: claim.title
-      });
-      assert.equal(applied, false);
-      assert.equal(chat.title, claim.title);
-      assert.equal(chat.titleSource, 'user');
+      await repository.renameChat(CHAT_ID, 'My heating mail');
+      assert.equal(await repository.setGeneratedTitle(CHAT_ID, 'Generated'), false);
+      assert.equal((await repository.getChat(CHAT_ID)).title, 'My heating mail');
     });
   });
 
-  it('loses to a reset, and a reset never earns another generation', async () => {
+  it('a rename after a generated title still sets it as the user title', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository);
-      const claim = await repository.claimGeneratedTitle(CHAT_ID);
-      await repository.renameChat(CHAT_ID, '');
-      const { applied } = await repository.setGeneratedTitle(CHAT_ID, 'Generated', {
-        expectedTitle: claim.title
-      });
-      assert.equal(applied, false);
-      // The next user message derives a fresh title, but no claim is left.
-      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'Next', runId: 'r3' });
-      assert.equal(await repository.claimGeneratedTitle(CHAT_ID), null);
+      await repository.setGeneratedTitle(CHAT_ID, 'Generated');
+      const renamed = await repository.renameChat(CHAT_ID, 'Mine');
+      assert.equal(renamed.title, 'Mine');
+      assert.equal(renamed.titleSetByUser, true);
     });
   });
 
-  it('does not store an empty title or write to a missing chat', async () => {
+  it('keeps a title to one line of at most 60 characters, and refuses an empty one', async () => {
     await withRepository(async ({ repository }) => {
       await seedAnsweredChat(repository);
-      const claim = await repository.claimGeneratedTitle(CHAT_ID);
-      const empty = await repository.setGeneratedTitle(CHAT_ID, '  ', {
-        expectedTitle: claim.title
-      });
-      assert.equal(empty.applied, false);
-      const missing = await repository.setGeneratedTitle('chat-missing', 'X', {
-        expectedTitle: 'y'
-      });
-      assert.deepEqual(missing, { applied: false, chat: null });
+      assert.equal(await repository.setGeneratedTitle(CHAT_ID, '   '), false);
+      assert.equal(await repository.setGeneratedTitle(CHAT_ID, `a\n${'b'.repeat(200)}`), true);
+      const { title } = await repository.getChat(CHAT_ID);
+      assert.ok(title.length <= 60);
+      assert.ok(!title.includes('\n'));
+    });
+  });
+
+  it('writes to nothing when the chat is gone', async () => {
+    await withRepository(async ({ repository }) => {
+      assert.equal(await repository.setGeneratedTitle('chat-missing', 'X'), false);
     });
   });
 });

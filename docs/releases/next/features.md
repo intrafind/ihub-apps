@@ -12,11 +12,11 @@ replaces that name with a headline of three to six words, in the language of the
 - **Your model choice.** Pick a small, cheap **Title model**, or leave it empty so the chat's own model
   writes the title. The picked model is used only for people whose groups may use it; everyone else
   gets the chat's own model. No other model is ever used.
-- **Your rename always wins.** A title you set yourself is never replaced, not even when you rename
-  while the title is still being written.
-- **Once, and in the background.** Each chat gets at most one generated title, after its first
-  answer, without delaying the chat. If it fails, the first-message title stays. It shows in the list
-  a few seconds after the answer. Temporary chats get theirs when you keep them.
+- **Your own titles stay.** A title you set yourself is never replaced.
+- **Once, and in the background.** A chat gets its title when its first answer arrives, without
+  delaying the chat. If it fails, the first-message title stays. It shows in the list a few seconds
+  after the answer. Temporary chats get theirs when you keep them. Chats that already have several
+  answers keep the title they have.
 
 **Migration:** on the first start with this version, `chats.titles` is added to `platform.json`,
 switched off.
