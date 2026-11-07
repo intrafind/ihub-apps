@@ -785,6 +785,10 @@ used to be an HTML or plain text page.
 - The SSL administration endpoints (`/api/admin/ssl/config`) answer in this shape: `BAD_REQUEST` for an invalid
   field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
   unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
+- The SSRF allowlist endpoints (`/api/admin/ssrf/config`) answer in this shape: `BAD_REQUEST` for an allowlist
+  that is not an array and for an entry that is not a string, is empty or is not a host pattern (the reason is
+  in `detail`). An unexpected failure, including an unreadable platform file, answers 500 with a fixed text;
+  the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

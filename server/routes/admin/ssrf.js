@@ -3,9 +3,9 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 
 export default function registerAdminSsrfRoutes(app) {
@@ -36,15 +36,11 @@ export default function registerAdminSsrfRoutes(app) {
    *                     type: string
    */
   app.get(buildServerPath('/api/admin/ssrf/config'), adminAuth, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform() || {};
-      const ssrfConfig = platformConfig.ssrf || { allowedHosts: [] };
-      res.json({
-        allowedHosts: Array.isArray(ssrfConfig.allowedHosts) ? ssrfConfig.allowedHosts : []
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'get SSRF configuration');
-    }
+    const platformConfig = configCache.getPlatform() || {};
+    const ssrfConfig = platformConfig.ssrf || { allowedHosts: [] };
+    res.json({
+      allowedHosts: Array.isArray(ssrfConfig.allowedHosts) ? ssrfConfig.allowedHosts : []
+    });
   });
 
   /**
@@ -73,56 +69,62 @@ export default function registerAdminSsrfRoutes(app) {
    *         description: Invalid SSRF configuration
    */
   app.put(buildServerPath('/api/admin/ssrf/config'), adminAuth, async (req, res) => {
-    try {
-      const { allowedHosts } = req.body || {};
+    const { allowedHosts } = req.body || {};
 
-      if (!Array.isArray(allowedHosts)) {
-        return sendBadRequest(res, 'Invalid SSRF configuration: allowedHosts must be an array');
-      }
-
-      const cleaned = [];
-      for (const entry of allowedHosts) {
-        if (typeof entry !== 'string') {
-          return sendBadRequest(res, 'Invalid SSRF configuration: entries must be strings');
-        }
-        const trimmed = entry.trim();
-        if (!trimmed) {
-          return sendBadRequest(res, 'Invalid SSRF configuration: entries must be non-empty');
-        }
-        // Allow letters, digits, dots, hyphens, and a single leading "*." or "."
-        // wildcard prefix. Matches the patterns supported by isDomainWhitelisted.
-        if (
-          !/^(\*\.|\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(
-            trimmed
-          )
-        ) {
-          return sendBadRequest(
-            res,
-            `Invalid SSRF host pattern "${entry}". Use a hostname, *.domain.tld, or .domain.tld.`
-          );
-        }
-        cleaned.push(trimmed);
-      }
-
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-      platformConfig.ssrf = { ...platformConfig.ssrf, allowedHosts: cleaned };
-
-      await configStore.writeJson('config/platform.json', platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-
-      logger.info('SSRF allowlist updated', {
-        component: 'AdminSSRF',
-        allowedHosts: cleaned
-      });
-
-      res.json({
-        message: 'SSRF configuration updated successfully',
-        config: { allowedHosts: cleaned }
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update SSRF configuration');
+    if (!Array.isArray(allowedHosts)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid SSRF configuration: allowedHosts must be an array'
+      );
     }
+
+    const cleaned = [];
+    for (const entry of allowedHosts) {
+      if (typeof entry !== 'string') {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid SSRF configuration: entries must be strings'
+        );
+      }
+      const trimmed = entry.trim();
+      if (!trimmed) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid SSRF configuration: entries must be non-empty'
+        );
+      }
+      // Allow letters, digits, dots, hyphens, and a single leading "*." or "."
+      // wildcard prefix. Matches the patterns supported by isDomainWhitelisted.
+      if (
+        !/^(\*\.|\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(
+          trimmed
+        )
+      ) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Invalid SSRF host pattern "${entry}". Use a hostname, *.domain.tld, or .domain.tld.`
+        );
+      }
+      cleaned.push(trimmed);
+    }
+
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
+
+    platformConfig.ssrf = { ...platformConfig.ssrf, allowedHosts: cleaned };
+
+    await configStore.writeJson('config/platform.json', platformConfig);
+    await configCache.refreshCacheEntry('config/platform.json');
+
+    logger.info('SSRF allowlist updated', {
+      component: 'AdminSSRF',
+      allowedHosts: cleaned
+    });
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      message: 'SSRF configuration updated successfully',
+      config: { allowedHosts: cleaned }
+    });
   });
 }
