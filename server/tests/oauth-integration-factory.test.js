@@ -197,6 +197,11 @@ for (const p of providers) {
     p.multi ? 'multi-provider has no bare /callback' : 'single-provider has no :providerId route',
     p.multi ? !routeFor(router, '/callback') : !routeFor(router, '/:providerId/callback')
   );
+  // The browse and download routes call out to the provider on every request: each carries a
+  // rate limiter between the sign-in check and the handler (authRequired, limiter, handler).
+  for (const path of ['/sources', '/drives/:source', '/items', '/download']) {
+    check(`${p.key} ${path} is rate limited`, routeFor(router, path)?.stack.length === 3);
+  }
   check(
     'POST /api/integrations/:id/connect is rate limited',
     routeFor(userIntegrationsRouter, '/:id/connect', 'post').stack.length === 4
