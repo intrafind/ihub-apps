@@ -5,7 +5,7 @@ import { memo, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { contentLineFromInfo } from '../../upload/utils/attachmentDescription';
-import { formatBytes } from '../utils/artifactFiles';
+import { PDF_LOOK, formatBytes } from '../utils/artifactFiles';
 import { uploadedFileBadge, uploadedFileLook } from '../utils/uploadedFiles';
 
 /**
@@ -55,6 +55,9 @@ const NEUTRAL_LOOK = {
   className: 'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-200'
 };
 
+/** Whether a card is a button: there is a Files drawer to open it in and a stored file to open. */
+const isOpenable = (view, onOpenFile) => Boolean(onOpenFile && view.id && view.shared !== false);
+
 /** The type label (PDF, DOCX), from the media type, else the extension. */
 const typeOf = view => uploadedFileBadge({ mimeType: view.mimeType, name: view.name });
 
@@ -66,7 +69,7 @@ function lookOfView(view) {
   }
   const look = uploadedFileLook({ mimeType: view.mimeType, name: view.name });
   // `fileLookOf` falls back to the PDF look for a type it does not know; only a PDF keeps it
-  if (look.className.startsWith('bg-red-') && typeOf(view) !== 'PDF') return NEUTRAL_LOOK;
+  if (look === PDF_LOOK && typeOf(view) !== 'PDF') return NEUTRAL_LOOK;
   return look;
 }
 
@@ -125,7 +128,7 @@ function AttachmentCard({
 }) {
   const { t } = useTranslation();
   const lineId = useId();
-  const openable = Boolean(onOpenFile && view.id && view.shared !== false);
+  const openable = isOpenable(view, onOpenFile);
   const name = view.name || t('chatSharing.viewer.attachmentUnnamed', 'file');
   const line = stateLineOf(view, t);
   const look = lookOfView(view);
@@ -140,7 +143,10 @@ function AttachmentCard({
     <Icon name={look.icon} size="md" aria-hidden="true" />
   );
 
-  const describedBy = [line ? lineId : null, openable ? hintId : null].filter(Boolean).join(' ');
+  // A grid tile has no room for the line as an element of its own: its text carries it instead
+  const describedBy = [line && !grid ? lineId : null, openable ? hintId : null]
+    .filter(Boolean)
+    .join(' ');
   const surface = [
     STYLES.card,
     tone === 'warn' ? STYLES.warn : '',
@@ -163,6 +169,7 @@ function AttachmentCard({
         {', '}
         {typeOf(view)}
         {size ? `, ${size}` : ''}
+        {line ? `, ${line.text}` : ''}
       </span>
     </>
   ) : (
@@ -402,9 +409,11 @@ function MessageAttachments({ attachments, onOpenFile = null, compact = false })
         </button>
       )}
       {/* Said once per card, not per read: the hint every openable card points at */}
-      <span id={hintId} className="sr-only">
-        {t('chatMessage.attachments.opensInFiles', 'Opens in the Files panel')}
-      </span>
+      {views.some(view => isOpenable(view, onOpenFile)) && (
+        <span id={hintId} className="sr-only">
+          {t('chatMessage.attachments.opensInFiles', 'Opens in the Files panel')}
+        </span>
+      )}
       <output className="sr-only">{announcement}</output>
     </div>
   );

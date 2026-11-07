@@ -1325,7 +1325,8 @@ function ChatMessage({
                 </button>
               )}
 
-              {!message.transcription && (
+              {/* A link restores the text of a turn; a turn that is only files has none */}
+              {!message.transcription && !attachmentsOnly && (
                 <button
                   onClick={handleCopyLink}
                   className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"

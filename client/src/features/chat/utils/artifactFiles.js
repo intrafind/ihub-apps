@@ -227,6 +227,12 @@ const LOOKS = {
 };
 
 /**
+ * The look of a PDF, which `fileLookOf` also returns for a type it does not know. Callers that must
+ * tell the two apart compare against this object, not against its class names.
+ */
+export const PDF_LOOK = LOOKS['application/pdf'];
+
+/**
  * Icon and colours of a file.
  *
  * @param {{ kind?: string, mimeType?: string }} artifact
