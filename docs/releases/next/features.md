@@ -834,9 +834,11 @@ gone.
   turns the filter off; it is left out when no app qualifies.
 - **The link keeps its `integration`:** the sign-in clean-up of the page removed `integration` from every address, which dropped the document before the list could use it. It now removes `integration` only next to a sign-in error (`integration_error`).
 - **The integration is switched on:** the chat opens with the integration's tools on, even when your saved default for the app has them off, because the link came from that system. The app list narrows as soon as the integration answers, without waiting for the document's details.
-- **The original file, images included:** the document is fetched as the original and attached
-  like a file from Nextcloud: an image as an image for a vision model, anything else as a document
-  that keeps its original next to the extracted text.
+- **The server fetches the document:** an iFinder document is attached by reference. The server
+  fetches the original with your own iFinder permissions, stores it with the chat and extracts the
+  text, like an upload without the upload; it never passes through your browser. Whether the
+  original is kept or only the text is the usual upload storage mode. Images and audio, which a
+  model needs as bytes, are still fetched in the browser and attached as an image or audio.
 - **Clear errors:** an integration that is not available to you, a document you may not read, or
   one that no longer exists is reported in the banner before you choose an app, and the app then
   opens without it. A document that fails to attach in the chat now says so instead of silently
@@ -863,13 +865,25 @@ gone.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).
 
+## Attachments: See What the Assistant Gets and Download It
+
+Each attachment under the composer now says what the assistant gets from the file: the characters of
+text extracted from a document, the page images sent instead for a scan without a text layer, or the
+size an image is sent in. Once the server stored the file, it also says when only the text is kept
+or the text was shortened.
+
+- **Download after attaching:** a file that came from a cloud storage or an integration, such as an
+  iFinder document opened from a link, has buttons to download the original file and, for a document,
+  the extracted text (from the stored file when the server fetched it). A local file is yours already and has none. Images and audio from these sources
+  keep their original for the download.
+  
 ## LLM Timeouts Configurable for All Providers and Per Provider
 
 A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with
 "stopped sending stream chunks for 60000 ms", and raising the limit meant editing `platform.json` and
 restarting, or changing every model. The two transport limits now have a place in the admin UI at every level:
 
-- **Admin → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
+- **Admin → Models → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
   response headers, default 30 s) and the **stream idle timeout** (longest silence between two chunks of a
   running stream, default 60 s) for the whole installation.
 - **Provider page:** a **Timeouts** section gives all models of one provider their own values, so every Google
@@ -881,3 +895,28 @@ The order is model, provider, installation, environment variable (`LLM_CONNECT_T
 apply to the next request — no restart. No migration is needed: providers without the new fields behave as before.
 
 See [LLM client → Tuning the ceilings](../../llm-client.md#tuning-the-ceilings).
+
+## Models and Providers in One Admin Area
+
+Web search, storage and tools are integrations now, so **Providers** is only the connection to a model
+endpoint. It no longer has a page of its own in the menu. **AI Workspace → Models** has two tabs, **Models**
+and **Providers**, and each links to the other.
+
+- **Models tab:** the provider column names the provider (a custom provider's name, not `openai`) and links to
+  it; filter by **Provider**, **Type** and **Status** (kept in the address); **Add New Model** and
+  **Import models** are the primary actions, **Upload Config**, **Install from Marketplace**, **Enable All**
+  and **Disable All** moved into a **⋮** menu.
+- **Set up your models:** a three-step strip (a provider with a key, an enabled model, a default model) replaces
+  the "Get started" panel and goes away when the steps are done.
+- **Providers tab:** each row's model count opens the Models tab for that provider, **Import models** opens the
+  import for it, and a ⏱ marks a provider with its own timeouts. The description and status columns are gone
+  (the description is a tooltip, a disabled provider is tagged). **Timeouts for all providers** is one summary
+  line you can open with **Edit**.
+- **Provider page:** **Add model** creates a model with the provider already chosen.
+- **Add provider** always creates an LLM provider; the category choice is gone. Entries of other categories
+  that an older installation still has stay reachable under a collapsed **Other credentials** group.
+
+Nothing else changes: addresses (`/admin/models`, `/admin/providers`), permissions (`admin.pages.providers`
+still decides whether the **Providers** tab is shown), data files and the API stay as they are.
+
+See [Admin UI → Managing Models](../../admin-ui.md#managing-models).

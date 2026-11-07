@@ -200,7 +200,7 @@ still inherits the connect timeout:
 | `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`          | the process        |
 | built-in defaults (30 s / 60 s)                                  | —                  |
 
-Admins set the installation values under **Admin → Providers → Timeouts for
+Admins set the installation values under **Admin → Models → Providers → Timeouts for
 all providers** and a provider's own on its page; neither needs a restart,
 because the client reads them on every call. The provider is the entry the
 model takes its key from (`providerId`, else its `provider`), so one value

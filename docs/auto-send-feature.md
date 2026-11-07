@@ -147,25 +147,36 @@ nothing.)
 
 ### How It Works
 
-The chat attaches the document the way the Nextcloud embed attaches the files you picked there:
+The document is attached **by reference**: the server fetches it, the browser never holds it.
 
 1. The page loads and shows a loading placeholder in the attachment area.
 2. The integration is asked whether it hands documents to you
    (`GET /api/integrations/{integration}/files`): it must be installed, switched on and
-   configured, and granted to your groups (`permissions.integrations`).
-3. The **original file** is fetched with your own permissions in that system
-   (`GET /api/integrations/{integration}/files/{id}/content`), so an image stays an image. Only if the
-   original cannot be fetched (not for a permission failure) is its text fetched as a `.txt`.
-4. The app must **bind the integration** (`app.integrations`); its local upload settings do not
-   matter, as they do not for the files of a storage provider. What only the model can decide is
-   checked: an **image** needs a model that sees and is attached as an image, **audio** needs a
-   model that hears, anything else is attached as a document that keeps its original next to the
-   extracted text.
+   configured, and granted to your groups (`permissions.integrations`). The app must **bind the
+   integration** (`app.integrations`); its local upload settings do not matter, as they do not for
+   the files of a storage provider.
+3. **On the server (iFinder, when the chat keeps files on the server):** the chat posts the
+   reference to its file endpoint (`POST /api/chats/{chatId}/files` with
+   `{ "source": { "kind": "ifinder-document", "ref": { "documentId": …, "searchProfile": … } } }`).
+   The server fetches the **original file** with your own iFinder permissions (never iFinder's
+   generated preview; only when iFinder fails to serve the original does it take the text iFinder
+   keeps), stores it with the chat and extracts the text itself, exactly as for an upload, only
+   without the upload. Whether the original is kept or only the text is the usual
+   `uploads.storageMode` of the platform or the app (see [Chat files](chat-files.md)). The composer
+   shows a stub, the stored file, with what the server read; the message names it by id.
+4. **In the browser (the exception):** a file the server cannot read as a document — an **image**
+   or **audio**, which a model needs as bytes — and a chat that keeps no files on the server are
+   fetched through `GET /api/integrations/{integration}/files/{id}/content` and attached the way
+   the Nextcloud embed attaches its files: an image needs a model that sees, audio one that hears,
+   anything else is a document that keeps its original next to the extracted text.
 5. The `documentId`, `integration` and `searchProfile` parameters are removed from the URL to
    prevent re-fetching on refresh. If the document cannot be attached, a system message in the chat
    says why: the integration is not available to you, access was denied, the document was not
    found, the app does not use the integration, the selected model cannot take this kind of file,
    or the fetch failed.
+
+The attachment chip says what the assistant gets (the text the server extracted, or the page images
+of a scan) and has buttons to download the original and the extracted text from the stored file.
 
 While the `documentId` parameter is still in the URL, messages sent to the backend also carry the
 document id as a `documentIds` array (the iAssistant uses it as its retrieval scope). Once the
