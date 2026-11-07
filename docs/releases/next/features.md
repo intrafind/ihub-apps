@@ -720,6 +720,11 @@ used to be an HTML or plain text page.
   "auth_refresh_failed"`), and a call that needs approval answers `403 APPROVAL_REQUIRED_NO_USER` or
   `409 APPROVAL_ALREADY_ANSWERED`. The message of a failing MCP server is shown only when it names no paths,
   hosts or credentials.
+- The provider administration endpoints (`/api/admin/providers*`) answer in this shape: `NOT_FOUND` (a provider),
+  `BAD_REQUEST` (an unsafe or changed id, a missing field, a reserved id, a built-in provider that cannot be
+  deleted, a gateway setting that cannot be removed while models use their own dialect) and
+  `409 PROVIDER_IN_USE` with the models that use the provider in `details.linkedModels`. An unexpected
+  failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

@@ -5,16 +5,10 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { isValidId, validateIdForPath } from '../../utils/pathSecurity.js';
+import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { getProxyConfig, redactUrlSecrets } from '../../utils/httpConfig.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
@@ -330,29 +324,25 @@ export default function registerAdminProvidersRoutes(app) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/admin/providers'), adminAuth, async (req, res) => {
-    try {
-      const { data: providers, etag: providersEtag } = configCache.getProviders(true);
+    const { data: providers, etag: providersEtag } = configCache.getProviders(true);
 
-      // Mask API keys in the response for security
-      const maskedProviders = providers.map(provider => {
-        const maskedProvider = { ...provider };
-        if (maskedProvider.apiKey) {
-          // Show masked value to indicate a key is set
-          maskedProvider.apiKeyMasked = '••••••••';
-          maskedProvider.apiKeySet = true;
-          // Remove the actual encrypted key from response
-          delete maskedProvider.apiKey;
-        } else {
-          maskedProvider.apiKeySet = false;
-        }
-        return maskedProvider;
-      });
+    // Mask API keys in the response for security
+    const maskedProviders = providers.map(provider => {
+      const maskedProvider = { ...provider };
+      if (maskedProvider.apiKey) {
+        // Show masked value to indicate a key is set
+        maskedProvider.apiKeyMasked = '••••••••';
+        maskedProvider.apiKeySet = true;
+        // Remove the actual encrypted key from response
+        delete maskedProvider.apiKey;
+      } else {
+        maskedProvider.apiKeySet = false;
+      }
+      return maskedProvider;
+    });
 
-      res.setHeader('ETag', providersEtag);
-      res.json(maskedProviders);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch providers');
-    }
+    res.setHeader('ETag', providersEtag);
+    res.json(maskedProviders);
   });
 
   /**
@@ -365,14 +355,10 @@ export default function registerAdminProvidersRoutes(app) {
     buildServerPath('/api/admin/providers/:providerId/schema'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { providerId } = req.params;
-        if (!validateIdForPath(providerId, 'provider', res)) return;
-        const schema = await getProviderConfigSchema(providerId);
-        res.json(schema || { fields: [] });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch provider schema');
-      }
+      const { providerId } = req.params;
+      assertValidId(providerId, 'provider');
+      const schema = await getProviderConfigSchema(providerId);
+      res.json(schema || { fields: [] });
     }
   );
 
@@ -585,160 +571,141 @@ export default function registerAdminProvidersRoutes(app) {
    * `GET /api/admin/models/_key-status`. The key itself is never returned.
    */
   app.get(buildServerPath('/api/admin/providers/_key-status'), adminAuth, async (req, res) => {
-    try {
-      const { data: providers } = configCache.getProviders(true);
-      // LLM providers only: other categories (web search, …) read their keys
-      // from places this check does not cover, so a verdict would mislead.
-      const statuses = Object.fromEntries(
-        providers
-          .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
-          .map(provider => [provider.id, inspectProviderApiKey(provider)])
-      );
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({ statuses });
-    } catch (error) {
-      return sendInternalError(res, error, 'read provider key status');
-    }
+    const { data: providers } = configCache.getProviders(true);
+    // LLM providers only: other categories (web search, …) read their keys
+    // from places this check does not cover, so a verdict would mislead.
+    const statuses = Object.fromEntries(
+      providers
+        .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
+        .map(provider => [provider.id, inspectProviderApiKey(provider)])
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ statuses });
   });
 
   app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
-    try {
-      const { providerId } = req.params;
+    const { providerId } = req.params;
 
-      // Validate providerId for security
-      if (!validateIdForPath(providerId, 'provider', res)) {
-        return;
-      }
+    // Validate providerId for security
+    assertValidId(providerId, 'provider');
 
-      const { data: providers, etag: providersEtag } = configCache.getProviders(true);
-      const provider = providers.find(p => p.id === providerId);
-      if (!provider) {
-        return sendNotFound(res, 'Provider');
-      }
-
-      // Mask API key in the response for security
-      const maskedProvider = { ...provider };
-      if (maskedProvider.apiKey) {
-        // Show masked value to indicate a key is set
-        maskedProvider.apiKeyMasked = '••••••••';
-        maskedProvider.apiKeySet = true;
-        // Remove the actual encrypted key from response
-        delete maskedProvider.apiKey;
-      } else {
-        maskedProvider.apiKeySet = false;
-      }
-
-      res.setHeader('ETag', providersEtag);
-      res.json(maskedProvider);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch provider');
+    const { data: providers, etag: providersEtag } = configCache.getProviders(true);
+    const provider = providers.find(p => p.id === providerId);
+    if (!provider) {
+      throw new ServiceError('NOT_FOUND', 'Provider not found');
     }
+
+    // Mask API key in the response for security
+    const maskedProvider = { ...provider };
+    if (maskedProvider.apiKey) {
+      // Show masked value to indicate a key is set
+      maskedProvider.apiKeyMasked = '••••••••';
+      maskedProvider.apiKeySet = true;
+      // Remove the actual encrypted key from response
+      delete maskedProvider.apiKey;
+    } else {
+      maskedProvider.apiKeySet = false;
+    }
+
+    res.setHeader('ETag', providersEtag);
+    res.json(maskedProvider);
   });
 
   app.put(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
-    try {
-      const { providerId } = req.params;
-      const updatedProvider = req.body;
+    const { providerId } = req.params;
+    const updatedProvider = req.body;
 
-      // Validate providerId for security
-      if (!validateIdForPath(providerId, 'provider', res)) {
-        return;
-      }
+    // Validate providerId for security
+    assertValidId(providerId, 'provider');
 
-      if (updatedProvider.id !== providerId) {
-        return sendBadRequest(res, 'Provider ID cannot be changed');
-      }
-
-      // Define paths once at the top
-      // Handle API key encryption
-      if (updatedProvider.apiKey) {
-        // Check if this is a new key or unchanged masked value
-        if (updatedProvider.apiKey !== '••••••••') {
-          // New key provided - encrypt it
-          try {
-            updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
-          } catch (error) {
-            return sendInternalError(res, error, 'encrypt API key');
-          }
-        } else {
-          // Masked value - need to preserve existing key
-          // CRITICAL FIX: Read the stored file, not the cache, to ensure we have
-          // the apiKey field. The cache might not have it due to TTL expiration
-          // or race conditions.
-          const stored = await configStore.readJson(PROVIDERS_FILE);
-          const existingProvider = Array.isArray(stored?.providers)
-            ? stored.providers.find(p => p.id === providerId)
-            : undefined;
-          if (existingProvider?.apiKey) {
-            // Preserve the existing encrypted API key
-            updatedProvider.apiKey = existingProvider.apiKey;
-          } else {
-            // Nothing stored to preserve, drop the masked placeholder
-            delete updatedProvider.apiKey;
-          }
-        }
-      }
-
-      // Remove client-side helper fields
-      delete updatedProvider.apiKeySet;
-      delete updatedProvider.apiKeyMasked;
-
-      // Load current providers and create a deep copy to avoid cache mutation
-      const { data: cachedProviders } = configCache.getProviders(true);
-
-      // Create a deep copy of the providers array to avoid mutating the cache
-      const providers = cachedProviders.map(p => ({ ...p }));
-
-      // Find and update the provider
-      const index = providers.findIndex(p => p.id === providerId);
-      if (index === -1) {
-        return sendNotFound(res, 'Provider');
-      }
-
-      // The category decides which fields an entry has; it is fixed at creation.
-      if (providers[index].category !== undefined) {
-        updatedProvider.category = providers[index].category;
-      } else {
-        delete updatedProvider.category;
-      }
-      const validationError = normalizeProviderFields(updatedProvider);
-      if (validationError) {
-        return sendBadRequest(res, validationError);
-      }
-
-      // A gateway provider's models speak different dialects (Mistral next to
-      // OpenAI, a realtime speech backend). Taking the gateway setting away would
-      // move them all to the provider's one API type — a realtime model would end
-      // up on the OpenAI batch transcriber — so refuse while that would happen.
-      if (isGatewayProvider(providers[index]) && !isGatewayProvider(updatedProvider)) {
-        const { data: models = [] } = configCache.getModels(true);
-        const apiType = getProviderApiType(updatedProvider);
-        const affected = getLinkedModels(providerId, models).filter(
-          model => linkedModelProvider(apiType, model) !== model.provider
-        );
-        if (affected.length > 0) {
-          return sendBadRequest(
-            res,
-            `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
-          );
-        }
-      }
-
-      providers[index] = updatedProvider;
-
-      // Save updated providers
-      await configStore.writeJson(PROVIDERS_FILE, { providers });
-      await configCache.refreshProvidersCache();
-      const updatedModels = await syncLinkedModelsApiType(updatedProvider);
-
-      res.json({
-        message: 'Provider updated successfully',
-        provider: updatedProvider,
-        updatedModels
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update provider');
+    if (updatedProvider.id !== providerId) {
+      throw new ServiceError('BAD_REQUEST', 'Provider ID cannot be changed');
     }
+
+    // Define paths once at the top
+    // Handle API key encryption
+    if (updatedProvider.apiKey) {
+      // Check if this is a new key or unchanged masked value
+      if (updatedProvider.apiKey !== '••••••••') {
+        // New key provided - encrypt it
+        updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
+      } else {
+        // Masked value - need to preserve existing key
+        // CRITICAL FIX: Read the stored file, not the cache, to ensure we have
+        // the apiKey field. The cache might not have it due to TTL expiration
+        // or race conditions.
+        const stored = await configStore.readJson(PROVIDERS_FILE);
+        const existingProvider = Array.isArray(stored?.providers)
+          ? stored.providers.find(p => p.id === providerId)
+          : undefined;
+        if (existingProvider?.apiKey) {
+          // Preserve the existing encrypted API key
+          updatedProvider.apiKey = existingProvider.apiKey;
+        } else {
+          // Nothing stored to preserve, drop the masked placeholder
+          delete updatedProvider.apiKey;
+        }
+      }
+    }
+
+    // Remove client-side helper fields
+    delete updatedProvider.apiKeySet;
+    delete updatedProvider.apiKeyMasked;
+
+    // Load current providers and create a deep copy to avoid cache mutation
+    const { data: cachedProviders } = configCache.getProviders(true);
+
+    // Create a deep copy of the providers array to avoid mutating the cache
+    const providers = cachedProviders.map(p => ({ ...p }));
+
+    // Find and update the provider
+    const index = providers.findIndex(p => p.id === providerId);
+    if (index === -1) {
+      throw new ServiceError('NOT_FOUND', 'Provider not found');
+    }
+
+    // The category decides which fields an entry has; it is fixed at creation.
+    if (providers[index].category !== undefined) {
+      updatedProvider.category = providers[index].category;
+    } else {
+      delete updatedProvider.category;
+    }
+    const validationError = normalizeProviderFields(updatedProvider);
+    if (validationError) {
+      throw new ServiceError('BAD_REQUEST', validationError);
+    }
+
+    // A gateway provider's models speak different dialects (Mistral next to
+    // OpenAI, a realtime speech backend). Taking the gateway setting away would
+    // move them all to the provider's one API type — a realtime model would end
+    // up on the OpenAI batch transcriber — so refuse while that would happen.
+    if (isGatewayProvider(providers[index]) && !isGatewayProvider(updatedProvider)) {
+      const { data: models = [] } = configCache.getModels(true);
+      const apiType = getProviderApiType(updatedProvider);
+      const affected = getLinkedModels(providerId, models).filter(
+        model => linkedModelProvider(apiType, model) !== model.provider
+      );
+      if (affected.length > 0) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
+        );
+      }
+    }
+
+    providers[index] = updatedProvider;
+
+    // Save updated providers
+    await configStore.writeJson(PROVIDERS_FILE, { providers });
+    await configCache.refreshProvidersCache();
+    const updatedModels = await syncLinkedModelsApiType(updatedProvider);
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      message: 'Provider updated successfully',
+      provider: updatedProvider,
+      updatedModels
+    });
   });
 
   /**
@@ -763,78 +730,71 @@ export default function registerAdminProvidersRoutes(app) {
    *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/providers'), adminAuth, async (req, res) => {
-    try {
-      const newProvider = req.body;
+    const newProvider = req.body;
 
-      // Validate required fields
-      if (!newProvider.id) {
-        return sendBadRequest(res, 'Missing required field: id');
-      }
-
-      // Validate providerId for security
-      if (!validateIdForPath(newProvider.id, 'provider', res)) {
-        return;
-      }
-
-      if (isReservedProviderId(newProvider.id)) {
-        return sendBadRequest(
-          res,
-          `Provider ID '${newProvider.id}' is reserved for an API type. Choose another ID.`
-        );
-      }
-
-      if (!newProvider.category) {
-        newProvider.category = 'custom';
-      }
-      if (!PROVIDER_CATEGORIES.includes(newProvider.category)) {
-        return sendBadRequest(res, `Category must be one of: ${PROVIDER_CATEGORIES.join(', ')}`);
-      }
-      const validationError = normalizeProviderFields(newProvider);
-      if (validationError) {
-        return sendBadRequest(res, validationError);
-      }
-
-      // Load current providers. Nothing readable means nothing configured yet,
-      // which is the first-run case for a custom provider.
-      const storedProviders = await configStore.readJson(PROVIDERS_FILE);
-      const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
-
-      // Check if provider with this ID already exists
-      if (providers.find(p => p.id === newProvider.id)) {
-        return sendBadRequest(res, `Provider with id '${newProvider.id}' already exists`);
-      }
-
-      // Handle API key encryption
-      if (newProvider.apiKey && newProvider.apiKey !== '••••••••') {
-        try {
-          newProvider.apiKey = tokenStorageService.encryptString(newProvider.apiKey);
-        } catch (error) {
-          return sendInternalError(res, error, 'encrypt API key');
-        }
-      } else {
-        delete newProvider.apiKey;
-      }
-
-      // Remove client-side helper fields
-      delete newProvider.apiKeySet;
-      delete newProvider.apiKeyMasked;
-
-      // Set defaults
-      if (newProvider.enabled === undefined) {
-        newProvider.enabled = true;
-      }
-
-      // Add new provider
-      providers.push(newProvider);
-
-      // Save updated providers
-      await configStore.writeJson(PROVIDERS_FILE, { providers });
-      await configCache.refreshProvidersCache();
-
-      res.status(201).json({ message: 'Provider created successfully', provider: newProvider });
-    } catch (error) {
-      return sendInternalError(res, error, 'create provider');
+    // Validate required fields
+    if (!newProvider.id) {
+      throw new ServiceError('BAD_REQUEST', 'Missing required field: id');
     }
+
+    // Validate providerId for security
+    assertValidId(newProvider.id, 'provider');
+
+    if (isReservedProviderId(newProvider.id)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Provider ID '${newProvider.id}' is reserved for an API type. Choose another ID.`
+      );
+    }
+
+    if (!newProvider.category) {
+      newProvider.category = 'custom';
+    }
+    if (!PROVIDER_CATEGORIES.includes(newProvider.category)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Category must be one of: ${PROVIDER_CATEGORIES.join(', ')}`
+      );
+    }
+    const validationError = normalizeProviderFields(newProvider);
+    if (validationError) {
+      throw new ServiceError('BAD_REQUEST', validationError);
+    }
+
+    // Load current providers. Nothing readable means nothing configured yet,
+    // which is the first-run case for a custom provider.
+    const storedProviders = await configStore.readJson(PROVIDERS_FILE);
+    const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
+
+    // Check if provider with this ID already exists
+    if (providers.find(p => p.id === newProvider.id)) {
+      throw new ServiceError('BAD_REQUEST', `Provider with id '${newProvider.id}' already exists`);
+    }
+
+    // Handle API key encryption
+    if (newProvider.apiKey && newProvider.apiKey !== '••••••••') {
+      newProvider.apiKey = tokenStorageService.encryptString(newProvider.apiKey);
+    } else {
+      delete newProvider.apiKey;
+    }
+
+    // Remove client-side helper fields
+    delete newProvider.apiKeySet;
+    delete newProvider.apiKeyMasked;
+
+    // Set defaults
+    if (newProvider.enabled === undefined) {
+      newProvider.enabled = true;
+    }
+
+    // Add new provider
+    providers.push(newProvider);
+
+    // Save updated providers
+    await configStore.writeJson(PROVIDERS_FILE, { providers });
+    await configCache.refreshProvidersCache();
+
+    res.status(201).json({ message: 'Provider created successfully', provider: newProvider }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
   /**
@@ -867,55 +827,48 @@ export default function registerAdminProvidersRoutes(app) {
    *         description: Internal server error
    */
   app.delete(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
-    try {
-      const { providerId } = req.params;
+    const { providerId } = req.params;
 
-      // Validate providerId for security
-      if (!validateIdForPath(providerId, 'provider', res)) {
-        return;
-      }
+    // Validate providerId for security
+    assertValidId(providerId, 'provider');
 
-      // Prevent deletion of built-in LLM providers
-      if (BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
-        return sendBadRequest(
-          res,
-          `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
-        );
-      }
-
-      // A provider still holding the key of some models cannot go: they would
-      // silently fall back to another key, or to none.
-      const { data: models = [] } = configCache.getModels(true);
-      const linkedModels = getLinkedModels(providerId, models).map(m => m.id);
-      if (linkedModels.length > 0) {
-        return sendErrorResponse(
-          res,
-          409,
-          `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
-          { code: 'PROVIDER_IN_USE', details: { linkedModels } }
-        );
-      }
-
-      // Load current providers
-      const storedProviders = await configStore.readJson(PROVIDERS_FILE);
-      const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
-
-      // Find provider index
-      const index = providers.findIndex(p => p.id === providerId);
-      if (index === -1) {
-        return sendNotFound(res, 'Provider');
-      }
-
-      // Remove provider
-      providers.splice(index, 1);
-
-      // Save updated providers
-      await configStore.writeJson(PROVIDERS_FILE, { providers });
-      await configCache.refreshProvidersCache();
-
-      res.json({ message: 'Provider deleted successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'delete provider');
+    // Prevent deletion of built-in LLM providers
+    if (BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
+      );
     }
+
+    // A provider still holding the key of some models cannot go: they would
+    // silently fall back to another key, or to none.
+    const { data: models = [] } = configCache.getModels(true);
+    const linkedModels = getLinkedModels(providerId, models).map(m => m.id);
+    if (linkedModels.length > 0) {
+      throw new ServiceError(
+        'PROVIDER_IN_USE',
+        `Provider '${providerId}' is used by ${linkedModels.length} model(s). Delete them or move them to another provider first.`,
+        { details: { linkedModels } }
+      );
+    }
+
+    // Load current providers
+    const storedProviders = await configStore.readJson(PROVIDERS_FILE);
+    const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
+
+    // Find provider index
+    const index = providers.findIndex(p => p.id === providerId);
+    if (index === -1) {
+      throw new ServiceError('NOT_FOUND', 'Provider not found');
+    }
+
+    // Remove provider
+    providers.splice(index, 1);
+
+    // Save updated providers
+    await configStore.writeJson(PROVIDERS_FILE, { providers });
+    await configCache.refreshProvidersCache();
+
+    res.json({ message: 'Provider deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 }
