@@ -282,10 +282,14 @@ async function updateClientsFileOutsideContents(fullPath, apply) {
  */
 export function generateClientId(name) {
   // Sanitize name: lowercase, replace spaces and special chars with underscores
-  const sanitizedName = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores // lgtm[js/polynomial-redos]
+  const collapsed = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  // Remove leading/trailing underscores. Trimmed with indices rather than
+  // `/^_+|_+$/`, which backtracks quadratically on a long run of underscores.
+  let start = 0;
+  let end = collapsed.length;
+  while (start < end && collapsed[start] === '_') start++;
+  while (end > start && collapsed[end - 1] === '_') end--;
+  const sanitizedName = collapsed.slice(start, end);
 
   // Generate short UUID (first 8 characters)
   const shortUuid = uuidv4().split('-')[0];
