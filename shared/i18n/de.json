@@ -9180,6 +9180,14 @@
     "INVALID_OPTION": "Die gewählte Option gehört nicht zu den angebotenen Optionen.",
     "NOT_PENDING": "Die Interaktion wartet nicht mehr auf eine Antwort.",
     "REASON_REQUIRED": "Zum Ablehnen ist eine Begründung erforderlich.",
-    "SKIP_NOT_ALLOWED": "Diese Frage darf nicht übersprungen werden."
+    "SKIP_NOT_ALLOWED": "Diese Frage darf nicht übersprungen werden.",
+    "ARCHIVE_REJECTED": "Das Update-Archiv wurde abgelehnt.",
+    "DISK_SPACE": "Für das Update ist nicht genug freier Speicherplatz vorhanden.",
+    "UPDATE_PENDING": "Ein Update ist bereits für den nächsten Neustart vorgemerkt. Starten Sie zuerst den Server neu.",
+    "CONFIRM_DOWNGRADE": "Die bereitgestellte Version ist nicht neuer als die laufende. Bestätigen Sie das Downgrade, um fortzufahren.",
+    "UNSIGNED_NOT_ALLOWED": "Unsignierte Archive sind auf diesem Server nicht erlaubt.",
+    "CONFIRM_UNSIGNED": "Das Archiv ist nicht von einem vertrauenswürdigen Schlüssel signiert. Geben Sie die Version ein, um es trotzdem zu installieren.",
+    "STAGED_CHANGED": "Das bereitgestellte Update hat sich geändert oder ist bereits vorgemerkt. Prüfen Sie es erneut, bevor Sie installieren.",
+    "CONFIG_SNAPSHOT_FAILED": "Der Konfigurations-Snapshot konnte nicht geschrieben werden. Schaffen Sie Speicherplatz oder wenden Sie das Update ohne Snapshot an."
   }
 }

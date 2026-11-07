@@ -9207,6 +9207,14 @@
     "INVALID_OPTION": "The chosen option is not one of the offered options.",
     "NOT_PENDING": "The interaction is no longer waiting for an answer.",
     "REASON_REQUIRED": "A reason is required to reject.",
-    "SKIP_NOT_ALLOWED": "This question cannot be skipped."
+    "SKIP_NOT_ALLOWED": "This question cannot be skipped.",
+    "ARCHIVE_REJECTED": "The update archive was rejected.",
+    "DISK_SPACE": "There is not enough free disk space for the update.",
+    "UPDATE_PENDING": "An update is already scheduled to be applied on restart. Restart the server first.",
+    "CONFIRM_DOWNGRADE": "The staged version is not newer than the running one. Confirm the downgrade to continue.",
+    "UNSIGNED_NOT_ALLOWED": "Unsigned archives are not allowed on this server.",
+    "CONFIRM_UNSIGNED": "The archive is not signed by a trusted key. Type its version to install it anyway.",
+    "STAGED_CHANGED": "The staged update changed or is already scheduled. Review it again before installing.",
+    "CONFIG_SNAPSHOT_FAILED": "The configuration snapshot could not be written. Free disk space, or apply without a snapshot."
   }
 }

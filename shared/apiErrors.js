@@ -272,6 +272,18 @@ export const INTERACTION_ERROR_CODES = Object.freeze({
   SKIP_NOT_ALLOWED: 400
 });
 
+/** In-place updates (`server/routes/admin/update.js`, `updateService.js`). */
+export const UPDATE_ERROR_CODES = Object.freeze({
+  ARCHIVE_REJECTED: 422,
+  DISK_SPACE: 507,
+  UPDATE_PENDING: 409,
+  CONFIRM_DOWNGRADE: 409,
+  UNSIGNED_NOT_ALLOWED: 403,
+  CONFIRM_UNSIGNED: 409,
+  STAGED_CHANGED: 409,
+  CONFIG_SNAPSHOT_FAILED: 507
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -286,7 +298,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...BACKUP_ERROR_CODES,
   ...MARKETPLACE_ERROR_CODES,
   ...MODEL_ERROR_CODES,
-  ...INTERACTION_ERROR_CODES
+  ...INTERACTION_ERROR_CODES,
+  ...UPDATE_ERROR_CODES
 });
 
 /**
