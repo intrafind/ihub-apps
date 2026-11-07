@@ -256,7 +256,7 @@ test('when the gateway cannot be asked, shows why and lets the admin try again',
     Object.assign(new Error('rejected'), {
       response: {
         data: {
-          error: 'The endpoint rejected the API key',
+          detail: 'The endpoint rejected the API key',
           code: 'UPSTREAM_ERROR',
           details: { reason: 'authenticationFailed', hint: 'HTTP 401. Check the API key.' }
         }

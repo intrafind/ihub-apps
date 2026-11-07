@@ -625,7 +625,7 @@ describe('temporary chats and guests', () => {
     });
     assert.equal(refused.statusCode, 409);
     assert.equal(refused.body.code, 'PROJECT_TEST_CHAT_NOT_KEEPABLE');
-    assert.equal(typeof refused.body.error, 'string');
+    assert.equal(typeof refused.body.detail, 'string');
 
     const stored = await getChatRepository().getChat(chatId);
     assert.equal(stored.temporary, true, 'still temporary');
@@ -654,7 +654,7 @@ describe('temporary chats and guests', () => {
       user: ADA
     });
     assert.equal(res.statusCode, 400);
-    assert.match(res.body.error, /cannot be moved/);
+    assert.match(res.body.detail, /cannot be moved/);
     assert.equal((await getChatRepository().getChat('chat-tmp-project')).projectId, undefined);
     const clearing = await drive(patchHandlers, {
       params: { chatId: 'chat-tmp-project' },
@@ -725,7 +725,7 @@ describe('chat routes answer errors in the shared shape', () => {
     const res = await drive(getHandlers, { params: { chatId: '../etc' }, user: ADA });
     assert.equal(res.statusCode, 400);
     assert.equal(res.body.code, 'BAD_REQUEST');
-    assert.match(res.body.error, /Invalid chat ID/);
+    assert.match(res.body.detail, /Invalid chat ID/);
   });
 
   it('answers a paging cursor that is not one with the storage code and status', async () => {
@@ -757,6 +757,6 @@ describe('chat routes answer errors in the shared shape', () => {
     const res = await drive(getHandlers, { params: { chatId: 'chat-nobody' }, user: ADA });
     assert.equal(res.statusCode, 404);
     assert.equal(res.body.code, 'NOT_FOUND');
-    assert.equal(res.body.error, 'Chat not found');
+    assert.equal(res.body.detail, 'Chat not found');
   });
 });
