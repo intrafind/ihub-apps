@@ -795,6 +795,16 @@ used to be an HTML or plain text page.
 - The JSON schema endpoints (`/api/admin/schemas*`) answer in this shape: `BAD_REQUEST` for an unknown schema
   type (the allowed types are in `detail`) and `NOT_FOUND` for a type without a schema. An unexpected failure
   answers 500 with a fixed text; the cause is in the server log.
+- The cache administration endpoints (`/api/admin/cache*`, `/api/admin/client/_refresh`), the value encryption endpoint (`/api/admin/encrypt-value`), the feature flag endpoint (`/api/admin/features`),
+  documentation endpoints (`/api/admin/docs*`), version endpoints (`/api/admin/version*`), logging endpoints
+  (`/api/admin/logging*`), system endpoints (`/api/admin/system*`) and rate limit endpoints
+  (`/api/admin/rate-limits`) answer in this shape: `BAD_REQUEST` for an invalid value, `NOT_FOUND` for an
+  unknown documentation page and, for an invalid rate limit body, `VALIDATION_FAILED` with the failed fields
+  in `errors` (before: `BAD_REQUEST` with the schema issues in `details`). An unexpected failure answers 500
+  with a fixed text; the cause is in the server log.
+- The usage guide endpoint (`/api/admin/apps/_usage-guide`) answers in this shape: `BAD_REQUEST` for a missing
+  app or an invalid language, `SERVICE_UNAVAILABLE` (503) when no chat model is available and, for a failing
+  model call, the LLM code with its canonical status.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

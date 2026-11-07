@@ -3,14 +3,8 @@
 
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { generateUsageGuide } from '../../services/appUsageGuide.js';
-import { isLLMError } from '../../services/loop/LLMClient.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendInternalError
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { LANGUAGE_CODE_PATTERN } from '../../../shared/validationPatterns.js';
 
 /**
@@ -62,24 +56,23 @@ export default function registerAdminAppUsageGuideRoute(app) {
    *         description: No chat model available
    */
   app.post(buildServerPath('/api/admin/apps/_usage-guide'), contentAdminAuth, async (req, res) => {
+    const { app: appConfig, language = 'en' } = req.body || {};
+    if (!appConfig || typeof appConfig !== 'object' || Array.isArray(appConfig)) {
+      throw new ServiceError('BAD_REQUEST', 'app must be an app configuration object');
+    }
+    if (typeof language !== 'string' || !LANGUAGE_CODE_PATTERN.test(language)) {
+      throw new ServiceError('BAD_REQUEST', 'Invalid language code');
+    }
     try {
-      const { app: appConfig, language = 'en' } = req.body || {};
-      if (!appConfig || typeof appConfig !== 'object' || Array.isArray(appConfig)) {
-        return sendBadRequest(res, 'app must be an app configuration object');
-      }
-      if (typeof language !== 'string' || !LANGUAGE_CODE_PATTERN.test(language)) {
-        return sendBadRequest(res, 'Invalid language code');
-      }
       const content = await generateUsageGuide({ app: appConfig, language, user: req.user });
       return res.json({ content });
     } catch (error) {
-      if (isLLMError(error)) {
-        return sendLLMError(res, error, { context: 'write usage guide' });
-      }
+      // No chat model available: the service reports it as a 503. Anything else, including
+      // an LLM failure, reaches the global error handler.
       if (error.status === 503) {
-        return sendErrorResponse(res, 503, error.message);
+        throw new ServiceError('SERVICE_UNAVAILABLE', error.message, { cause: error });
       }
-      return sendInternalError(res, error, 'write usage guide');
+      throw error;
     }
   });
 }

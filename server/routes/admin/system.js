@@ -4,7 +4,6 @@
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
 import {
   collectSystemResources,
   getLogFilePath,
@@ -24,14 +23,10 @@ export default function registerAdminSystemRoutes(app) {
    * `cluster.missingWorkers` rather than silently omitted.
    */
   app.get(buildServerPath('/api/admin/system/resources'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      const snapshot = await collectSystemResources({ logFile: getLogFilePath(platform) });
-      res.set('Cache-Control', 'no-store');
-      res.json(snapshot);
-    } catch (error) {
-      return sendInternalError(res, error, 'collect system resources');
-    }
+    const platform = configCache.getPlatform() || {};
+    const snapshot = await collectSystemResources({ logFile: getLogFilePath(platform) });
+    res.set('Cache-Control', 'no-store');
+    res.json(snapshot);
   });
 
   /**
@@ -42,15 +37,11 @@ export default function registerAdminSystemRoutes(app) {
    * read.
    */
   app.get(buildServerPath('/api/admin/system/storage'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      const storage = await getStorageSnapshot(
-        getMonitoredPaths({ logFile: getLogFilePath(platform) })
-      );
-      res.set('Cache-Control', 'no-store');
-      res.json({ storage: summarizeStorage(storage) });
-    } catch (error) {
-      return sendInternalError(res, error, 'check disk space');
-    }
+    const platform = configCache.getPlatform() || {};
+    const storage = await getStorageSnapshot(
+      getMonitoredPaths({ logFile: getLogFilePath(platform) })
+    );
+    res.set('Cache-Control', 'no-store');
+    res.json({ storage: summarizeStorage(storage) });
   });
 }

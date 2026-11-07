@@ -10,7 +10,6 @@ import {
   isVersionCheckDisabled,
   startBackgroundVersionCheck
 } from '../../services/versionCheckService.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
 
 export default function registerAdminVersionRoutes(app) {
   /**
@@ -26,18 +25,14 @@ export default function registerAdminVersionRoutes(app) {
    * All components (app, client, server) share the same version number.
    */
   app.get(buildServerPath('/api/admin/version'), adminAuth, async (req, res) => {
-    try {
-      const version = getAppVersion();
+    const version = getAppVersion();
 
-      res.json({
-        app: version,
-        client: version,
-        server: version,
-        node: process.version
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'get version information');
-    }
+    res.json({
+      app: version,
+      client: version,
+      server: version,
+      node: process.version
+    });
   });
 
   /**
@@ -61,25 +56,21 @@ export default function registerAdminVersionRoutes(app) {
    * - error: string (if the last check failed)
    */
   app.get(buildServerPath('/api/admin/version/check-update'), adminAuth, (req, res) => {
-    try {
-      const currentVersion = getAppVersion();
+    const currentVersion = getAppVersion();
 
-      if (isVersionCheckDisabled()) {
-        return res.json({
-          updateAvailable: false,
-          currentVersion,
-          versionCheckDisabled: true,
-          checking: false,
-          lastCheckedAt: null
-        });
-      }
-
-      const entry = getVersionCheckEntry();
-      const checking = startBackgroundVersionCheck();
-
-      res.json(buildUpdateInfo(entry, currentVersion, { checking }));
-    } catch (error) {
-      return sendInternalError(res, error, 'check for updates');
+    if (isVersionCheckDisabled()) {
+      return res.json({
+        updateAvailable: false,
+        currentVersion,
+        versionCheckDisabled: true,
+        checking: false,
+        lastCheckedAt: null
+      });
     }
+
+    const entry = getVersionCheckEntry();
+    const checking = startBackgroundVersionCheck();
+
+    res.json(buildUpdateInfo(entry, currentVersion, { checking }));
   });
 }
