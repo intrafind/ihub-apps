@@ -10,12 +10,8 @@ import { requireFeature } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
-import {
-  sendBadRequest,
-  sendInternalError,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
@@ -44,9 +40,7 @@ export function requireAppFeedbackEnabled(req, res, next) {
   const { data: apps = [] } = configCache.getApps(true) || {};
   const appConfig = findByIdCaseInsensitive(apps, appId);
   if (appConfig && appConfig.features?.feedback === false) {
-    return sendErrorResponse(res, 403, `Feedback is disabled for app '${appId}'`, {
-      code: 'FEATURE_DISABLED'
-    });
+    return next(new ServiceError('FEATURE_DISABLED', `Feedback is disabled for app '${appId}'`));
   }
   return next();
 }
@@ -153,174 +147,171 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
     validate(feedbackSchema),
     requireAppFeedbackEnabled,
     async (req, res) => {
-      try {
-        const {
-          messageId,
-          appId,
-          chatId,
-          messageContent,
-          rating,
-          feedback,
-          modelId,
-          conversationId,
-          ifinderMessageId,
-          runId
-        } = req.body;
-        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
-        if (!messageId || !rating || !appId || !chatId) {
-          const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
-          return sendBadRequest(res, errorMessage);
-        }
+      const {
+        messageId,
+        appId,
+        chatId,
+        messageContent,
+        rating,
+        feedback,
+        modelId,
+        conversationId,
+        ifinderMessageId,
+        runId
+      } = req.body;
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+      if (!messageId || !rating || !appId || !chatId) {
+        const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
+        throw new ServiceError('BAD_REQUEST', errorMessage);
+      }
 
-        // Feedback is a human event on the run that produced the message — only
-        // on a run the caller may access (same check as /api/runs/:runId/*) and
-        // only when that run belongs to this chat. Anything else is ignored;
-        // the feedback itself is still stored below.
-        if (runId && isValidRunId(runId)) {
-          try {
-            const access = await authorizeRun(runId, req.user);
-            const runChatId = access.meta?.refs?.chatId;
-            if (access.ok && access.meta?.kind === 'chat' && runChatId === chatId) {
-              // The run may live on another worker: continue its persisted sequence.
-              await runLog.appendRecovered(
-                runId,
-                RUN_LOG_EVENTS.HUMAN_EVENT,
-                {
-                  kind: 'feedback',
-                  messageId,
-                  rating,
-                  ...(feedback ? { message: String(feedback) } : {}),
-                  by: await resolveActorId(req.user, {
-                    mode: access.meta?.identityMode || runLog.identityMode()
-                  }),
-                  at: new Date().toISOString()
-                },
-                { kind: access.meta?.kind || 'chat' }
-              );
-            } else {
-              logger.debug('Feedback human/event skipped: run not accessible for this chat', {
-                component: 'feedbackRoutes',
-                runId,
-                chatId,
-                status: access.status || null
-              });
-            }
-          } catch (ledgerErr) {
-            logger.debug('Feedback human/event not recorded', {
+      // Feedback is a human event on the run that produced the message — only
+      // on a run the caller may access (same check as /api/runs/:runId/*) and
+      // only when that run belongs to this chat. Anything else is ignored;
+      // the feedback itself is still stored below.
+      if (runId && isValidRunId(runId)) {
+        try {
+          const access = await authorizeRun(runId, req.user);
+          const runChatId = access.meta?.refs?.chatId;
+          if (access.ok && access.meta?.kind === 'chat' && runChatId === chatId) {
+            // The run may live on another worker: continue its persisted sequence.
+            await runLog.appendRecovered(
+              runId,
+              RUN_LOG_EVENTS.HUMAN_EVENT,
+              {
+                kind: 'feedback',
+                messageId,
+                rating,
+                ...(feedback ? { message: String(feedback) } : {}),
+                by: await resolveActorId(req.user, {
+                  mode: access.meta?.identityMode || runLog.identityMode()
+                }),
+                at: new Date().toISOString()
+              },
+              { kind: access.meta?.kind || 'chat' }
+            );
+          } else {
+            logger.debug('Feedback human/event skipped: run not accessible for this chat', {
               component: 'feedbackRoutes',
               runId,
-              error: ledgerErr.message
+              chatId,
+              status: access.status || null
             });
           }
+        } catch (ledgerErr) {
+          logger.debug('Feedback human/event not recorded', {
+            component: 'feedbackRoutes',
+            runId,
+            error: ledgerErr.message
+          });
         }
+      }
 
-        // Check if this is an iAssistant message that should be routed to iFinder
-        let ifinderFeedbackSent = false;
-        if (conversationId && ifinderMessageId) {
-          try {
-            // The durable read, not the cache-only `getState`: with WORKERS>1
-            // in non-sticky mode the conversation may have been created on
-            // another worker, and a per-model `baseUrl` override would then
-            // route this feedback to the wrong endpoint.
-            const state = await conversationStateManager.loadState(chatId, {
-              ownerId: req.user?.id ?? null
-            });
-            const serviceConfig = iAssistantService.getConfig();
-            const baseUrl = state?.baseUrl || serviceConfig?.baseUrl;
+      // Check if this is an iAssistant message that should be routed to iFinder
+      let ifinderFeedbackSent = false;
+      if (conversationId && ifinderMessageId) {
+        try {
+          // The durable read, not the cache-only `getState`: with WORKERS>1
+          // in non-sticky mode the conversation may have been created on
+          // another worker, and a per-model `baseUrl` override would then
+          // route this feedback to the wrong endpoint.
+          const state = await conversationStateManager.loadState(chatId, {
+            ownerId: req.user?.id ?? null
+          });
+          const serviceConfig = iAssistantService.getConfig();
+          const baseUrl = state?.baseUrl || serviceConfig?.baseUrl;
 
-            if (baseUrl && req.user && req.user.id !== 'anonymous') {
-              // Convert rating from 0.5-5 scale to -100 to +100 scale
-              // 0.5-2.5 = negative (-100 to -20)
-              // 2.5 = neutral (0)
-              // 2.5-5 = positive (20 to 100)
-              let ifinderRating;
-              if (rating < 2.5) {
-                // Map 0.5-2.5 to -100 to 0
-                ifinderRating = Math.round(((rating - 2.5) / 2) * 100);
-              } else if (rating === 2.5) {
-                ifinderRating = 0;
-              } else {
-                // Map 2.5-5 to 0 to 100
-                ifinderRating = Math.round(((rating - 2.5) / 2.5) * 100);
-              }
-
-              // Send feedback to iFinder API
-              await conversationApiService.sendFeedback(conversationId, ifinderMessageId, {
-                user: req.user,
-                baseUrl,
-                rating: ifinderRating,
-                comment: feedback || undefined
-              });
-
-              ifinderFeedbackSent = true;
-              logger.info('Feedback sent to iFinder API', {
-                component: 'feedbackRoutes',
-                conversationId,
-                messageId: ifinderMessageId,
-                rating: ifinderRating
-              });
+          if (baseUrl && req.user && req.user.id !== 'anonymous') {
+            // Convert rating from 0.5-5 scale to -100 to +100 scale
+            // 0.5-2.5 = negative (-100 to -20)
+            // 2.5 = neutral (0)
+            // 2.5-5 = positive (20 to 100)
+            let ifinderRating;
+            if (rating < 2.5) {
+              // Map 0.5-2.5 to -100 to 0
+              ifinderRating = Math.round(((rating - 2.5) / 2) * 100);
+            } else if (rating === 2.5) {
+              ifinderRating = 0;
+            } else {
+              // Map 2.5-5 to 0 to 100
+              ifinderRating = Math.round(((rating - 2.5) / 2.5) * 100);
             }
-          } catch (ifinderError) {
-            // Log error but continue with local storage
-            logger.error('Failed to send feedback to iFinder API', {
+
+            // Send feedback to iFinder API
+            await conversationApiService.sendFeedback(conversationId, ifinderMessageId, {
+              user: req.user,
+              baseUrl,
+              rating: ifinderRating,
+              comment: feedback || undefined
+            });
+
+            ifinderFeedbackSent = true;
+            logger.info('Feedback sent to iFinder API', {
               component: 'feedbackRoutes',
-              error: ifinderError,
               conversationId,
-              messageId: ifinderMessageId
+              messageId: ifinderMessageId,
+              rating: ifinderRating
             });
           }
+        } catch (ifinderError) {
+          // Log error but continue with local storage
+          logger.error('Failed to send feedback to iFinder API', {
+            component: 'feedbackRoutes',
+            error: ifinderError,
+            conversationId,
+            messageId: ifinderMessageId
+          });
         }
+      }
 
-        const userSessionId = req.headers['x-session-id'];
-        await logInteraction('feedback', {
+      const userSessionId = req.headers['x-session-id'];
+      await logInteraction('feedback', {
+        messageId,
+        appId,
+        modelId,
+        sessionId: chatId,
+        userSessionId,
+        user: req.user,
+        responseType: 'feedback',
+        feedback: {
           messageId,
-          appId,
-          modelId,
-          sessionId: chatId,
-          userSessionId,
-          user: req.user,
-          responseType: 'feedback',
-          feedback: {
-            messageId,
-            rating,
-            comment: feedback || '',
-            contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
-            ifinderFeedbackSent
-          }
-        });
-        storeFeedback({
-          messageId,
-          appId,
-          chatId,
-          modelId,
           rating,
           comment: feedback || '',
           contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
-          conversationId,
-          ifinderMessageId,
-          baseUrl:
-            (await conversationStateManager.loadState(chatId, { ownerId: req.user?.id ?? null }))
-              ?.baseUrl || iAssistantService.getConfig()?.baseUrl
-        });
-        await recordFeedbackUsage({
-          user: req.user,
-          appId,
-          modelId,
-          conversationId: chatId,
-          rating
-        });
-        logger.info('Feedback received', {
-          component: 'feedbackRoutes',
-          messageId,
-          chatId,
-          rating,
           ifinderFeedbackSent
-        });
-        return res.status(200).json({ success: true });
-      } catch (error) {
-        return sendInternalError(res, error, 'processing feedback');
-      }
+        }
+      });
+      storeFeedback({
+        messageId,
+        appId,
+        chatId,
+        modelId,
+        rating,
+        comment: feedback || '',
+        contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
+        conversationId,
+        ifinderMessageId,
+        baseUrl:
+          (await conversationStateManager.loadState(chatId, { ownerId: req.user?.id ?? null }))
+            ?.baseUrl || iAssistantService.getConfig()?.baseUrl
+      });
+      await recordFeedbackUsage({
+        user: req.user,
+        appId,
+        modelId,
+        conversationId: chatId,
+        rating
+      });
+      logger.info('Feedback received', {
+        component: 'feedbackRoutes',
+        messageId,
+        chatId,
+        rating,
+        ifinderFeedbackSent
+      });
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      return res.status(200).json({ success: true });
     }
   );
 }
