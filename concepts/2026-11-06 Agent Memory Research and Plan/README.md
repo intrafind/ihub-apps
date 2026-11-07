@@ -4,6 +4,7 @@
 **Status:** Proposal; the seven open questions and three follow-up questions in §8 were decided on 2026-11-06
 **Issues:** #2522, #1039, #1465, #3192 (open); #2750, #2831, #2964, #1464 (closed, prior work)
 **Research notes:** [`research/`](research/) — theory, open-source frameworks, user memory in chat apps, audit of today's iHub memory, integration points.
+**Companion documents (2026-11-07):** [`product-plan.md`](product-plan.md) (personas, user stories P0–P4 with acceptance criteria, release packaging, metrics, DoD), [`architecture.md`](architecture.md) (implementation-grade design; its §0 corrections C1–C12 and its ADRs override this plan where they conflict), [`ux-design.md`](ux-design.md) (screens, components, i18n keys, interaction and accessibility rules), [`engineering-plan.md`](engineering-plan.md) and [`tickets.json`](tickets.json) (team playbook and the GitHub issue breakdown).
 
 ## Grow iHub memory from the service it already has
 
