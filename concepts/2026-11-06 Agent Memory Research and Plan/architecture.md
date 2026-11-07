@@ -570,11 +570,22 @@ sequenceDiagram
     EX-->>EX: log info, record skipped, stop (no reschedule)
   else
     EX->>R: readPlain(scope) → valid entries, appliedTurns
-    EX->>EX: build messages: system (extraction prompt), user (last N turns ≤ maxInputTokens, current entries, rolling summary if any)
-    EX->>LLM: complete({model, messages, options:{responseFormat:'json', responseSchema}, timeoutMs: 60000, telemetry:{kind:'utility', purpose:'user-memory', user, parentRunId: runId, surface:'memory', redaction:{messages:'hash-only'}}})
-    alt provider error
+    alt read fails before the call (KeyAccessDenied, MEMORY_UNAVAILABLE)
+      EX->>BU: release() — no request reached the provider
+      EX-->>EX: failed, no reschedule
+    else
+    EX->>EX: build messages: system (extraction prompt), user (next batch of stored turns ≤ maxInputTokens, current entries, rolling summary if any)
+    EX->>LLM: complete({model, messages, retries: 0, options:{responseFormat:'json', responseSchema}, timeoutMs: 60000, telemetry:{kind:'utility', purpose:'user-memory', user, parentRunId: runId, surface:'memory', redaction:{messages:'hash-only'}}})
+    alt connection-level error (refused, DNS) or local quota pre-check
       LLM-->>EX: throws
-      EX->>BU: release()
+      EX->>BU: release() — proven not to have reached the provider (§2.2)
+    else timeout, 5xx, unclassified
+      LLM-->>EX: throws
+      EX-->>EX: slot kept (may have been billed); failed, no reschedule
+    else malformed output
+      LLM-->>EX: {content}
+      EX->>BU: reserveExtractionSlot(userId, {cap}) for the one jsonInstruction retry
+      Note over EX,BU: no slot → failed, no write, no reschedule; otherwise the retry goes through the same branches
     else
       LLM-->>EX: {content, usage}
       EX->>EX: extractJson → createOutputValidator(schema) → filter confidence ≥ 0.7, sensitive policy, never-store patterns, dedupe
@@ -585,6 +596,7 @@ sequenceDiagram
       AC->>AC: ChatRepository.updateMessage(chatId, messageId, msg => activity.memory = summary) under chat lock
       AC->>AC: clusterBus.publish('user-memory:changed', {userId, chatId, runId})
     end
+    end
   end
   C->>C: GET /api/memories/_activity?chatId&since (while the chat view is open, at the notification cadence)
   C->>C: chip on that message, "Review 2 suggestions" when pending > 0
@@ -593,7 +605,7 @@ sequenceDiagram
 Details that matter:
 
 - The debounce map lives per worker; `appliedTurns` is the cross-worker guard (§8.3).
-- `maxInputTokens` truncates from the beginning (oldest turns first) using `estimateTokens` (`shared/tokenEstimator.js`), keeping the last user/assistant pair whole.
+- `maxInputTokens` shortens the batch from the end (newest turns first, at a turn boundary) using `estimateTokens` (`shared/tokenEstimator.js`), so the oldest unprocessed turns are always extracted first and the watermark only advances past turns that were in the prompt (§2.1).
 - Tool results and attachments in the window are replaced by `[tool result omitted]` placeholders; only user and assistant text is extracted from (MINJA mitigation, §8.8).
 - `reviewMode`: the effective mode is `max(platform.memory.extraction.reviewMode, user.reviewMode)` where `required > on > off`; with review on, every `add` and `update` is parked in `pending[]`, `invalidate` is never parked (it only hides a contradicted entry and can be undone from Settings).
 - Pending debounce timers of a user are cancelled by `cancelExtractionsFor(userId)` on pause, clear, disable and on the deletion step; a timer that fires anyway is harmless because the apply step re-reads under the lock.
