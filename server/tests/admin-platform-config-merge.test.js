@@ -384,14 +384,13 @@ describe('POST /api/admin/configs/platform answers refusals in the shared shape'
     await fs.rm(state.rootDir, { recursive: true, force: true });
   });
 
-  test('a body that is not an object is BAD_REQUEST', async () => {
-    const response = await request(createTestApp())
-      .post('/api/admin/configs/platform')
-      .set('Content-Type', 'application/json')
-      .send('"text"');
+  test("a request without a body is BAD_REQUEST with the route's own message", async () => {
+    // No body: the JSON parser leaves `req.body` unset and the route refuses it.
+    const response = await request(createTestApp()).post('/api/admin/configs/platform');
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('BAD_REQUEST');
+    expect(response.body.detail).toBe('Invalid configuration data');
   });
 
   test('a default language that is not a language code is BAD_REQUEST and stores nothing', async () => {
