@@ -1160,6 +1160,13 @@ function ModelFormEditor({
                   )}
                 </div>
 
+                <p className="col-span-6 -mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.models.timeoutsHelp',
+                    'Leave empty to use the provider’s value, else the installation’s (Admin → Providers). 0 turns a ceiling off.'
+                  )}
+                </p>
+
                 <div className="col-span-6">
                   <label
                     htmlFor="supportsTools"

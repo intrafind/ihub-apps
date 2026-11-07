@@ -15,6 +15,7 @@ import {
 } from '../../../../../shared/llmProviders.js';
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
+import ProviderTimeoutFields from '../components/ProviderTimeoutFields';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -45,6 +46,8 @@ function AdminProviderEditPage() {
   });
   const [models, setModels] = useState([]);
   const [syncOpen, setSyncOpen] = useState(false);
+  // What a provider without ceilings of its own inherits (the installation's).
+  const [inheritedTimeouts, setInheritedTimeouts] = useState({});
 
   // Connectivity test state — kept out of formData so running a test never
   // looks like an unsaved edit.
@@ -67,12 +70,14 @@ function AdminProviderEditPage() {
   const loadProvider = useCallback(async () => {
     try {
       setLoading(true);
-      const [response, modelsResponse] = await Promise.all([
+      const [response, modelsResponse, timeoutsResponse] = await Promise.all([
         makeAdminApiCall(`/admin/providers/${providerId}`),
-        makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
+        makeAdminApiCall('/admin/models').catch(() => ({ data: [] })),
+        makeAdminApiCall('/admin/llm-timeouts').catch(() => ({ data: {} }))
       ]);
       const provider = response.data;
       setModels(Array.isArray(modelsResponse.data) ? modelsResponse.data : []);
+      setInheritedTimeouts(timeoutsResponse.data?.effective || {});
 
       // Name and description are plain text. getLocalizedContent also reads an
       // entry still carrying per-language objects; saving stores the string.
@@ -232,6 +237,14 @@ function AdminProviderEditPage() {
             isLlm={isLlmProvider}
             apiTypeLocked={isBuiltIn}
           />
+
+          {isLlmProvider && (
+            <ProviderTimeoutFields
+              data={formData}
+              onChange={handleChange}
+              inherited={inheritedTimeouts}
+            />
+          )}
 
           {/* API Key */}
           <div className="mb-6">

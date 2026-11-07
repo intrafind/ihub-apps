@@ -875,6 +875,20 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts for all providers",
+        "description": "Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.",
+        "connect": "Connect timeout (ms)",
+        "connectHint": "Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.",
+        "streamIdle": "Stream idle timeout (ms)",
+        "streamIdleHint": "Longest silence between two chunks of a stream that is already running. Raise it for thinking models. 0 turns it off.",
+        "save": "Save timeouts",
+        "reset": "Reset",
+        "saved": "Timeouts saved. They apply to the next request.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Apply to all models of this provider. Leave a field empty to use the installation value; a model can still set its own. 0 turns a ceiling off.",
+        "inherited": "Inherited: {{value}} ms (installation)"
+      },
       "title": "Provider Credentials",
       "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
@@ -1030,6 +1044,7 @@
       }
     },
     "models": {
+      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
       "loadError": "Error loading models",
