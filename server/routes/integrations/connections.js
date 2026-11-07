@@ -43,7 +43,6 @@ const DELEGATED_AUTH_MODES = new Set([
  * mean anything.
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
  * @returns {Object} The acting user; throws a ServiceError when the caller may not act
  */
 function requireConnectionOwner(req) {
