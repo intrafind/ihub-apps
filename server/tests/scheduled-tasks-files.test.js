@@ -166,7 +166,7 @@ describe('task file routes', () => {
       assert.equal((await attach(user, task.id, { name: 'one.txt', text: 'one' })).statusCode, 201);
       const second = await attach(user, task.id, { name: 'two.txt', text: 'two' });
       assert.equal(second.statusCode, 413);
-      assert.equal(second.body.details?.code ?? second.body.code, 'QUOTA_CHAT_FILES');
+      assert.equal(second.body.code, 'QUOTA_CHAT_FILES');
     } finally {
       harness.setPlatform({});
     }

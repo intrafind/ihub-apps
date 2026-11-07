@@ -349,6 +349,7 @@ describe('resource access middleware', () => {
     const req = { user, params };
     const res = {
       statusCode: null,
+      setHeader() {},
       status(code) {
         this.statusCode = code;
         return this;

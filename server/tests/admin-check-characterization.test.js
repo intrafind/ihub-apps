@@ -110,6 +110,7 @@ const EXPECTED = {
 function runMiddleware(mw, user) {
   const res = {
     statusCode: 200,
+    setHeader: jest.fn(),
     status: jest.fn(c => ((res.statusCode = c), res)),
     json: jest.fn()
   };

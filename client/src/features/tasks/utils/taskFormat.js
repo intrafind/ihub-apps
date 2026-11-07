@@ -320,7 +320,7 @@ export function runChatLink(appId, chatId) {
 /** The API error's message, or a fallback. */
 export function errorMessage(error, fallback) {
   return (
-    responseData(error)?.error ||
+    responseData(error)?.detail ||
     error?.userFriendlyMessage ||
     error?.message ||
     fallback ||

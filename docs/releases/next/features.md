@@ -559,27 +559,39 @@ See [Admin UI → Documentation](../../admin-ui.md#documentation).
 
 ## One Error Response Shape for the API
 
-Errors that the server's routes do not answer themselves — a request body that is too large, a body
-that is not valid JSON, an unexpected failure — are now answered as JSON instead of an HTML or plain
-text page. Every such response has the same body:
+Every error the API answers is now `application/problem+json`, the standard format of RFC 9457, with
+the same members everywhere. That includes the errors the server's routes do not answer themselves
+— a request body that is too large, a body that is not valid JSON, an unexpected failure — which
+used to be an HTML or plain text page.
 
 ```json
-{ "error": "…", "code": "PAYLOAD_TOO_LARGE", "details": { "type": "entity.too.large" } }
+{
+  "type": "urn:ihub:problem:PAYLOAD_TOO_LARGE",
+  "title": "The request is too large.",
+  "status": 413,
+  "detail": "request entity too large",
+  "code": "PAYLOAD_TOO_LARGE",
+  "details": { "type": "entity.too.large" }
+}
 ```
 
 - `code` is a stable, machine-readable code; the web app shows its own translated message for it
-  (English and German).
-- `error` is an English text for scripts and other API callers. For a server error (5xx) it carries
-  the real message only if it is safe to show (no file paths, hosts, URLs, credentials, SQL or stack
-  details, at most 200 characters); otherwise it is a fixed text. The real reason is always written
-  to the log.
-- OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep their standard `{ error, error_description }`
-  body.
-- Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in
-  `details.issues` (a list of `{ path, code, message }`), instead of `{ error: "Invalid request",
-  details: [...] }`. This covers the chat, tool-run, feedback, session-start, magic-prompt and MCP
-  app endpoints; `error` now reads "Some of the entered data is not valid." and `details` is an
-  object, not a list.
+  (English and German). A client should branch on `code`, never on the text.
+- `title` is the English text of the code and the same for every occurrence; `status` repeats the
+  HTTP status; `type` is a stable identifier (`urn:ihub:problem:<code>`), not an address to fetch.
+- `detail` is the English text of this occurrence, for scripts and other API callers. For a server
+  error (5xx) it carries the real message only if it is safe to show (no file paths, hosts, URLs,
+  credentials, SQL or stack details, at most 200 characters); otherwise it is the `title`. The real
+  reason is always written to the log.
+- `details` (optional) holds what the message needs or what the caller can act on, such as
+  `retryAfterMs`, `currentVersion`, `linkedModels` or `integrationId`.
+- OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) and bearer-token errors keep their standard
+  `{ error, error_description }` body, and the OpenAI-compatible endpoints (`/v1/*`) keep the OpenAI
+  error object.
+- Request validation (`400`) answers `code: "VALIDATION_FAILED"` with the failed fields in `errors`,
+  a list of `{ pointer, code, message }` where `pointer` is a JSON Pointer to the offending member
+  (`/schedule/cron`), instead of `{ error: "Invalid request", details: [...] }`. This covers the
+  chat, tool-run, feedback, session-start, magic-prompt and MCP app endpoints.
 - The chat sharing endpoints (`/api/chats/:chatId/shares`, `/api/shares/*`, `/api/users/lookup`) answer
   in this shape. The codes they already had (`CHAT_SHARING_UNAVAILABLE`, `SHARE_MODE_DISABLED`,
   `CHAT_TEMPORARY`, `ORIGINAL_DISCARDED`, …) moved from `details.code` to the top-level `code`; an
@@ -710,6 +722,21 @@ text page. Every such response has the same body:
   hosts or credentials.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
+- The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
+  `TOKEN_EXPIRED`, `FORBIDDEN`), the admin routes for providers, groups, UI, translations and usage
+  limits, the agent run and artifact routes, the project and
+  project item routes, the chat session, history and short-link routes, the voice routes of the chat
+  (`/api/voice/*`), the integration connection routes, the Teams sign-in and the feature gate. The `success: false`
+  flag and the separate `message` member are gone from their error bodies: the text is `detail`.
+  A conflict names what the caller needs in `details` (`currentVersion` of a `VERSION_CONFLICT`,
+  `linkedModels` of a provider that is still used by models, `runningRuns` of a `CONCURRENCY_LIMIT`,
+  the `summary` of a rejected update archive). A failed model test carries its remediation text in
+  `details.remediation` and its `messageKey` in `details.messageKey`.
+- Reading the sections above: where one says `error`, the member is now `detail`, and a list that
+  is described as `details.issues` is now the `errors` list.
+- The voice routes of the chat (`/api/voice/*`) keep their own kebab-case codes (`invalid-voice`,
+  `not-permitted`, …): they are shared with the voice WebSocket and the voice dock of the web app, not
+  part of the code registry.
 
 See [Error Responses](../../error-responses.md).
 

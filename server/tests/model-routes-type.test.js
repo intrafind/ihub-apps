@@ -95,6 +95,6 @@ describe('GET /api/models?type=', () => {
   test('an unknown type in the list is a 400', async () => {
     const res = await request(buildApp()).get('/api/models?type=chat,video');
     assert.equal(res.status, 400);
-    assert.match(res.body.error, /Unknown model type: video/);
+    assert.match(res.body.detail, /Unknown model type: video/);
   });
 });

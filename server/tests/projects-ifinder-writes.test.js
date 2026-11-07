@@ -208,11 +208,11 @@ describe('creating a collection', () => {
     assert.equal((await create(NOCREATE, { name: 'X', tier: 'ifinder' })).statusCode, 403);
     const noPrincipal = await create(LOCAL, { name: 'X', tier: 'ifinder' });
     assert.equal(noPrincipal.statusCode, 403);
-    assert.equal(noPrincipal.body.details.code, 'TIER_NOT_AVAILABLE');
+    assert.equal(noPrincipal.body.code, 'TIER_NOT_AVAILABLE');
     h.setPlatform({ tierPolicy: 'ihub' });
     const policy = await create(ADA, { name: 'X', tier: 'ifinder' });
     assert.equal(policy.statusCode, 403);
-    assert.equal(policy.body.details.code, 'TIER_NOT_AVAILABLE');
+    assert.equal(policy.body.code, 'TIER_NOT_AVAILABLE');
     assert.equal(ifinder.requests.length, 0, 'none of these reached iFinder');
   });
 
@@ -220,20 +220,20 @@ describe('creating a collection', () => {
     ifinder.state.collectionsStatus = 404;
     const old = await create(ADA, { name: 'X', tier: 'ifinder' });
     assert.equal(old.statusCode, 403);
-    assert.equal(old.body.details.code, 'TIER_NOT_AVAILABLE');
+    assert.equal(old.body.code, 'TIER_NOT_AVAILABLE');
     assert.equal(old.body.details.reason, 'UNSUPPORTED');
     h.reset();
     ifinder.state.collectionsStatus = 500;
     const down = await create(ADA, { name: 'X', tier: 'ifinder' });
     assert.equal(down.statusCode, 503);
-    assert.equal(down.body.details.code, 'IFINDER_UNAVAILABLE');
+    assert.equal(down.body.code, 'IFINDER_UNAVAILABLE');
   });
 
   it('says it is not known whether the collection was created when the answer is lost', async () => {
     ifinder.state.dropAnswer = true;
     const res = await create(ADA, { name: 'Maybe', tier: 'ifinder' });
     assert.equal(res.statusCode, 502);
-    assert.equal(res.body.details.code, 'IFINDER_WRITE_FAILED');
+    assert.equal(res.body.code, 'IFINDER_WRITE_FAILED');
     assert.equal(res.body.details.outcome, 'unknown');
   });
 });
@@ -343,14 +343,10 @@ describe('adding documents', () => {
     h.collection(1, ADA.email, { documents: ['doc-a'] });
     const res = await addOne(ADA, 1, 'doc-hidden');
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.details.code, 'DOCUMENT_NOT_READABLE');
+    assert.equal(res.body.code, 'DOCUMENT_NOT_READABLE');
     assert.deepEqual(res.body.details.documentIds, ['doc-hidden']);
     const missing = await addOne(ADA, 1, 'doc-nowhere');
-    assert.equal(
-      missing.body.details.code,
-      'DOCUMENT_NOT_READABLE',
-      'iFinder checks no id: iHub does'
-    );
+    assert.equal(missing.body.code, 'DOCUMENT_NOT_READABLE', 'iFinder checks no id: iHub does');
     assert.equal(writes().length, 0);
     assert.deepEqual(documentsOf(1), ['doc-a']);
     const search = ifinder.calls('search').at(-1);
@@ -408,7 +404,7 @@ describe('adding documents', () => {
     assert.equal(documentsOf(1).length, MAX_DOCUMENTS);
     const over = await addOne(ADA, 1, 'doc-b');
     assert.equal(over.statusCode, 413);
-    assert.equal(over.body.details.code, 'QUOTA_COLLECTION_DOCUMENTS');
+    assert.equal(over.body.code, 'QUOTA_COLLECTION_DOCUMENTS');
     assert.equal(over.body.details.limit, MAX_DOCUMENTS);
     assert.equal(over.body.details.used, MAX_DOCUMENTS);
     assert.equal(over.body.details.requested, 1);
@@ -437,7 +433,7 @@ describe('adding documents', () => {
     ]) {
       const res = await add(ADA, 1, body);
       assert.equal(res.statusCode, 400, JSON.stringify(body));
-      assert.equal(res.body.details.code, 'KIND_NOT_ALLOWED', body.kind);
+      assert.equal(res.body.code, 'KIND_NOT_ALLOWED', body.kind);
     }
     const multipart = await drive(route.add, {
       user: ADA,
@@ -447,7 +443,7 @@ describe('adding documents', () => {
       body: {}
     });
     assert.equal(multipart.statusCode, 400);
-    assert.equal(multipart.body.details.code, 'KIND_NOT_ALLOWED');
+    assert.equal(multipart.body.code, 'KIND_NOT_ALLOWED');
     const bad = await add(ADA, 1, { kind: 'ifinder-document', ref: { documentId: '', extra: 1 } });
     assert.equal(bad.statusCode, 400);
     assert.equal(writes().length, 0);
@@ -541,7 +537,7 @@ describe('removing documents', () => {
       params: { projectId: pid(1), itemId: 'itm_unknown' }
     });
     assert.equal(unknown.statusCode, 404);
-    assert.equal(unknown.body.details.code, 'ITEM_NOT_FOUND');
+    assert.equal(unknown.body.code, 'ITEM_NOT_FOUND');
     h.collection(2, GRACE.email, { documents: ['doc-a'] });
     assert.equal((await remove(ADA, 2, 'doc-a')).statusCode, 404);
     assert.equal(writes().length, 0);
@@ -696,7 +692,7 @@ describe('writes to one collection are serialized', () => {
     h.collection(1, ADA.email);
     const res = await addOne(ADA, 1, 'doc-a');
     assert.equal(res.statusCode, 409);
-    assert.equal(res.body.details.code, 'COLLECTION_BUSY');
+    assert.equal(res.body.code, 'COLLECTION_BUSY');
     assert.equal(writes().length, 0);
   });
 
@@ -728,7 +724,7 @@ describe('writes to one collection are serialized', () => {
     };
     const res = await addOne(ADA, 1, 'doc-a');
     assert.equal(res.statusCode, 502, JSON.stringify(res.body));
-    assert.equal(res.body.details.code, 'IFINDER_WRITE_FAILED');
+    assert.equal(res.body.code, 'IFINDER_WRITE_FAILED');
     assert.equal(res.body.details.outcome, 'partial');
     assert.deepEqual(res.body.details.not, ['doc-a']);
     assert.deepEqual(documentsOf(1), ['doc-c']);
@@ -784,7 +780,7 @@ describe('where no lock reaches every instance', () => {
         await create(ADA, { name: 'x', tier: 'ifinder' })
       ]) {
         assert.equal(res.statusCode, 403, JSON.stringify(res.body));
-        assert.equal(res.body.details.code, 'IFINDER_WRITES_DISABLED');
+        assert.equal(res.body.code, 'IFINDER_WRITES_DISABLED');
         assert.equal(res.body.details.reason, reason);
       }
       assert.equal(writes().length, 0, 'iFinder never saw a write');
@@ -827,7 +823,7 @@ describe('iFinder failing in the middle of a write', () => {
     ifinder.state.failAfter = 2;
     const res = await add(ADA, 1, batch(['doc-a', 'doc-b', 'doc-c']));
     assert.equal(res.statusCode, 502);
-    assert.equal(res.body.details.code, 'IFINDER_WRITE_FAILED');
+    assert.equal(res.body.code, 'IFINDER_WRITE_FAILED');
     assert.equal(res.body.details.outcome, 'partial');
     assert.deepEqual(res.body.details.added, ['doc-a', 'doc-b']);
     assert.deepEqual(res.body.details.not, ['doc-c']);
@@ -855,7 +851,7 @@ describe('iFinder failing in the middle of a write', () => {
     ifinder.state.writeStatus = 422;
     const rejected = await addOne(ADA, 1, 'doc-b');
     assert.equal(rejected.statusCode, 422);
-    assert.equal(rejected.body.details.code, 'IFINDER_REJECTED');
+    assert.equal(rejected.body.code, 'IFINDER_REJECTED');
     assert.deepEqual(documentsOf(1), []);
   });
 

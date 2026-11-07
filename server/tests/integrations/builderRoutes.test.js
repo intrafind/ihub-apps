@@ -205,7 +205,7 @@ describe('create, load, save', () => {
       .send({ ...httpDraft, actions: [] })
       .expect(400);
     expect(res.body.code).toBe('INVALID_DRAFT');
-    expect(res.body.details.issues.some(d => d.path.join('.') === 'actions')).toBe(true);
+    expect(res.body.errors.some(e => e.pointer === '/actions')).toBe(true);
   });
 
   it('creates the definition folder and the installation', async () => {
@@ -489,9 +489,9 @@ describe('create, load, save', () => {
       .send(withDescription('x'.repeat(4001)))
       .expect(400);
     expect(refused.body.code).toBe('INVALID_DRAFT');
-    expect(
-      refused.body.details.issues.some(d => d.path.join('.').startsWith('actions.0.description'))
-    ).toBe(true);
+    expect(refused.body.errors.some(e => e.pointer.startsWith('/actions/0/description'))).toBe(
+      true
+    );
     await admin(request(app).put('/api/admin/integrations/builder/orders'))
       .send(withDescription('x'.repeat(4000)))
       .expect(200);

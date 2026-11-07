@@ -255,9 +255,11 @@ describe('per-user OAuth servers', () => {
     connectionForUser.mockRejectedValue(authRequired());
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({
-      error: 'Connect this integration first',
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toMatchObject({
+      status: 409,
       code: 'INTEGRATION_AUTH_REQUIRED',
+      detail: 'Connect this integration first',
       details: {
         integration: 'excalidraw',
         connectUrl: '/api/integrations/excalidraw/connect'
@@ -305,7 +307,11 @@ describe('per-user OAuth servers', () => {
     withUserConnection.mockRejectedValue(new Error('server is on fire'));
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(502);
-    expect(res.body).toEqual({ error: 'server is on fire', code: 'UPSTREAM_ERROR' });
+    expect(res.body).toMatchObject({
+      status: 502,
+      code: 'UPSTREAM_ERROR',
+      detail: 'server is on fire'
+    });
   });
 
   it('keeps the message of a failing MCP server out of the answer when it names internals', async () => {
@@ -314,7 +320,7 @@ describe('per-user OAuth servers', () => {
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(502);
     expect(res.body.code).toBe('UPSTREAM_ERROR');
-    expect(res.body.error).not.toMatch(/10\.0\.0\.5/);
+    expect(res.body.detail).not.toMatch(/10\.0\.0\.5/);
   });
 });
 

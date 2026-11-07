@@ -22,6 +22,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Admin routes for OAuth client management
  * All routes require admin authentication
@@ -62,10 +63,7 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const clientsFilePath = oauthClientsFile(oauthConfig);
@@ -96,10 +94,7 @@ export default function registerAdminOAuthRoutes(app) {
       });
     } catch (error) {
       logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to list OAuth clients'
-      });
+      sendErrorResponse(res, 500, 'Failed to list OAuth clients');
     }
   });
 
@@ -132,10 +127,7 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const { clientId } = req.params;
@@ -148,10 +140,7 @@ export default function registerAdminOAuthRoutes(app) {
       const client = findClientById(clientsConfig, clientId);
 
       if (!client) {
-        return res.status(404).json({
-          success: false,
-          error: 'OAuth client not found'
-        });
+        return sendErrorResponse(res, 404, 'OAuth client not found');
       }
 
       // Remove secret from response
@@ -163,10 +152,7 @@ export default function registerAdminOAuthRoutes(app) {
       });
     } catch (error) {
       logger.error('[OAuth Admin] Get client error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get OAuth client'
-      });
+      sendErrorResponse(res, 500, 'Failed to get OAuth client');
     }
   });
 
@@ -224,10 +210,7 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const {
@@ -250,19 +233,17 @@ export default function registerAdminOAuthRoutes(app) {
 
       // Validate required fields
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Client name is required'
-        });
+        return sendErrorResponse(res, 400, 'Client name is required');
       }
 
       // Validate token expiration
       const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440; // 24 hours default
       if (tokenExpirationMinutes && tokenExpirationMinutes > maxExpiration) {
-        return res.status(400).json({
-          success: false,
-          error: `Token expiration cannot exceed ${maxExpiration} minutes`
-        });
+        return sendErrorResponse(
+          res,
+          400,
+          `Token expiration cannot exceed ${maxExpiration} minutes`
+        );
       }
 
       const clientData = {
@@ -329,10 +310,7 @@ export default function registerAdminOAuthRoutes(app) {
       });
     } catch (error) {
       logger.error('[OAuth Admin] Create client error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create OAuth client'
-      });
+      sendErrorResponse(res, 500, 'Failed to create OAuth client');
     }
   });
 
@@ -371,10 +349,7 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const { clientId } = req.params;
@@ -388,10 +363,11 @@ export default function registerAdminOAuthRoutes(app) {
       if (updates.tokenExpirationMinutes) {
         const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
         if (updates.tokenExpirationMinutes > maxExpiration) {
-          return res.status(400).json({
-            success: false,
-            error: `Token expiration cannot exceed ${maxExpiration} minutes`
-          });
+          return sendErrorResponse(
+            res,
+            400,
+            `Token expiration cannot exceed ${maxExpiration} minutes`
+          );
         }
       }
 
@@ -415,16 +391,10 @@ export default function registerAdminOAuthRoutes(app) {
       });
     } catch (error) {
       if (error.message.includes('not found')) {
-        return res.status(404).json({
-          success: false,
-          error: error.message
-        });
+        return sendErrorResponse(res, 404, error.message);
       }
       logger.error('[OAuth Admin] Update client error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update OAuth client'
-      });
+      sendErrorResponse(res, 500, 'Failed to update OAuth client');
     }
   });
 
@@ -486,19 +456,13 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const raw = req.query.unusedForDays;
       const unusedForDays = raw === undefined || raw === '' ? 90 : Number(raw);
       if (!Number.isInteger(unusedForDays) || unusedForDays < 0 || unusedForDays > 3650) {
-        return res.status(400).json({
-          success: false,
-          error: 'unusedForDays must be an integer between 0 and 3650'
-        });
+        return sendErrorResponse(res, 400, 'unusedForDays must be an integer between 0 and 3650');
       }
 
       const clientsFilePath = oauthClientsFile(oauthConfig);
@@ -521,10 +485,7 @@ export default function registerAdminOAuthRoutes(app) {
       res.json({ success: true, deleted, clientIds });
     } catch (error) {
       logger.error('[OAuth Admin] Prune dynamic clients error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to remove unused dynamic OAuth clients'
-      });
+      sendErrorResponse(res, 500, 'Failed to remove unused dynamic OAuth clients');
     }
   });
 
@@ -534,10 +495,7 @@ export default function registerAdminOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.clients) {
-        return res.status(400).json({
-          success: false,
-          error: 'OAuth clients are not enabled on this server'
-        });
+        return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
       }
 
       const { clientId } = req.params;
@@ -564,16 +522,10 @@ export default function registerAdminOAuthRoutes(app) {
       });
     } catch (error) {
       if (error.message.includes('not found')) {
-        return res.status(404).json({
-          success: false,
-          error: error.message
-        });
+        return sendErrorResponse(res, 404, error.message);
       }
       logger.error('[OAuth Admin] Delete client error', { component: 'OAuthAdmin', error });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to delete OAuth client'
-      });
+      sendErrorResponse(res, 500, 'Failed to delete OAuth client');
     }
   });
 
@@ -609,10 +561,7 @@ export default function registerAdminOAuthRoutes(app) {
         const oauthConfig = platform.oauth || {};
 
         if (!oauthConfig.enabled?.clients) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth clients are not enabled on this server'
-          });
+          return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
         }
 
         const { clientId } = req.params;
@@ -643,16 +592,10 @@ export default function registerAdminOAuthRoutes(app) {
         });
       } catch (error) {
         if (error.message.includes('not found')) {
-          return res.status(404).json({
-            success: false,
-            error: error.message
-          });
+          return sendErrorResponse(res, 404, error.message);
         }
         logger.error('[OAuth Admin] Rotate secret error', { component: 'OAuthAdmin', error });
-        res.status(500).json({
-          success: false,
-          error: 'Failed to rotate client secret'
-        });
+        sendErrorResponse(res, 500, 'Failed to rotate client secret');
       }
     }
   );
@@ -698,10 +641,7 @@ export default function registerAdminOAuthRoutes(app) {
         const oauthConfig = platform.oauth || {};
 
         if (!oauthConfig.enabled?.clients) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth clients are not enabled on this server'
-          });
+          return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
         }
 
         const { clientId } = req.params;
@@ -712,10 +652,7 @@ export default function registerAdminOAuthRoutes(app) {
 
         // Validate expiration
         if (expirationDays < 1 || expirationDays > 3650) {
-          return res.status(400).json({
-            success: false,
-            error: 'Expiration must be between 1 and 3650 days'
-          });
+          return sendErrorResponse(res, 400, 'Expiration must be between 1 and 3650 days');
         }
 
         const clientsFilePath = oauthClientsFile(oauthConfig);
@@ -723,17 +660,11 @@ export default function registerAdminOAuthRoutes(app) {
         const client = findClientById(clientsConfig, clientId);
 
         if (!client) {
-          return res.status(404).json({
-            success: false,
-            error: 'OAuth client not found'
-          });
+          return sendErrorResponse(res, 404, 'OAuth client not found');
         }
 
         if (!client.active) {
-          return res.status(400).json({
-            success: false,
-            error: 'Cannot generate token for suspended client'
-          });
+          return sendErrorResponse(res, 400, 'Cannot generate token for suspended client');
         }
 
         const apiKeyResult = generateStaticApiKey(client, expirationDays);
@@ -754,10 +685,7 @@ export default function registerAdminOAuthRoutes(app) {
         });
       } catch (error) {
         logger.error('[OAuth Admin] Generate token error', { component: 'OAuthAdmin', error });
-        res.status(500).json({
-          success: false,
-          error: 'Failed to generate static API key'
-        });
+        sendErrorResponse(res, 500, 'Failed to generate static API key');
       }
     }
   );
@@ -791,21 +719,18 @@ export default function registerAdminOAuthRoutes(app) {
       const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
 
       if (jwtAlgorithm !== 'RS256') {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
-        });
+        return sendErrorResponse(
+          res,
+          400,
+          'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        );
       }
 
       const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
       const keyPair = tokenStorageService.getRSAKeyPair();
 
       if (!keyPair || !keyPair.publicKey) {
-        return res.status(404).json({
-          success: false,
-          error: 'RSA public key not available'
-        });
+        return sendErrorResponse(res, 404, 'RSA public key not available');
       }
 
       // Set headers for file download
@@ -817,10 +742,7 @@ export default function registerAdminOAuthRoutes(app) {
         component: 'OAuthAdmin',
         error
       });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to download public key'
-      });
+      sendErrorResponse(res, 500, 'Failed to download public key');
     }
   });
 
@@ -853,21 +775,18 @@ export default function registerAdminOAuthRoutes(app) {
       const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
 
       if (jwtAlgorithm !== 'RS256') {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
-        });
+        return sendErrorResponse(
+          res,
+          400,
+          'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        );
       }
 
       const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
       const keyPair = tokenStorageService.getRSAKeyPair();
 
       if (!keyPair || !keyPair.publicKey) {
-        return res.status(404).json({
-          success: false,
-          error: 'RSA public key not available'
-        });
+        return sendErrorResponse(res, 404, 'RSA public key not available');
       }
 
       // Convert PEM to base64 (remove header, footer, and newlines)
@@ -885,10 +804,7 @@ export default function registerAdminOAuthRoutes(app) {
         component: 'OAuthAdmin',
         error
       });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to download public key'
-      });
+      sendErrorResponse(res, 500, 'Failed to download public key');
     }
   });
 }

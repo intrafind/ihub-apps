@@ -364,6 +364,6 @@ describe('POST /api/auth/local/login while an account is locked', () => {
     const locked = await attempt('correct-password');
     expect(locked.status).toBe(429);
     expect(locked.headers['retry-after']).toBe(String(10 * 60));
-    expect(locked.body.error).toBe('Too many failed sign-in attempts. Try again in 10 minutes.');
+    expect(locked.body.detail).toBe('Too many failed sign-in attempts. Try again in 10 minutes.');
   });
 });

@@ -17,6 +17,7 @@ import { sanitizeOfficeMailAction } from '../../utils/officeMailActions.js';
 import logger from '../../utils/logger.js';
 import { officeManifestVersion, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
+import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -77,7 +78,7 @@ router.get('/config', (req, res) => {
   const officeConfig = platform?.officeIntegration;
 
   if (!officeConfig?.enabled) {
-    return res.status(404).json({ error: 'Office integration is not enabled' });
+    return sendErrorResponse(res, 404, 'Office integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);
@@ -122,7 +123,7 @@ router.get('/manifest.xml', (req, res) => {
   const officeConfig = platform?.officeIntegration;
 
   if (!officeConfig?.enabled) {
-    return res.status(404).json({ error: 'Office integration is not enabled' });
+    return sendErrorResponse(res, 404, 'Office integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);

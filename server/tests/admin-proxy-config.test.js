@@ -224,7 +224,7 @@ describe('PUT /api/admin/proxy/config', () => {
       .send({ enabled: true, https: 'proxy.example.com:8080' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('proxy.https');
+    expect(response.body.detail).toContain('proxy.https');
     expect(state.stored.proxy.https).toBeUndefined();
   });
 
@@ -234,8 +234,8 @@ describe('PUT /api/admin/proxy/config', () => {
       .send({ enabled: true, urlPatterns: ['api\\.openai\\.com', '(unclosed'] });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('proxy.urlPatterns.1');
-    expect(response.body.error).toContain('(unclosed');
+    expect(response.body.detail).toContain('proxy.urlPatterns.1');
+    expect(response.body.detail).toContain('(unclosed');
   });
 });
 
@@ -246,7 +246,7 @@ describe('POST /api/admin/proxy/test', () => {
       .send({ url: 'http://blocked.internal/health' });
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toContain('ssrf.allowedHosts');
+    expect(response.body.detail).toContain('ssrf.allowedHosts');
   });
 
   test('rejects a non-http(s) scheme', async () => {
@@ -255,7 +255,7 @@ describe('POST /api/admin/proxy/test', () => {
       .send({ url: 'file:///etc/passwd' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('file');
+    expect(response.body.detail).toContain('file');
   });
 
   test('rejects a draft config that would not be accepted on save', async () => {
@@ -264,7 +264,7 @@ describe('POST /api/admin/proxy/test', () => {
       .send({ url: 'https://example.com/', config: { urlPatterns: ['(unclosed'] } });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('proxy.urlPatterns.0');
+    expect(response.body.detail).toContain('proxy.urlPatterns.0');
   });
 
   test('reports the routing decision for a draft config without saving it', async () => {

@@ -341,7 +341,7 @@ function AdminAuditLogPage() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       setError(
-        err.response?.data?.error ||
+        err.response?.data?.detail ||
           err.message ||
           t('admin.auditLog.exportError', 'Failed to export audit log')
       );
@@ -378,7 +378,7 @@ function AdminAuditLogPage() {
       if (data.facets) setFacets(data.facets);
     } catch (err) {
       setError(
-        err.response?.data?.error ||
+        err.response?.data?.detail ||
           err.message ||
           t('admin.auditLog.fetchError', 'Failed to fetch audit log')
       );

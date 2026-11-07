@@ -29,7 +29,7 @@ export function projectErrorDetails(error) {
   return {
     code: details.code || data.code || error?.code || null,
     status: response?.status ?? error?.status ?? null,
-    message: data.error || error?.originalMessage || error?.message || '',
+    message: data.detail || error?.originalMessage || error?.message || '',
     details
   };
 }

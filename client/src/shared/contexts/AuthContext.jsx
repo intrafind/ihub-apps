@@ -511,14 +511,15 @@ export function AuthProvider({ children }) {
 
         return { success: true };
       } else {
-        const error = data.error || 'Login failed';
+        const error = data.detail || 'Login failed';
         dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
         return { success: false, error };
       }
     } catch (error) {
       console.error(`${errorContext} error:`, error);
       // Extract the error message from the response
-      const errorMessage = error.response?.data?.error || error.message || `${errorContext} failed`;
+      const errorMessage =
+        error.response?.data?.detail || error.message || `${errorContext} failed`;
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }

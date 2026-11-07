@@ -12,6 +12,7 @@ import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 import { checkProxyTrust, reportIgnoredProxyHeaders } from '../utils/proxyAuthTrust.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
 // previous cache never expired, so once an IdP rotated its signing keys every
 // token signed with the new key failed verification until the process was
@@ -453,10 +454,6 @@ export async function proxyAuth(req, res, next) {
   } catch (error) {
     logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
     // Return a 403 Forbidden with a user-friendly error message
-    res.status(403).json({
-      error: 'Access Denied',
-      message: error.message,
-      code: 'USER_VALIDATION_FAILED'
-    });
+    sendErrorResponse(res, 403, error.message, { code: 'USER_VALIDATION_FAILED' });
   }
 }

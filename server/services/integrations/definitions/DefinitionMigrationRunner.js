@@ -1825,7 +1825,15 @@ export class DefinitionMigrationRunner {
         if (errors.length > 0) {
           throw new IntegrationError(
             `The stored values of "${instanceId}" do not fit ${definition.id} ${definition.version}`,
-            { status: 422, code: 'ADOPT_INVALID', details: errors }
+            {
+              status: 422,
+              code: 'ADOPT_INVALID',
+              details: errors.map(({ kind, key, message }) => ({
+                path: ['values', key],
+                code: kind,
+                message
+              }))
+            }
           );
         }
         const now = this._now().toISOString();

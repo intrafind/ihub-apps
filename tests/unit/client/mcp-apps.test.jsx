@@ -348,7 +348,11 @@ describe('McpAppViews', () => {
       Object.assign(new Error('Request failed with status code 409'), {
         response: {
           status: 409,
-          data: { error: 'auth_required', code: 'INTEGRATION_AUTH_REQUIRED', connectUrl: '/x' }
+          data: {
+            detail: 'auth_required',
+            code: 'INTEGRATION_AUTH_REQUIRED',
+            details: { connectUrl: '/x' }
+          }
         }
       })
     );

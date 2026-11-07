@@ -18,6 +18,7 @@ import logger from '../utils/logger.js';
 import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { oauthClientsFile } from '../utils/contentsPath.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 /**
  * Answer a request whose token is validly signed but whose user is gone.
  *
@@ -260,10 +261,8 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
           return next();
         }
 
-        return res.status(401).json({
-          error: 'Token expired',
-          code: 'TOKEN_EXPIRED',
-          message: 'Your session has expired. Please log in again.'
+        return sendErrorResponse(res, 401, 'Your session has expired. Please log in again.', {
+          code: 'TOKEN_EXPIRED'
         });
       });
     }

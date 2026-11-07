@@ -85,7 +85,7 @@ const INFO = {
   type: null,
   name: { en: 'iFinder' }
 };
-const notFound = (status, error, code) => ({ response: { status, data: { error, code } } });
+const notFound = (status, error, code) => ({ response: { status, data: { detail: error, code } } });
 
 describe('pendingDocument helpers', () => {
   test('reads a valid link and defaults the optional parts', () => {

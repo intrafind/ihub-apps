@@ -27,7 +27,10 @@ const EDITOR = { id: 'user-editor', name: 'Editor', groups: ['editors'] };
 
 async function drive(handlers, { body = {}, user } = {}) {
   const req = { params: {}, query: {}, body, headers: {}, user, ip: '127.0.0.1', method: 'PUT' };
-  const res = { statusCode: 200, body: null };
+  const res = { statusCode: 200, body: null, headers: {} };
+  res.setHeader = (name, value) => {
+    res.headers[name] = value;
+  };
   res.status = code => {
     res.statusCode = code;
     return res;
@@ -160,6 +163,8 @@ describe('project sharing settings', () => {
     assert.equal(cleared.body.defaultAppId, '');
     const invalid = await drive(route.put, { user: ROOT, body: { defaultAppId: '../x' } });
     assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.headers['Content-Type'], 'application/problem+json');
+    assert.equal(invalid.body.code, 'BAD_REQUEST');
   });
 
   it('refuses an unknown tier policy and an empty body', async () => {

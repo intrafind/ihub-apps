@@ -586,7 +586,9 @@ describe('restore and adopt', () => {
     await assert.rejects(
       () => runner().adopt('badvalues', { notify: false }),
       error =>
-        error.code === 'ADOPT_INVALID' && error.details.issues.some(e => e.key === 'unknownField')
+        error.code === 'ADOPT_INVALID' &&
+        // each problem names its field as a path, which the answer turns into a JSON Pointer
+        error.details.issues.some(e => e.path.join('/') === 'values/unknownField')
     );
     assert.equal((await entryOf('badvalues')).definitionVersion, undefined);
   });

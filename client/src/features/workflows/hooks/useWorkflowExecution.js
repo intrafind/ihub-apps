@@ -152,7 +152,7 @@ function useWorkflowExecution(executionId, options = {}) {
     } catch (err) {
       console.error('Failed to fetch execution state:', err);
       if (mountedRef.current) {
-        setError(err.response?.data?.error || err.message || 'Failed to load execution');
+        setError(err.response?.data?.detail || err.message || 'Failed to load execution');
       }
     } finally {
       if (mountedRef.current) setLoading(false);

@@ -2396,7 +2396,7 @@ describe('routes', () => {
       params: { projectId: project.id, itemId: ready.id }
     });
     assert.equal(refresh.statusCode, 400, 'an upload cannot be refreshed');
-    assert.equal(refresh.body.details.code, 'INVALID_REF');
+    assert.equal(refresh.body.code, 'INVALID_REF');
   });
 
   it('keeps the characters of a UTF-8 file name', async () => {
@@ -2427,7 +2427,7 @@ describe('routes', () => {
     png.params = { projectId: project.id };
     const refused = await drive(route.addItem, { user: ADA, req: png });
     assert.equal(refused.statusCode, 415, JSON.stringify(refused.body));
-    assert.equal(refused.body.details.code, 'UNSUPPORTED_TYPE');
+    assert.equal(refused.body.code, 'UNSUPPORTED_TYPE');
 
     // Declared as text, but the bytes are a PNG: refused after receive, before any item exists.
     const lying = multipartRequest({
@@ -2450,7 +2450,7 @@ describe('routes', () => {
       big.params = { projectId: project.id };
       const tooBig = await drive(route.addItem, { user: ADA, req: big });
       assert.equal(tooBig.statusCode, 413, JSON.stringify(tooBig.body));
-      assert.equal(tooBig.body.details.code, 'QUOTA_FILE_BYTES');
+      assert.equal(tooBig.body.code, 'QUOTA_FILE_BYTES');
     } finally {
       setLimits({});
     }

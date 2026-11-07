@@ -9,6 +9,7 @@ import authDebugService from '../utils/authDebugService.js';
 import configCache from '../configCache.js';
 import { hasIdCaseInsensitive } from '../utils/resourceLookup.js';
 
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
  * @param {Object} req - Express request object
@@ -59,10 +60,8 @@ export function authRequired(req, res, next) {
       hasUser: !!req.user,
       userId: req.user?.id
     });
-    return res.status(401).json({
-      error: 'Authentication required',
-      code: 'AUTH_REQUIRED',
-      message: 'You must be logged in to access this resource'
+    return sendErrorResponse(res, 401, 'You must be logged in to access this resource', {
+      code: 'AUTH_REQUIRED'
     });
   }
 
@@ -102,7 +101,7 @@ function resourceAccessRequired(resourceType) {
     // (a signed-in user, or the anonymous principal built in setup.js when
     // anonymous access is allowed). No principal means nothing was granted.
     if (!req.user) {
-      return res.status(401).json({ error: 'authentication required' });
+      return sendErrorResponse(res, 401, 'authentication required');
     }
 
     const allowedResources = req.user.permissions?.[permissionsKey] || new Set();
@@ -111,11 +110,12 @@ function resourceAccessRequired(resourceType) {
     // Resource ids arriving from outside (e.g. the OpenAI-compatible
     // inference API) may not match the configured casing exactly.
     if (!allowedResources.has('*') && !hasIdCaseInsensitive(allowedResources, resourceId)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,
-        message: `You do not have permission to access ${resourceType}: ${resourceId}`
-      });
+      return sendErrorResponse(
+        res,
+        403,
+        `You do not have permission to access ${resourceType}: ${resourceId}`,
+        { code: `${resourceType.toUpperCase()}_ACCESS_DENIED` }
+      );
     }
 
     next();
@@ -159,9 +159,7 @@ export function authenticatedOnly(req, res, next) {
   );
   // Generic message — do NOT leak which endpoints are reachable anonymously.
   // That hint would help an attacker map the platform's allowed surface.
-  return res.status(401).json({
-    error: 'authentication required'
-  });
+  return sendErrorResponse(res, 401, 'authentication required');
 }
 
 /**

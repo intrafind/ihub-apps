@@ -178,7 +178,7 @@ class AzureSpeechRecognition {
       let message = `Azure token request failed (${res.status})`;
       try {
         const body = await res.json();
-        if (body?.error) message = body.error;
+        if (body?.detail) message = body.detail;
       } catch {
         /* non-JSON error body */
       }

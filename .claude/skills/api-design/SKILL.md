@@ -39,9 +39,11 @@ throw new ServiceError('NOT_FOUND', `Scheduled task ${taskId} not found`, { deta
 ```
 
 Never `res.status(404).json({ error: … })`. The code comes from `shared/apiErrors.js` (`UPPER_SNAKE`); a new one also
-goes into `apiErrors` of `shared/i18n/en.json` and `de.json`. Target body: `application/problem+json`
+goes into `apiErrors` of `shared/i18n/en.json` and `de.json`. Body: `application/problem+json`
 (`type`, `title`, `status`, `detail`, `code`, optional `details`, validation `errors[{pointer, code, message}]`).
-OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) keep RFC 6749.
+OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) and bearer-token errors keep RFC 6749 / 6750; `/v1/*` keeps the OpenAI error object.
+Inside a `try` whose `catch` would answer a second time, write the same response in place with
+`sendErrorResponse(res, status, message, { code, details })` (`utils/responseHelpers.js`); it uses the same mapper.
 
 **Lists.** `GET …?limit=50&cursor=…` → `{ "items": [...], "nextCursor": "…" | null }`. No `page`, `pageSize`,
 `offset`, `after`. Unpaged collections still answer `{ "items": [...] }`.

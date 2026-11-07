@@ -278,8 +278,12 @@ describe('POST /api/voice/speech', () => {
     });
     const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
     expect(res.status).toBe(502);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
     expect(res.body).toEqual({
-      error: 'Mistral rejected the API key (HTTP 401)',
+      type: 'urn:ihub:problem:upstream-error',
+      title: 'A connected service failed. Please try again later.',
+      status: 502,
+      detail: 'Mistral rejected the API key (HTTP 401)',
       code: 'upstream-error'
     });
   });
@@ -288,13 +292,22 @@ describe('POST /api/voice/speech', () => {
     state.silent = true;
     const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
     expect(res.status).toBe(502);
-    expect(res.body).toEqual({ error: 'No audio was returned', code: 'no-audio' });
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toEqual({
+      type: 'urn:ihub:problem:no-audio',
+      title: 'A connected service failed. Please try again later.',
+      status: 502,
+      detail: 'No audio was returned',
+      code: 'no-audio'
+    });
   });
 
   test('an unexpected error does not leak its message', async () => {
     state.failWith = new Error('ECONNREFUSED 10.0.0.5:443');
     const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Text-to-speech failed');
+    expect(res.body.detail).toBe('Text-to-speech failed');
+    expect(res.body.code).toBe('upstream-error');
+    expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
   });
 });

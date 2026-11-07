@@ -47,7 +47,7 @@ export default function AdminAgentInboxesPage() {
       // Drop straight into the editor so the user can add items immediately.
       navigate(`/admin/agents/inboxes/${trimmed}`);
     } catch (err) {
-      setError(err?.response?.data?.message || err.message);
+      setError(err?.response?.data?.detail || err.message);
     }
   }
 

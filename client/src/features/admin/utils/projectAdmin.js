@@ -354,11 +354,11 @@ export function filterProjects(projects, { search = '', status = 'all', kind = '
 /**
  * The dependency list of a delete the server refused (`400 PROJECT_IN_USE`).
  *
- * @param {Error & {response?: {data?: {details?: {code?: string, dependencies?: Array}}}}} error
+ * @param {Error & {response?: {data?: {code?: string, details?: {dependencies?: Array}}}}} error
  * @returns {Array<{type: string, id: string, name: string}>|null} `null` for any other error.
  */
 export function dependenciesFromDeleteError(error) {
-  const details = error?.response?.data?.details;
-  if (details?.code !== 'PROJECT_IN_USE') return null;
-  return Array.isArray(details.dependencies) ? details.dependencies : [];
+  const data = error?.response?.data;
+  if (data?.code !== 'PROJECT_IN_USE') return null;
+  return Array.isArray(data.details?.dependencies) ? data.details.dependencies : [];
 }

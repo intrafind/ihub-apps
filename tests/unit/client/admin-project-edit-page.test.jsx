@@ -53,7 +53,7 @@ jest.mock('../../../client/src/api/adminApi', () => {
     fetchProjectPickerPages: forward('fetchProjectPickerPages'),
     searchProjectPickerIFinder: forward('searchProjectPickerIFinder'),
     checkProjectPickerUrl: forward('checkProjectPickerUrl'),
-    getAdminApiErrorMessage: err => err?.response?.data?.error ?? err?.message ?? 'error'
+    getAdminApiErrorMessage: err => err?.response?.data?.detail ?? err?.message ?? 'error'
   };
 });
 jest.mock('../../../client/src/features/projects/components/ProjectAppSelect', () => ({
@@ -253,7 +253,7 @@ describe('AdminProjectEditPage – create', () => {
       Object.assign(new Error('conflict'), {
         response: {
           status: 409,
-          data: { error: 'Project exists', details: { code: 'PROJECT_EXISTS' } }
+          data: { detail: 'Project exists', details: { code: 'PROJECT_EXISTS' } }
         }
       })
     );

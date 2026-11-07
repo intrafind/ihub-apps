@@ -331,7 +331,7 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       });
 
       assert.equal(res.statusCode, 400);
-      assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED', 'the code integrators key on');
+      assert.equal(res.body.code, 'CLIENT_HISTORY_NOT_ALLOWED', 'the code integrators key on');
       assert.equal(calls.length, 0, 'nothing reached the request builder');
 
       // The code alone tells an integrator nothing about what to do instead,
@@ -357,7 +357,7 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
         });
 
         assert.equal(res.statusCode, 400);
-        assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED');
+        assert.equal(res.body.code, 'CLIENT_HISTORY_NOT_ALLOWED');
         assert.equal(calls.length, 0);
       });
     });
@@ -377,7 +377,7 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       });
 
       assert.equal(res.statusCode, 400);
-      assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED');
+      assert.equal(res.body.code, 'CLIENT_HISTORY_NOT_ALLOWED');
       assert.equal(calls.length, 0);
     });
   });
@@ -844,7 +844,8 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       });
 
       assert.equal(res.statusCode, 400);
-      assert.deepEqual(res.body, { error: 'UNKNOWN_MESSAGE' });
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.body.code, 'UNKNOWN_MESSAGE');
       assert.equal(calls.length, 0);
     });
   });
@@ -957,7 +958,7 @@ describe('POST: an @mention workflow turn is a turn', () => {
     }, []);
     // No stream is open, so the refusal comes back on the POST.
     assert.equal(res.statusCode, 400);
-    assert.match(res.body.message, /not available in this app/);
+    assert.match(res.body.detail, /not available in this app/);
     assert.equal(await getChatRepository().getChat(chatId), null, 'nothing is stored');
   });
 
