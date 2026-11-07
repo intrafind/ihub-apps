@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import { withFileLock } from './fileLock.js';
+import { ServiceError } from './ServiceError.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
@@ -281,10 +282,14 @@ async function updateClientsFileOutsideContents(fullPath, apply) {
  */
 export function generateClientId(name) {
   // Sanitize name: lowercase, replace spaces and special chars with underscores
-  const sanitizedName = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores // lgtm[js/polynomial-redos]
+  const collapsed = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  // Remove leading/trailing underscores. Trimmed with indices rather than
+  // `/^_+|_+$/`, which backtracks quadratically on a long run of underscores.
+  let start = 0;
+  let end = collapsed.length;
+  while (start < end && collapsed[start] === '_') start++;
+  while (end > start && collapsed[end - 1] === '_') end--;
+  const sanitizedName = collapsed.slice(start, end);
 
   // Generate short UUID (first 8 characters)
   const shortUuid = uuidv4().split('-')[0];
@@ -467,7 +472,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
 
     for (const key of allowedUpdates) {
@@ -503,7 +508,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
     throw new Error(`Invalid client ID: ${clientId}`);
   }
   if (!(await findClientByIdFresh(clientsFilePath, clientId)).client) {
-    throw new Error(`OAuth client not found: ${clientId}`);
+    throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
   }
 
   // Generate new secret
@@ -514,7 +519,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     const client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
     client.clientSecret = hashedSecret;
     client.lastRotated = new Date().toISOString();
@@ -548,7 +553,7 @@ export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
   await updateOAuthClients(clientsFilePath, clientsConfig => {
     const client = ownClient(clientsConfig, clientId);
     if (!client) {
-      throw new Error(`OAuth client not found: ${clientId}`);
+      throw new ServiceError('NOT_FOUND', `OAuth client not found: ${clientId}`);
     }
     clientName = client.name;
     delete clientsConfig.clients[clientId];
