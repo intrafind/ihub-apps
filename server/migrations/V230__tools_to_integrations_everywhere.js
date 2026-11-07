@@ -262,7 +262,13 @@ export function migrateGroups(groupsConfig, installed) {
     changed = true;
     const integrations = Array.isArray(permissions.integrations) ? permissions.integrations : [];
     for (const ref of list) {
-      if (typeof ref !== 'string' || ref === '*') continue;
+      if (typeof ref !== 'string') continue;
+      if (ref === '*') {
+        // Every tool over the gateways: the group now needs the integrations
+        // themselves. Reported when it does not already hold `*`.
+        if (!integrations.includes('*')) unmapped.push({ group: groupId, ref, all: true });
+        continue;
+      }
       if (SYSTEM_TOOLS.has(ref)) continue; // platform tools are not integrations
       const hit = resolveReference(ref, installed);
       if (!hit) {
@@ -311,9 +317,11 @@ export async function up(ctx) {
     if (changed) {
       await ctx.writeJson(GROUPS_FILE, groups);
       ctx.log('groups: permissions.tools removed (the gateways offer the granted integrations)');
-      for (const { group, ref } of unmapped) {
+      for (const { group, ref, all } of unmapped) {
         ctx.warn(
-          `group "${group}": the direct tool grant "${ref}" belongs to no installed integration and was removed.`
+          all
+            ? `group "${group}": the direct grant of every tool ("*") was removed; the MCP gateway now offers the integrations the group is granted (permissions.integrations), so check that list.`
+            : `group "${group}": the direct tool grant "${ref}" belongs to no installed integration and was removed.`
         );
       }
     }

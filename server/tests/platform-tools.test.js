@@ -23,7 +23,7 @@ import configCache from '../configCache.js';
 import '../services/integrations/protocols/native/connectors/register.js';
 import integrationRegistry from '../services/integrations/definitions/IntegrationRegistry.js';
 import { getToolsForApp } from '../services/tools/appTools.js';
-import { loadLocalTools, loadTools } from '../services/tools/catalog.js';
+import { loadTools } from '../services/tools/catalog.js';
 import { runTool } from '../services/tools/runTool.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
 import { MCP_SCOPES } from '../services/mcp/scopes.js';

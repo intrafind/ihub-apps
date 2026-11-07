@@ -77,6 +77,27 @@ describe('MCP gateway tools', () => {
   });
 });
 
+describe('machine clients (client credentials, static key)', () => {
+  const client = apps => ({
+    id: 'client',
+    isOAuthClient: true,
+    scopes,
+    allowedApps: apps,
+    permissions: { apps: new Set(apps), integrations: new Set(['*']) }
+  });
+
+  it('reach an integration only through the binding of an app they may use', async () => {
+    useWebSearch({ installed: [engine('brave')], groups: OPEN_GROUPS });
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'searching', enabled: true, integrations: { brave: {} } },
+      { id: 'plain', enabled: true }
+    ]);
+    assert.deepEqual(await registered(client(['searching'])), ['braveSearch']);
+    assert.deepEqual(await registered(client(['plain'])), []);
+    assert.deepEqual(await registered(client([])), []);
+  });
+});
+
 describe('isToolAllowed', () => {
   const expose = { tools: true };
   const integration = { _integration: { instanceId: 'x', action: 'a' } };

@@ -219,7 +219,7 @@ async function offeredTools(app, language, context, nodeTools) {
     context.model,
     context.user
   );
-  // A node may also name the page reader in its tool list — offer it only once.
+  // A node may also name the page reader in `systemTools` — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
   // Add the project knowledge tools when the projects feature is on and the

@@ -122,7 +122,10 @@ test('groups lose permissions.tools; the installations they named join integrati
   assert.deepEqual(groups.groups.power.permissions.integrations, ['ifinder', 'brave']);
   assert.deepEqual(groups.groups.open.permissions.integrations, ['*']);
   assert.equal('tools' in groups.groups.power.permissions, false);
-  assert.deepEqual(unmapped, [{ group: 'power', ref: 'bogus' }]);
+  assert.deepEqual(unmapped, [
+    { group: 'power', ref: 'bogus' },
+    { group: 'power', ref: '*', all: true }
+  ]);
   assert.equal('integrations' in groups.groups.plain.permissions, false);
 });
 

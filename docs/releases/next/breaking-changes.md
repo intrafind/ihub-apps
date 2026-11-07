@@ -46,8 +46,8 @@ What changes for every one of them:
   became `"integrations": { "com.intrafind/ldap-directory": {} }`. The MCP server and remote agent
   pickers of the app editor are gone; bind the installation instead.
 - **Tool files.** `contents/tools/iFinder.json`, the Jira tool file (`"script": "jira.js"`) and
-  `entraPeopleSearch.json` are deleted; the installations own the tools. Tool ids are unchanged, and
-  group tool grants naming `iFinder` or `iFinder_*` keep working.
+  `entraPeopleSearch.json` are deleted; the installations own the tools. Tool ids are unchanged. Group tool grants were removed later
+  (see "Tools Are Integrations Everywhere").
 - **An id another installation already holds.** An MCP server, A2A agent or people directory whose
   id is taken is not moved: it is kept in `contents/config/mcpServers.unmigrated.json`,
   `a2aAgents.unmigrated.json` or `peopleDirectories.unmigrated.json` with a warning in the log.
@@ -151,8 +151,8 @@ belong to projects, the agent workspace and evidence tools to workflows and agen
 - **Workspace and evidence tools** are no longer listed under the iHub integration. One that was
   switched off stays off: V202 writes its tool file with `enabled: false`. A single evidence
   function cannot be switched off on its own; V202 names one in a warning.
-- **Apps and groups need no change:** `tools: ["ask_user"]` and `permissions.tools` grants keep
-  working. `tools: ["ihub"]` and `tools: ["knowledge"]` select nothing.
+- **Apps bind the installation:** an app's `tools: ["ask_user"]` becomes
+  `integrations.ihub` (see "Tools Are Integrations Everywhere"); `tools: ["knowledge"]` selects nothing.
 - **The `ihub` installation cannot be removed or disabled:** `DELETE
   /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
@@ -283,7 +283,7 @@ manually** builds and **Edit in builder** edits.
   the same script in `server/tools/`, one action per function; an OpenAPI tool becomes an `openapi`
   integration with its document copied (or its URL kept) and its credential sent as before. Every
   action keeps its **tool id** (`myTool`, `myTool_search`), so apps, workflows, agent profiles,
-  group tool grants, the MCP and A2A gateways and app approval overrides keep working. `enabled`,
+  the MCP and A2A gateways and app approval overrides keep working. `enabled`,
   `approval`, `sideEffect` and `dataFlow` move onto the installation and its actions; apps that
   listed a tool bind its integration instead (`app.integrations`); groups with an explicit
   integrations list get the new installations. The tool file is deleted.
@@ -475,7 +475,10 @@ Every tool is an action of an installed integration, so nothing in iHub lists to
   three fields. A `tool` step still names one action by its tool id.
 - **The MCP gateway exposes the integrations.** It lists the actions of every enabled installation
   the caller's groups are granted (`permissions.integrations`), under the tool ids they have in a
-  chat, and checks the grant again at call time. Outbound MCP servers, remote A2A agents and the
+  chat, and checks the grant again at call time. The shipped groups hold `integrations: ["*"]`,
+  so a user-delegated token now reaches every integration its user may use: narrow the groups'
+  `integrations` lists if the gateway should offer less. A machine client (client credentials, static
+  key) reaches an integration only through the binding of an app in its `allowedApps`. Outbound MCP servers, remote A2A agents and the
   LDAP browser are still not re-exposed; neither are project, skill and platform tools.
 - **`permissions.tools` is gone** from groups (schema, group editor, `/api/admin/groups`, content
   access). A group's access to an integration is its `permissions.integrations` grant.

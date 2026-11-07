@@ -20,9 +20,8 @@
  * Integrations page — loaded by `loadTools()` next to the configured tools,
  * so they behave as their tool files in `contents/tools/` did before
  * migration V199: agent runs attach them (`agents/runtime/agentToolRegistrar.js`),
- * workflow nodes, agent profiles and apps name them in `tools` (exact id or
- * base id, `evidence`), group grants (`permissions.tools`) select them, a
- * scheduled run with memory gets `read_memory` / `write_memory`, and
+ * workflow nodes and agent profiles name them in `systemTools` (exact id or
+ * base id, `evidence`; apps cannot), a scheduled run with memory gets `read_memory` / `write_memory`, and
  * `runTool` runs them through their script like any tool file.
  *
  * The definitions are the shipped files in `server/defaults/tools/`, read

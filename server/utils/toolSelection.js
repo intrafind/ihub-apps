@@ -9,8 +9,8 @@ const A2A_TOOL_PREFIX = 'a2a__';
  * tool flagged `requiresUserInput`. The agent loop drives these to pause a turn
  * and ask the user a question (see `services/loop/seams/questionSeam.js`); they
  * are a system capability, not a user-selectable app capability. So they stay
- * available whatever a chat's `enabledTools` narrowing says (an app that lists
- * one in `app.tools` always keeps it) and are hidden from the end-user tools
+ * available whatever a chat's `enabledTools` narrowing says (an app that binds
+ * one always keeps it) and are hidden from the end-user tools
  * menu, where a toggle for them would only let a user disable the model's
  * ability to ask — the exact failure that makes an interview loop.
  *

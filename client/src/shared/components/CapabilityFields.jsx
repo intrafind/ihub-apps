@@ -44,7 +44,9 @@ export function integrationPickerItems(installed, t) {
   const usable = (Array.isArray(installed) ? installed : []).filter(
     item => item && item.id && item.enabled !== false && !item.definitionMissing
   );
-  const types = [...new Set(usable.map(item => item.type).filter(Boolean))].sort();
+  const types = [...new Set(usable.map(item => item.type).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b)
+  );
   return [
     ...usable.map(item => ({
       id: item.id,
@@ -73,8 +75,9 @@ export function integrationPickerItems(installed, t) {
  * @param {Object} props
  * @param {{ integrations?: Object, systemTools?: string[], webSearch?: boolean }} props.value
  * @param {(patch: Object) => void} props.onChange - receives e.g. `{ systemTools: [...] }`
+ * @param {boolean} [props.showWebSearch=true] - Whether to offer the web search switch (a verifier has none)
  */
-function CapabilityFields({ value, onChange }) {
+function CapabilityFields({ value, onChange, showWebSearch = true }) {
   const { t } = useTranslation();
   const integrations =
     value?.integrations && typeof value.integrations === 'object' ? value.integrations : {};
@@ -116,12 +119,14 @@ function CapabilityFields({ value, onChange }) {
           'Search platform tools...'
         )}
       />
-      <FormField
-        label={t('admin.workflows.capabilities.webSearch', 'Web search')}
-        type="checkbox"
-        value={value?.webSearch === true}
-        onChange={v => onChange({ webSearch: v ? true : undefined })}
-      />
+      {showWebSearch && (
+        <FormField
+          label={t('admin.workflows.capabilities.webSearch', 'Web search')}
+          type="checkbox"
+          value={value?.webSearch === true}
+          onChange={v => onChange({ webSearch: v ? true : undefined })}
+        />
+      )}
     </>
   );
 }

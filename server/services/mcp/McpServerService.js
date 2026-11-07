@@ -241,6 +241,8 @@ export function buildAppInputSchema(app) {
   return { type: 'object', properties, required };
 }
 
+const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
+
 /**
  * Whether the gateway offers an installed integration's action as an MCP tool.
  * The integrations are the tools (#3275): every action of an enabled
@@ -262,8 +264,6 @@ export function buildAppInputSchema(app) {
  * @param {Object} expose - the gateway's `expose` switches
  * @returns {boolean}
  */
-const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
-
 export function isToolAllowed(tool, expose) {
   if (!expose.tools) return false;
   if (!tool._integration) return false;
@@ -329,15 +329,30 @@ export async function buildMcpServer({ user, platform }) {
   // ---- Tools (the actions of the installed integrations) ------------------
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
     const language = platform?.defaultLanguage || 'en';
-    const { discoverIntegrationTools, filterIntegrationToolsForUser, userMayUse } =
-      await import('../integrations/integrationTools.js');
-    const tools = filterDirectoryToolsForUser(
+    const {
+      discoverIntegrationTools,
+      filterIntegrationToolsForUser,
+      getIntegrationToolsForApp,
+      userMayUse
+    } = await import('../integrations/integrationTools.js');
+    let tools = filterDirectoryToolsForUser(
       filterIntegrationToolsForUser(
         (await discoverIntegrationTools(language)).filter(tool => isToolAllowed(tool, expose)),
         user
       ),
       user
     );
+    // A machine client (client credentials, static key) holds no group grants:
+    // its permissions are `integrations: ['*']`, bounded by the apps it may
+    // use. An integration reaches it only through the binding of such an app.
+    let reachable = null;
+    if (user.isOAuthClient) {
+      const { data: apps = [] } = await configCache.getAppsForUser(user, platform);
+      reachable = new Set(
+        apps.flatMap(app => getIntegrationToolsForApp(app, tools, { user }).map(tool => tool.id))
+      );
+      tools = tools.filter(tool => reachable.has(tool.id));
+    }
     for (const tool of tools) {
       registerTool(
         tool.id,
@@ -356,6 +371,7 @@ export async function buildMcpServer({ user, platform }) {
             !instance ||
             instance.enabled === false ||
             !userMayUse(instance, user) ||
+            (reachable && !reachable.has(tool.id)) ||
             (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id))
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');

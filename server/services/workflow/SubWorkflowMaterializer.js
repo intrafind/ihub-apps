@@ -78,6 +78,8 @@ export class SubWorkflowMaterializer {
     // the spread of restTemplate must NOT overwrite the merged arrays we
     // build below.
     const {
+      // A leftover `tools` list (a hand-edited file) is dead data: drop it.
+      tools: _legacyTools,
       integrations: templateIntegrations,
       systemTools: templateSystemTools,
       webSearch: templateWebSearch,

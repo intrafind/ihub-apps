@@ -39,7 +39,11 @@ function VerifierForm({ config, onChange, variables }) {
         placeholder="Search models..."
       />
       {config.mode === 'adversarial' && (
-        <CapabilityFields value={config} onChange={patch => onChange({ ...config, ...patch })} />
+        <CapabilityFields
+          value={config}
+          onChange={patch => onChange({ ...config, ...patch })}
+          showWebSearch={false}
+        />
       )}
       <FormField
         label="Input Variable"

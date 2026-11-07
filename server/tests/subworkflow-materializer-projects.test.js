@@ -15,7 +15,7 @@ import { projectInputLinks } from '../services/workflow/projectNodes.js';
 
 const taskTemplate = {
   system: { en: 'Be useful.' },
-  tools: ['web_search'],
+  systemTools: ['read_url'],
   projects: ['faq', { id: 'docs', mode: 'tools', write: true }]
 };
 
@@ -92,7 +92,8 @@ describe('sub-workflow project links', () => {
       : null;
     assert.ok(runner, 'the drain worker sits inside the loop');
     assert.deepEqual(runner.config.projects, taskTemplate.projects);
-    assert.deepEqual(runner.config.tools, ['web_search']);
+    assert.deepEqual(runner.config.systemTools, ['read_url']);
+    assert.equal('tools' in runner.config, false);
   });
 
   it("adds the parent run's project inputs to every task, after the task's own links", () => {

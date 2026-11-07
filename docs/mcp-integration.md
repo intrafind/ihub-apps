@@ -1281,7 +1281,12 @@ Left out, as before:
   tools, and the platform tools of workflows and agents (`write_artifact`,
   `evidence_*`, …) — they are not integrations.
 
-Grant deliberately: an MCP client calling iFinder, Jira or Entra runs **as
+Grant deliberately. The shipped groups hold `integrations: ["*"]`, so after
+the upgrade a user-delegated token reaches every integration its user may use
+(before, a tool grant was opt-in); narrow the lists in `groups.json` if the
+gateway should offer less. A machine client (client credentials, static key)
+holds no group grant: it reaches an integration only through the binding of an
+app in its `allowedApps`. An MCP client calling iFinder, Jira or Entra runs **as
 the user**, with no app prompt or system prompt mediating the call. The
 gateway's `expose.tools` switch (Admin → MCP gateway) turns the tool list off
 as a whole.
