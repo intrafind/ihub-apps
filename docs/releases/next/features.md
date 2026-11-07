@@ -792,6 +792,9 @@ used to be an HTML or plain text page.
 - The admin translate endpoint (`/api/admin/translate`) answers in this shape: `BAD_REQUEST` for missing fields
   and, for a failing model call, the LLM code with its canonical status (as for the model test). A missing
   model or any other unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The JSON schema endpoints (`/api/admin/schemas*`) answer in this shape: `BAD_REQUEST` for an unknown schema
+  type (the allowed types are in `detail`) and `NOT_FOUND` for a type without a schema. An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
