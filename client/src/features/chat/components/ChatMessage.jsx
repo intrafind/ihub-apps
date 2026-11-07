@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { abortCauseText } from '../../../shared/utils/abortCause';
-import DOMPurify from 'dompurify';
 import { sendMessageFeedback, answerInteraction } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
@@ -78,9 +77,8 @@ import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/mo
 import { foldSkill } from '../../../../../shared/run/runReducer.js';
 import './ChatMessage.css';
 import { useChatFiles } from '../contexts/ChatFilesContext';
-import { formatBytes } from '../utils/artifactFiles';
+import MessageAttachments from './MessageAttachments';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
-import { splitUserMessageContent } from '../../../utils/userMessageContent';
 import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 
 /** How an answer ends when it stopped before it was complete. */
@@ -384,9 +382,8 @@ function ChatMessage({
     const currentUrl = new URL(window.location.href);
     const baseUrl = `${currentUrl.origin}${linkPath || currentUrl.pathname}`;
 
-    // Get the message content (raw content if available, otherwise regular content)
-    const messageContent =
-      message.meta?.rawContent || (typeof message.content === 'string' ? message.content : '');
+    // The message text: a user turn's content is exactly what was typed
+    const messageContent = typeof message.content === 'string' ? message.content : '';
 
     // Create URLSearchParams to build the query string
     const params = new URLSearchParams();
@@ -628,18 +625,6 @@ function ChatMessage({
           : message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
     }
 
-    // For HTML content, check if it contains image tags or file indicators and render them properly
-    const hasImageContent =
-      !!message.imageData ||
-      (contentToRender &&
-        typeof contentToRender === 'string' &&
-        (contentToRender.includes('<img') || contentToRender.includes('data:image')));
-
-    const hasFileContent = !!message.fileData;
-    const hasAudioContent = !!message.audioData;
-
-    const hasHTMLContent = hasImageContent || hasFileContent || hasAudioContent;
-
     if (isEditing) {
       const trimmed = editedContent.trim();
       const sendDisabled = trimmed === '';
@@ -775,32 +760,6 @@ function ChatMessage({
       );
     }
 
-    // If the message contains HTML content with an image tag or file content, render it as HTML
-    if (hasHTMLContent && isUser) {
-      // The typed text keeps its line breaks and is shown as text; only the
-      // markup around it (image previews, file badges) is rendered as HTML.
-      const split = splitUserMessageContent(contentToRender, message.rawContent);
-      if (split) {
-        return (
-          <div>
-            <div className="wrap-break-word whitespace-pre-wrap">{split.text}</div>
-            {split.html.trim() && (
-              <div
-                className="wrap-break-word whitespace-normal"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(split.html) }}
-              />
-            )}
-          </div>
-        );
-      }
-      return (
-        <div
-          className="wrap-break-word whitespace-normal"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentToRender) }}
-        />
-      );
-    }
-
     // Check effective format: message-level metadata overrides app-level prop
     const effectiveFormat = outputFormatFromMessage || outputFormat;
     if (!isUser && (effectiveFormat === 'markdown' || effectiveFormat === 'json')) {
@@ -863,14 +822,11 @@ function ChatMessage({
       );
     }
 
-    // A plain user message is shown as typed, so the first line keeps its
-    // leading indentation (the display content itself is trimmed).
-    const userText = isUser
-      ? (() => {
-          const plain = splitUserMessageContent(contentToRender, message.rawContent);
-          return plain && !plain.html ? plain.text : null;
-        })()
-      : null;
+    // A user message is its text and nothing else (its files are `message.attachments`,
+    // drawn above the bubble), shown as typed: the first line keeps its leading
+    // indentation, trailing whitespace goes.
+    const userText =
+      isUser && typeof contentToRender === 'string' ? contentToRender.trimEnd() : null;
 
     return (
       <div
@@ -885,6 +841,16 @@ function ChatMessage({
   // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
   const hasPendingClarification = message.clarification && !message.clarificationAnswered;
   const showBubble = !hasPendingClarification;
+  // A user turn's files are a block of their own above the bubble. A turn that is only
+  // files has no text to put in a bubble, so the bubble is left out.
+  const hasAttachments =
+    isUser && Array.isArray(message.attachments) && message.attachments.length > 0;
+  const attachmentsOnly =
+    hasAttachments &&
+    !isEditing &&
+    !message.loading &&
+    !hasVariables &&
+    !(typeof message.content === 'string' && message.content.trim());
   // The host's answer actions, when it supplies more than the single insert.
   // Every entry is a distinct action with its own handler; the main button runs
   // the resolved default and the chevron opens the rest (issue #2446).
@@ -911,12 +877,21 @@ function ChatMessage({
         }
       }}
     >
+      {hasAttachments && (
+        <MessageAttachments
+          attachments={message.attachments}
+          onOpenFile={chatFiles?.openFile}
+          compact={compact}
+        />
+      )}
       <div
         className={
           showBubble
             ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`
             : 'w-full'
         }
+        // Inline, not a utility class: the bubble's own `display` is unlayered CSS and would win
+        style={attachmentsOnly ? { display: 'none' } : undefined}
       >
         {/* A turn the user spoke in voice mode: live turns carry `inputMode`,
             hydrated ones `metadata.inputMode`. */}
@@ -1061,138 +1036,11 @@ function ChatMessage({
         )}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
-        {/* A shared chat carries an upload only as its name: the file itself
-            is never stored, so a viewer is told what is missing rather than
-            shown nothing. Only the share page sets this field. */}
-        {Array.isArray(message.sharedAttachments) && message.sharedAttachments.length > 0 && (
-          <ul
-            className="mt-2 space-y-1"
-            aria-label={t('chatSharing.viewer.attachmentsLabel', 'Attachments')}
-          >
-            {message.sharedAttachments.map((attachment, idx) => (
-              <li
-                key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
-                className="flex items-center gap-2 text-xs italic text-gray-500 dark:text-gray-400"
-              >
-                <Icon name="paper-clip" size="sm" />
-                {attachment?.shared && attachment?.id && chatFiles?.openFile ? (
-                  <button
-                    type="button"
-                    onClick={() => chatFiles.openFile(attachment.id)}
-                    className="not-italic underline underline-offset-2 text-indigo-700 dark:text-indigo-300"
-                    data-testid="shared-attachment-chip"
-                  >
-                    {attachment.name || attachment.type}
-                  </button>
-                ) : (
-                  <span>
-                    {t('chatSharing.viewer.attachmentNotIncluded', {
-                      name:
-                        attachment?.name ||
-                        attachment?.type ||
-                        t('chatSharing.viewer.attachmentUnnamed', 'file'),
-                      defaultValue: 'Attachment not included: {{name}}'
-                    })}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* A reopened chat keeps an upload only as its descriptor — the live
-            turn's file chip was never stored — so name what was sent. Without
-            it an upload-only turn has nothing to show at all (issue #2601). */}
-        {isUser &&
-          !message.sharedAttachments?.length &&
-          Array.isArray(message.attachments) &&
-          message.attachments.length > 0 && (
-            <ul
-              className="flex flex-wrap gap-1"
-              aria-label={t('chatMessage.attachmentsLabel', 'Attachments')}
-            >
-              {message.attachments.map((attachment, idx) => {
-                const label =
-                  attachment?.name ||
-                  attachment?.type ||
-                  t('chatSharing.viewer.attachmentUnnamed', 'file');
-                const detail = formatBytes(attachment?.bytes);
-                // A file the server stores opens in the Files drawer.
-                const openable = Boolean(chatFiles?.openFile && attachment?.id);
-                return (
-                  <li
-                    key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-gray-600 px-2 py-1 text-sm text-white"
-                  >
-                    <Icon name="paper-clip" size="sm" />
-                    {openable ? (
-                      <button
-                        type="button"
-                        onClick={() => chatFiles.openFile(attachment.id)}
-                        className="underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-sm"
-                        title={t('chatFiles.openInDrawer', 'Open {{name}} in the Files panel', {
-                          name: label
-                        })}
-                        data-testid="attachment-chip"
-                      >
-                        {label}
-                      </button>
-                    ) : (
-                      <span>{label}</span>
-                    )}
-                    {detail && <span className="text-xs text-gray-300">{detail}</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
             {message.images.map((image, idx) => (
               <GeneratedImage key={image.id || idx} image={image} chatId={chatId} index={idx} />
-            ))}
-          </div>
-        )}
-
-        {/* Display uploaded audio files with playback */}
-        {message.meta?.audioData && (
-          <div className="mt-3 space-y-2">
-            {(Array.isArray(message.meta.audioData)
-              ? message.meta.audioData
-              : [message.meta.audioData]
-            ).map((audio, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <Icon name="musical-note" className="text-purple-600 dark:text-purple-400" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {audio.fileName}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {audio.fileType}
-                      {audio.fileSize && ` • ${(audio.fileSize / 1024 / 1024).toFixed(2)} MB`}
-                    </div>
-                  </div>
-                </div>
-                {audio.base64 && (
-                  <audio
-                    controls
-                    className="w-full mt-2"
-                    style={{ maxWidth: '100%', height: '40px' }}
-                  >
-                    <source src={audio.base64} type={audio.fileType || 'audio/mpeg'} />
-                    {t(
-                      'chatMessage.audioNotSupported',
-                      'Your browser does not support audio playback.'
-                    )}
-                  </audio>
-                )}
-              </div>
             ))}
           </div>
         )}

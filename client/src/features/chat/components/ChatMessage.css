@@ -104,4 +104,17 @@
   .chat-widget-message .code-download-btn {
     display: none !important;
   }
+
+  /* A file card is a button (it opens the Files drawer) but it is content, not a control: the
+     files of a message stay on paper. The fold button is not inside a list item and stays hidden. */
+  .chat-widget-message .message-attachments li button {
+    display: flex !important;
+  }
+}
+
+/* Embeds (Office, the browser extension, Nextcloud) reset box-sizing to inherit (#2594). The
+   attachment cards are sized with the border box, like the edit field above. */
+.message-attachments,
+.message-attachments * {
+  box-sizing: border-box;
 }

@@ -9,6 +9,7 @@ import { saveBlobAs } from '../../../utils/externalNavigation';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import ArtifactPreview from './ArtifactPreview';
 import UploadedFilesTab from './UploadedFilesTab';
+import { attachmentIdsOf } from '../messageAttachments/attachmentViews';
 import {
   artifactDisplayName,
   fileLookOf,
@@ -65,13 +66,7 @@ function uploadedKeyOf(messages) {
   const ids = [];
   for (const message of messages || []) {
     if (message?.role !== 'user') continue;
-    for (const item of [
-      ...(Array.isArray(message.attachments) ? message.attachments : []),
-      ...[message.fileData].flat().filter(Boolean)
-    ]) {
-      const id = item?.id || item?.fileId;
-      if (id) ids.push(id);
-    }
+    ids.push(...attachmentIdsOf(message));
   }
   return ids.join(',');
 }
