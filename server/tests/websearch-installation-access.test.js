@@ -160,57 +160,62 @@ describe('an app with web search on', () => {
   });
 });
 
-describe('tools that name a web search tool', () => {
+describe('workflow nodes and web search tools', () => {
   const executor = new PromptNodeExecutor({ llmClient: { complete: async () => ({}) } });
-  const nodeTools = (toolIds, user) =>
-    executor.getAgentTools(toolIds, 'en', { user, chatId: 'c1', _skillIds: [] });
+  const nodeTools = (capabilities, user) =>
+    executor.getAgentTools(capabilities, 'en', { user, chatId: 'c1', _skillIds: [] });
+  const SEARCH = { 'type:web-search': { actions: ['search'] } };
 
-  it('get an engine tool by its id while that engine is installed, enabled and granted', async () => {
+  it('get an engine tool by binding the engine (or the type) while it is installed, enabled and granted', async () => {
     // The shape of claude-style-agent.json / research-assistant.json.
     useWebSearch({ installed: [engine('brave')] });
-    assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], RESEARCHER)), [
-      'braveSearch',
-      READ_URL_TOOL_ID
-    ]);
-    const [tool] = await nodeTools(['braveSearch'], RESEARCHER);
+    assert.deepEqual(
+      ids(await nodeTools({ integrations: SEARCH, systemTools: ['read_url'] }, RESEARCHER)),
+      ['braveSearch', READ_URL_TOOL_ID]
+    );
+    const [tool] = await nodeTools({ integrations: { brave: {} } }, RESEARCHER);
     assert.equal(tool._integration.instanceId, 'brave');
     assert.equal(tool.parameters.properties.query.type, 'string');
   });
 
   it('get no engine tool while it is missing, off or not granted, and the reader regardless', async () => {
+    const node = { integrations: { brave: {} }, systemTools: ['read_url'] };
     useWebSearch({ installed: [engine('qwant')] });
-    assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], RESEARCHER)), [
-      READ_URL_TOOL_ID
-    ]);
+    assert.deepEqual(ids(await nodeTools(node, RESEARCHER)), [READ_URL_TOOL_ID]);
     useWebSearch({ installed: [engine('brave', { enabled: false })] });
-    assert.deepEqual(ids(await nodeTools(['braveSearch'], RESEARCHER)), []);
+    assert.deepEqual(ids(await nodeTools({ integrations: { brave: {} } }, RESEARCHER)), []);
     useWebSearch({ installed: [engine('brave')], groups: grantResearchOnly('brave') });
-    assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], STAFF)), [READ_URL_TOOL_ID]);
-    assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], RESEARCHER)), [
-      'braveSearch',
-      READ_URL_TOOL_ID
+    assert.deepEqual(ids(await nodeTools(node, STAFF)), [READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(await nodeTools(node, RESEARCHER)), ['braveSearch', READ_URL_TOOL_ID]);
+  });
+
+  it('select no engine by a tool reference: systemTools takes platform tools only', async () => {
+    useWebSearch({ installed: [engine('qwant')] });
+    assert.deepEqual(
+      ids(await nodeTools({ systemTools: ['qwant', 'qwantSearch', 'websearch'] }, RESEARCHER)),
+      []
+    );
+  });
+
+  it('get a third-party engine’s search tool by binding its installation', async () => {
+    useWebSearch({ installed: [engine('acme')], tools: [thirdPartyEngineTool('acme')] });
+    assert.deepEqual(ids(await nodeTools({ integrations: { acme: {} } }, RESEARCHER)), [
+      'acme__search'
     ]);
   });
 
-  it('select nothing by the installation id or the retired websearch id', async () => {
+  it('get the engine the node’s webSearch resolved to, while it is granted', async () => {
     useWebSearch({ installed: [engine('qwant')] });
-    assert.deepEqual(ids(await nodeTools(['qwant', 'websearch'], RESEARCHER)), []);
-  });
-
-  it('get a third-party engine’s search tool by its exact id', async () => {
-    useWebSearch({ installed: [engine('acme')], tools: [thirdPartyEngineTool('acme')] });
-    assert.deepEqual(ids(await nodeTools(['acme__search'], RESEARCHER)), ['acme__search']);
-    assert.deepEqual(ids(await nodeTools(['acme'], RESEARCHER)), []);
-  });
-
-  it('in a node: narrowed like any tool by the chat’s selection', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
-    const offered = await getToolsForNode(['qwantSearch', 'read_url'], { id: 'n' }, 'en', {
+    const offered = await getToolsForNode({ engineToolIds: ['qwantSearch'] }, 'en', {
       modelProvider: 'mistral',
-      user: STAFF,
-      enabledTools: ['read_url']
+      user: STAFF
     });
-    assert.deepEqual(ids(offered), [READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(offered), ['qwantSearch']);
+    useWebSearch({ installed: [engine('qwant')], groups: grantResearchOnly('brave') });
+    assert.deepEqual(
+      ids(await getToolsForNode({ engineToolIds: ['qwantSearch'] }, 'en', { user: STAFF })),
+      []
+    );
   });
 
   it('an app has no tool list: the engine tool comes with app.websearch only', async () => {
@@ -222,7 +227,7 @@ describe('tools that name a web search tool', () => {
     assert.deepEqual(ids(offered), []);
   });
 
-  it('a workflow node’s generic webSearch falls back to the first engine the user may use', async () => {
+  it('a workflow node’s webSearch falls back to the first engine the user may use', async () => {
     useWebSearch({ installed: [engine('qwant'), engine('staan')] });
     assert.equal(await resolveWebSearchEngineToolId('auto', { user: STAFF }), 'staanSearch');
     useWebSearch({ installed: [] });

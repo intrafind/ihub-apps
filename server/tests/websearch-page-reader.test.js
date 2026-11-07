@@ -109,7 +109,7 @@ describe('page reader alongside web search', () => {
   });
 
   it('is offered once when a node with web search also lists it in its tools', async () => {
-    const offered = await getToolsForNode([READ_URL_TOOL_ID], webApp(), 'en', {
+    const offered = await getToolsForNode({ ...webApp(), systemTools: [READ_URL_TOOL_ID] }, 'en', {
       modelProvider: 'mistral',
       user: STAFF
     });

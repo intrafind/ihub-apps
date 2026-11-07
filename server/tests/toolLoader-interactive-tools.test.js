@@ -25,7 +25,7 @@ import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
 import a2aClientManager from '../services/a2a/A2aClientManager.js';
-import { getToolsForApp, getToolsForNode } from '../services/tools/appTools.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
 import {
   FIXTURE_OPEN_GROUPS,
   fixtureInstallation,
@@ -64,50 +64,6 @@ mcpClientManager.listAllTools = async () => [];
 a2aClientManager.listAllTools = async () => [];
 
 const ids = list => list.map(t => t.id).sort();
-
-describe('getToolsForNode keeps interactive tools through enabledTools narrowing', () => {
-  beforeEach(() => {
-    tools = [askUser, customInteractive, braveSearch];
-  });
-
-  it('keeps ask_user when the chat enables no tools at all', async () => {
-    const offered = await getToolsForNode(['ask_user', 'braveSearch'], { id: 'builder' }, 'en', {
-      enabledTools: []
-    });
-    assert.deepEqual(ids(offered), ['ask_user']);
-  });
-
-  it('keeps ask_user alongside the ordinary tools the chat does enable', async () => {
-    const offered = await getToolsForNode(['ask_user', 'braveSearch'], { id: 'builder' }, 'en', {
-      enabledTools: ['braveSearch']
-    });
-    assert.deepEqual(ids(offered), ['ask_user', 'braveSearch']);
-  });
-
-  it('keeps any requiresUserInput tool the node names, not only ask_user', async () => {
-    const offered = await getToolsForNode(
-      ['custom_prompt', 'braveSearch'],
-      { id: 'builder' },
-      'en',
-      { enabledTools: [] }
-    );
-    assert.deepEqual(ids(offered), ['custom_prompt']);
-  });
-
-  it('never injects an interactive tool the node does not name', async () => {
-    const offered = await getToolsForNode(['braveSearch'], { id: 'builder' }, 'en', {
-      enabledTools: ['braveSearch']
-    });
-    assert.deepEqual(ids(offered), ['braveSearch']);
-  });
-
-  it('still removes an ordinary tool the chat did not enable', async () => {
-    const offered = await getToolsForNode(['ask_user', 'braveSearch'], { id: 'builder' }, 'en', {
-      enabledTools: ['ask_user']
-    });
-    assert.deepEqual(ids(offered), ['ask_user']);
-  });
-});
 
 describe('getToolsForApp keeps a bound interactive tool through enabledTools narrowing', () => {
   const user = { id: 'u', groups: ['users'] };
