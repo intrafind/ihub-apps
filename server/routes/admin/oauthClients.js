@@ -23,6 +23,32 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 /**
+ * The PEM public key the JWTs are signed with.
+ *
+ * @returns {Promise<string>}
+ * @throws {ServiceError} `BAD_REQUEST` unless the algorithm is RS256, `NOT_FOUND` without a key pair
+ */
+async function loadRsaPublicKey() {
+  const platform = configCache.getPlatform() || {};
+  const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
+
+  if (jwtAlgorithm !== 'RS256') {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+    );
+  }
+
+  const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
+  const keyPair = tokenStorageService.getRSAKeyPair();
+
+  if (!keyPair || !keyPair.publicKey) {
+    throw new ServiceError('NOT_FOUND', 'RSA public key not available');
+  }
+  return keyPair.publicKey;
+}
+
+/**
  * Admin routes for OAuth client management
  * All routes require admin authentication
  */
@@ -670,27 +696,12 @@ export default function registerAdminOAuthRoutes(app) {
    *         description: Public key not available
    */
   app.get(buildServerPath('/api/admin/oauth/public-key/pem'), adminAuth, async (req, res) => {
-    const platform = configCache.getPlatform() || {};
-    const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
-
-    if (jwtAlgorithm !== 'RS256') {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
-      );
-    }
-
-    const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
-    const keyPair = tokenStorageService.getRSAKeyPair();
-
-    if (!keyPair || !keyPair.publicKey) {
-      throw new ServiceError('NOT_FOUND', 'RSA public key not available');
-    }
+    const publicKey = await loadRsaPublicKey();
 
     // Set headers for file download
     res.setHeader('Content-Type', 'application/x-pem-file');
     res.setHeader('Content-Disposition', 'attachment; filename="jwt-public-key.pem"');
-    res.send(keyPair.publicKey);
+    res.send(publicKey);
   });
 
   /**
@@ -717,25 +728,10 @@ export default function registerAdminOAuthRoutes(app) {
    *         description: Public key not available
    */
   app.get(buildServerPath('/api/admin/oauth/public-key/base64'), adminAuth, async (req, res) => {
-    const platform = configCache.getPlatform() || {};
-    const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
-
-    if (jwtAlgorithm !== 'RS256') {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
-      );
-    }
-
-    const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
-    const keyPair = tokenStorageService.getRSAKeyPair();
-
-    if (!keyPair || !keyPair.publicKey) {
-      throw new ServiceError('NOT_FOUND', 'RSA public key not available');
-    }
+    const publicKey = await loadRsaPublicKey();
 
     // Convert PEM to base64 (remove header, footer, and newlines)
-    const base64Key = keyPair.publicKey
+    const base64Key = publicKey
       .replace('-----BEGIN PUBLIC KEY-----', '')
       .replace('-----END PUBLIC KEY-----', '')
       .replace(/\s/g, '');
