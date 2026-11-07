@@ -5,21 +5,17 @@
 // Handles OAuth2 flow for Nextcloud file access authentication.
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import NextcloudService from '../../services/integrations/NextcloudService.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendAuthRequired,
-  sendBadRequest
-} from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 import {
   requireCloudStorageGrant,
   requestedProviderId,
-  respondIfAuthRequired
+  integrationAuthRequiredError
 } from './cloudStorageAccess.js';
 
 const router = express.Router();
@@ -64,24 +60,21 @@ registerIntegrationCallbackAlias(router, {
  * GET /api/integrations/nextcloud/sources
  */
 router.get('/sources', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const sources = [
-      {
-        id: 'personal',
-        name: 'My Files',
-        description: 'Your Nextcloud files',
-        icon: 'hard-drive'
-      }
-    ];
-
-    res.json({ success: true, sources });
-  } catch (error) {
-    return sendInternalError(res, error, 'get Nextcloud sources');
+  if (!req.user?.id || req.user.id === 'anonymous') {
+    throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
+
+  const sources = [
+    {
+      id: 'personal',
+      name: 'My Files',
+      description: 'Your Nextcloud files',
+      icon: 'hard-drive'
+    }
+  ];
+
+  // api-guidelines-ignore: existing success body, changed in its own API change
+  res.json({ success: true, sources });
 });
 
 /**
@@ -94,12 +87,12 @@ router.get('/sources', authRequired, async (req, res) => {
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const { source } = req.params;
     if (source !== 'personal') {
-      return sendBadRequest(res, 'Source must be one of: personal');
+      throw new ServiceError('BAD_REQUEST', 'Source must be one of: personal');
     }
 
     const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
@@ -131,8 +124,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       ]
     });
   } catch (error) {
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-    return sendInternalError(res, error, 'list Nextcloud drives');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 
@@ -150,7 +142,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
 router.get('/items', authRequired, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const folderPath = typeof req.query.folderPath === 'string' ? req.query.folderPath : '';
@@ -158,7 +150,10 @@ router.get('/items', authRequired, async (req, res) => {
     const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (folderPath && !isValidNextcloudPath(folderPath)) {
-      return sendBadRequest(res, 'folderPath contains invalid characters or path traversal');
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'folderPath contains invalid characters or path traversal'
+      );
     }
 
     let items;
@@ -175,9 +170,7 @@ router.get('/items', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-
-    return sendInternalError(res, error, 'list Nextcloud items');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 
@@ -189,17 +182,20 @@ router.get('/items', authRequired, async (req, res) => {
 router.get('/download', authRequired, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const filePath = typeof req.query.filePath === 'string' ? req.query.filePath : '';
     const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     if (!filePath) {
-      return sendBadRequest(res, 'filePath query parameter is required');
+      throw new ServiceError('BAD_REQUEST', 'filePath query parameter is required');
     }
 
     if (!isValidNextcloudPath(filePath)) {
-      return sendBadRequest(res, 'filePath contains invalid characters or path traversal');
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'filePath contains invalid characters or path traversal'
+      );
     }
 
     const file = await NextcloudService.downloadFile(req.user.id, filePath, providerId);
@@ -220,9 +216,7 @@ router.get('/download', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-
-    return sendInternalError(res, error, 'download Nextcloud file');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 
