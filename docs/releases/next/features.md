@@ -761,6 +761,11 @@ used to be an HTML or plain text page.
   invalid credential (before: `BAD_REQUEST` with the schema issues in `details`), `NOT_FOUND` for an unknown
   credential and `CONFLICT` for a credential id that exists. An unexpected failure, including an unreadable
   credential store, answers 500 with a fixed text; the cause is in the server log.
+- The client-metadata client endpoints (`/api/admin/oauth/clients/cimd/*` and the revoke-all route
+  `/api/admin/oauth/clients/{id}/connections`) answer in this shape: `BAD_REQUEST` for OAuth clients that are
+  not enabled, an identifier that does not decode and an invalid policy field (the reason is in `detail`),
+  and `NOT_FOUND` for an unknown client. An unexpected failure answers 500 with a fixed text; the cause is
+  in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

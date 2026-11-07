@@ -174,6 +174,7 @@ const { generateRefreshToken, storeRefreshToken, listRefreshTokenUserIds } =
 const { revokeConnectionsForClient } = await import('../services/oauth/ConnectionService.js');
 const { listCimdClientRows, recordCimdDiscovery } =
   await import('../services/oauth/CimdGovernanceService.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { default: registerAdminOAuthCimdRoutes } =
   await import('../routes/admin/oauthCimdClients.js');
 const { default: registerOAuthAuthorizeRoutes } = await import('../routes/oauthAuthorize.js');
@@ -368,6 +369,7 @@ describe('the admin API', () => {
     // which does not honour suppression comments.
     app.use(testRateLimiter);
     registerAdminOAuthCimdRoutes(app);
+    app.use(errorHandler);
     return app;
   }
 
@@ -410,6 +412,17 @@ describe('the admin API', () => {
       .send({ active: false });
 
     expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body).toMatchObject({ code: 'BAD_REQUEST', detail: 'Invalid client identifier' });
+  });
+
+  test('answers an unknown client with NOT_FOUND', async () => {
+    const res = await request(buildApp()).get(
+      `/api/admin/oauth/clients/cimd/${encode('https://nobody.example/client.json')}`
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ code: 'NOT_FOUND', detail: 'Client not found' });
   });
 
   test('refuses a policy field that is not a list of strings', async () => {
@@ -418,6 +431,10 @@ describe('the admin API', () => {
       .send({ allowedGroups: 'claude-code-users' });
 
     expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: 'allowedGroups must be an array of strings'
+    });
     expect(findCimdClientPolicy(CODE_URL, CLIENTS_FILE)).toBeNull();
   });
 
