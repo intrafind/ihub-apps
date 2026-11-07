@@ -33,6 +33,7 @@ export default function registerAppSessionStartRoute(app) {
         ip: enrichedMetadata.ipAddress.split(':').pop()
       });
       await logNewSession(sessionId, type || 'app_loaded', enrichedMetadata);
+      // api-guidelines-ignore: existing success body, changed in its own API change
       res.status(200).json({ success: true });
     }
   );

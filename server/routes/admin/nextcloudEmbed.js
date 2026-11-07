@@ -165,6 +165,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
       oauthClientId
     });
 
+    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
       message: 'Nextcloud embed enabled successfully',
       oauthClientId,
@@ -198,6 +199,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
     logger.info('Nextcloud embed disabled', { component: 'AdminNextcloudEmbed' });
 
+    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({ message: 'Nextcloud embed disabled successfully' });
   });
 

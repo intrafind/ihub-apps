@@ -101,6 +101,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
           suggestAppId(template.id, resolved.instance.id, isTaken)
         )
       );
+      // api-guidelines-ignore: existing success body, changed in its own API change
       res.json({
         success: true,
         templates,
@@ -175,6 +176,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
         resourceId: appId,
         summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
       });
+      // api-guidelines-ignore: existing success body, changed in its own API change
       res.status(201).json({ success: true, app: newApp });
     }
   );

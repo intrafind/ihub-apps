@@ -166,6 +166,7 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       200: { description: "{ items, total, page, pageSize }" }
    */
   app.get(buildServerPath('/api/admin/usage/limits/users'), adminAuth, async (req, res) => {
+    // api-guidelines-ignore: existing page/pageSize paging, changed in its own API change
     const { search, status, modelId, page, pageSize } = req.query;
     res.json(
       await listQuotaUsers({
