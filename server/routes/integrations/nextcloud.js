@@ -15,6 +15,7 @@ import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 import {
   requireCloudStorageGrant,
   requestedProviderId,
+  createCloudStorageLimiter,
   integrationAuthRequiredError
 } from './cloudStorageAccess.js';
 
@@ -41,6 +42,9 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('nextcloud'));
 
+// Rate limiter for status, browse and download requests
+const nextcloudApiLimiter = createCloudStorageLimiter();
+
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
 // are the one connect flow (POST /api/integrations/:id/connect|disconnect).
@@ -59,7 +63,7 @@ registerIntegrationCallbackAlias(router, {
  *
  * GET /api/integrations/nextcloud/sources
  */
-router.get('/sources', authRequired, async (req, res) => {
+router.get('/sources', authRequired, nextcloudApiLimiter, async (req, res) => {
   if (!req.user?.id || req.user.id === 'anonymous') {
     throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
@@ -84,7 +88,7 @@ router.get('/sources', authRequired, async (req, res) => {
  *
  * GET /api/integrations/nextcloud/drives/:source
  */
-router.get('/drives/:source', authRequired, async (req, res) => {
+router.get('/drives/:source', authRequired, nextcloudApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -139,7 +143,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  *
  * GET /api/integrations/nextcloud/items?folderPath=xxx&search=xxx
  */
-router.get('/items', authRequired, async (req, res) => {
+router.get('/items', authRequired, nextcloudApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -179,7 +183,7 @@ router.get('/items', authRequired, async (req, res) => {
  *
  * GET /api/integrations/nextcloud/download?filePath=xxx
  */
-router.get('/download', authRequired, async (req, res) => {
+router.get('/download', authRequired, nextcloudApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import rateLimit from 'express-rate-limit';
 import {
   findCloudStorageProvider,
   mayUseCloudStorage
@@ -110,6 +111,22 @@ export function integrationAuthRequiredError(error, installationId) {
   delete details.error;
   delete details.message;
   return new ServiceError(INTEGRATION_AUTH_REQUIRED, result.message, { status: 409, details });
+}
+
+/**
+ * A rate limiter for the browse and download routes of one storage provider
+ * (each router gets its own, so the providers do not share a bucket). These
+ * routes call out to the provider on every request.
+ *
+ * @returns {import('express').RequestHandler}
+ */
+export function createCloudStorageLimiter() {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
 }
 
 export default requireCloudStorageGrant;

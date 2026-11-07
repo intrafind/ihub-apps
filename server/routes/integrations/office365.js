@@ -15,6 +15,7 @@ import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 import {
   requireCloudStorageGrant,
   requestedProviderId,
+  createCloudStorageLimiter,
   integrationAuthRequiredError
 } from './cloudStorageAccess.js';
 import { isValidGraphId } from '../../services/integrations/graphIds.js';
@@ -30,6 +31,9 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('office365'));
 
+// Rate limiter for status, browse and download requests
+const office365ApiLimiter = createCloudStorageLimiter();
+
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
 // are the one connect flow (POST /api/integrations/:id/connect|disconnect).
@@ -43,7 +47,7 @@ registerIntegrationCallbackAlias(router, {
  * Get available source categories
  * GET /api/integrations/office365/sources
  */
-router.get('/sources', authRequired, async (req, res) => {
+router.get('/sources', authRequired, office365ApiLimiter, async (req, res) => {
   if (!req.user?.id || req.user.id === 'anonymous') {
     throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
@@ -85,7 +89,7 @@ router.get('/sources', authRequired, async (req, res) => {
  * List drives for a specific source
  * GET /api/integrations/office365/drives/:source
  */
-router.get('/drives/:source', authRequired, async (req, res) => {
+router.get('/drives/:source', authRequired, office365ApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -136,7 +140,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  * List items in a drive folder
  * GET /api/integrations/office365/items?driveId=xxx&folderId=xxx&search=xxx
  */
-router.get('/items', authRequired, async (req, res) => {
+router.get('/items', authRequired, office365ApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
@@ -182,7 +186,7 @@ router.get('/items', authRequired, async (req, res) => {
  * Download a file from Office 365
  * GET /api/integrations/office365/download?fileId=xxx&driveId=xxx
  */
-router.get('/download', authRequired, async (req, res) => {
+router.get('/download', authRequired, office365ApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
       throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
