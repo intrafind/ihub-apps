@@ -14,11 +14,11 @@
 // who follow the docs.
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 router.use(requireFeature('integrations'));
@@ -87,7 +87,7 @@ router.get('/config', (req, res) => {
   const cfg = platform?.nextcloudEmbed;
 
   if (!cfg?.enabled) {
-    return sendErrorResponse(res, 404, 'Nextcloud embed integration is not enabled');
+    throw new ServiceError('NOT_FOUND', 'Nextcloud embed integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);
