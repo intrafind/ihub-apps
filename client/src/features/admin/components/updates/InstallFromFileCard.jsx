@@ -78,8 +78,8 @@ function InstallFromFileCard({ status, latestVersion, busy, setBusy, onStaged })
     } catch (error) {
       if (error.code === 'ERR_CANCELED') {
         onStaged({});
-      } else if (error.response?.status === 422 && error.response.data?.summary) {
-        onStaged({ summary: error.response.data.summary });
+      } else if (error.response?.status === 422 && error.response.data?.details?.summary) {
+        onStaged({ summary: error.response.data.details.summary });
       } else {
         onStaged({ error: describeError(error, t) });
       }

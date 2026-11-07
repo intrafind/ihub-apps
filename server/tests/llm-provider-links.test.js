@@ -519,3 +519,51 @@ describe('iFinder Model Gateway providers', () => {
     expect(res.body.details.messageKey).toBe('unsupportedProvider');
   });
 });
+
+describe('transport ceilings on a provider entry', () => {
+  const stored = id => store['config/providers.json'].providers.find(p => p.id === id);
+  const put = (id, body) =>
+    request(app)
+      .put(`/api/admin/providers/${id}`)
+      .send({ ...stored(id), apiKey: undefined, ...body });
+
+  it('stores both ceilings of an LLM provider, and 0 as an explicit "off"', async () => {
+    const res = await put('llmhub', { connectTimeoutMs: 45000, streamIdleTimeoutMs: 0 });
+    expect(res.status).toBe(200);
+    expect(stored('llmhub').connectTimeoutMs).toBe(45000);
+    expect(stored('llmhub').streamIdleTimeoutMs).toBe(0);
+  });
+
+  it('works for a built-in provider such as google', async () => {
+    store['config/providers.json'].providers.push({ id: 'google', name: 'Google', enabled: true });
+    const res = await put('google', { streamIdleTimeoutMs: 180000 });
+    expect(res.status).toBe(200);
+    expect(stored('google').streamIdleTimeoutMs).toBe(180000);
+    expect(stored('google').connectTimeoutMs).toBeUndefined();
+  });
+
+  it('removes a ceiling that is sent empty, so the provider inherits again', async () => {
+    stored('llmhub').streamIdleTimeoutMs = 90000;
+    const res = await put('llmhub', { streamIdleTimeoutMs: null, connectTimeoutMs: '' });
+    expect(res.status).toBe(200);
+    expect('streamIdleTimeoutMs' in stored('llmhub')).toBe(false);
+    expect('connectTimeoutMs' in stored('llmhub')).toBe(false);
+  });
+
+  it.each([
+    ['negative', -1],
+    ['above 5 minutes', 300001],
+    ['fractional', 1.5],
+    ['text', '60s']
+  ])('refuses a %s value', async (_label, value) => {
+    const res = await put('llmhub', { streamIdleTimeoutMs: value });
+    expect(res.status).toBe(400);
+    expect(stored('llmhub').streamIdleTimeoutMs).toBeUndefined();
+  });
+
+  it('drops ceilings sent for a provider that has no models (web search)', async () => {
+    const res = await put('brave', { connectTimeoutMs: 1000 });
+    expect(res.status).toBe(200);
+    expect(stored('brave').connectTimeoutMs).toBeUndefined();
+  });
+});

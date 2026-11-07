@@ -188,14 +188,23 @@ pending forever. The abort still fires, so the socket is released.
 ### Tuning the ceilings
 
 Both are configurable, most specific source winning, and `0` disables a
-ceiling and leaves the call to the whole-call deadline:
+ceiling and leaves the call to the whole-call deadline. An empty value on a
+level means "ask the next one", so a provider that sets only the idle timeout
+still inherits the connect timeout:
 
 | Source                                                          | Scope              |
 | --------------------------------------------------------------- | ------------------ |
 | `connectTimeoutMs` / `streamIdleTimeoutMs` in a model's config   | that model         |
+| `connectTimeoutMs` / `streamIdleTimeoutMs` on a provider entry (`providers.json`) | every model that takes its key from that provider |
 | `llm.connectTimeoutMs` / `llm.streamIdleTimeoutMs` in `platform.json` | the installation |
 | `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`          | the process        |
 | built-in defaults (30 s / 60 s)                                  | —                  |
+
+Admins set the installation values under **Admin → Providers → Timeouts for
+all providers** and a provider's own on its page; neither needs a restart,
+because the client reads them on every call. The provider is the entry the
+model takes its key from (`providerId`, else its `provider`), so one value
+covers all Google models, or all models of a gateway.
 
 Raise the connect ceiling for an endpoint that is reachable but slow to accept
 a request — a VPN-only host, or a gateway that authenticates before it

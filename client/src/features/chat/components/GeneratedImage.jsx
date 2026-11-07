@@ -172,6 +172,8 @@ function GeneratedImage({ image, chatId, index }) {
     );
   }
 
+  const canShare = Boolean(viewer?.shareArtifact && storedId && chatId);
+
   const download = () => {
     const link = document.createElement('a');
     link.href = src;
@@ -211,14 +213,28 @@ function GeneratedImage({ image, chatId, index }) {
             style={{ maxHeight: '512px' }}
           />
         )}
-        <button
-          onClick={download}
-          className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
-          title={t('chatMessage.downloadImage', 'Download image')}
-          aria-label={t('chatMessage.downloadImage', 'Download image')}
-        >
-          <Icon name="download" size="sm" aria-hidden="true" />
-        </button>
+        <div className="absolute top-2 right-2 flex gap-2">
+          {canShare && (
+            <button
+              type="button"
+              onClick={() => viewer.shareArtifact(image)}
+              data-testid="generated-image-share"
+              className="bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+              title={t('chatMessage.shareImage', 'Share image')}
+              aria-label={t('chatMessage.shareImage', 'Share image')}
+            >
+              <Icon name="share" size="sm" aria-hidden="true" />
+            </button>
+          )}
+          <button
+            onClick={download}
+            className="bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+            title={t('chatMessage.downloadImage', 'Download image')}
+            aria-label={t('chatMessage.downloadImage', 'Download image')}
+          >
+            <Icon name="download" size="sm" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -893,6 +893,20 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts for all providers",
+        "description": "Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.",
+        "connect": "Connect timeout (ms)",
+        "connectHint": "Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.",
+        "streamIdle": "Stream idle timeout (ms)",
+        "streamIdleHint": "Longest silence between two chunks of a stream that is already running. Raise it for thinking models. 0 turns it off.",
+        "save": "Save timeouts",
+        "reset": "Reset",
+        "saved": "Timeouts saved. They apply to the next request.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Apply to all models of this provider. Leave a field empty to use the installation value; a model can still set its own. 0 turns a ceiling off.",
+        "inherited": "Inherited: {{value}} ms (installation)"
+      },
       "title": "Provider Credentials",
       "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
@@ -1048,6 +1062,7 @@
       }
     },
     "models": {
+      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
       "loadError": "Error loading models",
@@ -6071,6 +6086,7 @@
     "openInCanvas": "Open in Canvas",
     "generatedImage": "Generated image",
     "downloadImage": "Download image",
+    "shareImage": "Share image",
     "imageNotPersisted": "Image not available",
     "copyLink": "Copy link",
     "linkCopied": "Link copied!",
@@ -6132,7 +6148,9 @@
       "notKept": "This file was not kept with the chat",
       "slides": "{{count}} slides",
       "sheets": "{{count}} sheets",
-      "open": "Open"
+      "open": "Open",
+      "share": "Share",
+      "shareNamed": "Share {{name}}"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -9195,6 +9213,26 @@
     "VOICES_UNSUPPORTED": "The provider of this model does not manage voices.",
     "INVALID_AUDIO": "The audio is missing or not valid.",
     "UNSUPPORTED_TTS_PROVIDER": "The text-to-speech provider is not supported.",
-    "NO_AUDIO": "The model answered without any audio."
+    "NO_AUDIO": "The model answered without any audio.",
+    "ANSWER_IN_PROGRESS": "The interaction is being answered right now.",
+    "ANSWER_IN_CHAT": "Answer this approval in its chat.",
+    "APPROVER_REQUIRED": "An approver is required to answer this interaction.",
+    "UNAUTHORIZED_APPROVER": "You are not one of the approvers of this interaction.",
+    "CANCELLED": "The interaction was cancelled.",
+    "EXPIRED": "The interaction has expired.",
+    "RUN_DELETED": "The run of this interaction was deleted.",
+    "INVALID_INPUT": "The answer does not match what the interaction asks for.",
+    "INVALID_OPTION": "The chosen option is not one of the offered options.",
+    "NOT_PENDING": "The interaction is no longer waiting for an answer.",
+    "REASON_REQUIRED": "A reason is required to reject.",
+    "SKIP_NOT_ALLOWED": "This question cannot be skipped.",
+    "ARCHIVE_REJECTED": "The update archive was rejected.",
+    "DISK_SPACE": "There is not enough free disk space for the update.",
+    "UPDATE_PENDING": "An update is already scheduled to be applied on restart. Restart the server first.",
+    "CONFIRM_DOWNGRADE": "The staged version is not newer than the running one. Confirm the downgrade to continue.",
+    "UNSIGNED_NOT_ALLOWED": "Unsigned archives are not allowed on this server.",
+    "CONFIRM_UNSIGNED": "The archive is not signed by a trusted key. Type its version to install it anyway.",
+    "STAGED_CHANGED": "The staged update changed or is already scheduled. Review it again before installing.",
+    "CONFIG_SNAPSHOT_FAILED": "The configuration snapshot could not be written. Free disk space, or apply without a snapshot."
   }
 }

@@ -596,6 +596,7 @@
     "openInCanvas": "In Canvas öffnen",
     "generatedImage": "Generiertes Bild",
     "downloadImage": "Bild herunterladen",
+    "shareImage": "Bild teilen",
     "imageNotPersisted": "Bild nicht verfügbar",
     "copyLink": "Link kopieren",
     "linkCopied": "Link kopiert!",
@@ -657,7 +658,9 @@
       "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert",
       "slides": "{{count}} Folien",
       "sheets": "{{count}} Tabellenblätter",
-      "open": "Öffnen"
+      "open": "Öffnen",
+      "share": "Teilen",
+      "shareNamed": "{{name}} teilen"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
@@ -1201,6 +1204,20 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts für alle Provider",
+        "description": "Gelten für jedes Modell, sofern nicht sein Provider oder das Modell eigene Werte setzt. Änderungen wirken ab der nächsten Anfrage; ein Neustart ist nicht nötig. Ein leeres Feld verwendet den Standardwert.",
+        "connect": "Verbindungs-Timeout (ms)",
+        "connectHint": "Längste Wartezeit auf die Antwort-Header des Providers, bevor ein Aufruf als nicht erreichbar scheitert. 0 schaltet sie ab.",
+        "streamIdle": "Stream-Leerlauf-Timeout (ms)",
+        "streamIdleHint": "Längste Pause zwischen zwei Chunks eines bereits laufenden Streams. Für Denkmodelle erhöhen. 0 schaltet sie ab.",
+        "save": "Timeouts speichern",
+        "reset": "Zurücksetzen",
+        "saved": "Timeouts gespeichert. Sie gelten ab der nächsten Anfrage.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Gelten für alle Modelle dieses Providers. Ein leeres Feld verwendet den Wert der Installation; ein Modell kann weiterhin einen eigenen setzen. 0 schaltet eine Grenze ab.",
+        "inherited": "Geerbt: {{value}} ms (Installation)"
+      },
       "title": "Anbieter-Zugangsdaten",
       "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
       "search": "Anbieter suchen...",
@@ -1356,6 +1373,7 @@
       }
     },
     "models": {
+      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
       "title": "Modellverwaltung",
       "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
       "loadError": "Fehler beim Laden der Modelle",
@@ -9168,6 +9186,26 @@
     "VOICES_UNSUPPORTED": "Der Anbieter dieses Modells verwaltet keine Stimmen.",
     "INVALID_AUDIO": "Die Audiodatei fehlt oder ist ungültig.",
     "UNSUPPORTED_TTS_PROVIDER": "Der Text-to-Speech-Anbieter wird nicht unterstützt.",
-    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet."
+    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet.",
+    "ANSWER_IN_PROGRESS": "Die Interaktion wird gerade beantwortet.",
+    "ANSWER_IN_CHAT": "Beantworten Sie diese Freigabe im zugehörigen Chat.",
+    "APPROVER_REQUIRED": "Zum Beantworten dieser Interaktion ist ein Freigebender erforderlich.",
+    "UNAUTHORIZED_APPROVER": "Sie gehören nicht zu den Freigebenden dieser Interaktion.",
+    "CANCELLED": "Die Interaktion wurde abgebrochen.",
+    "EXPIRED": "Die Interaktion ist abgelaufen.",
+    "RUN_DELETED": "Der Lauf dieser Interaktion wurde gelöscht.",
+    "INVALID_INPUT": "Die Antwort passt nicht zu dem, was die Interaktion verlangt.",
+    "INVALID_OPTION": "Die gewählte Option gehört nicht zu den angebotenen Optionen.",
+    "NOT_PENDING": "Die Interaktion wartet nicht mehr auf eine Antwort.",
+    "REASON_REQUIRED": "Zum Ablehnen ist eine Begründung erforderlich.",
+    "SKIP_NOT_ALLOWED": "Diese Frage darf nicht übersprungen werden.",
+    "ARCHIVE_REJECTED": "Das Update-Archiv wurde abgelehnt.",
+    "DISK_SPACE": "Für das Update ist nicht genug freier Speicherplatz vorhanden.",
+    "UPDATE_PENDING": "Ein Update ist bereits für den nächsten Neustart vorgemerkt. Starten Sie zuerst den Server neu.",
+    "CONFIRM_DOWNGRADE": "Die bereitgestellte Version ist nicht neuer als die laufende. Bestätigen Sie das Downgrade, um fortzufahren.",
+    "UNSIGNED_NOT_ALLOWED": "Unsignierte Archive sind auf diesem Server nicht erlaubt.",
+    "CONFIRM_UNSIGNED": "Das Archiv ist nicht von einem vertrauenswürdigen Schlüssel signiert. Geben Sie die Version ein, um es trotzdem zu installieren.",
+    "STAGED_CHANGED": "Das bereitgestellte Update hat sich geändert oder ist bereits vorgemerkt. Prüfen Sie es erneut, bevor Sie installieren.",
+    "CONFIG_SNAPSHOT_FAILED": "Der Konfigurations-Snapshot konnte nicht geschrieben werden. Schaffen Sie Speicherplatz oder wenden Sie das Update ohne Snapshot an."
   }
 }

@@ -122,4 +122,22 @@ describe('GeneratedFiles cards', () => {
     expect(screen.queryByTestId('generated-file-open')).not.toBeInTheDocument();
     expect(openArtifact).not.toHaveBeenCalled();
   });
+
+  it('offers Share for a stored file when the chat can be shared', () => {
+    const shareArtifact = jest.fn();
+    render(
+      <ArtifactViewerContext.Provider value={{ openArtifact: jest.fn(), shareArtifact }}>
+        <GeneratedFiles files={[dashboard, report, live]} chatId="chat-1" />
+      </ArtifactViewerContext.Provider>
+    );
+    // The two stored files can be shared; the live one has no stored id yet.
+    expect(screen.getAllByTestId('generated-file-share')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Share dashboard.html' }));
+    expect(shareArtifact).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
+  });
+
+  it('offers no Share where the chat cannot be shared', () => {
+    renderWith([dashboard]);
+    expect(screen.queryByTestId('generated-file-share')).not.toBeInTheDocument();
+  });
 });

@@ -423,8 +423,8 @@ or two columns stay ordinary lines. Tagged PDFs still use their structure tree.
 ## Share a Single File as a Link, Optionally Embedded
 
 A generated file — a web page, image, document or code file — can now be shared on its own, like a
-chat, without the conversation it came from. Open the Artifacts panel, select the file and choose
-**Share**.
+chat, without the conversation it came from. Choose **Share** on the file's card in the chat, in the
+file viewer, or in the Artifacts panel.
 
 - **Same audiences and limits as chat links:** specific users, anyone signed in, or anyone with the
   link, each with an expiry, an open limit and **Revoke**. Only that one file opens through the link;
@@ -668,11 +668,27 @@ text page. Every such response has the same body:
   (`not-tts-model`, `voices-unsupported`, `invalid-audio`, `audio-too-large`, `upstream-error`, `no-audio`).
   The headline of a failed text-to-speech or transcription test is shown only when it is safe to show (it may
   name a host); the reason stays in `details.remediation`, which the admin page shows.
+- The run endpoints (`/api/runs*`, answering an interaction, human events) answer in this shape:
+  `NOT_FOUND` (a run or an interaction), `FORBIDDEN`, `BAD_REQUEST` (an unsafe id) and
+  `VALIDATION_FAILED` with the failed fields in `details.issues` for a malformed answer or human event
+  (before: one `error` text and a `details` object of `formErrors` / `fieldErrors`). The refusals of an
+  answer keep their own status and code, now translated by the web app: `EXPIRED` and `RUN_DELETED`
+  (410), `CANCELLED`, `NOT_PENDING`, `ANSWER_IN_PROGRESS` and `ANSWER_IN_CHAT` (409),
+  `APPROVER_REQUIRED` and `UNAUTHORIZED_APPROVER` (403), and `INVALID_DECISION`, `INVALID_INPUT`,
+  `INVALID_OPTION`, `REASON_REQUIRED` and `SKIP_NOT_ALLOWED` (400).
 - The app administration endpoints (`/api/admin/apps*`) answer in this shape: `NOT_FOUND` (an app or its
   file), `BAD_REQUEST` (a missing field, an unsafe or changed id, a bad reorder list), `CONFLICT` (an app id
   that exists) and `VALIDATION_FAILED` for an app configuration that does not match the schema. The
   `error` text still names the failed fields; the failed fields are in `details.issues`
   (`{ path, code, message }`, `path` a dotted string) instead of a bare `details` list with `path` arrays.
+- The in-place update endpoints (`/api/admin/update*`) answer in this shape: `BAD_REQUEST` for an installation
+  that cannot be updated in place or an invalid request, `FORBIDDEN` for a missing write permission,
+  `CONFLICT` for an update operation that is already running or no staged update, and
+  `PAYLOAD_TOO_LARGE` for an upload over the limit. The codes the update already used are now upper case
+  registry codes at the top level (before: lower case in `details.code`) and translated by the web app:
+  `DISK_SPACE` and `CONFIG_SNAPSHOT_FAILED` (507), `UPDATE_PENDING`, `CONFIRM_DOWNGRADE`,
+  `CONFIRM_UNSIGNED` and `STAGED_CHANGED` (409), `UNSIGNED_NOT_ALLOWED` (403) and `ARCHIVE_REJECTED` (422).
+  A rejected archive keeps its `error` text; its staging summary moved from `summary` to `details.summary`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
@@ -841,3 +857,22 @@ or the text was shortened.
   iFinder document opened from a link, has buttons to download the original file and, for a document,
   the extracted text (from the stored file when the server fetched it). A local file is yours already and has none. Images and audio from these sources
   keep their original for the download.
+  
+## LLM Timeouts Configurable for All Providers and Per Provider
+
+A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with
+"stopped sending stream chunks for 60000 ms", and raising the limit meant editing `platform.json` and
+restarting, or changing every model. The two transport limits now have a place in the admin UI at every level:
+
+- **Admin → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
+  response headers, default 30 s) and the **stream idle timeout** (longest silence between two chunks of a
+  running stream, default 60 s) for the whole installation.
+- **Provider page:** a **Timeouts** section gives all models of one provider their own values, so every Google
+  thinking model can share one ceiling. A field left empty uses the installation value.
+- **Model page:** unchanged, and still the most specific level. Its fields now say what an empty value means.
+
+The order is model, provider, installation, environment variable (`LLM_CONNECT_TIMEOUT_MS`,
+`LLM_STREAM_IDLE_TIMEOUT_MS`), built-in default. Values run from 0 to 300000 ms; `0` turns a limit off. Changes
+apply to the next request — no restart. No migration is needed: providers without the new fields behave as before.
+
+See [LLM client → Tuning the ceilings](../../llm-client.md#tuning-the-ceilings).

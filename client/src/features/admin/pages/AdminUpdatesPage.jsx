@@ -237,8 +237,8 @@ function AdminUpdatesPage() {
         setMessage(null);
       }
     } catch (error) {
-      if (error.response?.status === 422 && error.response.data?.summary) {
-        setSummary(error.response.data.summary);
+      if (error.response?.status === 422 && error.response.data?.details?.summary) {
+        setSummary(error.response.data.details.summary);
         setMessage(null);
       } else {
         setMessage({
