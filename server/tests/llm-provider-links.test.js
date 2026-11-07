@@ -567,3 +567,55 @@ describe('transport ceilings on a provider entry', () => {
     expect(stored('brave').connectTimeoutMs).toBeUndefined();
   });
 });
+
+describe('provider routes answer errors in the shared shape', () => {
+  it('answers an unsafe id with BAD_REQUEST and an unknown provider with NOT_FOUND', async () => {
+    const unsafe = await request(app).get('/api/admin/providers/bad%20id');
+    expect(unsafe.status).toBe(400);
+    expect(unsafe.body.code).toBe('BAD_REQUEST');
+    expect(unsafe.body.detail).toMatch(/Invalid provider ID/);
+
+    for (const call of [
+      request(app).get('/api/admin/providers/nobody'),
+      request(app).put('/api/admin/providers/nobody').send({ id: 'nobody' }),
+      request(app).delete('/api/admin/providers/nobody')
+    ]) {
+      const res = await call;
+      expect(res.status).toBe(404);
+      expect(res.body).toMatchObject({ code: 'NOT_FOUND', detail: 'Provider not found' });
+    }
+  });
+
+  it('refuses to change the id of a provider with BAD_REQUEST', async () => {
+    const res = await request(app).put('/api/admin/providers/llmhub').send({ id: 'other' });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: 'Provider ID cannot be changed'
+    });
+  });
+
+  it('answers a new provider without an id, or with an existing one, with BAD_REQUEST', async () => {
+    const missing = await request(app).post('/api/admin/providers').send({ name: 'x' });
+    expect(missing.status).toBe(400);
+    expect(missing.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: 'Missing required field: id'
+    });
+    const existing = await request(app)
+      .post('/api/admin/providers')
+      .send({ id: 'llmhub', category: 'llm', name: 'Again' });
+    expect(existing.status).toBe(400);
+    expect(existing.body.code).toBe('BAD_REQUEST');
+  });
+
+  it('answers a provider that models use with PROVIDER_IN_USE and the models in details', async () => {
+    addModel({ ...baseModel, id: 'llmhub-a', provider: 'openai', providerId: 'llmhub' });
+    const res = await request(app).delete('/api/admin/providers/llmhub');
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({
+      code: 'PROVIDER_IN_USE',
+      details: { linkedModels: ['llmhub-a'] }
+    });
+  });
+});
