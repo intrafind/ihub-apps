@@ -689,6 +689,17 @@ text page. Every such response has the same body:
   `DISK_SPACE` and `CONFIG_SNAPSHOT_FAILED` (507), `UPDATE_PENDING`, `CONFIRM_DOWNGRADE`,
   `CONFIRM_UNSIGNED` and `STAGED_CHANGED` (409), `UNSIGNED_NOT_ALLOWED` (403) and `ARCHIVE_REJECTED` (422).
   A rejected archive keeps its `error` text; its staging summary moved from `summary` to `details.summary`.
+- The chat endpoints (`/api/chats*`) and the file uploads of chats and scheduled tasks answer in this shape.
+  The codes these routes already sent in `details.code` are now registry codes at the top level, with the
+  web app's messages: `CHAT_PERSISTENCE_UNAVAILABLE` (503), `CHAT_OWNER_REQUIRED`, `USER_PROJECTS_DISABLED`
+  and `APP_PROJECTS_DISABLED` (403), `PROJECT_TEST_CHAT_NOT_KEEPABLE` (409), `ORIGINAL_DISCARDED` (410, with
+  `details.originalDeletedAt`), the upload refusals `QUOTA_FILE_BYTES`, `QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`,
+  `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES` (413) and `QUOTA_SERVER_BYTES` (507),
+  `BINARY_UPLOAD_NOT_ALLOWED`, `UNSUPPORTED_TYPE`, `SCAN_REJECTED`, `NO_TEXT` and `EXTRACTION_FAILED` (400),
+  and the refusals of a file from a connected system `SOURCE_FORBIDDEN` (403), `SOURCE_GONE` (404),
+  `SOURCE_UNAVAILABLE` and `SOURCE_INVALID` (400) and `SOURCE_FAILED` (502). Storage failures answer with
+  their storage code (`INVALID_CURSOR` for a bad paging cursor, 400). Details of a refusal (a quota's
+  `limit`, `used` and `size`) stay in `details`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 
@@ -864,7 +875,7 @@ A model that goes silent for a while — Gemini with thinking switched on, for e
 "stopped sending stream chunks for 60000 ms", and raising the limit meant editing `platform.json` and
 restarting, or changing every model. The two transport limits now have a place in the admin UI at every level:
 
-- **Admin → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
+- **Admin → Models → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
   response headers, default 30 s) and the **stream idle timeout** (longest silence between two chunks of a
   running stream, default 60 s) for the whole installation.
 - **Provider page:** a **Timeouts** section gives all models of one provider their own values, so every Google
@@ -876,3 +887,28 @@ The order is model, provider, installation, environment variable (`LLM_CONNECT_T
 apply to the next request — no restart. No migration is needed: providers without the new fields behave as before.
 
 See [LLM client → Tuning the ceilings](../../llm-client.md#tuning-the-ceilings).
+
+## Models and Providers in One Admin Area
+
+Web search, storage and tools are integrations now, so **Providers** is only the connection to a model
+endpoint. It no longer has a page of its own in the menu. **AI Workspace → Models** has two tabs, **Models**
+and **Providers**, and each links to the other.
+
+- **Models tab:** the provider column names the provider (a custom provider's name, not `openai`) and links to
+  it; filter by **Provider**, **Type** and **Status** (kept in the address); **Add New Model** and
+  **Import models** are the primary actions, **Upload Config**, **Install from Marketplace**, **Enable All**
+  and **Disable All** moved into a **⋮** menu.
+- **Set up your models:** a three-step strip (a provider with a key, an enabled model, a default model) replaces
+  the "Get started" panel and goes away when the steps are done.
+- **Providers tab:** each row's model count opens the Models tab for that provider, **Import models** opens the
+  import for it, and a ⏱ marks a provider with its own timeouts. The description and status columns are gone
+  (the description is a tooltip, a disabled provider is tagged). **Timeouts for all providers** is one summary
+  line you can open with **Edit**.
+- **Provider page:** **Add model** creates a model with the provider already chosen.
+- **Add provider** always creates an LLM provider; the category choice is gone. Entries of other categories
+  that an older installation still has stay reachable under a collapsed **Other credentials** group.
+
+Nothing else changes: addresses (`/admin/models`, `/admin/providers`), permissions (`admin.pages.providers`
+still decides whether the **Providers** tab is shown), data files and the API stay as they are.
+
+See [Admin UI → Managing Models](../../admin-ui.md#managing-models).

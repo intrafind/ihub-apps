@@ -400,7 +400,7 @@ env vars `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`, and a single
 model can override either in its own config. `0` disables a ceiling and leaves
 the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
 
-Edit them under **Admin → Providers → Timeouts for all providers**; a change
+Edit them under **Admin → Models → Providers → Timeouts for all providers**; a change
 applies to the next request without a restart. A provider entry can also carry
 its own `connectTimeoutMs` / `streamIdleTimeoutMs` (set on the provider's page)
 that its models inherit; the order is model, provider, `llm`, environment,

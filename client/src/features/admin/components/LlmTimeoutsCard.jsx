@@ -10,6 +10,12 @@ import Icon from '../../../shared/components/Icon';
 const INPUT =
   'mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm';
 
+/** 30000 → "30 s", 1500 → "1500 ms", 0 → null (no ceiling). */
+function formatMs(ms, t) {
+  if (ms === 0) return t('admin.providers.timeouts.off', 'off');
+  return ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`;
+}
+
 /** Saved values → the form's text values (an unset key is an empty field). */
 function toForm(saved) {
   return Object.fromEntries(LLM_TIMEOUT_KEYS.map(key => [key, saved?.[key] ?? '']));
@@ -30,16 +36,21 @@ function toRequest(form) {
  */
 function LlmTimeoutsCard() {
   const { t } = useTranslation();
-  const [form, setForm] = useState(toForm());
+  const [form, setForm] = useState(() => toForm());
   const [saved, setSaved] = useState({});
   const [defaults, setDefaults] = useState({});
+  const [effective, setEffective] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  // A failed load has nothing to summarise; it is shown beside the title, not inside the collapsed body.
+  const [loadError, setLoadError] = useState(null);
+  const [open, setOpen] = useState(false);
 
   const apply = useCallback(data => {
     setSaved(data?.saved || {});
     setDefaults(data?.defaults || {});
+    setEffective(data?.effective || {});
     setForm(toForm(data?.saved));
   }, []);
 
@@ -50,7 +61,7 @@ function LlmTimeoutsCard() {
         if (!cancelled) apply(response.data);
       })
       .catch(error => {
-        if (!cancelled) setMessage({ type: 'error', text: getAdminApiErrorMessage(error) });
+        if (!cancelled) setLoadError(getAdminApiErrorMessage(error));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -105,99 +116,126 @@ function LlmTimeoutsCard() {
   return (
     <form
       onSubmit={handleSave}
-      className="mb-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6"
+      className="mb-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4"
       aria-labelledby="llm-timeouts-title"
       data-testid="llm-timeouts-card"
     >
-      <div className="flex items-start gap-2 mb-4">
-        <Icon name="ClockIcon" className="w-6 h-6 text-blue-500 shrink-0" />
-        <div>
-          <h2
-            id="llm-timeouts-title"
-            className="text-lg font-semibold text-gray-900 dark:text-white"
-          >
-            {t('admin.providers.timeouts.title', 'Timeouts for all providers')}
-          </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'admin.providers.timeouts.description',
-              'Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.'
-            )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Icon name="ClockIcon" className="w-5 h-5 text-blue-500 shrink-0" />
+        <h2
+          id="llm-timeouts-title"
+          className="text-base font-semibold text-gray-900 dark:text-white"
+        >
+          {t('admin.providers.timeouts.title', 'Timeouts for all providers')}
+        </h2>
+        {loadError && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {loadError}
           </p>
-        </div>
+        )}
+        {!loading && Number.isFinite(effective.connectTimeoutMs ?? defaults.connectTimeoutMs) && (
+          <p
+            className="text-sm text-gray-600 dark:text-gray-400"
+            data-testid="llm-timeouts-summary"
+          >
+            {t('admin.providers.timeouts.summary', 'connect {{connect}} · stream idle {{idle}}', {
+              connect: formatMs(effective.connectTimeoutMs ?? defaults.connectTimeoutMs, t),
+              idle: formatMs(effective.streamIdleTimeoutMs ?? defaults.streamIdleTimeoutMs, t)
+            })}
+          </p>
+        )}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="llm-timeouts-body"
+          onClick={() => setOpen(prev => !prev)}
+          className="ml-auto rounded-md px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+        >
+          {open
+            ? t('admin.providers.timeouts.hide', 'Hide')
+            : t('admin.providers.timeouts.edit', 'Edit')}
+        </button>
       </div>
 
-      {loading ? (
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('common.loading', 'Loading...')}
-        </p>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {fields.map(({ key, label, hint }) => (
-              <div key={key}>
-                <label
-                  htmlFor={`llm-timeout-${key}`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {label}
-                </label>
-                <input
-                  id={`llm-timeout-${key}`}
-                  type="number"
-                  min="0"
-                  max={LLM_TIMEOUT_MAX_MS}
-                  step="1"
-                  value={form[key]}
-                  placeholder={defaults[key] === undefined ? '' : String(defaults[key])}
-                  onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-                  aria-describedby={`llm-timeout-${key}-hint`}
-                  className={INPUT}
-                />
-                <p
-                  id={`llm-timeout-${key}-hint`}
-                  className="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                >
-                  {hint}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {message && (
-            <p
-              role={message.type === 'error' ? 'alert' : 'status'}
-              className={`mt-4 text-sm ${
-                message.type === 'success'
-                  ? 'text-green-700 dark:text-green-300'
-                  : 'text-red-700 dark:text-red-300'
-              }`}
-            >
-              {message.text}
-            </p>
+      <div id="llm-timeouts-body" hidden={!open} className="mt-4">
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+          {t(
+            'admin.providers.timeouts.description',
+            'Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.'
           )}
+        </p>
+        {loading ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('common.loading', 'Loading...')}
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fields.map(({ key, label, hint }) => (
+                <div key={key}>
+                  <label
+                    htmlFor={`llm-timeout-${key}`}
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {label}
+                  </label>
+                  <input
+                    id={`llm-timeout-${key}`}
+                    type="number"
+                    min="0"
+                    max={LLM_TIMEOUT_MAX_MS}
+                    step="1"
+                    value={form[key]}
+                    placeholder={defaults[key] === undefined ? '' : String(defaults[key])}
+                    onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    aria-describedby={`llm-timeout-${key}-hint`}
+                    className={INPUT}
+                  />
+                  <p
+                    id={`llm-timeout-${key}-hint`}
+                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {hint}
+                  </p>
+                </div>
+              ))}
+            </div>
 
-          <div className="mt-4 flex justify-end gap-3">
-            <button
-              type="button"
-              disabled={!dirty || saving}
-              onClick={() => setForm(toForm(saved))}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t('admin.providers.timeouts.reset', 'Reset')}
-            </button>
-            <button
-              type="submit"
-              disabled={!dirty || saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving
-                ? t('admin.providers.edit.saving', 'Saving...')
-                : t('admin.providers.timeouts.save', 'Save timeouts')}
-            </button>
-          </div>
-        </>
-      )}
+            {message && (
+              <p
+                role={message.type === 'error' ? 'alert' : 'status'}
+                className={`mt-4 text-sm ${
+                  message.type === 'success'
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}
+              >
+                {message.text}
+              </p>
+            )}
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={!dirty || saving}
+                onClick={() => setForm(toForm(saved))}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('admin.providers.timeouts.reset', 'Reset')}
+              </button>
+              <button
+                type="submit"
+                disabled={!dirty || saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving
+                  ? t('admin.providers.edit.saving', 'Saving...')
+                  : t('admin.providers.timeouts.save', 'Save timeouts')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </form>
   );
 }

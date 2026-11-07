@@ -24,6 +24,7 @@
  */
 import { createHash } from 'node:crypto';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import {
   ACCEPTED_TYPES,
@@ -53,7 +54,7 @@ export const MAX_SCANNED_PDF_PAGES = 5;
 /**
  * Error raised during chat file ingest or validation.
  */
-export class ChatFileError extends Error {
+export class ChatFileError extends ServiceError {
   /**
    * @param {string} code
    * @param {string} message
@@ -61,11 +62,11 @@ export class ChatFileError extends Error {
    * @param {Object} [details]
    */
   constructor(code, message, status = 400, details = {}) {
-    super(message);
+    super(code, message, {
+      status,
+      details: Object.keys(details || {}).length ? details : undefined
+    });
     this.name = 'ChatFileError';
-    this.code = code;
-    this.status = status;
-    this.details = details;
   }
 }
 

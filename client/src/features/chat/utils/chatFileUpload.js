@@ -184,21 +184,14 @@ export function splitFilesForWire(fileData) {
 
 /**
  * The short, user-facing reason an upload was refused, from the server's
- * error body (`details.code` of `413 QUOTA_*`, `UNSUPPORTED_TYPE`, …).
+ * error body (`code` of `413 QUOTA_*`, `UNSUPPORTED_TYPE`, …).
  *
  * @param {unknown} error
  * @returns {string} A code; `'FAILED'` when the server named none.
  */
 export function uploadErrorCode(error) {
   // The file API wraps axios errors (`handleApiResponse`): the response then sits
-  // on `originalError`, and the wrapper's own `code` only mirrors a top-level
-  // `data.code`, which the file endpoints do not send (they use `details.code`).
+  // on `originalError`.
   const data = error?.response?.data || error?.originalError?.response?.data;
-  return (
-    data?.details?.code ||
-    data?.code ||
-    error?.details?.code ||
-    error?.code ||
-    'FAILED'
-  ).toString();
+  return (data?.code || error?.code || 'FAILED').toString();
 }

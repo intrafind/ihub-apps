@@ -152,7 +152,8 @@
     "export": "Exportieren",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
-    "saving": "Speichern…"
+    "saving": "Speichern…",
+    "moreActions": "Weitere Aktionen"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -1216,7 +1217,11 @@
         "saved": "Timeouts gespeichert. Sie gelten ab der nächsten Anfrage.",
         "providerTitle": "Timeouts",
         "providerDescription": "Gelten für alle Modelle dieses Providers. Ein leeres Feld verwendet den Wert der Installation; ein Modell kann weiterhin einen eigenen setzen. 0 schaltet eine Grenze ab.",
-        "inherited": "Geerbt: {{value}} ms (Installation)"
+        "inherited": "Geerbt: {{value}} ms (Installation)",
+        "off": "aus",
+        "summary": "Verbindung {{connect}} · Stream-Leerlauf {{idle}}",
+        "edit": "Bearbeiten",
+        "hide": "Ausblenden"
       },
       "title": "Anbieter-Zugangsdaten",
       "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
@@ -1240,8 +1245,7 @@
       "backToList": "Zurück zu Anbietern",
       "category": {
         "llm": "LLM-Anbieter",
-        "cloudstorage": "Cloud-Speicher-Anbieter",
-        "custom": "Benutzerdefinierte / Generische API-Schlüssel"
+        "other": "Weitere Zugangsdaten"
       },
       "table": {
         "provider": "Anbieter",
@@ -1338,7 +1342,8 @@
         "import": "Modelle importieren",
         "none": "Mit diesem Anbieter sind keine Modelle verknüpft.",
         "count": "{{count}} verknüpft, {{enabled}} aktiv",
-        "more": "+{{count}} weitere"
+        "more": "+{{count}} weitere",
+        "add": "Modell hinzufügen"
       },
       "gateway": {
         "none": "Keines (normaler Endpunkt)",
@@ -1370,10 +1375,13 @@
           "supportsVision": "Bildeingabe"
         },
         "skipped": "Das Gateway hat sich seit Ihrer Ansicht geändert. Gleichen Sie erneut ab."
-      }
+      },
+      "add": "Provider hinzufügen",
+      "import": "Modelle importieren",
+      "ownTimeouts": "Setzt eigene Timeouts"
     },
     "models": {
-      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
+      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Modelle → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
       "title": "Modellverwaltung",
       "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
       "loadError": "Fehler beim Laden der Modelle",
@@ -1681,18 +1689,42 @@
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
-        "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt."
+        "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt.",
+        "models": "Modelle importieren"
       },
-      "getStarted": {
-        "title": "Fügen Sie die Modelle hinzu, die Ihre Apps nutzen",
-        "description": "Importieren Sie die Modelle eines Anbieters wie OpenAI, Anthropic, Google, Mistral oder Ihres eigenen Endpunkts, oder konfigurieren Sie ein Modell von Hand.",
-        "import": "Von Anbieter importieren",
-        "importHint": "Die Modelle eines Anbieters auflisten und die gewünschten auswählen.",
-        "create": "Neues Modell anlegen",
-        "createHint": "Endpunkt und Einstellungen selbst eingeben.",
-        "marketplacePrefix": "Oder installieren Sie ein fertiges Modell aus",
-        "marketplace": "dem Marketplace"
-      }
+      "areaTitle": "Modelle",
+      "areaSubtitle": "KI-Provider verbinden und die Modelle auswählen, die Ihre Apps nutzen können",
+      "tabs": {
+        "models": "Modelle",
+        "providers": "Provider",
+        "aria": "Bereiche der Modellverwaltung"
+      },
+      "providerFilter": "Provider",
+      "filterAllProviders": "Alle Provider",
+      "typeFilter": "Typ",
+      "filterAllTypes": "Alle Typen",
+      "types": {
+        "chat": "Chat",
+        "transcription": "Transkription",
+        "tts": "Sprachausgabe"
+      },
+      "providerOwnTimeouts": "Dieser Provider setzt eigene Timeouts",
+      "fromMarketplace": "Aus dem Marketplace installieren",
+      "setup": {
+        "title": "Modelle einrichten",
+        "connect": "Provider verbinden",
+        "enable": "Modelle aktivieren",
+        "default": "Standardmodell wählen",
+        "connectAction": "API-Schlüssel hinterlegen",
+        "enableAction": "Modelle importieren",
+        "defaultAction": "Aktive Modelle anzeigen",
+        "connectHint": "Modelle brauchen einen Provider mit API-Schlüssel (oder einen Endpunkt, der keinen braucht).",
+        "enableHint": "Importieren Sie die Modelle eines Providers oder schalten Sie unten eines ein.",
+        "defaultHint": "Öffnen Sie ein Modell und setzen Sie „Standard“, damit Apps ohne eigenes Modell eines haben.",
+        "done": "(erledigt)",
+        "todo": "(offen)"
+      },
+      "moreActions": "Weitere Modell-Aktionen"
     },
     "chat": {
       "title": "Chat",
@@ -9206,6 +9238,28 @@
     "UNSIGNED_NOT_ALLOWED": "Unsignierte Archive sind auf diesem Server nicht erlaubt.",
     "CONFIRM_UNSIGNED": "Das Archiv ist nicht von einem vertrauenswürdigen Schlüssel signiert. Geben Sie die Version ein, um es trotzdem zu installieren.",
     "STAGED_CHANGED": "Das bereitgestellte Update hat sich geändert oder ist bereits vorgemerkt. Prüfen Sie es erneut, bevor Sie installieren.",
-    "CONFIG_SNAPSHOT_FAILED": "Der Konfigurations-Snapshot konnte nicht geschrieben werden. Schaffen Sie Speicherplatz oder wenden Sie das Update ohne Snapshot an."
+    "CONFIG_SNAPSHOT_FAILED": "Der Konfigurations-Snapshot konnte nicht geschrieben werden. Schaffen Sie Speicherplatz oder wenden Sie das Update ohne Snapshot an.",
+    "CHAT_PERSISTENCE_UNAVAILABLE": "Der Chatverlauf ist auf dieser Installation nicht verfügbar.",
+    "CHAT_OWNER_REQUIRED": "Dieser Chat hat keinen Eigentümer, unter dem er gespeichert werden könnte.",
+    "USER_PROJECTS_DISABLED": "Persönliche Projekte sind ausgeschaltet.",
+    "APP_PROJECTS_DISABLED": "Diese App nimmt keine Projekte entgegen.",
+    "PROJECT_TEST_CHAT_NOT_KEEPABLE": "Der Testchat eines Projekts kann nicht behalten werden.",
+    "QUOTA_FILE_BYTES": "Die Datei ist größer als erlaubt.",
+    "QUOTA_CHAT_FILES": "Dieser Chat hat bereits die maximale Anzahl hochgeladener Dateien.",
+    "QUOTA_CHAT_BYTES": "Die hochgeladenen Dateien dieses Chats überschreiten das Speicherkontingent.",
+    "QUOTA_API_FILES": "Sie haben bereits die maximale Anzahl an Dateien in der Inference-API.",
+    "QUOTA_API_BYTES": "Ihre Inference-API-Dateien überschreiten das Speicherkontingent.",
+    "QUOTA_USER_BYTES": "Ihr Speicherkontingent für hochgeladene Dateien ist aufgebraucht.",
+    "QUOTA_SERVER_BYTES": "Der Speicher für Datei-Uploads des Servers ist voll.",
+    "BINARY_UPLOAD_NOT_ALLOWED": "Binäre Datei-Uploads sind deaktiviert; laden Sie nur den extrahierten Text hoch.",
+    "UNSUPPORTED_TYPE": "Dieser Dateityp wird nicht unterstützt.",
+    "SCAN_REJECTED": "Der Sicherheitsscanner hat die Datei abgelehnt.",
+    "NO_TEXT": "Die Datei enthält keinen Text.",
+    "EXTRACTION_FAILED": "Der Text konnte nicht aus der Datei extrahiert werden.",
+    "SOURCE_FORBIDDEN": "Sie dürfen keine Dateien aus diesem angebundenen System anhängen.",
+    "SOURCE_GONE": "Die Datei existiert im angebundenen System nicht mehr.",
+    "SOURCE_UNAVAILABLE": "Das angebundene System ist nicht verfügbar.",
+    "SOURCE_INVALID": "Die Dateireferenz ist ungültig.",
+    "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden."
   }
 }
