@@ -9,7 +9,7 @@ import tokenStorageService from '../../services/TokenStorageService.js';
 import { issueAzureSpeechToken } from '../../services/azureSpeechToken.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
@@ -177,325 +177,317 @@ export default function registerAdminConfigRoutes(app) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
-    try {
-      // Strict, for the reason the save below is: defaults rendered over a
-      // platform.json that merely cannot be parsed read as "nothing is
-      // configured", which is the one thing that is not true.
-      let platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
-      if (!platformConfig) {
-        logger.info('Platform config not found, returning default config', {
-          component: 'AdminConfigs'
-        });
-        platformConfig = {
-          auth: {
-            mode: 'local',
-            authenticatedGroup: 'authenticated'
-          },
-          anonymousAuth: {
-            enabled: true,
-            defaultGroups: ['anonymous']
-          },
-          proxyAuth: {
-            enabled: false,
-            userHeader: 'X-Forwarded-User',
-            groupsHeader: 'X-Forwarded-Groups',
-            jwtProviders: []
-          },
-          localAuth: {
-            enabled: false,
-            sessionTimeoutMinutes: 480
-          },
-          oidcAuth: {
-            enabled: false,
-            providers: []
-          }
-        };
-      }
-
-      // Integration secrets (oidc/ldap/ntlm) no longer
-      // live in platform.json — they are stored in the central credential store
-      // and referenced by *Ref ids, so there is nothing to sanitize for them
-      // here. Only the JWT secrets and proxy JWT provider config remain inline.
-      const sanitizedConfig = { ...platformConfig };
-
-      // Sanitize JWT secret from auth config
-      if (sanitizedConfig.auth?.jwtSecret) {
-        sanitizedConfig.auth = {
-          ...sanitizedConfig.auth,
-          jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
-        };
-      }
-
-      // Sanitize JWT secret from localAuth config
-      if (sanitizedConfig.localAuth?.jwtSecret) {
-        sanitizedConfig.localAuth = {
-          ...sanitizedConfig.localAuth,
-          jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
-        };
-      }
-
-      // Sanitize the Azure Speech subscription key (server-side secret).
-      if (sanitizedConfig.speech?.azure?.subscriptionKey) {
-        sanitizedConfig.speech = {
-          ...sanitizedConfig.speech,
-          azure: {
-            ...sanitizedConfig.speech.azure,
-            subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
-          }
-        };
-      }
-
-      // Sanitize proxy auth JWT provider secrets
-      if (sanitizedConfig.proxyAuth?.jwtProviders) {
-        sanitizedConfig.proxyAuth = {
-          ...sanitizedConfig.proxyAuth,
-          jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
-            name: provider.name,
-            header: provider.header,
-            issuer: provider.issuer,
-            audience: provider.audience
-            // Exclude jwkUrl and any other potentially sensitive configuration
-          }))
-        };
-      }
-
-      res.json(sanitizedConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'get platform configuration');
+    // Strict, for the reason the save below is: defaults rendered over a
+    // platform.json that merely cannot be parsed read as "nothing is
+    // configured", which is the one thing that is not true.
+    let platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+    if (!platformConfig) {
+      logger.info('Platform config not found, returning default config', {
+        component: 'AdminConfigs'
+      });
+      platformConfig = {
+        auth: {
+          mode: 'local',
+          authenticatedGroup: 'authenticated'
+        },
+        anonymousAuth: {
+          enabled: true,
+          defaultGroups: ['anonymous']
+        },
+        proxyAuth: {
+          enabled: false,
+          userHeader: 'X-Forwarded-User',
+          groupsHeader: 'X-Forwarded-Groups',
+          jwtProviders: []
+        },
+        localAuth: {
+          enabled: false,
+          sessionTimeoutMinutes: 480
+        },
+        oidcAuth: {
+          enabled: false,
+          providers: []
+        }
+      };
     }
+
+    // Integration secrets (oidc/ldap/ntlm) no longer
+    // live in platform.json — they are stored in the central credential store
+    // and referenced by *Ref ids, so there is nothing to sanitize for them
+    // here. Only the JWT secrets and proxy JWT provider config remain inline.
+    const sanitizedConfig = { ...platformConfig };
+
+    // Sanitize JWT secret from auth config
+    if (sanitizedConfig.auth?.jwtSecret) {
+      sanitizedConfig.auth = {
+        ...sanitizedConfig.auth,
+        jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
+      };
+    }
+
+    // Sanitize JWT secret from localAuth config
+    if (sanitizedConfig.localAuth?.jwtSecret) {
+      sanitizedConfig.localAuth = {
+        ...sanitizedConfig.localAuth,
+        jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
+      };
+    }
+
+    // Sanitize the Azure Speech subscription key (server-side secret).
+    if (sanitizedConfig.speech?.azure?.subscriptionKey) {
+      sanitizedConfig.speech = {
+        ...sanitizedConfig.speech,
+        azure: {
+          ...sanitizedConfig.speech.azure,
+          subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
+        }
+      };
+    }
+
+    // Sanitize proxy auth JWT provider secrets
+    if (sanitizedConfig.proxyAuth?.jwtProviders) {
+      sanitizedConfig.proxyAuth = {
+        ...sanitizedConfig.proxyAuth,
+        jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
+          name: provider.name,
+          header: provider.header,
+          issuer: provider.issuer,
+          audience: provider.audience
+          // Exclude jwkUrl and any other potentially sensitive configuration
+        }))
+      };
+    }
+
+    res.json(sanitizedConfig);
   });
 
   /**
    * Update platform configuration
    */
   app.post(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
-    try {
-      const newConfig = req.body;
+    const newConfig = req.body;
 
-      if (!newConfig || typeof newConfig !== 'object') {
-        return sendBadRequest(res, 'Invalid configuration data');
-      }
-
-      // A bad default language is not cosmetic: every localized lookup that
-      // falls back to it, and every web search that has no request language of
-      // its own, would take the bad value.
-      if (
-        newConfig.defaultLanguage !== undefined &&
-        !isValidLanguageCode(newConfig.defaultLanguage)
-      ) {
-        return sendBadRequest(res, 'defaultLanguage must be a valid language code, e.g. "en"');
-      }
-
-      // The shared secret header is removed from every request, so it must not
-      // be one that sign-in or request handling reads.
-      const secretHeaderProblem =
-        newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
-      if (secretHeaderProblem) {
-        return sendBadRequest(res, `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
-      }
-
-      // Load existing config to preserve other fields and track changes.
-      // Strict, because this is a read-modify-write: the merge below emits
-      // only the named keys, so treating an unparseable platform.json as a
-      // first run would answer 200 while replacing `features`, `cors`,
-      // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
-      // One trailing comma left by an operator, one Save, and the file is
-      // gone.
-      const storedConfig = await configStore.readJsonStrict(PLATFORM_FILE);
-      if (!storedConfig) {
-        // File genuinely absent: first run.
-        logger.info('Creating new platform config file', { component: 'AdminConfigs' });
-      }
-      const existingConfig = storedConfig || {};
-
-      // Merge the authentication-related config with existing config
-      const mergedConfig = {
-        ...existingConfig,
-        // Listed explicitly for the same reason as `mcpServer` below: this merge
-        // emits only the named keys, so an unnamed one is silently reverted by
-        // the spread of existingConfig on save.
-        defaultLanguage:
-          newConfig.defaultLanguage !== undefined
-            ? newConfig.defaultLanguage
-            : existingConfig.defaultLanguage,
-        // First-run onboarding toggle (Admin → Advanced); same reason as above.
-        setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
-        auth: newConfig.auth || existingConfig.auth,
-        anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
-        proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
-        localAuth: newConfig.localAuth || existingConfig.localAuth,
-        oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
-        ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
-        ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
-        authorization: newConfig.authorization || existingConfig.authorization,
-        oauth: newConfig.oauth || existingConfig.oauth,
-        // MCP gateway (Admin → MCP gateway) is edited through this generic
-        // endpoint rather than a dedicated route, so it must be listed here —
-        // otherwise the spread of existingConfig silently wins and the saved
-        // toggles revert on the next load.
-        mcpServer:
-          newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
-        telemetry:
-          newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
-        speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
-        // Admin → Prompts → Variables (global context and custom variables).
-        globalPromptVariables:
-          newConfig.globalPromptVariables !== undefined
-            ? newConfig.globalPromptVariables
-            : existingConfig.globalPromptVariables,
-        // Admin → Security → Tool approval (#2945).
-        toolApproval:
-          newConfig.toolApproval !== undefined
-            ? newConfig.toolApproval
-            : existingConfig.toolApproval
-      };
-      if (newConfig.toolApproval === null) {
-        // `null` turns approval off: the block is removed, never stored as
-        // null (the platform schema has it as an optional object).
-        delete mergedConfig.toolApproval;
-      } else if (newConfig.toolApproval !== undefined) {
-        const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
-        if (approvalProblem) return sendBadRequest(res, approvalProblem);
-      }
-
-      // Restore secrets that were redacted in the client
-      // This prevents environment variable placeholders from being overwritten with ***REDACTED***
-
-      // Restore JWT secrets
-      if (newConfig.auth?.jwtSecret) {
-        if (!mergedConfig.auth) mergedConfig.auth = {};
-        mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
-          newConfig.auth.jwtSecret,
-          existingConfig.auth?.jwtSecret
-        );
-      }
-
-      if (newConfig.localAuth?.jwtSecret) {
-        if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
-        mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
-          newConfig.localAuth.jwtSecret,
-          existingConfig.localAuth?.jwtSecret
-        );
-      }
-
-      // Integration secrets (oidc/ldap/ntlm) live in
-      // the central credential store and are referenced by *Ref ids that are
-      // plain config values — they pass through the merge above unchanged and
-      // require no encrypt/restore handling here.
-
-      // Azure Speech subscription key: restore if the client sent the redacted
-      // placeholder, otherwise encrypt the newly provided secret at rest.
-      if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
-        if (!mergedConfig.speech) mergedConfig.speech = {};
-        if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
-        const restored = restoreSecretIfRedacted(
-          newConfig.speech.azure.subscriptionKey,
-          existingConfig.speech?.azure?.subscriptionKey
-        );
-        mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
-      }
-
-      // Save to file. Every secret has already been restored-if-redacted and
-      // encrypted above; what reaches the store is a plain object.
-      await configStore.writeJson(PLATFORM_FILE, mergedConfig);
-
-      // Refresh cache
-      await configCache.refreshCacheEntry('config/platform.json');
-
-      // Apply runtime-mutable telemetry settings without server restart
-      try {
-        const telemetryChanged =
-          JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
-        if (telemetryChanged && newConfig.telemetry) {
-          const { reloadTelemetryConfig } = await import('../../telemetry.js');
-          const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
-          reloadTelemetryConfig(newConfig.telemetry);
-          activityTracker.configure(newConfig.telemetry.activitySummary || {});
-          logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
-        }
-      } catch (telemetryError) {
-        logger.warn('Failed to apply runtime telemetry config update', {
-          component: 'AdminConfigs',
-          error: telemetryError.message
-        });
-      }
-
-      // A changed OIDC provider (token URL, client) invalidates the iFinder
-      // tokens exchanged through it. The iFinder installation itself lives in
-      // integrations.json and resets its caches from there.
-      if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
-        try {
-          const { clearExchangedTokenCache } =
-            await import('../../services/integrations/iFinderTokenProvider.js');
-          clearExchangedTokenCache();
-        } catch (error) {
-          logger.warn('Could not clear the iFinder token cache', {
-            component: 'AdminConfigs',
-            error
-          });
-        }
-      }
-
-      // Reconfigure authentication methods dynamically where possible
-      const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
-
-      // Log results
-      if (reconfigResults.reconfigured.length > 0) {
-        logger.info('Reconfigured authentication methods', {
-          component: 'AdminConfigs',
-          reconfigured: reconfigResults.reconfigured.join(', ')
-        });
-      }
-      if (reconfigResults.requiresRestart.length > 0) {
-        logger.info('Authentication methods require restart', {
-          component: 'AdminConfigs',
-          requiresRestart: reconfigResults.requiresRestart.join(', ')
-        });
-      }
-      reconfigResults.notes.forEach(note =>
-        logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
-      );
-
-      logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
-
-      // Sanitize the remaining inline secrets in the response — the admin UI
-      // should see ***REDACTED*** for JWT secrets, not raw values. Integration
-      // secrets no longer live in platform.json (they are in the credential
-      // store), so only the JWT secrets need sanitizing here.
-      const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
-      if (responseConfig.auth?.jwtSecret) {
-        responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
-      }
-      if (responseConfig.localAuth?.jwtSecret) {
-        responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
-      }
-
-      await saveSnapshot({
-        resource: 'platform',
-        id: 'platform',
-        before: existingConfig,
-        after: mergedConfig,
-        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
-      });
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'platform',
-        summary: 'Updated platform configuration'
-      });
-      res.json({
-        message: 'Platform configuration updated successfully',
-        config: responseConfig,
-        reconfiguration: {
-          reconfigured: reconfigResults.reconfigured,
-          requiresRestart: reconfigResults.requiresRestart,
-          notes: reconfigResults.notes
-        }
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update platform configuration');
+    if (!newConfig || typeof newConfig !== 'object') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid configuration data');
     }
+
+    // A bad default language is not cosmetic: every localized lookup that
+    // falls back to it, and every web search that has no request language of
+    // its own, would take the bad value.
+    if (
+      newConfig.defaultLanguage !== undefined &&
+      !isValidLanguageCode(newConfig.defaultLanguage)
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'defaultLanguage must be a valid language code, e.g. "en"'
+      );
+    }
+
+    // The shared secret header is removed from every request, so it must not
+    // be one that sign-in or request handling reads.
+    const secretHeaderProblem =
+      newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
+    if (secretHeaderProblem) {
+      throw new ServiceError('BAD_REQUEST', `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
+    }
+
+    // Load existing config to preserve other fields and track changes.
+    // Strict, because this is a read-modify-write: the merge below emits
+    // only the named keys, so treating an unparseable platform.json as a
+    // first run would answer 200 while replacing `features`, `cors`,
+    // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
+    // One trailing comma left by an operator, one Save, and the file is
+    // gone.
+    const storedConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+    if (!storedConfig) {
+      // File genuinely absent: first run.
+      logger.info('Creating new platform config file', { component: 'AdminConfigs' });
+    }
+    const existingConfig = storedConfig || {};
+
+    // Merge the authentication-related config with existing config
+    const mergedConfig = {
+      ...existingConfig,
+      // Listed explicitly for the same reason as `mcpServer` below: this merge
+      // emits only the named keys, so an unnamed one is silently reverted by
+      // the spread of existingConfig on save.
+      defaultLanguage:
+        newConfig.defaultLanguage !== undefined
+          ? newConfig.defaultLanguage
+          : existingConfig.defaultLanguage,
+      // First-run onboarding toggle (Admin → Advanced); same reason as above.
+      setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
+      auth: newConfig.auth || existingConfig.auth,
+      anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
+      proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
+      localAuth: newConfig.localAuth || existingConfig.localAuth,
+      oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
+      ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
+      ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
+      authorization: newConfig.authorization || existingConfig.authorization,
+      oauth: newConfig.oauth || existingConfig.oauth,
+      // MCP gateway (Admin → MCP gateway) is edited through this generic
+      // endpoint rather than a dedicated route, so it must be listed here —
+      // otherwise the spread of existingConfig silently wins and the saved
+      // toggles revert on the next load.
+      mcpServer: newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
+      telemetry: newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
+      speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
+      // Admin → Prompts → Variables (global context and custom variables).
+      globalPromptVariables:
+        newConfig.globalPromptVariables !== undefined
+          ? newConfig.globalPromptVariables
+          : existingConfig.globalPromptVariables,
+      // Admin → Security → Tool approval (#2945).
+      toolApproval:
+        newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
+    };
+    if (newConfig.toolApproval === null) {
+      // `null` turns approval off: the block is removed, never stored as
+      // null (the platform schema has it as an optional object).
+      delete mergedConfig.toolApproval;
+    } else if (newConfig.toolApproval !== undefined) {
+      const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
+      if (approvalProblem) throw new ServiceError('BAD_REQUEST', approvalProblem);
+    }
+
+    // Restore secrets that were redacted in the client
+    // This prevents environment variable placeholders from being overwritten with ***REDACTED***
+
+    // Restore JWT secrets
+    if (newConfig.auth?.jwtSecret) {
+      if (!mergedConfig.auth) mergedConfig.auth = {};
+      mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
+        newConfig.auth.jwtSecret,
+        existingConfig.auth?.jwtSecret
+      );
+    }
+
+    if (newConfig.localAuth?.jwtSecret) {
+      if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
+      mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
+        newConfig.localAuth.jwtSecret,
+        existingConfig.localAuth?.jwtSecret
+      );
+    }
+
+    // Integration secrets (oidc/ldap/ntlm) live in
+    // the central credential store and are referenced by *Ref ids that are
+    // plain config values — they pass through the merge above unchanged and
+    // require no encrypt/restore handling here.
+
+    // Azure Speech subscription key: restore if the client sent the redacted
+    // placeholder, otherwise encrypt the newly provided secret at rest.
+    if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
+      if (!mergedConfig.speech) mergedConfig.speech = {};
+      if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
+      const restored = restoreSecretIfRedacted(
+        newConfig.speech.azure.subscriptionKey,
+        existingConfig.speech?.azure?.subscriptionKey
+      );
+      mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
+    }
+
+    // Save to file. Every secret has already been restored-if-redacted and
+    // encrypted above; what reaches the store is a plain object.
+    await configStore.writeJson(PLATFORM_FILE, mergedConfig);
+
+    // Refresh cache
+    await configCache.refreshCacheEntry('config/platform.json');
+
+    // Apply runtime-mutable telemetry settings without server restart
+    try {
+      const telemetryChanged =
+        JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
+      if (telemetryChanged && newConfig.telemetry) {
+        const { reloadTelemetryConfig } = await import('../../telemetry.js');
+        const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
+        reloadTelemetryConfig(newConfig.telemetry);
+        activityTracker.configure(newConfig.telemetry.activitySummary || {});
+        logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
+      }
+    } catch (telemetryError) {
+      logger.warn('Failed to apply runtime telemetry config update', {
+        component: 'AdminConfigs',
+        error: telemetryError.message
+      });
+    }
+
+    // A changed OIDC provider (token URL, client) invalidates the iFinder
+    // tokens exchanged through it. The iFinder installation itself lives in
+    // integrations.json and resets its caches from there.
+    if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
+      try {
+        const { clearExchangedTokenCache } =
+          await import('../../services/integrations/iFinderTokenProvider.js');
+        clearExchangedTokenCache();
+      } catch (error) {
+        logger.warn('Could not clear the iFinder token cache', {
+          component: 'AdminConfigs',
+          error
+        });
+      }
+    }
+
+    // Reconfigure authentication methods dynamically where possible
+    const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
+
+    // Log results
+    if (reconfigResults.reconfigured.length > 0) {
+      logger.info('Reconfigured authentication methods', {
+        component: 'AdminConfigs',
+        reconfigured: reconfigResults.reconfigured.join(', ')
+      });
+    }
+    if (reconfigResults.requiresRestart.length > 0) {
+      logger.info('Authentication methods require restart', {
+        component: 'AdminConfigs',
+        requiresRestart: reconfigResults.requiresRestart.join(', ')
+      });
+    }
+    reconfigResults.notes.forEach(note =>
+      logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
+    );
+
+    logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
+
+    // Sanitize the remaining inline secrets in the response — the admin UI
+    // should see ***REDACTED*** for JWT secrets, not raw values. Integration
+    // secrets no longer live in platform.json (they are in the credential
+    // store), so only the JWT secrets need sanitizing here.
+    const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
+    if (responseConfig.auth?.jwtSecret) {
+      responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
+    }
+    if (responseConfig.localAuth?.jwtSecret) {
+      responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
+    }
+
+    await saveSnapshot({
+      resource: 'platform',
+      id: 'platform',
+      before: existingConfig,
+      after: mergedConfig,
+      admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+    });
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'platform',
+      summary: 'Updated platform configuration'
+    });
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      message: 'Platform configuration updated successfully',
+      config: responseConfig,
+      reconfiguration: {
+        reconfigured: reconfigResults.reconfigured,
+        requiresRestart: reconfigResults.requiresRestart,
+        notes: reconfigResults.notes
+      }
+    });
   });
 
   /**
@@ -507,57 +499,53 @@ export default function registerAdminConfigRoutes(app) {
    * only verifiable from the browser (the live dictation test).
    */
   app.post(buildServerPath('/api/admin/voice/azure/test'), adminAuth, async (req, res) => {
-    try {
-      const body = req.body || {};
-      const saved = (configCache.getPlatform() || {}).speech?.azure || {};
+    const body = req.body || {};
+    const saved = (configCache.getPlatform() || {}).speech?.azure || {};
 
-      const region = String(body.region ?? saved.region ?? '').trim();
-      const host = String(body.host ?? saved.host ?? '').trim();
-      let subscriptionKey = body.subscriptionKey ?? saved.subscriptionKey ?? '';
-      if (subscriptionKey === '***REDACTED***' || isEnvVarPlaceholder(subscriptionKey)) {
-        subscriptionKey = saved.subscriptionKey || ''; // already decrypted by configCache
-      }
-
-      // `code` is stable for the admin UI to translate; `message` is the
-      // English text for API callers and logs.
-      if (!subscriptionKey) {
-        return res.json(
-          host
-            ? {
-                ok: true,
-                code: 'keyless',
-                message:
-                  'No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.'
-              }
-            : {
-                ok: false,
-                code: 'not-configured',
-                message:
-                  'Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.'
-              }
-        );
-      }
-
-      const result = await issueAzureSpeechToken({ subscriptionKey, region });
-      if (!result.ok) {
-        return res.json(
-          /HTTP 401/.test(result.error)
-            ? {
-                ok: false,
-                code: 'invalid-key',
-                message: `${result.error}: the key is invalid or belongs to a different region`
-              }
-            : { ok: false, code: 'token-failed', message: result.error }
-        );
-      }
-      return res.json({
-        ok: true,
-        code: 'token-issued',
-        region: result.region,
-        message: `Key accepted: Azure issued a token for region "${result.region}".`
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'test Azure Speech credentials');
+    const region = String(body.region ?? saved.region ?? '').trim();
+    const host = String(body.host ?? saved.host ?? '').trim();
+    let subscriptionKey = body.subscriptionKey ?? saved.subscriptionKey ?? '';
+    if (subscriptionKey === '***REDACTED***' || isEnvVarPlaceholder(subscriptionKey)) {
+      subscriptionKey = saved.subscriptionKey || ''; // already decrypted by configCache
     }
+
+    // `code` is stable for the admin UI to translate; `message` is the
+    // English text for API callers and logs.
+    if (!subscriptionKey) {
+      return res.json(
+        host
+          ? {
+              ok: true,
+              code: 'keyless',
+              message:
+                'No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.'
+            }
+          : {
+              ok: false,
+              code: 'not-configured',
+              message:
+                'Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.'
+            }
+      );
+    }
+
+    const result = await issueAzureSpeechToken({ subscriptionKey, region });
+    if (!result.ok) {
+      return res.json(
+        /HTTP 401/.test(result.error)
+          ? {
+              ok: false,
+              code: 'invalid-key',
+              message: `${result.error}: the key is invalid or belongs to a different region`
+            }
+          : { ok: false, code: 'token-failed', message: result.error }
+      );
+    }
+    return res.json({
+      ok: true,
+      code: 'token-issued',
+      region: result.region,
+      message: `Key accepted: Azure issued a token for region "${result.region}".`
+    });
   });
 }
