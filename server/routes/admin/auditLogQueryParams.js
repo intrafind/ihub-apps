@@ -10,6 +10,8 @@
  * standing up Express.
  */
 
+import { ServiceError } from '../../utils/ServiceError.js';
+
 // Fields that can be filtered by value. Each accepts an include parameter
 // (`?action=create`) and an exclude parameter (`?actionExclude=login`).
 export const FILTER_FIELDS = ['actor', 'resource', 'action', 'result', 'source'];
@@ -35,7 +37,12 @@ export const MAX_QUERY_LENGTH = 200;
 // Upper bound on rows a single list request may return.
 export const MAX_PAGE_SIZE = 1000;
 
-export class BadFilterError extends Error {}
+export class BadFilterError extends ServiceError {
+  constructor(message) {
+    super('BAD_REQUEST', message);
+    this.name = 'BadFilterError';
+  }
+}
 
 /**
  * Parse one filter parameter into an array of values, or undefined when it is
