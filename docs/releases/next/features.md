@@ -756,6 +756,11 @@ used to be an HTML or plain text page.
   missing or mismatched page id and for a content or title key that is not a language code, `NOT_FOUND` for an
   unknown page and `CONFLICT` for a page id that exists (the reason is in `detail`). An unexpected failure
   answers 500 with a fixed text; the cause is in the server log.
+- The credential administration endpoints (`/api/admin/credentials*`) answer in this shape: `BAD_REQUEST` for an
+  unsafe id or a body that is not an object, `VALIDATION_FAILED` with the failed fields in `errors` for an
+  invalid credential (before: `BAD_REQUEST` with the schema issues in `details`), `NOT_FOUND` for an unknown
+  credential and `CONFLICT` for a credential id that exists. An unexpected failure, including an unreadable
+  credential store, answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
