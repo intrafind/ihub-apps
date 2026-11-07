@@ -89,6 +89,32 @@ export function downloadableText(entry) {
   };
 }
 
+/** What the server read from a stored file: its numbers, not the browser's. */
+function describeStub(entry) {
+  const pageImages = entry.pageImageCount ?? 0;
+  return {
+    kind: 'document',
+    stub: true,
+    // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
+    textBytes: pageImages > 0 ? 0 : (entry.textBytes ?? 0),
+    pageImages,
+    truncated: entry.truncated === true,
+    originalKept: entry.hasOriginal === true
+  };
+}
+
+/** What the browser read from a document it holds. */
+function describeBrowserDocument(entry) {
+  return {
+    kind: 'document',
+    characters: typeof entry.content === 'string' ? entry.content.trim().length : 0,
+    pageImages: Array.isArray(entry.pageImages) ? entry.pageImages.length : 0,
+    // Only known once the server stored the file
+    truncated: entry.truncated === true,
+    originalKept: entry.serverStored === true ? entry.hasOriginal === true : null
+  };
+}
+
 /**
  * What the assistant gets from an attachment, in numbers the UI can say in words.
  *
@@ -99,38 +125,19 @@ export function downloadableText(entry) {
  */
 export function describeAttachment(entry) {
   if (!entry || entry.loading) return null;
-  if (entry.type === 'document' && isStoredStub(entry)) {
-    // The server read the file: its numbers, not the browser's
-    return {
-      kind: 'document',
-      stub: true,
-      // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
-      textBytes: (entry.pageImageCount ?? 0) > 0 ? 0 : (entry.textBytes ?? 0),
-      pageImages: entry.pageImageCount ?? 0,
-      truncated: entry.truncated === true,
-      originalKept: entry.hasOriginal === true
-    };
+  switch (entry.type) {
+    case 'document':
+      return isStoredStub(entry) ? describeStub(entry) : describeBrowserDocument(entry);
+    case 'image':
+      return {
+        kind: 'image',
+        ...(entry.width && entry.height ? { width: entry.width, height: entry.height } : {})
+      };
+    case 'audio':
+      return { kind: 'audio' };
+    default:
+      return null;
   }
-  if (entry.type === 'document') {
-    const characters = typeof entry.content === 'string' ? entry.content.trim().length : 0;
-    const pageImages = Array.isArray(entry.pageImages) ? entry.pageImages.length : 0;
-    return {
-      kind: 'document',
-      characters,
-      pageImages,
-      // Only known once the server stored the file
-      truncated: entry.truncated === true,
-      originalKept: entry.serverStored === true ? entry.hasOriginal === true : null
-    };
-  }
-  if (entry.type === 'image') {
-    return {
-      kind: 'image',
-      ...(entry.width && entry.height ? { width: entry.width, height: entry.height } : {})
-    };
-  }
-  if (entry.type === 'audio') return { kind: 'audio' };
-  return null;
 }
 
 /** Whether the original file (or the image as sent) can be downloaded from this chip. */
