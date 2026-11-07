@@ -38,16 +38,30 @@
  *
  * ## Ordering and convergence
  *
- * Delivery is best-effort and eventually consistent: an announcement takes one
- * IPC hop to the primary and one back out, so a request racing the announcement
- * can still read stale config for a few milliseconds. That is bounded by the
- * hop, not by the TTL, and the reload always re-reads the file — so concurrent
- * announcements for the same key converge on the file's final contents rather
- * than on whichever message arrived last.
+ * `announceConfigChange` is fire-and-forget and eventually consistent: an
+ * announcement takes one IPC hop to the primary and one back out, and the
+ * receiving worker holds it for a short coalescing window before reloading. A
+ * request racing it can read stale config. That is fine for a background
+ * refresh, and wrong for an admin save: the browser's next request goes to
+ * whichever worker the round-robin picks, so a read right after a save mostly
+ * showed the old value, and a write that read a stale copy could undo the save.
  *
- * Inbound announcements are coalesced over a short window because one admin save
- * frequently touches several entries (platform + groups, or a bulk app import),
- * and reloading each key once per burst beats reloading it once per message.
+ * The admin routes therefore go through `announceConfigChangeAndWait`
+ * (`ConfigCache#refreshCacheEntry` does). It asks every other worker to reload
+ * at once, without the coalescing window, and returns when they have answered, so
+ * the save is acknowledged to the browser only after the whole cluster has the
+ * new data. The wait is bounded: a worker that is restarting or stuck costs the
+ * save at most `APPLY_TIMEOUT_MS`, never the save itself, and the TTL timer
+ * remains the backstop for a worker that missed it.
+ *
+ * Either way the reload re-reads the file, so concurrent announcements for the
+ * same key converge on the file's final contents rather than on whichever
+ * message arrived last.
+ *
+ * Inbound fire-and-forget announcements are coalesced over a short window because
+ * one admin save frequently touches several entries (platform + groups, or a bulk
+ * app import), and reloading each key once per burst beats reloading it once per
+ * message.
  *
  * ## Runtime state beyond the cache
  *
@@ -61,11 +75,22 @@
  * is ever received, and a single process needs none of it.
  */
 
-import { publish, subscribe } from './clusterBus.js';
+import { gather, isClusterBusActive, publish, respond, subscribe } from './clusterBus.js';
+import config from './config.js';
 import logger from './utils/logger.js';
 
 /** Bus channel for invalidation announcements. */
 const CHANNEL = 'config:changed';
+
+/** Bus channel for "reload these entries now and tell me when you have", see announceConfigChangeAndWait. */
+const APPLY_CHANNEL = 'config:apply';
+
+/**
+ * Longest an admin save waits for the other workers to confirm. A reload is a few
+ * file reads, so this is far above a healthy answer and short enough that a worker
+ * that is down does not make saving feel broken.
+ */
+export const APPLY_TIMEOUT_MS = 1000;
 
 /** Sentinel entry meaning "reload every entry you hold". */
 export const ALL_ENTRIES = '*';
@@ -144,6 +169,53 @@ export function announceConfigChange(entries) {
 }
 
 /**
+ * Tell the other workers that these cache entries changed on disk, and wait until
+ * they have reloaded them.
+ *
+ * For the admin save paths: the browser's next request may land on any worker, so
+ * the save must not be acknowledged while some of them still hold the old data.
+ * Each worker reloads immediately (no coalescing window) and answers; this resolves
+ * when all have, or after `timeoutMs`. It never rejects, and a worker that does not
+ * answer in time is logged and left to the TTL refresh.
+ *
+ * Outside cluster mode there is nobody to wait for and it resolves at once.
+ *
+ * @param {string|string[]} entries - Cache keys, e.g. `'config/models.json'`.
+ * @param {object} [options]
+ * @param {number} [options.expected] - Workers expected to answer; defaults to
+ *   the configured worker count minus this one.
+ * @param {number} [options.timeoutMs=APPLY_TIMEOUT_MS] - Longest wait.
+ * @returns {Promise<{expected: number, replied: number}>} How many answered.
+ */
+export async function announceConfigChangeAndWait(
+  entries,
+  { expected = Math.max(0, (Number(config.WORKERS) || 1) - 1), timeoutMs = APPLY_TIMEOUT_MS } = {}
+) {
+  const list = (Array.isArray(entries) ? entries : [entries]).filter(Boolean);
+  if (!list.length || expected <= 0) return { expected: 0, replied: 0 };
+
+  const replies = await gather(
+    APPLY_CHANNEL,
+    { entries: list, origin: process.pid },
+    { expected, timeoutMs }
+  );
+  // Outside cluster mode `gather` answers [] without asking anyone.
+  if (!isClusterBusActive()) return { expected: 0, replied: 0 };
+
+  stats.announced += 1;
+  if (replies.length < expected) {
+    logger.warn('Not every worker confirmed a config change in time', {
+      component: 'ConfigSync',
+      entries: list,
+      expected,
+      replied: replies.length,
+      timeoutMs
+    });
+  }
+  return { expected, replied: replies.length };
+}
+
+/**
  * Tell the other workers to reload everything. For operations that rewrite
  * configuration wholesale — a backup import, an explicit cache flush — where
  * enumerating the affected keys is neither possible nor useful.
@@ -152,6 +224,27 @@ export function announceConfigChange(entries) {
  */
 export function announceFullConfigReload() {
   return announceConfigChange(ALL_ENTRIES);
+}
+
+/**
+ * Reload what another worker announced, then let the config-derived runtime
+ * state catch up. Shared by the coalesced drain and the acknowledged apply.
+ *
+ * @param {string[]} entries - Cache keys, or the {@link ALL_ENTRIES} sentinel
+ */
+async function applyEntries(entries) {
+  if (entries.includes(ALL_ENTRIES)) {
+    await reloadAll?.();
+    stats.reloaded += 1;
+  } else {
+    for (const entry of entries) {
+      // Sequential: a burst is a handful of keys, and reloading them one at a
+      // time keeps a config save from competing with request traffic for I/O.
+      await reloadEntry?.(entry);
+      stats.reloaded += 1;
+    }
+  }
+  await runHooks(entries);
 }
 
 function scheduleDrain() {
@@ -178,23 +271,12 @@ async function drain() {
 
   draining = true;
   try {
-    if (entries.includes(ALL_ENTRIES)) {
-      await reloadAll?.();
-      stats.reloaded += 1;
-    } else {
-      for (const entry of entries) {
-        // Sequential: a burst is a handful of keys, and reloading them one at a
-        // time keeps a config save from competing with request traffic for I/O.
-        await reloadEntry?.(entry);
-        stats.reloaded += 1;
-      }
-    }
+    await applyEntries(entries);
     logger.debug('Applied config change from another worker', {
       component: 'ConfigSync',
       entries,
       pid: process.pid
     });
-    await runHooks(entries);
   } catch (error) {
     stats.failed += 1;
     // Keep the previously cached data rather than taking the worker down; the
@@ -223,6 +305,34 @@ async function runHooks(entries) {
     }
   }
 }
+
+// The other half of announceConfigChangeAndWait: reload now, then answer. The answer
+// is sent whether or not the reload worked, so the asker waits for the work and not
+// for the timeout; a failure is logged and left to the TTL refresh, as in drain().
+respond(APPLY_CHANNEL, async payload => {
+  const entries = Array.isArray(payload?.entries)
+    ? payload.entries.filter(entry => typeof entry === 'string' && entry)
+    : [];
+  if (!entries.length) return { ok: false, pid: process.pid };
+  stats.received += 1;
+  try {
+    await applyEntries(entries);
+    logger.debug('Applied config change for an acknowledged save', {
+      component: 'ConfigSync',
+      entries,
+      pid: process.pid
+    });
+    return { ok: true, pid: process.pid };
+  } catch (error) {
+    stats.failed += 1;
+    logger.error('Failed to apply relayed config change', {
+      component: 'ConfigSync',
+      entries,
+      error: error?.message || String(error)
+    });
+    return { ok: false, pid: process.pid };
+  }
+});
 
 subscribe(CHANNEL, payload => {
   const entries = payload?.entries;
