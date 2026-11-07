@@ -7,6 +7,7 @@ import request from 'supertest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import errorHandler from '../../middleware/errorHandler.js';
 import { scratchDocuments } from '../helpers/testStorage.js';
 
 const scratch = await scratchDocuments();
@@ -162,6 +163,7 @@ function mountRoutes(target) {
   target.use(testUser);
   registerMcpOAuthRoutes(target);
   target.use('/api/integrations', userIntegrationRoutes);
+  target.use(errorHandler);
   return target;
 }
 
@@ -468,12 +470,14 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     expect(discovery.body).toMatchObject({
       status: 502,
       detail: 'The sign-in could not be started',
-      code: 'discovery_failed'
+      code: 'INTEGRATION_CONNECT_FAILED',
+      details: { reason: 'discovery_failed' }
     });
     sdk.registerClient.mockRejectedValueOnce(new Error('registration refused'));
     const registration = await startFlow();
     expect(registration.status).toBe(502);
-    expect(registration.body.code).toBe('registration_failed');
+    expect(registration.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(registration.body.details.reason).toBe('registration_failed');
   });
 });
 
@@ -856,7 +860,8 @@ describe('public base and the shared registration', () => {
     sdk.registerClient.mockResolvedValue({ client_id: 'attacker-client' });
     const forged = await connect({ user: 'mallory', headers: { Host: 'evil.example' } });
     expect(forged.status).toBe(409);
-    expect(forged.body.code).toBe('public_url_mismatch');
+    expect(forged.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(forged.body.details.reason).toBe('public_url_mismatch');
     expect(sdk.registerClient).toHaveBeenCalledTimes(1);
     expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
       clientId: 'dcr-client',
@@ -880,7 +885,8 @@ describe('public base and the shared registration', () => {
       user: 'mallory',
       headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-Proto': 'https' }
     });
-    expect(forged.body.code).toBe('public_url_mismatch');
+    expect(forged.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(forged.body.details.reason).toBe('public_url_mismatch');
     expect((await mcpClientManager.clientStore.get('okta')).publicBase).toBe(
       'https://ihub.example.com'
     );
