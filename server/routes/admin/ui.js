@@ -12,12 +12,12 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
  * personalized start page, the apps browser, a content page (`defaultPageId`)
@@ -96,52 +96,45 @@ export default function registerAdminUIRoutes(app) {
     adminAuth,
     upload.single('asset'),
     (req, res) => {
-      try {
-        if (!req.file) {
-          recordUpload('admin_asset', 'rejected_other');
-          return res.status(400).json({
-            success: false,
-            message: 'No file uploaded'
-          });
-        }
-        recordUpload('admin_asset', 'accepted', req.file.size);
-
-        const { assetType = 'general', description = '' } = req.body;
-
-        // Generate public URL for the uploaded file
-        const publicUrl = `/uploads/assets/${req.file.filename}`;
-
-        const assetInfo = {
-          id: req.file.filename,
-          originalName: req.file.originalname,
-          filename: req.file.filename,
-          path: req.file.path,
-          publicUrl,
-          size: req.file.size,
-          mimetype: req.file.mimetype,
-          assetType,
-          description,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: req.user?.username || 'admin'
-        };
-
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'uiAsset',
-          resourceId: assetInfo.filename,
-          summary: `Uploaded UI asset ${assetInfo.filename}`
-        });
-
-        res.json({
-          success: true,
-          message: 'Asset uploaded successfully',
-          asset: assetInfo
-        });
-      } catch (error) {
-        logger.error('Error uploading asset', { component: 'AdminUI', error });
-        sendErrorResponse(res, 500, 'Failed to upload asset');
+      if (!req.file) {
+        recordUpload('admin_asset', 'rejected_other');
+        throw new ServiceError('BAD_REQUEST', 'No file uploaded');
       }
+      recordUpload('admin_asset', 'accepted', req.file.size);
+
+      const { assetType = 'general', description = '' } = req.body;
+
+      // Generate public URL for the uploaded file
+      const publicUrl = `/uploads/assets/${req.file.filename}`;
+
+      const assetInfo = {
+        id: req.file.filename,
+        originalName: req.file.originalname,
+        filename: req.file.filename,
+        path: req.file.path,
+        publicUrl,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        assetType,
+        description,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: req.user?.username || 'admin'
+      };
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'uiAsset',
+        resourceId: assetInfo.filename,
+        summary: `Uploaded UI asset ${assetInfo.filename}`
+      });
+
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({
+        success: true,
+        message: 'Asset uploaded successfully',
+        asset: assetInfo
+      });
     }
   );
 
@@ -149,59 +142,56 @@ export default function registerAdminUIRoutes(app) {
    * List uploaded assets
    */
   app.get(buildServerPath('/api/admin/ui/assets'), authRequired, adminAuth, (req, res) => {
-    try {
-      const assetsDir = getContentsPath('uploads', 'assets');
+    const assetsDir = getContentsPath('uploads', 'assets');
 
-      // Create directory if it doesn't exist
-      if (!fs.existsSync(assetsDir)) {
-        fs.mkdirSync(assetsDir, { recursive: true });
-        return res.json({ success: true, assets: [] });
-      }
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(assetsDir)) {
+      fs.mkdirSync(assetsDir, { recursive: true });
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      return res.json({ success: true, assets: [] });
+    }
 
-      const files = fs.readdirSync(assetsDir);
-      const assets = files
-        .filter(filename => {
-          // Filter out hidden files and directories
-          return !filename.startsWith('.') && filename.length > 0;
-        })
-        .map(filename => {
-          try {
-            const filepath = join(assetsDir, filename);
-            const stats = fs.statSync(filepath);
+    const files = fs.readdirSync(assetsDir);
+    const assets = files
+      .filter(filename => {
+        // Filter out hidden files and directories
+        return !filename.startsWith('.') && filename.length > 0;
+      })
+      .map(filename => {
+        try {
+          const filepath = join(assetsDir, filename);
+          const stats = fs.statSync(filepath);
 
-            // Skip directories
-            if (stats.isDirectory()) {
-              return null;
-            }
-
-            const ext = path.extname(filename).toLowerCase();
-
-            return {
-              id: filename,
-              filename,
-              publicUrl: `/uploads/assets/${filename}`,
-              size: stats.size,
-              mimetype: getMimeType(ext),
-              uploadedAt: stats.mtime.toISOString(),
-              isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
-            };
-          } catch (statError) {
-            logger.warn('Error reading file stats', {
-              component: 'AdminUI',
-              filename,
-              error: statError.message
-            });
+          // Skip directories
+          if (stats.isDirectory()) {
             return null;
           }
-        })
-        .filter(asset => asset !== null)
-        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-      res.json({ success: true, assets });
-    } catch (error) {
-      logger.error('Error listing assets', { component: 'AdminUI', error });
-      sendErrorResponse(res, 500, 'Failed to load assets');
-    }
+          const ext = path.extname(filename).toLowerCase();
+
+          return {
+            id: filename,
+            filename,
+            publicUrl: `/uploads/assets/${filename}`,
+            size: stats.size,
+            mimetype: getMimeType(ext),
+            uploadedAt: stats.mtime.toISOString(),
+            isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
+          };
+        } catch (statError) {
+          logger.warn('Error reading file stats', {
+            component: 'AdminUI',
+            filename,
+            error: statError.message
+          });
+          return null;
+        }
+      })
+      .filter(asset => asset !== null)
+      .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ success: true, assets });
   });
 
   /**
@@ -212,44 +202,34 @@ export default function registerAdminUIRoutes(app) {
     authRequired,
     adminAuth,
     async (req, res) => {
-      try {
-        const { id } = req.params;
-        const assetsDir = getContentsPath('uploads', 'assets');
+      const { id } = req.params;
+      const assetsDir = getContentsPath('uploads', 'assets');
 
-        // Validate path stays within assets directory (prevents traversal)
-        const filepath = await resolveAndValidatePath(id, assetsDir);
-        if (!filepath) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid asset id'
-          });
-        }
-
-        if (!fs.existsSync(filepath)) {
-          return res.status(404).json({
-            success: false,
-            message: 'Asset not found'
-          });
-        }
-
-        fs.unlinkSync(filepath);
-
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'uiAsset',
-          resourceId: id,
-          summary: `Deleted UI asset ${id}`
-        });
-
-        res.json({
-          success: true,
-          message: 'Asset deleted successfully'
-        });
-      } catch (error) {
-        logger.error('Error deleting asset', { component: 'AdminUI', error });
-        sendErrorResponse(res, 500, 'Failed to delete asset');
+      // Validate path stays within assets directory (prevents traversal)
+      const filepath = await resolveAndValidatePath(id, assetsDir);
+      if (!filepath) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid asset id');
       }
+
+      if (!fs.existsSync(filepath)) {
+        throw new ServiceError('NOT_FOUND', 'Asset not found');
+      }
+
+      fs.unlinkSync(filepath);
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'uiAsset',
+        resourceId: id,
+        summary: `Deleted UI asset ${id}`
+      });
+
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({
+        success: true,
+        message: 'Asset deleted successfully'
+      });
     }
   );
 
@@ -257,89 +237,74 @@ export default function registerAdminUIRoutes(app) {
    * Get UI configuration
    */
   app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
-    try {
-      const uiConfig = configCache.getUI();
+    const uiConfig = configCache.getUI();
 
-      res.json({
-        success: true,
-        config: uiConfig?.data || {}
-      });
-    } catch (error) {
-      logger.error('Error getting UI config', { component: 'AdminUI', error });
-      sendErrorResponse(res, 500, 'Failed to get UI configuration');
-    }
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      success: true,
+      config: uiConfig?.data || {}
+    });
   });
 
   /**
    * Update UI configuration
    */
   app.post(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
-    try {
-      const { config } = req.body;
+    const { config } = req.body;
 
-      if (!config || typeof config !== 'object') {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid configuration data'
-        });
-      }
-
-      // Validate the configuration structure (basic validation)
-      validateUIConfig(config);
-
-      // Write the updated configuration atomically
-      await configStore.writeJson('config/ui.json', config);
-
-      // Refresh the cache
-      await configCache.refreshCacheEntry('config/ui.json');
-
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'uiConfig',
-        summary: 'Updated UI configuration'
-      });
-
-      res.json({
-        success: true,
-        message: 'UI configuration updated successfully'
-      });
-    } catch (error) {
-      logger.error('Error updating UI config', { component: 'AdminUI', error });
-      sendErrorResponse(res, 500, 'Failed to update UI configuration');
+    if (!config || typeof config !== 'object') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid configuration data');
     }
+
+    // Validate the configuration structure (basic validation)
+    validateUIConfig(config);
+
+    // Write the updated configuration atomically
+    await configStore.writeJson('config/ui.json', config);
+
+    // Refresh the cache
+    await configCache.refreshCacheEntry('config/ui.json');
+
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'uiConfig',
+      summary: 'Updated UI configuration'
+    });
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      success: true,
+      message: 'UI configuration updated successfully'
+    });
   });
 
   /**
    * Backup UI configuration
    */
   app.post(buildServerPath('/api/admin/ui/backup'), authRequired, adminAuth, async (req, res) => {
-    try {
-      const uiConfig = configCache.getUI();
-      const currentConfig = uiConfig?.data || {};
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const uiConfig = configCache.getUI();
+    const currentConfig = uiConfig?.data || {};
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-      // `backups/` is not a configuration namespace, so this lands on the
-      // contained path — the store creates the directory on the way.
-      await configStore.writeJson(`backups/ui-config-backup-${timestamp}.json`, currentConfig);
+    // `backups/` is not a configuration namespace, so this lands on the
+    // contained path — the store creates the directory on the way.
+    await configStore.writeJson(`backups/ui-config-backup-${timestamp}.json`, currentConfig);
 
-      logAudit({
-        req,
-        action: 'export',
-        resource: 'uiConfig',
-        resourceId: `ui-config-backup-${timestamp}.json`,
-        summary: 'Backed up UI configuration'
-      });
+    logAudit({
+      req,
+      action: 'export',
+      resource: 'uiConfig',
+      resourceId: `ui-config-backup-${timestamp}.json`,
+      summary: 'Backed up UI configuration'
+    });
 
-      res.json({
-        success: true,
-        message: 'Configuration backed up successfully',
-        backupPath: `backups/ui-config-backup-${timestamp}.json`
-      });
-    } catch (error) {
-      logger.error('Error backing up UI config', { component: 'AdminUI', error });
-      sendErrorResponse(res, 500, 'Failed to backup UI configuration');
-    }
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({
+      success: true,
+      message: 'Configuration backed up successfully',
+      backupPath: `backups/ui-config-backup-${timestamp}.json`
+    });
   });
 
   // Helper functions (defined within the scope of registerAdminUIRoutes)
