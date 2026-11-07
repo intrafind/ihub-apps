@@ -686,6 +686,50 @@ describe('useIntegrationDocumentAttachment', () => {
       expect(uploadChatFile.mock.calls[0][2].fields).toEqual({ appId: 'app1', ephemeral: true });
     });
 
+    test.each([
+      ['a quota', 413, 'QUOTA_USER_BYTES'],
+      ['a chat that is full', 413, 'QUOTA_CHAT_FILES'],
+      ['a file with no text', 400, 'NO_TEXT'],
+      ['a file store that is down', 503, undefined]
+    ])(
+      "%s is the server's limit on storing: the browser attaches the document",
+      async (_, status, code) => {
+        uploadChatFile.mockRejectedValue({
+          response: { status, data: code ? { details: { code } } : {} }
+        });
+        fetchIntegrationFileContent.mockResolvedValue(
+          blobResponse('application/pdf', 'report.pdf')
+        );
+        processCloudFile.mockResolvedValue({
+          type: 'document',
+          content: 'text',
+          fileName: 'r.pdf'
+        });
+        mount({ serverFiles });
+        await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+        expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1);
+        expect(uploader.setSelectedFile.mock.calls.at(-1)[0]).toMatchObject({ type: 'document' });
+        expect(addSystemMessage).not.toHaveBeenCalled();
+      }
+    );
+
+    test('a security scan that rejects the file is final: said in the chat, the browser is not asked', async () => {
+      uploadChatFile.mockRejectedValue({
+        response: { status: 400, data: { details: { code: 'SCAN_REJECTED' } } }
+      });
+      mount({ serverFiles });
+      await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
+      expect(fetchIntegrationFileContent).not.toHaveBeenCalled();
+    });
+
+    test('a transcription model takes no document: the browser path decides what the file is', async () => {
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+      mount({ serverFiles, currentModel: { id: 'm', modelType: 'transcription' } });
+      await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
+      expect(uploadChatFile).not.toHaveBeenCalled();
+      expect(addSystemMessage.mock.calls[0][0]).toMatch(/model cannot take this kind of file/);
+    });
+
     test('a file the server cannot take as a document goes the browser way (an image)', async () => {
       uploadChatFile.mockRejectedValue({
         response: { status: 400, data: { details: { code: 'UNSUPPORTED_TYPE' } } }

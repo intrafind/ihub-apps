@@ -104,7 +104,8 @@ export function describeAttachment(entry) {
     return {
       kind: 'document',
       stub: true,
-      textBytes: entry.textBytes ?? 0,
+      // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
+      textBytes: (entry.pageImageCount ?? 0) > 0 ? 0 : (entry.textBytes ?? 0),
       pageImages: entry.pageImageCount ?? 0,
       truncated: entry.truncated === true,
       originalKept: entry.hasOriginal === true
@@ -143,7 +144,8 @@ export function canDownloadFile(entry) {
 export function canDownloadText(entry) {
   if (!entry || entry.loading) return false;
   if (downloadableText(entry)) return true;
-  return isStoredStub(entry) && (entry.textBytes ?? 1) > 0;
+  // A scan (page images) has no text to download
+  return isStoredStub(entry) && (entry.pageImageCount ?? 0) === 0 && (entry.textBytes ?? 1) > 0;
 }
 
 /**

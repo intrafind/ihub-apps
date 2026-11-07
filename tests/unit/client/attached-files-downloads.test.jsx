@@ -239,6 +239,18 @@ describe('the chip of a file the server fetched (a stub)', () => {
     expect(fetchChatFileText).toHaveBeenCalledWith('chat-1', 'f1');
   });
 
+  test('a scan: page images are not counted as text, and there is no text to download', () => {
+    // The server's textBytes is the text plus the JSON of the page images
+    renderList([stub({ textBytes: 850000, pageImageCount: 5 })]);
+    const line = screen.getByTestId('attached-file-content');
+    expect(line).toHaveTextContent('scan without text: 5 page image(s) sent instead');
+    expect(line).not.toHaveTextContent('Text extracted');
+    expect(
+      screen.queryByRole('button', { name: /Download the extracted text/ })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download report.pdf' })).toBeInTheDocument();
+  });
+
   test('a file whose original the server does not keep offers only the text', () => {
     renderList([stub({ hasOriginal: false })]);
     expect(screen.queryByRole('button', { name: 'Download report.pdf' })).not.toBeInTheDocument();

@@ -79,6 +79,29 @@ function failureMessageOf(kind, t) {
   }[kind];
 }
 
+/**
+ * Answers of the chat file endpoint that are about the document or the system it comes from, not
+ * about storing it: reported in the chat, because the browser could not fetch it either. Every
+ * other refusal (a quota, no text, a file store that is down, a type the server cannot read) is the
+ * server's own limit on storing, and the browser path still attaches the document, as it did before
+ * the server fetched documents. `SCAN_REJECTED` stays a refusal: the security scan said no.
+ */
+const SOURCE_REFUSALS = new Set([
+  'SOURCE_FORBIDDEN',
+  'SOURCE_GONE',
+  'SOURCE_UNAVAILABLE',
+  'SOURCE_INVALID',
+  'SOURCE_FAILED',
+  'SCAN_REJECTED'
+]);
+
+/** Whether the server's refusal is final (see {@link SOURCE_REFUSALS}) and not a reason to fall back. */
+function isFinalRefusal(err) {
+  if (SOURCE_REFUSALS.has(uploadErrorCode(err))) return true;
+  const status = (err?.response || err?.originalError?.response)?.status;
+  return status === 401 || status === 403 || status === 404;
+}
+
 /** Codes of a refusal that means the system the document comes from is not available. */
 const UNAVAILABLE_CODES = new Set([
   'INTEGRATION_NOT_GRANTED',
@@ -95,8 +118,8 @@ const UNAVAILABLE_CODES = new Set([
  * @param {Object} info - the probe's answer
  * @param {{kind: string, ref: Object}} source - what the server fetches
  * @param {{ephemeral?: boolean}} serverFiles
- * @returns {Promise<'attached'|'stale'|'fallback'>} `fallback`: the server cannot take the file as a
- *   document (an image, audio), so the browser fetches it; any other refusal is thrown
+ * @returns {Promise<'attached'|'stale'|'fallback'>} `fallback`: the server cannot or may not store
+ *   the file (an image or audio, a quota), so the browser fetches it; a final refusal is thrown
  */
 async function attachByReference(ctx, info, source, serverFiles) {
   const { live, doc, uploader, stale, dropPlaceholder, fallbackName } = ctx;
@@ -113,9 +136,10 @@ async function attachByReference(ctx, info, source, serverFiles) {
       }
     );
   } catch (serverError) {
-    // Only "not a document" falls back; everything else is reported by the caller.
-    if (uploadErrorCode(serverError) === 'UNSUPPORTED_TYPE') return 'fallback';
-    throw serverError;
+    // The document or its system said no: reported by the caller. Anything else is about storing
+    // it (a quota, no text, an image the server cannot read): the browser fetches it instead.
+    if (isFinalRefusal(serverError)) throw serverError;
+    return 'fallback';
   }
   const descriptor = stored?.file;
   if (!descriptor?.id) throw new Error('No file in the response');
@@ -345,8 +369,12 @@ export default function useIntegrationDocumentAttachment({
         // By reference where the server can fetch from the integration; a file it cannot take as a
         // document (an image, audio) goes the browser's way, where the model gets its bytes.
         const ctx = { live, doc, uploader, stale, dropPlaceholder, fallbackName };
+        // Only for a model that takes documents (a transcription model does not): the browser path
+        // checks what the file really is against the model.
         const serverSource =
-          serverFiles?.enabled && live.chatId ? serverFileSourceFor(info, doc) : null;
+          serverFiles?.enabled && live.chatId && modelTakesFileKind('document', live.currentModel)
+            ? serverFileSourceFor(info, doc)
+            : null;
         if (serverSource) {
           const outcome = await attachByReference(ctx, info, serverSource, serverFiles);
           if (outcome !== 'fallback') return;
