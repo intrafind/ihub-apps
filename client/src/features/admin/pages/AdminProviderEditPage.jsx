@@ -15,6 +15,8 @@ import {
 } from '../../../../../shared/llmProviders.js';
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
+import ProviderTimeoutFields from '../components/ProviderTimeoutFields';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -25,6 +27,7 @@ function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { providerId } = useParams();
+  const access = useAdminPageAccess();
 
   // Constants
   const API_KEY_PLACEHOLDER = '••••••••';
@@ -45,6 +48,8 @@ function AdminProviderEditPage() {
   });
   const [models, setModels] = useState([]);
   const [syncOpen, setSyncOpen] = useState(false);
+  // What a provider without ceilings of its own inherits (the installation's).
+  const [inheritedTimeouts, setInheritedTimeouts] = useState({});
 
   // Connectivity test state — kept out of formData so running a test never
   // looks like an unsaved edit.
@@ -67,12 +72,14 @@ function AdminProviderEditPage() {
   const loadProvider = useCallback(async () => {
     try {
       setLoading(true);
-      const [response, modelsResponse] = await Promise.all([
+      const [response, modelsResponse, timeoutsResponse] = await Promise.all([
         makeAdminApiCall(`/admin/providers/${providerId}`),
-        makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
+        makeAdminApiCall('/admin/models').catch(() => ({ data: [] })),
+        makeAdminApiCall('/admin/llm-timeouts').catch(() => ({ data: {} }))
       ]);
       const provider = response.data;
       setModels(Array.isArray(modelsResponse.data) ? modelsResponse.data : []);
+      setInheritedTimeouts(timeoutsResponse.data?.effective || {});
 
       // Name and description are plain text. getLocalizedContent also reads an
       // entry still carrying per-language objects; saving stores the string.
@@ -186,6 +193,7 @@ function AdminProviderEditPage() {
         <AdminBreadcrumb
           crumbs={[
             { label: 'Admin', href: '/admin' },
+            ...(access.models ? [{ label: 'Models', href: '/admin/models' }] : []),
             { label: 'Providers', href: '/admin/providers' },
             { label: formData?.name || providerId }
           ]}
@@ -232,6 +240,14 @@ function AdminProviderEditPage() {
             isLlm={isLlmProvider}
             apiTypeLocked={isBuiltIn}
           />
+
+          {isLlmProvider && (
+            <ProviderTimeoutFields
+              data={formData}
+              onChange={handleChange}
+              inherited={inheritedTimeouts}
+            />
+          )}
 
           {/* API Key */}
           <div className="mb-6">
@@ -340,6 +356,25 @@ function AdminProviderEditPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {access.models && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate('/admin/models/new', {
+                        state: {
+                          // A built-in provider is its own API type; a custom one links by id.
+                          templateModel: isBuiltIn
+                            ? { provider: providerId }
+                            : { provider: getProviderApiType(initialData), providerId }
+                        }
+                      })
+                    }
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
+                  >
+                    <Icon name="plus" className="w-4 h-4" />
+                    {t('admin.providers.linkedModels.add', 'Add model')}
+                  </button>
+                )}
                 {canSync && (
                   <button
                     type="button"

@@ -25,6 +25,8 @@ import {
   isGatewayProvider,
   isReservedProviderId,
   linkedModelProvider,
+  LLM_TIMEOUT_KEYS,
+  LLM_TIMEOUT_MAX_MS,
   resolveProviderApiKey
 } from '../../services/llmProviders.js';
 import {
@@ -45,6 +47,26 @@ const PROVIDERS_FILE = 'config/providers.json';
 const PROVIDER_CATEGORIES = ['llm', 'custom'];
 
 /**
+ * Validate the transport ceilings of an LLM provider entry, in place: each is a
+ * whole number of milliseconds from 0 (no ceiling) to 5 minutes. An empty value
+ * removes the key, so the provider inherits the installation's.
+ *
+ * @param {Object} provider - Provider entry from the request body
+ * @returns {string|null} Error message, or null when the ceilings are valid
+ */
+function normalizeProviderTimeouts(provider) {
+  for (const key of LLM_TIMEOUT_KEYS) {
+    const value = provider[key];
+    if (value === undefined || value === null || value === '') {
+      delete provider[key];
+    } else if (!Number.isInteger(value) || value < 0 || value > LLM_TIMEOUT_MAX_MS) {
+      return `${key} must be a whole number of milliseconds between 0 and ${LLM_TIMEOUT_MAX_MS}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Validate and tidy the editable fields of a provider entry, in place.
  *
  * `name` and `description` are plain strings (V141 converted the per-language
@@ -52,7 +74,9 @@ const PROVIDER_CATEGORIES = ['llm', 'custom'];
  * may carry a `baseUrl` used to list its models; a built-in LLM provider's API
  * type is its id, so an `apiType` on it is dropped. Other categories have
  * neither field. A custom LLM provider may name the `gateway` it points at
- * (an iFinder Model Gateway), which fixes the API types it can have.
+ * (an iFinder Model Gateway), which fixes the API types it can have. An LLM
+ * provider may also set `connectTimeoutMs` / `streamIdleTimeoutMs`, the
+ * transport ceilings its models inherit (see normalizeProviderTimeouts).
  *
  * @param {Object} provider - Provider entry from the request body
  * @returns {string|null} Error message, or null when the entry is valid
@@ -75,8 +99,12 @@ function normalizeProviderFields(provider) {
     delete provider.apiType;
     delete provider.baseUrl;
     delete provider.gateway;
+    for (const key of LLM_TIMEOUT_KEYS) delete provider[key];
     return null;
   }
+
+  const timeoutError = normalizeProviderTimeouts(provider);
+  if (timeoutError) return timeoutError;
 
   if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
     delete provider.apiType;

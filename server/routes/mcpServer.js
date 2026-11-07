@@ -237,8 +237,8 @@ function sendRpcError(res, status, code, message, headers = {}) {
  *   - a compliant streamable-HTTP client probing for the optional
  *     server→client SSE stream (harmless — the MCP SDK treats 405 on GET as
  *     "this server has no push channel" and carries on),
- *   - a client configured for the legacy SSE transport but pointed at `/mcp`
- *     instead of `/mcp/sse` (it needs a GET stream and cannot recover), or
+ *   - a client still configured for the retired HTTP+SSE transport but pointed
+ *     at `/mcp` (it needs a GET stream and cannot recover), or
  *   - a reverse proxy dropping the `Mcp-Session-Id` header, so a client that
  *     did initialize correctly never gets to use its session.
  *
@@ -586,6 +586,32 @@ export default function registerMcpServerRoutes(app) {
     }
     res.status(204).end();
   });
+
+  // ---- Retired legacy SSE transport -------------------------------------
+  // The 2024-11-05 HTTP+SSE transport (GET /mcp/sse, POST /mcp/messages) is
+  // gone. Answer both paths with 410 Gone for one release so a client that is
+  // still configured for it gets a clear instruction instead of a bare 404.
+  // Unauthenticated on purpose: the answer is static and reveals nothing.
+  const legacySseGone = (req, res) => {
+    logger.info('MCP gateway rejected request', {
+      component: 'McpGateway',
+      status: 410,
+      reason: 'legacy_sse_removed',
+      method: req.method,
+      path: req.path,
+      userAgent: req.headers['user-agent']
+    });
+    return sendRpcError(
+      res,
+      410,
+      -32000,
+      'Gone: the legacy HTTP+SSE transport (/mcp/sse, /mcp/messages) has been removed. ' +
+        'Reconfigure the client as a Streamable HTTP client on /mcp, or connect through a ' +
+        'bridge such as mcp-remote.'
+    );
+  };
+  app.all(buildServerPath('/mcp/sse'), enabledCheck, legacySseGone);
+  app.all(buildServerPath('/mcp/messages'), enabledCheck, legacySseGone);
 
   // ---- Public discovery -------------------------------------------------
   // Unauthenticated metadata endpoint; safe to expose.

@@ -9,10 +9,13 @@ import Icon from '../../../shared/components/Icon';
 import ProviderFormFields from '../components/ProviderFormFields';
 import { slugify } from '../utils/modelImport';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import useAdminPageAccess from '../hooks/useAdminPageAccess';
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const access = useAdminPageAccess();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -64,11 +67,6 @@ function AdminProviderCreatePage() {
         apiKey: formData.apiKey.trim() || undefined,
         baseUrl: formData.baseUrl.trim() || undefined
       };
-      if (formData.category !== 'llm') {
-        delete dataToSend.apiType;
-        delete dataToSend.baseUrl;
-      }
-
       await makeAdminApiCall('/admin/providers', {
         method: 'POST',
         headers: {
@@ -93,6 +91,14 @@ function AdminProviderCreatePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            ...(access.models ? [{ label: 'Models', href: '/admin/models' }] : []),
+            { label: 'Providers', href: '/admin/providers' },
+            { label: t('admin.providers.create.title', 'Create New Provider') }
+          ]}
+        />
         <div className="mb-6">
           <button
             onClick={() => navigate('/admin/providers')}
@@ -107,7 +113,7 @@ function AdminProviderCreatePage() {
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.providers.create.subtitle',
-              'Create an LLM provider for your own endpoint, a web search provider, or a generic API key'
+              'Connect an AI endpoint of your own — a gateway, a self-hosted server or another vendor. Its models share one API key.'
             )}
           </p>
         </div>
@@ -132,41 +138,14 @@ function AdminProviderCreatePage() {
 
         {/* Form */}
         <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-          {/* Category */}
-          <div className="mb-6">
-            <label
-              htmlFor="provider-category"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-            >
-              {t('admin.providers.create.category', 'Category')}
-            </label>
-            <select
-              id="provider-category"
-              value={formData.category}
-              onChange={e => handleChange('category', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="llm">{t('admin.providers.category.llm', 'LLM Providers')}</option>
-              <option value="custom">
-                {t('admin.providers.category.custom', 'Custom / Generic API Keys')}
-              </option>
-            </select>
-            {formData.category === 'llm' && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.providers.create.llmHelp',
-                  'An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.'
-                )}
-              </p>
+          <p className="mb-6 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.providers.create.llmHelp',
+              'An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.'
             )}
-          </div>
+          </p>
 
-          <ProviderFormFields
-            data={formData}
-            onChange={handleChange}
-            isNew
-            isLlm={formData.category === 'llm'}
-          />
+          <ProviderFormFields data={formData} onChange={handleChange} isNew isLlm />
 
           {/* API Key */}
           <div className="mb-6">

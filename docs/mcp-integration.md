@@ -1588,7 +1588,9 @@ Troubleshooting:
     nothing to fix.
   - **Wrong transport.** A client configured for the old HTTP+SSE
     transport but pointed at `/mcp`. It needs a GET stream and cannot
-    recover from the `405`. The gateway speaks Streamable HTTP only:
+    recover from the `405`. A client pointed at the old `/mcp/sse` or
+    `/mcp/messages` paths gets `410 Gone` instead (`reason: legacy_sse_removed`
+    in the `McpGateway` log). The gateway speaks Streamable HTTP only:
     reconfigure it as a Streamable HTTP (`http`) client on `/mcp`, or put a
     bridge such as `mcp-remote` in front of it.
   - **Header stripped in transit.** A reverse proxy dropping the

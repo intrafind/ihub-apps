@@ -93,22 +93,34 @@ its `integration` value is the provider id the source carries, the probe answers
 `{ id, definition: null, type: null, name: id }` for a provider that is not an installation, and no
 integration gate applies beyond the provider's own rules.
 
-### 4. Attach like Nextcloud: original file, images included
+### 4. Attach by reference: the server fetches, the browser never holds the document
 
-The chat attaches through the helper the Nextcloud embed and the cloud pickers use:
+*(Revised after the first release candidate. The first version fetched the original into the browser,
+extracted the text there and sent the result back to the server: a detour through the browser for
+a document that is already on a server iHub can reach.)*
 
-1. fetch the **original** (`format=original`) through the integration route;
-2. check that the **app binds the integration** (the probe says which installation it is) and that
-   the selected model can take the kind of file — an image needs a model that sees, audio one that
-   hears; the app's local upload settings do **not** decide, as they do not for the files of a
-   storage provider (which `createUploadConfig` also offers when local upload is off);
-3. `processCloudFile(file, uploadConfig)`: an image becomes an image attachment (resized base64, for
-   a vision model), audio an audio attachment, everything else a document that keeps its original
-   (`[ORIGINAL_FILE]`) next to the extracted text.
+The chat file endpoint already takes a file **by reference** (`POST /api/chats/:chatId/files` with
+`{ source: { kind: 'ifinder-document', ref } }`, `services/chatFiles/fileSources.js`): the server
+fetches the original with the user's own rights, stores it with the chat and extracts the text, like
+an upload without the upload. The chat attaches through it:
 
-The text is fetched, as a `.txt`, only when the request for the original fails with an error other
-than a sign-in, permission or not-found failure (a document of which only the text is kept, as the
-downloads do); a permission failure applies to the text as well and is shown.
+1. check the **gate** (the probe) and that the **app binds the integration**; the app's local upload
+   settings do **not** decide;
+2. post the reference. The composer holds a **stub**: the stored file's id, the chat's id and what the
+   server read (`textBytes`, `pageImageCount`, `hasOriginal`, `truncated`). The message names it by id
+   (`fileIds`). Whether the original is kept or only the text is the existing
+   `uploads.storageMode` (platform, overridable per app), not a new flag;
+3. the chip's **Download original** and **Download text** read the stored file
+   (`GET /api/chats/:chatId/files/:id`), like the Files drawer.
+
+What stays in the browser: a file the server cannot read as a document (`UNSUPPORTED_TYPE`: an
+**image**, **audio**) — a model needs those as bytes (a vision model sees pixels, not extracted
+text) — an integration the server has no source kind for, and a chat that keeps no files on the
+server (`platform.uploads.enabled` off). They are fetched through the integration route and attached
+with `processCloudFile`, as the Nextcloud embed does.
+
+The text is fetched, as a `.txt`, only when iFinder fails to serve the original (a document of which it
+keeps only the text); a permission failure applies to the text as well and is shown.
 
 ### 5. The picker offers the apps that bind the integration
 

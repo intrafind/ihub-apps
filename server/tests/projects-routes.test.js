@@ -33,6 +33,7 @@ import { locateConfigFile } from '../utils/configFileLocation.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
 import registerAdminProjectsRoutes from '../routes/admin/projects.js';
 import registerChatRoutes from '../routes/chats.js';
+import errorHandler from '../middleware/errorHandler.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
@@ -129,9 +130,15 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}
   const res = makeResponse();
   for (const handler of handlers) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handler(req, res, () => {
+        advanced = true;
+      });
+    } catch (error) {
+      // What Express does with a thrown error: the global handler answers.
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -1728,7 +1735,7 @@ describe('chats in a project', () => {
         body: { attachedProjectIds: [mine.id] }
       });
       assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
-      assert.equal(refused.body.details.code, 'APP_PROJECTS_DISABLED');
+      assert.equal(refused.body.code, 'APP_PROJECTS_DISABLED');
       assert.equal((await chats.getChat(chat.id)).attachedProjectIds, undefined);
     } finally {
       configCache.setCacheEntry('config/apps.json', apps?.data || []);

@@ -18,7 +18,7 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 |---------|--------------|
 | **Overview** | Dashboard |
 | **What's New & Docs** | Documentation, What's New |
-| **AI Workspace** | Apps, Models, Providers, Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
+| **AI Workspace** | Apps, Models (tabs **Models** and **Providers**), Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
 | **Customization** | UI Customization, Localization, Pages, Short Links |
@@ -192,7 +192,11 @@ separate preview.
 
 ## Managing Models
 
-Models define which AI providers and specific model versions are available on your platform.
+Models define which AI providers and specific model versions are available on your platform. **AI Workspace → Models** has two tabs: **Models** and **Providers** (see [Managing Providers](#managing-providers)). Models are the catalog your apps use; providers are the connections that serve them. Each tab links to the other: a model's provider name opens the provider, a provider's model count opens its models.
+
+**Set up your models:** until a provider has a key, a model is enabled and one is the default, a strip at the top of the Models tab shows the three steps and the one action that moves you to the next. It reads what is configured and disappears when all three are done.
+
+**Finding models:** search, and filter by **Provider**, **Type** (chat, transcription, text-to-speech) and **Status**. The filters are in the address, so `…/admin/models?provider=google` can be bookmarked or shared. **Add New Model** and **Import models** sit beside the title; **Upload Config**, **Install from Marketplace**, **Enable All** and **Disable All** are in the **⋮** menu.
 
 ![Model management list](assets/screenshots/admin-models.png)
 
@@ -216,13 +220,15 @@ Models define which AI providers and specific model versions are available on yo
 
 ## Managing Providers
 
-**AI Workspace → Providers** holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock, OpenRouter). A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
+**AI Workspace → Models → Providers** (the second tab of the Models page) holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock, OpenRouter). A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
+
+**Timeouts for all providers** (a summary line above the list; **Edit** opens it) sets the two transport ceilings for every model: the **connect timeout** (longest wait for the provider's response headers, 30 s) and the **stream idle timeout** (longest silence between two chunks of a running stream, 60 s). Raise the idle timeout for thinking models that reason silently for a while. A change applies to the next request, no restart. Open a provider to give all of its models their own values (empty = use the installation value); a model's own value in **Models → Edit** still wins. `0` turns a ceiling off. See [Stream deadlines](llm-client.md#tuning-the-ceilings).
 
 The web search engines (Brave, Staan, Qwant) are not providers: each is an integration of its own under **Integrations → Web search**, installed only when wanted. Brave and Staan reference their API key as a **secret** credential from **Integrations → Credentials** (the environment variables `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY` apply when no credential is referenced); the groups decide who may use an engine, and its **Test** runs one live search. Apps with web search on search natively on Google, OpenAI and Anthropic models without any engine. See [Web Tools](web-tools.md#api-key-setup).
 
 ![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
 
-**Create New Provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. Its page lists the linked models and imports more; a provider that models still use cannot be deleted. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
+**Add provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. Its page lists the linked models, adds a model with the provider already chosen and imports more; a provider that models still use cannot be deleted. In the list, each provider's **Models** count opens the Models tab filtered to that provider, and **Import models** opens the import for it. Entries of other categories left over from before web search and storage became integrations stay under a collapsed **Other credentials** group. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
 
 ![Create a new LLM provider](assets/screenshots/admin-provider-new.png)
 

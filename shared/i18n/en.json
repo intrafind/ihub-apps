@@ -32,7 +32,25 @@
     },
     "stored": "Saved to this chat",
     "templateReady": "can be used as a template",
-    "uploading": "Uploading {{name}}"
+    "uploading": "Uploading {{name}}",
+    "downloadOriginal": "Download original file",
+    "downloadOriginalNamed": "Download {{name}}",
+    "downloadSent": "Download the image as sent to the model",
+    "downloadText": "Download the extracted text",
+    "downloadTextNamed": "Download the extracted text of {{name}}",
+    "content": {
+      "text": "Text extracted: {{count}} characters",
+      "pageImages": "scan without text: {{count}} page image(s) sent instead",
+      "noText": "No text could be read from this file",
+      "imageSized": "Image sent to the model as {{width}}×{{height}}",
+      "image": "Image sent to the model",
+      "audio": "Audio sent to the model",
+      "truncated": "shortened to fit",
+      "textOnly": "only the text is kept in this chat",
+      "textServer": "Text extracted on the server: {{size}}"
+    },
+    "downloadDiscarded": "The original file is no longer stored; only its text is kept.",
+    "downloadFailed": "The download failed. Please try again."
   },
   "app": {
     "title": "iHub Apps",
@@ -132,7 +150,8 @@
     "export": "Export",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "moreActions": "More actions"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -875,6 +894,24 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts for all providers",
+        "description": "Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.",
+        "connect": "Connect timeout (ms)",
+        "connectHint": "Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.",
+        "streamIdle": "Stream idle timeout (ms)",
+        "streamIdleHint": "Longest silence between two chunks of a stream that is already running. Raise it for thinking models. 0 turns it off.",
+        "save": "Save timeouts",
+        "reset": "Reset",
+        "saved": "Timeouts saved. They apply to the next request.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Apply to all models of this provider. Leave a field empty to use the installation value; a model can still set its own. 0 turns a ceiling off.",
+        "inherited": "Inherited: {{value}} ms (installation)",
+        "off": "off",
+        "summary": "connect {{connect}} · stream idle {{idle}}",
+        "edit": "Edit",
+        "hide": "Hide"
+      },
       "title": "Provider Credentials",
       "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
@@ -897,8 +934,7 @@
       "backToList": "Back to Providers",
       "category": {
         "llm": "LLM Providers",
-        "cloudstorage": "Cloud Storage Providers",
-        "custom": "Custom / Generic API Keys"
+        "other": "Other credentials"
       },
       "table": {
         "provider": "Provider",
@@ -995,7 +1031,8 @@
         "import": "Import models",
         "none": "No models are linked to this provider.",
         "count": "{{count}} linked, {{enabled}} enabled",
-        "more": "+{{count}} more"
+        "more": "+{{count}} more",
+        "add": "Add model"
       },
       "gateway": {
         "none": "None (regular endpoint)",
@@ -1027,9 +1064,13 @@
           "supportsVision": "Image input"
         },
         "skipped": "The gateway changed since you looked. Run the sync again."
-      }
+      },
+      "add": "Add provider",
+      "import": "Import models",
+      "ownTimeouts": "Sets its own timeouts"
     },
     "models": {
+      "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Models → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
       "loadError": "Error loading models",
@@ -1337,18 +1378,42 @@
         },
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
-        "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one."
+        "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one.",
+        "models": "Import models"
       },
-      "getStarted": {
-        "title": "Add the models your apps use",
-        "description": "Import the models of a provider such as OpenAI, Anthropic, Google, Mistral or your own endpoint, or configure a model by hand.",
-        "import": "Import from provider",
-        "importHint": "List the models of a provider and pick the ones to add.",
-        "create": "Create new model",
-        "createHint": "Enter the endpoint and settings yourself.",
-        "marketplacePrefix": "Or install a ready-made model from",
-        "marketplace": "the Marketplace"
-      }
+      "areaTitle": "Models",
+      "areaSubtitle": "Connect AI providers and choose the models your apps can use",
+      "tabs": {
+        "models": "Models",
+        "providers": "Providers",
+        "aria": "Models sections"
+      },
+      "providerFilter": "Provider",
+      "filterAllProviders": "All providers",
+      "typeFilter": "Type",
+      "filterAllTypes": "All types",
+      "types": {
+        "chat": "Chat",
+        "transcription": "Transcription",
+        "tts": "Text-to-speech"
+      },
+      "providerOwnTimeouts": "This provider sets its own timeouts",
+      "fromMarketplace": "Install from Marketplace",
+      "setup": {
+        "title": "Set up your models",
+        "connect": "Connect a provider",
+        "enable": "Enable models",
+        "default": "Choose a default model",
+        "connectAction": "Add a provider key",
+        "enableAction": "Import models",
+        "defaultAction": "Show enabled models",
+        "connectHint": "Models need a provider with an API key (or an endpoint that needs none).",
+        "enableHint": "Import the models of a provider, or switch on one below.",
+        "defaultHint": "Open a model and tick “Default” so apps without a model of their own have one.",
+        "done": "(done)",
+        "todo": "(to do)"
+      },
+      "moreActions": "More model actions"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -6060,6 +6125,7 @@
     "openInCanvas": "Open in Canvas",
     "generatedImage": "Generated image",
     "downloadImage": "Download image",
+    "shareImage": "Share image",
     "imageNotPersisted": "Image not available",
     "copyLink": "Copy link",
     "linkCopied": "Link copied!",
@@ -6121,7 +6187,9 @@
       "notKept": "This file was not kept with the chat",
       "slides": "{{count}} slides",
       "sheets": "{{count}} sheets",
-      "open": "Open"
+      "open": "Open",
+      "share": "Share",
+      "shareNamed": "Share {{name}}"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -9196,6 +9264,36 @@
     "INVALID_OPTION": "The chosen option is not one of the offered options.",
     "NOT_PENDING": "The interaction is no longer waiting for an answer.",
     "REASON_REQUIRED": "A reason is required to reject.",
-    "SKIP_NOT_ALLOWED": "This question cannot be skipped."
+    "SKIP_NOT_ALLOWED": "This question cannot be skipped.",
+    "ARCHIVE_REJECTED": "The update archive was rejected.",
+    "DISK_SPACE": "There is not enough free disk space for the update.",
+    "UPDATE_PENDING": "An update is already scheduled to be applied on restart. Restart the server first.",
+    "CONFIRM_DOWNGRADE": "The staged version is not newer than the running one. Confirm the downgrade to continue.",
+    "UNSIGNED_NOT_ALLOWED": "Unsigned archives are not allowed on this server.",
+    "CONFIRM_UNSIGNED": "The archive is not signed by a trusted key. Type its version to install it anyway.",
+    "STAGED_CHANGED": "The staged update changed or is already scheduled. Review it again before installing.",
+    "CONFIG_SNAPSHOT_FAILED": "The configuration snapshot could not be written. Free disk space, or apply without a snapshot.",
+    "CHAT_PERSISTENCE_UNAVAILABLE": "Chat history is not available on this installation.",
+    "CHAT_OWNER_REQUIRED": "This chat has no owner to be stored under.",
+    "USER_PROJECTS_DISABLED": "Personal projects are switched off.",
+    "APP_PROJECTS_DISABLED": "This app takes no projects.",
+    "PROJECT_TEST_CHAT_NOT_KEEPABLE": "The test chat of a project cannot be kept.",
+    "QUOTA_FILE_BYTES": "The file is larger than the allowed size.",
+    "QUOTA_CHAT_FILES": "This chat already has the maximum number of uploaded files.",
+    "QUOTA_CHAT_BYTES": "The uploaded files of this chat exceed the storage quota.",
+    "QUOTA_API_FILES": "You already have the maximum number of files in the Inference API.",
+    "QUOTA_API_BYTES": "Your Inference API files exceed the storage quota.",
+    "QUOTA_USER_BYTES": "Your uploaded file storage quota is used up.",
+    "QUOTA_SERVER_BYTES": "The server's file upload storage is full.",
+    "BINARY_UPLOAD_NOT_ALLOWED": "Binary file uploads are disabled; upload the extracted text only.",
+    "UNSUPPORTED_TYPE": "This file type is not supported.",
+    "SCAN_REJECTED": "The security scanner rejected the file.",
+    "NO_TEXT": "The file contains no text.",
+    "EXTRACTION_FAILED": "The text could not be extracted from the file.",
+    "SOURCE_FORBIDDEN": "You may not attach files from this connected system.",
+    "SOURCE_GONE": "The file no longer exists in the connected system.",
+    "SOURCE_UNAVAILABLE": "The connected system is not available.",
+    "SOURCE_INVALID": "The file reference is not valid.",
+    "SOURCE_FAILED": "The file could not be fetched from the connected system."
   }
 }

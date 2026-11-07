@@ -25,6 +25,12 @@ optionally the original. Scopes:
 - **Composer.** A file is uploaded in the background as soon as it is attached (not when the message is
   sent) and the message then names it by id. In `client_text_only` mode only the text the browser
   extracted is uploaded.
+- **Attachment chips.** Each chip under the composer says what the assistant gets from the file: the
+  characters of text extracted from a document, the page images sent instead for a scan without a text
+  layer, the size an image is sent in; once the server stored the file it also says when only the text is
+  kept or the text was shortened. A file that came from a cloud storage or an integration (such as an
+  iFinder document opened from a link) has buttons to **download the original** and, for a document,
+  **the extracted text** as `<name>.txt`; a local file is the user's own already and has none.
 - **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
   (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
   **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,

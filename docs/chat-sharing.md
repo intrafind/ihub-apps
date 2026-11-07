@@ -236,7 +236,8 @@ open limit, revoke, admin list and `/share/<id>` URL; the share document just
 has `target: "artifact"` (a missing `target` means `chat`) and carries one
 artifact id and no transcript.
 
-- **Share** in the preview of the Artifacts panel opens the dialog. It is the
+- **Share** on a file or image card in the chat, in the file viewer, or in the
+  preview of the Artifacts panel opens the dialog. It is the
   conversation form minus the uploaded-file options; below it, the links of
   that file. Offered when chat sharing and `allowArtifacts` are on and the chat
   is kept and has a message.

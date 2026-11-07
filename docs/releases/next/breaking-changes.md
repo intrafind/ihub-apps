@@ -415,7 +415,9 @@ own that read one of the removed names have to switch.
 ## MCP Gateway: The Legacy SSE Transport Is Gone
 
 `GET /mcp/sse` and `POST /mcp/messages` (the 2024-11-05 HTTP+SSE transport) are removed; the
-gateway speaks Streamable HTTP on `/mcp` only. The **SSE (legacy)** toggle on **Admin → MCP
+gateway speaks Streamable HTTP on `/mcp` only. Both old paths answer `410 Gone` with a JSON-RPC
+error that names Streamable HTTP and a bridge, so a client still configured for them says what to
+change. The **SSE (legacy)** toggle on **Admin → MCP
 gateway**, the `mcp_sse_endpoint` and `sse` entry in `/mcp/.well-known`, and the "MCP endpoint
 (SSE)" row of the personal API keys page are gone. V223 deletes `mcpServer.transports.sse` from
 `platform.json`.

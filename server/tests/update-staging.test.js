@@ -224,7 +224,7 @@ describe('stageLocalFile', () => {
     assert.equal(summary.accepted, true);
     assert.equal(summary.comparison, 'downgrade');
     assert.equal(summary.requiresConfirmation.downgrade, true);
-    await assert.rejects(service.applyUpdate(), error => error.code === 'confirm-downgrade');
+    await assert.rejects(service.applyUpdate(), error => error.code === 'CONFIRM_DOWNGRADE');
   });
 
   it('refuses an update that skips a required intermediate version', async () => {
@@ -286,7 +286,7 @@ describe('stageLocalFile', () => {
     await service.applyUpdate();
     await assert.rejects(
       service.stageLocalFile(await buildRelease({ version: '3.0.0' })),
-      error => error.code === 'update-pending'
+      error => error.code === 'UPDATE_PENDING'
     );
     await assert.rejects(service.rollback(), /No backup|already scheduled/);
     assert.equal(
@@ -420,16 +420,16 @@ describe('applyUpdate / rollback', () => {
   it('requires the typed version for an unsigned archive', async () => {
     settings = { trustedPublicKeys: [], allowUnsigned: true };
     await service.stageLocalFile(await buildRelease({ signWith: null }));
-    await assert.rejects(service.applyUpdate(), error => error.code === 'confirm-unsigned');
+    await assert.rejects(service.applyUpdate(), error => error.code === 'CONFIRM_UNSIGNED');
     await assert.rejects(
       service.applyUpdate({ confirmUnsigned: 'yes' }),
-      error => error.code === 'confirm-unsigned'
+      error => error.code === 'CONFIRM_UNSIGNED'
     );
 
     settings = { trustedPublicKeys: [], allowUnsigned: false };
     await assert.rejects(
       service.applyUpdate({ confirmUnsigned: '2.0.0' }),
-      error => error.code === 'unsigned-not-allowed'
+      error => error.code === 'UNSIGNED_NOT_ALLOWED'
     );
 
     settings = { trustedPublicKeys: [], allowUnsigned: true };
