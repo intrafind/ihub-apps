@@ -5,10 +5,10 @@ import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
+import { assertValidId } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
-import { sendInternalError, sendNotFound, sendBadRequest } from '../utils/responseHelpers.js';
 import { getUsablePersonalSkills } from '../services/skillAccess.js';
 
 export default function registerSkillRoutes(app) {
@@ -20,54 +20,50 @@ export default function registerSkillRoutes(app) {
     authRequired,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
+      const platformConfig = configCache.getPlatform() || {};
+      const authConfig = platformConfig.auth || {};
 
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-        }
-
-        const { data: skills, etag } = await configCache.getSkillsForUser(req.user, platformConfig);
-
-        // Return only safe metadata (no paths). Global skills go by name.
-        const safeSkills = skills.map(({ name, displayName, description, metadata, isSystem }) => ({
-          id: name,
-          name,
-          displayName,
-          description,
-          metadata,
-          scope: 'global',
-          isSystem: isSystem === true
-        }));
-
-        // The caller's own and shared user skills, for the `/` picker. They
-        // change with every save, so the list is not cached when it has any.
-        const personal = await getUsablePersonalSkills({ user: req.user });
-        if (personal.length > 0) {
-          res.setHeader('Cache-Control', 'private, no-store');
-          for (const skill of personal) {
-            safeSkills.push({
-              id: skill.id,
-              name: skill.name,
-              displayName: skill.name,
-              description: skill.description || '',
-              scope: String(skill.ownerId) === String(req.user.id) ? 'mine' : 'shared',
-              owner: { name: skill.ownerName || '' }
-            });
-          }
-        } else if (etag) {
-          res.setHeader('ETag', etag);
-        }
-
-        res.json(safeSkills);
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch skills');
+      if (req.user && !req.user.permissions) {
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
+
+      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+      }
+
+      const { data: skills, etag } = await configCache.getSkillsForUser(req.user, platformConfig);
+
+      // Return only safe metadata (no paths). Global skills go by name.
+      const safeSkills = skills.map(({ name, displayName, description, metadata, isSystem }) => ({
+        id: name,
+        name,
+        displayName,
+        description,
+        metadata,
+        scope: 'global',
+        isSystem: isSystem === true
+      }));
+
+      // The caller's own and shared user skills, for the `/` picker. They
+      // change with every save, so the list is not cached when it has any.
+      const personal = await getUsablePersonalSkills({ user: req.user });
+      if (personal.length > 0) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        for (const skill of personal) {
+          safeSkills.push({
+            id: skill.id,
+            name: skill.name,
+            displayName: skill.name,
+            description: skill.description || '',
+            scope: String(skill.ownerId) === String(req.user.id) ? 'mine' : 'shared',
+            owner: { name: skill.ownerName || '' }
+          });
+        }
+      } else if (etag) {
+        res.setHeader('ETag', etag);
+      }
+
+      res.json(safeSkills);
     }
   );
 
@@ -79,28 +75,24 @@ export default function registerSkillRoutes(app) {
     authRequired,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
+      const platformConfig = configCache.getPlatform() || {};
+      const authConfig = platformConfig.auth || {};
 
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
-        const skill = skills.find(s => s.name === req.params.name);
-
-        if (!skill) {
-          return sendNotFound(res, 'Skill');
-        }
-
-        const { name, displayName, description, license, compatibility, metadata } = skill;
-        res.json({ name, displayName, description, license, compatibility, metadata });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch skill');
+      if (req.user && !req.user.permissions) {
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
+
+      const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
+      const skill = skills.find(s => s.name === req.params.name);
+
+      if (!skill) {
+        throw new ServiceError('NOT_FOUND', 'Skill not found');
+      }
+
+      const { name, displayName, description, license, compatibility, metadata } = skill;
+      res.json({ name, displayName, description, license, compatibility, metadata });
     }
   );
 
@@ -112,40 +104,36 @@ export default function registerSkillRoutes(app) {
     authRequired,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
+      const platformConfig = configCache.getPlatform() || {};
+      const authConfig = platformConfig.auth || {};
 
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Verify user has access to this skill
-        const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
-        const skill = skills.find(s => s.name === req.params.name);
-
-        if (!skill) {
-          return sendNotFound(res, 'Skill');
-        }
-
-        const content = await getSkillContent(req.params.name);
-        if (!content) {
-          return sendNotFound(res, 'Skill content');
-        }
-
-        res.json({
-          name: req.params.name,
-          body: content.body,
-          frontmatter: content.frontmatter,
-          references: content.references,
-          scripts: content.scripts,
-          assets: content.assets
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch skill content');
+      if (req.user && !req.user.permissions) {
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
+
+      // Verify user has access to this skill
+      const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
+      const skill = skills.find(s => s.name === req.params.name);
+
+      if (!skill) {
+        throw new ServiceError('NOT_FOUND', 'Skill not found');
+      }
+
+      const content = await getSkillContent(req.params.name);
+      if (!content) {
+        throw new ServiceError('NOT_FOUND', 'Skill content not found');
+      }
+
+      res.json({
+        name: req.params.name,
+        body: content.body,
+        frontmatter: content.frontmatter,
+        references: content.references,
+        scripts: content.scripts,
+        assets: content.assets
+      });
     }
   );
 
@@ -157,41 +145,37 @@ export default function registerSkillRoutes(app) {
     authRequired,
     requireFeature('skills'),
     async (req, res) => {
-      try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+      assertValidId(req.params.name, 'skill');
 
-        // Express 5 named wildcards arrive as an array of path segments
-        const filePath = Array.isArray(req.params.filePath)
-          ? req.params.filePath.join('/')
-          : req.params.filePath;
-        if (!filePath) {
-          return sendBadRequest(res, 'File path is required');
-        }
-
-        const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Verify user has access to this skill
-        const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
-        const skill = skills.find(s => s.name === req.params.name);
-
-        if (!skill) {
-          return sendNotFound(res, 'Skill');
-        }
-
-        const content = await getSkillResource(req.params.name, filePath);
-        if (content === null) {
-          return sendNotFound(res, 'Resource');
-        }
-
-        res.type('text/plain').send(content);
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch skill resource');
+      // Express 5 named wildcards arrive as an array of path segments
+      const filePath = Array.isArray(req.params.filePath)
+        ? req.params.filePath.join('/')
+        : req.params.filePath;
+      if (!filePath) {
+        throw new ServiceError('BAD_REQUEST', 'File path is required');
       }
+
+      const platformConfig = configCache.getPlatform() || {};
+      const authConfig = platformConfig.auth || {};
+
+      if (req.user && !req.user.permissions) {
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      }
+
+      // Verify user has access to this skill
+      const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
+      const skill = skills.find(s => s.name === req.params.name);
+
+      if (!skill) {
+        throw new ServiceError('NOT_FOUND', 'Skill not found');
+      }
+
+      const content = await getSkillResource(req.params.name, filePath);
+      if (content === null) {
+        throw new ServiceError('NOT_FOUND', 'Resource not found');
+      }
+
+      res.type('text/plain').send(content);
     }
   );
 }

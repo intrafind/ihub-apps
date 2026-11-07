@@ -771,6 +771,9 @@ used to be an HTML or plain text page.
   `FORBIDDEN` for a link of somebody else and `CONFLICT` for a code that exists. The redirect `/s/{code}`
   keeps its plain-text answers. An unexpected failure answers 500 with a fixed text; the cause is in the
   server log.
+- The skill endpoints (`/api/skills*`) answer in this shape: `BAD_REQUEST` for an unsafe skill name or a missing
+  file path and `NOT_FOUND` for an unknown skill, missing skill content or an unknown resource (the reason is
+  in `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
