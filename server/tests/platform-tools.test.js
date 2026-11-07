@@ -9,8 +9,8 @@
  * (`read_url`) are plain tools owned by those features,
  * not actions of the iHub integration. Everything that resolves them by id
  * keeps working as it did with their tool files: workflow prompt nodes and
- * agent runs, group grants, `runTool`, a scheduled run's memory tools;
- * and a file of the same id in `contents/tools/` still takes their place.
+ * agent runs, group grants, `runTool`, a scheduled run's memory tools.
+ * `platform.webSearch.pageReader: false` keeps the page reader off.
  *
  * Run: node --test server/tests/platform-tools.test.js
  */
@@ -222,5 +222,32 @@ describe('resolving the platform tools by id', () => {
     const byId = Object.fromEntries(prepared.tools.map(tool => [tool.id, tool]));
     assert.equal(byId.read_memory._integration, undefined);
     assert.equal(byId.list_task_runs._integration?.instanceId, 'ihub');
+  });
+});
+
+describe('the page reader switch (platform.webSearch.pageReader)', () => {
+  after(() => configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' }));
+
+  it('is on unless the platform setting says false', async () => {
+    configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
+    assert.ok((await loadTools('en')).some(tool => tool.id === PAGE_READER));
+    configCache.setCacheEntry('config/platform.json', {
+      defaultLanguage: 'en',
+      webSearch: { pageReader: true }
+    });
+    assert.ok((await loadTools('en')).some(tool => tool.id === PAGE_READER));
+  });
+
+  it('keeps read_url out of every tool list, the other platform tools stay', async () => {
+    configCache.setCacheEntry('config/platform.json', {
+      defaultLanguage: 'en',
+      webSearch: { pageReader: false }
+    });
+    const tools = await loadTools('en');
+    assert.equal(
+      tools.some(tool => tool.id === PAGE_READER),
+      false
+    );
+    assert.ok(tools.some(tool => tool.id === 'write_artifact'));
   });
 });

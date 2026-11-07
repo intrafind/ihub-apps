@@ -21,13 +21,16 @@
  *   A reference that is none of these is reported with the file and removed.
  * - **Groups** (`config/groups.json`): `permissions.tools` (direct tool access
  *   over the MCP and A2A gateways) is removed. The gateways now offer the
- *   actions of the integrations a group is granted (`permissions.integrations`);
- *   an entry that names an installation's tools adds that installation to the
- *   group's `integrations` (unless the group already holds `*`), so what the
- *   group could reach stays reachable. Entries that map to no installation are
- *   reported.
+ *   actions of the integrations a group is granted (`permissions.integrations`).
+ *   A tool grant never granted an installation, so no entry becomes an
+ *   integration grant (that would widen what the group may use); every dropped
+ *   entry is reported, with the installation it named, for the admin to decide.
+ * - **Loop bodies** kept inline under a node's `config.body` are rewritten like
+ *   any node.
  * - **Tool files** (`contents/tools/*.json`): nothing selects them any more;
- *   each one found is reported and left in place.
+ *   each one found is reported and left in place. A `read_url.json` with
+ *   `enabled: false` (V204 writes one to keep the page reader off) sets
+ *   `platform.webSearch.pageReader: false`, which keeps the reader off.
  *
  * Self-contained: the reference table lives in `support/toolReferences.js`, a
  * frozen snapshot of the built-in definitions that both V229 and V230 share.
@@ -42,6 +45,8 @@ export { resolveReference };
 
 const INTEGRATIONS_FILE = 'config/integrations.json';
 const GROUPS_FILE = 'config/groups.json';
+const PLATFORM_FILE = 'config/platform.json';
+const READER_TOOL_FILE = 'tools/read_url.json';
 
 /** The platform tools (and base ids) a node or profile may name in `systemTools`. */
 const SYSTEM_TOOLS = new Set([
@@ -149,18 +154,23 @@ export function rewriteHolder(holder, installed, unmapped) {
   return true;
 }
 
+/** The node configs and task templates of a list of nodes, loop bodies kept inline included. */
+function* holdersOfNodes(nodes) {
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    if (!plainObject(node?.config)) continue;
+    yield node.config;
+    if (plainObject(node.config.taskTemplate)) yield node.config.taskTemplate;
+    // A loop keeps its body inline under `config.body` (`LoopNodeExecutor`).
+    yield* holdersOfNodes(node.config.body);
+  }
+}
+
 /** Every node config and task template of a workflow or profile document. */
 function* holdersOf(doc) {
   if (!plainObject(doc)) return;
   yield doc; // an agent profile carries its own list
   const definitions = [doc, doc?.workflow?.definition].filter(plainObject);
-  for (const definition of definitions) {
-    for (const node of Array.isArray(definition.nodes) ? definition.nodes : []) {
-      if (!plainObject(node?.config)) continue;
-      yield node.config;
-      if (plainObject(node.config.taskTemplate)) yield node.config.taskTemplate;
-    }
-  }
+  for (const definition of definitions) yield* holdersOfNodes(definition.nodes);
 }
 
 /**
@@ -177,12 +187,16 @@ export function migrateDocument(doc, installed) {
 }
 
 /**
- * Drop `permissions.tools` of every group; entries naming an installation's
- * tools add the installation to the group's `integrations`.
- * @returns {{ changed: boolean, unmapped: Array<{group: string, ref: string}> }}
+ * Drop `permissions.tools` of every group. A tool grant was never an
+ * integration grant (the gateways offered tool files and platform tools, and
+ * an installation's tools only through `permissions.integrations`), so no
+ * entry is turned into one: that would widen what the group may use. Entries
+ * naming an installation's tools are reported with the installation, and the
+ * admin decides whether the group should hold it in `integrations`.
+ * @returns {{ changed: boolean, dropped: Array<{group: string, ref: string, installation?: string, all?: boolean}> }}
  */
 export function migrateGroups(groupsConfig, installed) {
-  const unmapped = [];
+  const dropped = [];
   let changed = false;
   for (const [groupId, group] of Object.entries(groupsConfig?.groups || {})) {
     const permissions = group?.permissions;
@@ -190,28 +204,20 @@ export function migrateGroups(groupsConfig, installed) {
     const list = Array.isArray(permissions.tools) ? permissions.tools : [];
     delete permissions.tools;
     changed = true;
-    const integrations = Array.isArray(permissions.integrations) ? permissions.integrations : [];
     for (const ref of list) {
       if (typeof ref !== 'string') continue;
       if (ref === '*') {
-        // Every tool over the gateways: the group now needs the integrations
-        // themselves. Reported when it does not already hold `*`.
-        if (!integrations.includes('*')) unmapped.push({ group: groupId, ref, all: true });
+        dropped.push({ group: groupId, ref, all: true });
         continue;
       }
       if (SYSTEM_TOOLS.has(ref)) continue; // platform tools are not integrations
       const hit = resolveReference(ref, installed);
-      if (!hit) {
-        unmapped.push({ group: groupId, ref });
-        continue;
-      }
-      if (!integrations.includes('*') && !integrations.includes(hit.instanceId)) {
-        integrations.push(hit.instanceId);
-      }
+      dropped.push(
+        hit ? { group: groupId, ref, installation: hit.instanceId } : { group: groupId, ref }
+      );
     }
-    permissions.integrations = integrations;
   }
-  return { changed, unmapped };
+  return { changed, dropped };
 }
 
 export async function up(ctx) {
@@ -243,17 +249,43 @@ export async function up(ctx) {
 
   if (await ctx.fileExists(GROUPS_FILE)) {
     const groups = await ctx.readJson(GROUPS_FILE);
-    const { changed, unmapped } = migrateGroups(groups, installed);
+    const { changed, dropped } = migrateGroups(groups, installed);
     if (changed) {
       await ctx.writeJson(GROUPS_FILE, groups);
       ctx.log('groups: permissions.tools removed (the gateways offer the granted integrations)');
-      for (const { group, ref, all } of unmapped) {
+      for (const { group, ref, installation, all } of dropped) {
         ctx.warn(
           all
-            ? `group "${group}": the direct grant of every tool ("*") was removed; the MCP gateway now offers the integrations the group is granted (permissions.integrations), so check that list.`
-            : `group "${group}": the direct tool grant "${ref}" belongs to no installed integration and was removed.`
+            ? `group "${group}": the direct grant of every tool ("*") was removed. It never granted an integration; the MCP gateway offers the integrations a group is granted (permissions.integrations), so check that list.`
+            : installation
+              ? `group "${group}": the direct tool grant "${ref}" was removed. It did not grant the installation "${installation}" and is not turned into a grant; add "${installation}" to the group's integrations (Admin → Groups) if the group should use it.`
+              : `group "${group}": the direct tool grant "${ref}" belongs to no installed integration and was removed.`
         );
       }
+    }
+  }
+
+  // The page reader of web search was switched off by a `read_url` tool file
+  // with `enabled: false` (V204 writes one). Tool files are not read any more:
+  // keep the reader off through the platform setting that replaces it.
+  if (await ctx.fileExists(READER_TOOL_FILE)) {
+    let reader = null;
+    try {
+      reader = await ctx.readJson(READER_TOOL_FILE);
+    } catch {
+      /* an unreadable file is reported with the other tool files below */
+    }
+    if (reader?.enabled === false) {
+      const platform = (await ctx.fileExists(PLATFORM_FILE))
+        ? await ctx.readJson(PLATFORM_FILE)
+        : {};
+      const next = plainObject(platform) ? platform : {};
+      next.webSearch = {
+        ...(plainObject(next.webSearch) ? next.webSearch : {}),
+        pageReader: false
+      };
+      await ctx.writeJson(PLATFORM_FILE, next);
+      ctx.log(`${READER_TOOL_FILE} was disabled: platform.webSearch.pageReader set to false`);
     }
   }
 

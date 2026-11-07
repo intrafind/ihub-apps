@@ -98,6 +98,33 @@ describe('machine clients (client credentials, static key)', () => {
   });
 });
 
+describe('user-delegated tokens (authorization code, personal API key)', () => {
+  const delegated = (clientAllowedApps, apps) => ({
+    ...user(['*']),
+    isPersonalApiKey: true,
+    clientAllowedApps,
+    permissions: { apps: new Set(apps), integrations: new Set(['*']) }
+  });
+
+  it("are bounded by the client's allowedApps when it names some", async () => {
+    useWebSearch({ installed: [engine('brave')], groups: OPEN_GROUPS });
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'searching', enabled: true, integrations: { brave: {} } },
+      { id: 'plain', enabled: true }
+    ]);
+    // The user may use both apps; the client names only the plain one.
+    assert.deepEqual(await registered(delegated(['plain'], ['plain'])), []);
+    assert.deepEqual(await registered(delegated(['searching'], ['searching'])), ['braveSearch']);
+  });
+
+  it('keep every granted integration when the client names no apps', async () => {
+    useWebSearch({ installed: [engine('brave')], groups: OPEN_GROUPS });
+    configCache.setCacheEntry('config/apps.json', [{ id: 'plain', enabled: true }]);
+    assert.deepEqual(await registered(delegated([], ['plain'])), ['braveSearch']);
+    assert.deepEqual(await registered(delegated(['*'], ['plain'])), ['braveSearch']);
+  });
+});
+
 describe('isToolAllowed', () => {
   const expose = { tools: true };
   const integration = { _integration: { instanceId: 'x', action: 'a' } };

@@ -15,6 +15,7 @@ import {
   bindingEnabledByDefault,
   defaultEnabledRefs
 } from '../../../shared/integrationDefaults.js';
+import { isStorageBindingKey } from '../../../shared/storageBindings.js';
 
 /** Binding keys that bind no tools: iAssistant is reached through the model. */
 const SCOPE_ONLY_BINDINGS = new Set(['iassistant']);
@@ -41,14 +42,18 @@ export function appCandidateRefs(app) {
 }
 
 /**
- * Whether the app binds an integration for its tools, so any model it uses
- * must support function calling.
+ * Whether the app binds an integration that gives the model tools, so any
+ * model it uses must support function calling. A storage provider
+ * (`type:storage`, a storage definition id) is a candidate reference of the
+ * chat's integration picker but brings no tools, only files, and does not
+ * count: an app that only attaches cloud files (`file-analysis`) needs no
+ * tool-capable model.
  *
  * @param {Object} app
  * @returns {boolean}
  */
 export function appHasToolBindings(app) {
-  return appCandidateRefs(app).length > 0;
+  return appCandidateRefs(app).some(key => !isStorageBindingKey(key));
 }
 
 /**

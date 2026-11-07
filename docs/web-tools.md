@@ -142,8 +142,9 @@ two is a preview feature for Gemini 3 models only and requires the server-side
 tool calls to be circulated back through the conversation, which the adapter
 does not do yet. The reader is a platform tool of the web search feature
 (`server/defaults/tools/read_url.json`), not an engine's action: an admin
-switches it off with a tool file `contents/tools/read_url.json` that says
-`"enabled": false` (a hand-written file; there is no admin page for tool files).
+switches it off for the whole platform with `"webSearch": { "pageReader": false }` in
+`platform.json` (a restart applies it; migration V230 sets it where a disabled
+`contents/tools/read_url.json` kept the reader off before).
 
 ### Admin UI Configuration
 

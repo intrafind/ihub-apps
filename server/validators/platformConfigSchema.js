@@ -591,6 +591,16 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Web search: `pageReader: false` keeps the page reader (`read_url`), the
+    // tool that opens a result's page, off for every app, workflow node and
+    // agent. Left out, it is on. Migration V230 sets it for an install whose
+    // `contents/tools/read_url.json` said `enabled: false`.
+    webSearch: z
+      .object({
+        pageReader: z.boolean().optional()
+      })
+      .passthrough()
+      .optional(),
     // User skills: skills signed-in users write themselves (instructions plus
     // text files) and share with users, groups or everyone. Stored through the
     // storage abstraction; `maxSkillsPerUser` of zero or less means no limit.

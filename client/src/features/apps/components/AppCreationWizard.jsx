@@ -665,8 +665,7 @@ function AIGenerationStep({ appData, updateAppData }) {
               content: prompt
             }
           ],
-          responseFormat: 'json',
-          responseSchema: appGeneratorPrompt.outputSchema
+          responseFormat: 'json'
         }
       });
 
@@ -721,7 +720,7 @@ function AIGenerationStep({ appData, updateAppData }) {
             ...(() => {
               const integrations = integrationsFromAnswer(
                 configJson.integrations,
-                appGeneratorPrompt.integrationIds || []
+                appGeneratorPrompt.integrations || []
               );
               return integrations ? { integrations } : {};
             })(),
