@@ -95,11 +95,13 @@ jest.unstable_mockModule('../services/runtime/RunSummaryRepository.js', () => ({
 }));
 
 const { default: registerAdminChatHistoryRoutes } = await import('../routes/admin/chatHistory.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp() {
   const app = express();
   app.use(express.json());
   registerAdminChatHistoryRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
