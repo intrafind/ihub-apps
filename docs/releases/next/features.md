@@ -805,6 +805,14 @@ used to be an HTML or plain text page.
 - The usage guide endpoint (`/api/admin/apps/_usage-guide`) answers in this shape: `BAD_REQUEST` for a missing
   app or an invalid language, `SERVICE_UNAVAILABLE` (503) when no chat model is available and, for a failing
   model call, the LLM code with its canonical status.
+- The audit log (`/api/admin/audit-log*`), usage (`/api/admin/usage*`), UI customization (`/api/admin/ui*`),
+  proxy (`/api/admin/proxy*`), translation override (`/api/admin/translations*`), overview and people directory
+  editor administration endpoints answer in this shape: `BAD_REQUEST` for an invalid filter, date range, asset
+  id, configuration or proxy setting (the reason is in `detail`; an invalid proxy configuration lists the failed
+  fields in `errors`), `NOT_FOUND` for an unknown asset or language and `FORBIDDEN` for a proxy test target the
+  SSRF guard blocks. The UI endpoints no longer answer an error with `{ success: false, message }`, and a UI
+  configuration that is missing a section or has an invalid value answers `BAD_REQUEST` again instead of 500. An
+  unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
