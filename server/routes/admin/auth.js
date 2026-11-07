@@ -8,14 +8,9 @@ import { isContentAdmin } from '../../utils/authorization.js';
 import { equalsIgnoreCase, hashPasswordWithUserId } from '../../utils/userManager.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { startUserCleanup } from '../../services/userDeletion.js';
@@ -175,19 +170,15 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to check authentication status
    */
   app.get(buildServerPath('/api/admin/auth/status'), async (req, res) => {
-    try {
-      // Check if admin auth is required considering current user authentication
-      // req.user is populated by the global auth middleware (proxyAuth, localAuth)
-      // Accept both full admins and content admins for admin panel entry
-      const authRequired = !isContentAdmin(req.user);
+    // Check if admin auth is required considering current user authentication
+    // req.user is populated by the global auth middleware (proxyAuth, localAuth)
+    // Accept both full admins and content admins for admin panel entry
+    const authRequired = !isContentAdmin(req.user);
 
-      res.json({
-        authRequired,
-        authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'check authentication status');
-    }
+    res.json({
+      authRequired,
+      authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
+    });
   });
 
   /**
@@ -231,12 +222,8 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to read the demo account status
    */
   app.get(buildServerPath('/api/admin/auth/demo-accounts'), adminAuth, async (req, res) => {
-    try {
-      const localAuth = configCache.getPlatform()?.localAuth || {};
-      res.json(await getDemoAccountStatus(localAuth));
-    } catch (error) {
-      return sendInternalError(res, error, 'read demo account status');
-    }
+    const localAuth = configCache.getPlatform()?.localAuth || {};
+    res.json(await getDemoAccountStatus(localAuth));
   });
 
   // User Management Routes
@@ -266,27 +253,23 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to get users
    */
   app.get(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
-    try {
-      let usersData = await configStore.readJson(USERS_FILE);
-      if (!usersData) {
-        // File doesn't exist or is invalid, return empty users
-        logger.info('Users file not found or invalid, returning empty list', {
-          component: 'AdminAuth'
-        });
-        usersData = { users: {}, metadata: {} };
-      }
-
-      const sanitizedUsers = Object.fromEntries(
-        Object.entries(usersData.users || {}).map(([id, user]) => {
-          const { passwordHash, ...userWithoutPasswordHash } = user;
-          return [id, userWithoutPasswordHash];
-        })
-      );
-
-      res.json({ ...usersData, users: sanitizedUsers });
-    } catch (error) {
-      return sendInternalError(res, error, 'get users');
+    let usersData = await configStore.readJson(USERS_FILE);
+    if (!usersData) {
+      // File doesn't exist or is invalid, return empty users
+      logger.info('Users file not found or invalid, returning empty list', {
+        component: 'AdminAuth'
+      });
+      usersData = { users: {}, metadata: {} };
     }
+
+    const sanitizedUsers = Object.fromEntries(
+      Object.entries(usersData.users || {}).map(([id, user]) => {
+        const { passwordHash, ...userWithoutPasswordHash } = user;
+        return [id, userWithoutPasswordHash];
+      })
+    );
+
+    res.json({ ...usersData, users: sanitizedUsers });
   });
 
   /**
@@ -360,100 +343,96 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to create user
    */
   app.post(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
-    try {
-      const {
-        username,
-        email,
-        name,
-        password,
-        internalGroups = [],
-        active = true,
-        authMethods = ['local']
-      } = req.body;
+    const {
+      username,
+      email,
+      name,
+      password,
+      internalGroups = [],
+      active = true,
+      authMethods = ['local']
+    } = req.body;
 
-      // Check if this is a local auth user (needs password)
-      const isLocalAuth = authMethods.includes('local');
+    // Check if this is a local auth user (needs password)
+    const isLocalAuth = authMethods.includes('local');
 
-      if (!username) {
-        return sendBadRequest(res, 'Username is required');
-      }
-
-      // Only require password for local auth users
-      if (isLocalAuth && !password) {
-        return sendBadRequest(res, 'Password is required for local authentication users');
-      }
-
-      if (password && password.length < 6) {
-        return sendBadRequest(res, 'Password must be at least 6 characters long');
-      }
-
-      // No user database yet is the first-run case: start the structure here.
-      const usersData = (await configStore.readJson(USERS_FILE)) || {
-        users: {},
-        metadata: {
-          version: '2.0.0',
-          description: 'Local user database for iHub Apps'
-        }
-      };
-
-      // Check if username already exists (case-insensitive)
-      const existingUser = Object.values(usersData.users).find(user =>
-        equalsIgnoreCase(user.username, username)
-      );
-      if (existingUser) {
-        return sendErrorResponse(res, 409, 'Username already exists');
-      }
-
-      // Create new user
-      const userId = `user_${uuidv4().replaceAll('-', '_')}`;
-
-      const newUser = {
-        id: userId,
-        username,
-        email: email || null,
-        name: name || '',
-        internalGroups: Array.isArray(internalGroups) ? internalGroups : [],
-        authMethods: Array.isArray(authMethods) ? authMethods : ['local'],
-        active,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      // Only add password hash for local auth users
-      if (isLocalAuth && password) {
-        newUser.passwordHash = await hashPasswordWithUserId(password, userId);
-      }
-
-      usersData.users[userId] = newUser;
-      usersData.metadata.lastUpdated = new Date().toISOString();
-
-      // Save to file
-      await configStore.writeJson(USERS_FILE, usersData);
-
-      // Refresh cache to ensure new user is available in cache
-      await configCache.refreshCacheEntry('config/users.json');
-
-      logger.info('Created new user', {
-        component: 'AdminAuth',
-        username,
-        userId,
-        authMethods: authMethods.join(', ')
-      });
-
-      logAudit({
-        req,
-        action: 'create',
-        resource: 'user',
-        resourceId: userId,
-        summary: `Created user "${username}"`
-      });
-
-      // Return user without password hash
-      const { passwordHash: _passwordHash, ...userResponse } = newUser;
-      res.json({ user: userResponse });
-    } catch (error) {
-      return sendInternalError(res, error, 'create user');
+    if (!username) {
+      throw new ServiceError('BAD_REQUEST', 'Username is required');
     }
+
+    // Only require password for local auth users
+    if (isLocalAuth && !password) {
+      throw new ServiceError('BAD_REQUEST', 'Password is required for local authentication users');
+    }
+
+    if (password && password.length < 6) {
+      throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
+    }
+
+    // No user database yet is the first-run case: start the structure here.
+    const usersData = (await configStore.readJson(USERS_FILE)) || {
+      users: {},
+      metadata: {
+        version: '2.0.0',
+        description: 'Local user database for iHub Apps'
+      }
+    };
+
+    // Check if username already exists (case-insensitive)
+    const existingUser = Object.values(usersData.users).find(user =>
+      equalsIgnoreCase(user.username, username)
+    );
+    if (existingUser) {
+      throw new ServiceError('CONFLICT', 'Username already exists');
+    }
+
+    // Create new user
+    const userId = `user_${uuidv4().replaceAll('-', '_')}`;
+
+    const newUser = {
+      id: userId,
+      username,
+      email: email || null,
+      name: name || '',
+      internalGroups: Array.isArray(internalGroups) ? internalGroups : [],
+      authMethods: Array.isArray(authMethods) ? authMethods : ['local'],
+      active,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Only add password hash for local auth users
+    if (isLocalAuth && password) {
+      newUser.passwordHash = await hashPasswordWithUserId(password, userId);
+    }
+
+    usersData.users[userId] = newUser;
+    usersData.metadata.lastUpdated = new Date().toISOString();
+
+    // Save to file
+    await configStore.writeJson(USERS_FILE, usersData);
+
+    // Refresh cache to ensure new user is available in cache
+    await configCache.refreshCacheEntry('config/users.json');
+
+    logger.info('Created new user', {
+      component: 'AdminAuth',
+      username,
+      userId,
+      authMethods: authMethods.join(', ')
+    });
+
+    logAudit({
+      req,
+      action: 'create',
+      resource: 'user',
+      resourceId: userId,
+      summary: `Created user "${username}"`
+    });
+
+    // Return user without password hash
+    const { passwordHash: _passwordHash, ...userResponse } = newUser;
+    res.json({ user: userResponse });
   });
 
   /**
@@ -519,97 +498,91 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to update user
    */
   app.put(buildServerPath('/api/admin/auth/users/:userId'), adminAuth, async (req, res) => {
-    try {
-      const { userId } = req.params;
+    const { userId } = req.params;
 
-      // Validate userId for security (prevents prototype pollution)
-      if (!validateIdForPath(userId, 'user', res)) {
-        return;
-      }
+    // Validate userId for security (prevents prototype pollution)
+    assertValidId(userId, 'user');
 
-      // Additional hardening: explicitly block prototype-polluting keys
-      if (userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
-        return sendBadRequest(res, 'Invalid user ID');
-      }
-
-      const { email, name, password, internalGroups, active, usageLimits } = req.body;
-      const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
-      if (limits && !limits.ok) return sendBadRequest(res, limits.error);
-
-      const usersData = await configStore.readJson(USERS_FILE);
-      if (!usersData) {
-        return sendNotFound(res, 'Users file');
-      }
-
-      // Check if user exists
-      if (!usersData.users[userId]) {
-        return sendNotFound(res, 'User');
-      }
-
-      const user = usersData.users[userId];
-      const deactivated = active === false && user.active !== false;
-
-      // Update fields
-      if (email !== undefined) user.email = email;
-      if (name !== undefined) user.name = name;
-      if (internalGroups !== undefined)
-        user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
-      if (active !== undefined) user.active = active;
-      if (limits) {
-        if (limits.value) user.usageLimits = limits.value;
-        else delete user.usageLimits;
-      }
-
-      // Update password if provided
-      if (password) {
-        if (password.length < 6) {
-          return sendBadRequest(res, 'Password must be at least 6 characters long');
-        }
-        user.passwordHash = await hashPasswordWithUserId(password, userId);
-        // A new password ends a lockout from failed sign-ins.
-        await clearFailedLogins(lockoutKey(user));
-      }
-
-      user.updatedAt = new Date().toISOString();
-      usersData.metadata.lastUpdated = new Date().toISOString();
-
-      // Save to file
-      await configStore.writeJson(USERS_FILE, usersData);
-
-      // Refresh cache to ensure updated user data is available in cache
-      await configCache.refreshCacheEntry('config/users.json');
-
-      // A deactivated user's stored sign-in must not keep iFinder background
-      // runs going (iFinder token exchange). Reactivating needs a new sign-in.
-      if (deactivated) {
-        try {
-          await deleteLoginTokens(userId);
-        } catch (error) {
-          logger.warn('Could not delete stored sign-in tokens of a deactivated user', {
-            component: 'AdminAuth',
-            userId,
-            error
-          });
-        }
-      }
-
-      logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
-
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'user',
-        resourceId: userId,
-        summary: `Updated user "${user.username}"`
-      });
-
-      // Return user without password hash
-
-      const { passwordHash, ...userResponse } = user;
-      res.json({ user: userResponse });
-    } catch (error) {
-      return sendInternalError(res, error, 'update user');
+    // Additional hardening: explicitly block prototype-polluting keys
+    if (userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid user ID');
     }
+
+    const { email, name, password, internalGroups, active, usageLimits } = req.body;
+    const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
+    if (limits && !limits.ok) throw new ServiceError('BAD_REQUEST', limits.error);
+
+    const usersData = await configStore.readJson(USERS_FILE);
+    if (!usersData) {
+      throw new ServiceError('NOT_FOUND', 'Users file not found');
+    }
+
+    // Check if user exists
+    if (!usersData.users[userId]) {
+      throw new ServiceError('NOT_FOUND', 'User not found');
+    }
+
+    const user = usersData.users[userId];
+    const deactivated = active === false && user.active !== false;
+
+    // Update fields
+    if (email !== undefined) user.email = email;
+    if (name !== undefined) user.name = name;
+    if (internalGroups !== undefined)
+      user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
+    if (active !== undefined) user.active = active;
+    if (limits) {
+      if (limits.value) user.usageLimits = limits.value;
+      else delete user.usageLimits;
+    }
+
+    // Update password if provided
+    if (password) {
+      if (password.length < 6) {
+        throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
+      }
+      user.passwordHash = await hashPasswordWithUserId(password, userId);
+      // A new password ends a lockout from failed sign-ins.
+      await clearFailedLogins(lockoutKey(user));
+    }
+
+    user.updatedAt = new Date().toISOString();
+    usersData.metadata.lastUpdated = new Date().toISOString();
+
+    // Save to file
+    await configStore.writeJson(USERS_FILE, usersData);
+
+    // Refresh cache to ensure updated user data is available in cache
+    await configCache.refreshCacheEntry('config/users.json');
+
+    // A deactivated user's stored sign-in must not keep iFinder background
+    // runs going (iFinder token exchange). Reactivating needs a new sign-in.
+    if (deactivated) {
+      try {
+        await deleteLoginTokens(userId);
+      } catch (error) {
+        logger.warn('Could not delete stored sign-in tokens of a deactivated user', {
+          component: 'AdminAuth',
+          userId,
+          error
+        });
+      }
+    }
+
+    logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
+
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'user',
+      resourceId: userId,
+      summary: `Updated user "${user.username}"`
+    });
+
+    // Return user without password hash
+
+    const { passwordHash, ...userResponse } = user;
+    res.json({ user: userResponse });
   });
 
   /**
@@ -655,80 +628,74 @@ export default function registerAdminAuthRoutes(app) {
    *         description: Failed to delete user
    */
   app.delete(buildServerPath('/api/admin/auth/users/:userId'), adminAuth, async (req, res) => {
-    try {
-      const { userId } = req.params;
+    const { userId } = req.params;
 
-      // Validate userId for security (prevents prototype pollution)
-      if (!validateIdForPath(userId, 'user', res)) {
-        return;
-      }
+    // Validate userId for security (prevents prototype pollution)
+    assertValidId(userId, 'user');
 
-      const usersData = await configStore.readJson(USERS_FILE);
-      if (!usersData) {
-        return sendNotFound(res, 'Users file');
-      }
-
-      // Check if user exists
-      if (!usersData.users[userId]) {
-        return sendNotFound(res, 'User');
-      }
-
-      // Check if user is the last admin - prevent deletion
-      if (isLastAdmin(userId)) {
-        return sendErrorResponse(
-          res,
-          403,
-          'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
-        );
-      }
-
-      const username = usersData.users[userId].username;
-
-      // Remove user
-      delete usersData.users[userId];
-      usersData.metadata.lastUpdated = new Date().toISOString();
-
-      // Save to file
-      await configStore.writeJson(USERS_FILE, usersData);
-
-      // Refresh cache to ensure deleted user is removed from cache
-      await configCache.refreshCacheEntry('config/users.json');
-
-      logger.info('Deleted user', { component: 'AdminAuth', username, userId });
-
-      logAudit({
-        req,
-        action: 'delete',
-        resource: 'user',
-        resourceId: userId,
-        summary: `Deleted user "${username}"`
-      });
-
-      // The record is gone, which is what ended the user's access. What they
-      // owned (connections, API keys, stored credentials, scheduled tasks, chats,
-      // prompts, skills, short links) is removed in the background: a user with a
-      // lot of chats should not make the admin wait. The outcome is audited, so a
-      // step that failed is visible somewhere other than the server log.
-      startUserCleanup({
-        userId,
-        platform: configCache.getPlatform() || {},
-        onDone: ({ failed }) =>
-          logAudit({
-            req,
-            action: 'cleanup',
-            resource: 'user',
-            resourceId: userId,
-            result: failed.length > 0 ? 'failure' : 'success',
-            summary:
-              failed.length > 0
-                ? `Removed what user "${username}" owned, except: ${failed.join(', ')}`
-                : `Removed what user "${username}" owned`
-          })
-      });
-
-      res.json({ message: 'User deleted successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'delete user');
+    const usersData = await configStore.readJson(USERS_FILE);
+    if (!usersData) {
+      throw new ServiceError('NOT_FOUND', 'Users file not found');
     }
+
+    // Check if user exists
+    if (!usersData.users[userId]) {
+      throw new ServiceError('NOT_FOUND', 'User not found');
+    }
+
+    // Check if user is the last admin - prevent deletion
+    if (isLastAdmin(userId)) {
+      throw new ServiceError(
+        'FORBIDDEN',
+        'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
+      );
+    }
+
+    const username = usersData.users[userId].username;
+
+    // Remove user
+    delete usersData.users[userId];
+    usersData.metadata.lastUpdated = new Date().toISOString();
+
+    // Save to file
+    await configStore.writeJson(USERS_FILE, usersData);
+
+    // Refresh cache to ensure deleted user is removed from cache
+    await configCache.refreshCacheEntry('config/users.json');
+
+    logger.info('Deleted user', { component: 'AdminAuth', username, userId });
+
+    logAudit({
+      req,
+      action: 'delete',
+      resource: 'user',
+      resourceId: userId,
+      summary: `Deleted user "${username}"`
+    });
+
+    // The record is gone, which is what ended the user's access. What they
+    // owned (connections, API keys, stored credentials, scheduled tasks, chats,
+    // prompts, skills, short links) is removed in the background: a user with a
+    // lot of chats should not make the admin wait. The outcome is audited, so a
+    // step that failed is visible somewhere other than the server log.
+    startUserCleanup({
+      userId,
+      platform: configCache.getPlatform() || {},
+      onDone: ({ failed }) =>
+        logAudit({
+          req,
+          action: 'cleanup',
+          resource: 'user',
+          resourceId: userId,
+          result: failed.length > 0 ? 'failure' : 'success',
+          summary:
+            failed.length > 0
+              ? `Removed what user "${username}" owned, except: ${failed.join(', ')}`
+              : `Removed what user "${username}" owned`
+        })
+    });
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ message: 'User deleted successfully' });
   });
 }
