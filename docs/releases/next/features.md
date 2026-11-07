@@ -841,6 +841,12 @@ used to be an HTML or plain text page.
   request without a usable provider, and `INTEGRATION_AUTH_REQUIRED` (409, with the Connect card details) when the
   user has no usable connection. An unexpected failure answers 500 with a fixed text; the cause is in the server
   log.
+- The agent run artifact (`/api/agents/runs/{id}/artifacts*`), OCR and tool job, chat feedback, release changelog,
+  OAuth connection and iFinder assistant administration endpoints answer in this shape: `NOT_FOUND` for an unknown
+  run, job, artifact or connection, `FORBIDDEN` for a run that is not the caller's or an app that turned feedback
+  off (`FEATURE_DISABLED`), `BAD_REQUEST` for an invalid upload, id or value, `CONFLICT` when iFinder is not
+  configured, `UPSTREAM_ERROR` (502) when iFinder cannot be asked, and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log. The voice routes keep their own codes as before.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
