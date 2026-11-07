@@ -7,6 +7,7 @@
  *   GET /api/agents/runs/:runId/artifacts/:name      — fetch one artifact
  */
 
+import rateLimit from 'express-rate-limit';
 import fs, { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
@@ -77,11 +78,20 @@ async function assertArtifactAccess(req, runId) {
   throw new ServiceError('FORBIDDEN', 'You are not allowed to access this run’s artifacts.');
 }
 
+/** Listing and reading artifact files: generous for a person, a wall for a script. */
+const artifactLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 export default function registerAgentArtifactRoutes(app) {
   app.get(
     buildServerPath('/api/agents/runs/:runId/artifacts'),
     authRequired,
     authenticatedOnly,
+    artifactLimiter,
     async (req, res) => {
       const { runId } = req.params;
       assertValidId(runId, 'run');
@@ -118,6 +128,7 @@ export default function registerAgentArtifactRoutes(app) {
     buildServerPath('/api/agents/runs/:runId/artifacts/:name'),
     authRequired,
     authenticatedOnly,
+    artifactLimiter,
     async (req, res) => {
       const { runId, name } = req.params;
       assertValidId(runId, 'run');

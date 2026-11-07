@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import rateLimit from 'express-rate-limit';
 import express from 'express';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { createReadStream } from 'node:fs';
@@ -138,11 +139,19 @@ router.get('/jobs/:jobId/progress', authRequired, async (req, res) => {
   });
 });
 
+/** Downloading results reads files: generous for a person, a wall for a script. */
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 /**
  * GET /jobs/:jobId/download
  * Download the result of a completed job (shared across all tools).
  */
-router.get('/jobs/:jobId/download', authRequired, async (req, res, next) => {
+router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, res, next) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
