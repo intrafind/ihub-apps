@@ -604,9 +604,12 @@ describe('provider routes answer errors in the shared shape', () => {
     });
     const existing = await request(app)
       .post('/api/admin/providers')
-      .send({ id: 'llmhub', category: 'llm', name: 'Again' });
+      .send({ id: 'llmhub', category: 'llm', name: 'Again', apiType: 'openai' });
     expect(existing.status).toBe(400);
-    expect(existing.body.code).toBe('BAD_REQUEST');
+    expect(existing.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: "Provider with id 'llmhub' already exists"
+    });
   });
 
   it('answers a provider that models use with PROVIDER_IN_USE and the models in details', async () => {
