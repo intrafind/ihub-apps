@@ -16,7 +16,7 @@
  * by the runtime, not the LLM. The registrar therefore no longer
  * auto-attaches `read_inbox`, `write_inbox`, `write_artifact`, or
  * `mark_task_done`. These tools still exist (they are platform tools) so
- * profile authors can add them to `profile.tools[]` as an
+ * profile authors can add them to `profile.systemTools[]` as an
  * escape hatch — but they are no longer pushed into every agent prompt by
  * default. That alone eliminates the planner-hallucination class of bugs
  * we were defending against with `"DO NOT include orchestration steps"`

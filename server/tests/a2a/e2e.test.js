@@ -57,10 +57,7 @@ jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({
   invokeApp,
   invokeAppNonStreaming: jest.fn()
 }));
-jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
-  loadConfiguredTools: jest.fn(async () => []),
-  loadLocalTools: jest.fn(async () => [])
-}));
+jest.unstable_mockModule('../../services/tools/catalog.js', () => ({}));
 jest.unstable_mockModule('../../services/tools/runTool.js', () => ({
   runTool: jest.fn()
 }));

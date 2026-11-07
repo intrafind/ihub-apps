@@ -4258,7 +4258,6 @@
     "contentAccess": {
       "title": "Group access",
       "description": "Choose which groups can use {{subject}}. Changes are saved immediately.",
-      "descriptionTools": "Choose which groups may call this tool directly over the MCP and A2A gateways. Changes are saved immediately. In chat, an app's own tool list decides what the model may call.",
       "saveFirst": "Save {{subject}} first. Afterwards you can choose which groups may use it.",
       "loading": "Loading groups…",
       "loadError": "Group access could not be loaded.",
@@ -5030,6 +5029,14 @@
       }
     },
     "workflows": {
+      "capabilities": {
+        "allOfType": "All {{type}} installations",
+        "integrations": "Integrations",
+        "integrationsPlaceholder": "Search installed integrations...",
+        "systemTools": "Platform tools",
+        "systemToolsPlaceholder": "Search platform tools...",
+        "webSearch": "Web search"
+      },
       "chatIntegration": {
         "title": "Chat integration",
         "description": "How this workflow can be used from the chat of the apps it is assigned to. The chat shows the Output of its end step as the answer.",

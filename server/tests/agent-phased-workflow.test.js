@@ -30,8 +30,8 @@ async function run() {
   check('has planner', byId['planner']?.type === 'planner');
   check(
     'planner has a taskTemplate with search tools',
-    Array.isArray(byId['planner']?.config?.taskTemplate?.tools) &&
-      byId['planner'].config.taskTemplate.tools.includes('braveSearch')
+    Boolean(byId['planner']?.config?.taskTemplate?.integrations?.['type:web-search']) &&
+      byId['planner'].config.taskTemplate.systemTools?.includes('read_url')
   );
   check(
     'has synthesize (prompt, _isSynthesizer)',

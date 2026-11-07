@@ -35,7 +35,7 @@
  *   profile.system               → Agent persona (used for task execution)
  *   profile.planner.{system,goal,modelId,maxTasks}
  *   profile.synthesizer.{system,prompt,modelId,enabled}
- *   profile.tools/apps/sources   → Research tools for task executors
+ *   profile.integrations/systemTools/webSearch/apps/projects → what task executors can use
  */
 
 import logger from '../../utils/logger.js';
@@ -302,7 +302,13 @@ function basePromptConfig(profile, { systemFallbackKey, fallbackIterations }) {
       ? profile.system
       : profile.description || { en: systemFallbackKey },
     maxIterations: pickIterations(profile, fallbackIterations),
-    tools: Array.isArray(profile.tools) ? profile.tools.slice() : [],
+    // What the agent can use: the integrations it binds, the platform tools it
+    // names and the web search switch (no tool list, #3275).
+    ...(profile.integrations && typeof profile.integrations === 'object'
+      ? { integrations: structuredClone(profile.integrations) }
+      : {}),
+    systemTools: Array.isArray(profile.systemTools) ? profile.systemTools.slice() : [],
+    webSearch: profile.webSearch === true,
     apps: Array.isArray(profile.apps) ? profile.apps.slice() : [],
     projects: Array.isArray(profile.projects) ? profile.projects.slice() : [],
     // Skills the agent can activate (instructional knowledge). The
@@ -398,7 +404,6 @@ function buildSynthesizerNode(profile) {
       prompt: isLocalizedNonEmpty(profile.synthesizer?.prompt)
         ? profile.synthesizer.prompt
         : DEFAULT_SYNTHESIZER_PROMPT,
-      tools: [],
       maxIterations: 1,
       // The synthesizer is a one-shot composition over ALL sub-task results
       // + citations. Provider defaults are often 4-8K — too tight for
@@ -427,7 +432,6 @@ function buildMemoryComposerNode(profile) {
       prompt: isLocalizedNonEmpty(profile.memory?.prompt)
         ? profile.memory.prompt
         : DEFAULT_MEMORY_COMPOSER_PROMPT,
-      tools: [],
       maxIterations: 1,
       maxTokens: 2000,
       outputVariable: '_memoryDelta',
@@ -502,7 +506,6 @@ function buildReviewerNode(profile) {
         ? profile.review.system
         : DEFAULT_REVIEWER_SYSTEM,
       prompt: DEFAULT_REVIEWER_PROMPT,
-      tools: [],
       maxIterations: 1,
       maxTokens: 2000,
       outputVariable: '_reviewOutput',

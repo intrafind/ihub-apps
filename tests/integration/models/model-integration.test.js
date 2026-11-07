@@ -1,5 +1,5 @@
 import { createCompletionRequest } from '../../../server/adapters/index.js';
-import { loadConfiguredTools } from '../../../server/services/tools/catalog.js';
+import { loadPlatformTools } from '../../../server/services/tools/catalog.js';
 import { TestHelper, MockDataGenerator } from '../../utils/helpers.js';
 import { testModels, testEnvironment, mockApiKeys } from '../../utils/fixtures.js';
 import dotenv from 'dotenv';
@@ -29,9 +29,9 @@ describe('Model Integration Tests', () => {
   let availableTools;
 
   beforeAll(async () => {
-    // Load configured tools for testing
+    // Load the platform tools for testing
     try {
-      availableTools = await loadConfiguredTools();
+      availableTools = await loadPlatformTools();
     } catch (error) {
       console.warn('Could not load tools, using mock tools:', error.message);
       availableTools = [

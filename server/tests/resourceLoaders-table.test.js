@@ -14,7 +14,6 @@ describe('RESOURCE_LOADERS', () => {
       'prompts',
       'workflows',
       'agents',
-      'tools',
       'projects'
     ]);
     for (const spec of Object.values(RESOURCE_LOADERS)) {

@@ -518,7 +518,7 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
   })
   .strict();
 
-const appIntegrationsSchema = z
+export const appIntegrationsSchema = z
   .record(
     // An installation id, a definition id (with its one `/`) or a type
     // (`type:people-directory`, see services/integrations/integrationTypes.js).
@@ -587,7 +587,6 @@ const baseAppConfigSchema = z.object({
   autoStart: z.boolean().optional().prefault(false),
   ephemeral: z.boolean().optional().prefault(false),
   websearch: websearchSchema,
-  tools: z.array(z.string()).optional(),
   // `required`: the model's first call of each turn must call one of the app's
   // tools (see services/loop/toolChoice.js); later calls are `auto`.
   toolChoice: z.enum(['auto', 'required']).optional(),

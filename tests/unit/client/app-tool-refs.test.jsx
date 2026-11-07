@@ -10,6 +10,7 @@
  */
 import {
   appDefaultToolRefs,
+  appHasToolBindings,
   appToolRefs,
   boundIntegrationRefs
 } from '../../../client/src/shared/utils/boundIntegrationRefs';
@@ -46,13 +47,13 @@ describe('boundIntegrationRefs', () => {
 });
 
 describe('appToolRefs', () => {
-  it('lists the app’s tools, then the integrations it binds, once each', () => {
+  it('lists the integrations the app binds, once each, and no leftover `tools`', () => {
     expect(
       appToolRefs({
         tools: ['ask_user', 'jira'],
-        integrations: { ifinder: {}, jira: {}, iassistant: {} }
+        integrations: { ihub: { actions: ['ask_user'] }, ifinder: {}, jira: {}, iassistant: {} }
       })
-    ).toEqual(['ask_user', 'jira', 'ifinder']);
+    ).toEqual(['ihub', 'ifinder', 'jira']);
   });
 
   it('gives the upgraded iFinder Search app its iFinder tools', () => {
@@ -67,25 +68,45 @@ describe('appToolRefs', () => {
   });
 });
 
+describe('appHasToolBindings', () => {
+  it('is true when the app binds an integration for its tools', () => {
+    expect(appHasToolBindings({ integrations: { ifinder: {} } })).toBe(true);
+  });
+
+  it('is false for scope-only bindings, iAssistant and an app without bindings', () => {
+    expect(appHasToolBindings({ integrations: { jira: { actions: [] }, iassistant: {} } })).toBe(
+      false
+    );
+    expect(appHasToolBindings({ id: 'chat', tools: ['ask_user'] })).toBe(false);
+    expect(appHasToolBindings(null)).toBe(false);
+  });
+});
+
 describe('appDefaultToolRefs', () => {
   it('starts with everything the app offers when no binding is available only', () => {
     const app = {
-      tools: ['ask_user'],
-      integrations: { ifinder: {}, jira: { enabledByDefault: true } }
+      integrations: {
+        ihub: { actions: ['ask_user'] },
+        ifinder: {},
+        jira: { enabledByDefault: true }
+      }
     };
     expect(appDefaultToolRefs(app)).toEqual(appToolRefs(app));
   });
 
   it('leaves out the integrations a binding makes available only', () => {
     const app = {
-      tools: ['ask_user'],
-      integrations: { ifinder: {}, jira: { enabledByDefault: false } }
+      integrations: {
+        ihub: { actions: ['ask_user'] },
+        ifinder: {},
+        jira: { enabledByDefault: false }
+      }
     };
-    expect(appToolRefs(app)).toEqual(['ask_user', 'ifinder', 'jira']);
-    expect(appDefaultToolRefs(app)).toEqual(['ask_user', 'ifinder']);
+    expect(appToolRefs(app)).toEqual(['ihub', 'ifinder', 'jira']);
+    expect(appDefaultToolRefs(app)).toEqual(['ihub', 'ifinder']);
   });
 
-  it('is empty for an app without tools', () => {
+  it('is empty for an app without bindings', () => {
     expect(appDefaultToolRefs({})).toEqual([]);
     expect(appDefaultToolRefs(null)).toEqual([]);
   });

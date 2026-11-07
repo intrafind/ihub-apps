@@ -57,7 +57,8 @@ Create `contents/apps/{id}.json` with this minimal valid shape:
   "allowedModels": ["gpt-4o", "claude-opus-4-6"],
   "disallowModelSelection": false,
   "allowEmptyContent": false,
-  "tools": ["webSearch", "calculator"],
+  "websearch": { "enabled": true },
+  "integrations": { "ifinder": { "actions": ["search"] } },
   "features": { "magicPrompt": true },
   "upload": { "enabled": true, "maxSize": 10485760 },
   "variables": [
@@ -72,6 +73,8 @@ Create `contents/apps/{id}.json` with this minimal valid shape:
   ]
 }
 ```
+
+An app has no `tools` list: it gets tools only from the integrations it binds under `integrations` (an installation id, a definition id or `type:<type>`, with an optional `actions` list; the group must be granted the installation in `permissions.integrations`) and from `websearch`.
 
 ## Permissions
 

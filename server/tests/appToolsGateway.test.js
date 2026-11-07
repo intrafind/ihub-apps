@@ -53,7 +53,6 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getApps: () => ({ data: appsFixture }),
     getFeatures: () => featuresConfig.value,
-    getTools: () => ({ data: [] }),
     getModels: () => ({ data: [] }),
     getPlatform: () => ({}),
     getSources: () => ({ data: [] }),

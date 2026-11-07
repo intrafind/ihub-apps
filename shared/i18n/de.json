@@ -4595,7 +4595,6 @@
     "contentAccess": {
       "title": "Gruppenzugriff",
       "description": "Legen Sie fest, welche Gruppen {{subject}} verwenden dürfen. Änderungen werden sofort gespeichert.",
-      "descriptionTools": "Legen Sie fest, welche Gruppen dieses Tool direkt über die MCP- und A2A-Gateways aufrufen dürfen. Änderungen werden sofort gespeichert. Im Chat bestimmt die Tool-Liste der App, was das Modell aufrufen darf.",
       "saveFirst": "Speichern Sie {{subject}} zuerst. Danach lässt sich festlegen, welche Gruppen Zugriff erhalten.",
       "loading": "Gruppen werden geladen…",
       "loadError": "Der Gruppenzugriff konnte nicht geladen werden.",
@@ -5367,6 +5366,14 @@
       }
     },
     "workflows": {
+      "capabilities": {
+        "allOfType": "Alle {{type}}-Installationen",
+        "integrations": "Integrationen",
+        "integrationsPlaceholder": "Installierte Integrationen suchen...",
+        "systemTools": "Plattform-Tools",
+        "systemToolsPlaceholder": "Plattform-Tools suchen...",
+        "webSearch": "Websuche"
+      },
       "chatIntegration": {
         "title": "Chat-Anbindung",
         "description": "Wie dieser Workflow im Chat der Apps genutzt werden kann, denen er zugewiesen ist. Der Chat zeigt die Ausgabe seines End-Schritts als Antwort.",

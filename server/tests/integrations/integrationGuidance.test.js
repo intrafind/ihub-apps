@@ -91,7 +91,6 @@ before(async () => {
   registry.contentsDirOverride = path.join(root, 'contents');
   await registry.reload();
 
-  configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/a2aAgents.json', { agents: [] });
   configCache.setCacheEntry('config/platform.json', {});
   configCache.setCacheEntry('config/groups.json', {

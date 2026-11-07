@@ -39,9 +39,7 @@ import {
   sumUsage
 } from '../services/scheduler/tasks/memoryComposer.js';
 
-const MEMORY_TOOLS = ['read_memory', 'write_memory', 'list_task_runs', 'get_task_run'];
-
-before(() => setupHarness({ defaultTools: MEMORY_TOOLS }));
+before(() => setupHarness());
 after(() => teardownHarness());
 
 const ada = () => principal({ id: 'user-ada', name: 'Ada' });

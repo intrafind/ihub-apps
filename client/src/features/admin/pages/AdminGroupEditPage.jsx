@@ -27,8 +27,7 @@ function AdminGroupEditPage() {
     models: [],
     prompts: [],
     workflows: [],
-    skills: [],
-    tools: []
+    skills: []
   });
   const [jsonSchema, setJsonSchema] = useState(null);
   // Every group, so the editor can show what this one inherits.

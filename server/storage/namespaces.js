@@ -72,7 +72,7 @@ export const CONFIG_NAMESPACES = Object.freeze({
   models: Object.freeze({ dir: 'models', raw: true }),
   /** `contents/prompts/*.json` — one file per prompt. */
   prompts: Object.freeze({ dir: 'prompts', raw: true }),
-  /** `contents/tools/*.json` — one file per tool definition. */
+  /** `contents/tools/*.json` — legacy tool files; only migrations read them (V211, V230). */
   tools: Object.freeze({ dir: 'tools', raw: true }),
   /** `contents/workflows/*.json` — one file per workflow. */
   workflows: Object.freeze({ dir: 'workflows', raw: true }),

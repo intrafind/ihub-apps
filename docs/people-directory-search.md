@@ -150,9 +150,9 @@ An app binds directories under `integrations` (**Admin → Apps → Edit → Int
 - `"integrations": { "x500bund": {} }` — one directory, all of its search tools; `{ "actions": ["search_people"] }` narrows it;
 - both together: the installation's own binding wins for that directory.
 
-A group's `permissions.tools` still selects a directory's tools by the directory id (`"x500bund"`) or an exact tool id (`"x500bund__search_people"`), and an `app.tools` entry naming a directory id keeps working for apps written that way.
+Which groups may use a directory is the group grant of its installation (`permissions.integrations`). The former tool grants (`permissions.tools`) and the app's `tools` list are gone (#3275): migrations V229 and V230 turned them into bindings and grants of the installation.
 
-The group grant (`permissions.integrations`) holds on top of that: an app that binds `x500bund`, or a `"*"` tool grant, does not give the directory to a user whose groups do not grant it. Inherited grants count (`admins` inherit `users`). The check runs in the tools listing, an app's tools, direct tool runs, the MCP gateway, and again when the tool runs.
+The grant holds on top of every binding: an app that binds `x500bund` does not give the directory to a user whose groups do not grant it. Inherited grants count (`admins` inherit `users`). The check runs in an app's tools, workflow nodes and the MCP gateway, and again when the tool runs.
 
 ## LDAP browser (for admins)
 
@@ -195,7 +195,7 @@ Install it under **Admin → Integrations → Catalog → LDAP browser**: pick t
 
 > **`*` grants every installation, the browser included.** The shipped `users` and `authenticated` groups hold `"*"` in `permissions.integrations`. Raw directory entries are not for every user: give those groups the installations they need instead of `"*"`, or keep the browser out of their apps (the shipped **LDAP browser** app ships disabled; restrict it to admin groups under **Admin → Groups**).
 
-**Binding.** An app binds a browser like any installation: `"integrations": { "corp-browser": {} }` binds its three browse actions (a browser binding without `actions` binds all three; `{ "actions": ["browse_read"] }` narrows it), `"integrations": { "com.intrafind/ldap-browser": {} }` every browser, including later ones. The shipped **LDAP browser** app (`ldap-browser`) binds the definition. A binding of a directory, of `com.intrafind/ldap-directory` or of `type:people-directory` never includes a browser, and neither does a `tools` entry: the `ldapBrowse` reference is retired.
+**Binding.** An app binds a browser like any installation: `"integrations": { "corp-browser": {} }` binds its three browse actions (a browser binding without `actions` binds all three; `{ "actions": ["browse_read"] }` narrows it), `"integrations": { "com.intrafind/ldap-browser": {} }` every browser, including later ones. The shipped **LDAP browser** app (`ldap-browser`) binds the definition. A binding of a directory, of `com.intrafind/ldap-directory` or of `type:people-directory` never includes a browser: the `ldapBrowse` reference is retired.
 
 **Migration V205** turned every directory that had the browser switched on (`browse: true`) into a browser installation `<directory id>-browser` (a numbered suffix when the id was taken), enabled like the directory and labelled "<directory label> – LDAP browser". Its groups (`browseGroups`, `admins` when empty) were granted the browser; an unknown group was skipped with a warning, and the log names the groups that hold `*` and may now browse. App bindings and `tools` entries of the browse actions were rewritten to bind the browser.
 

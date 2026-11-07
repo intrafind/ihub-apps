@@ -23,7 +23,6 @@
   "preferredStyle": "normal",
   "sendChatHistory": true,
   "enabled": true,
-  "tools": [],
   "greeting": {
     "en": {
       "title": "👋 Hello!",

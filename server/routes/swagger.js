@@ -31,7 +31,6 @@ export function apiDocGlobs(routesDir, sep = path.sep) {
     normal: [
       'generalRoutes.js',
       'modelRoutes.js',
-      'toolRoutes.js',
       'appSessionRoutes.js',
       'pageRoutes.js',
       'magicPromptRoutes.js',

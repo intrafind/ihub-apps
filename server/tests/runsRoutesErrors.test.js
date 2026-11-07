@@ -78,35 +78,35 @@ describe('run routes: errors', () => {
   it('answers an unknown run with NOT_FOUND and a foreign run with FORBIDDEN', async () => {
     state.auth = { ok: false, status: 404 };
     const missing = await request(app).get('/api/runs/run1').expect(404);
-    expect(missing.body).toEqual({ error: 'Run not found', code: 'NOT_FOUND' });
+    expect(missing.body).toMatchObject({ detail: 'Run not found', code: 'NOT_FOUND' });
 
     state.auth = { ok: false, status: 403 };
     const foreign = await request(app).delete('/api/runs/run1').expect(403);
-    expect(foreign.body).toEqual({
-      error: 'Insufficient permissions: delete run required',
+    expect(foreign.body).toMatchObject({
+      detail: 'Insufficient permissions: delete run required',
       code: 'FORBIDDEN'
     });
   });
 
-  it('answers a malformed answer with VALIDATION_FAILED and the fields in details.issues', async () => {
+  it('answers a malformed answer with VALIDATION_FAILED and the fields in errors', async () => {
     const res = await request(app).post(answerUrl).send({ decision: 'maybe' }).expect(400);
     expect(res.body.code).toBe('VALIDATION_FAILED');
-    expect(Array.isArray(res.body.details.issues)).toBe(true);
+    expect(Array.isArray(res.body.errors)).toBe(true);
   });
 
   it('answers an interaction of another run with NOT_FOUND', async () => {
     state.interaction = { id: 'i1', runId: 'other', policy: {} };
     const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(404);
-    expect(res.body).toEqual({ error: 'Interaction not found', code: 'NOT_FOUND' });
+    expect(res.body).toMatchObject({ detail: 'Interaction not found', code: 'NOT_FOUND' });
   });
 
-  it('answers a malformed human event with VALIDATION_FAILED and the fields in details.issues', async () => {
+  it('answers a malformed human event with VALIDATION_FAILED and the fields in errors', async () => {
     const res = await request(app)
       .post('/api/runs/run1/human-events')
       .send({ kind: 'not-a-kind' })
       .expect(400);
     expect(res.body.code).toBe('VALIDATION_FAILED');
-    expect(Array.isArray(res.body.details.issues)).toBe(true);
+    expect(Array.isArray(res.body.errors)).toBe(true);
   });
 
   it('refuses to answer a chat tool approval here with ANSWER_IN_CHAT', async () => {
@@ -119,14 +119,17 @@ describe('run routes: errors', () => {
       source: { chatId: 'chat1' }
     };
     const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(409);
-    expect(res.body).toEqual({ error: 'Answer this approval in its chat', code: 'ANSWER_IN_CHAT' });
+    expect(res.body).toMatchObject({
+      detail: 'Answer this approval in its chat',
+      code: 'ANSWER_IN_CHAT'
+    });
   });
 
   it('answers a caller who may not answer the interaction with FORBIDDEN', async () => {
     state.interactionAllowed = false;
     const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(403);
-    expect(res.body).toEqual({
-      error: 'Insufficient permissions: answer interaction required',
+    expect(res.body).toMatchObject({
+      detail: 'Insufficient permissions: answer interaction required',
       code: 'FORBIDDEN'
     });
   });
@@ -134,7 +137,7 @@ describe('run routes: errors', () => {
   it('keeps the status and code of an InteractionError', async () => {
     state.answerError = new InteractionError('Interaction expired', 'EXPIRED', 410);
     const expired = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(410);
-    expect(expired.body).toEqual({ error: 'Interaction expired', code: 'EXPIRED' });
+    expect(expired.body).toMatchObject({ detail: 'Interaction expired', code: 'EXPIRED' });
 
     state.answerError = new InteractionError('A reason is required to reject', 'REASON_REQUIRED');
     const reason = await request(app).post(answerUrl).send({ decision: 'reject' }).expect(400);

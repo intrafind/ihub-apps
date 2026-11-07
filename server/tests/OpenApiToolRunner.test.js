@@ -23,8 +23,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getCredentials: () => store,
     getPlatform: () => platformOverride.value,
-    getModels: () => ({ data: [] }),
-    getTools: () => ({ data: [] })
+    getModels: () => ({ data: [] })
   }
 }));
 

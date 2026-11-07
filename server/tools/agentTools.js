@@ -428,7 +428,7 @@ export async function markTaskDone(params = {}) {
 /**
  * Escape-hatch LLM tool. The runtime auto-persists synthesizer output and
  * per-task results without needing this — but profile authors can still
- * add `write_artifact` to `profile.tools[]` if they need to write a
+ * add `write_artifact` to `profile.systemTools[]` if they need to write a
  * specifically-named artifact mid-run.
  */
 export async function writeArtifact(params = {}) {

@@ -281,8 +281,8 @@ describe('the "+" menu as the integrations picker', () => {
   it('shows no menu when the server lists nothing and nothing else is offered', () => {
     render(
       <ChatInputActionsMenu
-        app={{ id: 'demo', tools: ['ask_user'] }}
-        enabledTools={['ask_user']}
+        app={{ id: 'demo', integrations: { ihub: { actions: ['ask_user'] } } }}
+        enabledTools={['ihub']}
         picker={{ rows: [], loading: false }}
         uploadConfig={{}}
       />

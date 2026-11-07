@@ -27,7 +27,7 @@ import configCache from '../../configCache.js';
 import { enhanceUserWithPermissions, isAdmin } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
-import { getBoundIntegrationIds, getVisibleToolIds, toolVisibleInSet } from './permissions.js';
+import { getBoundIntegrationIds } from './permissions.js';
 import { getMcpOAuthClientStore } from './mcpOAuthClientStore.js';
 import { McpAuthRequiredError, McpTokenRefreshError } from './McpUserOAuthProvider.js';
 import { readUserTokens, writeUserTokens, tokenBindingFor } from './mcpUserTokens.js';
@@ -99,27 +99,20 @@ async function installationAdmitsUser(instanceId, user) {
  * Whether a user may connect (and use) an `oauthUser` server: admins always
  * (they configure and test it); anyone else when their groups grant the
  * installation (`permissions.integrations`) and an app they may open binds it
- * (`app.integrations`), or lists the server or one of its tools in `tools`,
- * or a group grants one of them. The tool checks reuse the MCP gateway's
- * visibility rule (`getVisibleToolIds` + `toolVisibleInSet`), which also
- * resolves "app lists the server id".
+ * (`app.integrations`).
  *
  * @param {Object} user - Signed-in user (req.user)
  * @param {Object} serverConfig
- * @param {Object[]} [catalogTools] - The server's known iHub tool definitions
  * @returns {Promise<boolean>}
  */
-export async function isServerVisibleToUser(user, serverConfig, catalogTools = []) {
+export async function isServerVisibleToUser(user, serverConfig) {
   if (isAnonymousUser(user) || !serverConfig?.id) return false;
   const enhanced = withPermissions(user);
   if (isAdmin(enhanced)) return true;
   if (!(await installationAdmitsUser(serverConfig.id, enhanced))) return false;
   const platform = configCache.getPlatform() || {};
   const bound = await getBoundIntegrationIds(enhanced, platform);
-  if (bound.has(serverConfig.id)) return true;
-  const visible = await getVisibleToolIds(enhanced, platform);
-  if (toolVisibleInSet(serverConfig.id, visible, serverConfig.id)) return true;
-  return (catalogTools || []).some(tool => toolVisibleInSet(tool.id, visible, serverConfig.id));
+  return bound.has(serverConfig.id);
 }
 
 /**

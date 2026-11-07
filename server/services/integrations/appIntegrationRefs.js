@@ -3,7 +3,8 @@
 
 /**
  * The tool references an app offers a chat and the ones a new chat starts
- * with (#2923). Pure functions over the app config, with no service behind
+ * with (#2923). An app gets tools only through the integrations it binds
+ * (`app.integrations`, #3275). Pure functions over the app config, with no service behind
  * them: the integrations picker, the user's preferences route and the chat
  * request builder all read them.
  *
@@ -19,16 +20,14 @@ import {
 const SCOPE_ONLY_BINDINGS = new Set(['iassistant']);
 
 /**
- * Every tool reference an app offers a chat: its `tools` and the keys of the
- * integrations it binds for their tools (`app.integrations`), the same list
- * the chat has always started with. A binding with `actions: []` binds an
- * integration for its scopes only and is left out.
+ * Every tool reference an app offers a chat: the keys of the integrations it
+ * binds for their tools (`app.integrations`). A binding with `actions: []`
+ * binds an integration for its scopes only and is left out.
  *
  * @param {Object} app
  * @returns {string[]}
  */
 export function appCandidateRefs(app) {
-  const listed = Array.isArray(app?.tools) ? app.tools.filter(ref => typeof ref === 'string') : [];
   const bindings =
     app?.integrations && typeof app.integrations === 'object' ? app.integrations : {};
   const bound = Object.entries(bindings)
@@ -38,7 +37,18 @@ export function appCandidateRefs(app) {
         !(Array.isArray(binding?.actions) && binding.actions.length === 0)
     )
     .map(([key]) => key);
-  return [...new Set([...listed, ...bound])];
+  return [...new Set(bound)];
+}
+
+/**
+ * Whether the app binds an integration for its tools, so any model it uses
+ * must support function calling.
+ *
+ * @param {Object} app
+ * @returns {boolean}
+ */
+export function appHasToolBindings(app) {
+  return appCandidateRefs(app).length > 0;
 }
 
 /**

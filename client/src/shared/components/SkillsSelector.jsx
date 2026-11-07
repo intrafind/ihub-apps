@@ -9,7 +9,7 @@ import { fetchSkills } from '../../api/endpoints/skills';
 /**
  * SkillsSelector - Multi-select component for choosing skills to assign to an app.
  *
- * Follows the same pattern as ToolsSelector but adapted for skills.
+ * Searchable multi-select of skills.
  * Skills have a `name` (unique identifier) and a `description` field
  * instead of localized name/description objects.
  *

@@ -249,7 +249,6 @@ export const CACHE_KEYS = {
   MIMETYPES_CONFIG: 'mimetypes-config',
   TRANSLATIONS: 'translations',
   PAGE_CONTENT: 'page-content',
-  TOOLS: 'tools-list',
   MODEL_DETAILS: 'model-details'
 };
 

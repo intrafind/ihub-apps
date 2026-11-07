@@ -51,13 +51,19 @@ const APPS = [
   {
     id: 'research',
     enabled: true,
-    tools: ['drawio', 'ask_user'],
-    integrations: { ifinder: {}, jira: {}, 'type:storage': {}, iassistant: {} },
+    integrations: {
+      drawio: {},
+      ihub: { actions: ['ask_user'] },
+      ifinder: {},
+      jira: {},
+      'type:storage': {},
+      iassistant: {}
+    },
     websearch: { enabled: true, enabledByDefault: true }
   },
   { id: 'plain', enabled: true },
-  { id: 'secret', enabled: true, tools: ['drawio'] },
-  { id: 'off', enabled: false, tools: ['drawio'] }
+  { id: 'secret', enabled: true, integrations: { drawio: {} } },
+  { id: 'off', enabled: false, integrations: { drawio: {} } }
 ];
 
 const permissions = apps => ({ apps: new Set(apps), integrations: new Set(['*']) });
@@ -126,10 +132,10 @@ describe('the scope picker placement', () => {
 });
 
 describe('the app defaults', () => {
-  it('offers every reference the app lists or binds for tools', () => {
+  it('offers every integration the app binds for tools', () => {
     assert.deepEqual(appCandidateRefs(APPS[0]), [
       'drawio',
-      'ask_user',
+      'ihub',
       'ifinder',
       'jira',
       'type:storage'
@@ -147,8 +153,8 @@ describe('the app defaults', () => {
 
   it('starts without the bindings that are only available', () => {
     const app = {
-      tools: ['drawio'],
       integrations: {
+        drawio: {},
         ifinder: {},
         jira: { enabledByDefault: false },
         'type:storage': { enabledByDefault: true }
@@ -170,8 +176,7 @@ describe('the app defaults', () => {
 
   it('keeps a ticked iAssistant action in the defaults of a request without tools', () => {
     const integrations = (iassistant, jira = { enabledByDefault: false }) => ({
-      tools: ['drawio'],
-      integrations: { iassistant, jira }
+      integrations: { drawio: {}, iassistant, jira }
     });
     // `ask` ticked: the model's `iassistant__ask` must survive the narrowing.
     assert.deepEqual(appDefaultEnabledTools(integrations({ actions: ['ask'] })), [
@@ -254,7 +259,7 @@ describe('GET/PUT /api/integrations/preferences', () => {
     assert.equal(res.body.stored, false);
     assert.equal(res.body.available, true);
     assert.deepEqual(res.body.preferences, {
-      enabledTools: ['drawio', 'ask_user', 'ifinder', 'jira', 'type:storage'],
+      enabledTools: ['drawio', 'ihub', 'ifinder', 'jira', 'type:storage'],
       websearchEnabled: true,
       integrationScopes: {}
     });

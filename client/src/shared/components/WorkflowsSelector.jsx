@@ -9,7 +9,7 @@ import { getLocalizedContent } from '../../utils/localizeContent';
 
 /**
  * WorkflowsSelector - Multi-select component for choosing workflows to attach to an app.
- * Mirrors SkillsSelector/ToolsSelector but reads from the /workflows endpoint and
+ * Mirrors SkillsSelector but reads from the /workflows endpoint and
  * stores selections as workflow id strings in app.workflows.
  *
  * @param {Object} props

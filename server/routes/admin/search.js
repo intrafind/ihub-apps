@@ -27,8 +27,7 @@ export default function registerAdminSearchRoutes(app) {
         groups: [],
         users: [],
         projects: [],
-        providers: [],
-        tools: []
+        providers: []
       };
 
       // Search apps
@@ -148,29 +147,6 @@ export default function registerAdminSearchRoutes(app) {
           })
           .slice(0, MAX_PER_CATEGORY)
           .map(p => ({ id: p.id, name: p.name }));
-      } catch {
-        // skip
-      }
-
-      // Search tools
-      try {
-        const { data: tools } = configCache.getTools(true);
-        results.tools = tools
-          .filter(tl => {
-            const name =
-              typeof tl.name === 'object' ? Object.values(tl.name).join(' ') : tl.name || '';
-            const desc =
-              typeof tl.description === 'object'
-                ? Object.values(tl.description).join(' ')
-                : tl.description || '';
-            return (
-              tl.id?.toLowerCase().includes(query) ||
-              name.toLowerCase().includes(query) ||
-              desc.toLowerCase().includes(query)
-            );
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(tl => ({ id: tl.id, name: tl.name }));
       } catch {
         // skip
       }

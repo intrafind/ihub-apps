@@ -13,13 +13,13 @@ The conversation pauses until the user responds, then continues with the enriche
 
 ## Enabling the Tool
 
-Add `"ask_user"` to your app's tools array:
+Bind the `ask_user` action of the always-installed **iHub** integration to your app:
 
 ```json
 {
   "id": "my-app",
   "name": { "en": "My App" },
-  "tools": ["ask_user"],
+  "integrations": { "ihub": { "actions": ["ask_user"] } },
   "system": {
     "en": "You are a helpful assistant. When you need clarification, use the ask_user tool."
   }
@@ -33,7 +33,7 @@ clarification channel** the agent loop drives to pause a turn and ask the user a
 question (see the [agent loop docs](agent-loop.md)). It is treated as a system
 capability, not a user-selectable one:
 
-- **Always available when the app grants it.** Once an app lists it in `tools`,
+- **Always available when the app grants it.** Once an app binds it (`integrations.ihub`),
   the model keeps it regardless of a chat's per-turn tool narrowing
   (`enabledTools`). A user cannot switch it off, and a stale saved selection
   that predates it cannot strip it — otherwise the model would lose its only way
@@ -43,8 +43,8 @@ capability, not a user-selectable one:
   ask: the server leaves it out of the picker rows
   (`GET /api/integrations/picker`).
 
-No configuration is needed for this — listing `ask_user` (or any
-`requiresUserInput` tool) in the app's `tools` is enough. `ask_user` is an
+No configuration is needed for this — binding `ask_user` (or any
+`requiresUserInput` tool) under the app's `integrations` is enough. `ask_user` is an
 action of the always-installed built-in integration **iHub** (`ihub`, see
 [Integrations](integrations.md#built-in-integrations)); there is no tool file for
 it, and switching the action off there removes it from every app.

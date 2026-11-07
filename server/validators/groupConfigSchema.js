@@ -16,9 +16,6 @@ export const groupConfigSchema = z
         models: z.array(z.string()).prefault([]),
         workflows: z.array(z.string()).prefault([]),
         skills: z.array(z.string()).prefault([]),
-        // Direct tool access over the MCP/A2A gateways. Empty by default:
-        // a chat app's own `tools` list is what grants tool use in chat.
-        tools: z.array(z.string()).prefault([]),
         // Installed integrations members may use (#3093): `*`, installation
         // ids (`x500bund`), definition ids (`com.intrafind/ldap-directory`)
         // and type keys (`type:people-directory`). Checked on top of every

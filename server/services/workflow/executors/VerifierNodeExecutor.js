@@ -29,6 +29,7 @@ import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
+import { capabilitiesOf } from '../nodeCapabilities.js';
 
 export class VerifierNodeExecutor extends BaseNodeExecutor {
   /**
@@ -262,13 +263,15 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           ? this.buildAdversarialMessages(criteria, inputStr, temporalBlock)
           : this.buildQualityMessages(criteria, inputStr, threshold, temporalBlock);
 
-      // Tool-enabled adversarial verification: when the node lists `tools`, run
+      // Tool-enabled adversarial verification: when the node binds integrations or names platform tools, run
       // the verifier through a real tool loop so it can actually execute
       // checks/searches before its verdict — not just judge from reading. This
       // is the Claude Code verification-agent behavior ("did you actually run
       // the check?"). Other modes (and toolless adversarial) use one LLM call.
       const useToolLoop =
-        mode === 'adversarial' && Array.isArray(config.tools) && config.tools.length > 0;
+        mode === 'adversarial' &&
+        capabilitiesOf({ integrations: config.integrations, systemTools: config.systemTools })
+          .length > 0;
 
       let responseContent = '';
       // Capture token usage so verifier steps (including multi-iteration tool
@@ -278,7 +281,11 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       let responseTokens = null;
       if (useToolLoop) {
         const promptExecutor = await this.getPromptExecutor();
-        const tools = await promptExecutor.getAgentTools(config.tools, language, context);
+        const tools = await promptExecutor.getAgentTools(
+          { integrations: config.integrations, systemTools: config.systemTools },
+          language,
+          context
+        );
         const toolResp = await promptExecutor.executeLLMWithTools({
           model,
           messages,

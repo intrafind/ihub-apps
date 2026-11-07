@@ -96,7 +96,6 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getApps: () => ({ data: [{ id: 'chat' }, { id: 'Sales-Bot' }, { id: 'public' }] }),
     getPrompts: () => ({ data: [{ id: 'summary' }] }),
     getWorkflows: () => ({ data: [{ id: 'triage' }] }),
-    getTools: () => ({ data: [{ id: 'iFinder' }] }),
     getSkills: () => ({ data: [{ name: 'pdf' }] }),
     getPlatform: () => ({ auth: {} }),
     refreshCacheEntry: async key => {

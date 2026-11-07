@@ -65,14 +65,14 @@ describe('update routes: errors', () => {
     state.container = true;
     const res = await request(app).post('/api/admin/update/apply').send({}).expect(400);
     expect(res.body.code).toBe('BAD_REQUEST');
-    expect(res.body.error).toMatch(/container/);
+    expect(res.body.detail).toMatch(/container/);
   });
 
   it('refuses an installation that is not a binary one with BAD_REQUEST', async () => {
     state.binary = false;
     const res = await request(app).post('/api/admin/update/apply').send({}).expect(400);
-    expect(res.body).toEqual({
-      error: 'In-place updates are only available for binary installations',
+    expect(res.body).toMatchObject({
+      detail: 'In-place updates are only available for binary installations',
       code: 'BAD_REQUEST'
     });
   });
@@ -89,7 +89,7 @@ describe('update routes: errors', () => {
       code: 'CONFIRM_DOWNGRADE'
     });
     const res = await request(app).post('/api/admin/update/apply').send({}).expect(409);
-    expect(res.body).toEqual({ error: 'confirm the downgrade', code: 'CONFIRM_DOWNGRADE' });
+    expect(res.body).toMatchObject({ detail: 'confirm the downgrade', code: 'CONFIRM_DOWNGRADE' });
   });
 
   it('answers a request error without a code with BAD_REQUEST, or CONFLICT for a 409', async () => {
@@ -120,8 +120,8 @@ describe('update routes: errors', () => {
       .post('/api/admin/update/stage-local')
       .send({ path: '/srv/updates/ihub.zip' })
       .expect(422);
-    expect(res.body).toEqual({
-      error: 'The archive has no server folder',
+    expect(res.body).toMatchObject({
+      detail: 'The archive has no server folder',
       code: 'ARCHIVE_REJECTED',
       details: { summary }
     });

@@ -20,6 +20,7 @@ const withUserConnection = jest.fn();
 const connectUrlFor = jest.fn(id => `/api/integrations/${id}/connect`);
 
 let platform = { anonymousAuth: { enabled: false }, auth: {} };
+
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
     getPlatform: () => platform,
@@ -27,6 +28,22 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getIntegrations: () => ({ data: { installed: [] } }),
     get: () => ({ data: { installed: [] } })
   }
+}));
+
+/**
+ * The binding rules of an app, reduced to this fixture: the app binds the
+ * server's installation by id, with every action or a named list. (The real
+ * ones, with the group grant, are tested with the integrations.)
+ */
+const bindingOf = (app, tool) => app?.integrations?.[tool._integration.instanceId];
+jest.unstable_mockModule('../../services/integrations/integrationTools.js', () => ({
+  boundInstanceIds: app => Object.keys(app?.integrations || {}),
+  getIntegrationToolsForApp: (app, tools) =>
+    tools.filter(tool => {
+      const binding = bindingOf(app, tool);
+      if (!binding) return false;
+      return !Array.isArray(binding.actions) || binding.actions.includes(tool._integration.action);
+    })
 }));
 
 /** An in-memory interaction store with the service's answer-once semantics. */
@@ -125,7 +142,7 @@ const VIEW_TOOL = {
 
 let conn;
 beforeEach(() => {
-  apps = [{ id: 'whiteboard', tools: ['excalidraw__create_view'] }];
+  apps = [{ id: 'whiteboard', integrations: { excalidraw: { actions: ['create_view'] } } }];
   conn = fakeConnection();
   findTool.mockReset();
   hasServer.mockReset();
@@ -174,15 +191,15 @@ describe('GET /api/mcp-apps/resource', () => {
   });
 
   it('refuses a tool the app does not offer', async () => {
-    apps = [{ id: 'whiteboard', tools: ['other'] }];
+    apps = [{ id: 'whiteboard', integrations: { other: {} } }];
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(403);
     expect(findTool).not.toHaveBeenCalled();
   });
 
   it('serves a view for an app that uses the whole MCP server by its id', async () => {
-    // Prefix-agnostic: the app lists the server, not the tool id.
-    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    // Prefix-agnostic: the app binds the server, not the tool id.
+    apps = [{ id: 'whiteboard', integrations: { excalidraw: {} } }];
     findTool.mockImplementation(async id =>
       id === 'create_view' ? { conn, tool: { ...VIEW_TOOL, id: 'create_view' } } : null
     );
@@ -195,14 +212,19 @@ describe('GET /api/mcp-apps/resource', () => {
   });
 
   it('refuses a tool of another MCP server than the one the app uses', async () => {
-    apps = [{ id: 'whiteboard', tools: ['drawio'] }];
+    apps = [{ id: 'whiteboard', integrations: { drawio: {} } }];
     hasServer.mockImplementation(id => id === 'drawio' || id === 'excalidraw');
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(403);
   });
 
   it('404s a tool that renders no view', async () => {
-    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    apps = [{ id: 'whiteboard', integrations: { excalidraw: {} } }];
+    findTool.mockImplementation(async id =>
+      id === 'excalidraw__read_me'
+        ? { conn, tool: { id, _mcp: { serverId: 'excalidraw', originalName: 'read_me' } } }
+        : null
+    );
     const res = await asUser(
       request(app)
         .get('/api/mcp-apps/resource')
@@ -227,8 +249,8 @@ describe('GET /api/mcp-apps/resource', () => {
     expect(conn.getUiResource).toHaveBeenCalledWith(RESOURCE.uri);
   });
 
-  it('accepts a base tool id in the app (all tools of the server)', async () => {
-    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+  it('accepts a binding of the whole server', async () => {
+    apps = [{ id: 'whiteboard', integrations: { excalidraw: {} } }];
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(200);
   });
@@ -379,7 +401,7 @@ describe('views embedded in the result of a tool without a declared view', () =>
   const plainRef = { appId: 'whiteboard', toolId: PLAIN_TOOL.id };
 
   beforeEach(() => {
-    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    apps = [{ id: 'whiteboard', integrations: { excalidraw: {} } }];
     findTool.mockImplementation(async id =>
       id === PLAIN_TOOL.id ? { conn, tool: PLAIN_TOOL } : null
     );
@@ -565,7 +587,7 @@ describe('a view calling a tool that needs approval (#2945)', () => {
     apps = [
       {
         id: 'whiteboard',
-        tools: ['excalidraw__create_view'],
+        integrations: { excalidraw: { actions: ['create_view'] } },
         toolApproval: { tools: { excalidraw__save_checkpoint: 'always' } }
       }
     ];
@@ -574,11 +596,15 @@ describe('a view calling a tool that needs approval (#2945)', () => {
     expect(perTool.body.interaction.prompt.displayData.approvalSource).toBe('app');
     // The app's default for all its tools.
     apps = [
-      { id: 'whiteboard', tools: ['excalidraw__create_view'], toolApproval: { default: 'always' } }
+      {
+        id: 'whiteboard',
+        integrations: { excalidraw: { actions: ['create_view'] } },
+        toolApproval: { default: 'always' }
+      }
     ];
     expect((await call()).status).toBe(202);
     // Without an override, nothing asks.
-    apps = [{ id: 'whiteboard', tools: ['excalidraw__create_view'] }];
+    apps = [{ id: 'whiteboard', integrations: { excalidraw: { actions: ['create_view'] } } }];
     expect((await call()).status).toBe(200);
     expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
   });

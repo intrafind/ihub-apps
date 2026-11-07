@@ -484,7 +484,6 @@ Result: mappedGroups = ["users", "admin"]
     apps: ["translator", "summarizer", "chat"],
     prompts: ["general", "writing"],
     models: ["gpt-3.5-turbo", "gpt-4"],
-    tools: ["search"],
     sources: []
   },
   isAdmin: false,             // Admin flag

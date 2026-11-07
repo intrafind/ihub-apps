@@ -366,7 +366,7 @@ The budget depends on the model's `contextWindow` (see [Models](models.md)).
 ### The knowledge tools
 
 Every request that reaches a project gets three tools automatically while the projects feature is
-on. They belong to projects: they are not listed in an app's `tools` array, are no action of an
+on. They belong to projects: they are no tool of an app's bindings, are no action of an
 integration and cannot be switched off. The definition ships with iHub
 (`server/defaults/tools/knowledge.json`, read in place, in the request's language); a
 `contents/tools/knowledge.json` is not read.

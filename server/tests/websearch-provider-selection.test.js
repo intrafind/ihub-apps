@@ -34,7 +34,6 @@ import {
   grantResearchOnly,
   setUpWebSearch,
   tearDownWebSearch,
-  thirdPartyEngineTool,
   useWebSearch
 } from './helpers/webSearchEngines.js';
 
@@ -49,7 +48,7 @@ beforeEach(() => {
   delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.STAAN_API_KEY;
 });
-after(() => {
+after(async () => {
   for (const [name, value] of [
     ['BRAVE_SEARCH_API_KEY', savedKeys.brave],
     ['STAAN_API_KEY', savedKeys.staan]
@@ -57,7 +56,7 @@ after(() => {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
   }
-  tearDownWebSearch();
+  await tearDownWebSearch();
 });
 
 describe('auto', () => {
@@ -171,8 +170,7 @@ describe('a named engine', () => {
 
   it('can be a third-party engine', async () => {
     useWebSearch({
-      installed: [engine('acme'), engine('qwant')],
-      tools: [thirdPartyEngineTool('acme')]
+      installed: [engine('acme'), engine('qwant')]
     });
     assert.equal(idOf('acme', { user: STAFF }), 'acme');
     assert.equal(await resolveWebSearchEngineToolId('acme', { user: STAFF }), 'acme__search');
