@@ -140,6 +140,31 @@ export function boundToolRefsFor(app, info) {
   );
 }
 
+/** The definition whose documents the server can ingest into a chat by reference. */
+const SERVER_INGEST_DEFINITIONS = Object.freeze({ 'com.intrafind/ifinder': 'ifinder-document' });
+
+/**
+ * The `source` the chat's file endpoint takes (`POST /api/chats/:chatId/files`,
+ * `services/chatFiles/fileSources.js`) for a document of an installed integration, or `null` when
+ * the server cannot fetch from it: the server then fetches the original itself, with the user's own
+ * rights, stores it and extracts the text — the document never passes through the browser.
+ *
+ * @param {{definition?: string|null}|null} info - the probe's answer
+ * @param {{documentId: string, searchProfile?: string}} doc
+ * @returns {{kind: string, ref: Object}|null}
+ */
+export function serverFileSourceFor(info, doc) {
+  const kind = info?.definition ? SERVER_INGEST_DEFINITIONS[info.definition] : null;
+  if (!kind || !doc?.documentId) return null;
+  return {
+    kind,
+    ref: {
+      documentId: doc.documentId,
+      ...(doc.searchProfile ? { searchProfile: doc.searchProfile } : {})
+    }
+  };
+}
+
 /**
  * What kind of attachment a document becomes: `image` (resized for a vision model), `audio`, or
  * `document` (text extraction, original kept) — the same split `processCloudFile` makes.

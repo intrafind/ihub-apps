@@ -826,9 +826,11 @@ gone.
   turns the filter off; it is left out when no app qualifies.
 - **The link keeps its `integration`:** the sign-in clean-up of the page removed `integration` from every address, which dropped the document before the list could use it. It now removes `integration` only next to a sign-in error (`integration_error`).
 - **The integration is switched on:** the chat opens with the integration's tools on, even when your saved default for the app has them off, because the link came from that system. The app list narrows as soon as the integration answers, without waiting for the document's details.
-- **The original file, images included:** the document is fetched as the original and attached
-  like a file from Nextcloud: an image as an image for a vision model, anything else as a document
-  that keeps its original next to the extracted text.
+- **The server fetches the document:** an iFinder document is attached by reference. The server
+  fetches the original with your own iFinder permissions, stores it with the chat and extracts the
+  text, like an upload without the upload; it never passes through your browser. Whether the
+  original is kept or only the text is the usual upload storage mode. Images and audio, which a
+  model needs as bytes, are still fetched in the browser and attached as an image or audio.
 - **Clear errors:** an integration that is not available to you, a document you may not read, or
   one that no longer exists is reported in the banner before you choose an app, and the app then
   opens without it. A document that fails to attach in the chat now says so instead of silently
@@ -855,6 +857,18 @@ gone.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).
 
+## Attachments: See What the Assistant Gets and Download It
+
+Each attachment under the composer now says what the assistant gets from the file: the characters of
+text extracted from a document, the page images sent instead for a scan without a text layer, or the
+size an image is sent in. Once the server stored the file, it also says when only the text is kept
+or the text was shortened.
+
+- **Download after attaching:** a file that came from a cloud storage or an integration, such as an
+  iFinder document opened from a link, has buttons to download the original file and, for a document,
+  the extracted text (from the stored file when the server fetched it). A local file is yours already and has none. Images and audio from these sources
+  keep their original for the download.
+  
 ## LLM Timeouts Configurable for All Providers and Per Provider
 
 A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with

@@ -75,6 +75,8 @@ async function processCloudImage(file, config) {
 
         resolve({
           type: 'image',
+          // The unchanged file, for "Download original": `base64` is the resized copy the model gets
+          [ORIGINAL_FILE]: file,
           base64,
           fileName: file.name,
           fileSize: file.size,
@@ -100,6 +102,7 @@ async function processCloudAudio(file, mimeType) {
     reader.onload = e => {
       resolve({
         type: 'audio',
+        [ORIGINAL_FILE]: file,
         base64: withDataUrlMimeType(e.target.result, mimeType),
         fileName: file.name,
         fileSize: file.size,

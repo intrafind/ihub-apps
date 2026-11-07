@@ -32,7 +32,25 @@
     },
     "stored": "Saved to this chat",
     "templateReady": "can be used as a template",
-    "uploading": "Uploading {{name}}"
+    "uploading": "Uploading {{name}}",
+    "downloadOriginal": "Download original file",
+    "downloadOriginalNamed": "Download {{name}}",
+    "downloadSent": "Download the image as sent to the model",
+    "downloadText": "Download the extracted text",
+    "downloadTextNamed": "Download the extracted text of {{name}}",
+    "content": {
+      "text": "Text extracted: {{count}} characters",
+      "pageImages": "scan without text: {{count}} page image(s) sent instead",
+      "noText": "No text could be read from this file",
+      "imageSized": "Image sent to the model as {{width}}×{{height}}",
+      "image": "Image sent to the model",
+      "audio": "Audio sent to the model",
+      "truncated": "shortened to fit",
+      "textOnly": "only the text is kept in this chat",
+      "textServer": "Text extracted on the server: {{size}}"
+    },
+    "downloadDiscarded": "The original file is no longer stored; only its text is kept.",
+    "downloadFailed": "The download failed. Please try again."
   },
   "app": {
     "title": "iHub Apps",
