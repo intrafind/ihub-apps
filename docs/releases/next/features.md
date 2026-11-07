@@ -835,3 +835,22 @@ gone.
   `403 INTEGRATION_NOT_GRANTED` for them. Grant both to such groups.
 
 See [Auto-Send and URL Parameters](../../auto-send-feature.md#document-attachment-from-an-integration).
+
+## LLM Timeouts Configurable for All Providers and Per Provider
+
+A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with
+"stopped sending stream chunks for 60000 ms", and raising the limit meant editing `platform.json` and
+restarting, or changing every model. The two transport limits now have a place in the admin UI at every level:
+
+- **Admin → Providers → Timeouts for all providers:** the **connect timeout** (longest wait for the provider's
+  response headers, default 30 s) and the **stream idle timeout** (longest silence between two chunks of a
+  running stream, default 60 s) for the whole installation.
+- **Provider page:** a **Timeouts** section gives all models of one provider their own values, so every Google
+  thinking model can share one ceiling. A field left empty uses the installation value.
+- **Model page:** unchanged, and still the most specific level. Its fields now say what an empty value means.
+
+The order is model, provider, installation, environment variable (`LLM_CONNECT_TIMEOUT_MS`,
+`LLM_STREAM_IDLE_TIMEOUT_MS`), built-in default. Values run from 0 to 300000 ms; `0` turns a limit off. Changes
+apply to the next request — no restart. No migration is needed: providers without the new fields behave as before.
+
+See [LLM client → Tuning the ceilings](../../llm-client.md#tuning-the-ceilings).

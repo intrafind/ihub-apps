@@ -20,6 +20,7 @@ import {
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 import AdminLoadError from '../components/AdminLoadError';
+import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
 
 /** Linked model names shown in the list before "+N more". */
 const LINKED_MODEL_PREVIEW = 3;
@@ -338,6 +339,9 @@ function AdminProvidersPage() {
             {t('admin.providers.createNew', 'Create New Provider')}
           </button>
         </div>
+
+        {/* Installation-wide LLM timeouts (providers and models can override them) */}
+        <LlmTimeoutsCard />
 
         {/* Providers List - Grouped by Category */}
         {loading ? (

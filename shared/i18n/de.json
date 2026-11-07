@@ -1186,6 +1186,20 @@
       }
     },
     "providers": {
+      "timeouts": {
+        "title": "Timeouts für alle Provider",
+        "description": "Gelten für jedes Modell, sofern nicht sein Provider oder das Modell eigene Werte setzt. Änderungen wirken ab der nächsten Anfrage; ein Neustart ist nicht nötig. Ein leeres Feld verwendet den Standardwert.",
+        "connect": "Verbindungs-Timeout (ms)",
+        "connectHint": "Längste Wartezeit auf die Antwort-Header des Providers, bevor ein Aufruf als nicht erreichbar scheitert. 0 schaltet sie ab.",
+        "streamIdle": "Stream-Leerlauf-Timeout (ms)",
+        "streamIdleHint": "Längste Pause zwischen zwei Chunks eines bereits laufenden Streams. Für Denkmodelle erhöhen. 0 schaltet sie ab.",
+        "save": "Timeouts speichern",
+        "reset": "Zurücksetzen",
+        "saved": "Timeouts gespeichert. Sie gelten ab der nächsten Anfrage.",
+        "providerTitle": "Timeouts",
+        "providerDescription": "Gelten für alle Modelle dieses Providers. Ein leeres Feld verwendet den Wert der Installation; ein Modell kann weiterhin einen eigenen setzen. 0 schaltet eine Grenze ab.",
+        "inherited": "Geerbt: {{value}} ms (Installation)"
+      },
       "title": "Anbieter-Zugangsdaten",
       "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
       "search": "Anbieter suchen...",
@@ -1341,6 +1355,7 @@
       }
     },
     "models": {
+      "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
       "title": "Modellverwaltung",
       "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
       "loadError": "Fehler beim Laden der Modelle",
