@@ -7,6 +7,20 @@ provider error (quota, 4xx, 5xx) could write the key into the server logs. The k
 the `x-goog-api-key` header instead, for chat requests and for the setup wizard's API key check.
 No configuration change is needed.
 
+## Admin Saves Are Visible on Every Worker Straight Away; Models No Longer Lose Updates
+
+With several workers (four by default), a read right after an admin save usually still showed
+the old value, because the worker that answered had not reloaded yet. In a test with four
+workers, 71 of 80 reads right after saving a model returned the old value. A save now returns
+once the other workers have the change (at most one second; a worker that is restarting only
+delays that one save), so the model list, an edited model and the next save all see it.
+
+The same gap could undo a change. Enabling, disabling or deleting models, and giving a model the
+default flag, rewrote the cached copy of another model, which could be the version before a save
+made a moment earlier. In the same test, an update followed by disabling the default model was
+lost every time. These actions now start from the stored model files, and an older cache reload
+can no longer overwrite a newer one.
+
 ## Usage Menu, Limits & Quotas and Usage Reports Show the Same Numbers
 
 Each model call is now captured in one place, which both counts it against the user's limits and

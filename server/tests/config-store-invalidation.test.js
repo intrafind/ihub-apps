@@ -87,7 +87,12 @@ async function runAnnounceChild() {
 
   const ui = await configStore.readJson('config/ui.json');
   await configStore.writeJson('config/ui.json', { ...ui, title: SAVED_TITLE });
+  // The save asks the other workers to confirm and waits for them. Nobody answers
+  // in this fork, so it waits out its timeout, and the bus's own timer is unref'd
+  // (it must not keep a real worker alive): hold the event loop open for it.
+  const keepAlive = setInterval(() => {}, 50);
   await configCache.refreshCacheEntry('config/ui.json');
+  clearInterval(keepAlive);
 
   const report = {
     childReport: true,
@@ -212,11 +217,12 @@ if (process.env[CHILD_ENV] === '1') {
       );
     });
 
-    it('refreshCacheEntry still announces the change to the other workers', async () => {
+    it('refreshCacheEntry announces the change to the other workers and asks each to confirm', async () => {
       const child = makeInstallation('ihub-config-announce-');
       const messages = [];
       const forked = fork(fileURLToPath(import.meta.url), [], {
-        env: { ...process.env, [CHILD_ENV]: '1', APP_ROOT_DIR: child.root },
+        // Two workers in all: the fork stands in for one, and expects the other to answer.
+        env: { ...process.env, [CHILD_ENV]: '1', APP_ROOT_DIR: child.root, WORKERS: '2' },
         stdio: ['ignore', 'ignore', 'inherit', 'ipc']
       });
 
@@ -238,17 +244,24 @@ if (process.env[CHILD_ENV] === '1') {
         });
         assert.equal(exitCode, 0, 'the forked save completed');
 
-        const announcements = messages.filter(
+        // The save is announced as a request each other worker answers once it has
+        // reloaded (`config:apply`), so the writer can wait for the whole cluster.
+        const requests = messages.filter(
           message =>
             message?.__ihubBus === true &&
             message.kind === 'publish' &&
-            message.type === 'config:changed'
+            message.type === 'config:apply'
         );
-        assert.equal(announcements.length, 1, 'exactly one announcement went out on the bus');
+        assert.equal(requests.length, 1, 'exactly one acknowledged announcement went out');
         assert.deepEqual(
-          announcements[0].payload.entries,
+          requests[0].payload.payload.entries,
           ['config/ui.json'],
           'naming the entry every other worker has to re-read'
+        );
+        assert.equal(
+          messages.filter(message => message?.type === 'config:changed').length,
+          0,
+          'and no second, fire-and-forget announcement: the others reload once, not twice'
         );
 
         const report = messages.find(message => message?.childReport === true);

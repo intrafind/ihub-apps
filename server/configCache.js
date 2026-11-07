@@ -9,7 +9,12 @@ import {
   getPermissionsForUser,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
-import { announceConfigChange, announceFullConfigReload, setConfigReloader } from './configSync.js';
+import {
+  announceConfigChangeAndWait,
+  announceFullConfigReload,
+  setConfigReloader
+} from './configSync.js';
+import { ReloadSequence } from './utils/reloadSequence.js';
 import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
@@ -206,6 +211,8 @@ class ConfigCache {
   constructor() {
     this.cache = new Map();
     this.refreshTimers = new Map();
+    // Numbers the reloads of each entry, so a slow older one cannot store over a newer one.
+    this.reloads = new ReloadSequence();
     this.isInitialized = false;
     this.localeLoadingLocks = new Map();
     this.apiKeyVerifier = new ApiKeyVerifier();
@@ -479,11 +486,17 @@ class ConfigCache {
    * change event of its own for the same write — the two reach different
    * places, see {@link ConfigCache#_subscribeToStorageChanges}.
    *
+   * The call returns once the other workers have applied the change too (or
+   * after a short timeout, see `announceConfigChangeAndWait`). The admin's next
+   * request goes to whichever worker the round-robin picks, so answering the
+   * save before the others are current showed the old value on most of the
+   * reads that followed it, and let a write that read a stale copy undo it.
+   *
    * @param {string} key - Cache key, e.g. `'config/platform.json'`.
    */
   async refreshCacheEntry(key) {
     await this._reloadEntry(key);
-    announceConfigChange(key);
+    await announceConfigChangeAndWait(key);
   }
 
   /**
@@ -519,6 +532,9 @@ class ConfigCache {
       }
 
       const loader = loaderFor(key);
+      // Reloads of one entry overlap, and each reads the disk at its own moment: numbered
+      // before the read, so one that finishes late cannot store over a newer reload.
+      const ticket = this.reloads.begin(key);
       let data;
       try {
         data = await loader.load({ verbose: false });
@@ -537,6 +553,11 @@ class ConfigCache {
         // Unreadable right now — a half-written save, a transient EACCES. The
         // cached copy stays, and so must the chain that will try again.
         this._armRefreshTimer(key);
+        return;
+      }
+
+      if (!this.reloads.claim(key, ticket)) {
+        // A reload that started after this one has stored already; what this one read is older.
         return;
       }
 
