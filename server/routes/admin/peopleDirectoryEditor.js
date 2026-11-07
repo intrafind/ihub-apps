@@ -3,7 +3,6 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import {
   DEFAULT_SEARCH_PRESET,
@@ -136,11 +135,7 @@ export default function registerAdminPeopleDirectoryEditorRoutes(app) {
     buildServerPath('/api/admin/integrations/people-directories/editor-context'),
     adminAuth,
     (req, res) => {
-      try {
-        res.json(peopleDirectoryEditorContext(configCache.getPlatform() || {}));
-      } catch (error) {
-        return sendInternalError(res, error, 'load the people directory editor context');
-      }
+      res.json(peopleDirectoryEditorContext(configCache.getPlatform() || {}));
     }
   );
 }
