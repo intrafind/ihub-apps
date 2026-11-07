@@ -191,8 +191,8 @@ of them:
 the search profile picker. The binding is also the requirement: the app is
 offered to users only while the installation exists and is enabled, and
 **Admin → Apps** names a missing one. **Admin → Apps → Edit → Installed
-integrations** writes the object. Group tool grants (`permissions.tools` in
-`groups.json`) still name the tools by their ids, `iFinder` or `iFinder_*`. See
+integrations** writes the object. Which groups may use iFinder is the grant of the
+`ifinder` installation (`permissions.integrations`). See
 [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 
 ### iFinder.search
@@ -855,7 +855,7 @@ profile's long-term memory — see
 
 Over the MCP gateway these are `iFinder_getFields`, `iFinder_getFacetValues`,
 `iFinder_listProfiles` and `iFinder_discover`, and they need the calling group
-to hold the `iFinder` tool permission (`permissions.tools` in `groups.json`).
+to be granted the `ifinder` installation (`permissions.integrations` in `groups.json`).
 
 The **`ifinder-search` skill** shipped in `contents/skills/` teaches a client the
 whole surface — query syntax, the `.keyword` rule, filters versus query terms,
@@ -894,8 +894,7 @@ with a non-empty `agentProfileId`.
 
 **Access control**: the endpoint is gated by `adminAuth` — any
 registered tool can be invoked with admin context. `iFinder_discover`
-is intentionally NOT added to any default agent profile's `tools`
-array, so agents at runtime cannot call it; only the admin endpoint
+is intentionally NOT bound by any default agent profile, so agents at runtime cannot call it; only the admin endpoint
 can. Operators re-run discovery when the underlying index changes
 significantly.
 

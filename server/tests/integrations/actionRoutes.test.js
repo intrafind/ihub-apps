@@ -54,7 +54,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
         {
           id: 'nightly',
           name: { en: 'Nightly' },
-          nodes: [{ id: 'n1', config: { tools: ['portal'] } }]
+          nodes: [{ id: 'n1', config: { integrations: { portal: {} } } }]
         }
       ]
     })

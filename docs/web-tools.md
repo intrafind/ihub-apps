@@ -115,15 +115,13 @@ definition id, or `type:web-search` for every engine; see
 **Search the web** action an admin switched off; a named engine is used or not
 at all, so an app set to one engine never silently answers from another.
 
-The engine tools keep the ids they always had, so an app or a **workflow node**
-can still list `braveSearch`, `staanSearch`, `qwantSearch` (or a third-party
-engine's `<id>__search`) or `read_url` in its `tools` (the shipped
-`claude-style-agent` and `research-assistant` workflows do). An app has no
-`tools` list any more (#3275): it gets web search through its `websearch`
-configuration. An engine tool is served by exact id while its engine is
-installed, enabled and granted; the engine's installation id (`brave`) selects
-nothing in a node's `tools`. A node's generic
-`webSearch` marker resolves to native search where the model runs it, and
+An app gets web search through its `websearch` configuration. A **workflow
+node** or agent profile has no tool list (#3275): it binds an engine like any
+integration (`"integrations": { "type:web-search": { "actions": ["search"] } }`,
+or one engine's installation id), names the page reader in `systemTools`
+(`["read_url"]`; the shipped `claude-style-agent` and `research-assistant`
+workflows do) and may set `webSearch: true`. An engine's tool is served while
+its engine is installed, enabled and granted. A node's `webSearch: true` resolves to native search where the model runs it, and
 otherwise to the search tool of the first engine the user may use (`auto`);
 with no engine it adds nothing. Web search for an *app*, though, is configured
 in `websearch` as above.

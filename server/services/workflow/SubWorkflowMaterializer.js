@@ -16,6 +16,7 @@
  */
 
 import logger from '../../utils/logger.js';
+import { capabilitiesOf, pickCapabilities } from './nodeCapabilities.js';
 
 /**
  * Project links as the planner or the template name them: bare ids are kept,
@@ -77,11 +78,18 @@ export class SubWorkflowMaterializer {
     // the spread of restTemplate must NOT overwrite the merged arrays we
     // build below.
     const {
-      tools: templateTools,
+      integrations: templateIntegrations,
+      systemTools: templateSystemTools,
+      webSearch: templateWebSearch,
       apps: templateApps,
       projects: templateProjects,
       ...restTemplate
     } = parentConfig.taskTemplate || {};
+    const template = {
+      integrations: templateIntegrations,
+      systemTools: templateSystemTools,
+      webSearch: templateWebSearch
+    };
 
     const taskNodes = plan.tasks.map((task, index) => {
       // The agent's persona system prompt lives on the profile (carried via
@@ -140,23 +148,23 @@ export class SubWorkflowMaterializer {
       // a ledger to cite from, but the task worker's own output should
       // also include source URLs inline so the synthesizer can connect
       // facts to citations cleanly.
-      // Planner-driven per-task tool selection (Gemini grounding workaround):
-      // when the planner emits a populated `tools` array on a task, treat that
-      // as authoritative — DO NOT merge with templateTools. The planner is
-      // schema-bound to choose from templateTools, so its choice is always a
-      // subset. Merging would re-add every templateTool and undo the planner's
-      // attempt to split webSearch off from function tools.
-      //   - task.tools undefined / missing → inherit templateTools
-      //   - task.tools === []              → no tools for this task
+      // Planner-driven per-task capability selection (Gemini grounding
+      // workaround): when the planner emits a populated `tools` array on a
+      // task (catalog ids: integration keys, platform tools, `webSearch`),
+      // treat that as authoritative — DO NOT merge with the template. The
+      // planner is schema-bound to choose from the template's capabilities, so
+      // its choice is always a subset. Merging would re-add every capability
+      // and undo the planner's attempt to split webSearch off from function
+      // tools.
+      //   - task.tools undefined / missing → inherit the template
+      //   - task.tools === []              → nothing for this task
       //   - task.tools === [...non-empty]  → use exactly these
       const taskToolsExplicit = Array.isArray(task.tools);
       const taskAppsExplicit = Array.isArray(task.apps);
       const taskProjectsExplicit = Array.isArray(task.projects);
-      const effectiveTools = taskToolsExplicit
-        ? dedupeStrings(task.tools)
-        : Array.isArray(templateTools)
-          ? dedupeStrings(templateTools)
-          : [];
+      const effectiveCapabilities = taskToolsExplicit
+        ? pickCapabilities(template, dedupeStrings(task.tools))
+        : pickCapabilities(template, capabilitiesOf(template));
       const effectiveApps = taskAppsExplicit
         ? dedupeStrings(task.apps)
         : Array.isArray(templateApps)
@@ -195,11 +203,9 @@ export class SubWorkflowMaterializer {
       }
       const effectiveProjects = dedupeLinks([...taskProjects, ...inputLinks]);
 
-      const hasSearchLikeTool = effectiveTools.some(t => {
-        if (typeof t !== 'string') return false;
-        const id = t.toLowerCase();
-        return id === 'websearch' || id === 'read_url' || id.startsWith('source_');
-      });
+      const hasSearchLikeTool =
+        effectiveCapabilities.webSearch === true ||
+        effectiveCapabilities.systemTools.includes('read_url');
       if (hasSearchLikeTool) {
         promptParts.push(
           '## Grounding rules — MULTI-SOURCE REQUIRED\n\n' +
@@ -255,15 +261,15 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Per-task tools / apps / projects — planner-authoritative when the
-          // planner emitted the field, falling back to the profile-wide
-          // template otherwise. See `taskToolsExplicit` block above for the
-          // full semantics. The planner's response schema enum-binds each
-          // field (tools/apps/projects) to its catalog when the catalog is
+          // Per-task integrations / platform tools / web search, apps and
+          // projects — planner-authoritative when the planner emitted the
+          // field, falling back to the profile-wide template otherwise. See
+          // `taskToolsExplicit` block above for the full semantics. The
+          // planner's response schema enum-binds each field (tools/apps/projects) to its catalog when the catalog is
           // non-empty, so unknown ids are rejected at structured-output
           // time. A plan that omits a field inherits the template, via the
           // explicit-array check.
-          tools: effectiveTools,
+          ...effectiveCapabilities,
           apps: effectiveApps,
           projects: effectiveProjects
           // No `outputVariable` — the runtime auto-persists planner-task
@@ -340,7 +346,7 @@ export class SubWorkflowMaterializer {
           system: parentConfig.taskTemplate?.system || {
             en: 'Process the current task in `_currentTask`.'
           },
-          tools: templateTools || [],
+          ...pickCapabilities(template, capabilitiesOf(template)),
           // The profile's linked knowledge, like its tools: `projects` was
           // taken out of restTemplate above and has to be put back here,
           // with the parent run's project inputs.

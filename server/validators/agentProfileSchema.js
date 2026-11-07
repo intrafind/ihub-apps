@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { HEX_COLOR_PATTERN, LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { projectLinksSchema } from './projectSchema.js';
+import { appIntegrationsSchema } from './appConfigSchema.js';
 
 const AGENT_PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$/;
 const AGENT_PROFILE_ID_MAX_LENGTH = 64;
@@ -26,7 +27,7 @@ const optionalLocalizedStringSchema = z.record(
 // validator validates the full shape when the engine starts.
 // The Profile may omit `workflow.definition` entirely — the
 // profileWorkflowSerializer fills in a default shape on save based on the
-// Profile's `system`/`tools`/`projects`/`apps`/`preferredModel`/Planner/
+// Profile's `system`/`integrations`/`projects`/`apps`/`preferredModel`/Planner/
 // Dynamic-Tasks settings. For `external` refs `workflowId` is required.
 const workflowRefSchema = z
   .object({
@@ -216,7 +217,14 @@ const baseAgentProfileSchema = z.object({
   // configured on the profile, without editing the workflow definition.
   nodeModels: z.record(z.string(), z.string()).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
-  tools: z.array(z.string()).optional().prefault([]),
+  // What the agent can use (no tool list, #3275): the integrations it binds
+  // (like an app), the platform tools of workflows and agents it names
+  // (`systemTools`: `write_artifact`, `read_inbox`, `evidence`, `read_url`, …)
+  // and the web search switch (native search, else the first engine the
+  // user may use).
+  integrations: appIntegrationsSchema,
+  systemTools: z.array(z.string()).optional().prefault([]),
+  webSearch: z.boolean().optional(),
   // Projects linked to the agent (#1036, spec 1 §6.2), copied into every
   // generated prompt node.
   projects: projectLinksSchema.optional(),

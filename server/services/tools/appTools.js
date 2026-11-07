@@ -31,6 +31,7 @@ import {
   loadTools
 } from './catalog.js';
 import { resolveWebsearchTool } from './webSearchResolver.js';
+import { isPlatformTool } from './platformTools.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -136,69 +137,42 @@ export async function getToolsForApp(app, language = null, context = {}) {
 }
 
 /**
- * Get the tools a workflow node or an agent run names by id (`config.tools`):
- * the way tool references were read before apps lost their `tools` list. The
- * node is a pseudo-app (`nodeApp`: its project links and skills) next to the
- * references; everything `getToolsForApp` adds for an app comes along.
+ * Get the tools of a workflow node or an agent run: the integrations it binds
+ * (`node.integrations`, like an app), the platform tools it names
+ * (`node.systemTools`: the agent workspace, the evidence tools, the page
+ * reader — plain tools of workflows and agents, not integrations) and the
+ * search tool of a web search engine it was resolved to (`engineToolIds`).
+ * Everything `getToolsForApp` adds for an app comes along (project knowledge,
+ * skills).
  *
- * A reference selects a tool by its exact id (`braveSearch`), its base id
- * (`jira` for `jira_searchTickets`, `evidence` for `evidence_*`), an MCP server
- * or people directory id, or an A2A agent reference (see `isToolSelected`).
- * An installed integration's tools come through this path only where the tool
- * kept its id (`ask_user`, `iFinder_*`, an engine's search tool) or is a
- * people directory's, and only while the installation's own enabled and
- * group-grant checks pass (`filterIntegrationToolsForUser`); a node binds
- * the others through `nodeApp.integrations`.
- *
- * @param {string[]} toolRefs - The node's tool references
- * @param {Object} nodeApp - `{ projects, skills, _skillIds, integrations }`
+ * @param {Object} node - `{ integrations, systemTools, engineToolIds, projects, skills, _skillIds }`
  * @param {string|null} language
- * @param {Object} context - `{ user, chatId, enabledTools }`
+ * @param {Object} context - `{ user, chatId }`
  */
-export async function getToolsForNode(toolRefs, nodeApp = {}, language = null, context = {}) {
-  return offeredTools(nodeApp, language, context, Array.isArray(toolRefs) ? toolRefs : []);
+export async function getToolsForNode(node = {}, language = null, context = {}) {
+  return offeredTools(node, language, context, {
+    systemToolIds: Array.isArray(node.systemTools) ? node.systemTools : [],
+    engineToolIds: Array.isArray(node.engineToolIds) ? node.engineToolIds : []
+  });
 }
 
-async function offeredTools(app, language, context, toolRefs) {
+async function offeredTools(app, language, context, nodeTools) {
   // Get static tools from tool definitions
   const allTools = await loadTools(language);
   let appTools = [];
 
-  if (toolRefs && toolRefs.length > 0) {
-    // The people directories' tools a directory id selects, the search tool of
-    // a web search engine by its exact id (`braveSearch`, `staanSearch`,
-    // `qwantSearch`, a third-party engine's `<id>__search`) and every other
-    // built-in action that kept its tool id (`fixedToolId`: iHub's own
-    // `ask_user` and scheduled-task tools, `iFinder_*`, `jira_*`, …), read as
-    // the plain tool it was — exact id or base id, never the installation id.
-    // The platform tools of workflows and agents (`write_artifact`,
-    // `evidence_*`, …) and the page reader `read_url` are plain tools and
-    // selected like any tool file. An LDAP browser's tools come only through
-    // a binding.
-    const selected = allTools.filter(t => {
-      if (!t._integration) return isToolSelected(t, toolRefs);
-      if (t._peopleDirectory) return isToolSelected(t, toolRefs);
-      if (isWebSearchEngineTool(t)) return toolRefs.includes(t.id);
-      if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, toolRefs);
-      return false;
-    });
-    appTools = filterBrowserToolsForUser(
-      filterDirectoryToolsForUser(
-        await filterIntegrationToolsForUser(selected, context.user),
-        context.user
-      ),
+  if (nodeTools) {
+    // The platform tools a node names, by exact id or base id (`evidence`
+    // selects `evidence_*`), and the search tool of its web search engine,
+    // while the installation's own enabled and group-grant checks pass.
+    const systemTools = allTools.filter(
+      t => !t._integration && isPlatformTool(t.id) && isToolSelected(t, nodeTools.systemToolIds)
+    );
+    const engineTools = await filterIntegrationToolsForUser(
+      allTools.filter(t => isWebSearchEngineTool(t) && nodeTools.engineToolIds.includes(t.id)),
       context.user
     );
-
-    // Filter by enabledTools if provided in context. Interactive clarification
-    // tools (`ask_user`, anything `requiresUserInput`) are a system channel the
-    // loop drives, not a user-selectable capability, so a node that names one
-    // keeps it whatever the narrowing says.
-    if (Array.isArray(context.enabledTools)) {
-      appTools = appTools.filter(
-        t => isInteractiveTool(t) || isToolSelected(t, context.enabledTools)
-      );
-    }
+    appTools = [...systemTools, ...engineTools];
   }
 
   // Tools of the installed integrations the app binds under `app.integrations`

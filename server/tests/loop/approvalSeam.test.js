@@ -230,8 +230,6 @@ const KNOWN_RUN_TOOL_CALLERS = {
   'services/workflow/executors/PromptNodeExecutor.js': 'executeTool of the node loop',
   // Not model-decided: an author, an admin or the user chose this exact call.
   'services/workflow/executors/ToolNodeExecutor.js': 'workflow tool node (author-chosen)',
-  'routes/toolRoutes.js':
-    'direct tool API: a person chose the call; token callers are refused gated tools',
   'routes/admin/agents.js': 'admin builds agent memory from a tool',
   'services/mcp/a2aHandler.js': 'A2A skill runs a workflow; its nodes are gated',
   'services/mcp/McpServerService.js': 'MCP gateway: gated tools are refused before runTool'

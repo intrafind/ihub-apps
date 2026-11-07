@@ -23,11 +23,9 @@ const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-dir-browse-'))
 process.env.CONTENTS_DIR = contentsDir;
 
 const { default: configCache } = await import('../../configCache.js');
-const { getToolsForUser } = await import('../../services/tools/toolListing.js');
 await import('../../services/integrations/protocols/native/connectors/register.js');
 const { getToolsForApp } = await import('../../services/tools/appTools.js');
 const { loadTools } = await import('../../services/tools/catalog.js');
-const { mayRunTool } = await import('../../routes/toolRoutes.js');
 const { buildMcpServer } = await import('../../services/mcp/McpServerService.js');
 const { MCP_SCOPES } = await import('../../services/mcp/scopes.js');
 const { flushAuditLog } = await import('../../services/AuditLogService.js');
@@ -331,17 +329,6 @@ describe('LDAP browser', () => {
       assert.equal(mayUseBrowser(operator, 'infra-browser'), true);
     });
 
-    it('narrows the /api/tools listing, even with a "*" tool grant', async () => {
-      const platform = { defaultLanguage: 'en' };
-      const forAdmin = await getToolsForUser(admin, platform, 'en');
-      assert.deepEqual(browseIds(forAdmin.data), CORP_BROWSE_IDS);
-      const forMember = await getToolsForUser(member, platform, 'en');
-      assert.deepEqual(browseIds(forMember.data), []);
-      assert.ok(forMember.data.some(tool => tool.id === 'corp__search_people'));
-      const forOperator = await getToolsForUser(operator, platform, 'en');
-      assert.deepEqual(browseIds(forOperator.data), INFRA_BROWSE_IDS);
-    });
-
     it('is bound like any installation, never through the directory or a tool reference', async () => {
       for (const tools of [['corp'], ['corp__search_people'], ['ldapBrowse'], ['corp-browser']]) {
         const offered = await getToolsForApp({ id: 'a', tools }, 'en', { user: admin });
@@ -388,11 +375,8 @@ describe('LDAP browser', () => {
       assert.ok(!tools.some(tool => tool.id.startsWith('infra__')));
     });
 
-    it('refuses a direct run to users the browser is not granted to', async () => {
-      const platform = { defaultLanguage: 'en' };
-      assert.equal(await mayRunTool(admin, platform, 'corp-browser__browse_search'), true);
-      assert.equal(await mayRunTool(member, platform, 'corp-browser__browse_search'), false);
-      assert.equal(await mayRunTool(admin, platform, 'infra-browser__browse_read'), false);
+    it('knows the browser tool ids and not the old directory ones', async () => {
+      assert.equal(browserToolOfId('corp-browser__browse_search')?.id, 'corp-browser');
       // The old directory tool ids are gone.
       assert.equal(browserToolOfId('corp__browse_search'), null);
     });

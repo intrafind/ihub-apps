@@ -9,7 +9,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
-import ToolsSelector from '../../../shared/components/ToolsSelector';
+import CapabilityFields from '../../../shared/components/CapabilityFields';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import ProjectPicker from '../components/ProjectPicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -31,7 +31,9 @@ const BLANK_PROFILE = {
   workflow: { ref: 'embedded' },
   preferredModel: '',
   maxIterations: 10,
-  tools: [],
+  integrations: {},
+  systemTools: [],
+  webSearch: false,
   projects: [],
   apps: [],
   skills: [],
@@ -83,7 +85,9 @@ const TOP_LEVEL_FIELDS = new Set([
   'workflow',
   'preferredModel',
   'maxIterations',
-  'tools',
+  'integrations',
+  'systemTools',
+  'webSearch',
   'projects',
   'apps',
   'skills',
@@ -175,7 +179,7 @@ export default function AdminAgentEditPage() {
     const modelId = profile.preferredModel || '';
     const selectedModel = models.find(m => m.id === modelId);
     const isGoogle = selectedModel?.provider === 'google';
-    const hasWebSearch = (profile.tools || []).includes('webSearch');
+    const hasWebSearch = profile.webSearch === true;
     const hasApps = (profile.apps || []).length > 0;
     if (isGoogle && hasWebSearch && hasApps) return modelId;
     return null;
@@ -552,17 +556,14 @@ export default function AdminAgentEditPage() {
               title={t('admin.agents.edit.capabilities', 'Capabilities (task executors)')}
               hint={t(
                 'admin.agents.edit.capabilitiesHint',
-                'Research tools available to each planned task — webSearch, calculators, apps, knowledge sources. Memory tools are auto-attached. Inbox and artifact lifecycle are owned by the runtime now, NOT exposed as LLM tools (add them here only as an opt-in escape hatch).'
+                'What each planned task can use: installed integrations, platform tools, web search, apps and knowledge sources. Memory tools are auto-attached. Inbox and artifact lifecycle are owned by the runtime now, NOT exposed as LLM tools (add them as platform tools only as an opt-in escape hatch).'
               )}
             >
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.agents.edit.tools', 'Tools')}
-                  </label>
-                  <ToolsSelector
-                    selectedTools={profile.tools || []}
-                    onToolsChange={tools => handleField('tools', tools)}
+                <div className="space-y-3">
+                  <CapabilityFields
+                    value={profile}
+                    onChange={patch => setProfile(prev => ({ ...prev, ...patch }))}
                   />
                 </div>
 
@@ -588,9 +589,9 @@ export default function AdminAgentEditPage() {
                       <span className="font-medium">⚠ App tools won’t run on this profile.</span>{' '}
                       {incompatibleAppGroundingCombo} (Google) uses native grounding when{' '}
                       <span className="font-mono">webSearch</span> is configured, and Google models
-                      can’t combine native grounding with function calling. To use apps: remove{' '}
-                      <span className="font-mono">webSearch</span> from Tools, or pick a non-Google
-                      model.
+                      can’t combine native grounding with function calling. To use apps: turn off{' '}
+                      <span className="font-mono">webSearch</span> for this agent, or pick a
+                      non-Google model.
                     </div>
                   )}
                 </div>

@@ -90,7 +90,7 @@ JSON:
 
 Leave `actions` out for all six. The tools keep their ids (`jira_searchTickets`,
 `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`,
-`jira_getAttachment`), so group tool grants and prompts are unchanged. An app has no `tools` list any more:
+`jira_getAttachment`), so prompts are unchanged. An app has no `tools` list any more:
 the binding is the only way in (migration V229 turned remaining `jira` / `jira_*` entries into bindings). An app that binds Jira is
 offered only while the installation is enabled.
 

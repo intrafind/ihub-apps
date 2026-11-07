@@ -302,7 +302,7 @@ The groups decide, like for apps (#3093). `groups.json` → `permissions.integra
 }
 ```
 
-The list is resolved with inheritance exactly like `apps`: a group gets what the groups it `inherits` grant, and a user gets the union of their groups. The grant holds on top of every app binding and tool grant: an app that binds an installation offers its actions, scopes and sources only to users whose groups grant it, and a direct tool run, the MCP and A2A gateways, scheduled tasks and workflow nodes check the same grant. It also decides
+The list is resolved with inheritance exactly like `apps`: a group gets what the groups it `inherits` grant, and a user gets the union of their groups. The grant holds on top of every app binding: an app that binds an installation offers its actions, scopes and sources only to users whose groups grant it, and the MCP and A2A gateways, scheduled tasks and workflow nodes check the same grant. It also decides
 
 - which web search engines a user's apps search with (native search on Google, OpenAI and Anthropic models needs no grant);
 - which cloud storage providers `/api/auth/status` lists in `cloudStorage.providers` and the project picker offers; a user whose groups do not grant a provider cannot connect it, browse it or import from it (the connection's status and **Disconnect** stay available);

@@ -148,7 +148,7 @@ export async function filterIntegrationToolsForUser(tools, user) {
  * @param {string|null} language
  * @returns {Object[]}
  */
-function loadPlatformTools(language) {
+export function loadPlatformTools(language) {
   const { data: files } = configCache.getTools(true);
   const configuredIds = new Set((files || []).map(tool => tool?.id));
   const platformConfig = configCache.getPlatform() || {};

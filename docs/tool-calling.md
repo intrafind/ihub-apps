@@ -207,21 +207,10 @@ export async function execute(params) {
 
 ### 3. Testing and Validation
 
-Test your tool independently before integration. A direct call runs only a tool the caller may
-use: admins run every tool; other users need the tool granted to one of their groups
-(`permissions.tools` in `groups.json`) or listed by an app they can open, and get `403` otherwise.
-
-```bash
-# Test tool execution
-curl -X POST http://localhost:3000/api/tools/weatherLookup \
-  -H "Content-Type: application/json" \
-  -d '{
-    "params": {
-      "location": "London",
-      "units": "celsius"
-    }
-  }'
-```
+Test your tool independently before integration. There is no direct tool API (the `/api/tools`
+routes were removed in #3275): test an action under **Admin → Integrations → the installation →
+Actions** (the action tester), or with **Test in chat**. An inbound MCP client reaches the same
+actions through the MCP gateway (see [MCP Integration](mcp-integration.md#who-sees-which-tool)).
 
 ### 4. Startup Check
 
@@ -1018,12 +1007,7 @@ describe('MyTool', () => {
 ```
 
 **2. Integration Testing**
-```bash
-# Test tool through API
-curl -X POST http://localhost:3000/api/tools/myTool \
-  -H "Content-Type: application/json" \
-  -d '{"params": {"query": "test"}}'
-```
+Run the action from **Admin → Integrations → the installation → Actions** (the action tester).
 
 **3. End-to-End Testing**
 Test complete workflow from chat interface through tool execution.

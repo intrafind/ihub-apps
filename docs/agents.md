@@ -40,8 +40,8 @@ leave durable artifacts behind.
 
 ## Auto-registered tools
 
-Every agent run gets these tools merged into its toolset (in addition to any
-configured per-node `tools`):
+Every agent run gets these platform tools merged into its toolset (in addition to
+what the profile or node binds under `integrations`, `systemTools` and `webSearch`):
 
 | Tool | Description |
 |---|---|

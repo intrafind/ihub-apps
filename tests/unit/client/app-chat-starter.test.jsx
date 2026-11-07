@@ -53,13 +53,6 @@ const mockModelList = [{ id: 'gpt', name: { en: 'GPT' } }];
 jest.mock('../../../client/src/api', () => ({
   fetchAppDetails: jest.fn(() => Promise.resolve(mockApp)),
   fetchModels: jest.fn(() => Promise.resolve(mockModelList)),
-  // The server localizes tool metadata, so names arrive as plain strings.
-  fetchToolsBasic: jest.fn(() =>
-    Promise.resolve([
-      { id: 'braveSearch', name: 'Brave Search' },
-      { id: 'jira', name: 'Jira' }
-    ])
-  ),
   generateMagicPrompt: jest.fn(() => Promise.resolve({ prompt: 'enhanced' }))
 }));
 

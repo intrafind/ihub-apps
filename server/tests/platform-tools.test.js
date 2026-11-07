@@ -25,6 +25,8 @@ import integrationRegistry from '../services/integrations/definitions/Integratio
 import { getToolsForApp } from '../services/tools/appTools.js';
 import { loadLocalTools, loadTools } from '../services/tools/catalog.js';
 import { runTool } from '../services/tools/runTool.js';
+import { buildMcpServer } from '../services/mcp/McpServerService.js';
+import { MCP_SCOPES } from '../services/mcp/scopes.js';
 import {
   PLATFORM_TOOL_FILE_IDS,
   PLATFORM_TOOL_IDS,
@@ -35,7 +37,6 @@ import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExe
 import { getAgentToolIds } from '../agents/runtime/agentToolRegistrar.js';
 import { addMemoryTools } from '../services/scheduler/tasks/runMemory.js';
 import { copyDefaultConfiguration } from '../utils/setupUtils.js';
-import { getToolsForUser } from '../services/tools/toolListing.js';
 
 const AGENT_WORKSPACE = [
   'create_task',
@@ -186,7 +187,11 @@ describe('the platform tools', () => {
 describe('resolving the platform tools by id', () => {
   const executor = new PromptNodeExecutor({ llmClient: { complete: async () => ({}) } });
   const nodeTools = toolIds =>
-    executor.getAgentTools(toolIds, 'en', { user: member, chatId: 'c1', _skillIds: [] });
+    executor.getAgentTools({ systemTools: toolIds }, 'en', {
+      user: member,
+      chatId: 'c1',
+      _skillIds: []
+    });
 
   it('a workflow prompt node gets the tools it names, a base id included', async () => {
     assert.deepEqual(
@@ -205,23 +210,20 @@ describe('resolving the platform tools by id', () => {
     assert.deepEqual(resolved, ['create_task', 'list_tasks', 'read_memory', 'write_memory']);
   });
 
-  it('a group grant lists them by exact or base id', async () => {
-    const grantee = { id: 'g', groups: ['users'], permissions: { tools: new Set(['evidence']) } };
-    const { data } = await getToolsForUser(grantee, { defaultLanguage: 'en' }, 'en');
-    assert.deepEqual(ids(data), [...EVIDENCE].sort());
-  });
-
-  it('the inbound MCP gateway lists them with iHub’s local tools, not the iHub actions', async () => {
-    const local = await loadLocalTools('en');
-    assert.deepEqual(
-      ids(local.filter(tool => [...AGENT_WORKSPACE, ...EVIDENCE].includes(tool.id))),
-      [...AGENT_WORKSPACE, ...EVIDENCE].sort()
-    );
-    assert.equal(
-      local.some(tool => tool._integration || tool.id === 'ask_user'),
-      false,
-      'installed integrations stay out of the gateway'
-    );
+  it('the inbound MCP gateway does not list them: it offers integrations only', async () => {
+    const server = await buildMcpServer({
+      user: {
+        id: 'g',
+        groups: ['users'],
+        scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL],
+        permissions: { ...everything, integrations: new Set(['*']) }
+      },
+      platform: { defaultLanguage: 'en', mcpServer: { expose: { tools: true } } }
+    });
+    const registered = Object.keys(server._registeredTools);
+    for (const id of [...AGENT_WORKSPACE, ...EVIDENCE, 'read_url']) {
+      assert.equal(registered.includes(id), false, `${id} is not exposed`);
+    }
   });
 
   it('runTool runs them through their script', async () => {

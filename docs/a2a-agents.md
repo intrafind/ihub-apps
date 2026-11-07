@@ -144,7 +144,7 @@ id — **Admin → Apps → Edit → Installed integrations** writes it, exactly
 `"langdock": {}` offers every skill the installation has enabled; `"langdock": { "actions":
 ["<skill id>"] }` only the named skills (skill ids as the card names them). The group grant
 (`groups.json` → `permissions.integrations`, see [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration))
-and the binding's actions apply in the chat and in `GET /api/tools?appId=`; an
+and the binding's actions apply in the chat; an
 app whose installation is missing or disabled does not offer the agent. In the chat's tool menu
 each agent is one toggle.
 
@@ -152,31 +152,21 @@ An app has no `tools` list any more (#3275): the binding is the only way in. V19
 `"langdock"`, `"a2a__langdock"` and `"a2a__langdock__ask"` entries into bindings, V229 does the same
 for any that remained, and the app editor's former **Remote A2A agents** picker is gone.
 
-### Ids shared with tools or installed integrations
+### Ids shared with installed integrations
 
 An agent's id is an installation id, so it cannot collide with another installation — an MCP
 server, an iFinder installation or another agent: Admin → Integrations refuses the id (ids are
 compared ignoring case). People directories check installed integrations the same way, so a
-directory never takes an agent's id either.
-
-Local tools are referenced by bare ids too (`knowledge` for `knowledge_search`), and nothing stops a
-tool from being added with the id of an existing agent. Should an agent share the id or base id of
-a local tool, the bare id keeps meaning the tool in group grants: the agent is marked with
-`_a2a.idConflict`, the server log names the clash, and the agent is granted only by
-`a2a__<agentId>` or exact tool ids. Apps are not affected: they bind the installation under
-`integrations`, where the id is unambiguous. Group grants that already use `a2a__<agentId>` need
-no change when a clash appears later.
+directory never takes an agent's id either. Apps and workflow nodes bind the installation under
+`integrations`, where the id is unambiguous.
 
 ### Group permissions
 
-Group grants (`permissions.tools` in `groups.json`) are unchanged: grant `a2a__<agentId>`
-(`"a2a__langdock"`) or the bare agent id (`"langdock"` — unless it clashes with a local tool's
-base id, then only `a2a__langdock` means the agent) for all its skills, or an exact tool id for
-one — just as an installed integration's id (an MCP server's `"drawio"`) grants all its tools and
-a base id (`"iFinder"`) a tool's functions. The grants are read wherever group tool grants are
-evaluated: the tool list (`GET /api/tools`) and the MCP gateway's permission check. As for every
-tool, which tools an app can call is decided by the app's own bindings; the group
-grant decides what users see in the tool list. iHub's own MCP gateway and A2A endpoint never
+Which groups may use an agent is the group grant of its installation (`permissions.integrations`
+in `groups.json`: `*`, the agent id, the definition id or `type:<type>`). The former tool grants
+(`permissions.tools`, `a2a__<agentId>`) were removed in #3275; migration V230 turned them into
+grants of the installation. Which skills an app can call is decided by the app's own binding.
+iHub's own MCP gateway and A2A endpoint never
 re-export remote agents: a remote agent's credentials stay with iHub.
 
 ## Calling an agent

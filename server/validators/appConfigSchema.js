@@ -518,7 +518,7 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
   })
   .strict();
 
-const appIntegrationsSchema = z
+export const appIntegrationsSchema = z
   .record(
     // An installation id, a definition id (with its one `/`) or a type
     // (`type:people-directory`, see services/integrations/integrationTypes.js).

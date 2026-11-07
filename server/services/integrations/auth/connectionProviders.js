@@ -484,11 +484,7 @@ async function mcpDescriptor(installationId) {
     },
     async mayConnect(user) {
       if (serverConfig.enabled === false) return false;
-      return oauth.isServerVisibleToUser(
-        user,
-        serverConfig,
-        await mcpClientManager.toolsOfServer(installationId)
-      );
+      return oauth.isServerVisibleToUser(user, serverConfig);
     },
     async onConnected({ userId, user }) {
       // The next call reconnects with the new token; listing the tools now

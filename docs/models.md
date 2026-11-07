@@ -138,19 +138,10 @@ so leave the flag unset for them.
 
 ### Tools
 
-Apps get tools from the integrations they bind under `integrations` (and from `websearch`).
-Tool definitions are loaded from individual JSON files under `contents/tools/` (one file per tool, named `<toolId>.json`) or discovered from Model Context Protocol (MCP) servers installed as integrations under **Admin → Integrations** (`contents/config/integrations.json`; an app gets their tools by binding the installation under `integrations`, see [MCP Integration](mcp-integration.md)). Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `webSearch` tool, which performs a provider-configured web search. Additional tools provide direct access to specific search providers such as Brave (`braveSearch`) when the corresponding API key is configured.
-For example, an app configured for web browsing can enable the `webSearch` tool for its prompts.
-
-Each tool file in `contents/tools/` uses the following fields:
-
-| Field         | Description                                             |
-| ------------- | ------------------------------------------------------- |
-| `id`          | Unique identifier referenced by apps                    |
-| `name`        | Display name                                            |
-| `description` | Short description of the tool                           |
-| `script`      | The script file in `server/tools` implementing the tool |
-| `parameters`  | JSON schema describing the tool input                   |
+Tools are the actions of installed integrations (Admin → Integrations). Apps, workflow nodes and agent
+profiles get them by binding the installation under `integrations`; tool files are no longer used and there is no tool
+list in a config. A model must support tool calling (`supportsTools`) when it runs with a bound
+integration or with web search. See [Integrations](integrations.md).
 
 ### Providers
 

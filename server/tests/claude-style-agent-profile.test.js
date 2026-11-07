@@ -60,7 +60,7 @@ async function run() {
     check('verifier is adversarial', verify?.config?.mode === 'adversarial');
     check(
       'verifier is tool-enabled',
-      Array.isArray(verify?.config?.tools) && verify.config.tools.length > 0
+      Boolean(verify?.config?.integrations) && verify.config.systemTools?.length > 0
     );
 
     const finalizeEdge = workflow.edges.find(

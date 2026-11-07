@@ -123,19 +123,16 @@ describe('A2A agent ids that clash with a tool or installed integration id', () 
     expect(a2aTools[0]._a2a.idConflict).toBeUndefined();
   });
 
-  it('keeps a node reference meaning the local tool or installed integration only', async () => {
-    const ids = async (tools, integrations) =>
-      (await getToolsForNode(tools, { id: 'node', integrations }, 'en')).map(t => t.id);
-    expect(await ids(['jira'])).toEqual(['jira_searchTickets']);
-    // An installed integration's tools come through the binding, not a tool reference.
-    expect(await ids(['atlassian'])).toEqual([]);
+  it('binds an installation by its id, and a tool reference selects no integration', async () => {
+    const ids = async (systemTools, integrations) =>
+      (await getToolsForNode({ systemTools, integrations }, 'en')).map(t => t.id);
+    // The binding is the only way in: the id is unambiguous even where an
+    // agent shares a base id with a local tool.
     expect(await ids([], { atlassian: {} })).toEqual(['atlassian__search']);
-    // A remote agent is bound like any installation; its references in a
-    // node's `tools` select nothing any more.
-    expect(await ids(['langdock'])).toEqual([]);
-    expect(await ids(['a2a__jira__ask'])).toEqual([]);
     expect(await ids([], { langdock: {} })).toEqual(['a2a__langdock__ask']);
     expect(await ids([], { jira: {} })).toEqual(['a2a__jira__ask']);
+    // Tool references (`systemTools` takes platform tools only) offer none of them.
+    expect(await ids(['jira', 'atlassian', 'langdock', 'a2a__jira__ask'])).toEqual([]);
   });
 });
 

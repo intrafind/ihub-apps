@@ -459,16 +459,31 @@ registry you added yourself, or one with that id that you pointed elsewhere, is 
 again from the official marketplace (the same id replaces the local copy) or detach it. Automation
 that fetched `examples/catalog.json` from GitHub must use the marketplace catalog instead.
 
-## Apps No Longer Have a `tools` List
+## Tools Are Integrations Everywhere
 
-Every tool an app offers is an action of an installed integration, so the app's own `tools` list —
-a second way to grant the same thing, with its own exceptions — is gone. An app gets tools only
-through `integrations` (the group's grant of the installation plus the binding's action list) and
-through its `websearch` configuration. The `tools` field is removed from the app schema, the app
-editor (the **Tools** card keeps **Tool use** and **Approval before tool calls**), the app creation
-wizard and the built-in apps.
+Every tool is an action of an installed integration, so nothing in iHub lists tools by id any more
+(#3275). What changes:
 
-Migration V229 rewrites every app in `contents/apps/` on the first start:
+- **Apps** have no `tools` list. An app gets tools only through `integrations` (the group's grant of
+  the installation plus the binding's action list) and its `websearch` configuration. The field is
+  gone from the app schema, the app editor (the **Tools** card keeps **Tool use** and **Approval
+  before tool calls**), the creation wizard, the app generator prompt and the built-in apps.
+- **Workflow nodes, planner task templates and agent profiles** have no `tools` list either. They
+  bind `integrations` like an app, set `webSearch: true` for web search, and name the platform tools
+  of workflows and agents (`write_artifact`, `read_memory`, `evidence`, `read_url`, …) in
+  `systemTools`; those are plain tools, not integrations. The workflow and agent editors offer the
+  three fields. A `tool` step still names one action by its tool id.
+- **The MCP gateway exposes the integrations.** It lists the actions of every enabled installation
+  the caller's groups are granted (`permissions.integrations`), under the tool ids they have in a
+  chat, and checks the grant again at call time. Outbound MCP servers, remote A2A agents and the
+  LDAP browser are still not re-exposed; neither are project, skill and platform tools.
+- **`permissions.tools` is gone** from groups (schema, group editor, `/api/admin/groups`, content
+  access). A group's access to an integration is its `permissions.integrations` grant.
+- **`GET /api/tools` and `/api/tools/:toolId` are removed.** There is no direct tool API: use an
+  integration's action tester in Admin, or the MCP gateway.
+
+Migrations V229 (apps) and V230 (workflows, agent profiles, groups) rewrite the existing files on the
+first start:
 
 | Entry in `tools` | Becomes |
 | --- | --- |
@@ -476,16 +491,20 @@ Migration V229 rewrites every app in `contents/apps/` on the first start:
 | `iFinder`, `jira` | the binding of that installation with every action |
 | `iFinder_search`, `jira_getTicket`, `braveSearch`, `<installationId>__<action>` | the binding of that installation with those actions |
 | an installation id (an MCP server, a people directory, `a2a__<agentId>`) | the binding of that installation with every action |
-| anything else (`read_url`, `write_memory`, an id nobody installed) | removed, **logged as a warning with the app's file name** |
+| `webSearch` (workflow nodes, agent profiles) | `webSearch: true` |
+| `write_artifact`, `read_memory`, `evidence`, `read_url`, … (workflow nodes, agent profiles) | `systemTools` |
+| anything else (an app naming a platform tool, an id nobody installed) | removed, **logged as a warning with the file name** |
 
-An existing binding keeps its settings. The platform tools of workflows and agents (`read_url`,
-`write_artifact`, `read_memory`, `evidence_*`, …) belong to workflow nodes and agent profiles,
-which keep their `tools` lists; an app no longer offers them. The binding still needs the group
+A group's `permissions.tools` entry that names an installation's tools adds that installation to the
+group's `integrations`, so what the group could reach stays reachable; entries that map to no
+installation are logged. An existing binding keeps its settings. A binding still needs the group
 grant of the installation (`permissions.integrations`), so check **Admin → Groups** for the
-installations an app now binds.
+installations an app or workflow now binds.
 
-**Before upgrading:** check the startup log of the migration for removed entries. An app that
-still has `tools` after the upgrade (a restored backup, a hand-edited file) logs a validation
-warning and offers nothing for the entries; remove the field and bind the integration. API clients that read or write `tools` on `/api/admin/apps` must bind the
-integration under `integrations` instead. A model must support tool calling when the app binds an
-integration (as it did for an app with `tools`).
+**Before upgrading:** check the startup log of both migrations for removed entries. An app, node or
+profile that still has `tools` after the upgrade (a restored backup, a hand-edited file) logs a
+validation warning and offers nothing for the entries. API clients that read or write `tools` on
+`/api/admin/apps`, `/api/admin/workflows` or agent profiles, that call `/api/tools`, or that rely on
+`permissions.tools` must use the bindings and group grants instead. A model must support tool calling
+when an app or node binds an integration (as it did for an app with `tools`). Tool files left in
+`contents/tools/` are reported and no longer used by anything.

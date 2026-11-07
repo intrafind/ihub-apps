@@ -456,6 +456,21 @@ What callers receive changes in one way: for MCP and A2A, a JSON answer now arri
 (`structuredContent`, a `data` part) next to the text, and the answer is the Output only, not the
 run around it.
 
+## What a step can use: integrations, platform tools, web search
+
+A step has no tool list (removed in #3275). A prompt (agent) or verifier step, an agent profile and a
+planner's `taskTemplate` say what the model may call with three fields:
+
+| Field | Meaning |
+| --- | --- |
+| `integrations` | Installed integrations the step binds, as an app does: `{ "ifinder": { "actions": ["search"] }, "type:web-search": {} }`. The group's grant of the installation applies, as in a chat. |
+| `webSearch` | `true` gives the step web search: native search where the model runs it, else the search tool of the first web search engine the user may use. |
+| `systemTools` | Platform tools of workflows and agents (`write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done`, `evidence`, `read_url`): plain tools, not integrations. |
+
+A planner picks, per task, from what its template offers (the integration keys, the platform tools and
+`webSearch`). A `tool` step still names one action by its tool id (`toolId`). Migration V230 rewrote
+existing `tools` lists into these fields.
+
 ## Integration scopes in a node
 
 A prompt (agent) step or a tool step can bind its integration tools to a scope:
@@ -475,7 +490,7 @@ from the workflow state, usually a workflow input:
 ```json
 { "id": "research", "type": "agent",
   "config": {
-    "tools": ["iFinder_search", "iFinder_getContent"],
+    "integrations": { "ifinder": { "actions": ["search", "getContent"] } },
     "integrationScopes": { "ifinder": "$.data.searchProfile" } } }
 ```
 

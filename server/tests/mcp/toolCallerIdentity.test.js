@@ -2,43 +2,20 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
 import { scratchDocuments } from '../helpers/testStorage.js';
 
 const scratch = await scratchDocuments();
 
 /**
  * Tool calls made for an external caller always run as the authenticated
- * caller: a `user` (or `chatId`, `appConfig`, …) in a REST body, a query
- * string or an A2A input is dropped, never used. Per-user OAuth MCP tools
+ * caller: a `user` (or `chatId`, `appConfig`, …) in an A2A input or MCP
+ * arguments is dropped, never used. Per-user OAuth MCP tools
  * pick their token by `params.user`, so a spoofed user would otherwise run
  * the tool with somebody else's token.
  */
 
 const runTool = jest.fn(async () => 'ok');
-const loadedTools = [
-  { id: 'okta__get_my_profile', _mcp: { serverId: 'okta' } },
-  { id: 'jira_searchTickets', _integration: { instanceId: 'jira', action: 'searchTickets' } },
-  { id: 'a2a__desk__ask', _a2a: { agentId: 'desk' } }
-];
-let apps = [];
-/** Group `tools` grants of the calling user; null for a user without permissions. */
-let grantedTools = new Set(['okta']);
-let adminAccess = false;
 
-jest.unstable_mockModule('../../services/tools/catalog.js', () => ({
-  loadConfiguredTools: jest.fn(async () => []),
-  loadLocalTools: jest.fn(async () => []),
-  loadTools: jest.fn(async () => loadedTools)
-}));
-// The app's binding rules, reduced to this fixture: the app binds the
-// installation by id (the group grant and the action list are tested with the
-// integrations).
-jest.unstable_mockModule('../../services/integrations/integrationTools.js', () => ({
-  getIntegrationToolsForApp: (app, tools) =>
-    tools.filter(tool => app?.integrations?.[tool._integration?.instanceId])
-}));
 jest.unstable_mockModule('../../services/tools/runTool.js', () => ({
   runTool
 }));
@@ -51,37 +28,20 @@ jest.unstable_mockModule('../../featureRegistry.js', () => ({
   // The projects settings behind the MCP permissions ask for it.
   isFeatureEnabled: () => true
 }));
-jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
-  authRequired: (req, _res, next) => {
-    req.user = {
-      id: 'bob',
-      groups: ['users'],
-      permissions: grantedTools
-        ? { tools: grantedTools, ...(adminAccess ? { adminAccess: true } : {}) }
-        : {}
-    };
-    next();
-  }
-}));
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
     getPlatform: () => ({ defaultLanguage: 'en', mcpServer: { expose: { workflows: true } } }),
     getFeatures: () => ({}),
     getApps: () => ({ data: [] }),
-    getAppsForUser: async () => ({ data: apps }),
+    getAppsForUser: async () => ({ data: [] }),
     getWorkflows: () => ({ data: [{ id: 'hr-lookup', chatIntegration: { enabled: true } }] })
   }
 }));
 
 const { stripReservedToolContext, withTrustedToolContext, RESERVED_TOOL_CONTEXT_KEYS } =
   await import('../../utils/toolCallContext.js');
-const { default: registerToolRoutes } = await import('../../routes/toolRoutes.js');
 const { dispatchA2A } = await import('../../services/mcp/a2aHandler.js');
 const { A2aTaskStore } = await import('../../services/mcp/a2aTaskStore.js');
-
-const app = express();
-app.use(express.json());
-registerToolRoutes(app);
 
 const SPOOFED = {
   user: { id: 'alice@corp.com', groups: ['admins'] },
@@ -96,9 +56,6 @@ const SPOOFED = {
 beforeEach(async () => {
   await scratch.reset();
   runTool.mockClear();
-  apps = [];
-  grantedTools = new Set(['okta']);
-  adminAccess = false;
 });
 
 describe('withTrustedToolContext', () => {
@@ -113,73 +70,6 @@ describe('withTrustedToolContext', () => {
     expect(RESERVED_TOOL_CONTEXT_KEYS).toEqual(expect.arrayContaining(Object.keys(SPOOFED)));
     expect(withTrustedToolContext(null, { user: trusted })).toEqual({ user: trusted });
     expect(withTrustedToolContext(['a'], {})).toEqual({});
-  });
-});
-
-describe('POST /api/tools/:toolId', () => {
-  it("runs as the authenticated user, never as the body's user", async () => {
-    const res = await request(app)
-      .post('/api/tools/okta__get_my_profile')
-      .set('x-chat-id', 'chat-bob')
-      .send({ ...SPOOFED, query: 'me' });
-    expect(res.status).toBe(200);
-    expect(runTool).toHaveBeenCalledTimes(1);
-    const [toolId, params] = runTool.mock.calls[0];
-    expect(toolId).toBe('okta__get_my_profile');
-    expect(params).toEqual({
-      query: 'me',
-      chatId: 'chat-bob',
-      user: { id: 'bob', groups: ['users'], permissions: { tools: new Set(['okta']) } }
-    });
-  });
-
-  it('ignores a user in the query string of a GET', async () => {
-    await request(app)
-      .get('/api/tools/okta__get_my_profile')
-      .query({ 'user[id]': 'alice', q: 'x' });
-    const [, params] = runTool.mock.calls[0];
-    expect(params.user.id).toBe('bob');
-    expect(params.q).toBe('x');
-  });
-});
-
-describe('POST /api/tools/:toolId permissions', () => {
-  const call = toolId => request(app).post(`/api/tools/${toolId}`).send({});
-
-  it('refuses a tool neither the groups nor an app of the caller grant', async () => {
-    // An app has no tool list: naming the tool does not offer it.
-    apps = [{ id: 'support', tools: ['jira_searchTickets'] }];
-    const res = await call('jira_searchTickets');
-    expect(res.status).toBe(403);
-    expect(runTool).not.toHaveBeenCalled();
-  });
-
-  it('refuses a caller without tool permissions, and unknown tools alike', async () => {
-    grantedTools = null;
-    expect((await call('okta__get_my_profile')).status).toBe(403);
-    grantedTools = new Set(['okta']);
-    expect((await call('nope')).status).toBe(403);
-    expect((await call('workflow_hr-lookup')).status).toBe(403);
-    expect(runTool).not.toHaveBeenCalled();
-  });
-
-  it('runs the tool of an integration an app the caller can open binds', async () => {
-    apps = [{ id: 'support', integrations: { jira: {} } }];
-    expect((await call('jira_searchTickets')).status).toBe(200);
-    expect(runTool).toHaveBeenCalledWith('jira_searchTickets', expect.any(Object));
-  });
-
-  it('reads grants like app references: A2A agent reference, and * for all', async () => {
-    grantedTools = new Set(['a2a__desk']);
-    expect((await call('a2a__desk__ask')).status).toBe(200);
-    grantedTools = new Set(['*']);
-    expect((await call('workflow_hr-lookup')).status).toBe(200);
-  });
-
-  it('lets an admin run any tool', async () => {
-    grantedTools = new Set();
-    adminAccess = true;
-    expect((await call('jira_searchTickets')).status).toBe(200);
   });
 });
 

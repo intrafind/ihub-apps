@@ -6,7 +6,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchAdminToolCatalog } from '../../../../../api/integrationsAdminApi';
+import CapabilityFields from '../../../../../shared/components/CapabilityFields';
 
 function PlannerForm({ config, onChange }) {
   const tt = config.taskTemplate || {};
@@ -15,7 +15,6 @@ function PlannerForm({ config, onChange }) {
     onChange({ ...config, taskTemplate: { ...tt, [field]: value } });
   };
 
-  const fetchToolsFn = useCallback(() => fetchAdminToolCatalog(), []);
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   return (
@@ -67,13 +66,9 @@ function PlannerForm({ config, onChange }) {
       <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-700">
         Task Template
       </h4>
-      <ResourcePicker
-        label="Tools"
-        fetchFn={fetchToolsFn}
-        value={tt.tools}
-        onChange={v => onTT('tools', v)}
-        multi
-        placeholder="Search tools..."
+      <CapabilityFields
+        value={tt}
+        onChange={patch => onChange({ ...config, taskTemplate: { ...tt, ...patch } })}
       />
       <ResourcePicker
         label="Model ID"

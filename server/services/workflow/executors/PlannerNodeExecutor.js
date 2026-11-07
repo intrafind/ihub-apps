@@ -34,6 +34,7 @@ import {
 } from '../../skillAccess.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
+import { capabilitiesOf } from '../nodeCapabilities.js';
 
 export class PlannerNodeExecutor extends BaseNodeExecutor {
   /**
@@ -834,7 +835,9 @@ them and re-invokes you with the activated skill bodies in context.`
     const tt = config?.taskTemplate || {};
     const uniqStrings = arr =>
       Array.isArray(arr) ? Array.from(new Set(arr.filter(v => typeof v === 'string'))) : [];
-    const toolCatalog = uniqStrings(tt.tools);
+    // What the template offers (bound integrations, platform tools, web search):
+    // the plan's per-task `tools` pick names those catalog ids.
+    const toolCatalog = uniqStrings(capabilitiesOf(tt));
     const appCatalog = uniqStrings(tt.apps);
     const projectCatalog = uniqStrings(
       Array.isArray(tt.projects)

@@ -517,11 +517,10 @@ Groups are hierarchical with inheritance:
 ```
 
 Besides `apps`, `prompts` and `models`, a group may carry `workflows`,
-`skills`, `tools` and `integrations`. `tools` grants a tool directly over the
-MCP and A2A gateways without an app declaring it — see
-[MCP Integration](mcp-integration.md#who-sees-which-tool). It has no effect
-on chat, where the integrations an app binds decide what the model may
-call.
+`skills` and `integrations`. There is no tool grant (removed in #3275): the
+tools are the actions of the integrations, and the MCP gateway offers those of
+the integrations a group is granted — see
+[MCP Integration](mcp-integration.md#who-sees-which-tool).
 
 `integrations` lists the installed integrations members may use: `*`,
 installation ids (`x500bund`), definition ids (`com.intrafind/ldap-directory`)
@@ -562,7 +561,7 @@ This adds to `req.user`:
 A group with `permissions.contentAdmin: true` may use the admin area for apps,
 prompts and sources (`middleware/contentAdminAuth.js`) without `adminAccess`.
 Content admins may also change which groups can use a piece of content — the
-`apps`, `prompts`, `skills`, `tools` and `workflows` lists above — through
+`apps`, `prompts`, `skills` and `workflows` lists above — through
 `GET`/`PUT /api/admin/content-access/:type/:id` (`routes/admin/contentAccess.js`,
 logic in `utils/contentAccess.js`), but only for the groups they belong to and
 for every group that inherits from one of those.

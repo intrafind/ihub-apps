@@ -103,7 +103,7 @@ function countAdminAccessGroups(groups, excludeGroupId = null) {
  *
  * Both the create and update handlers rebuild this object field by field, so
  * anything missing from the list is silently dropped on every admin save —
- * that is how `skills` (and later `tools`) disappeared from groups that an
+ * that is how `skills` disappeared from groups that an
  * admin merely opened and saved. Keep every permission the authorization layer
  * reads (`utils/authorization.js`) in ONE place so adding the next one cannot
  * regress the others.
@@ -122,7 +122,6 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
     models: list('models'),
     workflows: list('workflows'),
     skills: list('skills'),
-    tools: list('tools'),
     integrations: list('integrations'),
     adminAccess:
       adminAccess !== undefined
@@ -173,16 +172,6 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
  *           items:
  *             type: string
  *           example: ["*"]
- *         tools:
- *           type: array
- *           description: >
- *             Tool IDs the group may call directly over the MCP/A2A gateways, or ['*'] for
- *             all tools. Naming a tool (`iFinder`) grants every function of it; naming a
- *             function (`iFinder_search`) grants only that one. Does not affect chat, where
- *             an app's own `tools` list decides what the model may call.
- *           items:
- *             type: string
- *           example: ["iFinder"]
  *         integrations:
  *           type: array
  *           description: >
@@ -469,31 +458,12 @@ export default function registerAdminGroupRoutes(app) {
         name: { en: skill.displayName || skill.name, de: skill.displayName || skill.name }
       }));
 
-      // Tools are offered per function (`iFinder_search`) as well as by base id
-      // (`iFinder`), because granting the base id covers every function of that
-      // tool — which is usually what an operator wants.
-      const { data: allTools } = configCache.getTools();
-      const toolsById = new Map();
-      for (const tool of allTools || []) {
-        if (!tool?.id) continue;
-        toolsById.set(tool.id, { id: tool.id, name: tool.name || { en: tool.id, de: tool.id } });
-        const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
-        if (!toolsById.has(baseId)) {
-          toolsById.set(baseId, {
-            id: baseId,
-            name: { en: `${baseId} (all functions)`, de: `${baseId} (alle Funktionen)` }
-          });
-        }
-      }
-      const tools = Array.from(toolsById.values());
-
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
         prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
         workflows: workflows.sort((a, b) => a.id.localeCompare(b.id)),
-        skills: skills.sort((a, b) => a.id.localeCompare(b.id)),
-        tools: tools.sort((a, b) => a.id.localeCompare(b.id))
+        skills: skills.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
       return sendInternalError(res, error, 'get resources');

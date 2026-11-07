@@ -14,7 +14,6 @@ The system supports seven different types of rate limiters, each configurable th
 - **Default Limit**: 500 requests per 1 minute per IP address
 - **Applied to**: Regular API endpoints including:
   - `/api/apps`
-  - `/api/tools` (including `/api/tools/:toolId`)
   - `/api/models`
   - `/api/prompts`
   - `/api/styles`

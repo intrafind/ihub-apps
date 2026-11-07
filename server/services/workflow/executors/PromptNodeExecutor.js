@@ -24,6 +24,7 @@ import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
 import { applyIntegrationScopes } from '../../chat/RequestBuilder.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForNode } from '../../tools/appTools.js';
+import { capabilitiesOf } from '../nodeCapabilities.js';
 import { runTool } from '../../tools/runTool.js';
 import {
   resolveNativeWebSearchProvider,
@@ -148,7 +149,8 @@ export function resolveNodeSkillIds(config, profile) {
  *   config: {
  *     system: 'You are a research assistant. Search for relevant information.',
  *     prompt: 'Research the following topic: ${$.data.topic}',
- *     tools: ['source_search', 'web_search'],
+ *     integrations: { ifinder: { actions: ['search'] } },
+ *     webSearch: true,
  *     modelId: 'gpt-4',
  *     maxIterations: 5,
  *     outputVariable: 'researchResults'
@@ -249,7 +251,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     this.logger.info('Executing agent node', {
       component: 'PromptNodeExecutor',
       nodeId: node.id,
-      hasTools: (config.tools || []).length > 0,
+      hasTools: capabilitiesOf(config).length > 0,
       ...(effectiveTaskId && effectiveTaskId !== node.id ? { taskId: effectiveTaskId } : {})
     });
 
@@ -379,11 +381,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Get tools if configured. Agent runs get auto-registered tools
       // (memory/inbox/dynamic-tasks/artifacts) merged on top.
-      let configuredToolIds = Array.isArray(config.tools) ? [...config.tools] : [];
+      let integrationBindings =
+        config.integrations && typeof config.integrations === 'object' ? config.integrations : null;
+      let systemToolIds = Array.isArray(config.systemTools) ? [...config.systemTools] : [];
       if (agentProfile) {
         const agentToolIds = getAgentToolIds(agentProfile, config);
         for (const id of agentToolIds) {
-          if (!configuredToolIds.includes(id)) configuredToolIds.push(id);
+          if (!systemToolIds.includes(id)) systemToolIds.push(id);
         }
       }
 
@@ -396,16 +400,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // skill tools from them, `runTool` only loads skills from this list, and
       // its presence keeps users' own skills out of workflow nodes.
       context = { ...context, _skillIds: nodeSkillIds };
-      if (nodeSkillIds.length > 0) {
-        if (!configuredToolIds.includes('activate_skill')) {
-          configuredToolIds.push('activate_skill');
-        }
-        if (!configuredToolIds.includes('read_skill_resource')) {
-          configuredToolIds.push('read_skill_resource');
-        }
-      }
-
-      // Provider-native search resolution. The generic `webSearch` tool id
+      // Provider-native search resolution. The node's `webSearch` switch
       // means "give this node web search" — it is never a real tool. For
       // models with native (provider-handled) search (Google, OpenAI
       // Responses, Anthropic) it resolves to that native capability, passed
@@ -434,8 +429,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // operators why function tools + apps didn't run on this step).
       let groundingSwapDropped = null;
       let nativeWebSearch = null;
-      if (configuredToolIds.includes('webSearch')) {
-        configuredToolIds = configuredToolIds.filter(id => id !== 'webSearch');
+      let engineToolIds = [];
+      if (config.webSearch === true) {
         nativeWebSearch = resolveNativeWebSearchProvider(model?.provider, {
           model,
           maxUses: config.maxWebSearches
@@ -445,19 +440,20 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           // Apps are implemented as function tools too, so they're just as
           // incompatible with native grounding — flag the drop (even when
           // empty) so the app-registration check below skips them.
-          groundingSwapDropped = configuredToolIds;
-          if (configuredToolIds.length > 0) {
+          groundingSwapDropped = [...Object.keys(integrationBindings || {}), ...systemToolIds];
+          if (groundingSwapDropped.length > 0) {
             this.logger.info(
               'Native Google Search grounding requested — dropping function tools (Gemini API limitation)',
               {
                 component: 'PromptNodeExecutor',
                 modelId: model.id,
-                droppedFunctionTools: configuredToolIds,
+                droppedFunctionTools: groundingSwapDropped,
                 nodeId: node.id
               }
             );
           }
-          configuredToolIds = [];
+          integrationBindings = null;
+          systemToolIds = [];
         } else if (!nativeWebSearch) {
           // No native search capability for this provider — fall back to
           // the search tool of the first engine available to the user.
@@ -466,7 +462,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             language
           });
           if (engineToolId) {
-            if (!configuredToolIds.includes(engineToolId)) configuredToolIds.push(engineToolId);
+            engineToolIds = [engineToolId];
           } else {
             this.logger.info('No web search engine for the node — webSearch has no effect', {
               component: 'PromptNodeExecutor',
@@ -477,8 +473,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
       let tools = [];
-      if (configuredToolIds.length > 0) {
-        tools = await this.getAgentTools(configuredToolIds, language, context);
+      const offersTools =
+        !groundingSwapDropped &&
+        (Object.keys(integrationBindings || {}).length > 0 ||
+          systemToolIds.length > 0 ||
+          engineToolIds.length > 0 ||
+          nodeSkillIds.length > 0);
+      if (offersTools) {
+        tools = await this.getAgentTools(
+          { integrations: integrationBindings, systemTools: systemToolIds, engineToolIds },
+          language,
+          context
+        );
       }
 
       // Append App-as-tool synthetic tools when enabled — BUT NOT when native
@@ -1382,17 +1388,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   /**
    * Get tools available to this agent.
    *
-   * @param {Array<string>} toolIds - List of tool IDs
+   * @param {{ integrations?: Object, systemTools?: string[], engineToolIds?: string[] }} capabilities -
+   *   The integrations the node binds, the platform tools it names and the web search engine's tool
    * @param {string} language - Language for localization
    * @param {Object} _context - Execution context (reserved for future use)
    * @returns {Promise<Array>} Array of tool configurations
    * @private
    */
-  async getAgentTools(toolIds, language, _context) {
-    // A minimal pseudo-app for the node: its project links and skills; the
-    // node's own tool references are read by `getToolsForNode`.
+  async getAgentTools(capabilities, language, _context) {
+    // A minimal pseudo-app for the node: the integrations it binds, the
+    // platform tools it names, its project links and skills.
     const skillIds = Array.isArray(_context._skillIds) ? _context._skillIds : [];
-    const appConfig = {
+    const nodeConfig = {
+      ...(capabilities?.integrations ? { integrations: capabilities.integrations } : {}),
+      systemTools: capabilities?.systemTools || [],
+      engineToolIds: capabilities?.engineToolIds || [],
       // The node's project links, so the knowledge tools are offered (#1036).
       projects: Array.isArray(_context.projectLinks) ? _context.projectLinks : [],
       // The node's list, an empty one included, marks this as a workflow node:
@@ -1401,13 +1411,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       ...(skillIds.length > 0 ? { skills: skillIds } : {})
     };
 
-    const toolContext = {
+    return await getToolsForNode(nodeConfig, language, {
       user: _context.user,
-      chatId: _context.chatId,
-      enabledTools: toolIds
-    };
-
-    return await getToolsForNode(toolIds, appConfig, language, toolContext);
+      chatId: _context.chatId
+    });
   }
 
   /**

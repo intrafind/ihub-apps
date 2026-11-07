@@ -19,7 +19,6 @@ import { isToolSelected } from '../../utils/toolSelection.js';
 
 // What OpenAI and Anthropic accept as a function name.
 const PROVIDER_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
-import { toolVisibleInSet } from '../../services/mcp/permissions.js';
 
 const agent = { id: 'langdock', name: 'Langdock', allowedSkills: ['*'] };
 
@@ -137,22 +136,11 @@ describe('tool selection of A2A tools', () => {
     // It names one agent only.
     expect(isToolSelected({ ...tool, _a2a: { agentId: 'other' } }, ['a2a__langdock'])).toBe(false);
     expect(isToolSelected({ id: 'langdock_search' }, ['a2a__langdock'])).toBe(false);
-    expect(
-      toolVisibleInSet('a2a__langdock__ask', new Set(['a2a__langdock']), null, 'langdock')
-    ).toBe(true);
   });
 
   it('never selects every agent through the literal base id "a2a"', () => {
     expect(isToolSelected(tool, ['a2a'])).toBe(false);
     expect(isToolSelected({ id: 'a2a__langdock__ask' }, ['a2a'])).toBe(false);
-    expect(toolVisibleInSet('a2a__langdock__ask', new Set(['a2a']))).toBe(false);
-  });
-
-  it('lets a gateway grant cover an agent through its id', () => {
-    expect(toolVisibleInSet('a2a__langdock__ask', new Set(['langdock']), null, 'langdock')).toBe(
-      true
-    );
-    expect(toolVisibleInSet('a2a__langdock__ask', new Set(['*']))).toBe(true);
   });
 });
 

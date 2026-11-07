@@ -150,9 +150,9 @@ An app binds directories under `integrations` (**Admin → Apps → Edit → Int
 - `"integrations": { "x500bund": {} }` — one directory, all of its search tools; `{ "actions": ["search_people"] }` narrows it;
 - both together: the installation's own binding wins for that directory.
 
-A group's `permissions.tools` still selects a directory's tools by the directory id (`"x500bund"`) or an exact tool id (`"x500bund__search_people"`), The app's former `tools` list is gone (#3275): migration V229 turned a directory id in it into a binding of that installation.
+Which groups may use a directory is the group grant of its installation (`permissions.integrations`). The former tool grants (`permissions.tools`) and the app's `tools` list are gone (#3275): migrations V229 and V230 turned them into bindings and grants of the installation.
 
-The group grant (`permissions.integrations`) holds on top of that: an app that binds `x500bund`, or a `"*"` tool grant, does not give the directory to a user whose groups do not grant it. Inherited grants count (`admins` inherit `users`). The check runs in the tools listing, an app's tools, direct tool runs, the MCP gateway, and again when the tool runs.
+The grant holds on top of every binding: an app that binds `x500bund` does not give the directory to a user whose groups do not grant it. Inherited grants count (`admins` inherit `users`). The check runs in an app's tools, workflow nodes and the MCP gateway, and again when the tool runs.
 
 ## LDAP browser (for admins)
 
