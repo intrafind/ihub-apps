@@ -847,6 +847,14 @@ used to be an HTML or plain text page.
   off (`FEATURE_DISABLED`), `BAD_REQUEST` for an invalid upload, id or value, `CONFLICT` when iFinder is not
   configured, `UPSTREAM_ERROR` (502) when iFinder cannot be asked, and `INTERNAL_ERROR` with a fixed text for an
   unexpected failure; the cause is in the server log. The voice routes keep their own codes as before.
+- The user integration endpoints (`/api/integrations`, connect, reconnect, disconnect and preferences), the browser
+  extension, Office add-in and Nextcloud embed configuration endpoints, the LDAP test, admin search and browser
+  extension administration endpoints, the chat configuration endpoints (`/api/styles`, `/api/translations`,
+  `/api/configs/*`) and conversation lookups answer in this shape: `AUTH_REQUIRED`, `JSON_REQUIRED`,
+  `INTERACTIVE_SESSION_REQUIRED`, `INTEGRATION_NOT_FOUND`, `INVALID_APP`, `APP_NOT_FOUND` and
+  `PREFERENCES_UNAVAILABLE` as before, and a failed sign-in start answers the new `INTEGRATION_CONNECT_FAILED`
+  with the flow's own reason (`discovery_failed`, `public_url_mismatch`, ...) in `details.reason` (before: the
+  reason as `code`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
