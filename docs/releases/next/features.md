@@ -766,6 +766,11 @@ used to be an HTML or plain text page.
   not enabled, an identifier that does not decode and an invalid policy field (the reason is in `detail`),
   and `NOT_FOUND` for an unknown client. An unexpected failure answers 500 with a fixed text; the cause is
   in the server log.
+- The short-link endpoints (`/api/shortlinks*`) answer in this shape: `BAD_REQUEST` for a missing target or a
+  target that is not a path on this server or a URL on an allowed host, `NOT_FOUND` for an unknown code,
+  `FORBIDDEN` for a link of somebody else and `CONFLICT` for a code that exists. The redirect `/s/{code}`
+  keeps its plain-text answers. An unexpected failure answers 500 with a fixed text; the cause is in the
+  server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

@@ -32,6 +32,7 @@ const { default: request } = await import('supertest');
 const { default: configCache } = await import('../configCache.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
 const { setupMiddleware } = await import('../middleware/setup.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const GROUPS = {
   groups: {
@@ -84,6 +85,7 @@ function buildApp() {
     next();
   });
   registerShortLinkRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -155,6 +157,11 @@ describe('short link ownership', () => {
       url: '/apps/other'
     });
     expect(put.status).toBe(403);
+    expect(put.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(put.body).toMatchObject({
+      code: 'FORBIDDEN',
+      detail: 'You do not own this short link.'
+    });
     expect((await as(request(app).delete(`/api/shortlinks/${link.code}`), 'bob')).status).toBe(403);
 
     const own = await as(request(app).put(`/api/shortlinks/${link.code}`), 'alice').send({
@@ -224,6 +231,27 @@ describe('short link targets', () => {
       url: 'https://elsewhere.example/'
     });
     expect(put.status).toBe(400);
+    expect(put.body.code).toBe('BAD_REQUEST');
+    expect(put.body.detail).toMatch(/allowed host/);
+  });
+
+  test('answers an unknown code with NOT_FOUND, a missing target with BAD_REQUEST and a taken code with CONFLICT', async () => {
+    const app = buildApp();
+    const missing = await as(request(app).get('/api/shortlinks/nosuchcode'), 'alice');
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: 'NOT_FOUND', detail: 'Short link not found' });
+
+    const none = await create(app, 'alice', {});
+    expect(none.status).toBe(400);
+    expect(none.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: 'appId or url or path required'
+    });
+
+    await create(app, 'alice', { appId: 'chat', code: 'taken1' });
+    const dup = await create(app, 'bob', { appId: 'chat', code: 'taken1' });
+    expect(dup.status).toBe(409);
+    expect(dup.body).toMatchObject({ code: 'CONFLICT', detail: 'Code already exists' });
   });
 
   test('/s/:code redirects to an allowed target', async () => {
