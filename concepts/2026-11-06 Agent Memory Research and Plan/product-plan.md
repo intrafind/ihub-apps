@@ -377,7 +377,7 @@ Phase 2 ships only after the Phase 2 acceptance in README §7 is met on the inte
 | `platform.memory.extraction.reviewMode` | Platform | `'off'` | Admin | Phase 2; `'required'` forces review for all |
 | `policies.context.summaryThresholdRatio` | Platform | `0.8` | Admin | Phase 3 |
 | `platform.memory.consolidation.enabled` | Platform | `false` | Admin | Phase 4 |
-| `agentProfile.memory.writeApproval` | Agent profile | `false` | Admin | Phase 4 |
+| `memory.writeApproval` (agent profile) | Agent profile | `false` | Admin | Phase 4 |
 
 The result for an upgrading customer: **nothing changes until an admin turns the flag and the platform setting on**; the group permission and the `chat` app default are prepared by migration so that turning the flag on is a single step.
 
