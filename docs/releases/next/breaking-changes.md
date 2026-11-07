@@ -480,8 +480,10 @@ Every tool is an action of an installed integration, so nothing in iHub lists to
   chat, and checks the grant again at call time. The shipped groups hold `integrations: ["*"]`,
   so a user-delegated token now reaches every integration its user may use: narrow the groups'
   `integrations` lists if the gateway should offer less. A machine client (client credentials, static
-  key) reaches an integration only through the binding of an app in its `allowedApps`. Outbound MCP servers, remote A2A agents and the
-  LDAP browser are still not re-exposed; neither are project, skill and platform tools.
+  key) reaches an integration only through the binding of an app in its `allowedApps`; so does a
+  user-delegated token or personal API key whose client names `allowedApps`. Outbound MCP servers,
+  remote A2A agents and the LDAP browser are still not re-exposed; neither are project, skill and
+  platform tools.
 - **`permissions.tools` is gone** from groups (schema, group editor, `/api/admin/groups`, content
   access). A group's access to an integration is its `permissions.integrations` grant.
 - **`GET /api/tools` and `/api/tools/:toolId` are removed.** There is no direct tool API: use an
@@ -500,11 +502,16 @@ first start:
 | `write_artifact`, `read_memory`, `evidence`, `read_url`, … (workflow nodes, agent profiles) | `systemTools` |
 | anything else (an app naming a platform tool, an id nobody installed) | removed, **logged as a warning with the file name** |
 
-A group's `permissions.tools` entry that names an installation's tools adds that installation to the
-group's `integrations`, so what the group could reach stays reachable; entries that map to no
-installation are logged. An existing binding keeps its settings. A binding still needs the group
-grant of the installation (`permissions.integrations`), so check **Admin → Groups** for the
-installations an app or workflow now binds.
+A group's `permissions.tools` is removed and **not** turned into an integration grant: a tool grant
+never gave a group an installation (the gateway offered tool files and platform tools, and an
+installation's tools only through `permissions.integrations`), so converting it would widen the
+group. V230 logs every dropped entry with the installation it named; add that installation to the
+group's `integrations` if the group should use it. A binding V229 adds to an app is `required: false`,
+so an app whose installation is switched off stays visible (without the tool), as before; an
+existing binding keeps its settings. A binding still needs the group grant of the installation
+(`permissions.integrations`), so check **Admin → Groups** for the installations an app or workflow
+now binds. V230 also rewrites loop bodies kept inline in a workflow, and the Entra tool ids
+(`entraPeopleSearch`, `entraPeopleSearch_<function>`) map to the `entra` installation.
 
 **Before upgrading:** check the startup log of both migrations for removed entries. An app, node or
 profile that still has `tools` after the upgrade (a restored backup, a hand-edited file) logs a
@@ -513,11 +520,14 @@ validation warning and offers nothing for the entries. API clients that read or 
 `permissions.tools` must use the bindings and group grants instead. A model must support tool calling
 when an app or node binds an integration (as it did for an app with `tools`). Tool files left in
 `contents/tools/` are reported by V230 and left in place; **iHub no longer loads `contents/tools/`**
-at all, so a hand-written script tool file or a platform tool switched off in its file (`read_url`
-with `"enabled": false`) has no effect: build the tool as a custom integration, and switch platform
-tools off by not naming them in `systemTools`. The app generator no longer offers or writes `tools`
-(V231 rewrites its prompt), lists the installed integrations in its brief and turns its answer's
-`integrations` into the app's bindings.
+at all, so a hand-written script tool file has no effect: build the tool as a custom integration.
+The page reader stays off where `contents/tools/read_url.json` said `"enabled": false`: V230 sets
+`platform.webSearch.pageReader: false`, which keeps `read_url` out of every app, node and agent
+(remove the setting or set it to `true` to switch it back on). Other platform tools are switched off
+by not naming them in `systemTools`. The app generator no longer offers or writes `tools` (V231
+updates its prompt), lists the installed integrations in its brief, and the wizard asks the model
+for plain JSON and turns the answer's `integrations` into the app's bindings, keeping only
+installed integrations and the actions they declare.
 
 ## Error Responses Are `application/problem+json`: `error` Is Now `detail`
 

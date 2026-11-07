@@ -4,7 +4,10 @@
 /**
  * The brief the app creation wizard sends to the model that drafts an app
  * (Admin → Apps → New → Generate with AI): the `app-generator` prompt, the
- * installed integrations the app may bind, and the schema of the answer.
+ * installed integrations the app may bind. The wizard asks for plain JSON and
+ * checks the answer itself (`integrationsFromAnswer`); the prompt's
+ * `outputSchema` is documentation, not sent to the model, because strict
+ * structured-output modes reject schemas with optional keys.
  *
  * An app has no tool list (#3275): it gets tools from the integrations it
  * binds. The generator therefore lists the enabled installations (id, name,
@@ -18,9 +21,6 @@
 import { getLocalizedString } from '../utils/localize.js';
 
 export { integrationsFromAnswer } from '../../shared/appGenerator.js';
-
-/** The part of the generator's answer that picks integrations. */
-const INTEGRATIONS_PROPERTY = 'integrations';
 
 /** Most actions listed per integration, so the brief stays small. */
 const MAX_LISTED_ACTIONS = 12;
@@ -70,46 +70,17 @@ export function integrationsBlock(integrations) {
 }
 
 /**
- * The schema of the generator's answer, with `integrations` limited to the
- * installed ones. Without any installed integration the property is left out.
- *
- * @param {Object} outputSchema - the prompt's own schema
- * @param {ReturnType<typeof describeInstalledIntegrations>} integrations
- * @returns {Object}
- */
-export function schemaWithIntegrations(outputSchema, integrations) {
-  const schema = structuredClone(outputSchema || { type: 'object', properties: {} });
-  if (integrations.length === 0) return schema;
-  schema.properties = {
-    ...(schema.properties || {}),
-    [INTEGRATIONS_PROPERTY]: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', enum: integrations.map(integration => integration.id) },
-          actions: { type: 'array', items: { type: 'string' } }
-        },
-        required: ['id']
-      }
-    }
-  };
-  return schema;
-}
-
-/**
  * The brief for one language.
  *
- * @param {Object} promptConfig - the `app-generator` prompt (`prompt`, `outputSchema`)
+ * @param {Object} promptConfig - the `app-generator` prompt (`prompt`)
  * @param {string} language
  * @param {string} defaultLanguage
  * @param {ReturnType<typeof describeInstalledIntegrations>} integrations
- * @returns {{ prompt: string, outputSchema: Object }}
+ * @returns {{ prompt: string }}
  */
 export function buildAppGeneratorBrief(promptConfig, language, defaultLanguage, integrations) {
   const text = promptConfig?.prompt?.[language] || promptConfig?.prompt?.[defaultLanguage] || '';
   return {
-    prompt: text + integrationsBlock(integrations),
-    outputSchema: schemaWithIntegrations(promptConfig?.outputSchema, integrations)
+    prompt: text + integrationsBlock(integrations)
   };
 }

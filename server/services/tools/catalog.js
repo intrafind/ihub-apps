@@ -109,7 +109,14 @@ export async function filterIntegrationToolsForUser(tools, user) {
 export function loadPlatformTools(language = null) {
   const platformConfig = configCache.getPlatform() || {};
   const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
-  return localizeTools(platformToolDefinitions(), effectiveLanguage);
+  // The page reader can be switched off for the whole platform
+  // (`platform.webSearch.pageReader: false`, set by migration V230 from a
+  // `read_url` tool file that was disabled).
+  const pageReaderOff = platformConfig?.webSearch?.pageReader === false;
+  const definitions = platformToolDefinitions().filter(
+    tool => !(pageReaderOff && tool.id === 'read_url')
+  );
+  return localizeTools(definitions, effectiveLanguage);
 }
 
 /**

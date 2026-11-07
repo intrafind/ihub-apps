@@ -345,8 +345,14 @@ export async function buildMcpServer({ user, platform }) {
     // A machine client (client credentials, static key) holds no group grants:
     // its permissions are `integrations: ['*']`, bounded by the apps it may
     // use. An integration reaches it only through the binding of such an app.
+    // A user-delegated token (authorization code, personal API key) whose
+    // client names `allowedApps` is bounded the same way, on top of the
+    // user's own grants.
+    const clientApps = user.clientAllowedApps;
+    const clientNarrowsApps =
+      Array.isArray(clientApps) && clientApps.length > 0 && !clientApps.includes('*');
     let reachable = null;
-    if (user.isOAuthClient) {
+    if (user.isOAuthClient || clientNarrowsApps) {
       const { data: apps = [] } = await configCache.getAppsForUser(user, platform);
       reachable = new Set(
         apps.flatMap(app => getIntegrationToolsForApp(app, tools, { user }).map(tool => tool.id))
