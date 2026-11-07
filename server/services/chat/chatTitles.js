@@ -36,8 +36,12 @@ export const TITLE_SOURCE_CHARS = 600;
 /** How long the model gets; the title is not worth a long wait. */
 export const TITLE_TIMEOUT_MS = 10000;
 
-/** Room for a short headline — and for a model that spends a few tokens first. */
-const TITLE_MAX_TOKENS = 48;
+/**
+ * Output budget of the title call. The title is cut to 60 characters anyway; the
+ * room is for a model that cannot switch reasoning off, whose reasoning tokens
+ * count against the same limit and would otherwise leave no visible text.
+ */
+const TITLE_MAX_TOKENS = 256;
 
 const SYSTEM_PROMPT =
   'You write SHORT, CRISP titles for chats — like a tab title, not a sentence. ' +
@@ -196,7 +200,9 @@ export async function generateChatTitle({
     const response = await llmClient.complete({
       model,
       messages: buildTitleMessages(exchange),
-      options: { maxTokens: TITLE_MAX_TOKENS, user },
+      // Reasoning off: every adapter that reasons treats an absent value as on,
+      // and a headline needs none.
+      options: { maxTokens: TITLE_MAX_TOKENS, thinkingEnabled: false, user },
       timeoutMs: TITLE_TIMEOUT_MS,
       retries: 0,
       language,

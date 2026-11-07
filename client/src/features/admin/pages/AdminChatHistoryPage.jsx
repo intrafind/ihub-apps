@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const inputClass =
   'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
@@ -220,7 +221,7 @@ function CheckboxField({ id, label, help, checked, onChange }) {
 }
 
 function AdminChatHistoryPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1192,7 +1193,7 @@ function AdminChatHistoryPage() {
                 </option>
                 {titleModels.map(model => (
                   <option key={model.id} value={model.id}>
-                    {model.name?.en || model.name || model.id}
+                    {getLocalizedContent(model.name, i18n.language) || model.id}
                   </option>
                 ))}
               </select>

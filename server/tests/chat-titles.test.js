@@ -20,6 +20,8 @@ import {
   sanitizeGeneratedTitle
 } from '../services/chat/chatTitles.js';
 import { chatTitleSettings } from '../services/chat/chatPersistence.js';
+import OpenAIAdapter from '../adapters/openai.js';
+import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
 
 const CHAT_MODEL = { id: 'chat-model', modelType: 'chat', enabled: true };
 const TITLE_MODEL = { id: 'small', modelType: 'chat', enabled: true };
@@ -217,7 +219,8 @@ describe('generateChatTitle', () => {
     assert.equal(completeCalls.length, 1);
     const call = completeCalls[0];
     assert.equal(call.model.id, 'chat-model');
-    assert.ok(call.options.maxTokens <= 64);
+    assert.ok(call.options.maxTokens >= 128, 'room for a model that spends tokens on reasoning');
+    assert.equal(call.options.thinkingEnabled, false, 'a headline needs no reasoning');
     assert.equal(call.options.user.id, 'u1');
     assert.equal(call.timeoutMs, 10000);
     assert.equal(call.retries, 0);
@@ -285,5 +288,49 @@ describe('generateChatTitle', () => {
   it('reports a title the chat did not take (the user named it meanwhile) as skipped', async () => {
     const repository = fakeRepository({ stored: false });
     assert.deepEqual(await generateChatTitle(params({ repository })), { status: 'skipped' });
+  });
+});
+
+describe('the title call as a provider receives it', () => {
+  // The model call is stubbed everywhere else in this file. A reasoning model
+  // spends its output budget on reasoning first, so a title that is switched to
+  // reasoning by default never produces any visible text: this builds the real
+  // request bodies from the options the title call passes.
+  async function titleOptions() {
+    await generateChatTitle({
+      repository: fakeRepository(),
+      chatId: 'chat-1',
+      user: userWith('chat-model'),
+      chatModel: CHAT_MODEL
+    });
+    return { ...completeCalls[0].options, stream: false };
+  }
+
+  it('asks the Responses API for minimal reasoning and a budget that leaves room', async () => {
+    const model = { modelId: 'gpt-5', url: 'https://api.openai.com/v1/responses' };
+    const request = await OpenAIResponsesAdapter.createCompletionRequest(
+      model,
+      [{ role: 'user', content: 'x' }],
+      'key',
+      await titleOptions()
+    );
+    assert.equal(request.body.reasoning.effort, 'minimal');
+    assert.ok(request.body.max_output_tokens >= 128);
+  });
+
+  it('sends no reasoning effort to a thinking-enabled chat-completions model', async () => {
+    const model = {
+      modelId: 'o-series',
+      url: 'https://api.openai.com/v1/chat/completions',
+      thinking: { enabled: true, level: 'high' }
+    };
+    const request = await OpenAIAdapter.createCompletionRequest(
+      model,
+      [{ role: 'user', content: 'x' }],
+      'key',
+      await titleOptions()
+    );
+    assert.equal(request.body.reasoning_effort, undefined);
+    assert.ok(request.body.max_tokens >= 128);
   });
 });

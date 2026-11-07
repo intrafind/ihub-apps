@@ -255,11 +255,11 @@ const cancelRecording = recording => {
   else if (recording?.kind === 'attach') recording.recorder.cancel();
 };
 
-// Longest audio sent to a transcription model (the server holds up to ~70
-// minutes for a batch model and caps a session at 70 minutes).
 /** How long after a first answer the chat list is fetched again for a generated title. */
 const TITLE_REFRESH_DELAY_MS = 6000;
 
+// Longest audio sent to a transcription model (the server holds up to ~70
+// minutes for a batch model and caps a session at 70 minutes).
 const MAX_TRANSCRIPTION_SECONDS = 3600;
 // Longest recording attached to a chat model that takes audio: it goes in the
 // chat request as 16 kHz WAV (~1.9 MB a minute), within the request size limit.
