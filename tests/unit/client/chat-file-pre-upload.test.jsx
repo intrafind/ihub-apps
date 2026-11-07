@@ -266,7 +266,7 @@ describe('useChatFilePreUpload', () => {
 
   it('keeps the file for an inline send when the server refuses it', async () => {
     mockUpload.mockRejectedValue({
-      response: { status: 413, data: { details: { code: 'QUOTA_CHAT_FILES' } } }
+      response: { status: 413, data: { code: 'QUOTA_CHAT_FILES' } }
     });
     const { result } = renderHook(() => useComposer());
     act(() => result.current.setSelectedFile(documentEntry()));
