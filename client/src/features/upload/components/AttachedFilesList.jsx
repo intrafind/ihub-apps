@@ -7,9 +7,10 @@ import Icon from '../../../shared/components/Icon';
 import { formatFileSize } from '../utils/cloudFileProcessing';
 import { canSaveExtractedAudio, saveExtractedAudio } from '../utils/extractedAudio';
 import {
+  canDownloadFile,
+  canDownloadText,
   describeAttachment,
   downloadableFile,
-  downloadableText,
   saveAttachmentFile,
   saveAttachmentText
 } from '../utils/attachmentContent';
@@ -96,6 +97,8 @@ export default function AttachedFilesList({
   const fileCount = files?.length || 0;
   const shouldDefaultCollapse = fileCount >= defaultCollapseThreshold;
   const [overrideExpanded, setOverrideExpanded] = useState(/** @type {boolean|null} */ (null));
+  // A download that failed (the server no longer has the original, or could not be reached)
+  const [downloadNotice, setDownloadNotice] = useState(/** @type {string|null} */ (null));
 
   // Reset the user's expand/collapse override when the number of files changes,
   // so the auto-collapse default re-applies when a 4th file lands (collapses) and
@@ -146,12 +149,35 @@ export default function AttachedFilesList({
     return t('attachedFiles.sourceCloud', 'Cloud file');
   };
 
+  const download = async (task, file) => {
+    setDownloadNotice(null);
+    try {
+      if (!(await task(file))) throw new Error('save');
+    } catch (error) {
+      setDownloadNotice(
+        error?.status === 410 || error?.code === 'ORIGINAL_DISCARDED'
+          ? t(
+              'attachedFiles.downloadDiscarded',
+              'The original file is no longer stored; only its text is kept.'
+            )
+          : t('attachedFiles.downloadFailed', 'The download failed. Please try again.')
+      );
+    }
+  };
+
   /** The words for what the assistant gets from a file (see `describeAttachment`). */
   const contentLine = file => {
     const info = describeAttachment(file);
     if (!info) return null;
     if (info.kind === 'document') {
       const parts = [];
+      if (info.stub && info.textBytes > 0) {
+        parts.push(
+          t('attachedFiles.content.textServer', 'Text extracted on the server: {{size}}', {
+            size: formatFileSize(info.textBytes)
+          })
+        );
+      }
       if (info.characters > 0) {
         parts.push(
           t('attachedFiles.content.text', 'Text extracted: {{count}} characters', {
@@ -381,13 +407,13 @@ export default function AttachedFilesList({
                 {/* Downloads — only for a file from a cloud storage or an integration: a local
                     file is the user's own already. The original is the file as it was handed
                     over; the text is what the assistant reads from it. */}
-                {(file.source || 'local') !== 'local' && downloadableFile(file) && (
+                {(file.source || 'local') !== 'local' && canDownloadFile(file) && (
                   <button
                     type="button"
-                    onClick={() => saveAttachmentFile(file)}
+                    onClick={() => download(saveAttachmentFile, file)}
                     className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     title={
-                      downloadableFile(file).kind === 'sent'
+                      downloadableFile(file)?.kind === 'sent'
                         ? t('attachedFiles.downloadSent', 'Download the image as sent to the model')
                         : t('attachedFiles.downloadOriginal', 'Download original file')
                     }
@@ -398,10 +424,10 @@ export default function AttachedFilesList({
                     <Icon name="download" size="sm" />
                   </button>
                 )}
-                {(file.source || 'local') !== 'local' && downloadableText(file) && (
+                {(file.source || 'local') !== 'local' && canDownloadText(file) && (
                   <button
                     type="button"
-                    onClick={() => saveAttachmentText(file)}
+                    onClick={() => download(saveAttachmentText, file)}
                     className="shrink-0 rounded-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     title={t('attachedFiles.downloadText', 'Download the extracted text')}
                     aria-label={t(
@@ -428,6 +454,16 @@ export default function AttachedFilesList({
               </div>
             ))}
           </div>
+
+          {downloadNotice && (
+            <p
+              role="alert"
+              className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400 border-t border-gray-200 dark:border-gray-700"
+              data-testid="attached-file-download-error"
+            >
+              {downloadNotice}
+            </p>
+          )}
 
           {/* Footer with file count and remove all button — stays outside the
               scroll region so it's always visible. */}

@@ -6,6 +6,10 @@ jest.mock('../../../client/src/api/endpoints/integrationFiles', () => ({
   fetchIntegrationFileMetadata: jest.fn(),
   fetchIntegrationFileContent: jest.fn()
 }));
+jest.mock('../../../client/src/api', () => ({
+  uploadChatFile: jest.fn(),
+  deleteChatFile: jest.fn()
+}));
 jest.mock('../../../client/src/shared/hooks/useApps', () => ({
   __esModule: true,
   default: jest.fn()
@@ -51,6 +55,7 @@ import {
   fetchIntegrationFilesProbe
 } from '../../../client/src/api/endpoints/integrationFiles';
 import { processCloudFile } from '../../../client/src/features/upload/utils/cloudFileProcessing';
+import { deleteChatFile, uploadChatFile } from '../../../client/src/api';
 import useApps from '../../../client/src/shared/hooks/useApps';
 import AppsList from '../../../client/src/features/apps/pages/AppsList';
 import usePendingDocumentCheck from '../../../client/src/features/apps/hooks/usePendingDocumentCheck';
@@ -625,6 +630,139 @@ describe('useIntegrationDocumentAttachment', () => {
     });
     mount({ currentModel: null, pending: { ...pending, documentId: 'd2' } });
     await waitFor(() => expect(processCloudFile).toHaveBeenCalledTimes(1));
+  });
+
+  describe('by reference, on the server', () => {
+    const stored = {
+      id: 'f1',
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      bytes: 1500,
+      originalBytes: 1200,
+      textBytes: 300,
+      hasOriginal: true
+    };
+    const serverFiles = { enabled: true, ephemeral: false };
+    beforeEach(() => {
+      uploadChatFile.mockReset().mockResolvedValue({ file: stored });
+      deleteChatFile.mockReset().mockResolvedValue({});
+    });
+
+    test('the server fetches the document: nothing is downloaded into the browser', async () => {
+      mount({ serverFiles });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+
+      expect(uploadChatFile).toHaveBeenCalledTimes(1);
+      expect(uploadChatFile.mock.calls[0][0]).toBe('chat-1');
+      expect(uploadChatFile.mock.calls[0][1]).toEqual({
+        source: { kind: 'ifinder-document', ref: { documentId: 'd1', searchProfile: 'sp' } }
+      });
+      expect(uploadChatFile.mock.calls[0][2].fields).toEqual({ appId: 'app1' });
+      // No bytes through the browser, no text extraction here
+      expect(fetchIntegrationFileContent).not.toHaveBeenCalled();
+      expect(processCloudFile).not.toHaveBeenCalled();
+      // The composer holds a stub: the stored file's id, what the server read, no content
+      const entry = uploader.setSelectedFile.mock.calls.at(-1)[0];
+      expect(entry).toMatchObject({
+        type: 'document',
+        source: 'ifinder',
+        integration: 'ifinder',
+        chatId: 'chat-1',
+        fileId: 'f1',
+        serverStored: true,
+        hasOriginal: true,
+        textBytes: 300,
+        fileName: 'report.pdf',
+        fileSize: 1200,
+        displayType: 'iFinder document'
+      });
+      expect(entry.content).toBeUndefined();
+      expect(addSystemMessage).not.toHaveBeenCalled();
+    });
+
+    test('a temporary chat is created as one', async () => {
+      mount({ serverFiles: { enabled: true, ephemeral: true } });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+      expect(uploadChatFile.mock.calls[0][2].fields).toEqual({ appId: 'app1', ephemeral: true });
+    });
+
+    test('a file the server cannot take as a document goes the browser way (an image)', async () => {
+      uploadChatFile.mockRejectedValue({
+        response: { status: 400, data: { details: { code: 'UNSUPPORTED_TYPE' } } }
+      });
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('image/png', 'site.png'));
+      processCloudFile.mockResolvedValue({ type: 'image', fileName: 'site.png' });
+      mount({ serverFiles, currentModel: { id: 'm', supportsVision: true } });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+      expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1);
+      expect(uploader.setSelectedFile.mock.calls.at(-1)[0]).toMatchObject({ type: 'image' });
+      expect(addSystemMessage).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      [403, 'SOURCE_FORBIDDEN', /do not have access/],
+      [404, 'SOURCE_GONE', /was not found/],
+      [400, 'SOURCE_UNAVAILABLE', /not available to you/],
+      [502, 'SOURCE_FAILED', /Please try again/]
+    ])(
+      'a refusal of %s (%s) is said in the chat, and the browser is not asked',
+      async (status, code, text) => {
+        uploadChatFile.mockRejectedValue({
+          originalError: { response: { status, data: { details: { code } } } }
+        });
+        mount({ serverFiles });
+        await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
+        expect(addSystemMessage.mock.calls[0][0]).toMatch(text);
+        expect(fetchIntegrationFileContent).not.toHaveBeenCalled();
+        expect(uploader.clearSelectedFile).toHaveBeenCalled();
+        expect(onConsumed).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    test('a chat that keeps no files on the server fetches in the browser as before', async () => {
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+      processCloudFile.mockResolvedValue({ type: 'document', content: 'text', fileName: 'r.pdf' });
+      mount({ serverFiles: { enabled: false } });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+      expect(uploadChatFile).not.toHaveBeenCalled();
+      expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1);
+    });
+
+    test('an integration the server cannot fetch from fetches in the browser', async () => {
+      fetchIntegrationFilesProbe.mockResolvedValue({
+        id: 'wiki',
+        definition: 'com.example/wiki',
+        type: null,
+        name: 'Wiki'
+      });
+      fetchIntegrationFileContent.mockResolvedValue(blobResponse('application/pdf', 'report.pdf'));
+      processCloudFile.mockResolvedValue({ type: 'document', content: 'text', fileName: 'r.pdf' });
+      mount({
+        serverFiles,
+        pending: { ...pending, integration: 'wiki' },
+        app: { id: 'app1', integrations: { wiki: {} } }
+      });
+      await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(1));
+      expect(uploadChatFile).not.toHaveBeenCalled();
+      expect(fetchIntegrationFileContent).toHaveBeenCalledTimes(1);
+    });
+
+    test('an app that does not bind the integration gets nothing, not even a server fetch', async () => {
+      mount({ serverFiles, app: { id: 'app1', integrations: { jira: {} } } });
+      await waitFor(() => expect(addSystemMessage).toHaveBeenCalledTimes(1));
+      expect(uploadChatFile).not.toHaveBeenCalled();
+    });
+
+    test('a chat that moved on while the server fetched does not keep the stored file', async () => {
+      let finish;
+      uploadChatFile.mockReturnValue(new Promise(resolve => (finish = resolve)));
+      const { rerender } = mount({ serverFiles });
+      await waitFor(() => expect(uploadChatFile).toHaveBeenCalled());
+      rerender({ chatId: 'chat-2' });
+      await act(async () => finish({ file: stored }));
+      await waitFor(() => expect(deleteChatFile).toHaveBeenCalledWith('chat-1', 'f1'));
+      expect(uploader.setSelectedFile.mock.calls.at(-1)[0]).not.toMatchObject({ fileId: 'f1' });
+    });
   });
 
   describe("the model rules are the uploader's", () => {

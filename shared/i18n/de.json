@@ -46,8 +46,11 @@
       "image": "Bild wird an das Modell gesendet",
       "audio": "Audio wird an das Modell gesendet",
       "truncated": "gekürzt",
-      "textOnly": "nur der Text wird im Chat gespeichert"
-    }
+      "textOnly": "nur der Text wird im Chat gespeichert",
+      "textServer": "Auf dem Server extrahierter Text: {{size}}"
+    },
+    "downloadDiscarded": "Die Originaldatei wird nicht mehr gespeichert; nur ihr Text bleibt erhalten.",
+    "downloadFailed": "Der Download ist fehlgeschlagen. Bitte versuchen Sie es erneut."
   },
   "app": {
     "title": "iHub Apps",

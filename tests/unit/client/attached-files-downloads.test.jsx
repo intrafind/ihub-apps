@@ -8,7 +8,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -23,11 +23,16 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
     throw new Error('offline');
   })
 }));
+jest.mock('../../../client/src/api/endpoints/chats', () => ({
+  fetchChatFileBlob: jest.fn(),
+  fetchChatFileText: jest.fn()
+}));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: ({ name }) => <span data-testid="icon" data-name={name} />
 }));
 
+const { fetchChatFileBlob, fetchChatFileText } = require('../../../client/src/api/endpoints/chats');
 const AttachedFilesList =
   require('../../../client/src/features/upload/components/AttachedFilesList').default;
 const {
@@ -178,5 +183,87 @@ describe('the attachment chips', () => {
     renderList([document_({ source: 'local' })]);
     expect(screen.getByTestId('attached-file-content')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('the chip of a file the server fetched (a stub)', () => {
+  let anchorClicks;
+  beforeEach(() => {
+    URL.createObjectURL = jest.fn(() => 'blob:mock');
+    URL.revokeObjectURL = jest.fn();
+    anchorClicks = [];
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function record() {
+      anchorClicks.push(this.download);
+    });
+    fetchChatFileBlob.mockReset().mockResolvedValue(new Blob(['%PDF original']));
+    fetchChatFileText.mockReset().mockResolvedValue({ file: { text: 'The extracted text' } });
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  const stub = (overrides = {}) => ({
+    type: 'document',
+    source: 'ifinder',
+    chatId: 'chat-1',
+    fileId: 'f1',
+    serverStored: true,
+    hasOriginal: true,
+    textBytes: 2048,
+    pageImageCount: 0,
+    fileName: 'report.pdf',
+    fileSize: 1200,
+    fileType: 'application/pdf',
+    ...overrides
+  });
+  const renderList = files =>
+    render(<AttachedFilesList files={files} onRemoveFile={jest.fn()} onRemoveAll={jest.fn()} />);
+
+  test('says what the server read, from the stored file, not from text in the browser', () => {
+    renderList([stub()]);
+    expect(screen.getByTestId('attached-file-content')).toHaveTextContent(
+      'Text extracted on the server: 2.0 KB'
+    );
+  });
+
+  test("downloads the original and the text from the chat's stored file", async () => {
+    renderList([stub()]);
+    screen.getByRole('button', { name: 'Download report.pdf' }).click();
+    await waitFor(() => expect(anchorClicks).toEqual(['report.pdf']));
+    expect(fetchChatFileBlob).toHaveBeenCalledWith('chat-1', 'f1');
+
+    screen.getByRole('button', { name: 'Download the extracted text of report.pdf' }).click();
+    await waitFor(() => expect(anchorClicks).toEqual(['report.pdf', 'report.txt']));
+    expect(fetchChatFileText).toHaveBeenCalledWith('chat-1', 'f1');
+  });
+
+  test('a file whose original the server does not keep offers only the text', () => {
+    renderList([stub({ hasOriginal: false })]);
+    expect(screen.queryByRole('button', { name: 'Download report.pdf' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download the extracted text of report.pdf' })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('attached-file-content')).toHaveTextContent(
+      'only the text is kept in this chat'
+    );
+  });
+
+  test('says so when the original is gone, and when the download fails', async () => {
+    fetchChatFileBlob.mockRejectedValueOnce({ status: 410, code: 'ORIGINAL_DISCARDED' });
+    renderList([stub()]);
+    screen.getByRole('button', { name: 'Download report.pdf' }).click();
+    expect(await screen.findByTestId('attached-file-download-error')).toHaveTextContent(
+      'The original file is no longer stored; only its text is kept.'
+    );
+
+    fetchChatFileBlob.mockRejectedValueOnce(new Error('offline'));
+    screen.getByRole('button', { name: 'Download report.pdf' }).click();
+    await waitFor(() =>
+      expect(screen.getByTestId('attached-file-download-error')).toHaveTextContent(
+        'The download failed. Please try again.'
+      )
+    );
   });
 });

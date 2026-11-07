@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchIntegrationFilesProbe } from '../../../api/endpoints/integrationFiles';
+import { deleteChatFile, uploadChatFile } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { processCloudFile } from '../../upload/utils/cloudFileProcessing';
 import {
@@ -11,10 +12,12 @@ import {
   boundToolRefsFor,
   documentFailureKind,
   documentKindOf,
-  documentRefOf
+  documentRefOf,
+  serverFileSourceFor
 } from '../utils/pendingDocument';
 import { fetchIntegrationDocumentFile } from '../utils/integrationDocument';
 import { modelTakesFileKind } from '../../../shared/utils/modelInputCapabilities';
+import { uploadErrorCode, withStoredFile } from '../../chat/utils/chatFileUpload';
 
 /** The id under which this hook reports itself as busy to the composer (`setAttachmentProcessing`). */
 const BUSY_ID = 'integration-document';
@@ -27,16 +30,20 @@ const documentKey = pending =>
 
 /**
  * Attaches the document a link names (`?documentId=…&integration=…`) to the chat, once the app and
- * its model are known — the way the Nextcloud embed attaches the files a user picked there
- * (`useNextcloudEmbedAttachments`):
+ * its model are known:
  *
- * 1. ask the integration whether it hands documents to this user (the gate);
- * 2. fetch the **original** file through `GET /api/integrations/:integration/files/:id/content`, with the
- *    user's own permissions in that system;
- * 3. check that the app binds the integration (its local upload settings do not matter) and that
- *    the selected model can take what the file is (an image needs a model that sees);
- * 4. `processCloudFile`: an image becomes an image attachment for a vision model, audio an audio
- *    attachment, anything else a document that keeps its original next to the extracted text.
+ * 1. ask the integration whether it hands documents to this user (the gate), and check that the
+ *    app binds it (its local upload settings do not matter);
+ * 2. **by reference, on the server** — when the chat keeps files on the server and the server can
+ *    fetch from the integration (iFinder): post `{ source: { kind, ref } }` to the chat's file
+ *    endpoint. The server fetches the original itself with the user's own rights, stores it and
+ *    extracts the text; the composer holds a stub (the stored file's id), and the document never
+ *    passes through the browser;
+ * 3. **in the browser** — otherwise (the server keeps no chat files, the integration is not one the
+ *    server can fetch from, or the file is an image or audio that has to reach a vision or audio
+ *    model as bytes): fetch the original through `GET /api/integrations/:integration/files/:id/content`,
+ *    check that the model can take it, and `processCloudFile` it the way the Nextcloud embed does
+ *    (`useNextcloudEmbedAttachments`).
  *
  * A placeholder shows while it loads. A document that cannot be attached says why in the chat
  * (`addSystemMessage`): no access, not found, the integration not available, the app does not use it, or
@@ -52,6 +59,8 @@ const documentKey = pending =>
  * @param {Object|null} options.currentModel - the selected model object
  * @param {Object} options.fileUploadHandler - `useFileUploadHandler()`
  * @param {(content: string, isError?: boolean) => void} options.addSystemMessage
+ * @param {{enabled: boolean, ephemeral?: boolean}} [options.serverFiles] - whether the chat keeps
+ *   files on the server (`useChatFilePreUpload().enabled`) and whether the chat is temporary
  * @param {(refs: string[]) => void} [options.onIntegrationBound] - the tool references of the app's
  *   binding for the integration the document comes from: the chat switches them on, whatever the
  *   user's default for the app says, because the link came from that system
@@ -66,6 +75,7 @@ export default function useIntegrationDocumentAttachment({
   currentModel,
   fileUploadHandler,
   addSystemMessage,
+  serverFiles,
   onIntegrationBound,
   onConsumed
 }) {
@@ -82,6 +92,7 @@ export default function useIntegrationDocumentAttachment({
       currentModel,
       fileUploadHandler,
       addSystemMessage,
+      serverFiles,
       onIntegrationBound,
       onConsumed,
       t,
@@ -174,6 +185,60 @@ export default function useIntegrationDocumentAttachment({
         // default for the app has them off (or the binding is available only).
         const boundRefs = boundToolRefsFor(live.app, info);
         if (boundRefs.length > 0) liveRef.current.onIntegrationBound?.(boundRefs);
+        // By reference: the server fetches the document, stores it and reads it; nothing passes
+        // through the browser. A file the server cannot take as a document (an image, audio) goes
+        // the browser's way below, where the model gets its bytes.
+        const serverSource =
+          serverFiles?.enabled && live.chatId ? serverFileSourceFor(info, doc) : null;
+        if (serverSource) {
+          try {
+            const stored = await uploadChatFile(
+              live.chatId,
+              { source: serverSource },
+              {
+                fields: {
+                  ...(live.app?.id ? { appId: live.app.id } : {}),
+                  ...(serverFiles.ephemeral ? { ephemeral: true } : {})
+                }
+              }
+            );
+            const descriptor = stored?.file;
+            if (!descriptor?.id) throw new Error('No file in the response');
+            if (stale()) {
+              // The chat moved on: do not leave the file the server just stored behind
+              deleteChatFile(live.chatId, descriptor.id).catch(() => {});
+              dropPlaceholder();
+              return;
+            }
+            const label = getLocalizedContent(info?.name, live.language);
+            uploader.setSelectedFile(
+              withStoredFile(
+                {
+                  type: 'document',
+                  source: doc.integration,
+                  integration: doc.integration,
+                  chatId: live.chatId,
+                  fileName: descriptor.name || fallbackName,
+                  fileSize: descriptor.originalBytes || descriptor.bytes || 0,
+                  fileType: descriptor.mimeType || 'application/octet-stream',
+                  ...(label
+                    ? {
+                        displayType: live.t('sources.documentFromIntegration', {
+                          defaultValue: '{{name}} document',
+                          name: label
+                        })
+                      }
+                    : {})
+                },
+                descriptor
+              )
+            );
+            return;
+          } catch (serverError) {
+            // Only "not a document" falls back; everything else is reported below.
+            if (uploadErrorCode(serverError) !== 'UNSUPPORTED_TYPE') throw serverError;
+          }
+        }
         const file = await fetchIntegrationDocumentFile({
           integration: doc.integration,
           ref,
@@ -222,12 +287,16 @@ export default function useIntegrationDocumentAttachment({
           return;
         }
         uploader.clearSelectedFile();
+        // The file API wraps the axios error (`originalError`); the integration routes do not.
+        const response = err?.response || err?.originalError?.response;
+        const code = response?.data?.code || response?.data?.details?.code;
         const failure =
-          err?.response?.data?.code === 'INTEGRATION_NOT_GRANTED' ||
-          err?.response?.data?.code === 'INTEGRATION_NOT_CONFIGURED' ||
-          err?.response?.data?.code === 'INTEGRATION_NOT_FOUND'
+          code === 'INTEGRATION_NOT_GRANTED' ||
+          code === 'INTEGRATION_NOT_CONFIGURED' ||
+          code === 'INTEGRATION_NOT_FOUND' ||
+          code === 'SOURCE_UNAVAILABLE'
             ? 'unavailable'
-            : documentFailureKind(err?.response?.status);
+            : documentFailureKind(response?.status);
         say(
           {
             unavailable: live.t(

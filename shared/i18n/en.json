@@ -46,8 +46,11 @@
       "image": "Image sent to the model",
       "audio": "Audio sent to the model",
       "truncated": "shortened to fit",
-      "textOnly": "only the text is kept in this chat"
-    }
+      "textOnly": "only the text is kept in this chat",
+      "textServer": "Text extracted on the server: {{size}}"
+    },
+    "downloadDiscarded": "The original file is no longer stored; only its text is kept.",
+    "downloadFailed": "The download failed. Please try again."
   },
   "app": {
     "title": "iHub Apps",
