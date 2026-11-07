@@ -14,6 +14,7 @@ import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { compareByOrderThenName } from '../../utils/resourceLoader.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { isTranscriptionModel } from '../../transcription/index.js';
@@ -284,6 +285,63 @@ export { applyProviderLink };
  * it would replace.
  */
 const isChatModel = model => (model.modelType || 'chat') === 'chat';
+
+/**
+ * The model files as they are on disk now, in the order the config cache lists them.
+ *
+ * A route that rewrites a model it did not just receive from the client has to start
+ * from the file, never from the config cache. The cache of another worker can still
+ * hold the version before a save that has just been acknowledged, and rewriting that copy
+ * writes the old version back over the save. The cache's objects are also shared with every
+ * reader in the process, so a route must not change them in place before the write succeeds.
+ *
+ * @returns {Promise<Object[]>}
+ */
+async function storedModels() {
+  const documents = await configStore.listDocuments('models');
+  return documents.map(document => document.data).sort(compareByOrderThenName);
+}
+
+/**
+ * Change one stored model: read its file, apply `change` to a copy, write it back.
+ *
+ * @param {string} modelId
+ * @param {(model: Object) => Object} change - Returns the new version of the model
+ * @returns {Promise<Object|null>} The model as written, or null when it has no file
+ */
+async function updateStoredModel(modelId, change) {
+  const file = await modelPath(modelId);
+  const stored = await configStore.readJson(file);
+  if (stored === null) return null;
+  const updated = change({ ...stored });
+  await configStore.writeJson(file, updated);
+  return updated;
+}
+
+/** Take the default flag off every stored model except `exceptId`. */
+async function clearOtherDefaults(exceptId) {
+  for (const model of await storedModels()) {
+    if (model.id !== exceptId && model.default === true) {
+      await updateStoredModel(model.id, stored => ({ ...stored, default: false }));
+    }
+  }
+}
+
+/**
+ * Make sure one enabled chat model is the default, deciding from the stored files.
+ * The config loader repairs a missing default in memory too, but a stored one survives a
+ * reorder and is the same on every worker.
+ *
+ * @param {string} [exceptId] - A model about to go away, never promoted
+ */
+async function ensureStoredDefault(exceptId) {
+  const candidates = (await storedModels()).filter(
+    model => model.id !== exceptId && model.enabled !== false && isChatModel(model)
+  );
+  if (candidates.length > 0 && !candidates.some(model => model.default === true)) {
+    await updateStoredModel(candidates[0].id, stored => ({ ...stored, default: true }));
+  }
+}
 
 /**
  * Validate a model's per-user token budget (`usageLimits: { day, week, month }`)
@@ -615,19 +673,9 @@ export default function registerAdminModelsRoutes(app) {
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
 
     if (!isChatModel(updatedModel)) updatedModel.default = false;
-    if (updatedModel.default === true) {
-      const modelsResponse = configCache.getModels(true);
-      const allModels = modelsResponse.data || modelsResponse;
-      for (const model of allModels) {
-        if (model.id !== modelId && model.default === true) {
-          model.default = false;
-          await configStore.writeJson(await modelPath(model.id), model);
-        }
-      }
-    }
-    // Capture old model state before writing
-    const { data: currentModels } = configCache.getModels(true);
-    const oldModel = currentModels.find(m => m.id === modelId);
+    if (updatedModel.default === true) await clearOtherDefaults(modelId);
+    // The version being replaced, as it is stored: the history's "before"
+    const oldModel = await configStore.readJson(await modelPath(modelId));
 
     await configStore.writeJson(await modelPath(modelId), updatedModel);
     await configCache.refreshModelsCache();
@@ -692,16 +740,7 @@ export default function registerAdminModelsRoutes(app) {
       throw new ServiceError('CONFLICT', 'Model with this ID already exists');
     }
     if (!isChatModel(newModel)) newModel.default = false;
-    if (newModel.default === true) {
-      const modelsResponse = configCache.getModels(true);
-      const allModels = modelsResponse.data || modelsResponse;
-      for (const model of allModels) {
-        if (model.default === true) {
-          model.default = false;
-          await configStore.writeJson(await modelPath(model.id), model);
-        }
-      }
-    }
+    if (newModel.default === true) await clearOtherDefaults(newModel.id);
     await configStore.writeJson(newModelPath, newModel);
     await configCache.refreshModelsCache();
     await logAudit({
@@ -720,24 +759,19 @@ export default function registerAdminModelsRoutes(app) {
     // Validate modelId for security
     assertValidId(modelId, 'model');
 
-    const { data: models } = configCache.getModels(true);
-    const model = models.find(m => m.id === modelId);
+    let newEnabledState;
+    const model = await updateStoredModel(modelId, stored => {
+      newEnabledState = stored.enabled === false;
+      return {
+        ...stored,
+        enabled: newEnabledState,
+        ...(!newEnabledState && stored.default === true ? { default: false } : {})
+      };
+    });
     if (!model) {
       throw new ServiceError('NOT_FOUND', 'Model not found');
     }
-    const newEnabledState = !model.enabled;
-    model.enabled = newEnabledState;
-    if (!newEnabledState && model.default === true) {
-      const enabledModels = models.filter(
-        m => m.id !== modelId && m.enabled === true && isChatModel(m)
-      );
-      if (enabledModels.length > 0) {
-        enabledModels[0].default = true;
-        await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
-      }
-      model.default = false;
-    }
-    await configStore.writeJson(await modelPath(modelId), model);
+    if (!newEnabledState) await ensureStoredDefault(modelId);
     await configCache.refreshModelsCache();
     await logAudit({
       req,
@@ -763,25 +797,18 @@ export default function registerAdminModelsRoutes(app) {
     // Validate modelIds for security
     const ids = assertValidIds(modelIds, 'model');
 
-    const { data: models } = configCache.getModels(true);
-    const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
+    const resolvedIds = ids.includes('*') ? (await storedModels()).map(m => m.id) : ids;
 
     for (const id of resolvedIds) {
-      const model = models.find(m => m.id === id);
-      if (!model) continue;
-      model.enabled = enabled;
-      if (!enabled) {
-        model.default = false;
-      }
-      await configStore.writeJson(await modelPath(id), model);
+      await updateStoredModel(id, stored => ({
+        ...stored,
+        enabled,
+        ...(enabled ? {} : { default: false })
+      }));
     }
 
     // ensure at least one enabled model has default=true
-    const enabledModels = models.filter(m => m.enabled && isChatModel(m));
-    if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
-      enabledModels[0].default = true;
-      await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
-    }
+    await ensureStoredDefault();
 
     await configCache.refreshModelsCache();
     await logAudit({
@@ -804,20 +831,11 @@ export default function registerAdminModelsRoutes(app) {
     // Validate modelId for security
     assertValidId(modelId, 'model');
 
-    const { data: models } = configCache.getModels(true);
-    const model = models.find(m => m.id === modelId);
+    const model = await configStore.readJson(await modelPath(modelId));
     if (!model) {
       throw new ServiceError('NOT_FOUND', 'Model not found');
     }
-    if (model.default === true) {
-      const otherModels = models.filter(
-        m => m.id !== modelId && m.enabled === true && isChatModel(m)
-      );
-      if (otherModels.length > 0) {
-        otherModels[0].default = true;
-        await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
-      }
-    }
+    if (model.default === true) await ensureStoredDefault(modelId);
     if (!(await configStore.remove(await modelPath(modelId)))) {
       throw new ServiceError('NOT_FOUND', 'Model file not found');
     }
