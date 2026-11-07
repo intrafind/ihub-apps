@@ -236,7 +236,7 @@ Key `umb_<d>` (same digest as the memory key, §2.3), owner = the user, no encry
 { "userId": "alice", "day": "2026-11-07", "calls": 17, "skipped": 2, "updatedAt": "…" }
 ```
 
-`reserveExtractionSlot(userId, { cap })` runs under `locks.withLock('user-memory-budget:<key>')`: if `day !== today` reset to `{ day: today, calls: 0 }`; if `calls >= cap` return `{ ok: false }` and increment `skipped`; else `calls += 1` with CAS and return `{ ok: true, release() }`. `release()` decrements once and is called only when the failure proves that no request reached the provider: a `readPlain(scope)` failure before the call (`KeyAccessDenied`, `MEMORY_UNAVAILABLE`), the local quota pre-check, or a connection-level error (refused, DNS). A timeout, a 5xx and any outcome the client cannot classify keep the slot, because the provider may have received and billed the request (README §6.3, P2-US-08, ticket P2-02 state the same rule). One document per user whatever the partition, as the plan says.
+`reserveExtractionSlot(userId, { cap })` runs under `locks.withLock('user-memory-budget:<key>')`: if `day !== today` reset to `{ day: today, calls: 0 }`; if `calls >= cap` return `{ ok: false }` and increment `skipped`; else `calls += 1` with CAS and return `{ ok: true, release() }`. `cap === 0` means unlimited: the counter still advances (it feeds the usage line) but `{ ok: false }` is never returned. `release()` decrements once and is called only when the failure proves that no request reached the provider: a `readPlain(scope)` failure before the call (`KeyAccessDenied`, `MEMORY_UNAVAILABLE`), the local quota pre-check, or a connection-level error (refused, DNS). A timeout, a 5xx and any outcome the client cannot classify keep the slot, because the provider may have received and billed the request (README §6.3, P2-US-08, ticket P2-02 state the same rule). For that classification to be truthful the extractor calls `llmClient.complete` with `retries: 0`, so one reservation is one transport attempt: `LLMClient` otherwise retries transient failures internally (`llmRetry.js`, `request/retry` ledger event) and returns only the last error, and a final connection error after an earlier 5xx would wrongly release a slot whose request had reached the provider. **Every provider call reserves its own slot**, including the malformed-output retry (§8.3): when no slot is left for the retry, the batch ends `failed` with no write and no reschedule. One document per user whatever the partition, as the plan says.
 
 ### 2.3 Keys, owners and partitions
 
@@ -801,7 +801,7 @@ Schema (`options.responseSchema`, validated with `createOutputValidator`, `struc
     } } } } }
 ```
 
-Validation after the schema: `entryId` must exist; `evidenceTurn` must be one of the offered turns; `invalidate` must be paired with an `add` or `update` in the same result (a bare invalidate is dropped — a model must not forget on its own); `confidence < 0.7` dropped; sensitive policy applied; `text` through `sensitiveFilter`; dedupe against valid entries. Weak-model fallback: when `extractJson` returns null, one retry with `jsonInstruction(format)` prepended (`structuredOutput.js:410`); a second failure is `failed`, no write.
+Validation after the schema: `entryId` must exist; `evidenceTurn` must be one of the offered turns; `invalidate` must be paired with an `add` or `update` in the same result (a bare invalidate is dropped — a model must not forget on its own); `confidence < 0.7` dropped; sensitive policy applied; `text` through `sensitiveFilter`; dedupe against valid entries. Weak-model fallback: when `extractJson` returns null, one retry with `jsonInstruction(format)` prepended (`structuredOutput.js:410`); the retry is a second provider call and reserves its own slot first (no slot → `failed`, no write); a second failure is `failed`, no write.
 
 ### 6.5 Consolidation prompt skeleton (Phase 4, plain-text tags per E4)
 
@@ -964,8 +964,8 @@ Every LLM call of this feature carries `telemetry: { kind: 'utility', purpose: '
 | Document corrupt (`sha256` mismatch after decrypt) | fail-open, `error` log with key id | 503; the UI offers "Clear memory" | skipped |
 | Permission or feature off | null scope (no block, no tools) | 403 `MEMORY_DISABLED` | skipped |
 | Partition id unauthorised on a direct request | n/a | 404 `MEMORY_PARTITION_NOT_FOUND` | n/a |
-| Provider error on the LLM call | n/a | n/a | `failed`, no reschedule; slot released only for connection-level errors (refused, DNS) that prove no request reached the provider; timeouts, 5xx and unclassified outcomes keep the slot (§2.2) |
-| Malformed JSON after one retry | n/a | n/a | `failed`, no write |
+| Provider error on the LLM call | n/a | n/a | `failed`, no reschedule; slot released only for connection-level errors (refused, DNS) that prove no request reached the provider; timeouts, 5xx and unclassified outcomes keep the slot; the call is made with `retries: 0` so the outcome is that of a single attempt (§2.2) |
+| Malformed JSON after one retry | n/a | n/a | `failed`, no write; the retry reserved its own slot, and when none was left the batch ended `failed` before the retry |
 | Quota exceeded | n/a | n/a | skipped, counted |
 | Model refuses a `memory_save` (the tool returns `{ error }`) | the model reads the code and answers the user; the loop continues | — | — |
 
