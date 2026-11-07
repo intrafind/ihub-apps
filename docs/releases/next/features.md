@@ -689,6 +689,17 @@ text page. Every such response has the same body:
   `DISK_SPACE` and `CONFIG_SNAPSHOT_FAILED` (507), `UPDATE_PENDING`, `CONFIRM_DOWNGRADE`,
   `CONFIRM_UNSIGNED` and `STAGED_CHANGED` (409), `UNSIGNED_NOT_ALLOWED` (403) and `ARCHIVE_REJECTED` (422).
   A rejected archive keeps its `error` text; its staging summary moved from `summary` to `details.summary`.
+- The chat endpoints (`/api/chats*`) and the file uploads of chats and scheduled tasks answer in this shape.
+  The codes these routes already sent in `details.code` are now registry codes at the top level, with the
+  web app's messages: `CHAT_PERSISTENCE_UNAVAILABLE` (503), `CHAT_OWNER_REQUIRED`, `USER_PROJECTS_DISABLED`
+  and `APP_PROJECTS_DISABLED` (403), `PROJECT_TEST_CHAT_NOT_KEEPABLE` (409), `ORIGINAL_DISCARDED` (410, with
+  `details.originalDeletedAt`), the upload refusals `QUOTA_FILE_BYTES`, `QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`,
+  `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES` (413) and `QUOTA_SERVER_BYTES` (507),
+  `BINARY_UPLOAD_NOT_ALLOWED`, `UNSUPPORTED_TYPE`, `SCAN_REJECTED`, `NO_TEXT` and `EXTRACTION_FAILED` (400),
+  and the refusals of a file from a connected system `SOURCE_FORBIDDEN` (403), `SOURCE_GONE` (404),
+  `SOURCE_UNAVAILABLE` and `SOURCE_INVALID` (400) and `SOURCE_FAILED` (502). Storage failures answer with
+  their storage code (`INVALID_CURSOR` for a bad paging cursor, 400). Details of a refusal (a quota's
+  `limit`, `used` and `size`) stay in `details`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 

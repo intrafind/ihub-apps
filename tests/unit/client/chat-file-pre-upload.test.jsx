@@ -164,7 +164,7 @@ describe('chatFileUpload helpers', () => {
   });
 
   it('reads the refusal code from a raw axios error and from the wrapped API error', () => {
-    const body = { error: 'No room', details: { code: 'QUOTA_CHAT_BYTES' } };
+    const body = { error: 'No room', code: 'QUOTA_CHAT_BYTES' };
     // Raw axios error
     expect(helpers.uploadErrorCode({ response: { data: body } })).toBe('QUOTA_CHAT_BYTES');
     // What `handleApiResponse` throws: the response only sits on `originalError`
@@ -176,7 +176,7 @@ describe('chatFileUpload helpers', () => {
     expect(
       helpers.uploadErrorCode(
         Object.assign(new Error('x'), {
-          originalError: { response: { data: { error: 'x', details: { code: 'NO_TEXT' } } } }
+          originalError: { response: { data: { error: 'x', code: 'NO_TEXT' } } }
         })
       )
     ).toBe('NO_TEXT');

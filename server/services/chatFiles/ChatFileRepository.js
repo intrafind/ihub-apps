@@ -25,6 +25,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
@@ -148,7 +149,7 @@ export const MAX_CHAT_FILE_NAME_CHARS = 300;
 /**
  * Error thrown when an upload exceeds one of the three quota tiers.
  */
-export class ChatFileQuotaError extends Error {
+export class ChatFileQuotaError extends ServiceError {
   /**
    * @param {'QUOTA_FILE_BYTES'|'QUOTA_CHAT_FILES'|'QUOTA_CHAT_BYTES'|'QUOTA_USER_BYTES'|'QUOTA_SERVER_BYTES'} code
    * @param {string} message
@@ -156,11 +157,11 @@ export class ChatFileQuotaError extends Error {
    * @param {number} [status=413]
    */
   constructor(code, message, details = {}, status = 413) {
-    super(message);
+    super(code, message, {
+      status,
+      details: Object.keys(details || {}).length ? details : undefined
+    });
     this.name = 'ChatFileQuotaError';
-    this.code = code;
-    this.details = details;
-    this.status = status;
   }
 }
 

@@ -31,6 +31,7 @@ import runLog from '../services/loop/RunLog.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { activeRequests } from '../sse.js';
 import registerChatRoutes from '../routes/chats.js';
+import errorHandler from '../middleware/errorHandler.js';
 import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 
 const ADA = { id: 'user-ada', name: 'Ada' };
@@ -122,9 +123,15 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user }) {
   const res = makeResponse();
   for (let index = 1; index < handlers.length; index += 1) {
     let advanced = false;
-    await handlers[index](req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handlers[index](req, res, () => {
+        advanced = true;
+      });
+    } catch (error) {
+      // What Express does with a thrown error: the global handler answers.
+      errorHandler(error, req, res, () => {});
+      break;
+    }
     if (index < handlers.length - 1 && !advanced) break;
   }
   return res;
@@ -512,7 +519,7 @@ describe('temporary chats and guests', () => {
     await withHistoryOff(async () => {
       const list = await drive(listHandlers, { user: ADA });
       assert.equal(list.statusCode, 503);
-      assert.equal(list.body.details.code, 'CHAT_PERSISTENCE_UNAVAILABLE');
+      assert.equal(list.body.code, 'CHAT_PERSISTENCE_UNAVAILABLE');
 
       const one = await drive(getHandlers, {
         params: { chatId: 'chat-tmp-history-off' },
@@ -617,7 +624,7 @@ describe('temporary chats and guests', () => {
       user: ADA
     });
     assert.equal(refused.statusCode, 409);
-    assert.equal(refused.body.details?.code ?? refused.body.code, 'PROJECT_TEST_CHAT_NOT_KEEPABLE');
+    assert.equal(refused.body.code, 'PROJECT_TEST_CHAT_NOT_KEEPABLE');
     assert.equal(typeof refused.body.error, 'string');
 
     const stored = await getChatRepository().getChat(chatId);
@@ -710,5 +717,46 @@ describe('temporary chats and guests', () => {
       assert.equal(res.statusCode, 503);
     });
     assert.equal((await getChatRepository().getChat('chat-keep-no-history')).temporary, true);
+  });
+});
+
+describe('chat routes answer errors in the shared shape', () => {
+  it('rejects an unsafe chat id with BAD_REQUEST', async () => {
+    const res = await drive(getHandlers, { params: { chatId: '../etc' }, user: ADA });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.code, 'BAD_REQUEST');
+    assert.match(res.body.error, /Invalid chat ID/);
+  });
+
+  it('answers a paging cursor that is not one with the storage code and status', async () => {
+    const res = await drive(listHandlers, { query: { cursor: '%%%not-a-cursor' }, user: ADA });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.code, 'INVALID_CURSOR');
+    assert.equal(res.body.details?.code, undefined, 'details never holds the code');
+  });
+
+  it('refuses a rename without a title, and moving a chat into a project', async () => {
+    await seedChat(ADA, 'chat-ada-shape');
+    const noTitle = await drive(patchHandlers, {
+      params: { chatId: 'chat-ada-shape' },
+      body: {},
+      user: ADA
+    });
+    assert.equal(noTitle.statusCode, 400);
+    assert.equal(noTitle.body.code, 'BAD_REQUEST');
+    const moved = await drive(patchHandlers, {
+      params: { chatId: 'chat-ada-shape' },
+      body: { projectId: 'p1' },
+      user: ADA
+    });
+    assert.equal(moved.statusCode, 400);
+    assert.equal(moved.body.code, 'BAD_REQUEST');
+  });
+
+  it('answers an unknown chat with NOT_FOUND', async () => {
+    const res = await drive(getHandlers, { params: { chatId: 'chat-nobody' }, user: ADA });
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.body.code, 'NOT_FOUND');
+    assert.equal(res.body.error, 'Chat not found');
   });
 });
