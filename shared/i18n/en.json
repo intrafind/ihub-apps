@@ -9310,6 +9310,7 @@
     "STORAGE_PROVIDER_REQUIRED": "A storage provider is required.",
     "INVALID_RETURN_URL": "The return address is not allowed.",
     "NOT_CONNECTABLE": "This integration cannot be connected by a user.",
+    "INTEGRATION_CONNECT_FAILED": "The sign-in to the integration could not be started.",
     "TEAMS_SSO_TOKEN_REQUIRED": "A Microsoft Teams sign-in token is required.",
     "TEAMS_AUTH_NOT_ENABLED": "Sign-in with Microsoft Teams is not enabled.",
     "TEAMS_ACCOUNT_DISABLED": "This account has been disabled.",
