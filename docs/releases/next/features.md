@@ -743,6 +743,11 @@ used to be an HTML or plain text page.
   id, a missing field, a protected system group, an invalid inheritance (the reason is in `detail`) or the
   removal of the last group with administrative access, `NOT_FOUND` for an unknown group and `CONFLICT` for
   a group id that exists. An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The agent run endpoints (`/api/agents/profiles/:id/runs`, `/api/agents/runs*`) answer in this shape:
+  `BAD_REQUEST` for an unsafe id, a disabled profile or a run that cannot be resumed (the reason is in
+  `detail`), `NOT_FOUND` for an unknown profile or run, `FORBIDDEN` for the run of somebody else (also when
+  the authorization lookup itself fails), and `CONCURRENCY_LIMIT` (409) with the running count in
+  `details.runningRuns`. An unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
