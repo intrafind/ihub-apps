@@ -860,6 +860,13 @@ used to be an HTML or plain text page.
   (`AUTH_REQUIRED`, 401), the app and model access guards (`APP_ACCESS_DENIED` / `MODEL_ACCESS_DENIED`, 403; now
   in the code registry) and the rate limiters (`RATE_LIMITED`, 429, with `Retry-After` as before). Every guard
   still fails closed: a refused request never reaches the route behind it.
+- The first-run setup endpoints (`/api/setup/*`), the Teams token exchange, the reverse proxy sign-in and the OIDC
+  login start answer in this shape: `BAD_REQUEST` for an invalid provider or key, `FORBIDDEN` when the system is
+  already configured, `NOT_FOUND` for an unknown provider, the Teams codes (`TEAMS_SSO_TOKEN_REQUIRED`,
+  `TEAMS_AUTH_NOT_ENABLED`, `TEAMS_ACCOUNT_DISABLED`, `TEAMS_INVALID_OR_EXPIRED_TOKEN`) as before, and the new
+  `USER_VALIDATION_FAILED` (403, with the validation's own message) when a reverse proxy user is refused. A
+  Teams request without a token or with Teams sign-in turned off is no longer answered as an invalid token.
+  Every sign-in path still fails closed.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
