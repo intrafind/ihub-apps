@@ -281,7 +281,7 @@ describe('per-user OAuth servers', () => {
     expect(res.body).toMatchObject({
       status: 409,
       code: 'INTEGRATION_AUTH_REQUIRED',
-      detail: 'auth_required',
+      detail: 'Connect this integration first',
       details: {
         integration: 'excalidraw',
         connectUrl: '/api/integrations/excalidraw/connect'
@@ -321,6 +321,28 @@ describe('per-user OAuth servers', () => {
     );
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(503);
+    expect(res.body.code).toBe('MCP_AUTH_REFRESH_FAILED');
+  });
+
+  it('answers a failing MCP server with 502 and its message', async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockRejectedValue(new Error('server is on fire'));
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({
+      status: 502,
+      code: 'UPSTREAM_ERROR',
+      detail: 'server is on fire'
+    });
+  });
+
+  it('keeps the message of a failing MCP server out of the answer when it names internals', async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:8080'));
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
+    expect(res.body.detail).not.toMatch(/10\.0\.0\.5/);
   });
 });
 
