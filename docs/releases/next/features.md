@@ -789,6 +789,9 @@ used to be an HTML or plain text page.
   that is not an array and for an entry that is not a string, is empty or is not a host pattern (the reason is
   in `detail`). An unexpected failure, including an unreadable platform file, answers 500 with a fixed text;
   the cause is in the server log.
+- The admin translate endpoint (`/api/admin/translate`) answers in this shape: `BAD_REQUEST` for missing fields
+  and, for a failing model call, the LLM code with its canonical status (as for the model test). A missing
+  model or any other unexpected failure answers 500 with a fixed text; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
