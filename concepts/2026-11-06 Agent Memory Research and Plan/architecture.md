@@ -236,7 +236,7 @@ Key `umb_<d>` (same digest as the memory key, §2.3), owner = the user, no encry
 { "userId": "alice", "day": "2026-11-07", "calls": 17, "skipped": 2, "updatedAt": "…" }
 ```
 
-`reserveExtractionSlot(userId, { cap })` runs under `locks.withLock('user-memory-budget:<key>')`: if `day !== today` reset to `{ day: today, calls: 0 }`; if `calls >= cap` return `{ ok: false }` and increment `skipped`; else `calls += 1` with CAS and return `{ ok: true, release() }`. `release()` decrements once, used only when `llmClient.complete` throws before a response (a provider error must not burn the user's budget). One document per user whatever the partition, as the plan says.
+`reserveExtractionSlot(userId, { cap })` runs under `locks.withLock('user-memory-budget:<key>')`: if `day !== today` reset to `{ day: today, calls: 0 }`; if `calls >= cap` return `{ ok: false }` and increment `skipped`; else `calls += 1` with CAS and return `{ ok: true, release() }`. `release()` decrements once and is called only when the failure proves that no request reached the provider: a `readPlain(scope)` failure before the call (`KeyAccessDenied`, `MEMORY_UNAVAILABLE`), the local quota pre-check, or a connection-level error (refused, DNS). A timeout, a 5xx and any outcome the client cannot classify keep the slot, because the provider may have received and billed the request (README §6.3, P2-US-08, ticket P2-02 state the same rule). One document per user whatever the partition, as the plan says.
 
 ### 2.3 Keys, owners and partitions
 
@@ -959,12 +959,12 @@ Every LLM call of this feature carries `telemetry: { kind: 'utility', purpose: '
 | Situation | Reading (block) | Writing (tool / Settings) | Extraction |
 |---|---|---|---|
 | Storage not ready / `MEMORY_UNAVAILABLE` | fail-open: no block, `meta.extra.memory.reason: 'unavailable'`, `warn` | fail-closed: 503 / `{ error: true, code: 'MEMORY_UNAVAILABLE' }` | skipped, slot released |
-| `KeyAccessDenied` | fail-open as above, `error` log | 503 | skipped |
+| `KeyAccessDenied` | fail-open as above, `error` log | 503 | skipped, slot released (no request reached the provider) |
 | Lock timeout (`LOCK_TIMEOUT`) | n/a (reads take no lock) | 503 after the CAS attempts | skipped |
 | Document corrupt (`sha256` mismatch after decrypt) | fail-open, `error` log with key id | 503; the UI offers "Clear memory" | skipped |
 | Permission or feature off | null scope (no block, no tools) | 403 `MEMORY_DISABLED` | skipped |
 | Partition id unauthorised on a direct request | n/a | 404 `MEMORY_PARTITION_NOT_FOUND` | n/a |
-| Provider error / timeout on the LLM call | n/a | n/a | `failed`, slot released, no reschedule |
+| Provider error on the LLM call | n/a | n/a | `failed`, no reschedule; slot released only for connection-level errors (refused, DNS) that prove no request reached the provider; timeouts, 5xx and unclassified outcomes keep the slot (§2.2) |
 | Malformed JSON after one retry | n/a | n/a | `failed`, no write |
 | Quota exceeded | n/a | n/a | skipped, counted |
 | Model refuses a `memory_save` (the tool returns `{ error }`) | the model reads the code and answers the user; the loop continues | — | — |

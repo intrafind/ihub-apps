@@ -282,7 +282,7 @@ All state lives behind the provider with CAS; the extraction debouncer is per wo
 | `GET /api/admin/users/{id}/memory` · `DELETE` | Metadata only; clear | `200` / `204`, audited |
 | `POST /api/scheduled-tasks/{taskId}/memory/_consolidate` · `GET …/memory/proposal` · `POST …/proposal/_apply` · `_discard` | Phase 4 | `202` / `200` / `204` |
 
-Errors are thrown as `ServiceError` with registry codes in `shared/apiErrors.js` plus `apiErrors.<CODE>` in both i18n files: existing `MEMORY_TOO_LONG` (400), `MEMORY_UNAVAILABLE` (503); new `MEMORY_DISABLED` (403), `MEMORY_FULL` (400), the existing `VERSION_CONFLICT` (409, already in `shared/apiErrors.js:104`; only the admin agent route still hand-writes the body — architecture C3), `MEMORY_SENSITIVE_BLOCKED` (400), `MEMORY_READ_ONLY` (403, a write in a read-only app, temporary chat or scheduled run), `MEMORY_BUDGET_EXCEEDED` (429 for extraction). Rate-limit like `memoryLimiter` (`routes/scheduledTasks.js:469-479`).
+Errors are thrown as `ServiceError` with registry codes in `shared/apiErrors.js` plus `apiErrors.<CODE>` in both i18n files: existing `MEMORY_TOO_LONG` (400), `MEMORY_UNAVAILABLE` (503); new `MEMORY_DISABLED` (403), `MEMORY_FULL` (400), the existing `VERSION_CONFLICT` (409, already in `shared/apiErrors.js:104`; only the admin agent route still hand-writes the body — architecture C3), `MEMORY_SENSITIVE_BLOCKED` (400), `MEMORY_READ_ONLY` (403, a write in a read-only app, temporary chat or scheduled run), `MEMORY_BUDGET_EXCEEDED` (429 for extraction). Rate-limit like `memoryLimiter` (declared at `server/routes/scheduledTasks.js:94-101`, applied to the memory routes at `:461-479`).
 
 ### 6.10 SSE and UI feedback
 
