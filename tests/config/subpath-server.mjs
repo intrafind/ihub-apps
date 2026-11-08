@@ -44,9 +44,14 @@ process.env.CONTENTS_DIR = CONTENTS_DIR;
 await prepareE2eContents({ root, contentsDir: CONTENTS_DIR, llmPort: LLM_PORT });
 
 // The production server serves `<root>/public`; with APP_ROOT_DIR it takes another
-// root, so the repository gets no extra directory.
+// root, so the repository gets no extra directory (the rest of it is linked in).
 const appRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-subpath-'));
 fs.cpSync(built, path.join(appRoot, 'public'), { recursive: true });
+// The rest of the repository (shared/i18n, docs, ...) is read from the same root.
+for (const entry of fs.readdirSync(root)) {
+  if (entry.startsWith('.') || entry === 'public' || entry.startsWith('contents')) continue;
+  fs.symlinkSync(path.join(root, entry), path.join(appRoot, entry));
+}
 process.on('exit', () => fs.rmSync(appRoot, { recursive: true, force: true }));
 
 const app = spawn(process.execPath, ['server/server.js'], {
