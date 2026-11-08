@@ -230,14 +230,13 @@ function AdminUpdatesPage() {
         method: 'POST',
         timeout: 0
       });
-      if (response.data?.success === false) {
-        setMessage({ tone: 'info', text: response.data.message });
-      } else {
-        setSummary(response.data);
-        setMessage(null);
-      }
+      setSummary(response.data);
+      setMessage(null);
     } catch (error) {
-      if (error.response?.status === 422 && error.response.data?.details?.summary) {
+      if (error.response?.status === 409) {
+        // Nothing newer to download: not a failure.
+        setMessage({ tone: 'info', text: errorText(error) });
+      } else if (error.response?.status === 422 && error.response.data?.details?.summary) {
         setSummary(error.response.data.details.summary);
         setMessage(null);
       } else {

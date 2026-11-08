@@ -22,12 +22,7 @@ function AssetManager({ t }) {
       setError(null);
 
       const response = await makeAdminApiCall('/admin/ui/assets');
-      const data = response.data;
-      if (data.success) {
-        setAssets(data.assets || []);
-      } else {
-        throw new Error(data.message || 'Failed to load assets');
-      }
+      setAssets(response.data?.assets || []);
     } catch (err) {
       console.error('Failed to load assets:', err);
       setError(err.message || 'Failed to load assets');
@@ -75,28 +70,22 @@ function AssetManager({ t }) {
       formData.append('assetType', getAssetType(file.type));
       formData.append('description', `Uploaded ${file.name}`);
 
-      const response = await makeAdminApiCall('/admin/ui/upload-asset', {
+      await makeAdminApiCall('/admin/ui/upload-asset', {
         method: 'POST',
         body: formData
         // Don't set Content-Type header, let the browser set it for multipart/form-data
       });
-      const data = response.data;
+      setSuccessMessage(`Successfully uploaded ${file.name}`);
+      await loadAssets(); // Refresh the asset list
+      setShowUpload(false); // Hide upload section
 
-      if (data.success) {
-        setSuccessMessage(`Successfully uploaded ${file.name}`);
-        await loadAssets(); // Refresh the asset list
-        setShowUpload(false); // Hide upload section
-
-        // Clear the file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        throw new Error(data.message || 'Failed to upload asset');
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Failed to upload asset:', err);
       setError(err.message || 'Failed to upload asset');
@@ -113,18 +102,10 @@ function AssetManager({ t }) {
     }
 
     try {
-      const response = await makeAdminApiCall(`/admin/ui/assets/${assetId}`, {
-        method: 'DELETE'
-      });
-      const data = response.data;
-
-      if (data.success) {
-        setSuccessMessage('Asset deleted successfully');
-        await loadAssets(); // Refresh the asset list
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        throw new Error(data.message || 'Failed to delete asset');
-      }
+      await makeAdminApiCall(`/admin/ui/assets/${assetId}`, { method: 'DELETE' });
+      setSuccessMessage('Asset deleted successfully');
+      await loadAssets(); // Refresh the asset list
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Failed to delete asset:', err);
       setError(err.message || 'Failed to delete asset');

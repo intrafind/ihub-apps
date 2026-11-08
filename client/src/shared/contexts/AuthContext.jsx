@@ -284,7 +284,7 @@ export function AuthProvider({ children }) {
 
       const data = response.data;
 
-      if (data.success && data.user) {
+      if (data.user) {
         // Clear any existing cached data to prevent permission leakage
         try {
           const { clearApiCache } = await import('../../api/utils/cache');
@@ -484,7 +484,7 @@ export function AuthProvider({ children }) {
 
       const data = response.data;
 
-      if (data.success) {
+      if (data.user) {
         // Token is set as HTTP-only cookie by the server for security (XSS protection)
         // Store token in localStorage only if provided (for backward compatibility)
         if (data.token) {
@@ -702,7 +702,7 @@ export function AuthProvider({ children }) {
 
       const data = response.data;
 
-      if (data.success && data.user) {
+      if (data.user) {
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
       } else {
         // Token might be expired, logout

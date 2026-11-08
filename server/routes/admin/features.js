@@ -104,9 +104,7 @@ export default function registerAdminFeaturesRoutes(app) {
       resourceId: Object.keys(updates).join(','),
       summary: `Updated features: ${Object.keys(updates).join(', ')}`
     });
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Features updated successfully',
       features: resolveFeatures(merged),
       categories: featureCategories
     });

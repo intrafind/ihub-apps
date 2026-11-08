@@ -90,11 +90,6 @@ export default function registerAdminLoggingRoutes(app) {
 
     logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      config: platformConfig.logging,
-      message: 'Logging configuration updated successfully'
-    });
+    res.json({ config: platformConfig.logging });
   });
 }

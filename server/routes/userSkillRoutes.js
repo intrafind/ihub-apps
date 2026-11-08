@@ -684,7 +684,7 @@ export default function registerUserSkillRoutes(app) {
       resourceId: skillId,
       summary: `Deleted user skill "${removed.name}"`
     });
-    res.json({ success: true });
+    res.status(204).end();
   });
 
   /**

@@ -647,7 +647,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ message: 'Model updated successfully', model: updatedModel });
+    res.json({ model: updatedModel });
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -711,7 +711,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.json({ message: 'Model created successfully', model: newModel });
+    res.status(201).json({ model: newModel });
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
@@ -799,7 +799,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
-    res.json({ message: 'Model deleted successfully' });
+    res.status(204).end();
   });
 
   /**
@@ -859,7 +859,6 @@ export default function registerAdminModelsRoutes(app) {
     }
     const seconds = bytes / 2 / provider.sampleRate;
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,
@@ -888,7 +887,6 @@ export default function registerAdminModelsRoutes(app) {
       });
     }
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: result.message,
@@ -1030,7 +1028,6 @@ export default function registerAdminModelsRoutes(app) {
         const safeModel = { ...model };
         delete safeModel.apiKey;
         res.json({
-          success: true,
           message: 'Model test successful',
           messageKey: 'testSuccessful',
           response: result.content,

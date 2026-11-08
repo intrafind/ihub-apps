@@ -933,7 +933,6 @@ export default function registerAdminGroupRoutes(app) {
       resourceId: groupId,
       summary: `Deleted group ${groupId}`
     });
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Group deleted successfully' });
+    res.status(204).end();
   });
 }

@@ -897,7 +897,7 @@
       .then(function (data) {
         isSubmitting = false;
 
-        if (data.success) {
+        if (data.user) {
           // Token is set as HTTP-only cookie by the server for security (XSS protection)
           // Store token in localStorage only if provided (for backward compatibility)
           if (data.token) {

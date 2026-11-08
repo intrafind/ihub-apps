@@ -189,7 +189,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     adminAuth,
     handle('deleted', async (req, res) => {
       await deleteTemplate(req.params.id);
-      res.json({ success: true });
+      res.status(204).end();
     })
   );
 

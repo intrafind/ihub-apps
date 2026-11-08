@@ -356,6 +356,7 @@ export default function registerAdminLdapTestRoutes(app) {
       });
 
       if (problems.length > 0) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'The provider configuration is incomplete.',
@@ -404,6 +405,7 @@ export default function registerAdminLdapTestRoutes(app) {
       );
 
       if (connectivityStep.status === STATUS.FAIL) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'The LDAP server could not be reached.',
@@ -428,6 +430,7 @@ export default function registerAdminLdapTestRoutes(app) {
               `Check that the credential profile "${resolved.adminPasswordRef}" exists under Admin → Credentials.`
             ]
           });
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: 'The bind password could not be resolved.',
@@ -485,6 +488,7 @@ export default function registerAdminLdapTestRoutes(app) {
         );
 
         if (lookupStep.status === STATUS.FAIL) {
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: `The user "${username}" could not be found in the directory.`,
@@ -525,6 +529,7 @@ export default function registerAdminLdapTestRoutes(app) {
         });
 
         if (loginStep.status === STATUS.FAIL && !entry) {
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: 'The login was rejected by the directory.',
@@ -541,6 +546,7 @@ export default function registerAdminLdapTestRoutes(app) {
       }
 
       if (!entry) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'No directory entry was read, so there is nothing to map.',
@@ -693,7 +699,7 @@ export default function registerAdminLdapTestRoutes(app) {
         message: described.message,
         hints: described.hints
       });
-      // api-guidelines-ignore: existing success body, changed in its own API change
+      // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
       return res.json({
         success: false,
         message: described.message,

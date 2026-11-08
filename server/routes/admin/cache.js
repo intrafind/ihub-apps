@@ -20,8 +20,7 @@ export default function registerAdminCacheRoutes(app) {
 
   app.post(buildServerPath('/api/admin/cache/_refresh'), adminAuth, async (req, res) => {
     await configCache.refreshAll();
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Configuration cache refreshed successfully' });
+    res.status(204).end();
   });
 
   app.post(buildServerPath('/api/admin/cache/_clear'), adminAuth, async (req, res) => {
@@ -30,8 +29,7 @@ export default function registerAdminCacheRoutes(app) {
     // clear()/initialize() only rebuild this worker's cache; the rest of the
     // cluster reloads from the announcement.
     announceFullConfigReload();
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Configuration cache cleared successfully' });
+    res.status(204).end();
   });
 
   app.post(buildServerPath('/api/admin/client/_refresh'), adminAuth, async (req, res) => {
@@ -49,9 +47,7 @@ export default function registerAdminCacheRoutes(app) {
       component: 'AdminCache',
       newAdminSalt: platformConfig.refreshSalt.salt
     });
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Force refresh triggered successfully',
       newAdminSalt: platformConfig.refreshSalt.salt,
       timestamp: platformConfig.refreshSalt.lastUpdated
     });
@@ -89,10 +85,8 @@ export default function registerAdminCacheRoutes(app) {
 
     logger.info('Value encrypted successfully via admin UI', { component: 'AdminEncryption' });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      encryptedValue,
-      message: 'Value encrypted successfully'
+      encryptedValue
     });
   });
 }

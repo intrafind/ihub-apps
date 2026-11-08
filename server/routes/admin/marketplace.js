@@ -259,6 +259,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.json(result);
       } catch (error) {
         logger.error('Error testing registry', { component: COMPONENT, error: error.message });
+        // api-guidelines-ignore: a registry test answers 200 with its outcome: that it failed is the result
         res.json({ success: false, itemCount: 0, message: error.message });
       }
     }
@@ -294,6 +295,7 @@ export default function registerAdminMarketplaceRoutes(app) {
       } catch (error) {
         logger.error('Error testing registry', { component: COMPONENT, error: error.message });
         // Always return 200 with success:false so the UI can display the message
+        // api-guidelines-ignore: a registry test answers 200 with its outcome: that it failed is the result
         res.json({ success: false, itemCount: 0, message: error.message });
       }
     }

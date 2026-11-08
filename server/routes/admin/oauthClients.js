@@ -98,9 +98,7 @@ export default function registerAdminOAuthRoutes(app) {
     // keeping. Neither is visible from the client record alone.
     const counts = countByClient();
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      success: true,
       // CIMD policy records live in the same store but are not stored
       // clients: their identity still comes from the document they publish,
       // and they are rendered from `cimdClients` below with the actions that
@@ -166,11 +164,7 @@ export default function registerAdminOAuthRoutes(app) {
     // Remove secret from response
     const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      client: clientWithoutSecret
-    });
+    res.json({ client: clientWithoutSecret });
   });
 
   /**
@@ -297,11 +291,7 @@ export default function registerAdminOAuthRoutes(app) {
     });
 
     // Return client with plain text secret (only time it's shown)
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.status(201).json({
-      success: true,
-      message:
-        'OAuth client created successfully. Save the client_secret - it will not be shown again.',
       client: {
         clientId: newClient.clientId,
         clientSecret: newClient.clientSecret, // Plain text - only shown once
@@ -394,12 +384,7 @@ export default function registerAdminOAuthRoutes(app) {
       summary: `Updated OAuth client "${updatedClient.name || clientId}"`
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      message: 'OAuth client updated successfully',
-      client: updatedClient
-    });
+    res.json({ client: updatedClient });
   });
 
   /**
@@ -485,8 +470,7 @@ export default function registerAdminOAuthRoutes(app) {
       summary: `Removed ${deleted} dynamic OAuth client(s) unused for ${unusedForDays} day(s)`
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ success: true, deleted, clientIds });
+    res.json({ deleted, clientIds });
   });
 
   app.delete(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
@@ -515,11 +499,7 @@ export default function registerAdminOAuthRoutes(app) {
       summary: `Deleted OAuth client ${clientId}`
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      message: 'OAuth client deleted successfully'
-    });
+    res.status(204).end();
   });
 
   /**
@@ -574,11 +554,7 @@ export default function registerAdminOAuthRoutes(app) {
         summary: `Rotated client secret for ${clientId}`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
       res.json({
-        success: true,
-        message:
-          'Client secret rotated successfully. Save the new secret - it will not be shown again.',
         clientId: result.clientId,
         clientSecret: result.clientSecret, // Plain text - only shown once
         rotatedAt: result.rotatedAt
@@ -662,13 +638,7 @@ export default function registerAdminOAuthRoutes(app) {
         summary: `Generated static API key for ${clientId} (expires in ${expirationDays} days)`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({
-        success: true,
-        message:
-          'Static API key generated successfully. Save this key - it will not be shown again.',
-        ...apiKeyResult
-      });
+      res.status(201).json({ ...apiKeyResult });
     }
   );
 

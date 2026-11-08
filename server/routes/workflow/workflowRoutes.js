@@ -580,7 +580,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       });
 
       res.status(201).json({
-        message: 'Workflow created successfully',
         workflow: validation.data
       });
 
@@ -672,7 +671,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       });
 
       res.json({
-        message: 'Workflow updated successfully',
         workflow: validation.data
       });
 
@@ -739,9 +737,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: id
       });
 
-      res.json({
-        message: 'Workflow deleted successfully'
-      });
+      res.status(204).end();
 
       // Refresh workflow cache after successful deletion
       configCache.refreshWorkflowsCache?.();
@@ -1245,11 +1241,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           userId: req.user?.id
         });
 
-        res.json({
-          success: true,
-          executionId: state.executionId,
-          status: state.status
-        });
+        res.json({ executionId: state.executionId, status: state.status });
       } catch (error) {
         if (error.code === 'EXECUTION_NOT_FOUND') {
           throw new ServiceError('NOT_FOUND', 'Execution not found', { cause: error });
@@ -1333,7 +1325,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         userId: execution.userId
       });
 
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -1783,7 +1775,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       });
 
       res.json({
-        message: `Workflow ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         workflow,
         enabled: newEnabledState
       });
@@ -1967,7 +1958,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         version
       });
 
-      res.json({ success: true, version, publishedAt: snapshot._publishedAt });
+      res.json({ version, publishedAt: snapshot._publishedAt });
     }
   );
 

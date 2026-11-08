@@ -118,8 +118,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
       if (!client) {
         throw new ServiceError('NOT_FOUND', 'Client not found');
       }
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ success: true, client });
+      res.json({ client });
     }
   );
 
@@ -301,12 +300,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
         });
       }
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({
-        success: true,
-        client: getCimdClientRow(clientId, platform) || record,
-        revoked
-      });
+      res.json({ client: getCimdClientRow(clientId, platform) || record, revoked });
     }
   );
 
@@ -370,8 +364,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
         summary: `Revoked all connections of ${clientId}: ${result.connectionsRevoked} connection(s), ${result.refreshTokensRevoked} refresh token(s)`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ success: true, ...result });
+      res.json({ ...result });
     }
   );
 }

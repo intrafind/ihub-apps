@@ -147,9 +147,7 @@ export default function registerAdminCorsRoutes(app) {
       maxAge
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'CORS configuration updated successfully',
       config: platformConfig.cors
     });
   });

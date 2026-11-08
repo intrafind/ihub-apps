@@ -121,9 +121,7 @@ export default function registerAdminSSLRoutes(app) {
       domainWhitelist
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'SSL configuration updated successfully',
       config: {
         ignoreInvalidCertificates,
         domainWhitelist

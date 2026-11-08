@@ -33,12 +33,7 @@ function AdminUICustomization() {
         setError(null);
 
         const response = await makeAdminApiCall('/admin/ui/config');
-        const data = response.data;
-        if (data.success) {
-          setConfig(data.config);
-        } else {
-          throw new Error(data.message || 'Failed to load configuration');
-        }
+        setConfig(response.data?.config);
       } catch (err) {
         console.error('Failed to load UI config:', err);
         setError(err.message || 'Failed to load configuration');
@@ -60,25 +55,19 @@ function AdminUICustomization() {
       setError(null);
       setSuccessMessage('');
 
-      const response = await makeAdminApiCall('/admin/ui/config', {
+      await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
         body: { config },
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      const data = response.data;
+      setSuccessMessage('UI configuration saved successfully');
+      // Refresh the UI config context to apply changes immediately
+      await refreshUIConfig();
 
-      if (data.success) {
-        setSuccessMessage('UI configuration saved successfully');
-        // Refresh the UI config context to apply changes immediately
-        await refreshUIConfig();
-
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        throw new Error(data.message || 'Failed to save configuration');
-      }
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Failed to save UI config:', err);
       setError(err.message || 'Failed to save configuration');
@@ -92,14 +81,8 @@ function AdminUICustomization() {
       const response = await makeAdminApiCall('/admin/ui/backup', {
         method: 'POST'
       });
-      const data = response.data;
-
-      if (data.success) {
-        setSuccessMessage(`Configuration backed up to: ${data.backupPath}`);
-        setTimeout(() => setSuccessMessage(''), 5000);
-      } else {
-        throw new Error(data.message || 'Failed to create backup');
-      }
+      setSuccessMessage(`Configuration backed up to: ${response.data?.backupPath}`);
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       console.error('Failed to backup config:', err);
       setError(err.message || 'Failed to create backup');

@@ -141,8 +141,7 @@ export default function registerAdminOAuthConnectionRoutes(app) {
         summary: `Revoked the connection between ${userId} and ${clientId} (${result.refreshTokensRevoked} refresh token(s))`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ success: true, ...result });
+      res.json({ ...result });
     }
   );
 }

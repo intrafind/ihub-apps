@@ -224,8 +224,7 @@ export default function registerAdminUsageRoutes(app) {
     platform.features.usageTrackingMode = trackingMode;
     await configStore.writeJson('config/platform.json', platform);
     await configCache.refreshCacheEntry('config/platform.json');
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ trackingMode, message: 'Tracking mode updated successfully' });
+    res.json({ trackingMode });
   });
 
   // Roll up now (normally hourly). `?all=1` rebuilds every day.
@@ -233,8 +232,7 @@ export default function registerAdminUsageRoutes(app) {
     const retention = configCache.getPlatform?.()?.usageTracking || {};
     const stats = await runRollups(retention, { all: req.query.all === '1' });
     clearUsageQueryCache();
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Rollup generation completed successfully', ...stats });
+    res.json({ ...stats });
   });
 
   /**

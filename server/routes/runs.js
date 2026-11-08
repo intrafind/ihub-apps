@@ -304,7 +304,7 @@ export default function registerRunRoutes(app) {
         user: req.user,
         channel: ['chat', 'run_page', 'queue', 'api'].includes(channel) ? channel : 'api'
       });
-      res.json({ success: true, interaction: answered }); // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({ interaction: answered });
     }
   );
 
@@ -403,7 +403,7 @@ export default function registerRunRoutes(app) {
       const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
       effect = routed ? `steer_${routed}` : null;
     }
-    res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
   });
 
   /**

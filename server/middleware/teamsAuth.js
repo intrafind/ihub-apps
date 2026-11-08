@@ -266,7 +266,6 @@ export async function teamsTokenExchange(req, res) {
     clearOidcLogoutHint(res, req);
 
     res.json({
-      success: true,
       user: {
         id: user.id,
         name: user.name,

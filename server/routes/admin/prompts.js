@@ -871,7 +871,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: promptId,
       summary: `Updated prompt ${promptId}`
     });
-    res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
+    res.json({ prompt: updatedPrompt });
   });
 
   /**
@@ -1002,7 +1002,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: newPrompt.id,
       summary: `Created prompt ${newPrompt.id}`
     });
-    res.json({ message: 'Prompt created successfully', prompt: newPrompt });
+    res.status(201).json({ prompt: newPrompt });
   });
 
   /**
@@ -1334,7 +1334,7 @@ export default function registerAdminPromptsRoutes(app) {
           userPrompt.ownerName || userPrompt.ownerId
         } to global prompt ${id}`
       });
-      res.status(201).json({ message: 'Prompt promoted successfully', prompt: globalPrompt });
+      res.status(201).json({ prompt: globalPrompt });
     }
   );
 
@@ -1448,7 +1448,7 @@ export default function registerAdminPromptsRoutes(app) {
         resourceId: promptId,
         summary: `Deleted prompt ${promptId}`
       });
-      res.json({ message: 'Prompt deleted successfully' });
+      res.status(204).end();
     }
   );
 
