@@ -121,8 +121,6 @@ export default function registerAdminSsrfRoutes(app) {
       allowedHosts: cleaned
     });
 
-    res.json({
-      config: { allowedHosts: cleaned }
-    });
+    res.json({ allowedHosts: cleaned });
   });
 }

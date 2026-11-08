@@ -436,7 +436,7 @@ export function registerProjectPickerRoutes(app) {
       user: req.user,
       ...(req.query?.profile ? { searchProfile: String(req.query.profile) } : {})
     });
-    res.json({ metadata });
+    res.json(metadata);
   });
 
   app.post(route('/url/_check'), ...gate, async (req, res) => {

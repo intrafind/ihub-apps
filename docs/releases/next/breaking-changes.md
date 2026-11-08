@@ -753,7 +753,7 @@ answer the resource itself:
 
 Answers that carry more than the resource keep their members (`_decline` still answers
 `{ request, alsoDeclined }`; an action override answers `{ override, detail }`). Singleton settings
-answers (`{ settings }`, `{ config }`) follow in a later change.
+answers follow below.
 
 ## Project Item Answers Are the Item Itself
 
@@ -767,3 +767,18 @@ Adding, changing, refreshing or rewriting a project item answers the item, not `
 
 Adding a single iFinder document to a smart collection still answers
 `{ item, alreadyMember }`, because it carries a second member.
+
+## Settings and Config Answers Are the Object Itself
+
+The admin config routes answered the object directly on `GET` but wrapped it on `PUT`, and a few
+`GET`s wrapped it too. They now answer the object on both:
+
+- `PUT /api/admin/ssl/config`, `PUT /api/admin/cors/config`, `PUT /api/admin/ssrf/config` and
+  `PUT /api/admin/logging/config` (were `{ config }`)
+- `PUT /api/admin/audit-log/settings` (was `{ settings }`)
+- `GET /api/admin/ui/config` (was `{ config }`)
+- `GET /api/projects/pickers/ifinder/metadata` (was `{ metadata }`)
+
+Answers that carry more than the object keep their members (user prompt and skill settings answer
+`{ settings, storageAvailable }`; `PUT /api/admin/configs/platform` answers `{ config, reconfiguration }`).
+`GET /api/admin/system/storage` keeps `{ storage }`, because the value is `null` when no volume could be read.

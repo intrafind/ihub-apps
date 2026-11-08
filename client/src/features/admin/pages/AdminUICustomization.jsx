@@ -33,7 +33,7 @@ function AdminUICustomization() {
         setError(null);
 
         const response = await makeAdminApiCall('/admin/ui/config');
-        setConfig(response.data?.config);
+        setConfig(response.data);
       } catch (err) {
         console.error('Failed to load UI config:', err);
         setError(err.message || 'Failed to load configuration');

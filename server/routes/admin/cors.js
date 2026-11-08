@@ -147,8 +147,6 @@ export default function registerAdminCorsRoutes(app) {
       maxAge
     });
 
-    res.json({
-      config: platformConfig.cors
-    });
+    res.json(platformConfig.cors);
   });
 }
