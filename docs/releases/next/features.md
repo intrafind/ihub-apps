@@ -876,6 +876,8 @@ used to be an HTML or plain text page.
 - The iFinder authorization routes (`/api/integrations/ifinder/authorization`), the feature gate (`FEATURE_DISABLED`,
   403), the workflow chat route (`CHAT_STORAGE_UNAVAILABLE`, 503) and the admin prompt completions answer in this
   shape. The iFinder routes keep the status the token store reported and show its message only for a client error.
+- A request whose declared body is larger than the configured limit is refused with `PAYLOAD_TOO_LARGE` (413) in this
+  shape instead of the plain text `Payload Too Large`.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
