@@ -62,18 +62,6 @@ export const stopAppChatStream = async (appId, chatId, { source } = {}) => {
   );
 };
 
-/**
- * Delete a conversation
- */
-export const deleteConversation = async (appId, conversationId) => {
-  return handleApiResponse(
-    () => apiClient.delete(`/apps/${appId}/conversations/${conversationId}`),
-    null,
-    null,
-    false
-  );
-};
-
 export const checkAppChatStatus = async (appId, chatId) => {
   return handleApiResponse(
     () => apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
