@@ -99,6 +99,7 @@ import {
   userProjectCreateSchema,
   userProjectUpdateSchema
 } from '../validators/projectSchema.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/projects?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'mine', 'shared', 'admin']);
@@ -621,7 +622,7 @@ export default function registerProjectRoutes(app) {
       summary: `Created project "${project.name}"`
     });
     const context = callerContext(req.user);
-    res.status(201).json(serializeFor(project, req.user, context));
+    sendCreated(res, route(`/${segment(project.id)}`), serializeFor(project, req.user, context));
   });
 
   app.get(

@@ -22,6 +22,7 @@ import {
   revokePersonalKey,
   rotatePersonalKey
 } from '../../utils/personalApiKeyManager.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const router = express.Router();
 
@@ -139,7 +140,7 @@ router.post('/', authRequired, async (req, res) => {
     summary: `Created personal API key "${result.key.name}"`
   });
 
-  res.status(201).json({
+  sendCreated(res, `/api/integrations/api-keys/${segment(result.key.id)}`, {
     ...result,
     endpoints: buildPersonalKeyEndpoints(req, platform)
   });

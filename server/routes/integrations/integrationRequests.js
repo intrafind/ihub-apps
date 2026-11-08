@@ -47,6 +47,7 @@ import {
   isRequestable,
   requestCatalogEntry
 } from '../../services/integrations/integrationRequestCatalog.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const router = express.Router();
 
@@ -210,7 +211,9 @@ router.post('/', requireFeature('integrations'), authRequired, async (req, res) 
       resourceId: definition,
       summary: `Requested integration "${definition}"${request.reason ? ' with a reason' : ''}`
     });
-    return res.status(201).json({ request: userRequestView(request) });
+    return sendCreated(res, `/api/integrations/requests/${segment(request.id)}`, {
+      request: userRequestView(request)
+    });
   }
 });
 

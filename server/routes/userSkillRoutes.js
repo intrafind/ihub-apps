@@ -72,6 +72,7 @@ import {
   userSkillUpdateSchema
 } from '../validators/userSkillSchema.js';
 import { resolveShares, shareRefusal } from './promptRoutes.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/user-skills?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'mine', 'shared']);
@@ -350,9 +351,10 @@ async function createCopy(req, res, deps, content, copiedFrom, auditSummary, ext
     resourceId: skill.id,
     summary: auditSummary(skill)
   });
-  res
-    .status(201)
-    .json({ ...view(skill, req, callerContext(req.user), { includeContent: true }), ...extra });
+  sendCreated(res, `/api/user-skills/${segment(skill.id)}`, {
+    ...view(skill, req, callerContext(req.user), { includeContent: true }),
+    ...extra
+  });
 }
 
 export default function registerUserSkillRoutes(app) {

@@ -33,6 +33,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import { dirNameToDefinitionId } from '../../validators/integrationDefinitionSchema.js';
 import { previewDefinitionUpdate } from '../../services/integrations/definitions/migrationPreview.js';
 import { isUpdate, offeredVersion } from '../../services/marketplace/versionPolicy.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
 
@@ -141,7 +142,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         summary: `Created marketplace registry ${registry.id}`
       });
 
-      res.status(201).json(registry);
+      sendCreated(res, `/api/admin/marketplace/registries/${segment(registry.id)}`, registry);
     }
   );
 
@@ -427,7 +428,11 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Installed marketplace item ${type}/${name} from registry ${registryId}`
       });
-      res.status(201).json(manifest);
+      sendCreated(
+        res,
+        `/api/admin/marketplace/registries/${segment(registryId)}/items/${segment(type)}/${segment(name)}`,
+        manifest
+      );
     }
   );
 

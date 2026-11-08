@@ -21,6 +21,7 @@ import { assertValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * The PEM public key the JWTs are signed with.
@@ -291,7 +292,7 @@ export default function registerAdminOAuthRoutes(app) {
     });
 
     // Return client with plain text secret (only time it's shown)
-    res.status(201).json({
+    sendCreated(res, `/api/admin/oauth/clients/${segment(newClient.clientId)}`, {
       client: {
         clientId: newClient.clientId,
         clientSecret: newClient.clientSecret, // Plain text - only shown once
@@ -638,7 +639,7 @@ export default function registerAdminOAuthRoutes(app) {
         summary: `Generated static API key for ${clientId} (expires in ${expirationDays} days)`
       });
 
-      res.status(201).json({ ...apiKeyResult });
+      sendCreated(res, `/api/admin/oauth/clients/${segment(clientId)}`, { ...apiKeyResult });
     }
   );
 

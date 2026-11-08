@@ -13,6 +13,7 @@ import {
 } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** The UI configuration, which carries the page registry. */
 const UI_FILE = 'config/ui.json';
@@ -128,7 +129,7 @@ export default function registerAdminPagesRoutes(app) {
     // content is missing.
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    res.status(201).json({ page: { id, title } });
+    sendCreated(res, `/api/admin/pages/${segment(id)}`, { page: { id, title } });
   });
 
   app.put(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {

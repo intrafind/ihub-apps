@@ -66,6 +66,7 @@ import { getItemText } from '../../services/knowledge/ItemTextService.js';
 import { estimateProject } from '../../services/projects/projectEstimate.js';
 import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
 import { RESULT_BUDGET_TOKENS } from '../../sources/documentRetrieval.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -465,7 +466,7 @@ export default function registerAdminProjectsRoutes(app) {
       summary: `Created admin project "${projectName(project)}"`
     });
     await snapshot(req, project.id, null, project);
-    res.status(201).json({ project: adminView(project) });
+    sendCreated(res, route(`/${segment(project.id)}`), { project: adminView(project) });
   });
 
   app.get(route('/:id'), ...gate, contentAdminAuth, async (req, res) => {

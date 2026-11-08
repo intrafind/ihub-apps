@@ -67,6 +67,7 @@ import {
   checkTaskPrincipal
 } from '../services/scheduler/tasks/taskPolicy.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 const checkFeature = requireFeature(SCHEDULED_TASKS_FEATURE);
 
@@ -247,7 +248,11 @@ export default function registerScheduledTaskRoutes(app) {
       sourceChatId: body.sourceChatId
     });
     audit(req, 'create', task.id, `Created scheduled task "${task.name}" (${task.schedule.type})`);
-    res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
+    sendCreated(
+      res,
+      `/api/scheduled-tasks/${segment(task.id)}`,
+      tasks.toPublicTask(task, { language: requestLanguage(req) })
+    );
   });
 
   /**
@@ -386,7 +391,11 @@ export default function registerScheduledTaskRoutes(app) {
       language: requestLanguage(req)
     });
     audit(req, 'create', task.id, `Duplicated scheduled task ${req.params.taskId}`);
-    res.status(201).json(tasks.toPublicTask(task, { language: requestLanguage(req) }));
+    sendCreated(
+      res,
+      `/api/scheduled-tasks/${segment(task.id)}`,
+      tasks.toPublicTask(task, { language: requestLanguage(req) })
+    );
   });
 
   /**
@@ -517,7 +526,9 @@ export default function registerScheduledTaskRoutes(app) {
       user: req.user
     });
     audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
-    res.status(201).json({ file });
+    sendCreated(res, `/api/scheduled-tasks/${segment(task.id)}/files/${segment(file.id)}`, {
+      file
+    });
   });
 
   app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {

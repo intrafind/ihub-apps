@@ -22,6 +22,7 @@ import {
   templateView
 } from '../../services/integrations/exampleApps.js';
 import logger from '../../utils/logger.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Example apps of an installation (issue #3128, concept "Example apps and
@@ -174,7 +175,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
         resourceId: appId,
         summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
       });
-      res.status(201).json({ app: newApp });
+      sendCreated(res, `/api/admin/apps/${segment(appId)}`, { app: newApp });
     }
   );
 }

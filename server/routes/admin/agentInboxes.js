@@ -7,6 +7,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import inboxStore from '../../agents/inbox/inboxStore.js';
 import { INBOX_ID_PATTERN } from '../../validators/agentInboxSchema.js';
 import logger from '../../utils/logger.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Reject an inbox id that is not of the allowed shape.
@@ -84,6 +85,6 @@ export default function registerAdminAgentInboxesRoutes(app) {
       body: body || `# ${inboxId}\n`,
       updatedBy: req.user?.id || 'admin'
     });
-    res.status(201).json({ version: result.version });
+    sendCreated(res, `/api/admin/agents/inboxes/${segment(inboxId)}`, { version: result.version });
   });
 }

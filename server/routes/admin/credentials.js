@@ -11,6 +11,7 @@ import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Admin CRUD routes for the central credential store
@@ -181,7 +182,7 @@ export default function registerAdminCredentialsRoutes(app) {
       admin: adminIdentity(req)
     });
 
-    res.status(201).json(redactProfile(profile));
+    sendCreated(res, `/api/admin/credentials/${segment(profile.id)}`, redactProfile(profile));
   });
 
   // Update an existing credential profile.

@@ -58,6 +58,7 @@ import {
   userProjectUpdateSchema
 } from '../validators/projectSchema.js';
 import { isMultipart } from './projectItemRoutes.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /**
  * Run `handler` for a smart collection and hand everything else on: a middleware
@@ -124,7 +125,11 @@ export async function createIFinderProject(req, res, { body, serialize }) {
     usage: { items: collection.items.length, bytes: 0 },
     collection: { id: collectionId, state: 'ok', name: collection.name }
   };
-  res.status(201).json(serialize(project, req.user, callerContext(req.user)));
+  sendCreated(
+    res,
+    `/api/projects/${segment(project.id)}`,
+    serialize(project, req.user, callerContext(req.user))
+  );
 }
 
 /**
@@ -208,7 +213,11 @@ export async function importCollection(req, res, { serialize }) {
     usage: { items: collection.items.length, bytes: 0 },
     collection: { id: collectionId, state: 'ok', name: collection.name }
   };
-  res.status(201).json(serialize(project, req.user, callerContext(req.user)));
+  sendCreated(
+    res,
+    `/api/projects/${segment(project.id)}`,
+    serialize(project, req.user, callerContext(req.user))
+  );
 }
 
 /**

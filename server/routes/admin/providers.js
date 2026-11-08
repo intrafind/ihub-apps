@@ -38,6 +38,7 @@ import { computeGatewayDrift } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
@@ -792,7 +793,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    res.status(201).json({ provider: newProvider });
+    sendCreated(res, `/api/admin/providers/${segment(newProvider.id)}`, { provider: newProvider });
   });
 
   /**
