@@ -99,7 +99,7 @@ import {
   userProjectCreateSchema,
   userProjectUpdateSchema
 } from '../validators/projectSchema.js';
-import { sendCreated, segment } from '../utils/created.js';
+import { sendCreated, sendWithLocation, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/projects?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'mine', 'shared', 'admin']);
@@ -622,7 +622,11 @@ export default function registerProjectRoutes(app) {
       summary: `Created project "${project.name}"`
     });
     const context = callerContext(req.user);
-    sendCreated(res, route(`/${segment(project.id)}`), serializeFor(project, req.user, context));
+    sendCreated(
+      res,
+      `/api/projects/${segment(project.id)}`,
+      serializeFor(project, req.user, context)
+    );
   });
 
   app.get(
@@ -745,7 +749,12 @@ export default function registerProjectRoutes(app) {
         resourceId: req.project.id,
         summary: `Added ${item.kind} item "${item.name}" (${item.provenance.origin}) to project "${projectName(req.project)}"`
       });
-      res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
+      sendWithLocation(
+        res,
+        item.status === 'ready' ? 201 : 202,
+        `/api/projects/${segment(req.project.id)}/items/${segment(item.id)}`,
+        { item: serializeItem(item) }
+      );
     }
   );
 

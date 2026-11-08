@@ -15,5 +15,15 @@ export function sendCreated(res, path, body) {
   return res.json(body);
 }
 
+/**
+ * Answer with `status` and, when it is `201` or `202`, the `Location` of the new resource (or of
+ * the job that will make it). For a call that answers `201` or `202` depending on the outcome.
+ */
+export function sendWithLocation(res, status, path, body) {
+  res.status(status);
+  if (status === 201 || status === 202) res.setHeader('Location', buildServerPath(path));
+  return res.json(body);
+}
+
 /** One path segment, safe to put into a `Location`. */
 export const segment = value => encodeURIComponent(String(value));
