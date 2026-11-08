@@ -1,220 +1,109 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 import { test, expect } from '@playwright/test';
 
 /**
- * End-to-End Tests for Chat Functionality
- * These tests validate the complete user journey for chat interactions
+ * End-to-end: a chat turn.
+ *
+ * Signs in as the default local admin (`admin` / `password123`) and chats in
+ * the general Chat app. The model is the e2e stub that
+ * `tests/config/e2e-server.mjs` registers: it answers
+ * `E2E reply to: <message> (turn N)` and fails a message containing `e2e-fail`.
+ * Against a server you started yourself, add such a model first or the tests
+ * have nothing to talk to.
  */
 
-test.describe('Chat E2E Tests', () => {
+const ADMIN = { username: 'admin', password: 'password123' };
+
+test.describe('Chat', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to the application
-    await page.goto('/');
+    // The first-visit disclaimer would sit over every click.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+    const login = await page.request.post('/api/auth/local/login', { data: ADMIN });
+    expect(login.ok(), 'sign in as the default admin').toBeTruthy();
+  });
 
-    // Wait for the application to load
+  // The visible copy of a text: the page also holds a hidden one for screen readers.
+  const shown = (page, text) => page.getByText(text).filter({ visible: true }).first();
+  // Opens the Chat app and waits until it knows its models: a message sent before
+  // that is shown but never reaches the server.
+  const openChat = async page => {
+    const models = page.waitForResponse(
+      response => response.url().includes('/api/models') && response.ok()
+    );
+    await page.goto('/apps/chat');
+    await models;
     await page.waitForLoadState('networkidle');
+  };
+  const input = page => page.getByRole('textbox', { name: 'Type your message' });
+  const send = page => page.getByRole('button', { name: 'Send', exact: true });
+
+  test('lists the apps and opens the Chat app', async ({ page }) => {
+    await page.goto('/apps');
+    const chat = page.getByRole('link', { name: /Chat/ }).first();
+    await expect(chat).toBeVisible();
+
+    await chat.click();
+    await expect(page).toHaveURL(/\/apps\/chat/);
+    await expect(input(page)).toBeVisible();
+    await expect(send(page)).toBeVisible();
   });
 
-  test('should load the chat interface', async ({ page }) => {
-    // Check if the main chat interface elements are present
-    await expect(page.locator('[data-testid="chat-container"]')).toBeVisible();
-    await expect(page.locator('[data-testid="message-input"]')).toBeVisible();
-    await expect(page.locator('[data-testid="send-button"]')).toBeVisible();
+  test('sends a message and shows the streamed answer', async ({ page }) => {
+    await openChat(page);
+    await input(page).fill('Hello, this is a test message');
+    await send(page).click();
+
+    await expect(shown(page, 'Hello, this is a test message')).toBeVisible();
+    await expect(shown(page, 'E2E reply to: Hello, this is a test message (turn 1)')).toBeVisible({
+      timeout: 30_000
+    });
   });
 
-  test('should display available apps', async ({ page }) => {
-    // Check if apps are displayed
-    await expect(page.locator('[data-testid="app-selector"]')).toBeVisible();
+  test('keeps the conversation: the second turn is answered with the history', async ({ page }) => {
+    await openChat(page);
 
-    // Verify at least one app is available
-    const appCount = await page.locator('[data-testid="app-option"]').count();
-    expect(appCount).toBeGreaterThan(0);
-  });
-
-  test('should send a message and receive a response', async ({ page }) => {
-    // Select an app (if not already selected)
-    const appSelector = page.locator('[data-testid="app-selector"]');
-    if (await appSelector.isVisible()) {
-      await page.locator('[data-testid="app-option"]').first().click();
-    }
-
-    // Type a message
-    const messageInput = page.locator('[data-testid="message-input"]');
-    await messageInput.fill('Hello, this is a test message');
-
-    // Send the message
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Wait for the message to appear in the chat
-    await expect(page.locator('[data-testid="user-message"]').last()).toContainText(
-      'Hello, this is a test message'
-    );
-
-    // Wait for the assistant response (with timeout)
-    await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({
-      timeout: 30000
+    await input(page).fill('What is machine learning?');
+    await send(page).click();
+    await expect(shown(page, 'E2E reply to: What is machine learning? (turn 1)')).toBeVisible({
+      timeout: 30_000
     });
 
-    // Verify the response contains some content
-    const responseText = await page
-      .locator('[data-testid="assistant-message"]')
-      .last()
-      .textContent();
-    expect(responseText).toBeTruthy();
-    expect(responseText.length).toBeGreaterThan(0);
+    await input(page).fill('Can you give me an example?');
+    await send(page).click();
+    await expect(shown(page, 'E2E reply to: Can you give me an example? (turn 2)')).toBeVisible({
+      timeout: 30_000
+    });
+    // The first exchange is still on the page.
+    await expect(shown(page, 'E2E reply to: What is machine learning? (turn 1)')).toBeVisible();
   });
 
-  test('should handle tool calling functionality', async ({ page }) => {
-    // Select an app that supports tools
-    await page.locator('[data-testid="app-selector"]').click();
-    await page.locator('[data-testid="app-option"][data-supports-tools="true"]').first().click();
-
-    // Send a message that should trigger tool usage
-    const messageInput = page.locator('[data-testid="message-input"]');
-    await messageInput.fill('Search for information about artificial intelligence');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Wait for tool execution indicator
-    await expect(page.locator('[data-testid="tool-execution-indicator"]')).toBeVisible({
-      timeout: 10000
+  test('shows an error, and keeps working, when the model fails', async ({ page }) => {
+    await openChat(page);
+    await input(page).fill('please e2e-fail now');
+    await send(page).click();
+    await expect(shown(page, /Invalid request sent to local API/)).toBeVisible({
+      timeout: 30_000
     });
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
 
-    // Wait for the final response
-    await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({
-      timeout: 60000
+    await input(page).fill('Back to normal');
+    await send(page).click();
+    await expect(shown(page, 'E2E reply to: Back to normal')).toBeVisible({
+      timeout: 30_000
     });
-
-    // Verify tool call results are displayed
-    await expect(page.locator('[data-testid="tool-result"]')).toBeVisible();
   });
 
-  test('should maintain conversation history', async ({ page }) => {
-    // Send first message
-    await page.locator('[data-testid="message-input"]').fill('What is machine learning?');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Wait for response
-    await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({
-      timeout: 30000
-    });
-
-    // Send follow-up message
-    await page.locator('[data-testid="message-input"]').fill('Can you give me an example?');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Wait for second response
-    await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({
-      timeout: 30000
-    });
-
-    // Verify conversation history
-    const userMessages = await page.locator('[data-testid="user-message"]').count();
-    const assistantMessages = await page.locator('[data-testid="assistant-message"]').count();
-
-    expect(userMessages).toBe(2);
-    expect(assistantMessages).toBe(2);
-  });
-
-  test('should handle authentication flow', async ({ page }) => {
-    // Check if authentication is required
-    const loginButton = page.locator('[data-testid="login-button"]');
-
-    if (await loginButton.isVisible()) {
-      // Test login flow
-      await loginButton.click();
-
-      // Fill login form (adjust selectors based on your auth implementation)
-      await page.locator('[data-testid="username-input"]').fill('test.user@ihub.com');
-      await page.locator('[data-testid="password-input"]').fill('testpassword');
-      await page.locator('[data-testid="submit-login"]').click();
-
-      // Wait for successful login
-      await expect(page.locator('[data-testid="user-profile"]')).toBeVisible({ timeout: 10000 });
-    }
-
-    // Verify user can access chat after authentication
-    await expect(page.locator('[data-testid="chat-container"]')).toBeVisible();
-  });
-
-  test('should be responsive on mobile devices', async ({ page }) => {
-    // Set mobile viewport
+  test('is usable on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-
-    // Check if mobile layout is applied
-    await expect(page.locator('[data-testid="mobile-menu-toggle"]')).toBeVisible();
-
-    // Test mobile chat functionality
-    await page.locator('[data-testid="message-input"]').fill('Mobile test message');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Verify mobile layout maintains functionality
-    await expect(page.locator('[data-testid="user-message"]').last()).toContainText(
-      'Mobile test message'
-    );
-  });
-
-  test('should handle error states gracefully', async ({ page }) => {
-    // Mock network failure
-    await page.route('/api/chat/**', route => {
-      route.fulfill({
-        status: 500,
-        contentType: 'application/problem+json',
-        body: JSON.stringify({
-          detail: 'Internal server error',
-          code: 'INTERNAL_ERROR',
-          status: 500
-        })
-      });
+    await openChat(page);
+    await input(page).fill('Mobile test message');
+    await send(page).click();
+    await expect(shown(page, 'E2E reply to: Mobile test message')).toBeVisible({
+      timeout: 30_000
     });
-
-    // Try to send a message
-    await page.locator('[data-testid="message-input"]').fill('This should fail');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Check for error message
-    await expect(page.locator('[data-testid="error-message"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-testid="error-message"]')).toContainText('error');
-  });
-
-  test('should support file uploads', async ({ page }) => {
-    // Check if file upload is available
-    const fileInput = page.locator('[data-testid="file-upload-input"]');
-
-    if (await fileInput.isVisible()) {
-      // Upload a test file
-      await fileInput.setInputFiles('tests/fixtures/test-document.pdf');
-
-      // Verify file is uploaded
-      await expect(page.locator('[data-testid="uploaded-file"]')).toBeVisible();
-
-      // Send a message about the file
-      await page.locator('[data-testid="message-input"]').fill('What does this document contain?');
-      await page.locator('[data-testid="send-button"]').click();
-
-      // Wait for response that references the file
-      await expect(page.locator('[data-testid="assistant-message"]').last()).toBeVisible({
-        timeout: 60000
-      });
-    }
-  });
-
-  test('should support streaming responses', async ({ page }) => {
-    // Send a message that generates a long response
-    await page
-      .locator('[data-testid="message-input"]')
-      .fill('Write a detailed explanation of quantum computing');
-    await page.locator('[data-testid="send-button"]').click();
-
-    // Check for streaming indicator
-    await expect(page.locator('[data-testid="typing-indicator"]')).toBeVisible({ timeout: 5000 });
-
-    // Wait for streaming to complete
-    await expect(page.locator('[data-testid="typing-indicator"]')).toBeHidden({ timeout: 60000 });
-
-    // Verify complete response is displayed
-    const responseText = await page
-      .locator('[data-testid="assistant-message"]')
-      .last()
-      .textContent();
-    expect(responseText.length).toBeGreaterThan(100); // Expecting a substantial response
   });
 });
