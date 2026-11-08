@@ -1,5 +1,14 @@
 # Fixes — Unreleased
 
+## The Azure Speech Key Stays Encrypted When Other Settings Are Saved
+
+The Azure Speech subscription key is kept encrypted in `platform.json`, but the server holds it
+decrypted. Several admin actions save `platform.json` from that copy: switching the Office add-in, the
+browser extension or the Nextcloud embed on or off or saving their settings, and the CORS, SSL,
+SSRF, logging, audit log, chat history, scheduled tasks, usage and skills pages. Each of them wrote the
+key into the file as plain text. Every save of `platform.json` now encrypts the key again, and a key
+that was already written in plain text is encrypted by the next save of any of those pages.
+
 ## Cookie Settings Can Be Saved Again
 
 **Admin → System → Cookie settings** sent its save with a request method the server does not accept, so
