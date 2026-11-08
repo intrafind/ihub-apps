@@ -618,7 +618,8 @@ Segments". The web app ships with the server and needs no change; scripts must u
 
 | Was | Is now |
 | --- | --- |
-| `POST …/toggle` on `/api/admin/apps/:id`, `/models/:id`, `/prompts/:id`, `/workflows/:id`, `/agents/profiles/:id` | `POST …/_toggle` |
+| `POST …/toggle` on `/api/admin/workflows/:id` and `/agents/profiles/:id` | `POST …/_toggle` |
+| `POST /api/admin/{apps,models,prompts}/:id/toggle` (flips the state) | gone: `POST /api/admin/{apps,models,prompts}/:ids/_toggle` with `{ "enabled": true\|false }` sets it, for one id, a comma-separated list or `*` |
 | `POST /api/admin/{browser-extension,copilot-agent,nextcloud-embed,office-integration}/enable` and `/disable` | `…/_enable` and `…/_disable` |
 | `POST /api/admin/models/:id/test`, `/proxy/test`, `/voice/azure/test`, `/office-integration/office-js/test`, `/projects/:id/test`, `/api/setup/test` | `…/_test` |
 | `POST /api/setup/disable` | `POST /api/setup/_disable` |

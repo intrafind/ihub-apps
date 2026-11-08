@@ -1081,39 +1081,6 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to toggle prompt"
    */
-  app.post(
-    buildServerPath('/api/admin/prompts/:promptId/_toggle'),
-    contentAdminAuth,
-    async (req, res) => {
-      const { promptId } = req.params;
-
-      // Validate promptId for security
-      assertValidId(promptId, 'prompt');
-
-      const { data: prompts } = configCache.getPrompts(true);
-      const prompt = prompts.find(p => p.id === promptId);
-      if (!prompt) {
-        throw new ServiceError('NOT_FOUND', 'Prompt not found');
-      }
-      const newEnabledState = !prompt.enabled;
-      prompt.enabled = newEnabledState;
-      await configStore.writeJson(await promptPath(promptId), prompt);
-      await configCache.refreshPromptsCache();
-      await logAudit({
-        req,
-        action: 'toggle',
-        resource: 'prompt',
-        resourceId: promptId,
-        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} prompt ${promptId}`
-      });
-      res.json({
-        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        prompt: prompt,
-        enabled: newEnabledState
-      });
-    }
-  );
-
   /**
    * @swagger
    * /api/admin/prompts/{promptIds}/_toggle:
@@ -1253,7 +1220,6 @@ export default function registerAdminPromptsRoutes(app) {
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} prompts`
       });
       res.json({
-        message: `Prompts ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,
         ids: resolvedIds
       });

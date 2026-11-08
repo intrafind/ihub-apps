@@ -158,11 +158,10 @@ function AdminModelsPage() {
 
   const toggleModel = async modelId => {
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/_toggle`, {
-        method: 'POST'
-      });
-      const result = response.data;
-      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
+      // The route sets the state it is told: flip from what the list shows.
+      const enabled = !models.find(m => m.id === modelId)?.enabled;
+      await toggleModels(modelId, enabled);
+      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled } : m)));
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }

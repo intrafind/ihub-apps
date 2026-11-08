@@ -370,7 +370,7 @@ describe('the admin queue', () => {
       'delete',
       '/api/admin/integrations/requests/hidden/com.example%2Fcrm'
     );
-    assert.equal(shown.status, 200);
+    assert.equal(shown.status, 204);
     assert.ok((await catalog('bob')).some(item => item.definition === 'com.example/crm'));
     const twice = await asUser(
       'admin',

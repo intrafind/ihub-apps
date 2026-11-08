@@ -647,7 +647,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ message: 'Model updated successfully', model: updatedModel }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ message: 'Model updated successfully', model: updatedModel });
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -711,46 +711,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.json({ message: 'Model created successfully', model: newModel }); // api-guidelines-ignore: existing success body, changed in its own API change
-  });
-
-  app.post(buildServerPath('/api/admin/models/:modelId/_toggle'), adminAuth, async (req, res) => {
-    const { modelId } = req.params;
-
-    // Validate modelId for security
-    assertValidId(modelId, 'model');
-
-    const { data: models } = configCache.getModels(true);
-    const model = models.find(m => m.id === modelId);
-    if (!model) {
-      throw new ServiceError('NOT_FOUND', 'Model not found');
-    }
-    const newEnabledState = !model.enabled;
-    model.enabled = newEnabledState;
-    if (!newEnabledState && model.default === true) {
-      const enabledModels = models.filter(
-        m => m.id !== modelId && m.enabled === true && isChatModel(m)
-      );
-      if (enabledModels.length > 0) {
-        enabledModels[0].default = true;
-        await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
-      }
-      model.default = false;
-    }
-    await configStore.writeJson(await modelPath(modelId), model);
-    await configCache.refreshModelsCache();
-    await logAudit({
-      req,
-      action: 'toggle',
-      resource: 'model',
-      resourceId: modelId,
-      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
-    });
-    res.json({
-      message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-      model: model,
-      enabled: newEnabledState
-    });
+    res.json({ message: 'Model created successfully', model: newModel });
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
@@ -792,7 +753,6 @@ export default function registerAdminModelsRoutes(app) {
       summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
     });
     res.json({
-      message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
       enabled,
       ids: resolvedIds
     });
@@ -839,7 +799,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
-    res.json({ message: 'Model deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ message: 'Model deleted successfully' });
   });
 
   /**

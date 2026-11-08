@@ -277,11 +277,10 @@ function AdminAppsPage() {
 
   const toggleApp = async appId => {
     try {
-      const response = await makeAdminApiCall(`/admin/apps/${appId}/_toggle`, { method: 'POST' });
-      const result = response.data;
-      setApps(prev =>
-        prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
-      );
+      // The batch route sets the state it is told: flip from what the list shows.
+      const enabled = !apps.find(app => app.id === appId)?.enabled;
+      await toggleApps(appId, enabled);
+      setApps(prev => prev.map(app => (app.id === appId ? { ...app, enabled } : app)));
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }
