@@ -647,7 +647,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ message: 'Model updated successfully', model: updatedModel });
+    res.json({ model: updatedModel });
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -711,7 +711,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.json({ message: 'Model created successfully', model: newModel });
+    res.status(201).json({ model: newModel });
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
@@ -799,7 +799,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
-    res.json({ message: 'Model deleted successfully' });
+    res.status(204).end();
   });
 
   /**
