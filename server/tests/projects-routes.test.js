@@ -741,7 +741,7 @@ describe('documents linked from another project', () => {
         body: { published: true }
       });
       assert.equal(published.statusCode, 200, JSON.stringify(published.body));
-      assert.equal(published.body.project.published, true);
+      assert.equal(published.body.published, true);
       const linked = await addLink(GRACE, target.id, ref);
       assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
       const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });
@@ -1053,7 +1053,7 @@ describe('admin projects', () => {
       body: { id: 'faq', name: { en: 'FAQ', de: 'FAQ' }, instructions: 'Cite the FAQ' }
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    assert.equal(created.body.project.ownership, 'admin');
+    assert.equal(created.body.ownership, 'admin');
     const again = await drive(route.adminCreate, {
       user: EDITOR,
       body: { id: 'faq', name: { en: 'FAQ' } }
@@ -1243,7 +1243,7 @@ describe('admin projects', () => {
       body: { id: 'faq-default', name: { en: 'FAQ' }, defaultAppId: 'support' }
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    assert.equal(created.body.project.defaultAppId, 'support');
+    assert.equal(created.body.defaultAppId, 'support');
 
     const patched = await drive(route.adminPatch, {
       user: EDITOR,
@@ -1251,14 +1251,14 @@ describe('admin projects', () => {
       body: { defaultAppId: 'chat' }
     });
     assert.equal(patched.statusCode, 200, JSON.stringify(patched.body));
-    assert.equal(patched.body.project.defaultAppId, 'chat');
+    assert.equal(patched.body.defaultAppId, 'chat');
 
     const cleared = await drive(route.adminPatch, {
       user: EDITOR,
       params: { id: 'faq-default' },
       body: { defaultAppId: null }
     });
-    assert.equal(cleared.body.project.defaultAppId, null);
+    assert.equal(cleared.body.defaultAppId, null);
   });
 
   it('refuses import pointers and managed files from API callers', async () => {
@@ -1363,7 +1363,7 @@ describe('admin projects', () => {
       }
     });
     assert.equal(built.statusCode, 201, JSON.stringify(built.body));
-    const [item] = built.body.project.items;
+    const [item] = built.body.items;
     assert.equal(item.id, 'policy');
     assert.equal(item.storage, 'link');
     assert.equal(item.status, 'ready');
@@ -1463,7 +1463,7 @@ describe('admin projects', () => {
       body: { tags: ['help'] }
     });
     assert.equal(patched.statusCode, 200);
-    assert.deepEqual(patched.body.project.tags, ['help']);
+    assert.deepEqual(patched.body.tags, ['help']);
     // Admin names are localized records, on update as on create — through
     // the user route as well, where a content admin may edit it.
     const plain = await drive(route.adminPatch, {
@@ -1503,7 +1503,7 @@ describe('admin projects', () => {
       body: { id: 'faq', name: { en: 'FAQ' }, tags: ['help'] }
     });
     assert.equal(put.statusCode, 200, JSON.stringify(put.body));
-    assert.deepEqual(put.body.project.tags, ['help']);
+    assert.deepEqual(put.body.tags, ['help']);
 
     const unlinked = await drive(route.adminCreate, {
       user: EDITOR,
@@ -1767,7 +1767,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [mine.id, other.id, mine.id] }
     });
     assert.equal(attached.statusCode, 200, JSON.stringify(attached.body));
-    assert.deepEqual(attached.body.chat.attachedProjectIds, [mine.id, other.id]);
+    assert.deepEqual(attached.body.attachedProjectIds, [mine.id, other.id]);
     assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [mine.id, other.id]);
 
     // The list replaces the attached ones: taking a project away is the same call.
@@ -1777,7 +1777,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [other.id] }
     });
     assert.equal(removed.statusCode, 200);
-    assert.deepEqual(removed.body.chat.attachedProjectIds, [other.id]);
+    assert.deepEqual(removed.body.attachedProjectIds, [other.id]);
 
     // A project the caller may not use is a 404 and nothing changes.
     const refused = await drive(route.chatPatch, {
@@ -1795,7 +1795,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [] }
     });
     assert.equal(clearing.statusCode, 200);
-    assert.deepEqual(clearing.body.chat.attachedProjectIds, []);
+    assert.deepEqual(clearing.body.attachedProjectIds, []);
 
     const bad = await drive(route.chatPatch, {
       user: ADA,
