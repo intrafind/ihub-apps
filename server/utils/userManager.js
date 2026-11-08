@@ -13,6 +13,7 @@ import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
 import { locateConfigFile } from './configFileLocation.js';
 import { localUsersFile } from './contentsPath.js';
+import { AccountDisabledError } from './accountDisabledError.js';
 
 /**
  * Where the users file lives — see {@link locateConfigFile}, which both this
@@ -597,9 +598,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   // If user exists, check if they are active
   if (existingUser) {
     if (!isUserActive(existingUser)) {
-      throw new Error(
-        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
-      );
+      throw new AccountDisabledError(existingUser);
     }
 
     // Update existing user and merge groups
