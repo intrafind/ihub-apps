@@ -69,7 +69,12 @@ describe('check-api-guidelines', () => {
   it('flags a 201 without a Location and accepts sendCreated', () => {
     assert.deepEqual(rules('res.status(201).json({ id });'), ['created-location']);
     assert.deepEqual(rules('res\n  .status(201)\n  .json({ id });'), ['created-location']);
+    assert.deepEqual(rules('res.status(ok ? 201 : 202).json({ item });'), ['created-location']);
     assert.deepEqual(rules('sendCreated(res, `/api/things/${id}`, { id });'), []);
+    assert.deepEqual(
+      rules('sendWithLocation(res, ok ? 201 : 202, `/api/things/${id}`, { id });'),
+      []
+    );
   });
 
   it('flags a bare verb on a route but accepts an _action segment', () => {
