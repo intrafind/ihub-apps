@@ -23,18 +23,13 @@ import {
   isActiveUser,
   permissionsFor,
   projectAccessRequired,
-  refuseIFinderWrite,
+  assertIFinderWriteAllowed,
   usersDb
 } from '../middleware/projectAccess.js';
 import { requireFeature } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendFailedOperationError,
-  sendNotFound
-} from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
+import { assertValidId } from '../utils/pathSecurity.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { auditPublished } from '../services/projects/projectAudit.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
@@ -49,8 +44,7 @@ import {
   refreshItem,
   replaceItemText,
   registerProjectPickerRoutes,
-  sendItemText,
-  sendProjectError
+  sendItemText
 } from './projectItemRoutes.js';
 import {
   UNSHAREABLE_GROUPS,
@@ -117,20 +111,17 @@ function displayName(user) {
   return String(user?.name || user?.displayName || user?.username || user?.id || '');
 }
 
-function parseBody(schema, req, res) {
+function parseBody(schema, req) {
   const parsed = schema.safeParse(req.body || {});
   if (!parsed.success) {
-    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
-    return null;
+    throw new ServiceError('BAD_REQUEST', `Invalid request: ${describeIssues(parsed.error)}`);
   }
   return parsed.data;
 }
 
-export { sendProjectError };
-
 /**
- * Gate for every route that reads or writes user projects. Sends the refusal
- * itself and returns null when the request cannot go on.
+ * Gate for every route that reads or writes user projects. Throws the refusal
+ * (answered by the error middleware) when the request cannot go on.
  *
  * @param {Object} req
  * @param {Object} res
@@ -138,30 +129,28 @@ export { sendProjectError };
  *   project; admins pass even when user projects are switched off.
  * @returns {{repo: import('../services/projects/ProjectRepository.js').ProjectRepository,
  *   service: import('../services/projects/ProjectService.js').ProjectService,
- *   settings: ReturnType<typeof projectSettings>}|null}
+ *   settings: ReturnType<typeof projectSettings>}}
+ * @throws {ServiceError} `PROJECTS_NOT_ALLOWED`, `USER_PROJECTS_DISABLED` or `STORAGE_UNAVAILABLE`
  */
-function requireUserProjects(req, res, { manage = false } = {}) {
+function requireUserProjects(req, { manage = false } = {}) {
   ensurePrincipal(req);
   if (!canHoldProjects(req.user)) {
-    sendErrorResponse(res, 403, 'This sign-in cannot hold projects', {
-      details: { code: 'PROJECTS_NOT_ALLOWED' }
+    throw new ServiceError('PROJECTS_NOT_ALLOWED', 'This sign-in cannot hold projects', {
+      status: 403
     });
-    return null;
   }
   if (!isUserProjectsConfigured(configCache.getFeatures())) {
     if (!manage || !callerContext(req.user).isAdmin) {
-      sendErrorResponse(res, 403, 'User projects are switched off', {
-        details: { code: 'USER_PROJECTS_DISABLED' }
+      throw new ServiceError('USER_PROJECTS_DISABLED', 'User projects are switched off', {
+        status: 403
       });
-      return null;
     }
   }
   const repo = getProjectRepository();
   if (!repo.isAvailable()) {
-    sendErrorResponse(res, 503, 'Projects are unavailable on this installation', {
-      details: { code: 'STORAGE_UNAVAILABLE' }
+    throw new ServiceError('STORAGE_UNAVAILABLE', 'Projects are unavailable on this installation', {
+      status: 503
     });
-    return null;
   }
   return {
     repo,
@@ -354,7 +343,7 @@ export default function registerProjectRoutes(app) {
   // `projectAccessRequired`, which loads the collection with the caller's own
   // rights and needs `canEdit`, the owner's.
   app.use(route('/:projectId'), (req, res, next) => {
-    if (refuseIFinderWrite(req, res, req.params.projectId)) return;
+    assertIFinderWriteAllowed(req, req.params.projectId);
     next();
   });
   // `/api/projects/pickers/*` must be registered before `/:projectId`.
@@ -371,61 +360,57 @@ export default function registerProjectRoutes(app) {
    *         description: Flags, limits, sharing audiences and the enabled item kinds
    */
   app.get(route('/_config'), ...gate, authenticatedOnly, async (req, res) => {
-    try {
-      ensurePrincipal(req);
-      const platform = configCache.getPlatform() || {};
-      const features = configCache.getFeatures();
-      const repo = getProjectRepository();
-      const settings = projectSettings(platform);
-      const base = projectsClientConfig(features, platform, {
-        storageAvailable: repo.isAvailable()
-      });
-      const used = base.userProjects ? await repo.countOwned(String(req.user.id)) : 0;
-      // The iFinder tier is per user: the policy and the iFinder configuration
-      // are the installation's, the principal and the Smart Collections API
-      // (the capability call) are the caller's.
-      // Whether collections can be changed from here is the installation's: a lock
-      // must reach every iHub instance (`collectionLock.js`). When it does not,
-      // the tier stays readable and `writable` says why it is not changeable.
-      const support = collectionWriteSupport();
-      const ifinder = {
-        available: false,
-        writable: false,
-        maxDocuments: MAX_DOCUMENTS
-      };
-      if (base.userProjects && iFinderTierConfigured(platform)) {
-        const availability = await availabilityFor(req.user);
-        ifinder.available = availability.offered;
-        ifinder.writable = availability.offered && support.writable;
-        if (availability.offered && !support.writable) {
-          ifinder.writeDisabledReason = support.reason || WRITE_DISABLED_REASONS.NO_LOCK;
-        }
-        if (!availability.offered) {
-          ifinder.reason = availability.reason;
-          if (availability.unavailable) ifinder.unavailable = true;
-        }
+    ensurePrincipal(req);
+    const platform = configCache.getPlatform() || {};
+    const features = configCache.getFeatures();
+    const repo = getProjectRepository();
+    const settings = projectSettings(platform);
+    const base = projectsClientConfig(features, platform, {
+      storageAvailable: repo.isAvailable()
+    });
+    const used = base.userProjects ? await repo.countOwned(String(req.user.id)) : 0;
+    // The iFinder tier is per user: the policy and the iFinder configuration
+    // are the installation's, the principal and the Smart Collections API
+    // (the capability call) are the caller's.
+    // Whether collections can be changed from here is the installation's: a lock
+    // must reach every iHub instance (`collectionLock.js`). When it does not,
+    // the tier stays readable and `writable` says why it is not changeable.
+    const support = collectionWriteSupport();
+    const ifinder = {
+      available: false,
+      writable: false,
+      maxDocuments: MAX_DOCUMENTS
+    };
+    if (base.userProjects && iFinderTierConfigured(platform)) {
+      const availability = await availabilityFor(req.user);
+      ifinder.available = availability.offered;
+      ifinder.writable = availability.offered && support.writable;
+      if (availability.offered && !support.writable) {
+        ifinder.writeDisabledReason = support.reason || WRITE_DISABLED_REASONS.NO_LOCK;
       }
-      res.json({
-        ...base,
-        ifinder,
-        userProjects: {
-          enabled: base.userProjects,
-          canCreate: base.userProjects && mayCreateProjects(req.user),
-          canShare: base.userProjects && mayShareProjects(req.user),
-          maxProjects: settings.limits.maxProjectsPerUser,
-          used
-        },
-        kinds: enabledItemKinds({ platform, features, settings }),
-        upload: {
-          available: Boolean(getProjectService().ingest) && repo.hasBlobs(),
-          accept: ACCEPTED_TYPES.extensions,
-          mimeTypes: ACCEPTED_TYPES.mimeTypes,
-          summary: ACCEPTED_TYPES.summary
-        }
-      });
-    } catch (error) {
-      sendFailedOperationError(res, 'load project configuration', error);
+      if (!availability.offered) {
+        ifinder.reason = availability.reason;
+        if (availability.unavailable) ifinder.unavailable = true;
+      }
     }
+    res.json({
+      ...base,
+      ifinder,
+      userProjects: {
+        enabled: base.userProjects,
+        canCreate: base.userProjects && mayCreateProjects(req.user),
+        canShare: base.userProjects && mayShareProjects(req.user),
+        maxProjects: settings.limits.maxProjectsPerUser,
+        used
+      },
+      kinds: enabledItemKinds({ platform, features, settings }),
+      upload: {
+        available: Boolean(getProjectService().ingest) && repo.hasBlobs(),
+        accept: ACCEPTED_TYPES.extensions,
+        mimeTypes: ACCEPTED_TYPES.mimeTypes,
+        summary: ACCEPTED_TYPES.summary
+      }
+    });
   });
 
   /**
@@ -436,52 +421,46 @@ export default function registerProjectRoutes(app) {
    *     tags: [Projects]
    */
   app.get(route('/share-targets'), ...gate, authenticatedOnly, (req, res) => {
-    try {
-      const deps = requireUserProjects(req, res, { manage: true });
-      if (!deps) return;
-      const context = callerContext(req.user);
-      const allowed = allowedTargetsFor(deps.settings, req.user);
-      const raw = typeof req.query.q === 'string' ? req.query.q : '';
-      const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
-      let users = [];
-      if (allowed.user && q.length >= LOOKUP_MIN_CHARS) {
-        const me = String(req.user.id);
-        users = Object.entries(context.users)
-          .map(([id, user]) => ({ ...user, id: String(user?.id ?? id) }))
-          .filter(user => user && user.active !== false && user.id !== me)
-          .filter(user =>
-            [user.name, user.username, user.email].some(
-              field => typeof field === 'string' && field.toLowerCase().includes(q)
-            )
+    const deps = requireUserProjects(req, { manage: true });
+    const context = callerContext(req.user);
+    const allowed = allowedTargetsFor(deps.settings, req.user);
+    const raw = typeof req.query.q === 'string' ? req.query.q : '';
+    const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
+    let users = [];
+    if (allowed.user && q.length >= LOOKUP_MIN_CHARS) {
+      const me = String(req.user.id);
+      users = Object.entries(context.users)
+        .map(([id, user]) => ({ ...user, id: String(user?.id ?? id) }))
+        .filter(user => user && user.active !== false && user.id !== me)
+        .filter(user =>
+          [user.name, user.username, user.email].some(
+            field => typeof field === 'string' && field.toLowerCase().includes(q)
           )
-          .map(user => ({
-            id: user.id,
-            name: displayName(user),
-            email: user.email ? String(user.email) : null
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .slice(0, LOOKUP_LIMIT);
-      }
-      let groups = [];
-      if (allowed.group) {
-        groups = Object.entries(context.config.groups || {})
-          .filter(([id]) => !UNSHAREABLE_GROUPS.includes(id))
-          .map(([id, group]) => ({
-            id,
-            name: String(group?.name || id),
-            description: group?.description ? String(group.description) : ''
-          }))
-          .filter(
-            group =>
-              !q || group.name.toLowerCase().includes(q) || group.id.toLowerCase().includes(q)
-          )
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .slice(0, LOOKUP_LIMIT);
-      }
-      res.json({ allowed, users, groups });
-    } catch (error) {
-      sendFailedOperationError(res, 'look up share targets', error);
+        )
+        .map(user => ({
+          id: user.id,
+          name: displayName(user),
+          email: user.email ? String(user.email) : null
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, LOOKUP_LIMIT);
     }
+    let groups = [];
+    if (allowed.group) {
+      groups = Object.entries(context.config.groups || {})
+        .filter(([id]) => !UNSHAREABLE_GROUPS.includes(id))
+        .map(([id, group]) => ({
+          id,
+          name: String(group?.name || id),
+          description: group?.description ? String(group.description) : ''
+        }))
+        .filter(
+          group => !q || group.name.toLowerCase().includes(q) || group.id.toLowerCase().includes(q)
+        )
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, LOOKUP_LIMIT);
+    }
+    res.json({ allowed, users, groups });
   });
 
   /**
@@ -505,17 +484,15 @@ export default function registerProjectRoutes(app) {
    */
   app.get(route('/_collections'), ...gate, authenticatedOnly, (req, res) => {
     ensurePrincipal(req);
-    if (!requireUserProjects(req, res)) return;
+    requireUserProjects(req);
     return listCollections(req, res);
   });
 
   app.post(route('/_collections'), ...gate, authenticatedOnly, (req, res) => {
     ensurePrincipal(req);
-    if (!requireUserProjects(req, res)) return;
+    requireUserProjects(req);
     if (!mayCreateProjects(req.user)) {
-      return sendErrorResponse(res, 403, 'You may not create projects', {
-        details: { code: 'PERMISSION_DENIED' }
-      });
+      throw new ServiceError('PERMISSION_DENIED', 'You may not create projects', { status: 403 });
     }
     return importCollection(req, res, { serialize: serializeFor });
   });
@@ -538,43 +515,38 @@ export default function registerProjectRoutes(app) {
    *         schema: { type: string }
    */
   app.get(route('/_catalog'), ...gate, authenticatedOnly, async (req, res) => {
-    try {
-      const deps = requireUserProjects(req, res);
-      if (!deps) return;
-      if (!deps.settings.sharing.allowCatalog) {
-        return res.json({ enabled: false, items: [] });
-      }
-      const context = callerContext(req.user);
-      const me = String(req.user.id);
-      const raw = typeof req.query.q === 'string' ? req.query.q : '';
-      const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
-      const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
-      // An admin project made available to everyone signed in is listed too:
-      // open to everyone already, it is added to bring it into one's list.
-      const adminPublished = (await deps.repo.listAdmin({ includeDisabled: false })).filter(
-        isPublished
-      );
-      const items = [];
-      for (const project of [...(await deps.repo.listCatalog()), ...adminPublished]) {
-        const text = [project.name, project.description, project.owner?.name]
-          .flatMap(value => (value && typeof value === 'object' ? Object.values(value) : [value]))
-          .filter(value => typeof value === 'string')
-          .join(' ')
-          .toLowerCase();
-        if (q && !text.includes(q)) continue;
-        const permissions = permissionsFor(project, req.user, context);
-        if (!permissions.canUse) continue;
-        items.push({
-          ...serializeFor(project, req.user, context, { includeItems: false }),
-          subscribed: subscribed.has(project.id)
-        });
-      }
-      const language = req.user?.language || 'en';
-      items.sort((a, b) => projectName(a, language).localeCompare(projectName(b, language)));
-      res.json({ enabled: true, items });
-    } catch (error) {
-      sendFailedOperationError(res, 'list the project catalog', error);
+    const deps = requireUserProjects(req);
+    if (!deps.settings.sharing.allowCatalog) {
+      return res.json({ enabled: false, items: [] });
     }
+    const context = callerContext(req.user);
+    const me = String(req.user.id);
+    const raw = typeof req.query.q === 'string' ? req.query.q : '';
+    const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
+    const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
+    // An admin project made available to everyone signed in is listed too:
+    // open to everyone already, it is added to bring it into one's list.
+    const adminPublished = (await deps.repo.listAdmin({ includeDisabled: false })).filter(
+      isPublished
+    );
+    const items = [];
+    for (const project of [...(await deps.repo.listCatalog()), ...adminPublished]) {
+      const text = [project.name, project.description, project.owner?.name]
+        .flatMap(value => (value && typeof value === 'object' ? Object.values(value) : [value]))
+        .filter(value => typeof value === 'string')
+        .join(' ')
+        .toLowerCase();
+      if (q && !text.includes(q)) continue;
+      const permissions = permissionsFor(project, req.user, context);
+      if (!permissions.canUse) continue;
+      items.push({
+        ...serializeFor(project, req.user, context, { includeItems: false }),
+        subscribed: subscribed.has(project.id)
+      });
+    }
+    const language = req.user?.language || 'en';
+    items.sort((a, b) => projectName(a, language).localeCompare(projectName(b, language)));
+    res.json({ enabled: true, items });
   });
 
   /**
@@ -589,35 +561,31 @@ export default function registerProjectRoutes(app) {
    *         schema: { type: string, enum: [all, mine, shared, admin] }
    */
   app.get(route(''), ...gate, authenticatedOnly, async (req, res) => {
-    try {
-      ensurePrincipal(req);
-      const scope = LIST_SCOPES.includes(req.query.scope) ? req.query.scope : 'all';
-      const repo = getProjectRepository();
-      // A principal that holds no projects (an OAuth client, an agent, a
-      // delegated token) still reads the admin projects its apps link, so
-      // only the owned and shared scopes are off for it.
-      const userProjectsOn =
-        canHoldProjects(req.user) &&
-        isUserProjectsConfigured(configCache.getFeatures()) &&
-        repo.isAvailable();
-      // Without user projects there is nothing owned or shared: those scopes
-      // answer empty rather than the admin projects the caller did not ask for.
-      if (!userProjectsOn && (scope === 'mine' || scope === 'shared')) {
-        return res.json({ items: [], nextCursor: null });
-      }
-      const effectiveScope = userProjectsOn ? scope : 'admin';
-      // The smart collections the user added are their projects (stubs, listed
-      // with the owned ones); a collection they did not add is not listed, it
-      // is offered by `GET /api/projects/_collections`. The stubs get the
-      // collection's name and document count from iFinder's list, asked for
-      // only when there is a stub: a slow iFinder costs its short timeout,
-      // never the local projects.
-      const local = await listProjects(req.user, repo, effectiveScope);
-      const { items, warnings } = await withCollectionStates(req.user, local);
-      res.json({ items, nextCursor: null, warnings });
-    } catch (error) {
-      sendFailedOperationError(res, 'list projects', error);
+    ensurePrincipal(req);
+    const scope = LIST_SCOPES.includes(req.query.scope) ? req.query.scope : 'all';
+    const repo = getProjectRepository();
+    // A principal that holds no projects (an OAuth client, an agent, a
+    // delegated token) still reads the admin projects its apps link, so
+    // only the owned and shared scopes are off for it.
+    const userProjectsOn =
+      canHoldProjects(req.user) &&
+      isUserProjectsConfigured(configCache.getFeatures()) &&
+      repo.isAvailable();
+    // Without user projects there is nothing owned or shared: those scopes
+    // answer empty rather than the admin projects the caller did not ask for.
+    if (!userProjectsOn && (scope === 'mine' || scope === 'shared')) {
+      return res.json({ items: [], nextCursor: null });
     }
+    const effectiveScope = userProjectsOn ? scope : 'admin';
+    // The smart collections the user added are their projects (stubs, listed
+    // with the owned ones); a collection they did not add is not listed, it
+    // is offered by `GET /api/projects/_collections`. The stubs get the
+    // collection's name and document count from iFinder's list, asked for
+    // only when there is a stub: a slow iFinder costs its short timeout,
+    // never the local projects.
+    const local = await listProjects(req.user, repo, effectiveScope);
+    const { items, warnings } = await withCollectionStates(req.user, local);
+    res.json({ items, nextCursor: null, warnings });
   });
 
   /**
@@ -633,35 +601,27 @@ export default function registerProjectRoutes(app) {
    *         description: The per-user project limit is reached
    */
   app.post(route(''), ...gate, authenticatedOnly, async (req, res) => {
-    try {
-      const deps = requireUserProjects(req, res);
-      if (!deps) return;
-      if (!mayCreateProjects(req.user)) {
-        return sendErrorResponse(res, 403, 'You may not create projects', {
-          details: { code: 'PERMISSION_DENIED' }
-        });
-      }
-      const body = parseBody(userProjectCreateSchema, req, res);
-      if (!body) return;
-      // A smart collection is created in iFinder, as the caller's own. The
-      // local limits, quota and storage of user projects do not apply to it.
-      if (body.tier === 'ifinder') {
-        return createIFinderProject(req, res, { body, serialize: serializeFor });
-      }
-      const { tier: _tier, ...content } = body;
-      const project = await deps.service.createUserProject({ owner: req.user, content });
-      logAudit({
-        req,
-        action: 'create',
-        resource: 'project',
-        resourceId: project.id,
-        summary: `Created project "${project.name}"`
-      });
-      const context = callerContext(req.user);
-      res.status(201).json(serializeFor(project, req.user, context));
-    } catch (error) {
-      sendProjectError(res, error, 'create project');
+    const deps = requireUserProjects(req);
+    if (!mayCreateProjects(req.user)) {
+      throw new ServiceError('PERMISSION_DENIED', 'You may not create projects', { status: 403 });
     }
+    const body = parseBody(userProjectCreateSchema, req);
+    // A smart collection is created in iFinder, as the caller's own. The
+    // local limits, quota and storage of user projects do not apply to it.
+    if (body.tier === 'ifinder') {
+      return createIFinderProject(req, res, { body, serialize: serializeFor });
+    }
+    const { tier: _tier, ...content } = body;
+    const project = await deps.service.createUserProject({ owner: req.user, content });
+    logAudit({
+      req,
+      action: 'create',
+      resource: 'project',
+      resourceId: project.id,
+      summary: `Created project "${project.name}"`
+    });
+    const context = callerContext(req.user);
+    res.status(201).json(serializeFor(project, req.user, context));
   });
 
   app.get(
@@ -670,26 +630,22 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
-      try {
-        const body = serializeFor(req.project, req.user, req.projectContext);
-        if (subscribable(req.project, req.projectPermissions)) {
-          body.subscribed = await getProjectRepository().isSubscribed(
-            req.project.id,
-            String(req.user.id)
-          );
-        }
-        // A document linked from another project says whether this viewer
-        // can read it there, so a broken link shows before a chat needs it.
-        const links = await linkStatesFor(req.project, req.user);
-        if (links.size > 0 && Array.isArray(body.items)) {
-          body.items = body.items.map(item =>
-            links.has(item.id) ? { ...item, link: links.get(item.id) } : item
-          );
-        }
-        res.json(body);
-      } catch (error) {
-        sendFailedOperationError(res, 'get project', error);
+      const body = serializeFor(req.project, req.user, req.projectContext);
+      if (subscribable(req.project, req.projectPermissions)) {
+        body.subscribed = await getProjectRepository().isSubscribed(
+          req.project.id,
+          String(req.user.id)
+        );
       }
+      // A document linked from another project says whether this viewer
+      // can read it there, so a broken link shows before a chat needs it.
+      const links = await linkStatesFor(req.project, req.user);
+      if (links.size > 0 && Array.isArray(body.items)) {
+        body.items = body.items.map(item =>
+          links.has(item.id) ? { ...item, link: links.get(item.id) } : item
+        );
+      }
+      res.json(body);
     }
   );
 
@@ -700,31 +656,26 @@ export default function registerProjectRoutes(app) {
     projectAccessRequired('edit'),
     forIFinderProject(renameIFinderProject(serializeFor)),
     async (req, res) => {
-      try {
-        // An admin project keeps the admin document's shape (localized
-        // names), whoever edits it.
-        const schema =
-          req.project.ownership === 'admin' ? adminProjectUpdateSchema : userProjectUpdateSchema;
-        const body = parseBody(schema, req, res);
-        if (!body) return;
-        const service = getProjectService();
-        const project = await service.updateProject(req.project.id, body, {
-          actor: req.user,
-          authorize: req.projectContext.authorize('edit')
-        });
-        if (!project) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'project',
-          resourceId: project.id,
-          summary: `Updated project "${projectName(project)}" (${Object.keys(body).join(', ')})`
-        });
-        auditPublished(req, req.project, project);
-        res.json(serializeFor(project, req.user, req.projectContext));
-      } catch (error) {
-        sendProjectError(res, error, 'update project');
-      }
+      // An admin project keeps the admin document's shape (localized
+      // names), whoever edits it.
+      const schema =
+        req.project.ownership === 'admin' ? adminProjectUpdateSchema : userProjectUpdateSchema;
+      const body = parseBody(schema, req);
+      const service = getProjectService();
+      const project = await service.updateProject(req.project.id, body, {
+        actor: req.user,
+        authorize: req.projectContext.authorize('edit')
+      });
+      if (!project) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'project',
+        resourceId: project.id,
+        summary: `Updated project "${projectName(project)}" (${Object.keys(body).join(', ')})`
+      });
+      auditPublished(req, req.project, project);
+      res.json(serializeFor(project, req.user, req.projectContext));
     }
   );
 
@@ -735,26 +686,22 @@ export default function registerProjectRoutes(app) {
     projectAccessRequired('own'),
     deleteStubCollection,
     async (req, res) => {
-      try {
-        const service = getProjectService();
-        const chats = getChatRepository();
-        const project = await service.deleteProject(req.project.id, {
-          authorize: req.projectContext.authorize('own'),
-          detachChat: chatId =>
-            chats.isAvailable() ? chats.moveProjectIf(chatId, req.project.id, null) : null
-        });
-        if (!project) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'project',
-          resourceId: project.id,
-          summary: `Deleted ${project.ownership} project "${projectName(project)}" with ${(project.items || []).length} items`
-        });
-        res.status(204).end();
-      } catch (error) {
-        sendProjectError(res, error, 'delete project');
-      }
+      const service = getProjectService();
+      const chats = getChatRepository();
+      const project = await service.deleteProject(req.project.id, {
+        authorize: req.projectContext.authorize('own'),
+        detachChat: chatId =>
+          chats.isAvailable() ? chats.moveProjectIf(chatId, req.project.id, null) : null
+      });
+      if (!project) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'project',
+        resourceId: project.id,
+        summary: `Deleted ${project.ownership} project "${projectName(project)}" with ${(project.items || []).length} items`
+      });
+      res.status(204).end();
     }
   );
 
@@ -784,25 +731,20 @@ export default function registerProjectRoutes(app) {
           authorize: req.projectContext.authorize('edit')
         });
       }
-      try {
-        const body = parseBody(addItemSchema, req, res);
-        if (!body) return;
-        const service = getProjectService();
-        const { item } = await service.addItem(req.project.id, body, {
-          user: req.user,
-          authorize: req.projectContext.authorize('edit')
-        });
-        logAudit({
-          req,
-          action: 'create',
-          resource: 'projectItem',
-          resourceId: req.project.id,
-          summary: `Added ${item.kind} item "${item.name}" (${item.provenance.origin}) to project "${projectName(req.project)}"`
-        });
-        res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
-      } catch (error) {
-        sendProjectError(res, error, 'add project item');
-      }
+      const body = parseBody(addItemSchema, req);
+      const service = getProjectService();
+      const { item } = await service.addItem(req.project.id, body, {
+        user: req.user,
+        authorize: req.projectContext.authorize('edit')
+      });
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'projectItem',
+        resourceId: req.project.id,
+        summary: `Added ${item.kind} item "${item.name}" (${item.provenance.origin}) to project "${projectName(req.project)}"`
+      });
+      res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
     }
   );
 
@@ -813,9 +755,9 @@ export default function registerProjectRoutes(app) {
     projectAccessRequired('use'),
     (req, res) => {
       const { itemId } = req.params;
-      if (!validateIdForPath(itemId, 'item', res)) return;
+      assertValidId(itemId, 'item');
       const item = (req.project.items || []).find(entry => entry.id === itemId);
-      if (!item) return sendNotFound(res, 'Item');
+      if (!item) throw new ServiceError('NOT_FOUND', 'Item not found');
       res.json(serializeItem(item));
     }
   );
@@ -826,27 +768,22 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('edit'),
     async (req, res) => {
-      try {
-        const { itemId } = req.params;
-        if (!validateIdForPath(itemId, 'item', res)) return;
-        const body = parseBody(itemUpdateSchema, req, res);
-        if (!body) return;
-        const result = await getProjectService().updateItem(req.project.id, itemId, body, {
-          user: req.user,
-          authorize: req.projectContext.authorize('edit')
-        });
-        if (!result) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'projectItem',
-          resourceId: req.project.id,
-          summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in project "${projectName(req.project)}"`
-        });
-        res.json(serializeItem(result.item));
-      } catch (error) {
-        sendProjectError(res, error, 'update project item');
-      }
+      const { itemId } = req.params;
+      assertValidId(itemId, 'item');
+      const body = parseBody(itemUpdateSchema, req);
+      const result = await getProjectService().updateItem(req.project.id, itemId, body, {
+        user: req.user,
+        authorize: req.projectContext.authorize('edit')
+      });
+      if (!result) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'projectItem',
+        resourceId: req.project.id,
+        summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in project "${projectName(req.project)}"`
+      });
+      res.json(serializeItem(result.item));
     }
   );
 
@@ -867,19 +804,15 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
-      try {
-        const settings = projectSettings(configCache.getPlatform() || {});
-        res.json(
-          await estimateProject(req.project, {
-            user: req.user,
-            language: req.user?.language || 'en',
-            budgetTokens: settings.loadAllMaxTokens,
-            toolResultBudgetTokens: RESULT_BUDGET_TOKENS
-          })
-        );
-      } catch (error) {
-        sendFailedOperationError(res, 'estimate project tokens', error);
-      }
+      const settings = projectSettings(configCache.getPlatform() || {});
+      res.json(
+        await estimateProject(req.project, {
+          user: req.user,
+          language: req.user?.language || 'en',
+          budgetTokens: settings.loadAllMaxTokens,
+          toolResultBudgetTokens: RESULT_BUDGET_TOKENS
+        })
+      );
     }
   );
 
@@ -913,30 +846,26 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('edit'),
     forIFinderProject((req, res) => {
-      if (!validateIdForPath(req.params.itemId, 'item', res)) return undefined;
+      assertValidId(req.params.itemId, 'item');
       return removeIFinderDocument(req, res);
     }),
     async (req, res) => {
-      try {
-        const { itemId } = req.params;
-        if (!validateIdForPath(itemId, 'item', res)) return;
-        const before = (req.project.items || []).find(entry => entry.id === itemId);
-        const project = await getProjectService().removeItem(req.project.id, itemId, {
-          user: req.user,
-          authorize: req.projectContext.authorize('edit')
-        });
-        if (!project) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'projectItem',
-          resourceId: project.id,
-          summary: `Removed ${before?.kind || 'item'} "${before?.name || itemId}" from project "${projectName(project)}"`
-        });
-        res.status(204).end();
-      } catch (error) {
-        sendProjectError(res, error, 'remove project item');
-      }
+      const { itemId } = req.params;
+      assertValidId(itemId, 'item');
+      const before = (req.project.items || []).find(entry => entry.id === itemId);
+      const project = await getProjectService().removeItem(req.project.id, itemId, {
+        user: req.user,
+        authorize: req.projectContext.authorize('edit')
+      });
+      if (!project) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'projectItem',
+        resourceId: project.id,
+        summary: `Removed ${before?.kind || 'item'} "${before?.name || itemId}" from project "${projectName(project)}"`
+      });
+      res.status(204).end();
     }
   );
 
@@ -948,71 +877,66 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('share'),
     async (req, res) => {
-      try {
-        const deps = requireUserProjects(req, res, { manage: true });
-        if (!deps) return;
-        if (!isUserProjectId(req.project.id)) {
-          return sendErrorResponse(res, 403, 'Admin projects have no members', {
-            details: { code: 'PERMISSION_DENIED' }
-          });
-        }
-        const body = parseBody(membersUpdateSchema, req, res);
-        if (!body) return;
-        // `resolveShares` wants `permission`; members carry `role`. Same
-        // resolution (known active users, existing groups, never the owner),
-        // then the role is put back.
-        const resolved = resolveShares(
-          body.members.map(member => ({
-            ...member,
-            permission: member.role === 'editor' ? 'edit' : 'use'
-          })),
-          {
-            prompt: {
-              ownerId: req.project.owner?.id,
-              shares: (req.project.members || []).map(m => ({
-                ...m,
-                permission: m.role === 'editor' ? 'edit' : 'use'
-              }))
-            },
-            allowed: allowedTargetsFor(deps.settings, req.user),
-            users: usersDb(),
-            groups: req.projectContext.config.groups || {},
-            noun: 'projects'
-          }
-        );
-        if (!resolved.ok) {
-          return sendErrorResponse(res, resolved.status, resolved.error, {
-            details: { code: 'SHARE_TARGET_INVALID', ...(resolved.details || {}) }
-          });
-        }
-        const members = resolved.shares.map(({ permission, ...share }) => ({
-          ...share,
-          role: permission === 'edit' ? 'editor' : 'user'
-        }));
-        const result = await deps.service.setMembers(req.project.id, members, {
-          user: req.user,
-          authorize: req.projectContext.authorize('share')
+      const deps = requireUserProjects(req, { manage: true });
+      if (!isUserProjectId(req.project.id)) {
+        throw new ServiceError('PERMISSION_DENIED', 'Admin projects have no members', {
+          status: 403
         });
-        if (!result) return sendNotFound(res, 'Project');
-        const changed = result.changed || [];
-        if (result.added.length || result.removed.length || changed.length) {
-          const everyone = result.project.members.some(member => member.type === 'everyone');
-          logAudit({
-            req,
-            action: 'share',
-            resource: 'projectShare',
-            resourceId: result.project.id,
-            summary:
-              `Changed members of project "${result.project.name}": ` +
-              `${result.added.length} added, ${result.removed.length} removed, ` +
-              `${changed.length} role${changed.length === 1 ? '' : 's'} changed` +
-              `${everyone ? ' (shared with everyone)' : ''}`
-          });
-        }
-        res.json(serializeFor(result.project, req.user, req.projectContext));
-      } catch (error) {
-        sendProjectError(res, error, 'change project members');
       }
+      const body = parseBody(membersUpdateSchema, req);
+      // `resolveShares` wants `permission`; members carry `role`. Same
+      // resolution (known active users, existing groups, never the owner),
+      // then the role is put back.
+      const resolved = resolveShares(
+        body.members.map(member => ({
+          ...member,
+          permission: member.role === 'editor' ? 'edit' : 'use'
+        })),
+        {
+          prompt: {
+            ownerId: req.project.owner?.id,
+            shares: (req.project.members || []).map(m => ({
+              ...m,
+              permission: m.role === 'editor' ? 'edit' : 'use'
+            }))
+          },
+          allowed: allowedTargetsFor(deps.settings, req.user),
+          users: usersDb(),
+          groups: req.projectContext.config.groups || {},
+          noun: 'projects'
+        }
+      );
+      if (!resolved.ok) {
+        throw new ServiceError('SHARE_TARGET_INVALID', resolved.error, {
+          status: resolved.status,
+          details: { ...(resolved.details || {}) }
+        });
+      }
+      const members = resolved.shares.map(({ permission, ...share }) => ({
+        ...share,
+        role: permission === 'edit' ? 'editor' : 'user'
+      }));
+      const result = await deps.service.setMembers(req.project.id, members, {
+        user: req.user,
+        authorize: req.projectContext.authorize('share')
+      });
+      if (!result) throw new ServiceError('NOT_FOUND', 'Project not found');
+      const changed = result.changed || [];
+      if (result.added.length || result.removed.length || changed.length) {
+        const everyone = result.project.members.some(member => member.type === 'everyone');
+        logAudit({
+          req,
+          action: 'share',
+          resource: 'projectShare',
+          resourceId: result.project.id,
+          summary:
+            `Changed members of project "${result.project.name}": ` +
+            `${result.added.length} added, ${result.removed.length} removed, ` +
+            `${changed.length} role${changed.length === 1 ? '' : 's'} changed` +
+            `${everyone ? ' (shared with everyone)' : ''}`
+        });
+      }
+      res.json(serializeFor(result.project, req.user, req.projectContext));
     }
   );
 
@@ -1022,43 +946,37 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('own'),
     async (req, res) => {
-      try {
-        const deps = requireUserProjects(req, res, { manage: true });
-        if (!deps) return;
-        const body = parseBody(transferSchema, req, res);
-        if (!body) return;
-        const users = usersDb();
-        const target = Object.hasOwn(users, body.ownerId) ? users[body.ownerId] : null;
-        if (!target || target.active === false) {
-          return sendBadRequest(res, 'The new owner is not a known, active user');
-        }
-        if (String(body.ownerId) === String(req.project.owner?.id)) {
-          return sendBadRequest(res, 'This user already owns the project');
-        }
-        const project = await deps.service.transfer(
-          req.project.id,
-          { id: body.ownerId, name: displayName({ ...target, id: body.ownerId }) },
-          { user: req.user, authorize: req.projectContext.authorize('own') }
-        );
-        if (!project) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'projectShare',
-          resourceId: project.id,
-          summary: `Transferred project "${project.name}" to ${project.owner.name || project.owner.id}`
-        });
-        // The caller may no longer see it; answer with what they have left.
-        const context = callerContext(req.user);
-        const permissions = permissionsFor(project, req.user, context);
-        res.json(
-          permissions.canView
-            ? serializeFor(project, req.user, context)
-            : { id: project.id, transferred: true }
-        );
-      } catch (error) {
-        sendProjectError(res, error, 'transfer project');
+      const deps = requireUserProjects(req, { manage: true });
+      const body = parseBody(transferSchema, req);
+      const users = usersDb();
+      const target = Object.hasOwn(users, body.ownerId) ? users[body.ownerId] : null;
+      if (!target || target.active === false) {
+        throw new ServiceError('BAD_REQUEST', 'The new owner is not a known, active user');
       }
+      if (String(body.ownerId) === String(req.project.owner?.id)) {
+        throw new ServiceError('BAD_REQUEST', 'This user already owns the project');
+      }
+      const project = await deps.service.transfer(
+        req.project.id,
+        { id: body.ownerId, name: displayName({ ...target, id: body.ownerId }) },
+        { user: req.user, authorize: req.projectContext.authorize('own') }
+      );
+      if (!project) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'projectShare',
+        resourceId: project.id,
+        summary: `Transferred project "${project.name}" to ${project.owner.name || project.owner.id}`
+      });
+      // The caller may no longer see it; answer with what they have left.
+      const context = callerContext(req.user);
+      const permissions = permissionsFor(project, req.user, context);
+      res.json(
+        permissions.canView
+          ? serializeFor(project, req.user, context)
+          : { id: project.id, transferred: true }
+      );
     }
   );
 
@@ -1082,53 +1000,52 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
-      try {
-        const deps = requireUserProjects(req, res, { manage: true });
-        if (!deps) return;
-        if (!isUserProjectId(req.project.id)) {
-          return sendBadRequest(res, 'Only user projects are published to the catalog');
-        }
-        if (typeof req.body?.published !== 'boolean') {
-          return sendBadRequest(res, '"published" must be true or false');
-        }
-        const { published } = req.body;
-        // Publishing takes owners and editors who may share, with the catalog
-        // on. Taking a project out takes them too, or a full admin: a project
-        // whose owner left would otherwise stay published.
-        const allowed = loaded => {
-          const permissions = permissionsFor(loaded, req.user, req.projectContext);
-          return published
-            ? permissions.canShare
-            : permissions.canShare || req.projectContext.isAdmin;
-        };
-        if (!allowed(req.project)) {
-          return sendErrorResponse(res, 403, 'You may not change this project in the catalog', {
-            details: { code: 'PERMISSION_DENIED', required: 'share' }
-          });
-        }
-        if (published && !(deps.settings.sharing.allowCatalog && mayShareProjects(req.user))) {
-          return sendErrorResponse(res, 403, 'Publishing projects to the catalog is not allowed', {
-            details: { code: 'PERMISSION_DENIED', required: 'publish' }
-          });
-        }
-        const project = await deps.repo.setPublished(req.project.id, published, {
-          actor: req.user,
-          authorize: allowed
-        });
-        if (!project) return sendNotFound(res, 'Project');
-        logAudit({
-          req,
-          action: 'share',
-          resource: 'projectShare',
-          resourceId: project.id,
-          summary: `${published ? 'Published' : 'Took'} project "${project.name}" ${
-            published ? 'to' : 'out of'
-          } the catalog`
-        });
-        res.json(serializeFor(project, req.user, req.projectContext));
-      } catch (error) {
-        sendProjectError(res, error, 'publish project');
+      const deps = requireUserProjects(req, { manage: true });
+      if (!isUserProjectId(req.project.id)) {
+        throw new ServiceError('BAD_REQUEST', 'Only user projects are published to the catalog');
       }
+      if (typeof req.body?.published !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', '"published" must be true or false');
+      }
+      const { published } = req.body;
+      // Publishing takes owners and editors who may share, with the catalog
+      // on. Taking a project out takes them too, or a full admin: a project
+      // whose owner left would otherwise stay published.
+      const allowed = loaded => {
+        const permissions = permissionsFor(loaded, req.user, req.projectContext);
+        return published
+          ? permissions.canShare
+          : permissions.canShare || req.projectContext.isAdmin;
+      };
+      if (!allowed(req.project)) {
+        throw new ServiceError(
+          'PERMISSION_DENIED',
+          'You may not change this project in the catalog',
+          { status: 403, details: { required: 'share' } }
+        );
+      }
+      if (published && !(deps.settings.sharing.allowCatalog && mayShareProjects(req.user))) {
+        throw new ServiceError(
+          'PERMISSION_DENIED',
+          'Publishing projects to the catalog is not allowed',
+          { status: 403, details: { required: 'publish' } }
+        );
+      }
+      const project = await deps.repo.setPublished(req.project.id, published, {
+        actor: req.user,
+        authorize: allowed
+      });
+      if (!project) throw new ServiceError('NOT_FOUND', 'Project not found');
+      logAudit({
+        req,
+        action: 'share',
+        resource: 'projectShare',
+        resourceId: project.id,
+        summary: `${published ? 'Published' : 'Took'} project "${project.name}" ${
+          published ? 'to' : 'out of'
+        } the catalog`
+      });
+      res.json(serializeFor(project, req.user, req.projectContext));
     }
   );
 
@@ -1152,37 +1069,30 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
-      try {
-        const deps = requireUserProjects(req, res);
-        if (!deps) return;
-        // A member has the project in their list already, and an admin
-        // project that comes with an app is not in the catalog.
-        if (!subscribable(req.project, req.projectPermissions)) {
-          return sendBadRequest(res, 'Only projects reached through the catalog are added');
-        }
-        await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);
-        res.json({
-          ...serializeFor(req.project, req.user, req.projectContext),
-          subscribed: true
-        });
-      } catch (error) {
-        sendProjectError(res, error, 'add project from the catalog');
+      const deps = requireUserProjects(req);
+      // A member has the project in their list already, and an admin
+      // project that comes with an app is not in the catalog.
+      if (!subscribable(req.project, req.projectPermissions)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Only projects reached through the catalog are added'
+        );
       }
+      await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);
+      res.json({
+        ...serializeFor(req.project, req.user, req.projectContext),
+        subscribed: true
+      });
     }
   );
 
   // No access check: a project taken out of the catalog can still be removed
   // from the list. Only the caller's own marker is touched.
   app.delete(route('/:projectId/subscription'), ...gate, authenticatedOnly, async (req, res) => {
-    try {
-      if (!validateIdForPath(req.params.projectId, 'project', res)) return;
-      const deps = requireUserProjects(req, res);
-      if (!deps) return;
-      await deps.repo.setSubscribed(req.params.projectId, String(req.user.id), false);
-      res.status(204).end();
-    } catch (error) {
-      sendProjectError(res, error, 'remove project from the list');
-    }
+    assertValidId(req.params.projectId, 'project');
+    const deps = requireUserProjects(req);
+    await deps.repo.setSubscribed(req.params.projectId, String(req.user.id), false);
+    res.status(204).end();
   });
 
   // --- chats ----------------------------------------------------------------
@@ -1215,76 +1125,71 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
-      try {
-        const chats = getChatRepository();
-        if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
-        // Someone who took the project from the catalog sees their own chats
-        // only; the members' chats stay among the members.
-        const filter = !req.projectPermissions.readsAllChats
-          ? 'mine'
-          : ['all', 'mine', 'others'].includes(req.query.filter)
-            ? req.query.filter
-            : 'all';
-        const markers = await getProjectRepository().listChatMarkers(req.project.id);
-        const me = String(req.user.id);
-        // A chat records its owner in the identity mode of its day (a
-        // pseudonymized chat keeps a fingerprint), so the caller is resolved
-        // per chat the way `authorizeChat` does, not compared by raw id.
-        const principals = new Map();
-        const principalIdFor = async mode => {
-          const key = mode || 'default';
-          if (!principals.has(key)) {
-            principals.set(key, (await resolvePrincipal(req.user, { mode: key })).id);
-          }
-          return principals.get(key);
-        };
-        const items = [];
-        for (const marker of markers) {
-          const chat = await chats.getChat(marker.chatId);
-          // The chat decides; a marker it no longer backs is pruned on the
-          // way, judged again under the chat's lock so a move that is still
-          // settling (or has moved the chat back since) keeps its marker.
-          if (!chat || chat.projectId !== req.project.id) {
-            await chats
-              .unlessInProject(marker.chatId, req.project.id, () =>
-                getProjectRepository().removeChatMarker(req.project.id, marker.chatId)
-              )
-              .catch(() => {});
-            continue;
-          }
-          const principalId = await principalIdFor(chat.identityMode);
-          const mine =
-            String(chat.ownerId) === principalId || String(marker.ownerId) === principalId;
-          if ((filter === 'mine' && !mine) || (filter === 'others' && mine)) continue;
-          items.push({
-            id: chat.id,
-            title: chat.title || '',
-            appId: chat.appId || null,
-            createdAt: chat.createdAt,
-            lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
-            messageCount: chat.messageCount || 0,
-            status: chat.status || 'active',
-            owner: { id: mine ? me : null, name: chat.ownerName || '', mine }
-          });
+      const chats = getChatRepository();
+      if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
+      // Someone who took the project from the catalog sees their own chats
+      // only; the members' chats stay among the members.
+      const filter = !req.projectPermissions.readsAllChats
+        ? 'mine'
+        : ['all', 'mine', 'others'].includes(req.query.filter)
+          ? req.query.filter
+          : 'all';
+      const markers = await getProjectRepository().listChatMarkers(req.project.id);
+      const me = String(req.user.id);
+      // A chat records its owner in the identity mode of its day (a
+      // pseudonymized chat keeps a fingerprint), so the caller is resolved
+      // per chat the way `authorizeChat` does, not compared by raw id.
+      const principals = new Map();
+      const principalIdFor = async mode => {
+        const key = mode || 'default';
+        if (!principals.has(key)) {
+          principals.set(key, (await resolvePrincipal(req.user, { mode: key })).id);
         }
-        items.sort((a, b) =>
-          String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || ''))
-        );
-        // A page of the newest first: `cursor` is the offset the page starts at.
-        const limit = Math.min(
-          CHATS_PAGE_MAX,
-          Math.max(1, Number.parseInt(req.query.limit, 10) || CHATS_PAGE_DEFAULT)
-        );
-        const start = Math.max(0, Number.parseInt(req.query.cursor, 10) || 0);
-        const page = items.slice(start, start + limit);
-        res.json({
-          items: page,
-          nextCursor: start + limit < items.length ? String(start + limit) : null,
-          total: items.length
+        return principals.get(key);
+      };
+      const items = [];
+      for (const marker of markers) {
+        const chat = await chats.getChat(marker.chatId);
+        // The chat decides; a marker it no longer backs is pruned on the
+        // way, judged again under the chat's lock so a move that is still
+        // settling (or has moved the chat back since) keeps its marker.
+        if (!chat || chat.projectId !== req.project.id) {
+          await chats
+            .unlessInProject(marker.chatId, req.project.id, () =>
+              getProjectRepository().removeChatMarker(req.project.id, marker.chatId)
+            )
+            .catch(() => {});
+          continue;
+        }
+        const principalId = await principalIdFor(chat.identityMode);
+        const mine = String(chat.ownerId) === principalId || String(marker.ownerId) === principalId;
+        if ((filter === 'mine' && !mine) || (filter === 'others' && mine)) continue;
+        items.push({
+          id: chat.id,
+          title: chat.title || '',
+          appId: chat.appId || null,
+          createdAt: chat.createdAt,
+          lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
+          messageCount: chat.messageCount || 0,
+          status: chat.status || 'active',
+          owner: { id: mine ? me : null, name: chat.ownerName || '', mine }
         });
-      } catch (error) {
-        sendFailedOperationError(res, 'list project chats', error);
       }
+      items.sort((a, b) =>
+        String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || ''))
+      );
+      // A page of the newest first: `cursor` is the offset the page starts at.
+      const limit = Math.min(
+        CHATS_PAGE_MAX,
+        Math.max(1, Number.parseInt(req.query.limit, 10) || CHATS_PAGE_DEFAULT)
+      );
+      const start = Math.max(0, Number.parseInt(req.query.cursor, 10) || 0);
+      const page = items.slice(start, start + limit);
+      res.json({
+        items: page,
+        nextCursor: start + limit < items.length ? String(start + limit) : null,
+        total: items.length
+      });
     }
   );
 }

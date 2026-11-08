@@ -24,8 +24,8 @@ import {
   isContentAdmin,
   loadGroupsConfiguration
 } from '../utils/authorization.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import { sendErrorResponse, sendNotFound } from '../utils/responseHelpers.js';
+import { assertValidId } from '../utils/pathSecurity.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
@@ -146,14 +146,12 @@ export const IFINDER_WRITE_ROUTES = Object.freeze([
   { method: 'DELETE', route: '/:projectId/items/:itemId', path: /^\/items\/[^/]+\/?$/ }
 ]);
 
-function refuseReadOnly(res) {
-  sendErrorResponse(
-    res,
-    403,
+function refuseReadOnly() {
+  throw new ServiceError(
+    'PROJECT_READ_ONLY',
     'A project from iFinder can only be renamed, and have documents added or removed. Everything else is done in iFinder',
-    { details: { code: 'PROJECT_READ_ONLY' } }
+    { status: 403 }
   );
-  return true;
 }
 
 /**
@@ -163,17 +161,16 @@ function refuseReadOnly(res) {
  * guard of `/api/projects/:projectId`, where `req.path` is the part below it.
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
  * @param {string} projectId
- * @returns {boolean} True when the request was refused.
+ * @throws {ServiceError} `PROJECT_READ_ONLY` (403) when the request is refused.
  */
-export function refuseIFinderWrite(req, res, projectId) {
-  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return false;
+export function assertIFinderWriteAllowed(req, projectId) {
+  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return;
   const allowed = IFINDER_WRITE_ROUTES.some(
     entry =>
       entry.method === req.method && typeof req.path === 'string' && entry.path.test(req.path)
   );
-  return allowed ? false : refuseReadOnly(res);
+  if (!allowed) refuseReadOnly();
 }
 
 /**
@@ -182,17 +179,16 @@ export function refuseIFinderWrite(req, res, projectId) {
  * A request that matched no route template is refused.
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
  * @param {string} projectId
- * @returns {boolean} True when the request was refused.
+ * @throws {ServiceError} `PROJECT_READ_ONLY` (403) when the request is refused.
  */
-export function refuseIFinderWriteRoute(req, res, projectId) {
-  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return false;
+export function assertIFinderWriteRouteAllowed(req, projectId) {
+  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return;
   const template = String(req.route?.path || '');
   const allowed = IFINDER_WRITE_ROUTES.some(
     entry => entry.method === req.method && template.endsWith(entry.route)
   );
-  return allowed ? false : refuseReadOnly(res);
+  if (!allowed) refuseReadOnly();
 }
 
 /**
@@ -214,24 +210,21 @@ export const COLLECTION_STUB_WRITE_ROUTES = Object.freeze([
  * {@link COLLECTION_STUB_WRITE_ROUTES}.
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
  * @param {Object} project - The loaded project.
- * @returns {boolean} True when the request was refused.
+ * @throws {ServiceError} `PROJECT_READ_ONLY` (403) when the request is refused.
  */
-export function refuseCollectionStubWrite(req, res, project) {
-  if (!isCollectionStub(project) || READ_METHODS.has(req.method)) return false;
+export function assertCollectionStubWriteAllowed(req, project) {
+  if (!isCollectionStub(project) || READ_METHODS.has(req.method)) return;
   const template = String(req.route?.path || '');
   const allowed = COLLECTION_STUB_WRITE_ROUTES.some(
     entry => entry.method === req.method && template.endsWith(entry.route)
   );
-  if (allowed) return false;
-  sendErrorResponse(
-    res,
-    403,
+  if (allowed) return;
+  throw new ServiceError(
+    'PROJECT_READ_ONLY',
     'A smart collection from iFinder can be renamed, configured, deleted, and have documents added or removed. Everything else is done in iFinder',
-    { details: { code: 'PROJECT_READ_ONLY' } }
+    { status: 403 }
   );
-  return true;
 }
 
 /**
@@ -247,24 +240,22 @@ export function projectAccessRequired(level) {
   return async function projectAccess(req, res, next) {
     try {
       const { projectId } = req.params;
-      if (!validateIdForPath(projectId, 'project', res)) return;
-      if (refuseIFinderWriteRoute(req, res, projectId)) return;
+      assertValidId(projectId, 'project');
+      assertIFinderWriteRouteAllowed(req, projectId);
       ensurePrincipal(req);
       const loaded = await loadProjectFor(req.user, projectId, {
         repository: getProjectRepository()
       });
       if (loaded.status === 'unavailable') {
-        sendErrorResponse(res, 503, 'iFinder could not be reached', {
-          details: { code: 'IFINDER_UNAVAILABLE' }
+        throw new ServiceError('IFINDER_UNAVAILABLE', 'iFinder could not be reached', {
+          status: 503
         });
-        return;
       }
       const project = loaded.project || null;
       const context = callerContext(req.user);
       const permissions = permissionsFor(project, req.user, context);
       if (!project || !permissions.canView) {
-        sendNotFound(res, 'Project');
-        return;
+        throw new ServiceError('NOT_FOUND', 'Project not found');
       }
       // User projects sit behind the `userProjects` flag (spec 1 §7.3): while
       // it is off they stay dark, reads and writes alike, for everyone but a
@@ -276,10 +267,9 @@ export function projectAccessRequired(level) {
         (!context.isAdmin || isIFinderProjectId(project.id)) &&
         !isUserProjectsConfigured(configCache.getFeatures())
       ) {
-        sendErrorResponse(res, 403, 'User projects are switched off', {
-          details: { code: 'USER_PROJECTS_DISABLED' }
+        throw new ServiceError('USER_PROJECTS_DISABLED', 'User projects are switched off', {
+          status: 403
         });
-        return;
       }
       // Where no lock reaches every iHub instance a collection cannot be changed
       // safely: say that, not a bare "no access" to its owner.
@@ -289,20 +279,19 @@ export function projectAccessRequired(level) {
         permissions.isOwner &&
         context.ifinderWritable !== true
       ) {
-        sendErrorResponse(res, 403, 'Changing smart collections from iHub is switched off here', {
-          details: {
-            code: 'IFINDER_WRITES_DISABLED',
-            reason: collectionWriteSupport().reason
-          }
-        });
-        return;
+        throw new ServiceError(
+          'IFINDER_WRITES_DISABLED',
+          'Changing smart collections from iHub is switched off here',
+          { status: 403, details: { reason: collectionWriteSupport().reason } }
+        );
       }
-      if (refuseCollectionStubWrite(req, res, project)) return;
+      assertCollectionStubWriteAllowed(req, project);
       if (!satisfiesLevel(permissions, level)) {
-        sendErrorResponse(res, 403, 'You do not have the required access to this project', {
-          details: { code: 'PERMISSION_DENIED', required: level }
-        });
-        return;
+        throw new ServiceError(
+          'PERMISSION_DENIED',
+          'You do not have the required access to this project',
+          { status: 403, details: { required: level } }
+        );
       }
       req.project = project;
       req.projectPermissions = permissions;
