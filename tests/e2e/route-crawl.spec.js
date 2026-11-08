@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { test, expect } from '@playwright/test';
+import { createConsoleFilter } from './helpers/consoleFilter.js';
 
 /**
  * End-to-end: crawl the app as the default admin and fail on anything that
@@ -115,15 +116,16 @@ test.describe('Route crawl', () => {
     /** Load one page in a fresh tab (a long-lived tab runs out of resources) and return its links. */
     async function visit(key) {
       const page = await context.newPage();
-      let expectedFailures = 0;
+      const consoleFilter = createConsoleFilter(IGNORED_CONSOLE);
       page.on('response', response => {
         const url = new URL(response.url());
         // `includes`, not `startsWith`: a page the client takes for a base path calls `/<segment>/api/...`.
         if (!url.pathname.includes('/api/')) return;
         const status = response.status();
         const method = response.request().method();
-        if (status >= 400 && isExpected(method, url.pathname, status)) expectedFailures++;
-        else if (status >= 400) {
+        if (status >= 400 && isExpected(method, url.pathname, status)) {
+          consoleFilter.expectFailure(url.pathname);
+        } else if (status >= 400) {
           problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
           if (status === 404 && method === 'GET') notFound.add(key);
         }
@@ -132,14 +134,7 @@ test.describe('Route crawl', () => {
       page.on('console', message => {
         if (message.type() !== 'error') return;
         const text = message.text();
-        if (IGNORED_CONSOLE.some(re => re.test(text))) return;
-        // The client logs a failed request it handles itself; the response above decides.
-        // Each expected failure excuses the two lines the client logs for it (the request,
-        // then the page that could not load); any further one is a different problem.
-        if (expectedFailures > 0 && /^(API Error|Error loading|Failed to)/.test(text)) {
-          expectedFailures -= 0.5;
-          return;
-        }
+        if (consoleFilter.excuses(text)) return;
         problems.push(`${key}: console.error: ${text.slice(0, 200)}`);
       });
       try {
