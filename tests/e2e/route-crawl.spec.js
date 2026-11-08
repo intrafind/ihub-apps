@@ -107,6 +107,10 @@ test.describe('Route crawl', () => {
     expect(login.ok()).toBeTruthy();
 
     const problems = [];
+    // Pages whose own request answered 404, and where the link to each was found: another
+    // spec running next to this one may delete a project or prompt between the link and the visit.
+    const notFound = new Set();
+    const foundOn = new Map();
 
     /** Load one page in a fresh tab (a long-lived tab runs out of resources) and return its links. */
     async function visit(key) {
@@ -119,7 +123,10 @@ test.describe('Route crawl', () => {
         const status = response.status();
         const method = response.request().method();
         if (status >= 400 && isExpected(method, url.pathname, status)) expectedFailures++;
-        else if (status >= 400) problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
+        else if (status >= 400) {
+          problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
+          if (status === 404 && method === 'GET') notFound.add(key);
+        }
       });
       page.on('pageerror', error => problems.push(`${key}: exception: ${error.message}`));
       page.on('console', message => {
@@ -149,12 +156,26 @@ test.describe('Route crawl', () => {
       seen.add(key);
       for (const href of await visit(key)) {
         const clean = href.split('#')[0].split('?')[0];
-        if (clean && !SKIP_LINK.test(clean) && !seen.has(clean)) queue.push(clean);
+        if (clean && !SKIP_LINK.test(clean) && !seen.has(clean)) {
+          queue.push(clean);
+          if (!foundOn.has(clean)) foundOn.set(clean, key);
+        }
       }
     }
 
     console.log(`crawled ${seen.size} pages`);
     expect(seen.size, 'the crawl found almost nothing to visit').toBeGreaterThan(20);
-    expect([...new Set(problems)], 'failures while loading pages').toEqual([]);
+
+    // A page that 404ed because the thing it shows was deleted meanwhile is not a defect:
+    // look at the page that linked to it again — if the link is gone, drop the failure.
+    const vanished = new Set();
+    for (const key of notFound) {
+      const source = foundOn.get(key);
+      const links = source ? await visit(source) : [key];
+      if (!links.some(href => href.split('#')[0].split('?')[0] === key)) vanished.add(key);
+    }
+    if (vanished.size) console.log(`ignored, deleted while crawling: ${[...vanished].join(', ')}`);
+    const failures = [...new Set(problems)].filter(line => !vanished.has(line.split(': ')[0]));
+    expect(failures, 'failures while loading pages').toEqual([]);
   });
 });
