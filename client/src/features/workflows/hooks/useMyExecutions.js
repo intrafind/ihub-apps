@@ -13,7 +13,6 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @param {Object} options - Fetch options
  * @param {string} [options.status] - Filter by status (running, paused, completed, failed, cancelled)
  * @param {number} [options.limit=20] - Maximum number of results
- * @param {number} [options.offset=0] - Number of results to skip
  * @returns {Object} Execution list state and methods
  * @property {Array} executions - List of user's executions
  * @property {boolean} loading - Whether the list is loading
@@ -22,7 +21,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @property {number} runningCount - Count of running/paused executions
  */
 function useMyExecutions(options = {}) {
-  const { status, limit = 20, offset = 0, includeArchived = false } = options;
+  const { status, limit = 20, includeArchived = false } = options;
 
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,12 +54,11 @@ function useMyExecutions(options = {}) {
       if (status) params.append('status', status);
       if (includeArchived) params.append('includeArchived', 'true');
       params.append('limit', String(limit));
-      params.append('offset', String(offset));
 
       const response = await apiClient.get(`/workflows/my-executions?${params.toString()}`, {
         signal: controller.signal
       });
-      setExecutions(response.data || []);
+      setExecutions(response.data?.items || []);
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       console.error('Failed to fetch executions:', err);
@@ -72,7 +70,7 @@ function useMyExecutions(options = {}) {
       }
       setLoading(false);
     }
-  }, [status, limit, offset, includeArchived, featureFlags]);
+  }, [status, limit, includeArchived, featureFlags]);
 
   useEffect(() => {
     fetchExecutions();

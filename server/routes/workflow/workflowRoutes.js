@@ -47,6 +47,12 @@ import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
+import {
+  limitFrom,
+  nextOffsetCursor,
+  offsetFromCursor,
+  pageOfList
+} from '../../utils/pagination.js';
 
 const checkWorkflowsFeature = requireFeature('workflows');
 
@@ -411,16 +417,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         schema:
    *           type: integer
    *           default: 20
-   *         description: Maximum number of results
+   *         description: Maximum number of results (at most 200)
    *       - in: query
-   *         name: offset
+   *         name: cursor
    *         schema:
-   *           type: integer
-   *           default: 0
-   *         description: Number of results to skip
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *     responses:
    *       200:
-   *         description: List of user's executions
+   *         description: "`{ items, nextCursor }`: the user's executions, newest first"
    *       401:
    *         description: Authentication required
    *       500:
@@ -432,17 +437,17 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authRequired,
     async (req, res) => {
       const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-      const { status, limit = 20, offset = 0, includeArchived } = req.query;
+      const { status, limit, cursor, includeArchived } = req.query;
 
       const registry = getExecutionRegistry();
       const executions = await registry.getByUser(userId, {
         status,
-        includeArchived: includeArchived === 'true' || includeArchived === '1',
-        limit: Number.parseInt(limit, 10),
-        offset: Number.parseInt(offset, 10)
+        includeArchived: includeArchived === 'true' || includeArchived === '1'
       });
 
-      res.json(executions);
+      res.json(
+        pageOfList(executions, { limit: limitFrom(limit, { fallback: 20, max: 200 }), cursor })
+      );
     }
   );
 
@@ -1822,16 +1827,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         schema:
    *           type: integer
    *           default: 100
-   *         description: Maximum number of results
+   *         description: Maximum number of results (at most 500)
    *       - in: query
-   *         name: offset
+   *         name: cursor
    *         schema:
-   *           type: integer
-   *           default: 0
-   *         description: Number of results to skip
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *     responses:
    *       200:
-   *         description: Execution summaries with stats
+   *         description: "`{ items, nextCursor, total, stats }`: execution summaries"
    *       401:
    *         description: Authentication required
    *       403:
@@ -1844,12 +1848,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      const { status, search, limit = 100, offset = 0 } = req.query;
+      const { status, search, limit, cursor } = req.query;
       const registry = getExecutionRegistry();
 
       if (status === 'all' || status) {
-        const parsedOffset = Number.parseInt(offset, 10) || 0;
-        const parsedLimit = Number.parseInt(limit, 10) || 100;
+        const parsedOffset = offsetFromCursor(cursor);
+        const parsedLimit = limitFrom(limit, { fallback: 100, max: 500 });
 
         // One listing call: the registry filters, searches, orders and
         // pages the shared execution records, and reports the statistics
@@ -1862,11 +1866,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         });
 
         res.json({
-          executions,
+          items: executions,
+          nextCursor: nextOffsetCursor({ offset: parsedOffset, limit: parsedLimit, total }),
           total,
-          stats,
-          offset: parsedOffset,
-          limit: parsedLimit
+          stats
         });
       } else {
         // Default behavior: return only active executions from WorkflowEngine
@@ -1874,11 +1877,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const stats = await registry.getStats();
 
         res.json({
-          executions: activeExecutions,
+          items: activeExecutions,
+          nextCursor: null,
           total: activeExecutions.length,
-          stats,
-          offset: 0,
-          limit: activeExecutions.length
+          stats
         });
       }
     }

@@ -170,7 +170,7 @@ function AdminWorkflowExecutionsPage() {
 
         const data = await fetchAdminExecutions(params, { signal: controller.signal });
 
-        setExecutions(Array.isArray(data.executions) ? data.executions : []);
+        setExecutions(Array.isArray(data.items) ? data.items : []);
         setStats(data.stats || null);
         setTotal(data.total || 0);
       } catch (err) {

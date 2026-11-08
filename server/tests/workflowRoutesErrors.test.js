@@ -16,7 +16,16 @@ import express from 'express';
 const executions = new Map();
 const registry = {
   get: async id => executions.get(id) || null,
-  remove: async id => executions.delete(id)
+  remove: async id => executions.delete(id),
+  getByUser: async () =>
+    Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, status: 'completed', userId: 'ada' })),
+  list: async ({ limit, offset }) => ({
+    executions: Array.from({ length: Math.max(Math.min(limit, 7 - offset), 0) }, (_, i) => ({
+      id: `x${offset + i}`
+    })),
+    total: 7,
+    stats: { total: 7 }
+  })
 };
 
 jest.unstable_mockModule('../services/workflow/ExecutionRegistry.js', () => ({
@@ -194,5 +203,37 @@ describe('workflow webhook route', () => {
       detail: 'Invalid JSON body',
       code: 'BAD_REQUEST'
     });
+  });
+
+  it('pages my executions by cursor as { items, nextCursor }', async () => {
+    const first = await request(app).get('/api/workflows/my-executions?limit=2').expect(200);
+    expect(first.body.items.map(e => e.id)).toEqual(['e0', 'e1']);
+    const last = await request(app)
+      .get('/api/workflows/my-executions')
+      .query({ limit: 4, cursor: first.body.nextCursor })
+      .expect(200);
+    // The cursor stands for position 2: the next page of four holds the three left.
+    expect(last.body.items.map(e => e.id)).toEqual(['e2', 'e3', 'e4']);
+    expect(last.body.nextCursor).toBeNull();
+  });
+
+  it('pages the admin execution list by cursor and keeps total and stats', async () => {
+    const first = await request(app)
+      .get('/api/admin/workflows/executions?status=all&limit=5')
+      .expect(200);
+    expect(first.body.items).toHaveLength(5);
+    expect(first.body).toMatchObject({ total: 7, stats: { total: 7 } });
+    expect(first.body.executions).toBeUndefined();
+    const second = await request(app)
+      .get('/api/admin/workflows/executions')
+      .query({ status: 'all', limit: 5, cursor: first.body.nextCursor })
+      .expect(200);
+    expect(second.body.items.map(e => e.id)).toEqual(['x5', 'x6']);
+    expect(second.body.nextCursor).toBeNull();
+  });
+
+  it('refuses a cursor it did not issue with INVALID_CURSOR', async () => {
+    const res = await request(app).get('/api/workflows/my-executions?cursor=bogus').expect(400);
+    expect(res.body.code).toBe('INVALID_CURSOR');
   });
 });
