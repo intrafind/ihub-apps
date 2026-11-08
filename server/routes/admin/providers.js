@@ -575,13 +575,11 @@ export default function registerAdminProvidersRoutes(app) {
     const { data: providers } = configCache.getProviders(true);
     // LLM providers only: other categories (web search, …) read their keys
     // from places this check does not cover, so a verdict would mislead.
-    const statuses = Object.fromEntries(
-      providers
-        .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
-        .map(provider => [provider.id, inspectProviderApiKey(provider)])
-    );
+    const items = providers
+      .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
+      .map(provider => ({ id: provider.id, ...inspectProviderApiKey(provider) }));
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ statuses });
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
