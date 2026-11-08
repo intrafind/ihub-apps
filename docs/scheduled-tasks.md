@@ -245,9 +245,9 @@ chat. A run that has not finished is never deleted and does not count toward the
 
 Runs can also be deleted by hand from the task page: one run, a selection, or **Delete all
 finished runs** (`DELETE /api/scheduled-tasks/:taskId/runs/:runId` and
-`POST /api/scheduled-tasks/:taskId/runs/delete` with `{ "runIds": [...] }` or `{ "all": true }`).
+`DELETE /api/scheduled-tasks/:taskId/runs?runIds=a,b` or `?all=true`; add `deleteChats=false` to keep the run chats).
 A run in progress cannot be deleted (`409 RUN_IN_PROGRESS`); cancel it first. Admins can delete
-runs of any task with `POST /api/admin/scheduled-tasks/:taskId/runs/delete`.
+runs of any task with `DELETE /api/admin/scheduled-tasks/:taskId/runs`.
 
 **Run now** queues a run immediately (`manual`); it is refused while another run
 of the same task is in progress (`409 RUN_IN_PROGRESS`).
@@ -503,13 +503,13 @@ tasks — an id that is not theirs is a 404.
 | `POST /`                                       | Create                                             |
 | `POST /_preview`                               | Validate a schedule, describe it, list next runs   |
 | `GET /_notifications`                          | Runs the caller has not seen                       |
-| `POST /_notifications/seen`                    | Mark them seen                                     |
+| `POST /_notifications/_mark-seen`              | Mark them seen                                     |
 | `GET /_apps/:appId/tools`                      | The tools a task of this app may use               |
 | `GET` · `PUT` · `PATCH` · `DELETE /:taskId`    | Read, edit, delete (`?deleteChats=1` removes the run chats too) |
-| `POST /:taskId/run` · `/pause` · `/resume` · `/duplicate` | Run now, pause, resume, copy (with the task's files) |
+| `POST /:taskId/_run` · `/_pause` · `/_resume` · `/_duplicate` | Run now, pause, resume, copy (with the task's files) |
 | `GET` · `POST /:taskId/files`, `GET` · `DELETE /:taskId/files/:fileId` | The task's attached files, see [Chat files](chat-files.md#http-api) |
 | `GET /:taskId/runs` · `/runs/:runId`           | Run history (cursor-paged), one run                |
-| `POST /:taskId/runs/:runId/cancel`             | Stop a queued, running or waiting run              |
+| `POST /:taskId/runs/:runId/_cancel`            | Stop a queued, running or waiting run              |
 | `POST /:taskId/runs/:runId/approval`           | `{ decision: 'approve' \| 'reject', alwaysAllow }` |
 | `DELETE /:taskId/allowed-tools/:toolId`        | Revoke an *always allow*                           |
 | `GET /:taskId/memory`                          | The notes with `version`, `chars`, `updatedAt`, `updatedBy`, `maxChars` and `platformEnabled` |

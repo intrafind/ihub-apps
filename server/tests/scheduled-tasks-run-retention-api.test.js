@@ -130,23 +130,23 @@ describe('deleting runs through the owner routes', () => {
 
   it('deletes a selection and all runs through the bulk route', async () => {
     const { task, run } = await taskWithRun();
-    const bulk = body =>
-      call(ownerRoutes, 'post', '/:taskId/runs/delete', {
+    const bulk = query =>
+      call(ownerRoutes, 'delete', '/:taskId/runs', {
         params: { taskId: task.id },
-        body,
+        query,
         user: ada()
       });
-    assert.equal((await bulk({ runIds: [] })).statusCode, 400);
-    assert.equal((await bulk({ runIds: [run.id] })).body.deleted, 1);
-    assert.equal((await bulk({ all: true })).body.deleted, 0);
+    assert.equal((await bulk({ runIds: '' })).statusCode, 400);
+    assert.equal((await bulk({ runIds: run.id })).body.deleted, 1);
+    assert.equal((await bulk({ all: 'true' })).body.deleted, 0);
     await cleanup(ada());
   });
 
   it('lets an admin delete the runs of any task', async () => {
     const { task } = await taskWithRun();
-    const res = await call(adminRoutes, 'post', '/:taskId/runs/delete', {
+    const res = await call(adminRoutes, 'delete', '/:taskId/runs', {
       params: { taskId: task.id },
-      body: { all: true },
+      query: { all: 'true' },
       user: adminUser
     });
     assert.equal(res.statusCode, 200);
@@ -158,7 +158,7 @@ describe('deleting runs through the owner routes', () => {
     const list = adminRoutes.find(
       entry => entry.method === 'get' && entry.routePath.endsWith('/admin/scheduled-tasks')
     ).handlers[0];
-    assert.equal(route(adminRoutes, 'post', '/:taskId/runs/delete').handlers[0], list);
+    assert.equal(route(adminRoutes, 'delete', '/:taskId/runs').handlers[0], list);
   });
 });
 
