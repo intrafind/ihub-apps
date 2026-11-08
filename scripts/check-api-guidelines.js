@@ -222,7 +222,7 @@ function checkQueryName(name, index, endIndex, add) {
 
 function checkQueryParams(source, add) {
   for (const [, alias] of source.matchAll(QUERY_ALIAS)) {
-    const aliased = new RegExp(`\\b${alias}\\.([A-Za-z_]\\w*)`, 'g');
+    const aliased = new RegExp(String.raw`\b${alias}\.([A-Za-z_]\w*)`, 'g');
     for (const match of source.matchAll(aliased)) {
       checkQueryName(match[1], match.index, match.index + match[0].length, add);
     }
