@@ -59,7 +59,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
    *             schema:
    *               type: object
    *               properties:
-   *                 assistants:
+   *                 items:
    *                   type: array
    *                   items:
    *                     type: object
