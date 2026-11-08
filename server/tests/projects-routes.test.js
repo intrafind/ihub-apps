@@ -130,10 +130,14 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}
   const res = makeResponse();
   for (const handler of handlers) {
     let advanced = false;
+    let refusal = null;
     try {
-      await handler(req, res, () => {
-        advanced = true;
+      await handler(req, res, error => {
+        // `next(error)` is what Express hands to the global handler, not a step forward.
+        if (error) refusal = error;
+        else advanced = true;
       });
+      if (refusal) throw refusal;
     } catch (error) {
       // What Express does with a thrown error: the global handler answers.
       errorHandler(error, req, res, () => {});
