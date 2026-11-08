@@ -216,6 +216,23 @@ describe('the user side', () => {
     assert.equal(forBob.request.reason, null);
   });
 
+  it('reads one request by id, for its requester only', async () => {
+    const created = await ask('alice', { definition: 'com.example/docs', reason: 'For contracts' });
+    assert.equal(created.status, 201);
+    const location = created.headers.location;
+    assert.ok(location.endsWith(`/api/integrations/requests/${created.body.id}`), location);
+
+    const own = await asUser('alice', 'get', `/api/integrations/requests/${created.body.id}`);
+    assert.equal(own.status, 200, JSON.stringify(own.body));
+    assert.deepEqual(own.body, created.body);
+
+    const other = await asUser('bob', 'get', `/api/integrations/requests/${created.body.id}`);
+    assert.equal(other.status, 404);
+    assert.equal(other.body.code, 'REQUEST_NOT_FOUND');
+    const unknown = await asUser('alice', 'get', '/api/integrations/requests/not-an-id');
+    assert.equal(unknown.status, 404);
+  });
+
   it('refuses anonymous callers, also when anonymous access is on', async () => {
     assert.equal((await ask(null, { definition: 'com.example/docs' })).status, 401);
     assert.equal((await asUser(null, 'get', '/api/integrations/requests')).status, 401);

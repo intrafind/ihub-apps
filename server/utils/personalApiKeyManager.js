@@ -215,6 +215,22 @@ export function listPersonalKeys(user, platform = {}) {
 }
 
 /**
+ * Read one personal key owned by a user.
+ *
+ * @param {Object} params
+ * @param {Object} params.user - Authenticated owner
+ * @param {Object} [params.platform] - Platform configuration
+ * @param {string} params.keyId - The key's id
+ * @returns {Object} The public view of the key (never a secret)
+ * @throws {PersonalKeyError} 404 when the user owns no such key
+ */
+export function getPersonalKey({ user, platform = {}, keyId }) {
+  const key = listPersonalKeys(user, platform).find(candidate => candidate.id === keyId);
+  if (!key) throw new PersonalKeyError('API key not found', 404);
+  return key;
+}
+
+/**
  * Create a personal key for a user.
  *
  * @param {Object} params - Creation parameters

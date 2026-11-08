@@ -494,7 +494,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Validate ID for security
       assertValidId(id, 'workflow');
 
-      const workflows = await loadWorkflows();
+      const workflows = await loadWorkflows(isAdmin(req.user));
       const workflow = findByIdCaseInsensitive(workflows, id);
 
       if (!workflow) {

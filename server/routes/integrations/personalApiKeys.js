@@ -16,6 +16,7 @@ import {
   buildPersonalKeyEndpoints,
   canUserManagePersonalKeys,
   createPersonalKey,
+  getPersonalKey,
   getPersonalKeyConfig,
   isPersonalKeysEnabled,
   listPersonalKeys,
@@ -93,6 +94,38 @@ router.get('/', authRequired, (req, res) => {
     endpoints: buildPersonalKeyEndpoints(req, platform),
     keys: listPersonalKeys(user, platform)
   });
+});
+
+/**
+ * @swagger
+ * /api/integrations/api-keys/{keyId}:
+ *   get:
+ *     summary: Read one of the caller's personal API keys
+ *     description: |
+ *       Answers the key's metadata (never its secret). This is the `Location` a
+ *       create answers with.
+ *     tags:
+ *       - Integrations - API Keys
+ *     parameters:
+ *       - name: keyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The key
+ *       403:
+ *         description: The user may not manage personal API keys
+ *       404:
+ *         description: No such key for this user
+ */
+router.get('/:keyId', authRequired, (req, res) => {
+  const { platform, user } = requireKeyManager(req);
+
+  assertValidId(req.params.keyId, 'API key');
+
+  res.json(getPersonalKey({ user, platform, keyId: req.params.keyId }));
 });
 
 /**
