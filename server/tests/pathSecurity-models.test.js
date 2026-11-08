@@ -10,7 +10,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { validateIdForPath, validateIdsForPath } from '../utils/pathSecurity.js';
+import { validateIdForPath, assertValidIds } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 
 describe('Model API Path Security Integration', () => {
@@ -86,15 +86,9 @@ describe('Model API Path Security Integration', () => {
     });
   });
 
-  describe('validateIdsForPath with multiple model IDs', () => {
+  describe('assertValidIds with multiple model IDs', () => {
     it('should validate multiple model IDs with dots', () => {
-      const mockRes = {
-        status: () => mockRes,
-        json: () => {}
-      };
-
-      const ids = 'gemini-2.5-flash,gemini-2.0-flash,gpt-4';
-      const result = validateIdsForPath(ids, 'model', mockRes);
+      const result = assertValidIds('gemini-2.5-flash,gemini-2.0-flash,gpt-4', 'model');
 
       assert.ok(Array.isArray(result), 'Result should be an array');
       assert.strictEqual(result.length, 3, 'Should have 3 IDs');
@@ -102,31 +96,14 @@ describe('Model API Path Security Integration', () => {
     });
 
     it('should reject if any ID contains path traversal', () => {
-      let statusCalled = false;
-      const mockRes = {
-        setHeader() {},
-        status: code => {
-          statusCalled = true;
-          return mockRes;
-        },
-        json: () => {}
-      };
-
-      const ids = 'gemini-2.5-flash,../evil,gpt-4';
-      const result = validateIdsForPath(ids, 'model', mockRes);
-
-      assert.strictEqual(result, false, 'Should reject if any ID is invalid');
-      assert.strictEqual(statusCalled, true, 'Status should be set to 400');
+      assert.throws(
+        () => assertValidIds('gemini-2.5-flash,../evil,gpt-4', 'model'),
+        error => error.code === 'BAD_REQUEST' && error.status === 400
+      );
     });
 
     it('should handle wildcard correctly', () => {
-      const mockRes = {
-        status: () => mockRes,
-        json: () => {}
-      };
-
-      const result = validateIdsForPath('*', 'model', mockRes);
-      assert.deepStrictEqual(result, ['*'], 'Wildcard should return ["*"]');
+      assert.deepStrictEqual(assertValidIds('*', 'model'), ['*'], 'Wildcard should return ["*"]');
     });
   });
 });
