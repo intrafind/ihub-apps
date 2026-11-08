@@ -265,7 +265,7 @@ export default function OcrPage() {
 
   const handleCancel = async jobId => {
     try {
-      await apiClient.patch(`/tools-service/jobs/${jobId}/cancel`);
+      await apiClient.post(`/tools-service/jobs/${jobId}/_cancel`);
     } catch {
       // Job may already be done
     }

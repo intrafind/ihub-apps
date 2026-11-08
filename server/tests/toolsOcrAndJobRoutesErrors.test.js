@@ -154,7 +154,7 @@ describe('tool job routes: errors', () => {
     for (const [method, url] of [
       ['get', '/api/jobs/nope/progress'],
       ['get', '/api/jobs/nope/download'],
-      ['patch', '/api/jobs/nope/cancel']
+      ['post', '/api/jobs/nope/_cancel']
     ]) {
       const res = await request(app)[method](url).expect(404);
       problem(res);
@@ -214,7 +214,7 @@ describe('tool job routes: errors', () => {
     'answers a cancel of a %s job with BAD_REQUEST',
     async status => {
       const job = jobFor({ status });
-      const res = await request(app).patch(`/api/jobs/${job.id}/cancel`).expect(400);
+      const res = await request(app).post(`/api/jobs/${job.id}/_cancel`).expect(400);
       problem(res);
       expect(res.body.code).toBe('BAD_REQUEST');
       expect(res.body.detail).toBe(`Job is already ${status}`);
@@ -223,7 +223,7 @@ describe('tool job routes: errors', () => {
 
   it('cancels a running job', async () => {
     const job = jobFor({ status: 'running' });
-    const res = await request(app).patch(`/api/jobs/${job.id}/cancel`).expect(200);
-    expect(res.body.status).toBe('cancelled');
+    const res = await request(app).post(`/api/jobs/${job.id}/_cancel`).expect(200);
+    expect(res.body).toEqual({ id: job.id, status: 'cancelled' });
   });
 });
