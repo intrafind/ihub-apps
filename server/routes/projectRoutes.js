@@ -909,7 +909,7 @@ export default function registerProjectRoutes(app) {
       if (!resolved.ok) {
         throw new ServiceError('SHARE_TARGET_INVALID', resolved.error, {
           status: resolved.status,
-          details: { ...(resolved.details || {}) }
+          details: resolved.details
         });
       }
       const members = resolved.shares.map(({ permission, ...share }) => ({

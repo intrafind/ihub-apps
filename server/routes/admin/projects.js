@@ -395,8 +395,7 @@ export default function registerAdminProjectsRoutes(app) {
     for (const id of [body.targetId, ...body.sourceIds]) {
       assertValidId(id, 'project');
       const project = await repo.get(id);
-      if (!project || project.ownership !== 'admin')
-        throw new ServiceError('NOT_FOUND', 'Project not found');
+      if (project?.ownership !== 'admin') throw new ServiceError('NOT_FOUND', 'Project not found');
       before.set(id, project);
     }
     const result = await getProjectService().mergeProjects(body.sourceIds, body.targetId, {
@@ -631,9 +630,8 @@ export default function registerAdminProjectsRoutes(app) {
         repo.get(body.sourceId),
         repo.get(body.targetId)
       ]);
-      if (!source || source.ownership !== 'admin')
-        throw new ServiceError('NOT_FOUND', 'Project not found');
-      if (!target || target.ownership !== 'admin')
+      if (source?.ownership !== 'admin') throw new ServiceError('NOT_FOUND', 'Project not found');
+      if (target?.ownership !== 'admin')
         throw new ServiceError('NOT_FOUND', 'Target project not found');
       const result = await getProjectService().transferItems(source.id, body.itemIds, target.id, {
         mode,
