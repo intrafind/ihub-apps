@@ -299,7 +299,7 @@ function AdminModelEditPage() {
   const loadAppsUsingModel = useCallback(async () => {
     try {
       const response = await makeAdminApiCall('/admin/apps');
-      const allApps = response.data;
+      const allApps = response.data?.items ?? [];
       const appsUsingModel = allApps.filter(app => app.preferredModel === modelId);
       setApps(appsUsingModel);
     } catch (err) {

@@ -701,3 +701,14 @@ read. Read `body.id` where you read `body.app.id`.
 Bodies that carry more than the resource keep their members: `{ instance, reviewed }`,
 `{ template, files }`, `{ client, revoked }`, `{ instance, definitionId }`, the migration result, and
 `GET /api/chats/{chatId}`.
+
+## Admin Lists Are `{ items }`, Not a Bare Array
+
+A top-level JSON value is an object, and a list is `{ "items": [...] }`. These admin lists answered a
+bare array and now answer `{ "items": [...] }`: `GET /api/admin/{apps,apps/templates,models,prompts,
+providers,pages,agents/profiles,agents/inboxes,marketplace/registries,marketplace/updates,
+integrations/tools}` and the unpaged `GET /api/admin/projects`. The shared user prompts
+(`GET /api/admin/prompts?scope=user`) answer `items` instead of `prompts`. The web app is updated; a
+script that reads these lists reads `body.items`. The public lists (`/api/apps`, `/api/models`,
+`/api/prompts`) and the named-list answers (`{ credentials }`, `{ assets }`, `{ templates }`, …) follow
+in a later change.

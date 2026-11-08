@@ -343,7 +343,7 @@ export default function registerAdminProvidersRoutes(app) {
     });
 
     res.setHeader('ETag', providersEtag);
-    res.json(maskedProviders);
+    res.json({ items: maskedProviders });
   });
 
   /**

@@ -36,7 +36,7 @@ export default function AdminAgentsPage() {
     try {
       setLoading(true);
       const data = await fetchAgentProfiles();
-      setProfiles(data?.data || data || []);
+      setProfiles(data?.data?.items ?? []);
     } catch (err) {
       setError(err.message || String(err));
     } finally {

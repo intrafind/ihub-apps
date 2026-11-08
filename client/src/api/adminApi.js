@@ -127,7 +127,7 @@ export const makeAdminApiCall = async (url, options = {}) => {
 // Specific admin API functions
 export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/admin/apps');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 /**
@@ -142,10 +142,10 @@ export const fetchAppIntegrationStatus = async () => {
 export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/admin/models');
-    const data = response.data;
+    const items = response.data?.items;
 
     // Ensure we return an array
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(items) ? items : [];
   } catch (error) {
     console.error('Error in fetchAdminModels:', error);
     throw error;
@@ -155,10 +155,10 @@ export const fetchAdminModels = async () => {
 export const fetchAdminPrompts = async () => {
   try {
     const response = await makeAdminApiCall('/admin/prompts');
-    const data = response.data;
+    const items = response.data?.items;
 
     // Ensure we return an array
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(items) ? items : [];
   } catch (error) {
     console.error('Error in fetchAdminPrompts:', error);
     throw error;
@@ -167,7 +167,7 @@ export const fetchAdminPrompts = async () => {
 
 export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/admin/apps/templates');
-  return response.data;
+  return response.data?.items ?? [];
 };
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/admin/prompts', {
@@ -231,7 +231,7 @@ export const reorderApps = async ids => {
 
 export const fetchAdminPages = async () => {
   const response = await makeAdminApiCall('/admin/pages');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 export const fetchAdminPage = async pageId => {
@@ -999,7 +999,7 @@ export const exportSkill = skillName => {
  */
 export const fetchMarketplaceRegistries = async () => {
   const response = await makeAdminApiCall('/admin/marketplace/registries');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 /**

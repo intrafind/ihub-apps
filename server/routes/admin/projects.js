@@ -186,7 +186,7 @@ export default function registerAdminProjectsRoutes(app) {
       });
     }
     const projects = await repo.listAdmin({ includeDisabled: true });
-    return res.json(projects.map(adminView));
+    return res.json({ items: projects.map(adminView) });
   });
 
   app.get(route('/_stats'), ...gate, contentAdminAuth, async (req, res) => {

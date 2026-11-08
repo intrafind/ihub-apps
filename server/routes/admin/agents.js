@@ -161,7 +161,7 @@ export default function registerAdminAgentsRoutes(app) {
   app.get(buildServerPath('/api/admin/agents/profiles'), adminAuth, async (req, res) => {
     const { data: profiles = [], etag } = configCache.getAgentProfiles(true);
     if (etag) res.setHeader('ETag', etag);
-    res.json(profiles);
+    res.json({ items: profiles });
   });
 
   // ── Default LLM shaper prompt used by the memory builder UI ───────────────

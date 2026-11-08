@@ -21,7 +21,7 @@ export default function useAdminTtsModels() {
     makeAdminApiCall('/admin/models')
       .then(response => {
         if (!active) return;
-        const all = Array.isArray(response?.data) ? response.data : [];
+        const all = Array.isArray(response?.data?.items) ? response.data.items : [];
         setModels(all.filter(m => m.modelType === 'tts' && m.enabled !== false));
       })
       .catch(err => console.error('Failed to load text-to-speech models:', err));

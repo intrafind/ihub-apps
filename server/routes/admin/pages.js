@@ -51,7 +51,7 @@ export default function registerAdminPagesRoutes(app) {
       allowedGroups: page.allowedGroups || [],
       contentType: page.contentType || 'markdown'
     }));
-    res.json(pages);
+    res.json({ items: pages });
   });
 
   app.get(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {

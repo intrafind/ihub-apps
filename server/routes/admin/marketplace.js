@@ -108,7 +108,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const registries = await registryService.listRegistries();
-      res.json(registries);
+      res.json({ items: registries });
     }
   );
 
@@ -574,7 +574,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         }
       }
 
-      res.json(updates);
+      res.json({ items: updates });
     }
   );
 }

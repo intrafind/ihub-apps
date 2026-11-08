@@ -300,7 +300,7 @@ export default function registerAdminAppsRoutes(app) {
   app.get(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
     res.setHeader('ETag', appsEtag);
-    res.json(apps);
+    res.json({ items: apps });
   });
 
   /**
@@ -354,7 +354,7 @@ export default function registerAdminAppsRoutes(app) {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
     const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
     res.setHeader('ETag', appsEtag);
-    res.json(templates);
+    res.json({ items: templates });
   });
 
   /**

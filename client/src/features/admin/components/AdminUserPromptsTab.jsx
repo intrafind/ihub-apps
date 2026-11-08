@@ -443,7 +443,7 @@ function AdminUserPromptsTab() {
       setLoading(true);
       setError(null);
       const response = await makeAdminApiCall('/admin/prompts?scope=user');
-      setPrompts(Array.isArray(response.datas) ? response.data.prompts : []);
+      setPrompts(Array.isArray(response.data?.items) ? response.data.items : []);
       setTruncated(response.data?.truncated === true);
       setAvailable(response.data?.available !== false);
     } catch (err) {

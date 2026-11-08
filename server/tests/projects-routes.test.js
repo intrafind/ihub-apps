@@ -1541,7 +1541,7 @@ describe('admin projects', () => {
     const asEditor = await drive(route.adminList, { user: EDITOR, query: { ownership: 'user' } });
     assert.equal(asEditor.statusCode, 403);
     const admin = await drive(route.adminList, { user: EDITOR });
-    assert.ok(Array.isArray(admin.body) && admin.body.some(p => p.id === 'faq'));
+    assert.ok(Array.isArray(admin.body.items) && admin.body.items.some(p => p.id === 'faq'));
   });
 });
 

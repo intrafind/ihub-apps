@@ -360,7 +360,7 @@ export default function registerAdminModelsRoutes(app) {
     });
 
     res.setHeader('ETag', modelsEtag);
-    res.json(maskedModels);
+    res.json({ items: maskedModels });
   });
 
   /**
