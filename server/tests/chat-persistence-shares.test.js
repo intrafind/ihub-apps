@@ -100,6 +100,8 @@ function makeResponse() {
     res.body = value;
     return res;
   };
+  // A `204` goes out through `end`.
+  res.end = () => res;
   res.setHeader = (name, value) => {
     res.headers[String(name).toLowerCase()] = value;
     return res;
@@ -1166,7 +1168,7 @@ describe('deleting the chat', () => {
     const pub = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
 
     const res = await drive(deleteChatHandlers, { params: { chatId }, user: ADA });
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 204);
 
     const shares = getChatShareRepository();
     assert.equal(await shares.getShare(users.id), null);
@@ -1398,7 +1400,7 @@ describe('sharing a single artifact', () => {
 
     assert.equal(
       (await drive(deleteChatHandlers, { params: { chatId }, user: ADA })).statusCode,
-      200
+      204
     );
     assert.equal(await getChatShareRepository().getShare(share.id), null);
     assert.equal(
