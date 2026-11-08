@@ -79,7 +79,7 @@ describe('personal API key routes: errors', () => {
     for (const res of [
       await request(app).get('/api/integrations/api-keys'),
       await request(app).post('/api/integrations/api-keys').send({}),
-      await request(app).post('/api/integrations/api-keys/k1/rotate').send({}),
+      await request(app).post('/api/integrations/api-keys/k1/_rotate').send({}),
       await request(app).delete('/api/integrations/api-keys/k1')
     ]) {
       expectProblem(res, 404, 'NOT_FOUND');
@@ -126,7 +126,7 @@ describe('personal API key routes: errors', () => {
   it('keeps the status of a PersonalKeyError on rotate and delete', async () => {
     state.managerError = new PersonalKeyError('API key not found', 404);
     expectProblem(
-      await request(app).post('/api/integrations/api-keys/k1/rotate').send({}),
+      await request(app).post('/api/integrations/api-keys/k1/_rotate').send({}),
       404,
       'NOT_FOUND'
     );
@@ -141,7 +141,7 @@ describe('personal API key routes: errors', () => {
   });
 
   it.each([
-    ['post', '/api/integrations/api-keys/bad%20id/rotate'],
+    ['post', '/api/integrations/api-keys/bad%20id/_rotate'],
     ['delete', '/api/integrations/api-keys/bad%20id']
   ])('answers an invalid keyId on %s with BAD_REQUEST', async (method, url) => {
     const res = await request(app)[method](url).send({});
