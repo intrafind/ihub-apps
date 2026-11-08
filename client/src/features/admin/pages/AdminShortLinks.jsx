@@ -57,7 +57,7 @@ function AdminShortLinks() {
       if (appIdFilter) params.set('appId', appIdFilter);
       if (userFilter) params.set('ownerId', userFilter);
       const response = await makeAdminApiCall(`/shortlinks?${params.toString()}`);
-      setLinks(response.data);
+      setLinks(response.data?.items ?? []);
     } catch (e) {
       setError(e.message);
     } finally {
