@@ -145,7 +145,7 @@ async function share(chatId, body = {}) {
     user: ADA
   });
   assert.equal(res.statusCode, 201, JSON.stringify(res.body));
-  return res.body.share;
+  return res.body;
 }
 
 before(async () => {

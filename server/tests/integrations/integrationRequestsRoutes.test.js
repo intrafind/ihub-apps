@@ -200,9 +200,9 @@ describe('the user side', () => {
       reason: '  For contracts '
     });
     assert.equal(first.status, 201, JSON.stringify(first.body));
-    assert.equal(first.body.request.status, 'open');
-    assert.equal(first.body.request.reason, 'For contracts');
-    assert.equal(first.body.request.id, requestIdFor('alice', 'com.example/docs'));
+    assert.equal(first.body.status, 'open');
+    assert.equal(first.body.reason, 'For contracts');
+    assert.equal(first.body.id, requestIdFor('alice', 'com.example/docs'));
 
     const second = await ask('alice', { definition: 'com.example/docs' });
     assert.equal(second.status, 409);
@@ -337,7 +337,7 @@ describe('the admin queue', () => {
     // Asking again opens a new request.
     const again = await ask('bob', { definition: 'com.example/docs' });
     assert.equal(again.status, 201);
-    assert.equal(again.body.request.status, 'open');
+    assert.equal(again.body.status, 'open');
   });
 
   it('declines and hides: gone from every user, the other open requests declined, shown again', async () => {

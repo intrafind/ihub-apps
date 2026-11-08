@@ -602,7 +602,7 @@ describe('temporary chats and guests', () => {
       user: ADA
     });
     assert.equal(kept.statusCode, 200);
-    assert.equal(kept.body.chat.temporary, undefined);
+    assert.equal(kept.body.temporary, undefined);
     list = await drive(listHandlers, { user: ADA });
     assert.ok(
       list.body.items.some(chat => chat.id === 'chat-keep-me'),
@@ -698,7 +698,7 @@ describe('temporary chats and guests', () => {
         user: ADA
       });
       assert.equal(res.statusCode, 200);
-      assert.equal(res.body.chat.temporary, true);
+      assert.equal(res.body.temporary, true);
     });
   });
 
