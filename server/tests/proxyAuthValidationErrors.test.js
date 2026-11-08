@@ -47,6 +47,15 @@ app.get('/api/probe', (req, res) => {
 });
 app.use(errorHandler);
 
+// The server runs proxyAuth through `createAuthChain`, which calls it with its own callback and
+// ignores the returned promise; a refusal that is thrown instead of passed to `next` would hang.
+const chainedApp = express();
+chainedApp.use((req, res, next) => {
+  proxyAuth(req, res, next);
+});
+chainedApp.get('/api/probe', (req, res) => res.json({ ok: true }));
+chainedApp.use(errorHandler);
+
 beforeEach(() => {
   resetProxyTrustForTests();
   handlerRuns = 0;
@@ -65,6 +74,13 @@ describe('proxyAuth: user validation', () => {
     expect(handlerRuns).toBe(0);
     expect(seenUser).toBeUndefined();
     expect(res.body.ok).toBeUndefined();
+  });
+
+  it('answers 403 even when called with a bare callback that ignores the returned promise', async () => {
+    validateAndPersistExternalUser.mockRejectedValue(new Error('Your account is disabled.'));
+    const res = await request(chainedApp).get('/api/probe').set('X-Forwarded-User', 'alice');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('USER_VALIDATION_FAILED');
   });
 
   it('lets the request go on with req.user when validation succeeds', async () => {
