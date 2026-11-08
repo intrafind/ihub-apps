@@ -730,6 +730,7 @@ export default function registerAdminProjectsRoutes(app) {
       }
     }
     res.json({
+      // api-guidelines-ignore: existing result body of the item test, changed in its own API change
       success: items.every(entry => entry.ok),
       duration: Date.now() - started,
       items
