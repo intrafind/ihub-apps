@@ -63,7 +63,6 @@ import {
   parseRawRelPath
 } from '../../storage/namespaces.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
-import { encryptPlatformSecrets } from '../../utils/configSecrets.js';
 
 const COMPONENT = 'ConfigStore';
 
@@ -602,6 +601,9 @@ export class ConfigStore {
     // Every save of the platform configuration passes here, and several routes
     // build it from the runtime cache, which holds secrets decrypted.
     if (path.posix.normalize(String(relPath)) === 'config/platform.json') {
+      // Loaded on demand: it pulls in TokenStorageService, which resolves the
+      // contents directory when first imported — too early for most callers.
+      const { encryptPlatformSecrets } = await import('../../utils/configSecrets.js');
       data = await encryptPlatformSecrets(data);
     }
     const location = parseRawRelPath(relPath);
