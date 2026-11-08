@@ -1165,10 +1165,11 @@ function useAppChat({
 
       let ended = false;
       try {
-        const { events } = await fetchAllLedgerEvents(async (after, limit) => {
+        const { events } = await fetchAllLedgerEvents(async (cursor, limit) => {
+          const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
           const res = await fetchWithAuthRetry(
             buildApiUrl(
-              `runs/${encodeURIComponent(runId)}/events?after=${after}&limit=${limit}&view=sse`
+              `runs/${encodeURIComponent(runId)}/events?limit=${limit}${cursorParam}&view=sse`
             ),
             { method: 'GET', headers: { Accept: 'application/json' } }
           );

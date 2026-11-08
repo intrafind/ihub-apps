@@ -84,13 +84,16 @@ export const sendHumanEvent = async (runId, event) => {
  * Ledger events of a run (re-sync a live stream from a sequence number).
  * @param {string} runId
  * @param {Object} [options]
- * @param {number} [options.after=0]
+ * @param {string} [options.cursor] - The `nextCursor` of the previous page
+ * @param {number} [options.limit]
  * @param {'sse'} [options.view] - `sse` returns SSE v2 envelopes
- * @returns {Promise<{ runId: string, after: number, events: Object[], lastSeq: number }>} the response body
+ * @returns {Promise<{ runId: string, items: Object[], nextCursor: string|null }>} the response body
  */
 export const fetchRunEvents = async (runId, options = {}) => {
-  const { after = 0, view } = options;
-  const params = new URLSearchParams({ after: String(after) });
+  const { cursor, limit, view } = options;
+  const params = new URLSearchParams();
+  if (cursor) params.set('cursor', cursor);
+  if (limit) params.set('limit', String(limit));
   if (view) params.set('view', view);
   return handleApiResponse(
     () => apiClient.get(`/runs/${encodeURIComponent(runId)}/events?${params.toString()}`),
