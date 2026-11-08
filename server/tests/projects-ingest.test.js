@@ -82,6 +82,7 @@ import { countBodyBytes, probeUrl } from '../sources/SourceManager.js';
 import { assertPublicTarget } from '../utils/ssrfGuard.js';
 import { z } from 'zod';
 import { makeMsg } from './helpers/msgFile.js';
+import { answerWithError } from './helpers/answerError.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MASTER = crypto.createHash('sha256').update('test-master').digest('hex');
@@ -201,10 +202,14 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, req: 
   for (const handler of handlers) {
     let advanced = false;
     let failure = null;
-    await handler(req, res, error => {
-      if (error) failure = error;
-      advanced = true;
-    });
+    try {
+      await handler(req, res, error => {
+        if (error) failure = error;
+        advanced = true;
+      });
+    } catch (error) {
+      failure = error;
+    }
     // A middleware that hands the request to a stream (multer) calls `next`
     // or answers later than its own return.
     if (!advanced && !responded) {
@@ -212,7 +217,11 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, req: 
         // A middleware that never answers is reported through `failure` below.
       });
     }
-    if (failure) throw failure;
+    if (failure) {
+      // What the error middleware would answer.
+      answerWithError(res, failure);
+      break;
+    }
     if (!advanced) break;
   }
   return res;

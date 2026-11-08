@@ -24,6 +24,7 @@
  */
 import fs from 'node:fs/promises';
 import { installationsFor } from './helpers/installedIFinder.js';
+import { answerWithError } from './helpers/answerError.js';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
@@ -163,15 +164,18 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, metho
   const chain = [...guards, ...handlers];
   for (const handler of chain) {
     let advanced = false;
+    let refusal = null;
     try {
-      await handler(req, res, () => {
-        advanced = true;
+      await handler(req, res, error => {
+        // `next(error)` is what Express hands to the global handler, not a step forward.
+        if (error) refusal = error;
+        else advanced = true;
       });
+      if (refusal) throw refusal;
     } catch (error) {
-      // A guard refuses by throwing a ServiceError, which the error middleware would answer.
-      if (!Number.isInteger(error?.status)) throw error;
-      res.statusCode = error.status;
-      res.body = { code: error.code, detail: error.message };
+      // What the error middleware would answer.
+      answerWithError(res, error);
+      break;
     }
     if (!advanced) break;
   }
@@ -692,7 +696,7 @@ describe('the write allow-list', () => {
   });
 
   it('names the allowed writes in the guard by method and path, and nothing near them', async () => {
-    const { refuseIFinderWrite, refuseIFinderWriteRoute, IFINDER_WRITE_ROUTES } =
+    const { assertIFinderWriteAllowed, assertIFinderWriteRouteAllowed, IFINDER_WRITE_ROUTES } =
       await import('../middleware/projectAccess.js');
     assert.deepEqual(
       IFINDER_WRITE_ROUTES.map(
@@ -701,12 +705,15 @@ describe('the write allow-list', () => {
       ALLOWED_WRITES
     );
     const refusedBy = (guard, request) => {
-      const res = makeResponse();
-      const refused = guard(request, res, pid(1));
-      return refused ? res.statusCode : null;
+      try {
+        guard(request, pid(1));
+        return null;
+      } catch (error) {
+        return error.status;
+      }
     };
     const byPath = (method, pathBelow) =>
-      refusedBy(refuseIFinderWrite, { method, path: pathBelow });
+      refusedBy(assertIFinderWriteAllowed, { method, path: pathBelow });
     // On the list.
     assert.equal(byPath('PATCH', '/'), null);
     assert.equal(byPath('POST', '/items'), null);
@@ -737,7 +744,7 @@ describe('the write allow-list', () => {
       assert.equal(byPath(method, below), 403, `${method} ${below}`);
     }
     const byRoute = (method, template) =>
-      refusedBy(refuseIFinderWriteRoute, { method, route: template && { path: template } });
+      refusedBy(assertIFinderWriteRouteAllowed, { method, route: template && { path: template } });
     assert.equal(byRoute('PATCH', '/api/projects/:projectId'), null);
     assert.equal(byRoute('POST', '/api/projects/:projectId/items'), null);
     assert.equal(byRoute('DELETE', '/api/projects/:projectId/items/:itemId'), null);
