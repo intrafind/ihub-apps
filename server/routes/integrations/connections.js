@@ -154,8 +154,7 @@ router.delete('/:clientId', authRequired, async (req, res) => {
     source: 'web'
   });
 
-  // api-guidelines-ignore: existing success body, changed in its own API change
-  res.json({ success: true, ...result });
+  res.json({ ...result });
 });
 
 export default router;

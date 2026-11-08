@@ -101,9 +101,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
           suggestAppId(template.id, resolved.instance.id, isTaken)
         )
       );
-      // api-guidelines-ignore: existing success body, changed in its own API change
       res.json({
-        success: true,
         templates,
         // Whether the calling admin's own groups grant the installation:
         // without it the test chat runs without its actions.
@@ -176,8 +174,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
         resourceId: appId,
         summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
       });
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.status(201).json({ success: true, app: newApp });
+      res.status(201).json({ app: newApp });
     }
   );
 }

@@ -170,7 +170,7 @@ describe('GET example apps', () => {
   it('lists the shipped example apps with a suggested id', async () => {
     state.apps = [{ id: 'portal-assistant' }];
     const res = await admin(request(app).get(`${URL('govdata')}?lang=de`)).expect(200);
-    expect(res.body).toMatchObject({ success: true, grantedToYou: true, enabled: true });
+    expect(res.body).toMatchObject({ grantedToYou: true, enabled: true });
     expect(res.body.templates).toEqual([
       expect.objectContaining({
         key: 'apps/portal-assistant.json',

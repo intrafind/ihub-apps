@@ -163,7 +163,7 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
       resourceId: instance.id,
       summary: `Built custom integration "${instance.id}" (${definition.protocol.type})`
     });
-    res.status(201).json({ success: true, instance, definitionId: definition.id });
+    res.status(201).json({ instance, definitionId: definition.id });
   });
 
   /**
@@ -211,6 +211,6 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
       resourceId: id,
       summary: `Saved custom integration "${id}" (${definition.version})`
     });
-    res.json({ success: true, instance, definitionId: definition.id });
+    res.json({ instance, definitionId: definition.id });
   });
 }

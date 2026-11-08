@@ -531,7 +531,7 @@ describe('installed instances', () => {
     });
     expect(list.body.updatesAvailable).toBe(0);
     const updates = await admin(request(app).get('/api/admin/integrations/updates')).expect(200);
-    expect(updates.body).toEqual({ success: true, definitions: [], installations: [], count: 0 });
+    expect(updates.body).toEqual({ definitions: [], installations: [], count: 0 });
   });
 });
 

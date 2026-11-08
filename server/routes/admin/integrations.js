@@ -441,7 +441,6 @@ export default function registerAdminIntegrationsRoutes(app) {
       ...marketplace.items
     ].sort((a, b) => a.name.localeCompare(b.name));
     res.json({
-      success: true,
       items,
       /** Whether the marketplace feeds the catalog, and which registries' catalogs are cached. */
       marketplace: { enabled: marketplace.enabled, registries: marketplace.registries },
@@ -455,7 +454,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     adminAuth,
     async (req, res) => {
       await integrationRegistry.reload();
-      res.json({ success: true, count: integrationRegistry.list().length });
+      res.json({ count: integrationRegistry.list().length });
     }
   );
 
@@ -468,7 +467,6 @@ export default function registerAdminIntegrationsRoutes(app) {
       const entry = integrationRegistry.get(id);
       if (!entry) throw new ServiceError('NOT_FOUND', 'Integration definition not found');
       res.json({
-        success: true,
         definition: definitionDetailView(
           entry,
           languageOf(req),
@@ -513,7 +511,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         definitionVersion: instance.definitionVersion || null,
         latestVersion: updates.get(instance.definition).latestVersion
       }));
-    res.json({ success: true, definitions, installations, count: installations.length });
+    res.json({ definitions, installations, count: installations.length });
   });
 
   app.post(
@@ -537,7 +535,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         summary: `Tested integration draft of ${id} (${result.success ? 'ok' : 'failed'})`,
         result: result.success ? 'success' : 'failure'
       });
-      res.json({ success: true, result });
+      res.json({ result });
     }
   );
 
@@ -557,7 +555,6 @@ export default function registerAdminIntegrationsRoutes(app) {
       );
     }
     res.json({
-      success: true,
       items,
       security: installedIntegrationService.security(),
       updatesAvailable: items.filter(item => item.updateAvailable).length
@@ -583,7 +580,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     });
     // Users who asked for this definition and whose groups now allow it.
     await closeRequestsFor(req, instance.definition);
-    res.status(201).json({ success: true, instance });
+    res.status(201).json({ instance });
   });
 
   app.get(buildServerPath('/api/admin/integrations/installed/:id'), adminAuth, async (req, res) => {
@@ -604,7 +601,6 @@ export default function registerAdminIntegrationsRoutes(app) {
     const updates = await definitionUpdates();
     const migrations = await migrationViews([instance]);
     res.json({
-      success: true,
       instance: instanceView(
         instance,
         resolved,
@@ -650,7 +646,7 @@ export default function registerAdminIntegrationsRoutes(app) {
       summary: `Updated installed integration "${id}"`
     });
     await closeRequestsFor(req, instance.definition);
-    res.json({ success: true, instance });
+    res.json({ instance });
   });
 
   /**
@@ -690,7 +686,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Updated the tool approval of integration "${id}"`
       });
-      res.json({ success: true, instance });
+      res.json({ instance });
     }
   );
 
@@ -732,7 +728,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Marked ${Array.isArray(names) ? 'actions' : 'all actions'} of integration "${id}" as reviewed: ${reviewed.join(', ') || '(none listed)'}`
       });
-      res.json({ success: true, instance, reviewed });
+      res.json({ instance, reviewed });
     }
   );
 
@@ -801,7 +797,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         platform: configCache.getPlatform() || {}
       });
       if (!detail) throw new ServiceError('NOT_FOUND', 'Action not found');
-      res.json({ success: true, detail });
+      res.json({ detail });
     }
   );
 
@@ -895,7 +891,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         language,
         platform: configCache.getPlatform() || {}
       });
-      res.json({ success: true, override, detail });
+      res.json({ override, detail });
     }
   );
 
@@ -990,7 +986,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `action.test: "${actionName}" of integration "${id}" as ${result.connection}${result.confirmed ? ' (confirmed ' + result.sideEffect + ')' : ''}: ${result.status} in ${result.durationMs} ms; args ${auditArgs(args)}`,
           result: result.status === 'ok' ? 'success' : 'failure'
         });
-        res.json({ success: true, result });
+        res.json({ result });
       } catch (error) {
         if (error instanceof ActionTestError) {
           // A refused test is audited too: an admin tried to run the action.
@@ -1065,7 +1061,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
       });
-      res.json({ success: true, instance });
+      res.json({ instance });
     }
   );
 
@@ -1106,7 +1102,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `${enabled ? 'Enabled' : 'Disabled'} integration "${id}"`
         });
         if (enabled) await closeRequestsFor(req, instance.definition);
-        res.json({ success: true, instance });
+        res.json({ instance });
       }
     );
   }
@@ -1170,7 +1166,6 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `Migrated integration "${id}" (${outcome.result})`
         });
         res.json({
-          success: true,
           result: outcome.result,
           logEntry: outcome.logEntry,
           instance: await migratedView(id, req)
@@ -1257,7 +1252,6 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `Restored backup ${outcome.backup.id} of integration "${id}"`
         });
         res.json({
-          success: true,
           backup: outcome.backup,
           logEntry: outcome.logEntry,
           instance: await migratedView(id, req)
@@ -1341,7 +1335,6 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `Reverted integration "${id}" to backup ${outcome.backup.id} (v${outcome.backup.representedVersion})`
         });
         res.json({
-          success: true,
           backup: outcome.backup,
           logEntry: outcome.logEntry,
           instance: await migratedView(id, req)
@@ -1398,11 +1391,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           resourceId: id,
           summary: `Adopted definition version ${outcome.instance.definitionVersion} for integration "${id}"`
         });
-        res.json({
-          success: true,
-          logEntry: outcome.logEntry,
-          instance: await migratedView(id, req)
-        });
+        res.json({ logEntry: outcome.logEntry, instance: await migratedView(id, req) });
       } catch (error) {
         throw await migrationFailure(error, id, req);
       }
@@ -1421,7 +1410,7 @@ export default function registerAdminIntegrationsRoutes(app) {
       const connections = found.adapter?.listConnections
         ? await found.adapter.listConnections(found.resolved.instance)
         : [];
-      res.json({ success: true, connections });
+      res.json({ connections });
     }
   );
 
@@ -1450,7 +1439,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Disconnected user "${userId}" from integration "${id}"`
       });
-      res.json({ success: true, ...result });
+      res.json({ ...result });
     }
   );
 
@@ -1477,7 +1466,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Reset the OAuth client registration of integration "${id}"`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -1505,7 +1494,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         summary: `Tested integration "${id}" (${result.success ? 'ok' : 'failed'})`,
         result: result.success ? 'success' : 'failure'
       });
-      res.json({ success: true, result });
+      res.json({ result });
     }
   );
 }
