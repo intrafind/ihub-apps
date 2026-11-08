@@ -89,10 +89,16 @@ fs.writeFileSync(
   )}\n`
 );
 
-const server = spawn('npm', ['run', 'dev'], {
-  cwd: root,
-  stdio: 'inherit',
-  env: { ...process.env, CONTENTS_DIR }
-});
+// The `dev` script of package.json (server and client with hot reload), started
+// through the repository's own `concurrently` rather than a PATH lookup of `npm`.
+const server = spawn(
+  path.join(root, 'node_modules', '.bin', 'concurrently'),
+  ['--kill-others-on-fail', 'npm run server', 'sleep 2 && npm run client'],
+  {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_ENV: 'development', WORKERS: '1', CONTENTS_DIR }
+  }
+);
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal));
 server.on('exit', code => process.exit(code ?? 0));
