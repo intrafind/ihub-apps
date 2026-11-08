@@ -69,9 +69,17 @@ describe('admin audit log routes: errors', () => {
       .get('/api/admin/audit-log')
       .query({ action: 'create,update', limit: '10' })
       .expect(200);
-    expect(res.body).toEqual({ entries: [], total: 0 });
+    expect(res.body).toEqual({ items: [], nextCursor: null, total: 0 });
     expect(state.lastOptions.action).toEqual(['create', 'update']);
     expect(state.lastOptions.limit).toBe(10);
+  });
+
+  it('pages by cursor and refuses a cursor it did not issue', async () => {
+    const bad = await request(app)
+      .get('/api/admin/audit-log')
+      .query({ cursor: 'nope' })
+      .expect(400);
+    expect(bad.body.code).toBe('INVALID_CURSOR');
   });
 
   it.each(['/api/admin/audit-log', '/api/admin/audit-log/export'])(

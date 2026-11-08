@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { nextOffsetCursor, offsetFromCursor } from '../../utils/pagination.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
@@ -39,7 +40,8 @@ function getAuditSettings() {
 export default function registerAdminAuditLogRoutes(app) {
   /**
    * GET /api/admin/audit-log
-   * Query audit log entries with optional filters and pagination.
+   * Query audit log entries with optional filters and cursor pagination (`limit`, `cursor`).
+   * Answers `{ items, nextCursor, total, facets? }`.
    *
    * Each of actor/resource/action/result/source accepts an include parameter
    * and a `<field>Exclude` parameter subtracted from it, with `*` meaning
@@ -51,15 +53,21 @@ export default function registerAdminAuditLogRoutes(app) {
   app.get(buildServerPath('/api/admin/audit-log'), adminAuth, async (req, res) => {
     const filters = parseAuditLogQuery(req.query);
 
-    const result = await queryAuditLog({
+    const limit = clampInt(req.query.limit, 50, 1, MAX_PAGE_SIZE);
+    const offset = offsetFromCursor(req.query.cursor);
+    const { entries, total, facets } = await queryAuditLog({
       ...filters,
       facets: isFlagSet(req.query.facets),
-      limit: clampInt(req.query.limit, 50, 1, MAX_PAGE_SIZE),
-      // api-guidelines-ignore: existing offset paging, changed in its own API change
-      offset: clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+      limit,
+      offset
     });
 
-    res.json(result);
+    res.json({
+      items: entries,
+      nextCursor: nextOffsetCursor({ offset, limit, total }),
+      total,
+      ...(facets ? { facets } : {})
+    });
   });
 
   /**

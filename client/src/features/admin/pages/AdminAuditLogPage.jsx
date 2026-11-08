@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useCursorPager } from '../../../shared/hooks/useCursorPager';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -244,6 +245,7 @@ function AdminAuditLogPage() {
 
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
+  const [nextCursor, setNextCursor] = useState(null);
   const [facets, setFacets] = useState(EMPTY_FACETS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -258,7 +260,6 @@ function AdminAuditLogPage() {
     () => ({
       from: getDefaultFromDate(),
       to: getDefaultToDate(),
-      page: '1',
       pageSize: String(DEFAULT_PAGE_SIZE)
     }),
     []
@@ -268,15 +269,12 @@ function AdminAuditLogPage() {
   const fromDate = get('from');
   const toDate = get('to');
   const queryText = get('q');
-  const page = Math.max(1, Number.parseInt(get('page'), 10) || 1);
   // Clamped to what the table offers: the server caps `limit`, so a larger
   // URL value would page over rows it never returns and strand the tail.
   const pageSize = Math.min(
     MAX_PAGE_SIZE,
     Math.max(1, Number.parseInt(get('pageSize'), 10) || DEFAULT_PAGE_SIZE)
   );
-  const offset = (page - 1) * pageSize;
-
   // The include/exclude sets currently in the URL, per field.
   const filterSets = useMemo(() => {
     const sets = {};
@@ -324,6 +322,11 @@ function AdminAuditLogPage() {
     return params.toString();
   }, [searchParams, fromDate, toDate, queryText]);
 
+  // Pages are reached by cursor; any change of filter or page size starts again at the first.
+  const { cursor, page, hasPrevious, goNext, goPrevious } = useCursorPager(
+    `${filterQuery}|${pageSize}`
+  );
+
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -365,7 +368,7 @@ function AdminAuditLogPage() {
     try {
       const params = new URLSearchParams(filterQuery);
       params.set('limit', String(pageSize));
-      params.set('offset', String(offset));
+      if (cursor) params.set('cursor', cursor);
       // Facets are computed in the same file scan as the query, so asking for
       // them does not cost a second pass over the log.
       params.set('facets', '1');
@@ -373,7 +376,8 @@ function AdminAuditLogPage() {
       const response = await makeAdminApiCall(`/admin/audit-log?${params.toString()}`);
       const data = response.data;
 
-      setEntries(data.entries || []);
+      setEntries(data.items || []);
+      setNextCursor(data.nextCursor || null);
       setTotal(data.total || 0);
       if (data.facets) setFacets(data.facets);
     } catch (err) {
@@ -385,14 +389,14 @@ function AdminAuditLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterQuery, offset, pageSize, t]);
+  }, [filterQuery, cursor, pageSize, t]);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
-  /** Apply filter updates and return to page 1, in one navigation. */
-  const applyFilter = useCallback(updates => setMany({ ...updates, page: null }), [setMany]);
+  /** Apply filter updates; a new filter returns the table to its first page (see the pager's key). */
+  const applyFilter = useCallback(updates => setMany(updates), [setMany]);
 
   const handleSelectionChange = useCallback(
     (field, selected) => applyFilter(encodeSelection(field, filterOptions[field], selected)),
@@ -400,7 +404,7 @@ function AdminAuditLogPage() {
   );
 
   const clearAllFilters = useCallback(() => {
-    const updates = { from: null, to: null, q: null, page: null };
+    const updates = { from: null, to: null, q: null };
     for (const field of FILTER_FIELDS) {
       updates[field] = null;
       updates[`${field}Exclude`] = null;
@@ -743,8 +747,13 @@ function AdminAuditLogPage() {
           total,
           page,
           pageSize,
-          onPageChange: p => setMany({ page: String(p) }),
-          onPageSizeChange: size => setMany({ pageSize: String(size), page: null }),
+          cursorPaging: {
+            hasPrevious,
+            hasNext: Boolean(nextCursor),
+            onPrevious: goPrevious,
+            onNext: () => goNext(nextCursor)
+          },
+          onPageSizeChange: size => setMany({ pageSize: String(size) }),
           pageSizeOptions: PAGE_SIZE_OPTIONS
         }}
         empty={{
