@@ -738,3 +738,20 @@ now answer `items` (siblings such as `persisted`, `pinned` or `categories` keep 
 The web app is updated. A script that reads one of these reads `body.items`. Maps such as
 `GET /api/admin/{models,providers}/_key-status` (`statuses`, keyed by id) are not lists and keep
 their shape.
+
+## More Resources Are Answered As Themselves
+
+The same rule, for the entity answers that still wrapped one resource under its own name. They now
+answer the resource itself:
+
+- `GET /api/integrations/{id}` (was `{ integration }`), `GET /api/admin/integrations/catalog/{definitionId}`
+  (was `{ definition }`), `GET …/installed/{id}/actions/{action}` (was `{ detail }`)
+- `POST /api/admin/integrations/requests/{id}/_approve` (was `{ request }`)
+- `POST /api/runs/{runId}/interactions/{id}/answer` (was `{ interaction }`)
+- `PUT /api/workflows/{id}` (was `{ workflow }`)
+- `POST /api/admin/auth/users` and `PUT /api/admin/auth/users/{userId}` (were `{ user }`)
+
+Answers that carry more than the resource keep their members (`_decline` still answers
+`{ request, alsoDeclined }`; an action override answers `{ override, detail }`). Singleton settings
+answers (`{ settings }`, `{ config }`) and the project item answers (`{ item }`) follow in a later
+change.

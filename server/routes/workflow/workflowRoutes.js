@@ -669,9 +669,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: id
       });
 
-      res.json({
-        workflow: validation.data
-      });
+      res.json(validation.data);
 
       // Refresh workflow cache after successful update
       configCache.refreshWorkflowsCache?.();

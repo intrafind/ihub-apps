@@ -49,7 +49,7 @@ export async function fetchUserIntegrations() {
 export async function fetchUserIntegration(id) {
   try {
     const { data } = await apiClient.get(path(id), QUIET);
-    return data?.integration || null;
+    return data || null;
   } catch (error) {
     if (error?.response?.status === 404) return null;
     throw error;
