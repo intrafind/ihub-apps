@@ -21,17 +21,18 @@ iHub already has the loop (`AgentLoop`). The gap is around it:
 - Deep Research is a mode of its own.
 - Provider server tools beyond today's native web search come in a later phase.
 - Code execution waits for a backend (#2663).
-- Quotas for Deep and Deep Research: see the recommendation in the main document.
+- Quotas for Deep and Deep Research: run counts per mode on top of the existing token limits (defaults: Deep 10 per day / 40 per month, Deep Research 3 per day / 15 per month), concurrency limits and per-run budgets; see §5.9 of the main document.
 - We build the evaluation harness ourselves, first, in Phase 0.
 
 ## Documents
 
-- **[Agentic Chat — Closing the Gap to Claude and ChatGPT](<2026-11-07 Agentic Chat — Closing the Gap to Claude and ChatGPT.md>)**: summary, comparison, iHub gap analysis with file references, target design (seven layers), roadmap, risks, decisions needed, a draft operating-manual prompt. **Read this first.**
+- **[Agentic Chat — Closing the Gap to Claude and ChatGPT](<2026-11-07 Agentic Chat — Closing the Gap to Claude and ChatGPT.md>)**: summary, comparison, iHub gap analysis with file references, target design (seven layers, chat modes, quotas), roadmap, risks, the decisions of 2026-11-08, a draft operating-manual prompt. **Read this first.**
 - Research notes (code-level and documentation findings, with sources and fact/inference markers):
   - [Claude: Claude.ai, Research, Claude Code, Claude API](<research/2026-11-07 Claude.md>)
   - [ChatGPT, OpenAI APIs, Codex, Gemini](<research/2026-11-07 ChatGPT and Gemini.md>)
   - [LibreChat and Open WebUI](<research/2026-11-07 LibreChat and Open WebUI.md>)
   - [mini-swe-agent, Hermes Agent, Deep Agents](<research/2026-11-07 mini-swe-agent, Hermes Agent, Deep Agents.md>)
+  - [Quotas for Deep and Deep Research: market limits and cost per run](<research/2026-11-08 Quotas for Deep and Deep Research.md>)
 
 ## Related
 

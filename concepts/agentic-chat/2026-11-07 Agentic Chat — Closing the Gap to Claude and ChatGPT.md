@@ -332,6 +332,51 @@ scripts/agentic-eval.js   live layer (nightly or manual, not in test:quick)
 
 **Gates.** Phase 0 compares Standard against the Classic baseline: it ships when Standard is ahead on pass rate overall and not behind in any category. From then on every mode has a baseline from the report in which it first appeared, and a later change ships only with a positive delta on its target mode and no regression in pass rate or latency on the modes that already have a baseline (Quick from Phase 1, Deep from Phase 1, Deep Research from Phase 2). The Classic → Standard default switch needs Standard ahead on pass rate in every category at an acceptable cost per passed task.
 
+### 5.9 Quotas and cost control
+
+The recommendation asked for in decision 5 (§8). Sources, the full product table and the cost arithmetic are in [research/2026-11-08 Quotas for Deep and Deep Research.md](<research/2026-11-08 Quotas for Deep and Deep Research.md>).
+
+**What the market does.** Discrete research modes get **run counts**, and enterprise tiers cluster at **15–50 runs per user per month**: Microsoft 365 Copilot allows 25 per user per month, shared by Researcher and Analyst; Langdock 15 per user per rolling 30 days on its own keys (workspaces on their own keys set their own limits or none); Perplexity Enterprise Pro 50 per month; Gemini Enterprise 3 or 10 per licence per day, pooled across the organisation, then $4 per extra run. General-purpose assistants (Claude, the Gemini app, ChatGPT Work) have moved to compute budgets over a 5-hour and a weekly window. Common practice: the quota is checked when a run starts and a started run finishes; when a mode is used up the product offers a lighter mode or model; the remaining quota is visible to the user; group limits resolve to the most generous one. No vendor publishes a concurrency limit.
+
+**What a run costs.** Google documents its Deep Research agent at about $1–3 per task (about 80 searches, 250k input tokens) and the Max variant at about $3–7 (about 160 searches, 900k input tokens). Modelling iHub's own loop on frontier models, with prompt caching working: Standard about $0.7–1.2, **Deep about $2.5–4.7, Deep Research about $5.7–8.2** per run (top-tier reasoning models cost more). Without working prompt caching every figure is three to four times higher, so the append-only transcripts of Layers A and B are also a cost prerequisite. Search fees are 30–55% of a research run on mid-priced models, so a per-run search cap is a direct cost lever. For internal vLLM the money cost is close to zero, but GPU capacity is finite, which is why concurrency limits matter there too.
+
+**Recommendation: extend iHub's existing usage limits** (`docs/usage-limits.md`, `server/services/quota/`) instead of building a second system.
+
+1. **Token limits stay as they are** for every mode: per model and across all models, per day, week and month, at the model, platform, group and user levels, enforced in `LLMClient`.
+2. **New: run counts per mode**, configured like the token limits (platform default, group, user; across groups the most generous wins, a user's own limit can only lower it; `-1` unlimited, `0` disables):
+
+   ```json
+   { "usageLimits": { "modes": { "deep": { "day": 10, "month": 40 }, "research": { "day": 3, "month": 15 } } } }
+   ```
+
+   | | Deep | Deep Research |
+   |---|---|---|
+   | Default (platform) | 10 per day, 40 per month | 3 per day, 15 per month |
+   | Power-user group (example) | 20 per day, 120 per month | 8 per day, 50 per month |
+   | Anonymous users | 0 (not available) | 0 (not available) |
+   | Own provider keys or internal vLLM | counts may be lifted (`-1`); concurrency and per-run budgets still apply | same |
+
+   The windows use the existing reset schedule (calendar day and month, same as the token limits), so admins work with one window model; the daily limit keeps a monthly allowance from being used up in a single day. Rolling windows (Langdock's "per rolling 30 days") avoid a rush at the start of the month and are the alternative if users ask for it. Classic, Quick and Standard have no run count, only the token limits.
+3. **New: concurrency limits.** Per user: 2 Deep runs and 1 Deep Research run at a time (power users: 2). Per organisation: 10 Deep and 5 Deep Research runs at a time (one Deep Research run is five or six parallel model loops); further runs wait in a first-in, first-out queue that shows the position, and are rejected after 10 minutes (Deep) or 60 minutes (Deep Research, which runs in the background anyway). The counter has to be cluster-wide (the cluster bus and scheduler lock already exist).
+4. **Per-run budgets** (mode policy; the loop already has round, token and wall-clock budgets, a search cap is new):
+
+   | Per run | Deep | Deep Research |
+   |---|---|---|
+   | Tool rounds | 60 | lead 30; up to 5 sub-agents with 30 each |
+   | Web searches | 60 | 160 |
+   | Input tokens, cumulative | 5M (compaction above about 150k context) | 8M across all agents |
+   | Output tokens, incl. reasoning | 120k | 300k |
+   | Wall clock | 15 min | 60 min |
+   | Cost ceiling | $5, once models carry prices | $12, once models carry prices |
+
+   At 80% of any budget the budget notice (§5.5) tells the model to converge; at the budget the run writes its answer from what it has and never ends without output. iHub's model configuration has no prices today, so cost ceilings, and an optional monthly money cap per organisation with admin alerts at 50/75/90/100%, come later (Phase 3).
+5. **Counting rules.** A run is checked and counted when it starts. Once started it always finishes within its own per-run budget: its model calls count against the token limits but are not refused mid-run. Today the call after a token limit is crossed is refused, which would cut a research run off without a result, so the start check also requires enough remaining token budget for the run's token cap and otherwise offers a lighter mode. A run that fails on the system or provider side before producing a result is refunded; a run the user cancels counts, unless it is cancelled before its first tool call.
+6. **User experience.** The mode selector shows what is left ("Deep Research · 12 of 15 left this month"); a warning at 80% (the existing `WARNING_THRESHOLD`); when a mode is used up, an explicit offer of the next mode down (Deep Research → Deep → Standard), never a silent switch, because Deep Research delivers a report and Deep a chat answer; a notification when a background run finishes; admins see run counts next to token usage in the existing usage reports.
+7. **What it costs.** A user who uses the whole default allowance costs about $185–315 per month on frontier models (15 Deep Research runs × $5.7–8.2 plus 40 Deep runs × $2.5–4.7); at the per-run ceilings the worst case is about $380. Most users will use far less, but there is no published usage rate, so the defaults should be checked against 30 days of real usage (the run ledger and the eval report cost per run) before they are tuned.
+8. **Works council and data protection.** Per-user usage counters can count as technical monitoring of employees under BetrVG §87 (1) No. 6. Keep only the data the windows need, show admins aggregated figures by default, and document the purpose (capacity and cost control). To be confirmed with legal; this was not part of the research.
+
+Rollout: Deep's run counts and per-run budgets in Phase 1, Deep Research's counts, concurrency limits and queue in Phase 2, cost ceilings and money caps in Phase 3.
+
 ---
 
 ## 6. Roadmap
@@ -368,14 +413,14 @@ Decided on 2026-11-08:
 | 2 | Research as the main loop plus sub-agents, or as a workflow? | Deep Research becomes a mode of its own. | Deep Research is a separate entry in the mode selector, with its own budgets, quota and UX; behind it the lead loop with `delegate_task` (§5.6) |
 | 3 | Provider server tools (search, fetch, code execution) by default? | Maybe in a later phase; some are already supported. | Deferred to Phase 3 as an opt-in per app; today's native web search stays as it is (§5.4) |
 | 4 | Code execution backend (#2663)? | We don't have one yet. | Code execution stays a separate track that starts when #2663 chooses a backend; Deep Research does not depend on it, data analysis does (§5.4, §6) |
-| 5 | Quotas for Deep and Deep Research? | Research them and recommend. | Recommendation in §5.9 |
+| 5 | Quotas for Deep and Deep Research? | Research them and recommend. | Recommendation in §5.9: run counts per mode on top of the existing token limits (Deep 10 per day / 40 per month, Deep Research 3 per day / 15 per month by default), concurrency limits with a queue, per-run budgets, cost ceilings once models carry prices |
 | 6 | Who owns the eval and its tasks? | We have to build it. | The evaluation harness is the first deliverable of Phase 0, built in the shape planned for the memory eval (#3407) (§5.8) |
 
 Still open:
 
 - The code execution backend (#2663).
 - Where the benchmark tasks come from: which customers can contribute anonymised real requests, and who signs off the acceptance criteria.
-- Confirming the quota defaults in §5.9 against the first cost measurements from the eval.
+- Confirming the quota defaults in §5.9 against 30 days of real usage and the eval's cost per run; whether to keep calendar windows or move to rolling ones; the works council question in §5.9.
 
 ---
 
