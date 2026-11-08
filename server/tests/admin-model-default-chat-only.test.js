@@ -105,7 +105,7 @@ describe('the default model is always a chat model', () => {
     const res = await request(app)
       .post('/api/admin/models')
       .send({ ...tts('voxtral'), default: true });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(stored('voxtral').default).toBe(false);
     expect(stored('small').default).toBe(true);
   });
@@ -130,7 +130,7 @@ describe('the default model is always a chat model', () => {
   test('deleting the default passes it to a chat model', async () => {
     seed(chat('small', { default: true }), tts('voxtral'), chat('large'));
     const res = await request(app).delete('/api/admin/models/small');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
     expect(stored('voxtral').default).toBeUndefined();
     expect(stored('large').default).toBe(true);
   });

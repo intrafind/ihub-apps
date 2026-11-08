@@ -636,3 +636,27 @@ answer `204`. That covers the catalog, installed integrations, migrations, examp
 builder and integration requests, the registry edits and the personal API key revocation. A
 connection test keeps its outcome in the body (`success: false` with a `message`), because the
 outcome is its result.
+
+## Admin, Sign-In and Run Calls Drop `{ success }` and `{ message: '… successfully' }`
+
+The status code carries success. The calls below no longer answer `success: true` or a
+`message: '… successfully'` text; the web app ships with the server and shows its own messages.
+Scripts that read those members must read the status (and the resource) instead.
+
+- **Nothing to say → `204`:** deleting an app, model, prompt, provider, page, group, user, OAuth client
+  or UI asset; saving the UI configuration; `POST /api/admin/{cache/_clear,cache/_refresh,client/_refresh}`;
+  `…/_disable` of the browser extension, Copilot agent, Nextcloud embed and Office integration;
+  `POST /api/session/start`; `POST /api/feedback`.
+- **A created resource → `201` and the resource:** apps, models, prompts (and promoting one), providers,
+  pages, UI assets, OAuth clients' static API keys.
+- **Everything else answers the resource or what it computed**, without the envelope: configuration
+  saves (`/api/admin/{cors,ssl,ssrf,proxy,logging,features,platform}`), the OAuth client calls, the
+  usage tracking mode and rollup, the workflow calls.
+- **Sign-in:** `POST /api/auth/{local,ldap,ntlm}/login`, the OIDC JSON callback, `POST
+  /api/auth/teams/exchange` and `GET /api/auth/user` answer `{ "user", … }`; a client that checked
+  `success` checks `user`. `POST /api/auth/logout` answers `{ "oidcLogoutRequired" }`.
+- **`POST /api/admin/update/download`** with nothing newer answers `409` `CONFLICT` ("No update
+  available") instead of `200` with `success: false`.
+- **A test keeps its report in the body:** the directory (LDAP) tests and the registry test answer `200`
+  with `success`, `message` and the steps, as `docs/api-guidelines.md` now says. A model test that ran
+  answers the model's reply; one that failed is `502`, as before.

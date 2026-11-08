@@ -68,7 +68,6 @@ test('a working endpoint passes, and the key is not echoed', async () => {
   const res = await request(app).post(url);
   expect(res.status).toBe(200);
   expect(res.body).toMatchObject({
-    success: true,
     messageKey: 'testSuccessful',
     response: 'Connected — the endpoint started a session'
   });

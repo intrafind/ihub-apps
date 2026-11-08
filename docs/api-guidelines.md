@@ -46,6 +46,9 @@ GET  /api/scheduled-tasks/_notifications          (a virtual collection, same pr
 - Name the action with a verb in the imperative: `_cancel`, `_rotate`, `_disconnect`, `_duplicate`.
 - An action returns what its result is: the changed resource (`200`), a new resource (`201` + `Location`), or
   `202` with a job resource when it runs asynchronously. Never `{ success: true }`.
+- A **test** (`POST …/_test`: an LDAP bind, a registry fetch, an endpoint probe) answers `200` with its report when
+  the test ran, because that it failed is its result; the body says so (`success`, `message`, steps). An action that
+  could not run at all (nothing to do, a refused request) is an error, not a report: `409 CONFLICT`, `400`, `502`.
 - `scheduledTasks.js` already uses `_preview`, `_notifications` and `_apps/{appId}/tools`; that is the model.
   No endpoint uses a bare verb any more (`/run`, `/duplicate`, `/cancel`, `/rotate`, `/disconnect` became
   `/_run`, `/_duplicate`, `/_cancel`, `/_rotate`, `/_disconnect`); `scripts/check-api-guidelines.js` keeps it so.
