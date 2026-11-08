@@ -180,7 +180,7 @@ describe('POST/PUT /api/admin/models with providerId', () => {
     const res = await request(app)
       .post('/api/admin/models')
       .send({ ...baseModel, id: 'llmhub-gpt-oss', provider: 'local', providerId: 'llmhub' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(store['models/llmhub-gpt-oss.json']).toMatchObject({
       provider: 'openai',
       providerId: 'llmhub'
@@ -192,7 +192,7 @@ describe('POST/PUT /api/admin/models with providerId', () => {
     const res = await request(app)
       .post('/api/admin/models')
       .send({ ...baseModel, id: 'gpt-x', provider: 'openai', providerId: 'openai' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(store['models/gpt-x.json'].providerId).toBeUndefined();
   });
 
@@ -200,7 +200,7 @@ describe('POST/PUT /api/admin/models with providerId', () => {
     const res = await request(app)
       .post('/api/admin/models')
       .send({ ...baseModel, id: 'legacy-m', provider: 'openai', providerId: 'openai-responses' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(store['models/legacy-m.json']).toMatchObject({
       provider: 'openai-responses',
       providerId: 'openai-responses'
@@ -225,7 +225,7 @@ describe('POST/PUT /api/admin/models with providerId', () => {
       modelType: 'transcription'
     };
     const res = await request(app).post('/api/admin/models').send(live);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(store['models/proxy-transcribe-live.json']).toMatchObject({
       provider: 'google-live',
       providerId: 'gemini-proxy'
@@ -421,7 +421,7 @@ describe('iFinder Model Gateway providers', () => {
     const mistral = await request(app)
       .post('/api/admin/models')
       .send({ ...baseModel, id: 'gw-mistral', provider: 'mistral', providerId: 'ifinder-gw' });
-    expect(mistral.status).toBe(200);
+    expect(mistral.status).toBe(201);
     expect(store['models/gw-mistral.json']).toMatchObject({
       provider: 'mistral',
       providerId: 'ifinder-gw'
@@ -436,14 +436,14 @@ describe('iFinder Model Gateway providers', () => {
         providerId: 'ifinder-gw',
         modelType: 'transcription'
       });
-    expect(speech.status).toBe(200);
+    expect(speech.status).toBe(201);
     expect(store['models/gw-voxtral.json'].provider).toBe('vllm-realtime');
 
     // An adapter a gateway does not offer falls back to the provider's API type.
     const other = await request(app)
       .post('/api/admin/models')
       .send({ ...baseModel, id: 'gw-other', provider: 'google', providerId: 'ifinder-gw' });
-    expect(other.status).toBe(200);
+    expect(other.status).toBe(201);
     expect(store['models/gw-other.json'].provider).toBe('openai');
   });
 
