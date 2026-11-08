@@ -54,6 +54,28 @@ function freePort() {
   });
 }
 
+/** The /api/health payload, or null while the server is not answering yet. */
+async function healthBody(port) {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null; // not listening yet
+  }
+}
+
+/** Poll until the server serves, exits, or the deadline passes. */
+async function waitForHealth(child, port, deadline) {
+  if (child.exitCode !== null) return { ready: false, why: 'exited' };
+  if (Date.now() >= deadline) return { ready: false, why: 'timeout' };
+  const body = await healthBody(port);
+  if (body) return { ready: body.storage?.ready === true, body };
+  await sleep(500);
+  return waitForHealth(child, port, deadline);
+}
+
 /** Start `server/server.js` of `dir` on `contentsDir`; resolves once it serves, with its log. */
 async function start(dir, contentsDir) {
   const port = await freePort();
@@ -73,23 +95,8 @@ async function start(dir, contentsDir) {
   });
   child.stdout.on('data', chunk => (log.text += chunk));
   child.stderr.on('data', chunk => (log.text += chunk));
-  const deadline = Date.now() + 180_000;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) return { child, port, log, ready: false, why: 'exited' };
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
-        signal: AbortSignal.timeout(5000)
-      });
-      if (response.ok) {
-        const body = await response.json();
-        return { child, port, log, ready: body?.storage?.ready === true, body };
-      }
-    } catch {
-      /* not listening yet */
-    }
-    await sleep(500);
-  }
-  return { child, port, log, ready: false, why: 'timeout' };
+  const result = await waitForHealth(child, port, Date.now() + 180_000);
+  return { child, port, log, ...result };
 }
 
 async function stop(child) {
@@ -106,83 +113,104 @@ const errorLines = text =>
     .filter(line => /"level":"error"|Uncaught exception|UnhandledPromiseRejection/.test(line))
     .slice(0, 10);
 
+const READ_ROUTES = [
+  '/api/apps',
+  '/api/models',
+  '/api/configs/ui',
+  '/api/admin/apps',
+  '/api/admin/models',
+  '/api/admin/groups',
+  '/api/admin/integrations/installed',
+  '/api/admin/features'
+];
+
+/** Sign in as the default admin and read a handful of routes; returns what went wrong. */
+async function answerCalls(port) {
+  const failures = [];
+  const base = `http://127.0.0.1:${port}`;
+  const login = await fetch(`${base}/api/auth/local/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'password123' })
+  });
+  const cookie = (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
+  if (!login.ok) failures.push(`default admin login answered ${login.status}`);
+  const responses = await Promise.all(
+    READ_ROUTES.map(route => fetch(base + route, { headers: { cookie } }))
+  );
+  responses.forEach((response, i) => {
+    const type = response.headers.get('content-type') || '';
+    if (!response.ok || !/json/.test(type)) {
+      failures.push(`GET ${READ_ROUTES[i]} answered ${response.status} ${type}`);
+    }
+  });
+  return failures;
+}
+
+/** Check out the earlier release and start it once, so `contentsDir` holds its data. */
+async function seedPreviousRelease(git, oldDir, contentsDir) {
+  git('worktree', 'add', '--detach', oldDir, from);
+  for (const dir of ['node_modules', 'server/node_modules', 'client/node_modules']) {
+    if (fs.existsSync(path.join(root, dir))) {
+      fs.symlinkSync(path.join(root, dir), path.join(oldDir, dir));
+    }
+  }
+  process.stdout.write(`▶ start ${from} on an empty contents directory ... `);
+  const before = await start(oldDir, contentsDir);
+  await stop(before.child);
+  if (before.ready) {
+    console.log('ok');
+    return true;
+  }
+  console.log('✗');
+  console.log(`  the earlier release did not come up (${before.why ?? 'storage not ready'})`);
+  if (keepLogs) console.log(before.log.text.split('\n').slice(-20).join('\n'));
+  return false;
+}
+
+/** Start this checkout on the data of the earlier release; returns what went wrong. */
+async function startThisCheckout(contentsDir) {
+  process.stdout.write('▶ start this checkout on the same contents ... ');
+  const after = await start(root, contentsDir);
+  const failures = [];
+  if (!after.ready) failures.push(`did not serve with storage ready (${after.why ?? 'not ready'})`);
+  const errors = errorLines(after.log.text);
+  if (errors.length) failures.push(`error-level log output:\n    ${errors.join('\n    ')}`);
+  if (after.ready) failures.push(...(await answerCalls(after.port)));
+  await stop(after.child);
+  console.log(failures.length ? '✗' : 'ok');
+  if (keepLogs || failures.length) console.log(after.log.text.split('\n').slice(-25).join('\n'));
+  return failures;
+}
+
+function cleanUp(git, oldDir, tmp) {
+  try {
+    git('worktree', 'remove', '--force', oldDir);
+  } catch {
+    /* removed with the temp directory */
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+  try {
+    git('worktree', 'prune');
+  } catch {
+    /* nothing to prune */
+  }
+}
+
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'upgrade-'));
   const oldDir = path.join(tmp, 'old');
   const contentsDir = path.join(tmp, 'contents');
   const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
-  const failures = [];
   console.log(`⬆️  Upgrade check: ${from} -> this checkout\n`);
+  let failures;
   try {
-    git('worktree', 'add', '--detach', oldDir, from);
-    for (const dir of ['node_modules', 'server/node_modules', 'client/node_modules']) {
-      if (fs.existsSync(path.join(root, dir))) {
-        fs.symlinkSync(path.join(root, dir), path.join(oldDir, dir));
-      }
-    }
-
-    process.stdout.write(`▶ start ${from} on an empty contents directory ... `);
-    const before = await start(oldDir, contentsDir);
-    await stop(before.child);
-    if (!before.ready) {
-      console.log('✗');
-      console.log(`  the earlier release did not come up (${before.why ?? 'storage not ready'})`);
-      if (keepLogs) console.log(before.log.text.split('\n').slice(-20).join('\n'));
-      process.exit(2);
-    }
-    console.log('ok');
-
-    process.stdout.write('▶ start this checkout on the same contents ... ');
-    const after = await start(root, contentsDir);
-    if (!after.ready)
-      failures.push(`did not serve with storage ready (${after.why ?? 'not ready'})`);
-    const errors = errorLines(after.log.text);
-    if (errors.length) failures.push(`error-level log output:\n    ${errors.join('\n    ')}`);
-
-    if (after.ready) {
-      const base = `http://127.0.0.1:${after.port}`;
-      const login = await fetch(`${base}/api/auth/local/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'admin', password: 'password123' })
-      });
-      const cookie = (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
-      if (!login.ok) failures.push(`default admin login answered ${login.status}`);
-      for (const route of [
-        '/api/apps',
-        '/api/models',
-        '/api/configs/ui',
-        '/api/admin/apps',
-        '/api/admin/models',
-        '/api/admin/groups',
-        '/api/admin/integrations/installed',
-        '/api/admin/features'
-      ]) {
-        const response = await fetch(base + route, { headers: { cookie } });
-        const type = response.headers.get('content-type') || '';
-        if (!response.ok || !/json/.test(type)) {
-          failures.push(`GET ${route} answered ${response.status} ${type}`);
-        }
-      }
-    }
-    await stop(after.child);
-    console.log(failures.length ? '✗' : 'ok');
-    if (keepLogs || failures.length) {
-      console.log(after.log.text.split('\n').slice(-25).join('\n'));
-    }
+    if (!(await seedPreviousRelease(git, oldDir, contentsDir))) process.exitCode = 2;
+    else failures = await startThisCheckout(contentsDir);
   } finally {
-    try {
-      git('worktree', 'remove', '--force', oldDir);
-    } catch {
-      /* removed with the temp directory */
-    }
-    fs.rmSync(tmp, { recursive: true, force: true });
-    try {
-      git('worktree', 'prune');
-    } catch {
-      /* nothing to prune */
-    }
+    cleanUp(git, oldDir, tmp);
   }
+  if (process.exitCode === 2) process.exit(2);
 
   if (failures.length) {
     console.log(`\n❌ upgrade from ${from} failed:`);
