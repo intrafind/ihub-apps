@@ -408,7 +408,7 @@ export const createAdminProject = async project => {
     method: 'POST',
     body: project
   });
-  return response.data?.project;
+  return response.data;
 };
 
 /**
@@ -423,7 +423,7 @@ export const updateAdminProject = async (projectId, project) => {
     method: 'PUT',
     body: project
   });
-  return response.data?.project;
+  return response.data;
 };
 
 /**

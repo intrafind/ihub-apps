@@ -526,9 +526,7 @@ export default function registerScheduledTaskRoutes(app) {
       user: req.user
     });
     audit(req, 'file-add', task.id, `Attached "${file.name}" to scheduled task`);
-    sendCreated(res, `/api/scheduled-tasks/${segment(task.id)}/files/${segment(file.id)}`, {
-      file
-    });
+    sendCreated(res, `/api/scheduled-tasks/${segment(task.id)}/files/${segment(file.id)}`, file);
   });
 
   app.get(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {
@@ -540,7 +538,7 @@ export default function registerScheduledTaskRoutes(app) {
     if (req.query.format === 'text') {
       const text = await store.getText(scope, fileId);
       if (!text) throw new ServiceError('NOT_FOUND', 'File not found');
-      return res.json({ file: text });
+      return res.json(text);
     }
     const original = await store.getOriginal(scope, fileId);
     if (!original) throw new ServiceError('NOT_FOUND', 'File not found');

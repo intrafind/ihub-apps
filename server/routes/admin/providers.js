@@ -793,7 +793,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    sendCreated(res, `/api/admin/providers/${segment(newProvider.id)}`, { provider: newProvider });
+    sendCreated(res, `/api/admin/providers/${segment(newProvider.id)}`, newProvider);
   });
 
   /**

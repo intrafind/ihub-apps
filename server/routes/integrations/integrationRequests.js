@@ -211,9 +211,11 @@ router.post('/', requireFeature('integrations'), authRequired, async (req, res) 
       resourceId: definition,
       summary: `Requested integration "${definition}"${request.reason ? ' with a reason' : ''}`
     });
-    return sendCreated(res, `/api/integrations/requests/${segment(request.id)}`, {
-      request: userRequestView(request)
-    });
+    return sendCreated(
+      res,
+      `/api/integrations/requests/${segment(request.id)}`,
+      userRequestView(request)
+    );
   }
 });
 

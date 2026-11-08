@@ -636,7 +636,7 @@ export default function registerAdminGroupRoutes(app) {
       resourceId: id,
       summary: `Created group ${id}`
     });
-    res.json({ group: newGroup });
+    res.json(newGroup);
   });
 
   /**
@@ -798,7 +798,7 @@ export default function registerAdminGroupRoutes(app) {
       resourceId: groupId,
       summary: `Updated group ${groupId}`
     });
-    res.json({ group });
+    res.json(group);
   });
 
   /**

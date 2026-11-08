@@ -580,9 +580,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: workflowData.id
       });
 
-      sendCreated(res, `/api/workflows/${segment(workflowData.id)}`, {
-        workflow: validation.data
-      });
+      sendCreated(res, `/api/workflows/${segment(workflowData.id)}`, validation.data);
 
       // Refresh workflow cache after successful creation
       configCache.refreshWorkflowsCache?.();

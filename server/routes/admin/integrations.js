@@ -581,7 +581,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     });
     // Users who asked for this definition and whose groups now allow it.
     await closeRequestsFor(req, instance.definition);
-    sendCreated(res, `/api/admin/integrations/installed/${segment(instance.id)}`, { instance });
+    sendCreated(res, `/api/admin/integrations/installed/${segment(instance.id)}`, instance);
   });
 
   app.get(buildServerPath('/api/admin/integrations/installed/:id'), adminAuth, async (req, res) => {
@@ -647,7 +647,7 @@ export default function registerAdminIntegrationsRoutes(app) {
       summary: `Updated installed integration "${id}"`
     });
     await closeRequestsFor(req, instance.definition);
-    res.json({ instance });
+    res.json(instance);
   });
 
   /**
@@ -687,7 +687,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `Updated the tool approval of integration "${id}"`
       });
-      res.json({ instance });
+      res.json(instance);
     }
   );
 
@@ -1062,7 +1062,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         resourceId: id,
         summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
       });
-      res.json({ instance });
+      res.json(instance);
     }
   );
 
@@ -1103,7 +1103,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `${enabled ? 'Enabled' : 'Disabled'} integration "${id}"`
         });
         if (enabled) await closeRequestsFor(req, instance.definition);
-        res.json({ instance });
+        res.json(instance);
       }
     );
   }

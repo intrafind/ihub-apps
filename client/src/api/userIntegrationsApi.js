@@ -125,5 +125,5 @@ export async function requestIntegration(definition, reason) {
     { definition, ...(trimmed ? { reason: trimmed } : {}) },
     QUIET
   );
-  return data?.request || null;
+  return data || null;
 }

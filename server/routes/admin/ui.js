@@ -130,7 +130,7 @@ export default function registerAdminUIRoutes(app) {
         summary: `Uploaded UI asset ${assetInfo.filename}`
       });
 
-      sendCreated(res, publicUrl, { asset: assetInfo });
+      sendCreated(res, publicUrl, assetInfo);
     }
   );
 

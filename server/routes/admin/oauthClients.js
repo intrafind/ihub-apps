@@ -165,7 +165,7 @@ export default function registerAdminOAuthRoutes(app) {
     // Remove secret from response
     const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
 
-    res.json({ client: clientWithoutSecret });
+    res.json(clientWithoutSecret);
   });
 
   /**
@@ -293,27 +293,25 @@ export default function registerAdminOAuthRoutes(app) {
 
     // Return client with plain text secret (only time it's shown)
     sendCreated(res, `/api/admin/oauth/clients/${segment(newClient.clientId)}`, {
-      client: {
-        clientId: newClient.clientId,
-        clientSecret: newClient.clientSecret, // Plain text - only shown once
-        name: newClient.name,
-        description: newClient.description,
-        scopes: newClient.scopes,
-        allowedApps: newClient.allowedApps,
-        allowedModels: newClient.allowedModels,
-        allowedPrompts: newClient.allowedPrompts,
-        allowedGroups: newClient.allowedGroups,
-        tokenExpirationMinutes: newClient.tokenExpirationMinutes,
-        active: newClient.active,
-        createdAt: newClient.createdAt,
-        createdBy: newClient.createdBy,
-        clientType: newClient.clientType,
-        grantTypes: newClient.grantTypes,
-        redirectUris: newClient.redirectUris,
-        postLogoutRedirectUris: newClient.postLogoutRedirectUris,
-        consentRequired: newClient.consentRequired,
-        trusted: newClient.trusted
-      }
+      clientId: newClient.clientId,
+      clientSecret: newClient.clientSecret, // Plain text - only shown once
+      name: newClient.name,
+      description: newClient.description,
+      scopes: newClient.scopes,
+      allowedApps: newClient.allowedApps,
+      allowedModels: newClient.allowedModels,
+      allowedPrompts: newClient.allowedPrompts,
+      allowedGroups: newClient.allowedGroups,
+      tokenExpirationMinutes: newClient.tokenExpirationMinutes,
+      active: newClient.active,
+      createdAt: newClient.createdAt,
+      createdBy: newClient.createdBy,
+      clientType: newClient.clientType,
+      grantTypes: newClient.grantTypes,
+      redirectUris: newClient.redirectUris,
+      postLogoutRedirectUris: newClient.postLogoutRedirectUris,
+      consentRequired: newClient.consentRequired,
+      trusted: newClient.trusted
     });
   });
 
@@ -385,7 +383,7 @@ export default function registerAdminOAuthRoutes(app) {
       summary: `Updated OAuth client "${updatedClient.name || clientId}"`
     });
 
-    res.json({ client: updatedClient });
+    res.json(updatedClient);
   });
 
   /**

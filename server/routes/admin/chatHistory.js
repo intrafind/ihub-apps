@@ -386,7 +386,7 @@ export default function registerAdminChatHistoryRoutes(app) {
         resourceId: shareId,
         summary: `Admin revoked share of chat ${revoked.chatId} (${revoked.mode})`
       });
-      res.json({ share: { ...revoked, views: undefined, state: 'revoked' } });
+      res.json({ ...revoked, views: undefined, state: 'revoked' });
     }
   );
 

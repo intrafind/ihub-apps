@@ -100,7 +100,7 @@ export default function useChatFilePreUpload({
         }
       })
         .then(result => {
-          const descriptor = result?.file;
+          const descriptor = result;
           if (!descriptor?.id) throw new Error('No file in the response');
           stored.current.set(key, descriptor);
           setSelectedFile(prev => updateSelection(prev, key, e => withStoredFile(e, descriptor)));

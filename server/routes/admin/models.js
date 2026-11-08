@@ -648,7 +648,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ model: updatedModel });
+    res.json(updatedModel);
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -712,7 +712,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, { model: newModel });
+    sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, newModel);
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {

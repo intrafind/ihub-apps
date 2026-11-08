@@ -872,7 +872,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: promptId,
       summary: `Updated prompt ${promptId}`
     });
-    res.json({ prompt: updatedPrompt });
+    res.json(updatedPrompt);
   });
 
   /**
@@ -1003,7 +1003,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: newPrompt.id,
       summary: `Created prompt ${newPrompt.id}`
     });
-    sendCreated(res, `/api/admin/prompts/${segment(newPrompt.id)}`, { prompt: newPrompt });
+    sendCreated(res, `/api/admin/prompts/${segment(newPrompt.id)}`, newPrompt);
   });
 
   /**
@@ -1335,7 +1335,7 @@ export default function registerAdminPromptsRoutes(app) {
           userPrompt.ownerName || userPrompt.ownerId
         } to global prompt ${id}`
       });
-      sendCreated(res, `/api/admin/prompts/${segment(globalPrompt.id)}`, { prompt: globalPrompt });
+      sendCreated(res, `/api/admin/prompts/${segment(globalPrompt.id)}`, globalPrompt);
     }
   );
 

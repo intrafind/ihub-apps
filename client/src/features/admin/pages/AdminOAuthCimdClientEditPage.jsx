@@ -53,7 +53,7 @@ function AdminOAuthCimdClientEditPage() {
     setLoading(true);
     try {
       const response = await makeAdminApiCall(`/admin/oauth/clients/cimd/${encodedClientId}`);
-      const loaded = response.data?.client;
+      const loaded = response.data;
       setClient(loaded);
       setForm({
         allowedGroups: loaded?.policy?.allowedGroups ?? null,

@@ -395,8 +395,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         // The server normalizes the title (whitespace collapsed, length
         // capped), so show what it actually stored rather than what was typed.
         const result = await renameChat(chatId, title);
-        if (typeof result?.chat?.title === 'string') {
-          patchChatInCache(chatId, { title: result.chat.title });
+        if (typeof result?.title === 'string') {
+          patchChatInCache(chatId, { title: result.title });
         }
         setChatActionStatus(t('chatHistory.renamed', 'Chat renamed'));
       } catch {

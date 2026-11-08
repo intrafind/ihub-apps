@@ -466,7 +466,7 @@ export default function registerAdminProjectsRoutes(app) {
       summary: `Created admin project "${projectName(project)}"`
     });
     await snapshot(req, project.id, null, project);
-    sendCreated(res, route(`/${segment(project.id)}`), { project: adminView(project) });
+    sendCreated(res, route(`/${segment(project.id)}`), adminView(project));
   });
 
   app.get(route('/:id'), ...gate, contentAdminAuth, async (req, res) => {
@@ -523,7 +523,7 @@ export default function registerAdminProjectsRoutes(app) {
     });
     auditPublished(req, before, project);
     await snapshot(req, project.id, before, project);
-    res.json({ project: adminView(project) });
+    res.json(adminView(project));
   });
 
   app.patch(route('/:id'), ...gate, contentAdminAuth, async (req, res) => {
@@ -540,7 +540,7 @@ export default function registerAdminProjectsRoutes(app) {
     });
     auditPublished(req, before, project);
     await snapshot(req, project.id, before, project);
-    res.json({ project: adminView(project) });
+    res.json(adminView(project));
   });
 
   app.delete(route('/:id'), ...gate, contentAdminAuth, async (req, res) => {
