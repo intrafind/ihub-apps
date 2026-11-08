@@ -103,18 +103,22 @@ export function notesText() {
   return `${text}\n${expandBraces(text)}`;
 }
 
-/** What the notes may contain to name a route: its static prefix, or its last two literal segments. */
-function mentions(routePath) {
-  const prefix = routePath.split('/:')[0].toLowerCase();
-  const literal = routePath
-    .toLowerCase()
-    .split('/')
-    .filter(seg => seg && !seg.startsWith(':'));
+/**
+ * What the notes may contain to name a route: its static prefix, or its last two
+ * literal segments. A route that starts with a parameter (`/:lang/privacy`) has no
+ * static prefix, so the notes may only name it whole, with the parameter written
+ * as `:lang` or `{lang}`.
+ */
+export function mentions(routePath) {
+  const lower = routePath.toLowerCase();
+  const prefix = lower.split('/:')[0];
+  const literal = lower.split('/').filter(seg => seg && !seg.startsWith(':'));
   const tail = `/${literal.slice(-2).join('/')}`;
-  // An empty string would match any notes (`includes('')`), so drop it.
-  return [prefix, prefix.replace(/^\/api/, ''), ...(literal.length > 1 ? [tail] : [])].filter(
-    Boolean
-  );
+  const candidates = [prefix, prefix.replace(/^\/api/, ''), ...(literal.length > 1 ? [tail] : [])];
+  // An empty string would match any notes (`includes('')`), so it never counts.
+  const named = candidates.filter(Boolean);
+  if (named.length) return named;
+  return [lower, lower.replace(/:(\w+)/g, '{$1}')];
 }
 
 /** The base and head tables as sets of `METHOD path`, and what changed between them. */
