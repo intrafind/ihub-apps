@@ -73,6 +73,8 @@ export default defineConfig({
   webServer: {
     // Starts `npm run dev` on its own contents directory with raised rate limits.
     command: 'node tests/config/e2e-server.mjs',
+    // From the repository root (the default is this file's directory).
+    cwd: '../..',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000
