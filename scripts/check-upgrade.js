@@ -31,10 +31,31 @@ import { gitExecutable } from './git-executable.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
-const from = argv.includes('--from') ? argv[argv.indexOf('--from') + 1] : latestTag();
+const from = readFrom();
 const keepLogs = argv.includes('--keep-logs');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** The release to upgrade from: `--from <ref>`, else the latest tag on origin/main. */
+function readFrom() {
+  const idx = argv.indexOf('--from');
+  if (idx > -1) {
+    if (!argv[idx + 1] || argv[idx + 1].startsWith('--')) {
+      console.error('--from needs a tag or ref, e.g. --from v5.6.5-RC13');
+      process.exit(2);
+    }
+    return argv[idx + 1];
+  }
+  try {
+    return latestTag();
+  } catch (error) {
+    console.error(
+      `Cannot find the latest release tag (${error.message.split('\n')[0]}).\n` +
+        'Pass one with --from <tag>, and set GIT_EXECUTABLE if git is not in a standard location.'
+    );
+    process.exit(2);
+  }
+}
 
 function latestTag() {
   return execFileSync(gitExecutable(), ['describe', '--tags', '--abbrev=0', 'origin/main'], {
@@ -149,7 +170,12 @@ async function answerCalls(port) {
 
 /** Check out the earlier release and start it once, so `contentsDir` holds its data. */
 async function seedPreviousRelease(git, oldDir, contentsDir) {
-  git('worktree', 'add', '--detach', oldDir, from);
+  try {
+    git('worktree', 'add', '--detach', oldDir, from);
+  } catch (error) {
+    console.log(`✗ cannot check out ${from}: ${error.message.split('\n')[0]}`);
+    return false;
+  }
   for (const dir of ['node_modules', 'server/node_modules', 'client/node_modules']) {
     if (fs.existsSync(path.join(root, dir))) {
       fs.symlinkSync(path.join(root, dir), path.join(oldDir, dir));
@@ -203,14 +229,16 @@ async function main() {
   const contentsDir = path.join(tmp, 'contents');
   const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
   console.log(`⬆️  Upgrade check: ${from} -> this checkout\n`);
-  let failures;
+  let failures = null;
   try {
-    if (!(await seedPreviousRelease(git, oldDir, contentsDir))) process.exitCode = 2;
-    else failures = await startThisCheckout(contentsDir);
+    if (await seedPreviousRelease(git, oldDir, contentsDir)) {
+      failures = await startThisCheckout(contentsDir);
+    }
   } finally {
     cleanUp(git, oldDir, tmp);
   }
-  if (process.exitCode === 2) process.exit(2);
+  // The earlier release did not start (or could not be checked out): nothing to compare.
+  if (failures === null) process.exit(2);
 
   if (failures.length) {
     console.log(`\n❌ upgrade from ${from} failed:`);

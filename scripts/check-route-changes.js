@@ -38,7 +38,7 @@ const key = r => `${r.method} ${r.path.replace(/:\w+/g, ':')}`;
 
 /** The route table of `ref`, dumped by this checkout's `dump-routes.js`. */
 export function routesAtRef(ref) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'route-base-'));
+  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'route-base-'));
   const work = path.join(tmp, 'wt');
   const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
   try {
@@ -111,7 +111,10 @@ function mentions(routePath) {
     .split('/')
     .filter(seg => seg && !seg.startsWith(':'));
   const tail = `/${literal.slice(-2).join('/')}`;
-  return [prefix, prefix.replace(/^\/api/, ''), ...(literal.length > 1 ? [tail] : [])];
+  // An empty string would match any notes (`includes('')`), so drop it.
+  return [prefix, prefix.replace(/^\/api/, ''), ...(literal.length > 1 ? [tail] : [])].filter(
+    Boolean
+  );
 }
 
 /** The base and head tables as sets of `METHOD path`, and what changed between them. */

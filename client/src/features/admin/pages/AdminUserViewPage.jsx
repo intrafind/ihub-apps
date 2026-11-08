@@ -48,12 +48,18 @@ function AdminUserViewPage() {
   }, [userId]);
 
   useEffect(() => {
+    // The list answers one page at a time: follow `nextCursor` until it is complete.
+    const fetchConnections = async (cursor = null, collected = []) => {
+      const query = new URLSearchParams({ userId });
+      if (cursor) query.set('cursor', cursor);
+      const response = await makeAdminApiCall(`/admin/oauth/connections?${query}`);
+      const all = [...collected, ...(response.data?.items || [])];
+      return response.data?.nextCursor ? fetchConnections(response.data.nextCursor, all) : all;
+    };
+
     const loadConnections = async () => {
       try {
-        const response = await makeAdminApiCall(
-          `/admin/oauth/connections?userId=${encodeURIComponent(userId)}`
-        );
-        setConnections(response.data?.items || []);
+        setConnections(await fetchConnections());
       } catch {
         setConnections([]);
       }

@@ -78,7 +78,10 @@ function AdminOAuthPage() {
 
           try {
             const connectionsResponse = await makeAdminApiCall('/admin/oauth/connections');
-            setConnectionCount((connectionsResponse.data?.items || []).length);
+            // `total` counts every connection; `items` is only the first page.
+            setConnectionCount(
+              connectionsResponse.data?.total ?? (connectionsResponse.data?.items || []).length
+            );
           } catch {
             setConnectionCount(0);
           }

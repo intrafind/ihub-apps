@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -71,7 +71,9 @@ function recordMountPaths(router) {
 export async function dumpRoutes() {
   // express lives in server/node_modules, not next to this script.
   const express = createRequire(path.join(root, 'server', 'package.json'))('express');
-  const { registerAllRoutes } = await import(path.join(root, 'server/startup/routes.js'));
+  const { registerAllRoutes } = await import(
+    pathToFileURL(path.join(root, 'server/startup/routes.js')).href
+  );
   const app = express();
   recordMountPaths(app.router);
   await registerAllRoutes(app, {

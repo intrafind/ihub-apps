@@ -134,7 +134,12 @@ test.describe('Route crawl', () => {
         const text = message.text();
         if (IGNORED_CONSOLE.some(re => re.test(text))) return;
         // The client logs a failed request it handles itself; the response above decides.
-        if (expectedFailures && /^(API Error|Error loading|Failed to)/.test(text)) return;
+        // Each expected failure excuses the two lines the client logs for it (the request,
+        // then the page that could not load); any further one is a different problem.
+        if (expectedFailures > 0 && /^(API Error|Error loading|Failed to)/.test(text)) {
+          expectedFailures -= 0.5;
+          return;
+        }
         problems.push(`${key}: console.error: ${text.slice(0, 200)}`);
       });
       try {
