@@ -266,7 +266,7 @@ describe('GET /api/integrations', () => {
   it('answers one integration, 404 for one not granted, and hands other paths on', async () => {
     const one = await request(app).get('/api/integrations/jira').set('x-test-user', 'member');
     assert.equal(one.status, 200);
-    assert.equal(one.body.integration.id, 'jira');
+    assert.equal(one.body.id, 'jira');
     const hidden = await request(app)
       .get('/api/integrations/nc-legal')
       .set('x-test-user', 'member');
@@ -293,11 +293,11 @@ describe('GET /api/integrations', () => {
     assert.equal(outcome.ok, true);
     assert.equal(outcome.redirectTo, '/apps/a/c/1?integration_connected=jira');
     const one = await request(app).get('/api/integrations/jira').set('x-test-user', 'member');
-    assert.equal(one.body.integration.connection.status, 'connected');
-    assert.ok(one.body.integration.connection.connectedAt);
+    assert.equal(one.body.connection.status, 'connected');
+    assert.ok(one.body.connection.connectedAt);
     // Another user is not connected by it.
     const other = await request(app).get('/api/integrations/jira').set('x-test-user', 'other');
-    assert.equal(other.body.integration.connection.status, 'not_connected');
+    assert.equal(other.body.connection.status, 'not_connected');
   });
 });
 
@@ -426,9 +426,9 @@ describe('POST /api/integrations/:id/_reconnect and /_disconnect', () => {
     assert.equal(res.body.success, undefined);
     assert.equal(res.body.removed, true);
     const member = await request(app).get('/api/integrations/jira').set('x-test-user', 'member');
-    assert.equal(member.body.integration.connection.status, 'not_connected');
+    assert.equal(member.body.connection.status, 'not_connected');
     const other = await request(app).get('/api/integrations/jira').set('x-test-user', 'other');
-    assert.equal(other.body.integration.connection.status, 'connected');
+    assert.equal(other.body.connection.status, 'connected');
     assert.equal((await post('/api/integrations/nope/_disconnect')).status, 404);
     assert.equal((await post('/api/integrations/brave/_disconnect')).status, 404);
   });

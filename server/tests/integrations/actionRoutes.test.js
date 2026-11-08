@@ -250,7 +250,7 @@ describe('action detail', () => {
 
   it('describes what the model sees, the sources of side effect and approval, and the bindings', async () => {
     const res = await admin(request(app).get(`${base}/actions/search`)).expect(200);
-    const { detail } = res.body;
+    const detail = res.body;
     expect(detail.action).toMatchObject({
       name: 'search',
       toolId: 'portal__search',
@@ -288,7 +288,7 @@ describe('action detail', () => {
   });
 
   it('suggests the side effect of an undeclared OpenAPI operation from its method', async () => {
-    const { detail } = (await admin(request(app).get(`${base}/actions/guess`)).expect(200)).body;
+    const detail = (await admin(request(app).get(`${base}/actions/guess`)).expect(200)).body;
     expect(detail.effect).toMatchObject({
       sideEffect: 'unknown',
       declaredSideEffect: 'unknown',
@@ -425,7 +425,7 @@ describe('action test', () => {
 
     // A test counts as a test, never as a call.
     const detail = await admin(request(app).get(`${base}/actions/search`)).expect(200);
-    expect(detail.body.detail.usage).toMatchObject({ calls: 0, tests: 1 });
+    expect(detail.body.usage).toMatchObject({ calls: 0, tests: 1 });
   });
 
   it('redacts secret arguments in the shown request and in the audit entry', async () => {

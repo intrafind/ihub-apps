@@ -311,8 +311,8 @@ describe('the admin queue', () => {
     const id = requestIdFor('alice', 'com.example/docs');
     const res = await decide(id, '_approve', { note: 'Installing it this week' });
     assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.request.status, 'approved');
-    assert.deepEqual(res.body.request.decidedBy, { id: 'admin', name: 'Admin' });
+    assert.equal(res.body.status, 'approved');
+    assert.deepEqual(res.body.decidedBy, { id: 'admin', name: 'Admin' });
     assert.equal((await queue()).openCount, 0);
     // Still one standing request: a second is refused.
     assert.equal((await ask('alice', { definition: 'com.example/docs' })).status, 409);
