@@ -11,6 +11,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 
 const state = { platform: { setup: {} }, providers: [], user: null, written: [], fetches: 0 };
 
@@ -54,6 +55,8 @@ const { createOidcAuthHandler } = await import('../middleware/oidcAuth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
+// Harness-only limiter: the production app rate-limits at the server level.
+app.use(rateLimit({ windowMs: 60000, limit: 1000 }));
 app.use(express.json());
 app.use((req, res, next) => {
   if (state.user) req.user = state.user;

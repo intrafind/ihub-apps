@@ -10,6 +10,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 
 const platform = {
   auth: { mode: 'proxy', authenticatedGroup: 'authenticated' },
@@ -36,6 +37,8 @@ const { default: errorHandler } = await import('../middleware/errorHandler.js');
 let handlerRuns;
 let seenUser;
 const app = express();
+// Harness-only limiter: the production app rate-limits at the server level.
+app.use(rateLimit({ windowMs: 60000, limit: 1000 }));
 app.use(proxyAuth);
 app.get('/api/probe', (req, res) => {
   handlerRuns += 1;

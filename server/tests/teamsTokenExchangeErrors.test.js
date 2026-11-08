@@ -11,6 +11,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import jsonwebtoken from 'jsonwebtoken';
 
 const state = { teams: { enabled: true, clientId: 'cid', tenantId: 'tid', domain: 'x.example' } };
@@ -59,6 +60,8 @@ const { teamsTokenExchange } = await import('../middleware/teamsAuth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
+// Harness-only limiter: the production app rate-limits at the server level.
+app.use(rateLimit({ windowMs: 60000, limit: 1000 }));
 app.use(express.json());
 app.post('/api/auth/teams/exchange', teamsTokenExchange);
 app.use(errorHandler);
