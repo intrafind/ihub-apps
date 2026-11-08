@@ -71,7 +71,8 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
+    // Starts `npm run dev` on its own contents directory with raised rate limits.
+    command: 'node tests/config/e2e-server.mjs',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000

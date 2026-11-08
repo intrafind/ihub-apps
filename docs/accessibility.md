@@ -192,6 +192,11 @@ npm run test:a11y
 npm run test:e2e
 ```
 
+Playwright starts the app itself with `tests/config/e2e-server.mjs`: a fresh install in its own git-ignored
+`contents-e2e/` directory with every rate limit raised, so a full run is not answered with `429` and
+the specs do not write into your real `contents/`. Delete `contents-e2e/` to start from a fresh install.
+A server you already run on port 5173 is reused as it is, with its own limits and contents.
+
 The `test:a11y` command scans the following pages for WCAG 2.2 AA violations (axe-core tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22a`, `wcag22aa`):
 
 | Page | Route | Notes |
