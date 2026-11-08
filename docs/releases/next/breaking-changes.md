@@ -728,10 +728,10 @@ A list answer is `{ "items": [...] }` whatever it holds. These answered a list u
 now answer `items` (siblings such as `persisted`, `pinned` or `categories` keep their names):
 
 - Admin: `GET /api/admin/{credentials, ui/assets, document-templates, docs/search, features}`,
-  `…/integrations/installed/{id}/connections`, `…/iassistants` (iFinder assistants) and
-  `…/models/{id}/tts/voices`, plus the office integration reachability check.
+  `…/integrations/installed/{id}/connections`, `…/integrations/ifinder/assistants` and
+  `…/models/{id}/tts/voices`, plus the answer of `POST …/office-integration/office-js/_test`.
 - User: `GET /api/document-templates`, `GET /api/integrations`, `GET /api/integrations/scopes`,
-  `GET /api/interactions/pending`, `GET /api/runs`, the OCR job list, and the cloud storage lists
+  `GET /api/interactions/pending`, `GET /api/runs`, the jobs an OCR upload starts, and the cloud storage lists
   (`…/sources`, `…/drives/{source}` of Google Drive, Office 365 and Nextcloud).
 - Project pickers: `GET /api/projects/pickers/{pages, ifinder/search, cloud}`.
 
