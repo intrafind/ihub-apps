@@ -80,45 +80,53 @@ const SKIP_LINK =
 test.describe('Route crawl', () => {
   test.setTimeout(10 * 60 * 1000);
 
-  test('no page fails an API call, throws or logs an error', async ({ page }) => {
-    await page.addInitScript(() => {
+  test('no page fails an API call, throws or logs an error', async ({ context }) => {
+    // The first-visit disclaimer would sit over every page.
+    await context.addInitScript(() => {
       window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
     });
-    const login = await page.request.post('/api/auth/local/login', { data: ADMIN });
+    const login = await context.request.post('/api/auth/local/login', { data: ADMIN });
     expect(login.ok()).toBeTruthy();
 
     const problems = [];
-    let current = '';
-    page.on('response', response => {
-      const url = new URL(response.url());
-      if (!url.pathname.startsWith('/api/')) return;
-      const status = response.status();
-      const method = response.request().method();
-      if (status >= 400 && !isExpected(method, url.pathname, status)) {
-        problems.push(`${current}: ${method} ${url.pathname} -> ${status}`);
+
+    /** Load one page in a fresh tab (a long-lived tab runs out of resources) and return its links. */
+    async function visit(key) {
+      const page = await context.newPage();
+      page.on('response', response => {
+        const url = new URL(response.url());
+        if (!url.pathname.startsWith('/api/')) return;
+        const status = response.status();
+        const method = response.request().method();
+        if (status >= 400 && !isExpected(method, url.pathname, status)) {
+          problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
+        }
+      });
+      page.on('pageerror', error => problems.push(`${key}: exception: ${error.message}`));
+      page.on('console', message => {
+        if (message.type() !== 'error') return;
+        const text = message.text();
+        if (IGNORED_CONSOLE.some(re => re.test(text))) return;
+        problems.push(`${key}: console.error: ${text.slice(0, 200)}`);
+      });
+      try {
+        await page.goto(key, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        return await internalLinks(page);
+      } finally {
+        await page.close();
       }
-    });
-    page.on('pageerror', error => problems.push(`${current}: exception: ${error.message}`));
-    page.on('console', message => {
-      if (message.type() !== 'error') return;
-      const text = message.text();
-      if (IGNORED_CONSOLE.some(re => re.test(text))) return;
-      problems.push(`${current}: console.error: ${text.slice(0, 200)}`);
-    });
+    }
 
     const queue = ['/', '/admin'];
     const seen = new Set();
     let docPages = 0;
     while (queue.length && seen.size < MAX_PAGES) {
-      const target = queue.shift();
-      const key = target.split('#')[0];
+      const key = queue.shift().split('#')[0];
       if (seen.has(key)) continue;
       if (key.startsWith('/admin/docs/') && ++docPages > MAX_DOC_PAGES) continue;
       seen.add(key);
-      current = key;
-      await page.goto(key, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => {});
-      for (const href of await internalLinks(page)) {
+      for (const href of await visit(key)) {
         const clean = href.split('#')[0].split('?')[0];
         if (clean && !SKIP_LINK.test(clean) && !seen.has(clean)) queue.push(clean);
       }
