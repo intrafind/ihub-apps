@@ -758,7 +758,7 @@ describe('versions', () => {
     const history = await drive(route.versions, { user: ADA, params: { promptId: prompt.id } });
     assert.equal(history.statusCode, 200);
     assert.deepEqual(
-      history.body.versions.map(v => [v.revision, v.prompt]),
+      history.body.items.map(v => [v.revision, v.prompt]),
       [
         [2, 'second'],
         [1, 'first']
@@ -793,7 +793,7 @@ describe('versions', () => {
     }
     const history = await drive(route.versions, { user: ADA, params: { promptId: prompt.id } });
     assert.deepEqual(
-      history.body.versions.map(v => v.revision),
+      history.body.items.map(v => v.revision),
       [4, 3]
     );
   });

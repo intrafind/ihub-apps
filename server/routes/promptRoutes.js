@@ -1116,7 +1116,7 @@ export default function registerPromptRoutes(app) {
       const versions = await deps.repo.listVersions(promptId);
       res.json({
         revision: loaded.prompt.revision,
-        versions: versions.map(version => ({
+        items: versions.map(version => ({
           revision: version.revision,
           name: version.name,
           description: version.description,

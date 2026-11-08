@@ -592,17 +592,15 @@ export default function registerChatShareRoutes(app) {
       // The viewer gets the text and what describes it, nothing of the
       // owner's storage bookkeeping.
       return res.json({
-        file: {
-          id: textFile.id,
-          name: textFile.name,
-          mimeType: textFile.mimeType,
-          formatLabel: textFile.formatLabel,
-          bytes: textFile.bytes,
-          pages: textFile.pages,
-          origin: textFile.origin,
-          text: textFile.text,
-          hasOriginal: textFile.hasOriginal && access === 'original'
-        }
+        id: textFile.id,
+        name: textFile.name,
+        mimeType: textFile.mimeType,
+        formatLabel: textFile.formatLabel,
+        bytes: textFile.bytes,
+        pages: textFile.pages,
+        origin: textFile.origin,
+        text: textFile.text,
+        hasOriginal: textFile.hasOriginal && access === 'original'
       });
     }
 

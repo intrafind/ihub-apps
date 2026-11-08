@@ -801,3 +801,10 @@ Answers that carry more than the object keep their members (user prompt and skil
 member name. They now answer `{ items: [{ id, state, source, envVar }] }` (models also carry
 `enabled`), like every other collection. The ids are values, so an id such as `__proto__` is an
 ordinary entry. The web app, including the setup wizard, is updated.
+
+## Three Last Wrapped Answers
+
+- `GET /api/shares/{shareId}/files/{fileId}?format=text` answers the file itself (id, name, text, …),
+  not `{ file }`, like the same read on chats and scheduled tasks.
+- `GET /api/runs/{runId}/interactions` answers `{ items }` (was `{ runId, interactions }`).
+- `GET /api/prompts/{promptId}/versions` answers `{ revision, items }` (was `{ revision, versions }`).
