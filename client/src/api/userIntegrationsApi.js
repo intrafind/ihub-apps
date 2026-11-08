@@ -72,7 +72,7 @@ export async function requestConnectUrl(id, { returnUrl, reconnect = false, scop
     ...(reconnect && Array.isArray(scopes) && scopes.length ? { scopes } : {})
   };
   const { data } = await apiClient.post(
-    `${path(id)}/${reconnect ? 'reconnect' : 'connect'}`,
+    `${path(id)}/_${reconnect ? 'reconnect' : 'connect'}`,
     body,
     QUIET
   );
@@ -85,10 +85,10 @@ export async function requestConnectUrl(id, { returnUrl, reconnect = false, scop
 /**
  * Disconnect the user from an integration (revokes at the vendor where supported).
  * @param {string} id - Installation id
- * @returns {Promise<{success: boolean, removed: boolean, revoked: boolean}>}
+ * @returns {Promise<{removed: boolean, revoked: boolean}>}
  */
 export async function disconnectUserIntegration(id) {
-  const { data } = await apiClient.post(`${path(id)}/disconnect`, {}, QUIET);
+  const { data } = await apiClient.post(`${path(id)}/_disconnect`, {}, QUIET);
   return data;
 }
 

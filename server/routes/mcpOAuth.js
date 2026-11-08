@@ -16,7 +16,7 @@
  *
  * Starting a sign-in, listing connections and disconnecting are the one
  * connect flow of every integration (`routes/integrations/userIntegrations.js`:
- * `GET /api/integrations`, `POST /api/integrations/:id/connect|reconnect|disconnect`).
+ * `GET /api/integrations`, `POST /api/integrations/:id/_connect|_reconnect|_disconnect`).
  *
  * @module routes/mcpOAuth
  */

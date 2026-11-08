@@ -57,7 +57,7 @@ check('legacy callback route is removed', !getRoutes.includes('/callback'));
 
 // Drive the handlers directly. Each call gets a fresh request with no session,
 // like a callback landing on a different cluster worker than the connect
-// request (`POST /api/integrations/:id/connect`) did.
+// request (`POST /api/integrations/:id/_connect`) did.
 function handlerFor(path) {
   const route = office365Router.stack.find(layer => layer.route?.path === path).route;
   return route.stack[route.stack.length - 1].handle;
@@ -303,7 +303,7 @@ Office365Service.listItems = async () => {
       body?.code === 'INTEGRATION_AUTH_REQUIRED' &&
       body.details?.integration === 'office365' &&
       body.details.reason === 'expired' &&
-      body.details.connectUrl === '/api/integrations/office365/connect'
+      body.details.connectUrl === '/api/integrations/office365/_connect'
   );
 }
 

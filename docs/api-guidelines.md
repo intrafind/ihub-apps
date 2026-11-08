@@ -47,8 +47,8 @@ GET  /api/scheduled-tasks/_notifications          (a virtual collection, same pr
 - An action returns what its result is: the changed resource (`200`), a new resource (`201` + `Location`), or
   `202` with a job resource when it runs asynchronously. Never `{ success: true }`.
 - `scheduledTasks.js` already uses `_preview`, `_notifications` and `_apps/{appId}/tools`; that is the model.
-  Existing endpoints that use a bare verb (`/run`, `/duplicate`, `/cancel`, `/rotate`, `/disconnect`) move to the
-  prefix when they are next changed, together with their client call.
+  No endpoint uses a bare verb any more (`/run`, `/duplicate`, `/cancel`, `/rotate`, `/disconnect` became
+  `/_run`, `/_duplicate`, `/_cancel`, `/_rotate`, `/_disconnect`); `scripts/check-api-guidelines.js` keeps it so.
 
 ## 2. Methods and status codes
 

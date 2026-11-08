@@ -478,7 +478,7 @@ describe('chat projection of an MCP App tool that needs a sign-in', () => {
         error: 'INTEGRATION_AUTH_REQUIRED',
         integration: 'okta',
         reason: 'not_connected',
-        connectUrl: '/api/integrations/okta/connect'
+        connectUrl: '/api/integrations/okta/_connect'
       },
       message: { content: '' },
       durationMs: 1

@@ -14,7 +14,7 @@
  *
  * Starting a sign-in, the status and disconnecting are the one connect flow
  * of every integration (`userIntegrations.js`: `GET /api/integrations`,
- * `POST /api/integrations/:id/connect|reconnect|disconnect`); the per-provider
+ * `POST /api/integrations/:id/_connect|_reconnect|_disconnect`); the per-provider
  * `/auth`, `/status` and `/disconnect` routes were removed (#2917).
  *
  * @module routes/integrations/oauthIntegrationFactory

@@ -19,7 +19,7 @@ router.use(requireFeature('integrations'));
 
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
-// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+// are the one connect flow (POST /api/integrations/:id/_connect|_disconnect).
 // The redirect URI sent to Atlassian is the configured one or derived from the
 // request (resolveJiraRedirectUri).
 registerIntegrationCallbackAlias(router, {

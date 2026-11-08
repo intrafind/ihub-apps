@@ -148,8 +148,8 @@ const ROUTE_STEPS = [
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
   // The user's integrations and the one connect flow (GET /api/integrations,
-  // POST /api/integrations/:id/connect|reconnect|disconnect). First, so an
-  // installation id that equals a provider slug still reaches /:id/connect.
+  // POST /api/integrations/:id/_connect|_reconnect|_disconnect). First, so an
+  // installation id that equals a provider slug still reaches /:id/_connect.
   // Requests for catalog integrations (GET/POST /api/integrations/requests), before
   // the user integrations, whose GET /:id hands ids it does not know on.
   app => app.use(buildApiPath('/integrations/requests'), integrationRequestRoutes),

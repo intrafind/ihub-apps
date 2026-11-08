@@ -40,7 +40,7 @@ describe('scope step-up on a per-user MCP server', () => {
       reason: 'insufficient_scope'
     });
     // The one reconnect route, with the scopes the re-authorization asks for.
-    expect(result.connectUrl).toBe('/api/integrations/okta/reconnect');
+    expect(result.connectUrl).toBe('/api/integrations/okta/_reconnect');
     expect(result.scopes).toEqual(['openid', 'tickets:read', 'tickets:write']);
   });
 

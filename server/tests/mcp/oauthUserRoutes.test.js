@@ -14,7 +14,7 @@ const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth for outbound MCP servers — the one connect flow of every
- * integration (`POST /api/integrations/:id/connect|disconnect`,
+ * integration (`POST /api/integrations/:id/_connect|_disconnect`,
  * `GET /api/integrations`) and the MCP callback alias, end to end with the MCP
  * SDK's OAuth functions mocked: start (discovery, DCR / CIMD, PKCE,
  * server-side state), callback (state checks, user binding, code exchange,
@@ -295,7 +295,7 @@ function matchesChallenge(verifier, challenge) {
 
 /**
  * Start a sign-in the way the chat's Connect card does:
- * `POST /api/integrations/:id/connect` → `{ url }`. Answers the status, the
+ * `POST /api/integrations/:id/_connect` → `{ url }`. Answers the status, the
  * body and the authorization URL (`location`).
  */
 async function connect({
@@ -306,7 +306,7 @@ async function connect({
   admin = false,
   headers = {}
 } = {}) {
-  let req = request(target).post(`/api/integrations/${serverId}/connect`);
+  let req = request(target).post(`/api/integrations/${serverId}/_connect`);
   if (user) req = req.set('x-test-user', user);
   if (admin) req = req.set('x-test-admin', '1');
   for (const [name, value] of Object.entries(headers)) req = req.set(name, value);
@@ -318,7 +318,7 @@ function startFlow(user = 'alice', returnUrl = '/chat/abc') {
   return connect({ user, returnUrl });
 }
 
-describe('POST /api/integrations/:id/connect (MCP)', () => {
+describe('POST /api/integrations/:id/_connect (MCP)', () => {
   it('answers the authorization URL with PKCE, resource and a server-side state', async () => {
     const res = await startFlow();
     expect(res.status).toBe(200);
@@ -407,7 +407,7 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
 
   it('refuses a request without a JSON body (no cross-site form posts)', async () => {
     const res = await request(app)
-      .post('/api/integrations/okta/connect')
+      .post('/api/integrations/okta/_connect')
       .set('x-test-user', 'alice')
       .type('form')
       .send('returnUrl=/chat/abc');
@@ -590,7 +590,7 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   });
 });
 
-describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)', () => {
+describe('GET /api/integrations and POST /api/integrations/:id/_disconnect (MCP)', () => {
   it('lists the per-user server with its connection status', async () => {
     await writeUserTokens(
       'alice',
@@ -635,11 +635,11 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
 
     const res = await request(app)
-      .post('/api/integrations/okta/disconnect')
+      .post('/api/integrations/okta/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: true, removed: true, revoked: true });
+    expect(res.body).toMatchObject({ removed: true, revoked: true });
     // Revocation requests refuse redirects too.
     for (const [url, init] of safeFetch.mock.calls) {
       if (String(url).includes('/revoke')) expect(init.redirect).toBe('manual');
@@ -657,12 +657,12 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
 
   it('refuses an invalid or unknown server id', async () => {
     const bad = await request(app)
-      .post('/api/integrations/..%2Fetc/disconnect')
+      .post('/api/integrations/..%2Fetc/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(bad.status).toBe(404);
     const unknown = await request(app)
-      .post('/api/integrations/nope/disconnect')
+      .post('/api/integrations/nope/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(unknown.status).toBe(404);
