@@ -80,9 +80,7 @@ function AdminFeedbackPage() {
         fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
       ]);
 
-      const feedbackFeature = (featuresResponse.data?.features || []).find(
-        f => f.id === 'feedback'
-      );
+      const feedbackFeature = (featuresResponse.data?.items || []).find(f => f.id === 'feedback');
       const platform = platformResponse.data || {};
       const next = {
         collectionEnabled: feedbackFeature ? feedbackFeature.enabled !== false : true,
