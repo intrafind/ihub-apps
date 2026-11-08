@@ -143,8 +143,8 @@ const marketplaceItemPath = (registryId, name) =>
  * caller already added it (`added: { id, name }`) and whether a global skill
  * of that name is available to them (`availableAsGlobal`).
  *
- * @param {{search?: string, registry?: string, category?: string, page?: number, limit?: number}} [params]
- * @returns {Promise<{items: Object[], total: number, page: number, limit: number, totalPages: number, registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
+ * @param {{search?: string, registry?: string, category?: string, cursor?: string, limit?: number}} [params]
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number, registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
  */
 export const fetchMarketplaceSkills = async (params = {}) =>
   read(() => apiClient.get('/user-skills/marketplace', { params }));

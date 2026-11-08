@@ -948,12 +948,16 @@ describe('from the marketplace', () => {
       writing.body.items.map(item => item.name),
       ['plain', 'gone']
     );
-    const paged = await browse(ADA, { limit: '1', page: '2' });
-    assert.equal(paged.body.totalPages, 3);
+    const firstPage = await browse(ADA, { limit: '1' });
+    assert.equal(firstPage.body.total, 3);
+    assert.equal(firstPage.body.items.length, 1);
+    const paged = await browse(ADA, { limit: '1', cursor: firstPage.body.nextCursor });
     assert.deepEqual(
       paged.body.items.map(item => item.name),
       ['plain']
     );
+    const lastPage = await browse(ADA, { limit: '5', cursor: paged.body.nextCursor });
+    assert.equal(lastPage.body.nextCursor, null);
     const otherRegistry = await browse(ADA, { registry: 'off-reg' });
     assert.equal(otherRegistry.body.total, 0);
   });

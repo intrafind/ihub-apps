@@ -190,6 +190,25 @@ describe('catalog load screens integration items', () => {
     );
   });
 
+  test('pages the marketplace list by cursor and ends with a null nextCursor', async () => {
+    const catalog = await registryService.fetchCatalog(REGISTRY);
+    jest
+      .spyOn(registryService, 'getCachedCatalogAsync')
+      .mockResolvedValue({ registryId: 'acme', catalog });
+
+    const first = await registryService.getAllItems({ type: 'integration', limit: 2 });
+    expect(first.items).toHaveLength(2);
+    expect(first.total).toBe(3);
+    expect(first.page).toBeUndefined();
+    const second = await registryService.getAllItems({
+      type: 'integration',
+      limit: 2,
+      cursor: first.nextCursor
+    });
+    expect(second.items.map(i => i.name)).toEqual(['gone']);
+    expect(second.nextCursor).toBeNull();
+  });
+
   test('only the good integration is listed in the marketplace', async () => {
     const catalog = await registryService.fetchCatalog(REGISTRY);
     jest

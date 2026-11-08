@@ -18,6 +18,7 @@
  */
 
 import { ServiceError } from '../../utils/ServiceError.js';
+import { limitFrom, pageOfList } from '../../utils/pagination.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { catalogItemVersionSchema, validateCatalog } from '../../validators/catalogSchema.js';
 import {
@@ -1078,20 +1079,11 @@ class RegistryService {
       );
     }
 
-    // Pagination
-    const page = Number.parseInt(filters.page) || 1;
-    const limit = Number.parseInt(filters.limit) || 24;
-    const total = filtered.length;
-    const start = (page - 1) * limit;
-    const items = filtered.slice(start, start + limit);
+    // Pagination: `limit` (default 24, at most 1000) and the opaque `cursor`
+    const limit = limitFrom(filters.limit, { fallback: 24, max: 1000 });
+    const { items, nextCursor } = pageOfList(filtered, { limit, cursor: filters.cursor });
 
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit)
-    };
+    return { items, nextCursor, total: filtered.length };
   }
 
   /**
