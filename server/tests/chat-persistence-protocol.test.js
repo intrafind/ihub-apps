@@ -1135,8 +1135,7 @@ describe('Stop reaches a durable turn that never streamed', () => {
     try {
       const res = await drive(chatStopHandlers, { chatId, user: USER });
 
-      assert.equal(res.statusCode, 200);
-      assert.deepEqual(res.body, { message: 'Chat stream stopped' });
+      assert.equal(res.statusCode, 204);
       assert.equal(aborted, true);
     } finally {
       activeRequests.delete(chatId);

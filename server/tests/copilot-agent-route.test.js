@@ -223,7 +223,7 @@ describe('disable', () => {
     await post('/api/admin/copilot-agent/_enable');
     const res = await post('/api/admin/copilot-agent/_disable');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
     expect(state.clients.client_copilot.active).toBe(false);
     expect(state.platform.copilotAgent.enabled).toBe(false);
     expect(state.platform.mcpServer.enabled).toBe(true);
@@ -247,7 +247,7 @@ describe('config', () => {
       name: 'Contoso AI',
       conversationStarters: [{ title: 'Policy', text: 'What is our travel policy?' }, { text: '' }]
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
     expect(state.platform.copilotAgent).toMatchObject({
       oauthReferenceId: 'ref-123',
       name: 'Contoso AI',

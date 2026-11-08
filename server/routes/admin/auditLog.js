@@ -138,7 +138,7 @@ export default function registerAdminAuditLogRoutes(app) {
   app.post(buildServerPath('/api/admin/audit-log/retention/_run'), adminAuth, async (_req, res) => {
     const { retentionDays } = getAuditSettings();
     const result = await cleanupAuditLog(retentionDays);
-    res.json({ ok: true, ...result });
+    res.json({ ...result });
   });
 
   /**
@@ -189,6 +189,6 @@ export default function registerAdminAuditLogRoutes(app) {
       anonymizeIp
     });
 
-    res.json({ ok: true, settings: getAuditSettings() });
+    res.json({ settings: getAuditSettings() });
   });
 }

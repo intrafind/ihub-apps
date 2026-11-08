@@ -176,7 +176,6 @@ export default function registerAdminScheduledTaskRoutes(app) {
     }
     const platform = configCache.getPlatform() || platformConfig;
     res.json({
-      ok: true,
       changed,
       settings: scheduledTaskSettings(platform),
       status: resolveStatus(platform, configCache.getFeatures() || {})

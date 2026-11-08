@@ -51,7 +51,7 @@ export default function registerAdminAgentInboxesRoutes(app) {
       expectedVersion,
       updatedBy: req.user?.id || 'admin'
     });
-    res.json({ ok: true, version: result.version });
+    res.json({ version: result.version });
   });
 
   app.post(
@@ -72,7 +72,7 @@ export default function registerAdminAgentInboxesRoutes(app) {
         inboxId,
         actor: req.user?.id
       });
-      res.json({ ok: true, version: result.version });
+      res.json({ version: result.version });
     }
   );
 
@@ -84,6 +84,6 @@ export default function registerAdminAgentInboxesRoutes(app) {
       body: body || `# ${inboxId}\n`,
       updatedBy: req.user?.id || 'admin'
     });
-    res.status(201).json({ ok: true, version: result.version });
+    res.status(201).json({ version: result.version });
   });
 }

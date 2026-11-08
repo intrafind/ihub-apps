@@ -401,7 +401,7 @@ describe('creating and listing', () => {
     const unshared = await share(ROOT, prompt.id, []);
     assert.equal(unshared.statusCode, 200, JSON.stringify(unshared.body));
     const removed = await drive(route.remove, { user: ROOT, params });
-    assert.equal(removed.statusCode, 200, JSON.stringify(removed.body));
+    assert.equal(removed.statusCode, 204, JSON.stringify(removed.body));
 
     const created = await drive(route.create, { user: ROOT, body: { name: 'x', prompt: 'y' } });
     assert.equal(created.statusCode, 403, 'nobody creates new ones, admins included');
@@ -670,7 +670,7 @@ describe('ownership', () => {
     const prompt = await create(ADA);
     await share(ADA, prompt.id, [{ type: 'user', id: GRACE.id, permission: 'edit' }]);
     const res = await drive(route.remove, { user: ADA, params: { promptId: prompt.id } });
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 204);
     assert.ok(!ids(await list(GRACE)).includes(prompt.id));
     const marker = await getUserPromptRepository().documents.get(
       USER_PROMPT_SHARES_NAMESPACE,

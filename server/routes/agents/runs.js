@@ -367,12 +367,7 @@ export default function registerAgentRunRoutes(app) {
         executionId: state.executionId,
         actor: req.user?.id
       });
-      res.status(202).json({
-        ok: true,
-        executionId: state.executionId,
-        status: state.status,
-        profileId
-      });
+      res.status(202).json({ executionId: state.executionId, status: state.status, profileId });
     }
   );
 
@@ -634,11 +629,7 @@ export default function registerAgentRunRoutes(app) {
       await loadRunAccess(req, runId);
       // The run may execute on another worker: the engine relays the cancel.
       const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
-      res.json({
-        ok: true,
-        status: state.status,
-        ...(state.cancelRelayed ? { relayed: true } : {})
-      });
+      res.json({ status: state.status, ...(state.cancelRelayed ? { relayed: true } : {}) });
     }
   );
 
@@ -729,7 +720,6 @@ export default function registerAgentRunRoutes(app) {
           userId: req.user?.id
         });
         res.json({
-          ok: true,
           executionId: newState.executionId,
           status: newState.status,
           currentNodes: newState.currentNodes

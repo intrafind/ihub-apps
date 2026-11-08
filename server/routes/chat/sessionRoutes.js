@@ -1663,7 +1663,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         throw new ServiceError('NOT_FOUND', 'Chat session not found');
       }
       logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
-      return res.status(200).json({ message: 'Chat stream stopped' });
+      return res.status(204).end();
     }
   );
 

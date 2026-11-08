@@ -160,7 +160,7 @@ export default function registerAdminChangesRoutes(app) {
         snapshotTs: snapshot.ts
       });
 
-      res.json({ message: `Rolled back ${resource} ${id} to ${snapshot.ts}` });
+      res.json({ resource, id, snapshotTs: snapshot.ts });
     }
   );
 }

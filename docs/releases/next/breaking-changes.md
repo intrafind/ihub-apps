@@ -660,3 +660,13 @@ Scripts that read those members must read the status (and the resource) instead.
 - **A test keeps its report in the body:** the directory (LDAP) tests and the registry test answer `200`
   with `success`, `message` and the steps, as `docs/api-guidelines.md` now says. A model test that ran
   answers the model's reply; one that failed is `502`, as before.
+
+## Calls Drop the `{ ok }`, `{ deleted: true }` and Message-Only Bodies
+
+Same rule, last shapes: the status code carries success, so a call with nothing to report answers
+`204` with no body instead of `{ "ok": true }`, `{ "deleted": true }`, `{ "revoked": true }` or a
+bare `{ "message": … }`. This covers the admin agent, agent-inbox, audit-log, chat-history,
+scheduled-task, change-log, configuration and Copilot-agent calls, the agent run calls, chat stop
+and history deletion, project item calls, prompt calls, and workflow trigger calls. Calls that
+return something (a run, a count, a resource) keep that body. Scripts that read `ok`, `deleted`
+or `revoked` must read the status instead.
