@@ -62,6 +62,7 @@ import { applyProjectTestScope } from '../services/knowledge/projectTestScope.js
 import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMaterializer.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import ChatService from '../services/chat/ChatService.js';
+import errorHandler from '../middleware/errorHandler.js';
 import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
 import { activeRequests } from '../sse.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
@@ -1828,9 +1829,14 @@ describe('chat route and projects', () => {
     };
     for (let index = 1; index < chatPost.length; index += 1) {
       let advanced = false;
-      await chatPost[index](req, res, () => {
-        advanced = true;
-      });
+      try {
+        await chatPost[index](req, res, () => {
+          advanced = true;
+        });
+      } catch (error) {
+        // A handler refuses by throwing; the error middleware answers it.
+        errorHandler(error, req, res, () => {});
+      }
       if (index < chatPost.length - 1 && !advanced) break;
     }
     return res;
