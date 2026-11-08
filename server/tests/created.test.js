@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { sendCreated, segment } from '../utils/created.js';
+import { sendCreated, sendWithLocation, segment } from '../utils/created.js';
 
 function makeRes() {
   const res = { statusCode: 200, headers: {}, body: null };
@@ -35,5 +35,18 @@ describe('sendCreated', () => {
     const res = makeRes();
     sendCreated(res, `/api/things/${segment('x/../y')}`, {});
     assert.equal(res.headers.Location, '/api/things/x%2F..%2Fy');
+  });
+
+  it('sets Location for a 201 or 202 but not for another status', () => {
+    for (const status of [201, 202]) {
+      const res = makeRes();
+      sendWithLocation(res, status, '/api/things/a', { id: 'a' });
+      assert.equal(res.statusCode, status);
+      assert.equal(res.headers.Location, '/api/things/a');
+    }
+    const res = makeRes();
+    sendWithLocation(res, 200, '/api/things/a', { id: 'a' });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers.Location, undefined);
   });
 });
