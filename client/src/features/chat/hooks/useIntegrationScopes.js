@@ -47,7 +47,7 @@ export default function useIntegrationScopes({ app, modelId, language, selected,
         if (cancelled) return;
         setAnswer({
           key: requestKey,
-          integrations: Array.isArray(data?.integrations) ? data.integrations : []
+          integrations: Array.isArray(data?.items) ? data.items : []
         });
       })
       .catch(() => {

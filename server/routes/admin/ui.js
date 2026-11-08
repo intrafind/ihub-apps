@@ -143,7 +143,7 @@ export default function registerAdminUIRoutes(app) {
     // Create directory if it doesn't exist
     if (!fs.existsSync(assetsDir)) {
       fs.mkdirSync(assetsDir, { recursive: true });
-      return res.json({ assets: [] });
+      return res.json({ items: [] });
     }
 
     const files = fs.readdirSync(assetsDir);
@@ -185,7 +185,7 @@ export default function registerAdminUIRoutes(app) {
       .filter(asset => asset !== null)
       .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-    res.json({ assets });
+    res.json({ items: assets });
   });
 
   /**

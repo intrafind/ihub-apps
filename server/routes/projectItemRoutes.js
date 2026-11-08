@@ -375,7 +375,7 @@ export function registerProjectPickerRoutes(app) {
         title: config?.title || id,
         languages: Object.keys(config?.filePath || {})
       }));
-    res.json({ pages });
+    res.json({ items: pages });
   });
 
   // The search profiles the caller may search in, as the chat input offers
@@ -422,7 +422,7 @@ export function registerProjectPickerRoutes(app) {
       maxResults: limit,
       ...(profile ? { searchProfile: profile } : {})
     });
-    res.json({ results });
+    res.json({ items: results });
   });
 
   app.get(route('/ifinder/metadata'), ...gate, async (req, res) => {
@@ -534,7 +534,7 @@ export function registerProjectPickerRoutes(app) {
         type: provider.type,
         displayName: provider.displayName || provider.name || provider.id
       }));
-    res.json({ providers });
+    res.json({ items: providers });
   });
 }
 

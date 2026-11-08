@@ -77,7 +77,7 @@ router.get('/sources', authRequired, nextcloudApiLimiter, async (req, res) => {
     }
   ];
 
-  res.json({ sources });
+  res.json({ items: sources });
 });
 
 /**

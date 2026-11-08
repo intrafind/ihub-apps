@@ -254,7 +254,7 @@ export default function OcrPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      const { jobs } = response.data;
+      const jobs = response.data?.items;
       setActiveJobs(jobs);
       setStatus('processing');
     } catch (err) {

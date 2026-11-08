@@ -903,7 +903,7 @@ export default function registerAdminModelsRoutes(app) {
     const resolved = resolveVoicesModel(req);
     try {
       const voices = await resolved.provider.listVoices(resolved.cfg);
-      return res.json({ voices });
+      return res.json({ items: voices });
     } catch (error) {
       throw voicesError(error, 'list voices');
     }

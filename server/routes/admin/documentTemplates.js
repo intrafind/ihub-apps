@@ -152,7 +152,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     base,
     adminAuth,
     handle('loaded', async (req, res) => {
-      res.json({ templates: await listTemplates({ includeDisabled: true }) });
+      res.json({ items: await listTemplates({ includeDisabled: true }) });
     })
   );
 

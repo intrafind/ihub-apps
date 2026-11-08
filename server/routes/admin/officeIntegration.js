@@ -656,7 +656,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         reachable: results.filter(r => r.reachable).length
       });
 
-      res.json({ results });
+      res.json({ items: results });
     }
   );
 }

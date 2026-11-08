@@ -283,7 +283,7 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
   if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   const integrations = await listUserIntegrations({ user: req.user, language: languageOf(req) });
   res.setHeader('Cache-Control', 'no-store');
-  return res.json({ integrations });
+  return res.json({ items: integrations });
 });
 
 /**

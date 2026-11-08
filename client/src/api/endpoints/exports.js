@@ -63,7 +63,7 @@ export const fetchDocumentTemplateChoices = async ({ language, appId } = {}) => 
     params: { lang: language, ...(appId ? { appId } : {}) }
   });
   return {
-    templates: Array.isArray(response.data?.templates) ? response.data.templates : [],
+    templates: Array.isArray(response.data?.items) ? response.data.items : [],
     pinned: typeof response.data?.pinned === 'string' ? response.data.pinned : null
   };
 };

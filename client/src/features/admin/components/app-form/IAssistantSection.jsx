@@ -76,7 +76,7 @@ function IAssistantSection({
       const response = await makeAdminApiCall(
         `/admin/integrations/ifinder/assistants?lang=${encodeURIComponent(i18n.language || 'en')}`
       );
-      setAssistants(response.data?.assistants ?? []);
+      setAssistants(response.data?.items ?? []);
     } catch (err) {
       setAssistantsError(getAdminApiErrorMessage(err));
     } finally {

@@ -31,7 +31,7 @@ export default function registerAdminFeaturesRoutes(app) {
   app.get(buildServerPath('/api/admin/features'), adminAuth, (req, res) => {
     const featureConfig = configCache.getFeatures();
     res.json({
-      features: resolveFeatures(featureConfig),
+      items: resolveFeatures(featureConfig),
       categories: featureCategories
     });
   });
@@ -105,7 +105,7 @@ export default function registerAdminFeaturesRoutes(app) {
       summary: `Updated features: ${Object.keys(updates).join(', ')}`
     });
     res.json({
-      features: resolveFeatures(merged),
+      items: resolveFeatures(merged),
       categories: featureCategories
     });
   });

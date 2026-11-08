@@ -164,7 +164,7 @@ router.post(
       }
     }
 
-    res.json({ jobs });
+    res.json({ items: jobs });
   }
 );
 

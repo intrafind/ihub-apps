@@ -231,7 +231,7 @@ export const adoptInstalledIntegration = async id =>
 
 /** Users who connected their own account to an installation that signs every user in. */
 export const fetchIntegrationConnections = async id =>
-  (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.connections || [];
+  (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.items || [];
 
 /** Disconnect one user: revoke where possible, delete the stored tokens. */
 export const disconnectIntegrationUser = async (id, userId) =>
