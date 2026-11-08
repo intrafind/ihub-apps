@@ -154,7 +154,11 @@ test.describe('Route crawl', () => {
       if (seen.has(key)) continue;
       if (key.startsWith('/admin/docs/') && ++docPages > MAX_DOC_PAGES) continue;
       seen.add(key);
-      for (const href of await visit(key)) {
+      const links = await visit(key);
+      // The audit log lists what happened to things that may be gone since (another spec
+      // deletes the projects and prompts it creates); a link there can rightly 404.
+      if (key.startsWith('/admin/audit-log')) continue;
+      for (const href of links) {
         const clean = href.split('#')[0].split('?')[0];
         if (clean && !SKIP_LINK.test(clean) && !seen.has(clean)) {
           queue.push(clean);
