@@ -16,8 +16,14 @@ import { useCallback, useState } from 'react';
  */
 export function useCursorPager(resetKey = null) {
   const [stored, setStored] = useState({ cursors: [null], index: 0, key: resetKey });
-  // A changed `resetKey` (the filters, say) starts over without a render on the old cursors.
-  const state = stored.key === resetKey ? stored : { cursors: [null], index: 0, key: resetKey };
+  // A changed `resetKey` (the filters, say) starts over. The fresh state is stored at once, in
+  // the render that sees the new key, so going back to an earlier key does not bring its old
+  // pages back, and no render shows the old cursors.
+  let state = stored;
+  if (stored.key !== resetKey) {
+    state = { cursors: [null], index: 0, key: resetKey };
+    setStored(state);
+  }
 
   const goNext = useCallback(
     nextCursor => {
