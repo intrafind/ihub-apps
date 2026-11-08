@@ -907,9 +907,12 @@ export default function registerProjectRoutes(app) {
         }
       );
       if (!resolved.ok) {
-        throw new ServiceError('SHARE_TARGET_INVALID', resolved.error, {
+        // `resolveShares` may name the refusal (`SHARE_TARGET_NOT_ALLOWED` for an audience the
+        // caller may not share with); it is the code of the response, the rest stays in `details`.
+        const { code = 'SHARE_TARGET_INVALID', ...details } = resolved.details || {};
+        throw new ServiceError(code, resolved.error, {
           status: resolved.status,
-          details: resolved.details
+          details: Object.keys(details).length ? details : undefined
         });
       }
       const members = resolved.shares.map(({ permission, ...share }) => ({
