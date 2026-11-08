@@ -8,7 +8,6 @@ name: Unit Tests
 
 on:
   pull_request:
-    branches: [main, develop]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 

@@ -12,7 +12,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   # Quick build check job - runs on every push and pull request
