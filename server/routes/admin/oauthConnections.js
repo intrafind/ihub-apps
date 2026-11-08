@@ -43,15 +43,16 @@ export default function registerAdminOAuthConnectionRoutes(app) {
    *       - name: host
    *         in: query
    *         schema: { type: string }
-   *       - name: page
+   *       - name: limit
    *         in: query
-   *         schema: { type: integer, default: 1 }
-   *       - name: pageSize
+   *         schema: { type: integer, default: 50, maximum: 500 }
+   *       - name: cursor
    *         in: query
-   *         schema: { type: integer, default: 50 }
+   *         description: The `nextCursor` of the previous page
+   *         schema: { type: string }
    *     responses:
    *       200:
-   *         description: Matching connections
+   *         description: "`{ items, nextCursor, total, cimdClients }`: matching connections"
    *       400:
    *         description: OAuth clients are not enabled
    */
