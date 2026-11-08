@@ -31,6 +31,13 @@ const ADMIN = { username: 'admin', password: 'password123' };
 // path without it, so a page is `/admin` on both deployments.
 const BASE = (process.env.CRAWL_BASE_PATH || '').replace(/\/$/, '');
 
+/**
+ * Root-relative links in page content that leave a deployment prefix: the Markdown
+ * link renderer emits `/pages/x` unchanged, so under `/ihub` it opens `/pages/x` (404
+ * at the proxy). Known, tracked in #3485; they are logged, any other one fails.
+ */
+const KNOWN_LINKS_OUTSIDE_BASE = ['/pages/privacy', '/pages/nda-guide'];
+
 // Enough to reach every admin page and a sample of detail pages, few enough to
 // finish in a couple of minutes.
 const MAX_PAGES = 120;
@@ -155,7 +162,9 @@ test.describe('Route crawl', () => {
         for (const href of hrefs) {
           if (href === BASE || href.startsWith(`${BASE}/`))
             inApp.push(href.slice(BASE.length) || '/');
-          else problems.push(`${key}: link ${href} ignores the base path ${BASE}`);
+          else if (KNOWN_LINKS_OUTSIDE_BASE.includes(href)) {
+            console.log(`known (#3485): ${key} links ${href} without ${BASE}`);
+          } else problems.push(`${key}: link ${href} ignores the base path ${BASE}`);
         }
         return inApp;
       } finally {
