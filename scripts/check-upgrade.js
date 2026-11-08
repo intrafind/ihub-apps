@@ -156,7 +156,7 @@ async function main() {
         '/api/admin/models',
         '/api/admin/groups',
         '/api/admin/integrations/installed',
-        '/api/admin/skills'
+        '/api/admin/features'
       ]) {
         const response = await fetch(base + route, { headers: { cookie } });
         const type = response.headers.get('content-type') || '';
