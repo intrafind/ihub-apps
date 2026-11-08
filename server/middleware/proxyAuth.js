@@ -451,7 +451,9 @@ export async function proxyAuth(req, res, next) {
   } catch (error) {
     logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
     // A 403 with the validation's own, user-friendly message; the request never goes on.
-    throw new ServiceError('USER_VALIDATION_FAILED', error.message, { cause: error });
+    // Passed to `next` rather than thrown: `createAuthChain` calls this middleware with its own
+    // callback and never observes the returned promise, so a rejection would leave the request hanging.
+    return next(new ServiceError('USER_VALIDATION_FAILED', error.message, { cause: error }));
   }
 
   req.user = user;
