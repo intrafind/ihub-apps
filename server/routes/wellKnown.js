@@ -6,7 +6,7 @@ import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { getJwtAlgorithm } from '../utils/tokenService.js';
 import logger from '../utils/logger.js';
-import { sendInternalError, sendErrorResponse } from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import crypto from 'node:crypto';
 import * as jose from 'jose';
 
@@ -209,18 +209,14 @@ export default function registerWellKnownRoutes(app) {
    *                     type: string
    */
   app.get('/.well-known/openid-configuration', (req, res) => {
-    try {
-      const discovery = buildAuthServerMetadata(req);
+    const discovery = buildAuthServerMetadata(req);
 
-      logger.info('Served OpenID Connect Discovery', {
-        component: 'WellKnown',
-        issuer: discovery.issuer
-      });
+    logger.info('Served OpenID Connect Discovery', {
+      component: 'WellKnown',
+      issuer: discovery.issuer
+    });
 
-      res.json(discovery);
-    } catch (error) {
-      return sendInternalError(res, error, 'serve OpenID Connect Discovery');
-    }
+    res.json(discovery);
   });
 
   /**
@@ -239,18 +235,14 @@ export default function registerWellKnownRoutes(app) {
    *         description: Authorization server metadata
    */
   const authServerMetadataHandler = (req, res) => {
-    try {
-      const discovery = buildAuthServerMetadata(req);
+    const discovery = buildAuthServerMetadata(req);
 
-      logger.info('Served OAuth Authorization Server Metadata', {
-        component: 'WellKnown',
-        issuer: discovery.issuer
-      });
+    logger.info('Served OAuth Authorization Server Metadata', {
+      component: 'WellKnown',
+      issuer: discovery.issuer
+    });
 
-      res.json(discovery);
-    } catch (error) {
-      return sendInternalError(res, error, 'serve OAuth Authorization Server Metadata');
-    }
+    res.json(discovery);
   };
 
   app.get('/.well-known/oauth-authorization-server', authServerMetadataHandler);
@@ -279,17 +271,13 @@ export default function registerWellKnownRoutes(app) {
    *         description: MCP gateway is not enabled
    */
   const protectedResourceHandler = (req, res) => {
-    try {
-      const platform = configCache.getPlatform() || {};
-      if (platform.mcpServer?.enabled !== true) {
-        return res
-          .status(404)
-          .json({ error: 'not_found', error_description: 'MCP gateway is not enabled' });
-      }
-      res.json(buildProtectedResourceMetadata(req));
-    } catch (error) {
-      return sendInternalError(res, error, 'serve OAuth Protected Resource Metadata');
+    const platform = configCache.getPlatform() || {};
+    if (platform.mcpServer?.enabled !== true) {
+      return res
+        .status(404)
+        .json({ error: 'not_found', error_description: 'MCP gateway is not enabled' });
     }
+    res.json(buildProtectedResourceMetadata(req));
   };
 
   app.get('/.well-known/oauth-protected-resource', protectedResourceHandler);
@@ -324,51 +312,43 @@ export default function registerWellKnownRoutes(app) {
    *         description: JWKS not supported for current signing algorithm
    */
   app.get('/.well-known/jwks.json', async (req, res) => {
-    try {
-      const algorithm = getJwtAlgorithm();
+    const algorithm = getJwtAlgorithm();
 
-      if (algorithm === 'HS256') {
-        // For symmetric algorithms, we cannot expose the secret key
-        // Return information about the algorithm but not the key
-        logger.warn('JWKS endpoint called but HS256 (symmetric) algorithm is in use', {
-          component: 'WellKnown'
-        });
-
-        return res.status(200).json({
-          keys: [],
-          note: 'JWKS not available for HS256 (symmetric) algorithm. Public key sharing requires RS256 (asymmetric) algorithm. Configure "jwt.algorithm": "RS256" in platform.json to enable public key sharing.'
-        });
-      }
-
-      // For RS256, return the public key in JWK format
-      const keyPair = tokenStorageService.getRSAKeyPair();
-
-      if (!keyPair || !keyPair.publicKey) {
-        logger.error('No RSA key pair available for JWKS', { component: 'WellKnown' });
-        return sendErrorResponse(res, 501, 'JWKS not configured');
-      }
-
-      // Convert PEM to JWK
-      const jwk = await pemToJwk(keyPair.publicKey);
-
-      // Add standard JWK fields
-      jwk.use = 'sig';
-      jwk.kid = crypto
-        .createHash('sha256')
-        .update(keyPair.publicKey)
-        .digest('hex')
-        .substring(0, 16);
-      jwk.alg = 'RS256';
-
-      logger.info('Served JWKS endpoint', {
-        component: 'WellKnown',
-        algorithm: 'RS256',
-        kid: jwk.kid
+    if (algorithm === 'HS256') {
+      // For symmetric algorithms, we cannot expose the secret key
+      // Return information about the algorithm but not the key
+      logger.warn('JWKS endpoint called but HS256 (symmetric) algorithm is in use', {
+        component: 'WellKnown'
       });
 
-      res.json({ keys: [jwk] });
-    } catch (error) {
-      return sendInternalError(res, error, 'serve JWKS');
+      return res.status(200).json({
+        keys: [],
+        note: 'JWKS not available for HS256 (symmetric) algorithm. Public key sharing requires RS256 (asymmetric) algorithm. Configure "jwt.algorithm": "RS256" in platform.json to enable public key sharing.'
+      });
     }
+
+    // For RS256, return the public key in JWK format
+    const keyPair = tokenStorageService.getRSAKeyPair();
+
+    if (!keyPair || !keyPair.publicKey) {
+      logger.error('No RSA key pair available for JWKS', { component: 'WellKnown' });
+      throw new ServiceError('NOT_IMPLEMENTED', 'JWKS not configured');
+    }
+
+    // Convert PEM to JWK
+    const jwk = await pemToJwk(keyPair.publicKey);
+
+    // Add standard JWK fields
+    jwk.use = 'sig';
+    jwk.kid = crypto.createHash('sha256').update(keyPair.publicKey).digest('hex').substring(0, 16);
+    jwk.alg = 'RS256';
+
+    logger.info('Served JWKS endpoint', {
+      component: 'WellKnown',
+      algorithm: 'RS256',
+      kid: jwk.kid
+    });
+
+    res.json({ keys: [jwk] });
   });
 }
