@@ -79,6 +79,15 @@ describe('admin OAuth connection routes: errors', () => {
     expect(revokeConnection).toHaveBeenCalledWith(' ', 'alice');
   });
 
+  it('decodes the path once: a literal percent sign of a key reaches the store as it is', async () => {
+    state.revoked = true;
+    // Express decodes `%2541` to `%41`; a second decode would turn it into `A`.
+    await request(app)
+      .delete(`${BASE}/client/${encodeURIComponent('user%41')}`)
+      .expect(200);
+    expect(revokeConnection).toHaveBeenCalledWith('client', 'user%41');
+  });
+
   it('answers NOT_FOUND for an unknown connection', async () => {
     const res = await request(app).delete(
       `${BASE}/${encodeURIComponent('https://x.example/c')}/nobody`
