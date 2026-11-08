@@ -50,6 +50,7 @@ app.use(errorHandler);
 // The server runs proxyAuth through `createAuthChain`, which calls it with its own callback and
 // ignores the returned promise; a refusal that is thrown instead of passed to `next` would hang.
 const chainedApp = express();
+chainedApp.use(rateLimit({ windowMs: 60000, limit: 1000 }));
 chainedApp.use((req, res, next) => {
   proxyAuth(req, res, next);
 });
