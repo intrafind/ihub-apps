@@ -596,7 +596,7 @@ tables now step with **Previous** and **Next** instead of jumping to a page numb
 
 | Endpoint | Was | Now |
 | --- | --- | --- |
-| `GET /api/admin/audit-log` | `entries`, `offset` | `items`, `cursor` (plus `total`, `facets`) |
+| `GET /api/admin/audit-log` | `offset` → `{ entries, total, facets }` | `limit`, `cursor` → `{ items, nextCursor, total, facets }` |
 | `GET /api/admin/usage/limits/users` | `page`, `pageSize` → `{ items, total, page, pageSize }` | `limit`, `cursor` → `{ items, nextCursor, total }` |
 | `GET /api/admin/usage/feedback` | `offset` → `{ feedbackEntries, total, limit, offset }` | `cursor` → `{ items, nextCursor, total }` |
 | `GET /api/admin/oauth/connections` | `page`, `pageSize` → `{ success, connections, total, page, pageSize, cimdClients }` | `limit`, `cursor` → `{ items, nextCursor, total, cimdClients }` |
