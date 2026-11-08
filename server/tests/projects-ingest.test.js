@@ -2492,10 +2492,10 @@ describe('routes', () => {
     const pages = await drive(route.pages, { user: ADA });
     assert.equal(pages.statusCode, 200);
     assert.deepEqual(
-      pages.body.pages.map(page => page.id),
+      pages.body.items.map(page => page.id),
       ['faq']
     );
-    assert.deepEqual(pages.body.pages[0].languages, ['en', 'de']);
+    assert.deepEqual(pages.body.items[0].languages, ['en', 'de']);
     const bad = await drive(route.urlCheck, { user: ADA, body: { url: 'ftp://example.com' } });
     assert.equal(bad.statusCode, 400);
     // The probe is held to the reader's line: no private or internal target.
