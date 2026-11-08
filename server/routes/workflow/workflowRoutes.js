@@ -1951,7 +1951,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Save to history. version comes from workflow.version which is
       // schema-validated as semver, so it's a safe filename component;
       // timestamp is generated above and id was checked by
-      // validateIdForPath. The store creates the directory on first write.
+      // assertValidId. The store creates the directory on first write.
       await configStore.writeJson(`${historyDirFor(id)}/${version}-${timestamp}.json`, snapshot);
 
       // Update workflow status

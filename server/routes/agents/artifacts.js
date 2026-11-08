@@ -28,7 +28,7 @@ function artifactsRootDir() {
 }
 
 // Returns a validated absolute directory path for the run, or null on any
-// path-traversal attempt. validateIdForPath should have rejected bad ids
+// path-traversal attempt. assertValidId should have rejected bad ids
 // upstream; this is defense-in-depth. path.basename is a CodeQL-recognized
 // sanitizer for js/path-injection.
 async function artifactsDirForRun(runId) {
@@ -100,7 +100,7 @@ export default function registerAgentArtifactRoutes(app) {
       if (!dir) throw new ServiceError('BAD_REQUEST', 'invalid run id');
       let entries = [];
       try {
-        // lgtm[js/path-injection] -- runId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+        // lgtm[js/path-injection] -- runId validated by assertValidId; path canonicalized via resolveAndValidatePath.
         entries = await fsp.readdir(dir);
       } catch (err) {
         if (err.code !== 'ENOENT') throw err;
