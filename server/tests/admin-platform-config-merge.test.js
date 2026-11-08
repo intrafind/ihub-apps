@@ -300,6 +300,43 @@ describe('POST /api/admin/configs/platform section persistence', () => {
     expect(saved.proxyAuth).toEqual(before.proxyAuth);
   });
 
+  test('a save carrying only cookieSettings stores it and leaves proxyAuth (jwkUrl) as stored', async () => {
+    const app = createTestApp();
+    const before = await readPlatform();
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ cookieSettings: { disableSecure: true } });
+
+    expect(response.status).toBe(200);
+    const saved = await readPlatform();
+    expect(saved.cookieSettings).toEqual({ disableSecure: true });
+    expect(saved.proxyAuth).toEqual(before.proxyAuth);
+  });
+
+  test('keeps the stored cookieSettings when a save omits them', async () => {
+    const app = createTestApp();
+    await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ cookieSettings: { disableSecure: true } })
+      .expect(200);
+    await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ defaultLanguage: 'de' })
+      .expect(200);
+    expect((await readPlatform()).cookieSettings).toEqual({ disableSecure: true });
+  });
+
+  test('refuses cookieSettings that are not an object with a boolean disableSecure', async () => {
+    const app = createTestApp();
+    for (const bad of [null, 'yes', ['x'], { disableSecure: 'true' }]) {
+      const response = await request(app)
+        .post('/api/admin/configs/platform')
+        .send({ cookieSettings: bad });
+      expect(response.status).toBe(400);
+    }
+  });
+
   test('toolApproval: null removes the block instead of storing null', async () => {
     const app = createTestApp();
     await request(app)
