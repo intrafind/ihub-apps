@@ -25,7 +25,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 function collect(stack, prefix, out) {
   for (const layer of stack) {
     if (layer.route) {
-      const routePaths = [].concat(layer.route.path);
+      const routePaths = [layer.route.path].flat();
       for (const rp of routePaths) {
         const methods = Object.keys(layer.route.methods).filter(m => layer.route.methods[m]);
         // `app.all()` registers every HTTP method; list it once.
@@ -60,7 +60,7 @@ function recordMountPaths(router) {
     if (typeof first === 'string' || Array.isArray(first)) {
       for (const fn of rest.flat(Infinity)) {
         if (typeof fn === 'function' && Array.isArray(fn.stack)) {
-          fn.__mountPath = [].concat(first)[0];
+          fn.__mountPath = [first].flat()[0];
         }
       }
     }
@@ -83,10 +83,12 @@ export async function dumpRoutes() {
   });
   const out = new Set();
   collect(app.router.stack, '', out);
-  return [...out].sort().map(line => {
-    const [method, ...rest] = line.split(' ');
-    return { method, path: rest.join(' ') };
-  });
+  return [...out]
+    .sort((a, b) => a.localeCompare(b))
+    .map(line => {
+      const [method, ...rest] = line.split(' ');
+      return { method, path: rest.join(' ') };
+    });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

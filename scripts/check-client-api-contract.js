@@ -145,59 +145,71 @@ function normalize(raw, base, consts) {
   out = out.replace(/(?<=[^/\s])\$\{.*$/s, '');
   out = out.replace(/\$\{\s*encodeURIComponent\([^)]*\)\s*\}/g, 'x1');
   let p = out.replace(/\$\{[^}]*\}/g, 'x1').split('?')[0];
-  if (/^\$\{/.test(out)) return null;
+  if (out.startsWith('${')) return null;
   if (!p.startsWith('/') && base) p = `/${p}`;
   if (p === '/' || p === '') return null;
   return p.startsWith('/api/') ? p : base + p;
 }
 
+/** The string constants and the template-literal path builders of one source file. */
+function readConstants(src) {
+  const consts = { vars: {}, fns: {} };
+  for (const c of src.matchAll(
+    /(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*(['"`])((?:(?!\2)[^\\\n])*)\2\s*;/g
+  )) {
+    consts.vars[c[1]] = c[3];
+  }
+  for (const c of src.matchAll(
+    /(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?(?:\(([\w\s,={}'"]*)\)|(\w+))\s*=>\s*`([^`]*)`/g
+  )) {
+    const params = (c[2] ?? c[3] ?? '')
+      .split(',')
+      .map(x => x.trim().split('=')[0].trim())
+      .filter(Boolean);
+    let body = c[4];
+    for (const name of params) body = body.split(`\${${name}}`).join('x1');
+    consts.fns[c[1]] = body.replace(/\$\{\s*encodeURIComponent\(\s*\w+\s*\)\s*\}/g, 'x1');
+  }
+  return consts;
+}
+
+const methodOf = body => (body.match(/method:\s*['"](\w+)['"]/)?.[1] || 'GET').toUpperCase();
+
+/** The `[method, path]` pairs of the API calls in one source file. */
+function readCalls(src, consts) {
+  const found = [];
+  for (const c of src.matchAll(/makeAdminApiCall\(\s*([A-Za-z_]\w*)\s*[,)]/g)) {
+    if (consts.vars[c[1]] === undefined) continue;
+    const body = callBody(src, c.index + 'makeAdminApiCall'.length);
+    found.push([methodOf(body), normalize(consts.vars[c[1]], '/api', consts)]);
+  }
+  for (const m of src.matchAll(/makeAdminApiCall\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    const body = callBody(src, m.index + 'makeAdminApiCall'.length);
+    found.push([methodOf(body), normalize(m[2], '/api', consts)]);
+  }
+  for (const m of src.matchAll(
+    /apiClient\.(get|post|put|patch|delete)\(\s*(['"`])((?:(?!\2)[^\\]|\\.)*)\2/g
+  )) {
+    found.push([m[1].toUpperCase(), normalize(m[3], '/api', consts)]);
+  }
+  for (const m of src.matchAll(
+    /buildApiUrl\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1\)([\s\S]{0,200})/g
+  )) {
+    found.push([methodOf(m[3]), normalize(m[2], '/api', consts)]);
+  }
+  return found;
+}
+
 export function findClientCalls() {
   const calls = new Map();
-  const add = (method, p, file) => {
-    if (!p) return;
-    const key = `${method} ${p}`;
-    if (!calls.has(key)) calls.set(key, new Set());
-    calls.get(key).add(path.relative(root, file));
-  };
   for (const sourceRoot of SOURCE_ROOTS) {
     for (const file of walk(path.join(root, sourceRoot))) {
       const src = fs.readFileSync(file, 'utf8');
-      const consts = { vars: {}, fns: {} };
-      for (const c of src.matchAll(
-        /(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*(['"`])((?:(?!\2)[^\\\n])*)\2\s*;/g
-      )) {
-        consts.vars[c[1]] = c[3];
-      }
-      for (const c of src.matchAll(
-        /(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?(?:\(([\w\s,={}'"]*)\)|(\w+))\s*=>\s*`([^`]*)`/g
-      )) {
-        const params = (c[2] ?? c[3] ?? '')
-          .split(',')
-          .map(x => x.trim().split('=')[0].trim())
-          .filter(Boolean);
-        let body = c[4];
-        for (const name of params) body = body.split(`\${${name}}`).join('x1');
-        consts.fns[c[1]] = body.replace(/\$\{\s*encodeURIComponent\(\s*\w+\s*\)\s*\}/g, 'x1');
-      }
-      const methodOf = body => (body.match(/method:\s*['"](\w+)['"]/)?.[1] || 'GET').toUpperCase();
-      for (const c of src.matchAll(/makeAdminApiCall\(\s*([A-Za-z_]\w*)\s*[,)]/g)) {
-        if (consts.vars[c[1]] === undefined) continue;
-        const body = callBody(src, c.index + 'makeAdminApiCall'.length);
-        add(methodOf(body), normalize(consts.vars[c[1]], '/api', consts), file);
-      }
-      for (const m of src.matchAll(/makeAdminApiCall\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
-        const body = callBody(src, m.index + 'makeAdminApiCall'.length);
-        add(methodOf(body), normalize(m[2], '/api', consts), file);
-      }
-      for (const m of src.matchAll(
-        /apiClient\.(get|post|put|patch|delete)\(\s*(['"`])((?:(?!\2)[^\\]|\\.)*)\2/g
-      )) {
-        add(m[1].toUpperCase(), normalize(m[3], '/api', consts), file);
-      }
-      for (const m of src.matchAll(
-        /buildApiUrl\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1\)([\s\S]{0,200})/g
-      )) {
-        add(methodOf(m[3]), normalize(m[2], '/api', consts), file);
+      for (const [method, p] of readCalls(src, readConstants(src))) {
+        if (!p) continue;
+        const key = `${method} ${p}`;
+        if (!calls.has(key)) calls.set(key, new Set());
+        calls.get(key).add(path.relative(root, file));
       }
     }
   }
@@ -211,7 +223,7 @@ export function pathMatches(clientPath, routePath) {
   const c = segments(clientPath);
   const r = segments(routePath);
   for (let i = 0; i < r.length; i++) {
-    if (r[i].startsWith('*') || /^\{\*/.test(r[i])) return c.length >= i;
+    if (r[i].startsWith('*') || r[i].startsWith('{*')) return c.length >= i;
     if (i >= c.length) return false;
     if (r[i].startsWith(':') || c[i] === 'x1') continue;
     if (/[._]$/.test(c[i]) ? !r[i].startsWith(c[i]) : c[i] !== r[i]) return false;
@@ -238,7 +250,7 @@ const routeExists = (routes, spec) => {
  */
 export function checkContract(routes, calls = findClientCalls()) {
   const unmatched = [];
-  for (const [key, files] of [...calls].sort()) {
+  for (const [key, files] of [...calls].sort(([a], [b]) => a.localeCompare(b))) {
     const [method, p] = key.split(' ');
     const ok = routes.some(
       route => methodMatches(method, route.method) && pathMatches(p, route.path)

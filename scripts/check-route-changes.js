@@ -30,6 +30,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dumpRoutes } from './dump-routes.js';
+import { gitExecutable } from './git-executable.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -39,7 +40,7 @@ const key = r => `${r.method} ${r.path.replace(/:\w+/g, ':')}`;
 export function routesAtRef(ref) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'route-base-'));
   const work = path.join(tmp, 'wt');
-  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+  const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
   try {
     git('worktree', 'add', '--detach', work, ref);
     for (const dir of ['node_modules', 'server/node_modules', 'client/node_modules']) {
@@ -74,21 +75,22 @@ export function routesAtRef(ref) {
   }
 }
 
-/** `a/{b,c}/d` → `a/b/d a/c/d`: the notes group paths in braces to save space. */
-function expandBraces(text) {
-  let out = text;
-  for (let i = 0; i < 4; i++) {
-    out = out.replace(/(\S*)\{([^{}\s]+)\}(\S*)/g, (all, pre, group, post) =>
-      group.includes(',')
-        ? group
-            .split(',')
-            .map(alt => `${pre}${alt}${post}`)
-            .join(' ')
-        : all
-    );
-  }
-  return out;
+/** `a/{b,c}/d` → `a/b/d`, `a/c/d`: the notes group paths in braces to save space. */
+function expandToken(token) {
+  const open = token.indexOf('{');
+  const close = open < 0 ? -1 : token.indexOf('}', open);
+  const group = close < 0 ? '' : token.slice(open + 1, close);
+  if (!group.includes(',')) return [token];
+  const pre = token.slice(0, open);
+  const post = token.slice(close + 1);
+  return group.split(',').flatMap(alt => expandToken(`${pre}${alt}${post}`));
 }
+
+const expandBraces = text =>
+  text
+    .split(/\s+/)
+    .flatMap(token => expandToken(token))
+    .join(' ');
 
 export function notesText() {
   const dir = path.join(root, 'docs/releases/next');

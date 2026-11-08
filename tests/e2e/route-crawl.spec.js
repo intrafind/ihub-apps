@@ -40,6 +40,24 @@ const MAX_DOC_PAGES = 6;
 const EXPECTED_FAILURES = [
   [/^GET$/, /\/api\/auth\/status/, [401], 'status probe before sign-in'],
   [
+    /^GET$/,
+    /\/api\/admin\/integrations\/installed\//,
+    [400, 404],
+    'the app editor probes the installations an app names; one that is not installed is shown as such'
+  ],
+  [
+    /^GET$/,
+    /\/api\/apps\/(?:iassistant|ifinder-search|people-directory|skill-builder)$/,
+    [404],
+    'apps that belong to an integration are hidden until it is installed'
+  ],
+  [
+    /^GET$/,
+    /\/api\/admin\/oauth\/(?:connections|clients)$/,
+    [400],
+    'OAuth clients are not enabled on a fresh install'
+  ],
+  [
     /./,
     /\/api\/user-skills\/marketplace/,
     [502, 503, 504],

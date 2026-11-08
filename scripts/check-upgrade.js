@@ -27,6 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { gitExecutable } from './git-executable.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -36,7 +37,7 @@ const keepLogs = argv.includes('--keep-logs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function latestTag() {
-  return execFileSync('git', ['describe', '--tags', '--abbrev=0', 'origin/main'], {
+  return execFileSync(gitExecutable(), ['describe', '--tags', '--abbrev=0', 'origin/main'], {
     cwd: root,
     encoding: 'utf8'
   }).trim();
@@ -109,7 +110,7 @@ async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'upgrade-'));
   const oldDir = path.join(tmp, 'old');
   const contentsDir = path.join(tmp, 'contents');
-  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+  const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
   const failures = [];
   console.log(`⬆️  Upgrade check: ${from} -> this checkout\n`);
   try {
