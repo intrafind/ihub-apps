@@ -386,6 +386,19 @@ export const PROJECT_SERVICE_ERROR_CODES = Object.freeze({
   INTEGRATION_SCOPE_NOT_ALLOWED: 403
 });
 
+/** Codes of the read-aloud route (`server/routes/voiceRoutes.js`) that used to be kebab-case strings. */
+export const VOICE_ERROR_CODES = Object.freeze({
+  INVALID_TEXT: 400,
+  TEXT_TOO_LONG: 413,
+  INVALID_MODEL: 400,
+  INVALID_LANGUAGE: 400,
+  INVALID_VOICE: 400,
+  NO_SPEAKABLE_TEXT: 422,
+  NO_AUDIO: 502,
+  TTS_NOT_CONFIGURED: 503,
+  MODEL_DISABLED: 503
+});
+
 /** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
 export const MISC_ERROR_CODES = Object.freeze({
   TEAMS_SSO_TOKEN_REQUIRED: 400,
@@ -421,6 +434,7 @@ export const API_ERROR_CODES = Object.freeze({
   ...CLOUD_STORAGE_ERROR_CODES,
   ...PROJECT_SERVICE_ERROR_CODES,
   ...PROJECT_ERROR_CODES,
+  ...VOICE_ERROR_CODES,
   ...MISC_ERROR_CODES
 });
 
