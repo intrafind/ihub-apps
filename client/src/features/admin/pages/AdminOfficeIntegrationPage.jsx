@@ -336,7 +336,7 @@ function AdminOfficeIntegrationPage() {
 
   const handleToggle = async () => {
     if (!status) return;
-    const action = status.enabled ? 'disable' : 'enable';
+    const action = status.enabled ? '_disable' : '_enable';
     try {
       setToggling(true);
       setMessage(null);

@@ -65,7 +65,7 @@ function CookieSettingsConfig() {
 
       // Save the updated platform config
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'PUT',
+        method: 'POST',
         body: updatedPlatform
       });
 

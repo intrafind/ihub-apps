@@ -1,5 +1,10 @@
 # Fixes — Unreleased
 
+## Cookie Settings Can Be Saved Again
+
+**Admin → System → Cookie settings** saved the platform configuration with a request method the
+server does not accept, so the change was refused. It now saves like every other platform setting.
+
 ## Three Loose Ends of the Error Response Conversion
 
 - Downloading an agent artifact whose file cannot be read (it vanished after the check, a disk fault)

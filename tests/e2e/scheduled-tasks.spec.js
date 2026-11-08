@@ -51,7 +51,7 @@ test.describe('Scheduled tasks', () => {
     const name = `E2E digest ${Date.now()}`;
 
     await page.goto('/tasks');
-    await expect(page.getByRole('heading', { name: 'Scheduled tasks' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Scheduled tasks' }).first()).toBeVisible();
 
     await page.getByRole('link', { name: 'New task' }).first().click();
     await expect(page).toHaveURL(/\/tasks\/new$/);
@@ -190,8 +190,8 @@ test.describe('Scheduled tasks', () => {
         }
       });
       expect(response.status()).toBe(400);
-      const { details } = await response.json();
-      expect(details.map(detail => detail.code)).toContain('NOTIFY_CHANGES_NEEDS_MEMORY');
+      const { errors } = await response.json();
+      expect(errors.map(error => error.code)).toContain('NOTIFY_CHANGES_NEEDS_MEMORY');
     });
 
     test('edits the notes from the Memory card on the task page', async ({ page }) => {
