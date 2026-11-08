@@ -18,7 +18,6 @@ name: Code Scanning
 
 on:
   pull_request:
-    branches: [main, develop]
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
