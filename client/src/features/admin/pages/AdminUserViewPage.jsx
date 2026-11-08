@@ -53,7 +53,7 @@ function AdminUserViewPage() {
         const response = await makeAdminApiCall(
           `/admin/oauth/connections?userId=${encodeURIComponent(userId)}`
         );
-        setConnections(response.data?.connections || []);
+        setConnections(response.data?.items || []);
       } catch {
         setConnections([]);
       }

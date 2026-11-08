@@ -93,20 +93,23 @@ test.describe('Route crawl', () => {
     /** Load one page in a fresh tab (a long-lived tab runs out of resources) and return its links. */
     async function visit(key) {
       const page = await context.newPage();
+      let expectedFailures = 0;
       page.on('response', response => {
         const url = new URL(response.url());
-        if (!url.pathname.startsWith('/api/')) return;
+        // `includes`, not `startsWith`: a page the client takes for a base path calls `/<segment>/api/...`.
+        if (!url.pathname.includes('/api/')) return;
         const status = response.status();
         const method = response.request().method();
-        if (status >= 400 && !isExpected(method, url.pathname, status)) {
-          problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
-        }
+        if (status >= 400 && isExpected(method, url.pathname, status)) expectedFailures++;
+        else if (status >= 400) problems.push(`${key}: ${method} ${url.pathname} -> ${status}`);
       });
       page.on('pageerror', error => problems.push(`${key}: exception: ${error.message}`));
       page.on('console', message => {
         if (message.type() !== 'error') return;
         const text = message.text();
         if (IGNORED_CONSOLE.some(re => re.test(text))) return;
+        // The client logs a failed request it handles itself; the response above decides.
+        if (expectedFailures && /^(API Error|Error loading|Failed to)/.test(text)) return;
         problems.push(`${key}: console.error: ${text.slice(0, 200)}`);
       });
       try {

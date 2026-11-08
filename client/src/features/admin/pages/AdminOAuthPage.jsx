@@ -78,7 +78,7 @@ function AdminOAuthPage() {
 
           try {
             const connectionsResponse = await makeAdminApiCall('/admin/oauth/connections');
-            setConnectionCount((connectionsResponse.data?.connections || []).length);
+            setConnectionCount((connectionsResponse.data?.items || []).length);
           } catch {
             setConnectionCount(0);
           }

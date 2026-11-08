@@ -34,7 +34,7 @@ Die Erstellung benutzerdefinierter Apps steht Premium-Nutzern zur Verfügung. Na
 
 ### Wie werden meine Daten behandelt?
 
-Wir nehmen den Datenschutz ernst. Bitte lesen Sie unsere [Datenschutzerklärung](/page/privacy) für detaillierte Informationen darüber, wie wir Ihre Daten sammeln, verwenden und schützen.
+Wir nehmen den Datenschutz ernst. Bitte lesen Sie unsere [Datenschutzerklärung](/pages/privacy) für detaillierte Informationen darüber, wie wir Ihre Daten sammeln, verwenden und schützen.
 
 ### Werden meine Gespräche gespeichert?
 
