@@ -1141,9 +1141,9 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/profiles` | Your iFinder search profiles, as the chat input offers them.   |
 | `GET`  | `/api/projects/pickers/ifinder/search`  | iFinder search with your rights; `?q=&profile=&limit=`. A profile outside the allow-list answers `403 INTEGRATION_SCOPE_NOT_ALLOWED`. |
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
-| `POST` | `/api/projects/pickers/url/check`       | Check a URL `{ url }` before adding it.                         |
+| `POST` | `/api/projects/pickers/url/_check`       | Check a URL `{ url }` before adding it.                         |
 | `POST` | `/api/projects/pickers/url/_preview`    | The text a URL `{ url }` gives the model, before it is added.   |
-| `POST` | `/api/projects/pickers/url/crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
+| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API

@@ -35,7 +35,7 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @property {(url: string) => Promise<Object>} [previewUrl] - The text a URL would
  *   give the model (`POST …/pickers/url/_preview`).
  * @property {(url: string, options: Object) => Promise<Object>} [crawlUrl] - The
- *   pages of a website below a URL (`POST …/pickers/url/crawl`).
+ *   pages of a website below a URL (`POST …/pickers/url/_crawl`).
  * @property {() => Promise<Array<Object>>} [fetchCloudProviders] - Cloud connections.
  * @property {() => Promise<Array<Object>>} [fetchLinkSources] - Projects whose
  *   documents can be linked (`projectLinks`).

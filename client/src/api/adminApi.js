@@ -687,7 +687,7 @@ export const searchProjectPickerIFinder = async (query, { profile, limit } = {})
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
 export const checkProjectPickerUrl = async url => {
-  const response = await makeAdminApiCall('/projects/pickers/url/check', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_check', {
     method: 'POST',
     body: { url }
   });
@@ -717,7 +717,7 @@ export const previewProjectPickerUrl = async url => {
  * @returns {Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean, error?: string}>}
  */
 export const crawlProjectPickerUrl = async (url, options = {}) => {
-  const response = await makeAdminApiCall('/projects/pickers/url/crawl', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_crawl', {
     method: 'POST',
     body: { url, ...options },
     // Past the server's crawl deadline; see `CRAWL_REQUEST_TIMEOUT_MS`.

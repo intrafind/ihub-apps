@@ -70,6 +70,8 @@ const ACTION_VERBS = new Set([
   'reset',
   'test',
   'validate',
+  'check',
+  'crawl',
   'preview',
   'export',
   'import',
@@ -129,7 +131,7 @@ const RULES = [
 
 /** A route path, bare or wrapped in `buildServerPath(…)`, as the first argument of a registration. */
 const ROUTE =
-  /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(?:buildServerPath\(\s*)?(['"`])([^'"`]*)\2/g;
+  /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(?:(?:buildServerPath|route)\(\s*)?(['"`])([^'"`]*)\2/g;
 const QUERY_PARAM = /\breq\.query\.([A-Za-z_]\w*)/g;
 const QUERY_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*req\.query\b/g;
 /** `const query = req.query || {}`: the name the rest of the handler reads the parameters by. */
