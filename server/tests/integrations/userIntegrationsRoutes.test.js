@@ -316,7 +316,7 @@ describe('POST /api/integrations/:id/_connect', () => {
 
   it('checks the id against the registry and the groups', async () => {
     assert.equal((await post('/api/integrations/nope/_connect')).status, 404);
-    assert.equal((await post('/api/integrations/..%2Fetc/connect')).status, 404);
+    assert.equal((await post('/api/integrations/..%2Fetc/_connect')).status, 404);
     const notGranted = await post('/api/integrations/nc-legal/_connect');
     assert.equal(notGranted.status, 404);
     assert.equal(notGranted.body.code, 'INTEGRATION_NOT_FOUND');
