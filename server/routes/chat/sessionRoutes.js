@@ -446,7 +446,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           if (llmError.code === LLM_ERROR_CODES.TIMEOUT) {
             throw refusal(
               504,
-              `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
+              `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`,
+              { code: 'TIMEOUT' }
             );
           }
           // A failing model call is answered by the error middleware with its mapped status.
