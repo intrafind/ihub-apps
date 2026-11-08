@@ -15,7 +15,7 @@ import {
   jsonPointer,
   PROBLEM_CONTENT_TYPE
 } from '../utils/errorResponse.js';
-import { sendErrorResponse, sendNotFound } from '../utils/responseHelpers.js';
+import { sendErrorResponse } from '../utils/responseHelpers.js';
 import { EtagMismatchError, StorageError, InvalidKeyError } from '../storage/errors.js';
 import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
 import { API_ERROR_CODES, apiErrorI18nKey } from '../../shared/apiErrors.js';
@@ -206,33 +206,6 @@ describe('toErrorResponse', () => {
     assert.equal(other.errors, undefined);
   });
 
-  it('takes a code carried in details.code as the code of the response', () => {
-    const sent = [];
-    const res = {
-      setHeader() {},
-      status() {
-        return this;
-      },
-      json(body) {
-        sent.push(body);
-        return this;
-      }
-    };
-    sendErrorResponse(res, 403, 'Read-only', {
-      details: { code: 'PROJECT_READ_ONLY', required: 'edit' }
-    });
-    assert.equal(sent[0].code, 'PROJECT_READ_ONLY');
-    assert.equal(sent[0].type, 'urn:ihub:problem:PROJECT_READ_ONLY');
-    assert.deepEqual(sent[0].details, { required: 'edit' });
-    // nothing else in details: no details member at all
-    sendErrorResponse(res, 409, 'Busy', { details: { code: 'PROJECT_MISMATCH' } });
-    assert.equal(sent[1].details, undefined);
-    // an explicit code wins over details.code
-    sendErrorResponse(res, 409, 'x', { code: 'CONFLICT', details: { code: 'OTHER' } });
-    assert.equal(sent[2].code, 'CONFLICT');
-    assert.deepEqual(sent[2].details, { code: 'OTHER' });
-  });
-
   it('writes a JSON Pointer for a path (RFC 6901)', () => {
     assert.equal(jsonPointer(['a', 0, 'b']), '/a/0/b');
     assert.equal(jsonPointer('a.b'), '/a/b');
@@ -277,7 +250,7 @@ describe('toErrorResponse', () => {
     assert.equal(res.headers['Content-Type'], PROBLEM_CONTENT_TYPE);
     assert.equal(sent[0].detail, 'No access');
 
-    sendNotFound(res, 'App');
+    sendErrorResponse(res, 404, 'App not found');
     assert.equal(res.code, 404);
     assert.equal(sent[1].code, 'NOT_FOUND');
     assert.equal(sent[1].detail, 'App not found');

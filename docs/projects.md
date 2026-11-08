@@ -1060,11 +1060,17 @@ you want into one project.
 
 ## API
 
-All paths are relative to the server's base path. Project errors carry their code in
-`details.code`, next to any further details (for `PROJECT_IN_USE`, the dependencies):
+All paths are relative to the server's base path. Project errors are RFC 9457 problems that carry
+their code in `code`; `details` holds any further information (for `PROJECT_IN_USE`, the dependencies):
 
 ```json
-{ "error": "Project not found", "details": { "code": "PROJECT_NOT_FOUND" } }
+{
+  "type": "urn:ihub:problem:PROJECT_NOT_FOUND",
+  "title": "…",
+  "status": 404,
+  "detail": "Project not found",
+  "code": "PROJECT_NOT_FOUND"
+}
 ```
 
 The codes are the ones named on this page plus `PROJECT_NOT_FOUND` (also "no access"),
@@ -1075,8 +1081,8 @@ reached), `TIER_NOT_AVAILABLE`, `IFINDER_WRITES_DISABLED` (no lock reaches every
 `IFINDER_FORBIDDEN` (the user lacks the iFinder role), `IFINDER_REJECTED`, `IFINDER_WRITE_FAILED`
 (not atomic: see `details.outcome`), `COLLECTION_BUSY`, `QUOTA_COLLECTION_DOCUMENTS`,
 `DOCUMENT_NOT_READABLE` and `KIND_NOT_ALLOWED`. Generic errors (a plain
-"not found", a validation failure, an unexpected server error) may come without `details` or
-without a code.
+"not found", a validation failure, an unexpected server error) carry the generic code of
+their status.
 
 The chat request is different: a project it names but may not use is answered with the code at the
 top level:
