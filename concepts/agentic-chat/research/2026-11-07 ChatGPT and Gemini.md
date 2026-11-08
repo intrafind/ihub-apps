@@ -601,7 +601,7 @@ Source: https://aistudio.google.com/docs/deep-research.md
     - If plan items are still pending, re-prompt with a continuation message.
     - Use OpenAI's line "Do NOT promise to call a function later. If a function call is required, emit it now".
 14. **Offer an optional "goal / deep task" mode** with a completion contract: outcome, verification evidence, constraints, and a blocked-stop rule (for example, blocked only after the same blocker recurs for three turns). Run continuation turns with a requirement-by-requirement completion audit (Codex Goals). [DOC]
-15. **Parallel tool calls on** (`parallel_tool_calls: true`); execute them concurrently and return all outputs before re-sampling. [DOC]
+15. **Parallel tool calls on** (`parallel_tool_calls: true`); return all outputs before re-sampling. [DOC] Execute concurrently only calls that are independent and safe (reads, searches); run calls with side effects, or that depend on shared state or order, one after another in the order the model gave them. [INF, in line with Anthropic's parallel tool use guidance]
 16. **Long tasks:** use background mode (OpenAI) or `background=true` (Gemini Interactions), stream progress events, consider WebSocket mode for 20+ tool calls (about 40% faster), and avoid HTTP timeouts and automatic retries on long streams. [DOC]
 
 ### D. Prompt layer (system prompt contracts)

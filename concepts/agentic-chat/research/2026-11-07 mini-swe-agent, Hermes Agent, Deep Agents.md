@@ -171,7 +171,7 @@ The call is still billed when parsing fails (`self.cost += e.messages[0]["extra"
 - **Budget-aware observations.** Add "N rounds / M minutes left, start converging, and write down open items" to tool results near the end. This is cheap and works through templates. iHub's `ROUND_CAP_NUDGE` fires only at the very last round. [inferred]
 - **Truncated output with a hint on how to narrow it.** Use head/tail plus "use a more selective query" for any connector (search, Jira, document read) instead of hard truncation without guidance. [inferred]
 - **A recommended workflow in the task prompt.** For research, the equivalent of "analyze, reproduce, fix, verify, edge cases" is "scope, search broadly, read primary sources, cross-check, cover every sub-question, cite". The DeepSWE authors credit exactly this kind of workflow prompt for the gains. [inferred/web]
-- **Save the trajectory after every step** so it can be replayed and debugged. iHub's run ledger already does this.
+- **Save the trajectory after every step** so it can be replayed and debugged. iHub's run ledger largely does this: each model request's `request/header` event carries the messages added since the previous request (`messagesDelta`, `server/services/loop/LLMClient.js`), so the model input can be reconstructed when ledger persistence is on. The `tool/result` events themselves carry only a 1,024-character preview, and nothing yet replays a run from the ledger.
 - **What does not carry over directly:** bash as the universal tool. In an enterprise chat, "bash" corresponds to a small set of general, composable tools (search, fetch/read, a query language for connected systems, a code interpreter), not many narrow ones. [inferred]
 
 ---
@@ -279,7 +279,7 @@ These blocks are added to the system prompt **once per session**, chosen by matc
 
 - Splits a batch into ordered `("parallel"|"sequential", calls)` segments. Always parallel-safe: `read_file, search_files, session_search, skill_view, skills_list, vision_analyze, web_extract, web_search, image_generate, connectors__execute`, plus MCP tools whose server opted in.
 - Path-scoped readers and writers are admitted to a parallel run by path overlap: readers may overlap each other, but a writer conflicts with any overlap. `clarify` and other interactive tools are barriers. A parallel run with fewer than 2 calls becomes sequential. Results are re-inserted in the original order.
-- iHub already has an equivalent (`server/services/loop/segmentPlanner.js`), so this is listed only for completeness.
+- iHub has a similar planner (`server/services/loop/segmentPlanner.js`), but it is not equivalent: it treats two calls as conflicting only when an argument value is exactly equal (case-insensitive), while Hermes checks path overlap, so a read of `/project` and a write to `/project/file` can share an iHub batch but not a Hermes one. Chat currently runs tools sequentially (`parallel: false`), so this matters for the planned parallel rollout.
 
 ### 2.9 Reasoning carryover per provider [code]
 
