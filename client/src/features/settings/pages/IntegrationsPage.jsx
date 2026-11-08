@@ -306,7 +306,7 @@ export default function IntegrationsPage() {
 
   const handleRotateApiKey = async key => {
     const data = await callApiKeyEndpoint(
-      `/${encodeURIComponent(key.id)}/rotate`,
+      `/${encodeURIComponent(key.id)}/_rotate`,
       { method: 'POST', body: JSON.stringify({}) },
       'integrations.page.apiKeys.rotateFailed'
     );
