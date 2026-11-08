@@ -35,7 +35,7 @@ import {
   uploadAdminProjectItem
 } from '../../../client/src/api/adminApi.js';
 
-function captureRequests(response = { data: { item: { id: 'i1' } }, status: 202, headers: {} }) {
+function captureRequests(response = { data: { id: 'i1' }, status: 202, headers: {} }) {
   const requests = [];
   apiClient.defaults.adapter = config => {
     requests.push({
@@ -70,7 +70,7 @@ describe('admin projects API', () => {
   });
 
   test('sends link and text items as JSON', async () => {
-    const requests = captureRequests({ data: { item: { id: 'i2' } }, status: 201, headers: {} });
+    const requests = captureRequests({ data: { id: 'i2' }, status: 201, headers: {} });
 
     await addAdminProjectItem('handbook', { kind: 'url', ref: { url: 'https://example.com' } });
 

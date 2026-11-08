@@ -125,7 +125,7 @@ export const deleteProject = async (projectId, { deleteCollection = false } = {}
  */
 export const addProjectItem = async (projectId, item) => {
   const data = await call(() => apiClient.post(`${projectPath(projectId)}/items`, item));
-  return data?.item;
+  return data;
 };
 
 /**
@@ -146,7 +146,7 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
       headers: { 'Content-Type': undefined }
     })
   );
-  return data?.item;
+  return data;
 };
 
 /**
@@ -172,7 +172,7 @@ export const updateProjectItem = (projectId, itemId, changes) =>
  */
 export const updateProjectItemText = async (projectId, itemId, text) => {
   const data = await call(() => apiClient.put(`${itemPath(projectId, itemId)}/text`, { text }));
-  return data?.item;
+  return data;
 };
 
 /**
@@ -196,7 +196,7 @@ export const deleteProjectItem = async (projectId, itemId) => {
  */
 export const refreshProjectItem = async (projectId, itemId) => {
   const data = await call(() => apiClient.post(`${itemPath(projectId, itemId)}/_refresh`));
-  return data?.item;
+  return data;
 };
 
 /**

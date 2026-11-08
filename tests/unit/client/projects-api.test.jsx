@@ -39,7 +39,7 @@ import {
   uploadProjectItem
 } from '../../../client/src/api/endpoints/projects.js';
 
-function captureRequests(response = { data: { item: { id: 'i1' } }, status: 202, headers: {} }) {
+function captureRequests(response = { data: { id: 'i1' }, status: 202, headers: {} }) {
   const requests = [];
   apiClient.defaults.adapter = config => {
     requests.push({
@@ -73,7 +73,7 @@ describe('user projects API', () => {
   });
 
   test('sends a picked item as JSON', async () => {
-    const requests = captureRequests({ data: { item: { id: 'i2' } }, status: 202, headers: {} });
+    const requests = captureRequests({ data: { id: 'i2' }, status: 202, headers: {} });
     const body = { kind: 'office365', ref: { providerId: 'sp', fileId: 'f1' }, pinned: false };
 
     expect(await addProjectItem('prj_a', body)).toEqual({ id: 'i2' });

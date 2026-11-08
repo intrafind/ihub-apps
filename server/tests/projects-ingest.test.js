@@ -2323,26 +2323,26 @@ describe('routes', () => {
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     const edited = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'New notes.' }
     });
     assert.equal(edited.statusCode, 200, JSON.stringify(edited.body));
-    assert.equal(edited.body.item.status, 'ready');
-    assert.equal(edited.body.item.provenance.origin, 'written');
+    assert.equal(edited.body.status, 'ready');
+    assert.equal(edited.body.provenance.origin, 'written');
     const read = await drive(route.text, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id }
+      params: { projectId: project.id, itemId: added.body.id }
     });
     assert.equal(read.body, 'New notes.');
     const empty = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: '  ' }
     });
     assert.equal(empty.statusCode, 400);
     const stranger = await drive(route.editText, {
       user: GRACE,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'Not mine.' }
     });
     // A project the caller is no member of does not exist for them.
@@ -2358,18 +2358,18 @@ describe('routes', () => {
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     // An imported text can be longer than an upload may be.
-    await getProjectService().patchItem(project.id, added.body.item.id, item => {
+    await getProjectService().patchItem(project.id, added.body.id, item => {
       item.text.chars = 20_000_000;
     });
     const refused = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'Cut.' }
     });
     assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
     const read = await drive(route.text, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id }
+      params: { projectId: project.id, itemId: added.body.id }
     });
     assert.equal(read.body, 'Old notes.', 'nothing was replaced');
   });
@@ -2385,11 +2385,11 @@ describe('routes', () => {
     req.params = { projectId: project.id };
     const res = await drive(route.addItem, { user: ADA, req });
     assert.equal(res.statusCode, 202, JSON.stringify(res.body));
-    assert.equal(res.body.item.status, 'pending');
-    assert.equal(res.body.item.pinned, true);
-    assert.equal(res.body.item.name, 'notes.md');
-    assert.equal(res.body.item.text, null);
-    const ready = await settled(project.id, res.body.item.id);
+    assert.equal(res.body.status, 'pending');
+    assert.equal(res.body.pinned, true);
+    assert.equal(res.body.name, 'notes.md');
+    assert.equal(res.body.text, null);
+    const ready = await settled(project.id, res.body.id);
     assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
     const text = await drive(route.text, {
       user: ADA,
@@ -2420,7 +2420,7 @@ describe('routes', () => {
     const res = await drive(route.addItem, { user: ADA, req });
     assert.equal(res.statusCode, 202, JSON.stringify(res.body));
     // multer reads part headers as latin1 unless told otherwise: "–" came out as "â€\"".
-    assert.equal(res.body.item.name, name);
+    assert.equal(res.body.name, name);
   });
 
   it('refuses an unsupported type before accepting bytes and a file over the limit', async () => {
@@ -2474,7 +2474,7 @@ describe('routes', () => {
       body: { kind: 'upload', ref: {}, name: 'Pasted', text: 'Pasted text for the project.' }
     });
     assert.equal(stillJson.statusCode, 201, JSON.stringify(stillJson.body));
-    assert.equal(stillJson.body.item.status, 'ready');
+    assert.equal(stillJson.body.status, 'ready');
   });
 
   it('lists readable pages and checks a URL', async () => {
