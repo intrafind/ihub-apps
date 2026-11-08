@@ -519,7 +519,7 @@ export default function registerPromptRoutes(app) {
     // permissions, own prompts, shares — so the ETag does too, and `private`
     // keeps shared caches from handing one user another's list.
     res.setHeader('Cache-Control', 'private, no-cache');
-    res.json(items);
+    res.json({ items });
   });
 
   /**

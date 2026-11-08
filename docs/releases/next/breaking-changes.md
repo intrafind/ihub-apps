@@ -712,3 +712,12 @@ integrations/tools}` and the unpaged `GET /api/admin/projects`. The shared user 
 script that reads these lists reads `body.items`. The public lists (`/api/apps`, `/api/models`,
 `/api/prompts`) and the named-list answers (`{ credentials }`, `{ assets }`, `{ templates }`, …) follow
 in a later change.
+
+## The Public Lists Are `{ items }`, Not a Bare Array
+
+A list is an object, `{ "items": [...] }`, never a bare array. These calls answered an array and now
+answer `{ items }`: `GET /api/apps`, `GET /api/models` (with `?type=` too), `GET /api/prompts`,
+`GET /api/shortlinks`, `GET /api/agents/runs` and `GET /api/workflows`. The web app is updated.
+**Scripts and integrations that call these with an OAuth token or API key must read `body.items`**,
+for example `curl … /api/models | jq '.items[].id'` instead of `jq '.[].id'`. The conditional-request
+behaviour (`ETag` / `If-None-Match`) is unchanged.

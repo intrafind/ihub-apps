@@ -125,20 +125,20 @@ describe('short link ownership', () => {
     const { body: theirs } = await create(app, 'bob', { appId: 'list-app' });
 
     const alice = await as(request(app).get('/api/shortlinks?appId=list-app'), 'alice');
-    expect(alice.body.map(l => l.code)).toEqual([mine.code]);
+    expect(alice.body.items.map(l => l.code)).toEqual([mine.code]);
 
     // A user cannot widen the list to someone else's links.
     const widened = await as(request(app).get('/api/shortlinks?ownerId=bob'), 'alice');
-    expect(widened.body.every(l => l.ownerId === 'alice')).toBe(true);
+    expect(widened.body.items.every(l => l.ownerId === 'alice')).toBe(true);
 
     const admin = await as(request(app).get('/api/shortlinks?appId=list-app'), 'admin');
-    expect(admin.body.map(l => l.code).sort()).toEqual([mine.code, theirs.code].sort());
+    expect(admin.body.items.map(l => l.code).sort()).toEqual([mine.code, theirs.code].sort());
 
     const byOwner = await as(
       request(app).get('/api/shortlinks?appId=list-app&ownerId=bob'),
       'admin'
     );
-    expect(byOwner.body.map(l => l.code)).toEqual([theirs.code]);
+    expect(byOwner.body.items.map(l => l.code)).toEqual([theirs.code]);
   });
 
   test('another user sees only that a code is taken', async () => {

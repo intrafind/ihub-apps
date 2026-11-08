@@ -34,7 +34,7 @@ export default function AgentRunsPage() {
       try {
         const res = await fetchAgentRuns(profileId ? { profileId } : {});
         if (!mounted) return;
-        const data = res?.data || [];
+        const data = res?.data?.items ?? [];
         setRuns(data);
         setError(null);
         hasActiveRun = data.some(r => r.status === 'running' || r.status === 'paused');

@@ -388,7 +388,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       const workflows = await loadWorkflows();
       const filtered = filterByPermissions(workflows, req.user);
 
-      res.json(filtered);
+      res.json({ items: filtered });
     }
   );
 

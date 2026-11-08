@@ -168,7 +168,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       }
     }
 
-    res.json(sanitizedModels);
+    res.json({ items: sanitizedModels });
   });
 
   // No modelAccessRequired here: it answers 403, while this route gives one

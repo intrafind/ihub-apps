@@ -62,7 +62,7 @@ function buildApp() {
   return app;
 }
 
-const ids = res => res.body.map(m => m.id);
+const ids = res => res.body.items.map(m => m.id);
 
 describe('GET /api/models?type=', () => {
   test('lists chat models by default', async () => {
@@ -75,7 +75,7 @@ describe('GET /api/models?type=', () => {
     const res = await request(buildApp()).get('/api/models?type=chat,transcription');
     assert.equal(res.status, 200);
     assert.deepEqual(ids(res), ['gemini-flash', 'gemini-live', 'gemini-batch']);
-    const byId = Object.fromEntries(res.body.map(m => [m.id, m]));
+    const byId = Object.fromEntries(res.body.items.map(m => [m.id, m]));
     assert.equal(byId['gemini-live'].transcriptionMode, 'stream');
     assert.equal(byId['gemini-batch'].transcriptionMode, 'batch');
     assert.equal(byId['gemini-flash'].transcriptionMode, undefined);

@@ -41,7 +41,7 @@ export const fetchPrompts = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.PROMPTS;
 
-  return handleApiResponse(
+  const data = await handleApiResponse(
     () => {
       const headers = {};
 
@@ -60,6 +60,7 @@ export const fetchPrompts = async (options = {}) => {
     true,
     true // Enable ETag handling
   );
+  return data?.items ?? [];
 };
 
 /**

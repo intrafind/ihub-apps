@@ -192,7 +192,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     }
 
     res.setHeader('ETag', userSpecificEtag);
-    res.json(withoutUsageGuideContent(apps));
+    res.json({ items: withoutUsageGuideContent(apps) });
   });
 
   /**

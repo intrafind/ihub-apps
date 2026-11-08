@@ -8,11 +8,12 @@ import { handleApiResponse } from '../utils/requestHandler';
 export const fetchApps = async (options = {}) => {
   const { language = null } = options;
 
-  return handleApiResponse(
+  const data = await handleApiResponse(
     () => apiClient.get('/apps', { params: { language } }),
     null, // no client-side caching for apps list
     null
   );
+  return data?.items ?? [];
 };
 
 export const fetchAppDetails = async (appId, options = {}) => {

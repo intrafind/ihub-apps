@@ -442,7 +442,7 @@ export default function registerAgentRunRoutes(app) {
         }
         runs = filtered;
       }
-      res.json(runs);
+      res.json({ items: runs });
     }
   );
 
