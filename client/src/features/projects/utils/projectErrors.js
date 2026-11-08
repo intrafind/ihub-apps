@@ -3,10 +3,10 @@
 
 /**
  * Messages for the errors of the projects API (#1036, spec 1 §5.4 and spec 3
- * §9). The server answers `{ error, details: { code, limit?, used?, … } }`
- * (the chat route answers `{ error, code }`); these helpers find the code
- * wherever the API client put it and turn it into a translated message a
- * user can act on. Unknown codes keep the server's own wording.
+ * §9). The server answers an RFC 9457 problem: `{ detail, code, details: { limit?,
+ * used?, … } }`; these helpers find the code wherever the API client put it and
+ * turn it into a translated message a user can act on. Unknown codes keep the
+ * server's own wording.
  *
  * @module features/projects/utils/projectErrors
  */
