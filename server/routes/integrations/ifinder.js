@@ -79,7 +79,7 @@ router.delete('/authorization', authRequired, async (req, res) => {
         source: 'web'
       });
     }
-    return res.json({ revoked });
+    return res.status(204).end();
   } catch (error) {
     throw failure(error, 'iFinder authorization revoke error');
   }

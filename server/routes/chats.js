@@ -601,7 +601,8 @@ export default function registerChatRoutes(app) {
       }
 
       const deleted = await fileStore.delete(scope, fileId);
-      return res.json({ deleted });
+      if (!deleted) throw notFound('File');
+      return res.status(204).end();
     }
   );
 

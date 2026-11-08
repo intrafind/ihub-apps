@@ -782,3 +782,15 @@ The admin config routes answered the object directly on `GET` but wrapped it on 
 Answers that carry more than the object keep their members (user prompt and skill settings answer
 `{ settings, storageAvailable }`; `PUT /api/admin/configs/platform` answers `{ config, reconfiguration }`).
 `GET /api/admin/system/storage` keeps `{ storage }`, because the value is `null` when no volume could be read.
+
+## Test Probes and Deletes Answer Plainly
+
+- The `_test` probes of integrations answer their report itself, not `{ result }`:
+  `POST /api/admin/integrations/installed/{id}/_test`, `POST …/actions/{action}/_test` and the draft
+  probe `POST /api/admin/integrations/catalog/{definitionId}/_test`.
+- `POST /api/admin/models/{modelId}/tts/voices` answers `201` with the voice itself and a
+  `Location` (was `200 { voice }`); `GET …/tts/voices/{voiceId}` is new.
+- Deleting answers `204` with no body, not `{ deleted }` or `{ revoked }`:
+  `DELETE /api/admin/models/{modelId}/tts/voices/{voiceId}`,
+  `DELETE /api/chats/{chatId}/files/{fileId}` (a file that does not exist now answers `404`) and
+  `DELETE /api/integrations/ifinder/authorization`.
