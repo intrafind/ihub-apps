@@ -123,8 +123,8 @@ Every `4xx` and `5xx` response is `application/problem+json` as defined by
 - **A new code** goes into `shared/apiErrors.js` and into `apiErrors` of `shared/i18n/en.json` and `de.json`.
   Codes are `UPPER_SNAKE`; never `kebab-case` or ad hoc strings.
 - The OAuth endpoints and bearer-token errors keep `{ "error", "error_description" }` of RFC 6749 / 6750, the
-  OpenAI-compatible endpoints keep the OpenAI error object. The voice routes keep their kebab-case protocol
-  codes: they are shared with the voice WebSocket and the voice dock, not part of the registry.
+  OpenAI-compatible endpoints keep the OpenAI error object. The codes of the voice WebSocket are protocol
+  codes and stay outside the registry; the read-aloud routes use registry codes.
 
 ## 4. Lists
 
@@ -247,8 +247,7 @@ The check finds the mechanical violations; the [checklist](#checklist) still cov
 
 - **Errors:** done. The mapper (`server/utils/errorResponse.js`) answers `application/problem+json` and the
   API guidelines check keeps new hand-written bodies out. The exceptions are the specifications that fix their
-  own shape (OAuth and bearer tokens, the OpenAI-compatible endpoints) and the voice routes, whose kebab-case
-  codes are shared with the voice WebSocket.
+  own shape (OAuth and bearer tokens, the OpenAI-compatible endpoints).
 - **Success bodies, verbs, pagination:** migrate when an endpoint is touched. The check fails a new
   `{ success }` envelope, a bare verb in a route and a `page` / `offset` parameter; a grep for
   `json({ success`, `json({ message:` and `/run`, `/duplicate`, `/cancel` finds the candidates.

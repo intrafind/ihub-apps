@@ -312,7 +312,7 @@ The button shows when all of these hold:
 - **Microphone permission.** A proxy that sends `Permissions-Policy` must allow `microphone=(self)`. Voice mode is not offered in an embedded chat. Send `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` (unless you embed iHub on purpose) so that no other site can frame iHub and start recording with a click.
 - **HTTPS.** The browser grants the microphone and `AudioWorklet` only on HTTPS or `localhost`.
 - **Sub-paths.** Behind a base path (`/ihub/`) the files are served from `/ihub/vad/`; the client works the path out like it does for the API.
-- **Rate limits.** Every answer is read in several requests (three to six). They count against `rateLimit.inferenceApi`, which is keyed by IP address: many users behind one NAT share it, so raise its `limit` when voice mode is used widely. A request the user stops by interrupting is not counted by that limiter, so a user can additionally have at most six syntheses running at once (`429` with `too-many-requests`).
+- **Rate limits.** Every answer is read in several requests (three to six). They count against `rateLimit.inferenceApi`, which is keyed by IP address: many users behind one NAT share it, so raise its `limit` when voice mode is used widely. A request the user stops by interrupting is not counted by that limiter, so a user can additionally have at most six syntheses running at once (`429` with `RATE_LIMITED`).
 
 ### Configuration reference
 
