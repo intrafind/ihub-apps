@@ -183,7 +183,7 @@ export async function saveAttachmentText(entry) {
   if (!isStoredStub(entry)) return false;
   const { fetchChatFileText } = await import('../../../api/endpoints/chats');
   const result = await fetchChatFileText(entry.chatId, entry.fileId);
-  const text = typeof result?.text === 'string' ? result.file.text : '';
+  const text = typeof result?.text === 'string' ? result.text : '';
   if (!text) return false;
   return saveBlobAs(
     new Blob([text], { type: 'text/plain;charset=utf-8' }),

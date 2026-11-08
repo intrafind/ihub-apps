@@ -688,3 +688,16 @@ projects, integrations, marketplace registries and installs, document templates,
 user create calls (prompts, skills, projects, scheduled tasks and their files, chat shares, chat
 files, integration requests, personal API keys, workflows). The API guidelines check now rejects a
 bare `status(201).json(…)`; use `sendCreated` from `server/utils/created.js`.
+
+## A Resource Is Answered As Itself, Not Wrapped in `{ app }` or `{ model }`
+
+The body of a call that returns one resource is that resource, not an object with one member named
+after it. This covers the create and update answers of apps, models, prompts (and promoting one),
+providers, pages, groups, projects, agent profiles, OAuth clients, integration installations and
+example apps, document templates and chat shares, a chat rename (`PATCH /api/chats/{chatId}`), the
+text and discard answers of chat and scheduled-task files, the UI asset upload, and the CIMD client
+read. Read `body.id` where you read `body.app.id`.
+
+Bodies that carry more than the resource keep their members: `{ instance, reviewed }`,
+`{ template, files }`, `{ client, revoked }`, `{ instance, definitionId }`, the migration result, and
+`GET /api/chats/{chatId}`.

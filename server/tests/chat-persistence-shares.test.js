@@ -407,7 +407,7 @@ describe('creating a share', () => {
     const chatId = await seedChat(ADA);
     const res = await createShare(ADA, chatId, { mode: 'authenticated' });
     assert.equal(res.statusCode, 201);
-    const { share } = res.body;
+    const share = res.body;
     assert.ok(isShareId(share.id));
     assert.notEqual(share.id, chatId);
     assert.ok(share.id.length >= 30);
@@ -468,8 +468,8 @@ describe('creating a share', () => {
     assert.equal(proto.statusCode, 400, 'a prototype key is not a user');
     const ok = await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id, GRACE.id] });
     assert.equal(ok.statusCode, 201);
-    assert.deepEqual(ok.body.share.recipients, [GRACE.id]);
-    assert.deepEqual(ok.body.share.recipientDetails, [
+    assert.deepEqual(ok.body.recipients, [GRACE.id]);
+    assert.deepEqual(ok.body.recipientDetails, [
       { id: GRACE.id, name: GRACE.name, email: GRACE.email }
     ]);
   });
@@ -481,16 +481,16 @@ describe('creating a share', () => {
     assert.equal(tooMany.statusCode, 400);
     const res = await createShare(ADA, chatId, { mode: 'authenticated' });
     assert.equal(res.statusCode, 201);
-    assert.equal(res.body.share.maxViews, 3);
-    assert.ok(res.body.share.expiresAt, 'a cap on expiry means every link expires');
-    assert.ok(Date.parse(res.body.share.expiresAt) <= Date.now() + 2 * DAY_MS + 1000);
+    assert.equal(res.body.maxViews, 3);
+    assert.ok(res.body.expiresAt, 'a cap on expiry means every link expires');
+    assert.ok(Date.parse(res.body.expiresAt) <= Date.now() + 2 * DAY_MS + 1000);
   });
 });
 
 describe('who may open a link', () => {
   it('public: opens for nobody at all, and every such open counts', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers['cache-control'], 'private, no-store');
@@ -508,7 +508,7 @@ describe('who may open a link', () => {
 
   it('authenticated: an anonymous visitor is told to sign in, anyone signed in gets through', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'authenticated' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'authenticated' })).body;
     const anon = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(anon.statusCode, 401);
     assert.equal(anon.body.code, 'AUTH_REQUIRED');
@@ -523,8 +523,7 @@ describe('who may open a link', () => {
 
   it('users: only the people on the list, and the owner', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     assert.equal(
       (await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS })).statusCode,
       401
@@ -546,8 +545,7 @@ describe('who may open a link', () => {
 
   it('an admin may read any link, without counting', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: ROOT });
     assert.equal(res.statusCode, 200);
     assert.equal((await getChatShareRepository().getShare(share.id)).viewCount, 0);
@@ -562,7 +560,7 @@ describe('who may open a link', () => {
 
   it('every link is dead while sharing is switched off', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     setSharing({ enabled: false });
     try {
       const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
@@ -592,25 +590,24 @@ describe('identity modes and delegated principals', () => {
 
     const res = await createShare(ADA, chatId, { mode: 'public', showOwnerName: true });
     assert.equal(res.statusCode, 201);
-    assert.equal(res.body.share.ownerName, null);
-    assert.equal(res.body.share.showOwnerName, false);
+    assert.equal(res.body.ownerName, null);
+    assert.equal(res.body.showOwnerName, false);
 
     const view = await drive(openHandlers, {
-      params: { shareId: res.body.share.id },
+      params: { shareId: res.body.id },
       user: GRACE
     });
     assert.equal(view.statusCode, 200);
     assert.equal(view.body.share.sharedBy, null);
     // The per-view log stores the viewer the way the mode records people.
-    const stored = await getChatShareRepository().getShare(res.body.share.id);
+    const stored = await getChatShareRepository().getShare(res.body.id);
     assert.equal(stored.views[0].userId, await fingerprint(GRACE.id));
     assert.notEqual(stored.views[0].userId, GRACE.id);
   });
 
   it("a delegated token with the admin's groups is not an admin here", async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     // What enhanceUserWithPermissions makes of an admin's personal API key: no admin rights.
     const apiKey = {
       ...ROOT,
@@ -630,8 +627,7 @@ describe('identity modes and delegated principals', () => {
 describe('what a viewer sees', () => {
   it('is the transcript and the display fields, nothing that identifies the owner or the chat', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: GRACE });
     assert.equal(res.statusCode, 200);
     const view = res.body.share;
@@ -680,7 +676,7 @@ describe('what a viewer sees', () => {
     const { messages: stored } = await getChatRepository().getMessages(chatId);
     assert.equal(stored.at(-1).sources.items.length, 2, 'the owner’s own chat keeps them all');
 
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.messages.at(-1).content, 'See the contract.');
@@ -689,9 +685,8 @@ describe('what a viewer sees', () => {
 
   it('hides the owner’s name on a public link unless they opted in', async () => {
     const chatId = await seedChat(ADA);
-    const hidden = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
-    const shown = (await createShare(ADA, chatId, { mode: 'public', showOwnerName: true })).body
-      .share;
+    const hidden = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const shown = (await createShare(ADA, chatId, { mode: 'public', showOwnerName: true })).body;
     const a = await drive(openHandlers, { params: { shareId: hidden.id }, user: ANONYMOUS });
     assert.equal(a.body.share.sharedBy, null);
     const b = await drive(openHandlers, { params: { shareId: shown.id }, user: ANONYMOUS });
@@ -705,7 +700,7 @@ describe('what a viewer sees', () => {
       content: 'see attached',
       attachments: [{ type: 'application/pdf', name: 'plan.pdf', bytes: 1234 }]
     });
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.deepEqual(res.body.messages[0].attachments, [
       { type: 'application/pdf', name: 'plan.pdf', bytes: 1234 }
@@ -716,7 +711,7 @@ describe('what a viewer sees', () => {
 describe('a share is a snapshot', () => {
   it('shows the chat as it was when shared, not as it is now', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const repository = getChatRepository();
     // The conversation goes on, and an earlier answer is edited away.
     await repository.appendMessage(chatId, { role: 'user', content: 'question 3' });
@@ -742,7 +737,7 @@ describe('artifacts through a share', () => {
   it('serves only what the snapshot named, inline or as a download', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const before = await seedArtifact(chatId, 'before');
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const later = await seedArtifact(chatId, 'later');
 
     const list = await drive(artifactsHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
@@ -784,7 +779,7 @@ describe('artifacts through a share', () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const repository = getChatRepository();
     const shared = await seedArtifact(chatId, 'shared');
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     // Not in any share: the ordinary rule still applies to this one.
     const unshared = await seedArtifact(chatId, 'unshared');
     const { messages } = await repository.getMessages(chatId);
@@ -813,7 +808,7 @@ describe('artifacts through a share', () => {
   it('is still served to the viewer whose open used the last allowed view', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const artifact = await seedArtifact(chatId, 'last');
-    const { share } = (await createShare(ADA, chatId, { mode: 'public', maxViews: 1 })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public', maxViews: 1 })).body;
 
     const open = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(open.statusCode, 200);
@@ -846,8 +841,7 @@ describe('artifacts through a share', () => {
   it('applies the same audience rules as the transcript', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const artifact = await seedArtifact(chatId, 'private');
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     const anon = await drive(artifactHandlers, {
       params: { shareId: share.id, artifactId: artifact.id },
       user: ANONYMOUS
@@ -1022,7 +1016,7 @@ describe('artifacts as one ZIP', () => {
   it('through a share packs only what the snapshot named', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const shared = await seedArtifact(chatId, 'shared');
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const later = await seedArtifact(chatId, 'later');
 
     const all = await driveZip(shareZipHandlers, {
@@ -1064,7 +1058,7 @@ describe('artifacts as one ZIP', () => {
 describe('limits and revocation close a link the same way', () => {
   it('a view limit: the open that reaches it is served, the next is not', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'public', maxViews: 2 })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public', maxViews: 2 })).body;
     const open = () => drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal((await open()).statusCode, 200);
     assert.equal((await open()).statusCode, 200);
@@ -1091,7 +1085,7 @@ describe('limits and revocation close a link the same way', () => {
 
   it('a revoke: by the owner or an admin, never by anyone else, and it sticks', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const share = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const stranger = await drive(revokeHandlers, { params: { shareId: share.id }, user: GRACE });
     assert.equal(stranger.statusCode, 404);
     assert.equal(
@@ -1100,13 +1094,13 @@ describe('limits and revocation close a link the same way', () => {
     );
     const owner = await drive(revokeHandlers, { params: { shareId: share.id }, user: ADA });
     assert.equal(owner.statusCode, 200);
-    assert.equal(owner.body.share.state, 'revoked');
+    assert.equal(owner.body.state, 'revoked');
     assert.equal(
       (await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS })).statusCode,
       404
     );
     // Idempotent, and an admin may do it too.
-    const second = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
+    const second = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const admin = await drive(revokeHandlers, { params: { shareId: second.id }, user: ROOT });
     assert.equal(admin.statusCode, 200);
     const again = await drive(revokeHandlers, { params: { shareId: second.id }, user: ADA });
@@ -1131,8 +1125,7 @@ describe('the owner’s and the recipient’s lists', () => {
 
   it('shows a recipient what was shared with them, and whether they opened it', async () => {
     const chatId = await seedChat(ADA);
-    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
-      .body;
+    const share = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
     await createShare(ADA, chatId, { mode: 'authenticated' });
 
     const grace = await drive(withMeHandlers, { user: GRACE });
@@ -1163,9 +1156,8 @@ describe('the owner’s and the recipient’s lists', () => {
 describe('deleting the chat', () => {
   it('takes its shares, their snapshots and their recipient markers with it', async () => {
     const chatId = await seedChat(ADA);
-    const users = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body
-      .share;
-    const pub = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
+    const users = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] })).body;
+    const pub = (await createShare(ADA, chatId, { mode: 'public' })).body;
 
     const res = await drive(deleteChatHandlers, { params: { chatId }, user: ADA });
     assert.equal(res.statusCode, 204);
@@ -1261,7 +1253,7 @@ describe('sharing a single artifact', () => {
 
     const created = await shareArtifact(ADA, chatId, page.id, { mode: 'public' });
     assert.equal(created.statusCode, 201);
-    const { share } = created.body;
+    const share = created.body;
     assert.equal(share.target, 'artifact');
     assert.deepEqual(share.artifactIds, [page.id]);
     assert.equal(
@@ -1296,8 +1288,7 @@ describe('sharing a single artifact', () => {
     const chatId = await seedChat(ADA);
     const page = await seedHtmlArtifact(chatId);
 
-    const authed = (await shareArtifact(ADA, chatId, page.id, { mode: 'authenticated' })).body
-      .share;
+    const authed = (await shareArtifact(ADA, chatId, page.id, { mode: 'authenticated' })).body;
     assert.equal(
       (await drive(openHandlers, { params: { shareId: authed.id }, user: ANONYMOUS })).statusCode,
       401
@@ -1309,7 +1300,7 @@ describe('sharing a single artifact', () => {
 
     const users = (
       await shareArtifact(ADA, chatId, page.id, { mode: 'users', recipients: [GRACE.id] })
-    ).body.share;
+    ).body;
     assert.equal(
       (await drive(openHandlers, { params: { shareId: users.id }, user: GRACE })).statusCode,
       200
@@ -1319,7 +1310,7 @@ describe('sharing a single artifact', () => {
       404
     );
 
-    const revoked = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    const revoked = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body;
     await drive(revokeHandlers, { params: { shareId: revoked.id }, user: ADA });
     assert.equal(
       (await drive(openHandlers, { params: { shareId: revoked.id }, user: ANONYMOUS })).statusCode,
@@ -1348,7 +1339,7 @@ describe('sharing a single artifact', () => {
     const chatId = await seedChat(ADA);
     const page = await seedHtmlArtifact(chatId);
     const other = await seedArtifact(chatId, 'second');
-    const mine = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    const mine = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body;
     await shareArtifact(ADA, chatId, other.id, { mode: 'public' });
     await createShare(ADA, chatId, { mode: 'public' });
     const res = await drive(listHandlers, {
@@ -1367,7 +1358,7 @@ describe('sharing a single artifact', () => {
     const page = await seedHtmlArtifact(chatId);
     const ok = await shareArtifact(ADA, chatId, page.id, { mode: 'public', embeddable: true });
     assert.equal(ok.statusCode, 201);
-    assert.equal(ok.body.share.embeddable, true);
+    assert.equal(ok.body.embeddable, true);
 
     assert.equal(
       (await shareArtifact(ADA, chatId, page.id, { mode: 'authenticated', embeddable: true }))
@@ -1394,7 +1385,7 @@ describe('sharing a single artifact', () => {
   it('takes the artifact shares and the artifacts with the chat', async () => {
     const chatId = await seedChat(ADA);
     const page = await seedHtmlArtifact(chatId);
-    const share = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body.share;
+    const share = (await shareArtifact(ADA, chatId, page.id, { mode: 'public' })).body;
     const repository = getChatRepository();
     assert.ok(await getArtifactRepository().get(repository.artifactScope(chatId), page.id));
 
@@ -1417,7 +1408,7 @@ describe('the embed page', () => {
     const body = { mode: 'public', embeddable: true, ...overrides };
     const created = await shareArtifact(ADA, chatId, page.id, body);
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    return created.body.share;
+    return created.body;
   }
 
   it('renders the artifact in a sandboxed frame, framable only by allowlisted origins', async () => {
@@ -1439,7 +1430,7 @@ describe('the embed page', () => {
     assert.equal((await drive(embedHandlers, { params: { shareId: plain.id } })).statusCode, 404);
 
     const chatId = await seedChat(ADA);
-    const chatShare = (await createShare(ADA, chatId, { mode: 'public' })).body.share;
+    const chatShare = (await createShare(ADA, chatId, { mode: 'public' })).body;
     assert.equal(
       (await drive(embedHandlers, { params: { shareId: chatShare.id } })).statusCode,
       404
