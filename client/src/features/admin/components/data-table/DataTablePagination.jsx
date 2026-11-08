@@ -49,6 +49,7 @@ function DataTablePagination({
   total,
   onPageChange,
   onPageSizeChange,
+  cursorPaging,
   labels = {}
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -80,53 +81,75 @@ function DataTablePagination({
             ))}
           </select>
         </label>
-        <div className="flex items-center gap-1">
-          <PageButton
-            onClick={() => onPageChange(1)}
-            disabled={safePage === 1}
-            label={labels.first || 'First page'}
-          >
-            <Icon name="chevron-double-left" size="xs" />
-          </PageButton>
-          <PageButton
-            onClick={() => onPageChange(safePage - 1)}
-            disabled={safePage === 1}
-            label={labels.previous || 'Previous'}
-          >
-            <Icon name="chevron-left" size="xs" />
-          </PageButton>
-          {pages.map((p, i) =>
-            p === '…' ? (
-              // eslint-disable-next-line @eslint-react/no-array-index-key
-              <span key={`gap-${i}`} className="px-1 text-gray-500">
-                …
-              </span>
-            ) : (
-              <PageButton
-                key={p}
-                active={p === safePage}
-                onClick={() => onPageChange(p)}
-                label={typeof labels.page === 'function' ? labels.page(p) : `Page ${p}`}
-              >
-                {p}
-              </PageButton>
-            )
-          )}
-          <PageButton
-            onClick={() => onPageChange(safePage + 1)}
-            disabled={safePage === totalPages}
-            label={labels.next || 'Next'}
-          >
-            <Icon name="chevron-right" size="xs" />
-          </PageButton>
-          <PageButton
-            onClick={() => onPageChange(totalPages)}
-            disabled={safePage === totalPages}
-            label={labels.last || 'Last page'}
-          >
-            <Icon name="chevron-double-right" size="xs" />
-          </PageButton>
-        </div>
+        {cursorPaging ? (
+          <div className="flex items-center gap-1">
+            <PageButton
+              onClick={cursorPaging.onPrevious}
+              disabled={!cursorPaging.hasPrevious}
+              label={labels.previous || 'Previous'}
+            >
+              <Icon name="chevron-left" size="xs" />
+            </PageButton>
+            <span className="px-2 text-sm text-gray-600 dark:text-gray-400">
+              {typeof labels.page === 'function' ? labels.page(page) : `Page ${page}`}
+            </span>
+            <PageButton
+              onClick={cursorPaging.onNext}
+              disabled={!cursorPaging.hasNext}
+              label={labels.next || 'Next'}
+            >
+              <Icon name="chevron-right" size="xs" />
+            </PageButton>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <PageButton
+              onClick={() => onPageChange(1)}
+              disabled={safePage === 1}
+              label={labels.first || 'First page'}
+            >
+              <Icon name="chevron-double-left" size="xs" />
+            </PageButton>
+            <PageButton
+              onClick={() => onPageChange(safePage - 1)}
+              disabled={safePage === 1}
+              label={labels.previous || 'Previous'}
+            >
+              <Icon name="chevron-left" size="xs" />
+            </PageButton>
+            {pages.map((p, i) =>
+              p === '…' ? (
+                // eslint-disable-next-line @eslint-react/no-array-index-key
+                <span key={`gap-${i}`} className="px-1 text-gray-500">
+                  …
+                </span>
+              ) : (
+                <PageButton
+                  key={p}
+                  active={p === safePage}
+                  onClick={() => onPageChange(p)}
+                  label={typeof labels.page === 'function' ? labels.page(p) : `Page ${p}`}
+                >
+                  {p}
+                </PageButton>
+              )
+            )}
+            <PageButton
+              onClick={() => onPageChange(safePage + 1)}
+              disabled={safePage === totalPages}
+              label={labels.next || 'Next'}
+            >
+              <Icon name="chevron-right" size="xs" />
+            </PageButton>
+            <PageButton
+              onClick={() => onPageChange(totalPages)}
+              disabled={safePage === totalPages}
+              label={labels.last || 'Last page'}
+            >
+              <Icon name="chevron-double-right" size="xs" />
+            </PageButton>
+          </div>
+        )}
       </div>
     </div>
   );

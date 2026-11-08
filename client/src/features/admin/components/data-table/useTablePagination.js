@@ -41,6 +41,7 @@ export function normalizePagination(pagination) {
     total: pagination.total,
     page: pagination.page,
     onPageChange: pagination.onPageChange,
-    onPageSizeChange: pagination.onPageSizeChange
+    onPageSizeChange: pagination.onPageSizeChange,
+    cursorPaging: pagination.cursorPaging
   };
 }

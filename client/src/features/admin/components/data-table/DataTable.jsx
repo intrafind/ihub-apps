@@ -157,6 +157,7 @@ function DataTable({
           total={total}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
+          cursorPaging={paginationConfig.cursorPaging}
           labels={labels}
         />
       )}
