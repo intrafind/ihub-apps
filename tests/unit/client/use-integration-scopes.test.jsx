@@ -23,7 +23,7 @@ const useIntegrationScopes =
   require('../../../client/src/features/chat/hooks/useIntegrationScopes').default;
 
 const LISTED = {
-  integrations: [
+  items: [
     {
       id: 'ifinder',
       scopePicker: 'menu',
