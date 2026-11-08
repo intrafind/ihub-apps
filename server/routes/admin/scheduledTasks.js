@@ -9,7 +9,7 @@
  *   PATCH  /api/admin/scheduled-tasks/:taskId         { status: paused|active|disabled, reason? }
  *   DELETE /api/admin/scheduled-tasks/:taskId        ?deleteChats=1
  *   GET    /api/admin/scheduled-tasks/:taskId/runs    run history (cursor-paged)
- *   DELETE /api/admin/scheduled-tasks/:taskId/runs        delete `?runIds=a,b` or `?all=true` finished runs
+ *   DELETE /api/admin/scheduled-tasks/:taskId/runs        delete all finished runs of the task
  *   PUT    /api/admin/scheduled-tasks/settings        update `platform.scheduledTasks`
  *
  * An admin can stop any task but never runs one or edits what it does: a run

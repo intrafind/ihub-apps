@@ -25,7 +25,7 @@
  *   GET    /api/scheduled-tasks/:taskId/runs             run history, newest first (cursor-paged)
  *   GET    /api/scheduled-tasks/:taskId/runs/:runId      one run
  *   DELETE /api/scheduled-tasks/:taskId/runs/:runId      delete one finished run (and its chat)
- *   DELETE /api/scheduled-tasks/:taskId/runs             delete `?runIds=a,b` or `?all=true` finished runs
+ *   DELETE /api/scheduled-tasks/:taskId/runs             delete all finished runs; one run: DELETE …/runs/:runId
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/_cancel
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/approval   { decision, alwaysAllow }
  *   GET    /api/scheduled-tasks/:taskId/files            files attached to the task (kept until the task is deleted)
@@ -128,20 +128,11 @@ export function requestLanguage(req) {
 
 /** The file store for a request; throws a 503 while it is down. */
 /**
- * The filter of `DELETE …/runs`: `?runIds=a,b` (or repeated), `?all=true`, `?deleteChats=false`.
- * Chats of the deleted runs go too unless the caller says otherwise.
+ * `DELETE …/runs` removes every finished run of the task; one run is `DELETE …/runs/:runId`.
+ * Chats of the deleted runs go too unless the caller sends `?deleteChats=0`.
  */
 export function runDeletionFromQuery(query = {}) {
-  const raw = [].concat(query.runIds ?? []);
-  const runIds = raw
-    .flatMap(value => (typeof value === 'string' ? value.split(',') : []))
-    .map(id => id.trim())
-    .filter(Boolean);
-  return {
-    runIds: runIds.length > 0 ? runIds : undefined,
-    all: query.all === 'true',
-    deleteChats: query.deleteChats !== 'false'
-  };
+  return { all: true, deleteChats: query.deleteChats !== '0' };
 }
 
 function taskFileStore() {

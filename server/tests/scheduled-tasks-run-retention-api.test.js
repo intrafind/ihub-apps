@@ -128,17 +128,19 @@ describe('deleting runs through the owner routes', () => {
     await cleanup(ada());
   });
 
-  it('deletes a selection and all runs through the bulk route', async () => {
-    const { task, run } = await taskWithRun();
-    const bulk = query =>
-      call(ownerRoutes, 'delete', '/:taskId/runs', {
-        params: { taskId: task.id },
-        query,
-        user: ada()
-      });
-    assert.equal((await bulk({ runIds: '' })).statusCode, 400);
-    assert.equal((await bulk({ runIds: run.id })).body.deleted, 1);
-    assert.equal((await bulk({ all: 'true' })).body.deleted, 0);
+  it('deletes all finished runs through the collection route', async () => {
+    const { task } = await taskWithRun();
+    const res = await call(ownerRoutes, 'delete', '/:taskId/runs', {
+      params: { taskId: task.id },
+      user: ada()
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.deleted, 1);
+    const again = await call(ownerRoutes, 'delete', '/:taskId/runs', {
+      params: { taskId: task.id },
+      user: ada()
+    });
+    assert.equal(again.body.deleted, 0);
     await cleanup(ada());
   });
 
@@ -146,7 +148,6 @@ describe('deleting runs through the owner routes', () => {
     const { task } = await taskWithRun();
     const res = await call(adminRoutes, 'delete', '/:taskId/runs', {
       params: { taskId: task.id },
-      query: { all: 'true' },
       user: adminUser
     });
     assert.equal(res.statusCode, 200);

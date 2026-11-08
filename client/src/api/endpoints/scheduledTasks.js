@@ -67,22 +67,26 @@ export const fetchScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.get(`${task(taskId)}/runs/${encodeURIComponent(runId)}`));
 
 /**
- * Delete finished runs (and by default their chats).
+ * Delete finished runs (and by default their chats): the listed runs one by one
+ * (`DELETE …/runs/:runId`), or every finished run (`DELETE …/runs`) with `all`.
  *
  * @param {string} taskId
  * @param {{runIds?: string[], all?: boolean, deleteChats?: boolean}} selection
  * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
  */
 export const deleteScheduledTaskRuns = (taskId, selection) =>
-  call(() =>
-    apiClient.delete(`${task(taskId)}/runs`, {
-      params: {
-        ...(selection?.runIds?.length ? { runIds: selection.runIds.join(',') } : {}),
-        ...(selection?.all ? { all: true } : {}),
-        ...(selection?.deleteChats === false ? { deleteChats: false } : {})
-      }
-    })
-  );
+  call(async () => {
+    const params = selection?.deleteChats === false ? { deleteChats: 0 } : {};
+    if (selection?.all) return apiClient.delete(`${task(taskId)}/runs`, { params });
+    const total = { deleted: 0, chatsDeleted: 0, skipped: 0 };
+    for (const runId of selection?.runIds || []) {
+      const { data } = await apiClient.delete(`${task(taskId)}/runs/${encodeURIComponent(runId)}`, {
+        params
+      });
+      for (const key of Object.keys(total)) total[key] += data?.[key] || 0;
+    }
+    return { data: total };
+  });
 
 export const cancelScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.post(`${task(taskId)}/runs/${encodeURIComponent(runId)}/_cancel`));

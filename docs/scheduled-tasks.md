@@ -243,9 +243,9 @@ stricter value wins: an owner can keep less than the installation allows, never 
 is applied when a run ends; the age limit by the periodic sweep. Deleting a run also deletes its
 chat. A run that has not finished is never deleted and does not count toward the limit.
 
-Runs can also be deleted by hand from the task page: one run, a selection, or **Delete all
+Runs can also be deleted by hand from the task page: one run, a selection (one call per run), or **Delete all
 finished runs** (`DELETE /api/scheduled-tasks/:taskId/runs/:runId` and
-`DELETE /api/scheduled-tasks/:taskId/runs?runIds=a,b` or `?all=true`; add `deleteChats=false` to keep the run chats).
+`DELETE /api/scheduled-tasks/:taskId/runs` for all finished runs; add `deleteChats=0` to keep the run chats).
 A run in progress cannot be deleted (`409 RUN_IN_PROGRESS`); cancel it first. Admins can delete
 runs of any task with `DELETE /api/admin/scheduled-tasks/:taskId/runs`.
 

@@ -578,7 +578,7 @@ needs no change; scripts that call these endpoints must use the new path.
 | `POST /api/scheduled-tasks/:taskId/run` · `/pause` · `/resume` · `/duplicate` | `POST …/_run` · `/_pause` · `/_resume` · `/_duplicate` |
 | `POST /api/scheduled-tasks/:taskId/runs/:runId/cancel` | `POST …/runs/:runId/_cancel` |
 | `POST /api/scheduled-tasks/_notifications/seen` | `POST /api/scheduled-tasks/_notifications/_mark-seen` |
-| `POST /api/scheduled-tasks/:taskId/runs/delete` `{ "runIds", "all", "deleteChats" }` and the same under `/api/admin/scheduled-tasks` | `DELETE …/runs?runIds=a,b` or `?all=true`, plus `deleteChats=false` to keep the chats |
+| `POST /api/scheduled-tasks/:taskId/runs/delete` `{ "runIds", "all", "deleteChats" }` and the same under `/api/admin/scheduled-tasks` | `DELETE …/runs/:runId` for one run, `DELETE …/runs` for all finished runs (`?deleteChats=0` keeps the chats) |
 | `POST /api/integrations/:id/connect` · `/reconnect` · `/disconnect` | `POST …/_connect` · `/_reconnect` · `/_disconnect` |
 | `POST /api/integrations/api-keys/:keyId/rotate` | `POST …/api-keys/:keyId/_rotate` |
 
