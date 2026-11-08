@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useCursorPager } from '../../../shared/hooks/useCursorPager';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -81,6 +82,8 @@ function bucketLabel(bucket, t, language) {
 }
 
 /* ── Near limit ─────────────────────────────────────────────────────────── */
+
+const PAGE_SIZE = 25;
 
 /**
  * Users above 80 % of any limit, the soonest reset first, each with its bar
@@ -355,7 +358,8 @@ function SettingsCard() {
 function UsersView({ models }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const [query, setQuery] = useState({ search: '', status: 'all', modelId: '', page: 1 });
+  const [query, setQuery] = useState({ search: '', status: 'all', modelId: '' });
+  const { cursor, page, hasPrevious, goNext, goPrevious, reset: resetPaging } = useCursorPager();
   const [search, setSearch] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -366,7 +370,7 @@ function UsersView({ models }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await fetchUsageLimitUsers({ ...query, pageSize: 25 }));
+      setData(await fetchUsageLimitUsers({ ...query, cursor, limit: PAGE_SIZE }));
       setError(null);
     } catch (e) {
       setError(
@@ -377,7 +381,7 @@ function UsersView({ models }) {
     } finally {
       setLoading(false);
     }
-  }, [query, t]);
+  }, [query, cursor, t]);
 
   useEffect(() => {
     void load();
@@ -385,9 +389,12 @@ function UsersView({ models }) {
 
   // Search as you type, a moment after the last key.
   useEffect(() => {
-    const timer = setTimeout(() => setQuery(q => ({ ...q, search, page: 1 })), 300);
+    const timer = setTimeout(() => {
+      setQuery(q => ({ ...q, search }));
+      resetPaging();
+    }, 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, resetPaging]);
 
   const confirmReset = async () => {
     const target = pendingReset;
@@ -405,7 +412,7 @@ function UsersView({ models }) {
     }
   };
 
-  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
     <div className={CARD}>
@@ -425,7 +432,10 @@ function UsersView({ models }) {
           <select
             className={`${INPUT} mt-1`}
             value={query.status}
-            onChange={e => setQuery(q => ({ ...q, status: e.target.value, page: 1 }))}
+            onChange={e => {
+              setQuery(q => ({ ...q, status: e.target.value }));
+              resetPaging();
+            }}
           >
             <option value="all">{t('admin.usage.limits.filter.all', 'All users')}</option>
             <option value="limited">
@@ -444,7 +454,10 @@ function UsersView({ models }) {
           <select
             className={`${INPUT} mt-1`}
             value={query.modelId}
-            onChange={e => setQuery(q => ({ ...q, modelId: e.target.value, page: 1 }))}
+            onChange={e => {
+              setQuery(q => ({ ...q, modelId: e.target.value }));
+              resetPaging();
+            }}
           >
             <option value="">{t('admin.usage.limits.filter.anyModel', 'Any model')}</option>
             {models
@@ -597,29 +610,24 @@ function UsersView({ models }) {
         </table>
       </div>
 
-      {data && pages > 1 && (
+      {data && (hasPrevious || data.nextCursor) && (
         <div className="flex items-center justify-between border-t border-gray-200 p-3 text-sm dark:border-gray-700">
           <span className="text-gray-500 dark:text-gray-400">
             {t('admin.usage.limits.pageOf', 'Page {{page}} of {{pages}} · {{total}} users', {
-              page: data.page,
+              page,
               pages,
               total: data.total
             })}
           </span>
           <div className="flex gap-2">
-            <button
-              type="button"
-              className={BUTTON}
-              disabled={data.page <= 1}
-              onClick={() => setQuery(q => ({ ...q, page: q.page - 1 }))}
-            >
+            <button type="button" className={BUTTON} disabled={!hasPrevious} onClick={goPrevious}>
               {t('common.previous', 'Previous')}
             </button>
             <button
               type="button"
               className={BUTTON}
-              disabled={data.page >= pages}
-              onClick={() => setQuery(q => ({ ...q, page: q.page + 1 }))}
+              disabled={!data.nextCursor}
+              onClick={() => goNext(data.nextCursor)}
             >
               {t('common.next', 'Next')}
             </button>

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
+import { limitFrom, nextOffsetCursor, offsetFromCursor } from '../../utils/pagination.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { loadBuiltinLocaleJson } from '../../configLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -112,7 +113,7 @@ export default function registerAdminTranslationsRoutes(app) {
   /**
    * List/search translations of one language.
    * Query: q (matches key, built-in and overridden text), changedOnly (default
-   * true), limit, offset.
+   * true), limit, cursor.
    */
   app.get(
     buildServerPath('/api/admin/translations/:lang'),
@@ -135,12 +136,8 @@ export default function registerAdminTranslationsRoutes(app) {
       const query = String(req.query.q || '')
         .trim()
         .toLowerCase();
-      const limit = Math.min(
-        Math.max(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, 1),
-        MAX_LIMIT
-      );
-      // api-guidelines-ignore: existing offset paging, changed in its own API change
-      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      const limit = limitFrom(req.query.limit, { fallback: DEFAULT_LIMIT, max: MAX_LIMIT });
+      const offset = offsetFromCursor(req.query.cursor);
 
       const baseKeys = new Set();
       const candidates = [];
@@ -171,10 +168,11 @@ export default function registerAdminTranslationsRoutes(app) {
         languages: configCache.getSupportedLanguages(),
         changedCount: overrides.size,
         total: matches.length,
-        entries: matches.slice(offset, offset + limit).map(entry => ({
+        items: matches.slice(offset, offset + limit).map(entry => ({
           ...entry,
           key: entry.path.join('.')
-        }))
+        })),
+        nextCursor: nextOffsetCursor({ offset, limit, total: matches.length })
       });
     }
   );

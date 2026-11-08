@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { limitFrom, offsetCursor, offsetFromCursor } from './utils/pagination.js';
 import fs from 'node:fs/promises';
 import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';
@@ -140,12 +141,15 @@ export async function cleanupFeedback(retentionDays) {
  * order, so a page is a slice from the end of the file: only the lines of
  * that page are parsed, and nothing is sorted.
  *
- * @param {{limit?: number, offset?: number}} [opts]
- * @returns {Promise<{feedbackEntries: Object[], total: number, limit: number, offset: number}>}
+ * The cursor names the line the next page ends before, so entries appended meanwhile do not
+ * shift the pages that follow.
+ *
+ * @param {{limit?: number, cursor?: string|null}} [opts]
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
  */
-export async function readFeedbackPage({ limit = 100, offset = 0 } = {}) {
-  const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 100, 1), 500);
-  const skip = Math.max(Number.parseInt(offset, 10) || 0, 0);
+export async function readFeedbackPage({ limit = 100, cursor = null } = {}) {
+  const pageSize = limitFrom(limit, { fallback: 100, max: 500 });
+  const before = cursor ? offsetFromCursor(cursor) : null;
   try {
     await appender.flush();
   } catch {
@@ -155,19 +159,19 @@ export async function readFeedbackPage({ limit = 100, offset = 0 } = {}) {
   try {
     content = await fs.readFile(dataFile, 'utf8');
   } catch {
-    return { feedbackEntries: [], total: 0, limit: pageSize, offset: skip };
+    return { items: [], nextCursor: null, total: 0 };
   }
   const lines = content.split('\n').filter(line => line.trim());
   const total = lines.length;
-  const end = Math.max(total - skip, 0);
+  const end = before === null ? total : Math.min(before, total);
   const start = Math.max(end - pageSize, 0);
-  const feedbackEntries = [];
+  const items = [];
   for (let i = end - 1; i >= start; i--) {
     try {
-      feedbackEntries.push(JSON.parse(lines[i]));
+      items.push(JSON.parse(lines[i]));
     } catch {
       // Skip a malformed line.
     }
   }
-  return { feedbackEntries, total, limit: pageSize, offset: skip };
+  return { items, nextCursor: start > 0 ? offsetCursor(start) : null, total };
 }

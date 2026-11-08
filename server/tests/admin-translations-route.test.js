@@ -49,9 +49,25 @@ beforeEach(() => {
 
 test('lists only changed keys by default, all when asked', async () => {
   let res = await request(app).get('/api/admin/translations/en');
-  expect(res.body.entries).toEqual([]);
+  expect(res.body.items).toEqual([]);
   res = await request(app).get('/api/admin/translations/en?changedOnly=false&q=cancel');
-  expect(res.body.entries.map(e => e.key)).toEqual(['common.cancel']);
+  expect(res.body.items.map(e => e.key)).toEqual(['common.cancel']);
+});
+
+test('pages by cursor and ends with a null nextCursor', async () => {
+  const all = await request(app).get('/api/admin/translations/en?changedOnly=false&limit=500');
+  expect(all.body.nextCursor).toBeNull();
+  const keys = [];
+  let cursor;
+  for (let guard = 0; guard < 50; guard += 1) {
+    const url = `/api/admin/translations/en?changedOnly=false&limit=1${cursor ? `&cursor=${cursor}` : ''}`;
+    const res = await request(app).get(url);
+    expect(res.body.items.length).toBeLessThanOrEqual(1);
+    keys.push(...res.body.items.map(e => e.key));
+    cursor = res.body.nextCursor;
+    if (!cursor) break;
+  }
+  expect(keys).toEqual(all.body.items.map(e => e.key));
 });
 
 test('sets an override, keeps other keys, and lists it as changed', async () => {
@@ -62,7 +78,7 @@ test('sets an override, keeps other keys, and lists it as changed', async () => 
   expect(stored).toEqual({ common: { save: 'Store' } });
   expect(refresh).toHaveBeenCalledWith('locales/en.json');
   const res = await request(app).get('/api/admin/translations/en');
-  expect(res.body.entries[0]).toMatchObject({
+  expect(res.body.items[0]).toMatchObject({
     key: 'common.save',
     base: 'Save',
     override: 'Store'

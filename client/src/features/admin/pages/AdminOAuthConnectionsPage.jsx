@@ -40,7 +40,7 @@ function AdminOAuthConnectionsPage() {
     setLoading(true);
     try {
       const response = await makeAdminApiCall('/admin/oauth/connections');
-      setConnections(response.data?.connections || []);
+      setConnections(response.data?.items || []);
       setCimdClients(response.data?.cimdClients || []);
     } catch (error) {
       setMessage({

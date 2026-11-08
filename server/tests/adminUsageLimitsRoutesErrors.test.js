@@ -46,7 +46,10 @@ jest.unstable_mockModule('../services/quota/quotaAdmin.js', () => ({
     state.nearArgs = args;
     return { items: [], total: 0 };
   },
-  listQuotaUsers: async () => ({ items: [] })
+  listQuotaUsers: async args => {
+    state.usersArgs = args;
+    return { items: [], nextCursor: null, total: 0 };
+  }
 }));
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
@@ -168,5 +171,16 @@ describe('usage limit administration routes: errors', () => {
   it('lists near-limit users for valid numbers', async () => {
     await request(app).get('/api/admin/usage/limits/near?threshold=0.5&limit=10').expect(200);
     expect(state.nearArgs).toEqual({ threshold: 0.5, limit: 10 });
+  });
+
+  it('hands limit and cursor of the users list to the service, and no page or pageSize', async () => {
+    const res = await request(app)
+      .get('/api/admin/usage/limits/users')
+      .query({ limit: '10', cursor: 'abc', status: 'exceeded', page: '3', pageSize: '99' })
+      .expect(200);
+    expect(res.body).toEqual({ items: [], nextCursor: null, total: 0 });
+    expect(state.usersArgs).toMatchObject({ limit: '10', cursor: 'abc', status: 'exceeded' });
+    expect(state.usersArgs.page).toBeUndefined();
+    expect(state.usersArgs.pageSize).toBeUndefined();
   });
 });

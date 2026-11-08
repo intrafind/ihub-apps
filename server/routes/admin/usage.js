@@ -297,7 +297,6 @@ export default function registerAdminUsageRoutes(app) {
 
   // Stored feedback entries (with comments), newest first, one page at a time.
   app.get(buildServerPath('/api/admin/usage/feedback'), adminAuth, async (req, res) => {
-    // api-guidelines-ignore: existing offset paging, changed in its own API change
-    res.json(await readFeedbackPage({ limit: req.query.limit, offset: req.query.offset }));
+    res.json(await readFeedbackPage({ limit: req.query.limit, cursor: req.query.cursor }));
   });
 }

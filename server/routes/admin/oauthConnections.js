@@ -63,13 +63,10 @@ export default function registerAdminOAuthConnectionRoutes(app) {
       throw new ServiceError('BAD_REQUEST', 'OAuth clients are not enabled on this server');
     }
 
-    // api-guidelines-ignore: existing page/pageSize paging, changed in its own API change
-    const { clientId, userId, host, page, pageSize } = req.query;
-    const result = listConnections({ clientId, userId, host, page, pageSize });
+    const { clientId, userId, host, limit, cursor } = req.query;
+    const result = listConnections({ clientId, userId, host, limit, cursor });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      success: true,
       ...result,
       // The clients behind these connections that identify themselves with a
       // metadata document, with their governance state, so this page can
