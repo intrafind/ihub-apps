@@ -72,8 +72,8 @@ sequenceDiagram
 
     Note over H: Signs with the iHub OIDC RSA private key
     U->>H: Uses an iFinder-backed app
-    H->>H: generateIFinderJWT(user)<br/>alg=RS256, kid=<iHub key id>,<br/>iss=<iHub issuer URL>, sub=<user>
-    H->>F: API request + Authorization: Bearer <JWT>
+    H->>H: generateIFinderJWT(user)<br/>alg=RS256, kid=#lt;iHub key id#gt;,<br/>iss=#lt;iHub issuer URL#gt;, sub=#lt;user#gt;
+    H->>F: API request + Authorization: Bearer #lt;JWT#gt;
 
     Note over F: First request only (then cached)
     F->>H: GET /.well-known/openid-configuration

@@ -29,6 +29,10 @@ const ADMIN = { username: 'admin', password: 'password123' };
 // finish in a couple of minutes.
 const MAX_PAGES = 120;
 
+// The documentation viewer links to dozens of pages that share one renderer;
+// a few cover it without using up the budget for the admin pages.
+const MAX_DOC_PAGES = 6;
+
 /**
  * Responses that are part of normal operation and not a defect.
  * Each entry: [method pattern, URL pattern, status list, why].
@@ -104,10 +108,12 @@ test.describe('Route crawl', () => {
 
     const queue = ['/', '/admin'];
     const seen = new Set();
+    let docPages = 0;
     while (queue.length && seen.size < MAX_PAGES) {
       const target = queue.shift();
       const key = target.split('#')[0];
       if (seen.has(key)) continue;
+      if (key.startsWith('/admin/docs/') && ++docPages > MAX_DOC_PAGES) continue;
       seen.add(key);
       current = key;
       await page.goto(key, { waitUntil: 'domcontentloaded' });
