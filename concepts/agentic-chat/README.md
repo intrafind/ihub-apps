@@ -1,6 +1,6 @@
 # Agentic Chat
 
-**Status:** Research and concept (2026-11-07)
+**Status:** Research and concept (2026-11-07); team decisions of 2026-11-08 recorded in §8 of the main document
 
 ## Why
 
@@ -14,6 +14,15 @@ iHub already has the loop (`AgentLoop`). The gap is around it:
 2. Nobody tells the model how much work a request deserves, to finish the job, or what a final answer is.
 3. Chat lacks the tools and loop settings the others have: code execution, a plan tool, delegation to sub-agents, a research mode, parallel tool calls, budgets sized to the job, and a check that a text-only reply really is the end.
 4. There is no evaluation that compares iHub with Claude.ai and ChatGPT.
+
+## Decisions (2026-11-08)
+
+- The chat modes are a switch from the start; existing apps keep today's behaviour (Classic) preselected until the eval shows Standard is better.
+- Deep Research is a mode of its own.
+- Provider server tools beyond today's native web search come in a later phase.
+- Code execution waits for a backend (#2663).
+- Quotas for Deep and Deep Research: see the recommendation in the main document.
+- We build the evaluation harness ourselves, first, in Phase 0.
 
 ## Documents
 

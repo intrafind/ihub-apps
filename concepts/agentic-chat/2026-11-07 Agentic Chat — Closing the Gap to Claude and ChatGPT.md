@@ -1,7 +1,7 @@
 # Agentic Chat — Closing the Gap to Claude and ChatGPT
 
 **Date:** 2026-11-07
-**Status:** Research and concept. Nothing here is implemented yet.
+**Status:** Research and concept; the team's decisions of 2026-11-08 are recorded in §8 and worked into the design. Nothing here is implemented yet.
 **Question:** When you ask Claude.ai or ChatGPT about a topic, it works out what to do and keeps going (search, read, compute, check, search again) until the job is done. iHub chat, using the same models, does noticeably less. What do they do that we don't, and what do we have to build so that iHub chat becomes as capable as Claude.ai and ChatGPT **with the same models**?
 **Sources studied:** Claude.ai, Claude Research, Claude Code and the Claude API; ChatGPT, Deep Research, Codex and the OpenAI APIs; Gemini; LibreChat; Open WebUI; mini-swe-agent; Hermes Agent; Deep Agents. Details and references are in [`research/`](research/).
 **Related:** [Agent Harness Comparison (2026-08-26)](<../2026-08-26 Agent Harness Comparison — DeepSeek Harness, Hermes, Deep Agents vs iHub.md>) (audit, approvals, scheduling), [One Agentic Loop (2026-08-26)](<../2026-08-26 One Agentic Loop — Unified Runtime for Chats, Workflows and Agents.md>) (implemented: `AgentLoop` + `LLMClient`), issues #1040 (Deep Research), #2603 (reasoning toggle), #2663 (sandboxed code execution), #3015 (Gemini thinking), #3191 (steer a running answer), #3196 (sub-agents), #3365 (memory).
@@ -28,7 +28,9 @@
 
 6. **Effort is the currency.** Anthropic measured that token usage alone explains 80% of performance variance on BrowseComp, and that their multi-agent Research system beats a single agent by 90.2%, at about 4× (agent) and 15× (multi-agent) the tokens of a chat turn. "As capable as Claude" therefore also means "willing to spend like Claude" on requests that deserve it, which needs effort modes, budgets and quotas rather than one fixed setting.
 
-7. **Recommendation.** Keep the loop. Build seven layers around it, in this order: **(A)** provider-native reasoning replay, **(B)** a platform "operating manual" prompt with model-family overlays, **(C)** an agent-grade tool palette, **(D)** effort modes with budgets, parallel calls and completion checks, **(E)** a Research mode on top of a delegation tool, **(F)** progress UX, **(G)** an evaluation harness that compares iHub side by side with Claude.ai and ChatGPT. Phase 0 (A, B, parallel calls, budgets and an eval baseline) is two to three weeks of work and should produce the largest single jump; §6 has the roadmap.
+7. **Recommendation.** Keep the loop. Build seven layers around it, in this order: **(A)** provider-native reasoning replay, **(B)** a platform "operating manual" prompt with model-family overlays, **(C)** an agent-grade tool palette, **(D)** effort modes with budgets, parallel calls and completion checks, **(E)** a Deep Research mode on top of a delegation tool, **(F)** progress UX, **(G)** an evaluation harness that compares iHub side by side with Claude.ai and ChatGPT. Phase 0 (the eval harness and baseline first, then the mode switch, A, B, parallel calls and budgets) is three to four weeks of work and should produce the largest single jump; §6 has the roadmap.
+
+8. **Decided on 2026-11-08 (§8):** the chat modes are a switch from the start (existing apps keep today's behaviour preselected until the eval says otherwise); Deep Research is a mode of its own; provider server tools beyond today's native web search come in a later phase; code execution waits for a backend (#2663); quotas follow the recommendation in §5.9; the evaluation harness is built by us, first, in Phase 0 (§5.8).
 
 ---
 
@@ -193,7 +195,7 @@ Source: [research/2026-11-07 mini-swe-agent, Hermes Agent, Deep Agents.md](<rese
 ### 5.1 Principles
 
 1. **Keep the one loop.** Every change below is a seam, a policy, a prompt section, a tool or an adapter change. No second loop (decision recorded in the One Agentic Loop concept).
-2. **Model-native first.** Replay reasoning in the provider's own format, prefer provider tools the model was trained on when the admin allows them, and use provider context management (Anthropic context editing and compaction) before our own.
+2. **Model-native first.** Replay reasoning in the provider's own format and use provider context management (Anthropic context editing and compaction) before our own. Provider server tools the models were trained on (search, fetch, code execution) come in a later phase (§8); today's native web search stays as it is.
 3. **Append-only transcripts.** Within a turn and across turns, earlier messages, the system prompt and the tool list are never rewritten; dynamic context goes into late messages. This is what preserved thinking and prompt caching require, and it is what mini-swe-agent's authors credit for robustness.
 4. **Scaffolding is data, per model family.** What Claude needs (little) and what GPT, Gemini, Qwen or a small local model need (more) differ; prompt overlays, plan/think tools and stall guards are switched by model profile, and every switch is justified by an eval.
 5. **The server decides, the client renders** (CLAUDE.md "Run Activity"): plan state, activity labels, effort mode and completion status are server-sent fields.
@@ -234,32 +236,35 @@ A platform-level system prompt section, prepended to the app's own system prompt
 | Tool | Why | Notes |
 |---|---|---|
 | **Search + read**, tuned | The core research loop is "search, then read the full page". | 8–10 results with title, URL, date and snippet; `read_url` with pagination (exists); page-read cap by effort mode instead of a fixed 5; audit every tool description for anti-iteration wording |
-| **Provider server tools** (opt-in per app or platform) | Trained-in behaviour: Anthropic `web_search` / `web_fetch` (with dynamic filtering) and code execution; OpenAI `web_search` and `code_interpreter` | Queries leave to the provider's search, which is already the case with native search today; admins decide |
-| **Code execution** (#2663) | Data analysis, calculations, charts, file conversion; both products have it, and Claude.ai's file creation "relies entirely on code generation" | Sandbox backend decision is #2663's; expose it as one tool in chat with files in and out |
+| **Provider server tools** (later phase, opt-in per app or platform) | Trained-in behaviour: Anthropic `web_search` / `web_fetch` (with dynamic filtering) and code execution; OpenAI `web_search` and `code_interpreter` | Deferred to Phase 3 (decision §8). Native web search for Anthropic, OpenAI and Google, which iHub already supports, stays as it is; admins decide per app |
+| **Code execution** (#2663) | Data analysis, calculations, charts, file conversion; both products have it, and Claude.ai's file creation "relies entirely on code generation" | There is no backend yet (§8): the tool waits for #2663 to choose one, then becomes one chat tool with files in and out. Deep Research does not depend on it; data analysis does |
 | **Enterprise document exploration** | Our differentiator: agentic list/search/grep/read over iFinder, knowledge sources and chat files instead of one-shot RAG (Open WebUI's `kb_exec` is the reference) | Builds on `iFinder`, `knowledge`, `chat_files_*` |
-| **`update_plan`** (chat-scoped) | Visible plan; keeps weaker models on track; required for the open-items completion check | On by default for non-frontier models and in Deep/Research modes, off for frontier models in Standard (Deep Agents v0.7 and Claude Code evidence); the plan is server state rendered by the client and re-injected after compaction |
+| **`update_plan`** (chat-scoped) | Visible plan; keeps weaker models on track; required for the open-items completion check | On by default for non-frontier models and in the Deep and Deep Research modes, off for frontier models in Standard (Deep Agents v0.7 and Claude Code evidence); the plan is server state rendered by the client and re-injected after compaction |
 | **`think`** | Reasoning after each tool result for models without interleaved reasoning | Only for model profiles that lack native reasoning; Anthropic recommends extended thinking instead for Claude |
-| **`delegate_task`** (#3196) | Fan-out with fresh context; the basis of Research mode | Depth 1, concurrency cap, frozen permissions, 1–2k-token report back, children's runs linked in the ledger |
+| **`delegate_task`** (#3196) | Fan-out with fresh context; the basis of the Deep Research mode | Depth 1, concurrency cap, frozen permissions, 1–2k-token report back, children's runs linked in the ledger |
 | **`ask_user`** (exists) | Ask only when blocked | Keep the cap; resumable already |
 
 Tool hygiene, applied to all existing tools: intent-level tools rather than one per API, names instead of IDs, pagination with a hint on how to narrow, a per-result cap (Claude Code uses 25k tokens), instructive errors, and tool search once an app exposes more than 30–50 tools.
 
 ### 5.5 Layer D: effort modes, budgets and completion checks
 
-**Effort modes** replace the single fixed chat configuration. The user picks one per message (like ChatGPT's thinking toggle or Claude's Research button); the app sets the default; *Auto* starts as *Standard* and can later use a router.
+**Chat modes** replace the single fixed chat configuration, and they are a **switch from the start** (decision §8). A mode selector in the chat input offers the modes the app allows; the user picks one per chat or per message (like ChatGPT's thinking selector or Claude's Research button); the app decides which modes it offers and which one is preselected (`chatModes: { available: [...], default: "..." }`). For the beginning, existing apps keep **Classic** preselected: today's behaviour, unchanged, so users and admins can switch and compare on their own questions. When the eval (§5.8) shows Standard is better, the default moves to Standard and Classic is retired. An *Auto* option that picks the mode per request comes later (Phase 3).
 
-| | Quick | Standard (default) | Deep | Research |
-|---|---|---|---|---|
-| Purpose | chat, rewriting, simple facts | most questions | thorough multi-source answers | reports, surveys, many documents |
-| Tool rounds | 8 | 25 | 60 | lead 40 + sub-agents 15–20 each |
-| Wall clock | interactive | interactive / 30 min durable | 15 min | 30–60 min, background |
-| Reasoning | low | medium | high | lead high, sub-agents low–medium |
-| Page reads | 3 | 8 | 20 | per sub-agent 10 |
-| Plan tool | off | model profile | on | on |
-| Completion checks | stall guards | stall guards + open plan items | + rubric grader (optional) | + rubric grader + citation pass |
-| Sub-agents | — | — | optional | yes (3–5 parallel) |
+| | Classic (transitional) | Quick | Standard | Deep | Deep Research |
+|---|---|---|---|---|---|
+| Purpose | today's behaviour, for comparison | chat, rewriting, simple facts | most questions | thorough multi-source answers | reports, surveys, many documents (§5.6) |
+| Operating manual (§5.3) | no | yes | yes | yes | yes (research variant) |
+| Tool rounds | 25 (as today) | 8 | 25 | 60 | lead 40 + sub-agents 15–20 each |
+| Wall clock | as today | interactive | interactive / 30 min durable | 15 min | 30–60 min, background |
+| Reasoning | as configured today | low | medium | high | lead high, sub-agents low–medium |
+| Page reads | 5 (as today) | 3 | 8 | 20 | per sub-agent 10 |
+| Parallel read-only tools | no (as today) | yes | yes | yes | yes |
+| Plan tool | off | off | model profile | on | on |
+| Completion checks | none | stall guards | stall guards + open plan items | + rubric grader (optional) | + rubric grader + citation pass |
+| Sub-agents | — | — | — | optional | yes (3–5 parallel) |
+| Quota (§5.9) | token limits as today | token limits as today | token limits as today | + per-run budget and a run count | + per-run budget, run count and concurrency |
 
-Numbers are starting points for the eval, not decisions.
+Numbers are starting points for the eval, not decisions. Internally the modes are ids (`classic`, `quick`, `standard`, `deep`, `research`); the labels are a UI decision. Reasoning replay (Layer A) is a correctness fix, not a mode feature: it applies in every mode, Classic included.
 
 **Loop policy changes:**
 
@@ -268,23 +273,23 @@ Numbers are starting points for the eval, not decisions.
 3. **Completion seam** (`onAnswer`), bounded to two or three re-prompts per turn:
    - *stall guards* (Hermes): a reply that ends on a promise ("let me now …", "I'll now …", German "ich werde jetzt …", "lass mich …"), an acknowledgement without action, an empty reply after tool results, `finish_reason=tool_calls` without calls, a degenerate fragment;
    - *open plan items*: when the plan still has open items and no blocker is stated, continue with a short message naming them (Anthropic's unattended-run guidance; Codex Goals: "status restatements and unexecuted plans are no progress");
-   - *rubric grader* (Deep/Research): a separate cheap model checks the candidate against 2–5 acceptance criteria drafted from the request ("every sub-question answered", "every factual claim cited to a fetched source", "contradictions called out", "unknowns stated"), conservative, criteria frozen after the first pass, at most three revisions. The existing `VerifierNodeExecutor` adversarial prompt is a good starting point.
+   - *rubric grader* (Deep and Deep Research): a separate cheap model checks the candidate against 2–5 acceptance criteria drafted from the request ("every sub-question answered", "every factual claim cited to a fetched source", "contradictions called out", "unknowns stated"), conservative, criteria frozen after the first pass, at most three revisions. The existing `VerifierNodeExecutor` adversarial prompt is a good starting point.
 4. **Unfinished turns are resumable.** When a budget ends the turn, show *Keep going* / *Answer now* (LibreChat) in addition to the forced final answer, so the user can extend the budget without retyping.
 5. **Context management that keeps the transcript append-only:** Anthropic context editing (`clear_tool_uses`) and server compaction where available; for other providers compaction that replaces the whole earlier history with one summary (Anthropic's published summary structure), triggered by share of the context window (already scaled for chat), and the model told up front that compaction exists so it doesn't wrap up early.
 
-### 5.6 Layer E: Research mode
+### 5.6 Layer E: Deep Research mode
 
-Research mode is the "Deep Research" answer to #1040, built from the pieces above rather than as a separate system:
+Deep Research is **a chat mode of its own** (decision §8): the user picks it in the mode selector like the other modes; it is not a workflow and not a setting on Standard. It is the answer to #1040, built from the pieces above rather than as a separate system, and it needs no code execution (data analysis inside a research run arrives with #2663):
 
 1. **Clarify (optional):** up to three short questions through `ask_user` when the request is ambiguous, as ChatGPT Deep Research does.
-2. **Plan:** the lead (Research effort) writes a research plan with `update_plan` and saves the request; the plan is shown to the user, who can steer (#3191).
+2. **Plan:** the lead (Deep Research settings) writes a research plan with `update_plan` and saves the request; the plan is shown to the user, who can steer (#3191).
 3. **Fan out:** `delegate_task` spawns 3–5 researcher sub-runs in parallel. Each gets an objective, output format, sources and tools (web, iFinder, knowledge, integrations: "internal sources first" for internal questions), boundaries and a budget (5–15 calls); each returns 1–2k tokens of findings plus its sources, and writes longer notes to run storage.
 4. **Assess and iterate:** the lead checks coverage against the plan and runs another wave if needed (bounded).
 5. **Synthesize and cite:** the lead writes the report; a citation pass maps claims to fetched sources (one number per URL across all findings).
 6. **Verify:** the rubric grader (or the adversarial verifier) checks the report; at most three revisions.
-7. **Deliver:** the answer in chat plus a document artifact (existing docx/pdf tools); runs as a durable background turn with a notification when done; quota per user or group (Langdock's 15 per month is a reference point).
+7. **Deliver:** the answer in chat plus a document artifact (existing docx/pdf tools); runs as a durable background turn with a notification when done; counted against the Deep Research quota (§5.9).
 
-Why a loop with a delegation tool rather than a workflow: the decomposition is decided by the model at run time (orchestrator-worker), which Anthropic found essential for research ("subtasks decided at runtime"). The workflow engine stays the place for operator-authored, repeatable processes (the existing Claude-style agent workflows).
+Why a loop with a delegation tool behind the mode rather than a workflow: the decomposition is decided by the model at run time (orchestrator-worker), which Anthropic found essential for research ("subtasks decided at runtime"). The workflow engine stays the place for operator-authored, repeatable processes (the existing Claude-style agent workflows).
 
 ### 5.7 Layer F: progress UX
 
@@ -297,13 +302,32 @@ Long agentic turns feel broken when the screen is silent. Claude 5-era models em
 
 ### 5.8 Layer G: evaluation
 
-Without measurement we cannot claim parity, and every layer above has model-dependent effects (Deep Agents found todos don't help frontier models; Anthropic found self-check prompts make one model over-verify).
+Without measurement we cannot claim parity, and every layer above has model-dependent effects (Deep Agents found todos don't help frontier models; Anthropic found self-check prompts make one model over-verify). Nothing like it exists in the repository yet, so we build it (decision §8), **first**: the baseline has to be recorded before Phase 0 changes any behaviour, and the Classic → Standard default switch (§5.5) is decided by it.
 
-- **Task set:** 30–50 real tasks in German and English across categories: current facts, multi-source comparison, internal-document research (iFinder/knowledge), document creation, connected-systems actions (with read-back), data analysis (once #2663 lands). Each with acceptance criteria and a reference answer. Start with 20.
-- **Runner:** a headless chat run through the real pipeline (`invokeAppInternal` / the inference path), each task several times; the run ledger is the trajectory.
-- **Scoring:** an LLM judge with a rubric (factual accuracy, citation accuracy, completeness, source quality, tool efficiency, 0–1 plus pass/fail), plus metrics from the ledger: rounds, tool calls, tokens, cost, latency, stop reason, early-stop rate, stall-guard firings.
-- **Baselines:** the same tasks answered in Claude.ai and ChatGPT with the same model families (manual score sheet), and iHub before each phase.
-- **Gate:** nightly job on a fixed model set (the memory epic's nightly eval job, #3407, is the pattern); a layer ships only with a positive delta and no regression on Quick/Standard latency.
+**Layout**, the same shape as the memory evaluation planned in #3407, so both share the runner, the judge and the report format:
+
+```
+tests/integration/agentic-eval/
+  README.md               task format, how to add a task, consent and anonymisation rule
+  tasks/*.json            { id, lang, category, mode, app, prompt, files?, acceptance: [...],
+                            reference?, expectTools?: [...], maxRounds? }
+  loop.test.js            deterministic layer (CI)
+  reports/<date>.json     live-layer results, one file per run
+scripts/agentic-eval.js   live layer (nightly or manual, not in test:quick)
+```
+
+**Task set.** Start with 20 tasks and grow to 50, half German, from real requests (customers and internal use, anonymised) across six categories: current facts; multi-source comparison and research; internal-document research (iFinder, knowledge sources, chat files); document creation; connected-systems actions with read-back; data analysis (once #2663 has a backend). Each task carries 2–5 acceptance criteria written as checks, optionally a reference answer, and the mode it is meant for. Deep Research gets its own 5–10 report-style tasks.
+
+**Two layers:**
+
+1. **Deterministic (CI).** Scripted `LLMClient` fakes drive the real `AgentLoop` and chat pipeline and assert the mechanics, not answer quality: reasoning blocks are replayed unchanged, the prefix stays stable across the forced final round and circuit breakers, the budget notice fires at the right round, stall guards fire and stop after their cap, parallel read-only calls are batched and side-effecting ones are not, mode policies reach the loop. Runs with every PR.
+2. **Live (nightly or manual).** `scripts/agentic-eval.js` runs every task through the real chat pipeline (headless, as `invokeAppInternal` does) against a fixed model set: one Claude, one OpenAI, one Gemini and one self-hosted vLLM model, three runs per task, in each relevant mode, Classic included. The run ledger is the trajectory.
+
+**Scoring.** A fixed judge model scores each answer against the task's acceptance criteria and a general rubric (factual accuracy, citation accuracy, completeness, source quality), conservatively ("a criterion you cannot positively confirm fails"), with the transcript marked as untrusted data. The ledger adds the cost side: rounds, tool calls, tokens, cost, wall time, stop reason, early-stop rate, stall-guard and budget-notice firings. The report shows pass rate and score per task, category, mode and model, the tasks that flipped since the last report, and cost per passed task.
+
+**Baselines.** iHub Classic (today), recorded before Phase 0; the same tasks answered in Claude.ai and ChatGPT with the same model families, pasted into the same judge (a manual score sheet, repeated each quarter); iHub after each phase.
+
+**Gates.** A layer ships only with a positive delta on its target mode and no regression on Quick and Standard pass rate or latency. The Classic → Standard default switch needs Standard ahead on pass rate in every category at an acceptable cost per passed task.
 
 ---
 
@@ -311,10 +335,10 @@ Without measurement we cannot claim parity, and every layer above has model-depe
 
 | Phase | Scope | Size | Expected effect |
 |---|---|---|---|
-| **0 — Unbreak the model** | A: reasoning replay for Anthropic, OpenAI Responses and vLLM (per model), within a turn; Anthropic `thinking` + `effort` + display; Responses `store: false` + encrypted reasoning; and, shipped with replay, a prefix-safe loop: stable tool list (forced final round and circuit breakers via `tool_choice` / error results instead of removing tools) and provider compaction or a reasoning reset instead of in-place shortening (§5.2). B: operating manual v1 + model-family overlays; move per-turn notes out of the system prompt; fix the default Chat prompt. D: parallel read-only tools in chat; early budget notice; page-read and result limits raised for Standard. G: eval baseline (20 tasks) incl. Claude.ai / ChatGPT score sheets | 2–3 weeks | Largest single jump: models plan between rounds and are told to finish |
-| **1 — Make it stick** | D: completion seam (stall guards, open plan items), effort modes Quick/Standard/Deep in UI and app config, Keep going / Answer now. C: `update_plan` + plan UI, tool description audit, `think` for non-reasoning profiles. Context: Anthropic context editing and compaction, whole-history compaction elsewhere. F: reasoning summaries and progress updates, intent labels | 3–5 weeks | Fewer premature stops, visible plans, deeper answers on demand |
-| **2 — Scale out** | C: `delegate_task` (#3196). E: Research mode (#1040) with background runs, rubric grader, citation pass, report artifact, quotas. C (parallel track): code execution (#2663), enterprise document exploration tools | 6–8 weeks | Deep Research parity; data analysis |
-| **3 — Broaden** | Self-hosted models: Hermes-format text tool calls (`<tool_call>`) as fallback, per-model profiles; tool search for large MCP catalogs; memory (#3365) in the loop; steer UI (#3191); an *Auto* router that picks the effort mode | ongoing | Good behaviour beyond frontier APIs |
+| **0 — Unbreak the model** | G, first: the evaluation harness (deterministic layer, live runner, first 20 tasks) and the Classic baseline, incl. Claude.ai / ChatGPT score sheets (§5.8). Modes: the mode selector in the chat input and `chatModes` in the app config, with Classic (preselected) and Standard (§5.5). A: reasoning replay for Anthropic, OpenAI Responses and vLLM (per model), within a turn; Anthropic `thinking` + `effort` + display; Responses `store: false` + encrypted reasoning; and, shipped with replay, a prefix-safe loop: stable tool list (forced final round and circuit breakers via `tool_choice` / error results instead of removing tools) and provider compaction or a reasoning reset instead of in-place shortening (§5.2). B: operating manual v1 + model-family overlays; move per-turn notes out of the system prompt; fix the default Chat prompt. D (Standard): parallel read-only tools; early budget notice; page-read and result limits raised | 3–4 weeks | Largest single jump: models plan between rounds and are told to finish; measured against the baseline |
+| **1 — Make it stick** | Modes: Quick and Deep join the selector; Deep's per-run budget and run count (§5.9); switch the default from Classic to Standard once the eval gate passes. D: completion seam (stall guards, open plan items), Keep going / Answer now. C: `update_plan` + plan UI, tool description audit, `think` for non-reasoning profiles. Context: Anthropic context editing and compaction, whole-history compaction elsewhere. F: reasoning summaries and progress updates, intent labels | 3–5 weeks | Fewer premature stops, visible plans, deeper answers on demand |
+| **2 — Scale out** | C: `delegate_task` (#3196). E: the Deep Research mode (#1040) with background runs, rubric grader, citation pass, report artifact, its quota and concurrency limit (§5.9). C: enterprise document exploration tools. Code execution once #2663 has chosen a backend (separate track) | 6–8 weeks | Deep Research parity; data analysis when the code tool lands |
+| **3 — Broaden** | Provider server tools (Anthropic / OpenAI search, fetch, code execution) as an opt-in per app. Self-hosted models: Hermes-format text tool calls (`<tool_call>`) as fallback, per-model profiles; tool search for large MCP catalogs; memory (#3365) in the loop; steer UI (#3191); an *Auto* router that picks the effort mode | ongoing | Good behaviour beyond frontier APIs |
 
 Appendix C maps each item to the code it touches.
 
@@ -323,7 +347,7 @@ Appendix C maps each item to the code it touches.
 ## 7. Risks and trade-offs
 
 - **Cost and latency.** Agentic answers cost about 4× a chat turn and multi-agent research about 15×. Mitigations: effort modes with a cheap default, per-group quotas for Research, cost shown on the run, prompt caching (Anthropic cache reads cost 0.1× input; append-only transcripts make caching work), tool-result clearing, provider dynamic filtering.
-- **Prompt injection.** More autonomy means more untrusted text driving decisions. Keep web and document content inside tool results, state in the manual that tool output is data, keep approvals for side-effecting tools (exists), and make Research mode read-only by default.
+- **Prompt injection.** More autonomy means more untrusted text driving decisions. Keep web and document content inside tool results, state in the manual that tool output is data, keep approvals for side-effecting tools (exists), and make the Deep Research mode read-only by default.
 - **Data protection.** Switching OpenAI to `store: false` with encrypted reasoning reduces what stays at the provider. Provider server tools (search, fetch, code execution) process data at the provider; they must stay an admin decision per app.
 - **Over-eager models.** Some models over-verify or over-search when pushed; overlays are per model family and gated by eval, and Quick mode stays fast.
 - **Compatibility.** Stored chat turns gain `providerContent`, and SSE gains new event fields (plan, effort, progress); both are additive. Per CLAUDE.md, any compatibility shim for a breaking change is a decision for the team, not a default.
@@ -331,14 +355,24 @@ Appendix C maps each item to the code it touches.
 
 ---
 
-## 8. Decisions needed
+## 8. Decisions
 
-1. **Default behaviour for chat apps:** agentic *Standard* mode with the operating manual for every app (opt-out per app), or opt-in per app?
-2. **Research mode architecture:** loop + `delegate_task` (recommended) or a workflow-based implementation?
-3. **Provider server tools** (Anthropic/OpenAI search, fetch, code execution) allowed by default where the provider supports them, or only iHub's own tools?
-4. **Code execution backend** (#2663), since it gates data analysis parity.
-5. **Quotas and cost visibility** for Deep and Research modes.
-6. **Eval ownership** and which customer tasks go into the benchmark.
+Decided on 2026-11-08:
+
+| # | Question | Decision | What it changes in this concept |
+|---|---|---|---|
+| 1 | Agentic mode as the default for every app, or opt-in per app? | For the beginning, the mode must be switchable. | A mode selector in the chat input and `chatModes` per app from Phase 0; existing apps keep **Classic** (today's behaviour) preselected; the default moves to Standard when the eval gate passes (§5.5, §5.8) |
+| 2 | Research as the main loop plus sub-agents, or as a workflow? | Deep Research becomes a mode of its own. | Deep Research is a separate entry in the mode selector, with its own budgets, quota and UX; behind it the lead loop with `delegate_task` (§5.6) |
+| 3 | Provider server tools (search, fetch, code execution) by default? | Maybe in a later phase; some are already supported. | Deferred to Phase 3 as an opt-in per app; today's native web search stays as it is (§5.4) |
+| 4 | Code execution backend (#2663)? | We don't have one yet. | Code execution stays a separate track that starts when #2663 chooses a backend; Deep Research does not depend on it, data analysis does (§5.4, §6) |
+| 5 | Quotas for Deep and Deep Research? | Research them and recommend. | Recommendation in §5.9 |
+| 6 | Who owns the eval and its tasks? | We have to build it. | The evaluation harness is the first deliverable of Phase 0, built in the shape planned for the memory eval (#3407) (§5.8) |
+
+Still open:
+
+- The code execution backend (#2663).
+- Where the benchmark tasks come from: which customers can contribute anonymised real requests, and who signs off the acceptance criteria.
+- Confirming the quota defaults in §5.9 against the first cost measurements from the eval.
 
 ---
 
@@ -360,7 +394,7 @@ you have described how you would get it.
   correct: work out the sub-questions first, then use as many tool calls as the question
   needs — typically 3–10, up to about 20 for a report.
 - If a request clearly needs much more (a broad survey, many documents, a long report),
-  do the most important part and suggest Research mode for the rest.
+  do the most important part and suggest the Deep Research mode for the rest.
 
 ## Work in a loop
 1. Work out what is being asked and what a complete answer contains.
@@ -428,7 +462,7 @@ use as many tool calls as needed, and verify before answering. Web search: on.
 | Medium: a few sources, a simple comparison | 3–5 | Standard |
 | Deeper research, comparisons, "analyze", "evaluate" | 5–10 (≥5) | Standard / Deep |
 | Report, multi-entity research | 10–20 | Deep |
-| Above about 20 calls, many documents | lead + 3–5 sub-agents × 5–15 calls | Research |
+| Above about 20 calls, many documents | lead + 3–5 sub-agents × 5–15 calls | Deep Research |
 
 ## Appendix C — Change map
 
@@ -445,5 +479,7 @@ use as many tool calls as needed, and verify before answering. Web search: on.
 | Completion seam | new `server/services/loop/seams/completionSeam.js` on `onAnswer` |
 | Effort modes | `server/validators/appConfigSchema.js`, chat request contract, `ChatService` policies, client mode selector |
 | `update_plan`, `think` | `server/tools/` + `server/defaults/tools/`, plan SSE event, client plan view |
-| `delegate_task`, Research mode | #3196, #1040; `ChatService.invokeAppInternal`, durable turns, run ledger parent/child links |
-| Eval harness | `tests/` (new eval suite), nightly job like #3407 |
+| `delegate_task`, Deep Research mode | #3196, #1040; `ChatService.invokeAppInternal`, durable turns, run ledger parent/child links |
+| Chat modes (selector, `chatModes`, mode policies) | `server/validators/appConfigSchema.js` (`chatModes`), chat request contract (`mode`), `ChatService` (mode → loop policies, manual on/off), client chat input (mode selector), admin app editor |
+| Mode quotas (run counts, per-run budgets, concurrency) | `server/services/quota/` (`limitResolver.js`, `QuotaLedger.js`, `quotaService.js`), `docs/usage-limits.md`, `AgentLoop` budgets (`maxTokensPerRun`, `maxWallClockMs`), admin usage views |
+| Eval harness | `tests/integration/agentic-eval/` (tasks, deterministic layer), `scripts/agentic-eval.js` (live layer), shared runner and judge with the memory eval (#3407), a scheduled workflow or documented manual run |
