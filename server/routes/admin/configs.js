@@ -339,10 +339,28 @@ export default function registerAdminConfigRoutes(app) {
         newConfig.globalPromptVariables !== undefined
           ? newConfig.globalPromptVariables
           : existingConfig.globalPromptVariables,
+      // Admin → System → Cookie settings (`disableSecure`); same reason as above.
+      cookieSettings:
+        newConfig.cookieSettings !== undefined
+          ? newConfig.cookieSettings
+          : existingConfig.cookieSettings,
       // Admin → Security → Tool approval (#2945).
       toolApproval:
         newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
     };
+    if (
+      newConfig.cookieSettings !== undefined &&
+      (newConfig.cookieSettings === null ||
+        typeof newConfig.cookieSettings !== 'object' ||
+        Array.isArray(newConfig.cookieSettings) ||
+        (newConfig.cookieSettings.disableSecure !== undefined &&
+          typeof newConfig.cookieSettings.disableSecure !== 'boolean'))
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'cookieSettings must be an object with a boolean disableSecure'
+      );
+    }
     if (newConfig.toolApproval === null) {
       // `null` turns approval off: the block is removed, never stored as
       // null (the platform schema has it as an optional object).
