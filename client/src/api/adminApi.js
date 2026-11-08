@@ -501,7 +501,7 @@ export const transferAdminProjectItems = async (
  * @returns {Promise<{success: boolean, duration: number, items: Array<Object>}>}
  */
 export const testAdminProject = async projectId => {
-  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/test`, {
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/_test`, {
     method: 'POST'
   });
   return response.data;
@@ -607,7 +607,7 @@ export const deleteAdminProjectItem = async (projectId, itemId) => {
  * @returns {Promise<Object>} The item.
  */
 export const refreshAdminProjectItem = async (projectId, itemId) => {
-  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/refresh`, {
+  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/_refresh`, {
     method: 'POST'
   });
   return response.data?.item;
@@ -702,7 +702,7 @@ export const checkProjectPickerUrl = async url => {
  *   chars?: number, truncated?: boolean, error?: string}>}
  */
 export const previewProjectPickerUrl = async url => {
-  const response = await makeAdminApiCall('/projects/pickers/url/preview', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_preview', {
     method: 'POST',
     body: { url }
   });
@@ -759,7 +759,7 @@ export const deleteAdminWorkflow = async id => {
 };
 
 export const toggleAdminWorkflow = async id => {
-  const response = await makeAdminApiCall(`/admin/workflows/${id}/toggle`, { method: 'POST' });
+  const response = await makeAdminApiCall(`/admin/workflows/${id}/_toggle`, { method: 'POST' });
   return response.data;
 };
 
@@ -888,7 +888,9 @@ export const fetchAdminExecutions = async (params, { signal } = {}) => {
  * @returns {Promise<Object>} Response with success status and new execution state
  */
 export const cancelAdminExecution = async id => {
-  const response = await makeAdminApiCall(`/workflows/executions/${id}/cancel`, { method: 'POST' });
+  const response = await makeAdminApiCall(`/workflows/executions/${id}/_cancel`, {
+    method: 'POST'
+  });
   return response.data;
 };
 
@@ -971,7 +973,7 @@ export const deleteSkill = async skillName => {
  * @returns {Promise<Object>} The imported skill object
  */
 export const importSkill = async formData => {
-  const response = await makeAdminApiCall('/admin/skills/import', {
+  const response = await makeAdminApiCall('/admin/skills/_import', {
     method: 'POST',
     body: formData
   });

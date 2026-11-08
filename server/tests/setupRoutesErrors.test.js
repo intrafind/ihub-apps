@@ -87,9 +87,9 @@ beforeEach(() => {
 
 describe('setup routes: admin guard', () => {
   it.each([
-    ['post', '/api/setup/test'],
+    ['post', '/api/setup/_test'],
     ['post', '/api/setup/configure'],
-    ['post', '/api/setup/disable']
+    ['post', '/api/setup/_disable']
   ])('refuses a non-admin on %s %s with 403 FORBIDDEN before anything happens', async (m, url) => {
     for (const user of [null, { id: 'anonymous' }, { id: 'bob', isAdmin: false }]) {
       state.user = user;
@@ -101,11 +101,11 @@ describe('setup routes: admin guard', () => {
   });
 });
 
-describe('POST /api/setup/test: errors', () => {
+describe('POST /api/setup/_test: errors', () => {
   it.each([[{}], [{ providerId: 'nope', apiKey: 'k' }]])(
     'answers an invalid provider id %j with 400 BAD_REQUEST',
     async body => {
-      const res = await request(app).post('/api/setup/test').send(body);
+      const res = await request(app).post('/api/setup/_test').send(body);
       expectProblem(res, 400, 'BAD_REQUEST', 'Invalid provider ID');
       expect(state.fetches).toBe(0);
     }
@@ -114,7 +114,9 @@ describe('POST /api/setup/test: errors', () => {
   it.each([[undefined], [''], ['   '], [42]])(
     'answers a missing api key (%j) with 400 BAD_REQUEST',
     async apiKey => {
-      const res = await request(app).post('/api/setup/test').send({ providerId: 'openai', apiKey });
+      const res = await request(app)
+        .post('/api/setup/_test')
+        .send({ providerId: 'openai', apiKey });
       expectProblem(res, 400, 'BAD_REQUEST', 'API key is required');
       expect(state.fetches).toBe(0);
     }
@@ -170,10 +172,10 @@ describe('POST /api/setup/configure: errors', () => {
   });
 });
 
-describe('POST /api/setup/disable: errors', () => {
+describe('POST /api/setup/_disable: errors', () => {
   it('answers an unreadable platform.json with 500 INTERNAL_ERROR that does not leak the cause', async () => {
     state.platform = null;
-    const res = await request(app).post('/api/setup/disable').send({});
+    const res = await request(app).post('/api/setup/_disable').send({});
     expect(res.status).toBe(500);
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
     expect(res.body.code).toBe('INTERNAL_ERROR');
@@ -182,7 +184,7 @@ describe('POST /api/setup/disable: errors', () => {
   });
 
   it('records the choice for an admin', async () => {
-    await request(app).post('/api/setup/disable').send({}).expect(200);
+    await request(app).post('/api/setup/_disable').send({}).expect(200);
     expect(state.written[0][1].setup.disabled).toBe(true);
   });
 });

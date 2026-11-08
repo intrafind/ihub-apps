@@ -108,7 +108,7 @@ export const deleteUserPrompt = async promptId =>
  * @returns {Promise<Object>} The copy.
  */
 export const duplicatePrompt = async (promptId, body = {}) =>
-  write(() => apiClient.post(`/prompts/${encodeURIComponent(promptId)}/duplicate`, body));
+  write(() => apiClient.post(`/prompts/${encodeURIComponent(promptId)}/_duplicate`, body));
 
 /**
  * Replace who a user prompt is shared with.

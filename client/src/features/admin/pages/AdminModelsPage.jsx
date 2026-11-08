@@ -158,7 +158,7 @@ function AdminModelsPage() {
 
   const toggleModel = async modelId => {
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/_toggle`, {
         method: 'POST'
       });
       const result = response.data;
@@ -192,7 +192,7 @@ function AdminModelsPage() {
     // 401), so the shared admin client is safe here: a 401 really is an expired
     // admin session and must go through the global re-authentication flow.
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/_test`, {
         method: 'POST'
       });
       setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));

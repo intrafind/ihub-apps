@@ -112,7 +112,7 @@ describe('the default model is always a chat model', () => {
 
   test('disabling the default passes it to a chat model, not a TTS model', async () => {
     seed(chat('small', { default: true }), tts('voxtral'), chat('large'));
-    const res = await request(app).post('/api/admin/models/small/toggle');
+    const res = await request(app).post('/api/admin/models/small/_toggle');
     expect(res.status).toBe(200);
     expect(stored('small').default).toBe(false);
     expect(stored('voxtral').default).toBeUndefined();

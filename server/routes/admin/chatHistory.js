@@ -392,7 +392,7 @@ export default function registerAdminChatHistoryRoutes(app) {
   );
 
   /**
-   * POST /api/admin/chat-history/retention/run
+   * POST /api/admin/chat-history/retention/_run
    * Apply the retention rules now instead of waiting for the daily sweep.
    * Body: `{ target: 'chats' | 'ledger' | 'all' }` (default `all`).
    *
@@ -402,7 +402,7 @@ export default function registerAdminChatHistoryRoutes(app) {
    * is enabled.
    */
   app.post(
-    buildServerPath('/api/admin/chat-history/retention/run'),
+    buildServerPath('/api/admin/chat-history/retention/_run'),
     adminAuth,
     async (req, res) => {
       const parsed = retentionRunSchema.safeParse(req.body || {});

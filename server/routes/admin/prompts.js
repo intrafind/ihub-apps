@@ -1007,7 +1007,7 @@ export default function registerAdminPromptsRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/prompts/{promptId}/toggle:
+   * /api/admin/prompts/{promptId}/_toggle:
    *   post:
    *     summary: Toggle the enabled state of a prompt template
    *     description: |
@@ -1082,7 +1082,7 @@ export default function registerAdminPromptsRoutes(app) {
    *               error: "Failed to toggle prompt"
    */
   app.post(
-    buildServerPath('/api/admin/prompts/:promptId/toggle'),
+    buildServerPath('/api/admin/prompts/:promptId/_toggle'),
     contentAdminAuth,
     async (req, res) => {
       const { promptId } = req.params;

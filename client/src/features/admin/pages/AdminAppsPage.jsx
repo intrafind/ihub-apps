@@ -277,7 +277,7 @@ function AdminAppsPage() {
 
   const toggleApp = async appId => {
     try {
-      const response = await makeAdminApiCall(`/admin/apps/${appId}/toggle`, { method: 'POST' });
+      const response = await makeAdminApiCall(`/admin/apps/${appId}/_toggle`, { method: 'POST' });
       const result = response.data;
       setApps(prev =>
         prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))

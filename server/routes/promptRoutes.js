@@ -866,14 +866,14 @@ export default function registerPromptRoutes(app) {
 
   /**
    * @swagger
-   * /api/prompts/{promptId}/duplicate:
+   * /api/prompts/{promptId}/_duplicate:
    *   post:
    *     summary: Copy a global or shared prompt into the caller's own prompts
    *     tags:
    *       - Prompts
    */
   app.post(
-    buildServerPath('/api/prompts/:promptId/duplicate'),
+    buildServerPath('/api/prompts/:promptId/_duplicate'),
     ...gate,
     authenticatedOnly,
     async (req, res) => {

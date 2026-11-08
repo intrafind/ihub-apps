@@ -108,7 +108,7 @@ function AdminPromptsPage() {
 
   const handleTogglePrompt = async promptId => {
     try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, { method: 'POST' });
+      await makeAdminApiCall(`/admin/prompts/${promptId}/_toggle`, { method: 'POST' });
       await loadPrompts();
     } catch (err) {
       setError(getAdminApiErrorMessage(err));

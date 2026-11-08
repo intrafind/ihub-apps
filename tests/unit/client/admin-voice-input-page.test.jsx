@@ -177,7 +177,7 @@ beforeEach(() => {
     if (url === '/admin/models' && method === 'GET') {
       return { data: MODELS };
     }
-    if (url === '/admin/voice/azure/test') {
+    if (url === '/admin/voice/azure/_test') {
       return {
         data: { ok: true, code: 'token-issued', region: 'northeurope', message: 'server text' }
       };
@@ -566,7 +566,7 @@ test('Azure: tests the unsaved form values on the server', async () => {
     await screen.findByText('Key accepted: Azure issued a token for region "northeurope".')
   ).toBeInTheDocument();
   expect(screen.queryByText('server text')).not.toBeInTheDocument();
-  expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/voice/azure/test', {
+  expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/voice/azure/_test', {
     method: 'POST',
     body: { region: 'northeurope', host: '', subscriptionKey: '***REDACTED***' }
   });

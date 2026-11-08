@@ -145,7 +145,7 @@ beforeEach(reset);
 
 describe('enable', () => {
   test('creates the Copilot OAuth client and turns on what the agent needs', async () => {
-    const res = await post('/api/admin/copilot-agent/enable');
+    const res = await post('/api/admin/copilot-agent/_enable');
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -175,19 +175,19 @@ describe('enable', () => {
 
   test('writes platform.json as stored, never the resolved cache', async () => {
     state.cacheExtra = { speech: { azure: { key: 'decrypted-secret' } } };
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     await put('/api/admin/copilot-agent/config', { name: 'Contoso AI' });
-    await post('/api/admin/copilot-agent/disable');
+    await post('/api/admin/copilot-agent/_disable');
     expect(state.platform).not.toHaveProperty('speech');
     expect(JSON.stringify(state.platform)).not.toContain('decrypted-secret');
   });
 
   test('enabling again keeps the client, its secret and the app id', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     const appId = state.platform.copilotAgent.appId;
-    await post('/api/admin/copilot-agent/disable');
+    await post('/api/admin/copilot-agent/_disable');
 
-    const res = await post('/api/admin/copilot-agent/enable');
+    const res = await post('/api/admin/copilot-agent/_enable');
     expect(res.status).toBe(200);
     expect(res.body).not.toHaveProperty('clientSecret');
     expect(state.created).toHaveLength(1);
@@ -196,12 +196,12 @@ describe('enable', () => {
   });
 
   test('a replacement client drops the old Teams registration ID', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-old' });
     // The client was deleted by hand; the registration names its id.
     delete state.clients.client_copilot;
 
-    const res = await post('/api/admin/copilot-agent/enable');
+    const res = await post('/api/admin/copilot-agent/_enable');
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe('plain-secret');
     expect(state.created).toHaveLength(2);
@@ -209,10 +209,10 @@ describe('enable', () => {
   });
 
   test('an unreadable client store fails instead of creating a second client', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     state.clientsError = 'EACCES';
 
-    const res = await post('/api/admin/copilot-agent/enable');
+    const res = await post('/api/admin/copilot-agent/_enable');
     expect(res.status).toBe(500);
     expect(state.created).toHaveLength(1);
   });
@@ -220,8 +220,8 @@ describe('enable', () => {
 
 describe('disable', () => {
   test('deactivates the client so Copilot tokens stop working; the gateway stays', async () => {
-    await post('/api/admin/copilot-agent/enable');
-    const res = await post('/api/admin/copilot-agent/disable');
+    await post('/api/admin/copilot-agent/_enable');
+    const res = await post('/api/admin/copilot-agent/_disable');
 
     expect(res.status).toBe(200);
     expect(state.clients.client_copilot.active).toBe(false);
@@ -230,10 +230,10 @@ describe('disable', () => {
   });
 
   test('an unreadable client store fails instead of reporting the client off', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     state.clientsError = 'EACCES';
 
-    const res = await post('/api/admin/copilot-agent/disable');
+    const res = await post('/api/admin/copilot-agent/_disable');
     expect(res.status).toBe(500);
     expect(state.platform.copilotAgent.enabled).toBe(true);
     expect(state.updates.filter(u => u.updates.active === false)).toHaveLength(0);
@@ -273,7 +273,7 @@ describe('config', () => {
 describe('rotate-secret', () => {
   test('needs a client, then hands out a new secret once', async () => {
     expect((await post('/api/admin/copilot-agent/rotate-secret')).status).toBe(404);
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     const res = await post('/api/admin/copilot-agent/rotate-secret');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ oauthClientId: 'client_copilot', clientSecret: 'rotated-secret' });
@@ -282,7 +282,7 @@ describe('rotate-secret', () => {
 
 describe('status', () => {
   test('says what to register in the Teams Developer Portal', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     const res = await get('/api/admin/copilot-agent/status');
     expect(res.status).toBe(200);
     expect(res.body.prerequisites).toEqual({
@@ -306,7 +306,7 @@ describe('status', () => {
   });
 
   test('forwarded headers from an untrusted peer do not move the addresses', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     const res = await get('/api/admin/copilot-agent/status')
       .set('X-Forwarded-Host', 'evil.example')
       .set('X-Forwarded-Proto', 'https');
@@ -321,14 +321,14 @@ describe('package.zip', () => {
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('COPILOT_AGENT_DISABLED');
 
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     res = await get('/api/admin/copilot-agent/package.zip');
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('COPILOT_REFERENCE_ID_MISSING');
   });
 
   test('is refused while iHub is reached over plain http', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-123' });
 
     const status = await get('/api/admin/copilot-agent/status');
@@ -342,7 +342,7 @@ describe('package.zip', () => {
   });
 
   test('the registration, the gateway and the links all use the configured Public URL', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     state.platform.mcpServer.publicUrl = 'https://ihub.contoso.com/ihub/';
     const res = await get('/api/admin/copilot-agent/status');
     expect(res.body.prerequisites.publicHttps).toBe(true);
@@ -354,7 +354,7 @@ describe('package.zip', () => {
   });
 
   test('is a flat zip of the manifests and icons, pointing at the public gateway', async () => {
-    await post('/api/admin/copilot-agent/enable');
+    await post('/api/admin/copilot-agent/_enable');
     await put('/api/admin/copilot-agent/config', { oauthReferenceId: 'ref-123' });
     state.platform.mcpServer.publicUrl = 'https://ihub.contoso.com/';
 

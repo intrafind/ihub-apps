@@ -286,13 +286,13 @@ global skills keep working.
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | GET | `/api/skills` | Skills for the `/` picker: global skills the user may see, plus their own and shared user skills (`scope`: `global`, `mine`, `shared`) |
-| POST | `/api/skills/:name/duplicate` | Copy a global skill into My skills |
+| POST | `/api/skills/:name/_duplicate` | Copy a global skill into My skills |
 | GET | `/api/user-skills?scope=all\|mine\|shared` | The caller's own and shared user skills |
 | POST | `/api/user-skills` | Create a user skill (`name`, `description`, `body`, `files`) |
 | GET / PUT / DELETE | `/api/user-skills/:id` | Read (with instructions and files), update (`expectedRevision` refuses a stale save with 409), delete |
 | PUT | `/api/user-skills/:id/shares` | Replace the share list |
 | PUT | `/api/user-skills/:id/owner` | Hand the skill to another user (`ownerId`) |
-| POST | `/api/user-skills/:id/duplicate` | Copy a user skill |
+| POST | `/api/user-skills/:id/_duplicate` | Copy a user skill |
 | GET | `/api/user-skills/:id/versions` | Versions, newest first; `/versions/:revision` returns one with its content |
 | POST | `/api/user-skills/:id/versions/:revision/restore` | Restore a version |
 | GET | `/api/user-skills/share-targets?q=` | Users and groups the caller may share with |

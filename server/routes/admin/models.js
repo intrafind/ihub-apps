@@ -714,7 +714,7 @@ export default function registerAdminModelsRoutes(app) {
     res.json({ message: 'Model created successfully', model: newModel }); // api-guidelines-ignore: existing success body, changed in its own API change
   });
 
-  app.post(buildServerPath('/api/admin/models/:modelId/toggle'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/models/:modelId/_toggle'), adminAuth, async (req, res) => {
     const { modelId } = req.params;
 
     // Validate modelId for security
@@ -843,7 +843,7 @@ export default function registerAdminModelsRoutes(app) {
   });
 
   /**
-   * POST /api/admin/models/:modelId/test
+   * POST /api/admin/models/:modelId/_test
    *
    * Connectivity / credential diagnostic for one configured model. Disabled
    * models are included so an admin can verify a model before enabling it.
@@ -1036,7 +1036,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   );
 
-  app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/models/:modelId/_test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
 

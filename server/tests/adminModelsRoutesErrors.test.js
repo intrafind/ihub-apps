@@ -80,7 +80,7 @@ describe('model administration routes: errors', () => {
 
   it('answers a failed model test with the LLM code, the headline and the remediation', async () => {
     state.completeError = new LLMError('Invalid API key', { code: 'AUTH_FAILED', status: 401 });
-    const res = await request(app).post('/api/admin/models/gpt/test').expect(502);
+    const res = await request(app).post('/api/admin/models/gpt/_test').expect(502);
     expect(res.body.code).toBe('AUTH_FAILED');
     expect(res.body.details).toMatchObject({ messageKey: expect.any(String) });
     expect(typeof res.body.details.remediation).toBe('string');
@@ -89,7 +89,7 @@ describe('model administration routes: errors', () => {
 
   it('hides the reason of an unexpected failure of a model test', async () => {
     state.completeError = new Error('boom at /srv/secret/path');
-    const res = await request(app).post('/api/admin/models/gpt/test').expect(500);
+    const res = await request(app).post('/api/admin/models/gpt/_test').expect(500);
     expect(res.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(res.body)).not.toContain('/srv/secret');
   });

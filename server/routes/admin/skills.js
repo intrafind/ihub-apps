@@ -278,7 +278,7 @@ export default function registerAdminSkillsRoutes(app) {
   );
 
   /**
-   * POST /api/admin/skills/import - Import a skill from a zip file.
+   * POST /api/admin/skills/_import - Import a skill from a zip file.
    *
    * Expects multipart/form-data with a 'skill' file field.
    * Uses JSZip for safe in-process extraction — no shell commands are invoked.
@@ -286,7 +286,7 @@ export default function registerAdminSkillsRoutes(app) {
    * Maximum upload size: 10 MB.
    */
   app.post(
-    buildServerPath('/api/admin/skills/import'),
+    buildServerPath('/api/admin/skills/_import'),
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {

@@ -281,7 +281,7 @@ There is one API for both kinds of prompts. Every call except the list and singl
 | `DELETE /api/prompts/:id` | Delete a user prompt (owner or admin). |
 | `PUT /api/prompts/:id/shares` | Replace the share list: `{ shares: [{ type: "user"\|"group"\|"everyone", id?, permission: "use"\|"edit" }] }`. |
 | `PUT /api/prompts/:id/owner` | Hand the prompt to another user: `{ ownerId }` (owner or admin). |
-| `POST /api/prompts/:id/duplicate` | Copy a global or shared prompt into the caller's prompts: `{ name?, language? }`. |
+| `POST /api/prompts/:id/_duplicate` | Copy a global or shared prompt into the caller's prompts: `{ name?, language? }`. |
 | `GET /api/prompts/:id/versions` | Saved versions, newest first (for those who can edit). |
 | `POST /api/prompts/:id/versions/:revision/restore` | Restore a version as a new one. |
 | `GET /api/prompts/share-targets?q=` | Users and groups the caller may share with. |

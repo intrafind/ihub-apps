@@ -1116,7 +1116,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
-   * /api/workflows/executions/{executionId}/restart:
+   * /api/workflows/executions/{executionId}/_restart:
    *   post:
    *     summary: Restart a cancelled or failed execution
    *     description: |
@@ -1138,7 +1138,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *           type: string
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/restart'),
+    buildServerPath('/api/workflows/executions/:executionId/_restart'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1182,7 +1182,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
-   * /api/workflows/executions/{executionId}/cancel:
+   * /api/workflows/executions/{executionId}/_cancel:
    *   post:
    *     summary: Cancel execution
    *     description: |
@@ -1223,7 +1223,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/cancel'),
+    buildServerPath('/api/workflows/executions/:executionId/_cancel'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1716,7 +1716,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
-   * /api/admin/workflows/{id}/toggle:
+   * /api/admin/workflows/{id}/_toggle:
    *   post:
    *     summary: Toggle workflow enabled/disabled status
    *     description: |
@@ -1746,7 +1746,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/workflows/:id/toggle'),
+    buildServerPath('/api/admin/workflows/:id/_toggle'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {

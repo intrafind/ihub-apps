@@ -41,8 +41,8 @@ import {
  * `utils/copilotAgentPackage.js` for what the package is):
  *
  *   GET  /api/admin/copilot-agent/status
- *   POST /api/admin/copilot-agent/enable         → the OAuth client secret, once
- *   POST /api/admin/copilot-agent/disable
+ *   POST /api/admin/copilot-agent/_enable         → the OAuth client secret, once
+ *   POST /api/admin/copilot-agent/_disable
  *   PUT  /api/admin/copilot-agent/config
  *   POST /api/admin/copilot-agent/rotate-secret  → a new secret, once
  *   GET  /api/admin/copilot-agent/package.zip
@@ -215,7 +215,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/copilot-agent/enable:
+   * /api/admin/copilot-agent/_enable:
    *   post:
    *     summary: Enable the Microsoft 365 Copilot agent
    *     description: Creates (or reactivates) the confidential OAuth client Copilot signs users in with, and turns on the OAuth authorization server and the MCP gateway. The response carries the client secret when a client was created — it is shown only this once.
@@ -228,7 +228,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *       200:
    *         description: Copilot agent enabled
    */
-  app.post(buildServerPath('/api/admin/copilot-agent/enable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/copilot-agent/_enable'), adminAuth, async (req, res) => {
     const platform = configCache.getPlatform() || {};
     const settings = readSettings(platform);
     const clientsFile = oauthClientsFile(platform.oauth || {});
@@ -306,7 +306,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/copilot-agent/disable:
+   * /api/admin/copilot-agent/_disable:
    *   post:
    *     summary: Disable the Microsoft 365 Copilot agent
    *     description: Deactivates the agent's OAuth client, so Copilot's tokens stop working. The MCP gateway is left as it is.
@@ -319,7 +319,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
    *       200:
    *         description: Copilot agent disabled
    */
-  app.post(buildServerPath('/api/admin/copilot-agent/disable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/copilot-agent/_disable'), adminAuth, async (req, res) => {
     const found = findCopilotClient(configCache.getPlatform() || {});
     if (found && found.client.active !== false) {
       await updateOAuthClient(found.clientId, { active: false }, found.clientsFile, req.user?.id);

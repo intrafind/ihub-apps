@@ -503,7 +503,7 @@ export default function registerAdminProxyRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/proxy/test:
+   * /api/admin/proxy/_test:
    *   post:
    *     summary: Test outbound connectivity for a URL
    *     description: |
@@ -542,7 +542,7 @@ export default function registerAdminProxyRoutes(app) {
    *       403:
    *         description: Target blocked by the SSRF guard
    */
-  app.post(buildServerPath('/api/admin/proxy/test'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/proxy/_test'), adminAuth, async (req, res) => {
     const { url, timeoutMs, config: draft } = req.body || {};
 
     if (!url || typeof url !== 'string') {

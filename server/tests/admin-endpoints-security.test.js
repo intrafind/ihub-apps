@@ -163,7 +163,7 @@ describe('Admin Endpoints Security - Comprehensive Audit', () => {
 
     test('should require admin auth for backup import', async () => {
       // Test without auth - should fail
-      const response = await request(app).post('/api/admin/backup/import');
+      const response = await request(app).post('/api/admin/backup/_import');
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error');
@@ -192,7 +192,7 @@ describe('Admin Endpoints Security - Comprehensive Audit', () => {
       });
 
       const response = await request(app)
-        .post('/api/admin/backup/import')
+        .post('/api/admin/backup/_import')
         .set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(403);

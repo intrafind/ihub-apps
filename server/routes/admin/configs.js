@@ -498,7 +498,7 @@ export default function registerAdminConfigRoutes(app) {
    * secret never reaches the browser; an empty key means keyless mode, which is
    * only verifiable from the browser (the live dictation test).
    */
-  app.post(buildServerPath('/api/admin/voice/azure/test'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/voice/azure/_test'), adminAuth, async (req, res) => {
     const body = req.body || {};
     const saved = (configCache.getPlatform() || {}).speech?.azure || {};
 

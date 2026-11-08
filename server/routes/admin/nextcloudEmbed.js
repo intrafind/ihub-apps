@@ -90,7 +90,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/nextcloud-embed/enable:
+   * /api/admin/nextcloud-embed/_enable:
    *   post:
    *     summary: Enable Nextcloud embed integration and auto-create OAuth client
    *     tags:
@@ -102,7 +102,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
    *       200:
    *         description: Nextcloud embed integration enabled
    */
-  app.post(buildServerPath('/api/admin/nextcloud-embed/enable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/nextcloud-embed/_enable'), adminAuth, async (req, res) => {
     const platform = configCache.getPlatform();
     const cfg = platform?.nextcloudEmbed || {};
     const baseUrl = buildPublicBaseUrl(req);
@@ -175,7 +175,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/nextcloud-embed/disable:
+   * /api/admin/nextcloud-embed/_disable:
    *   post:
    *     summary: Disable Nextcloud embed integration
    *     tags:
@@ -187,7 +187,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
    *       200:
    *         description: Nextcloud embed integration disabled
    */
-  app.post(buildServerPath('/api/admin/nextcloud-embed/disable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/nextcloud-embed/_disable'), adminAuth, async (req, res) => {
     const platform = configCache.getPlatform();
 
     await savePlatformConfig({

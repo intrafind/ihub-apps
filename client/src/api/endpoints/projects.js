@@ -195,7 +195,7 @@ export const deleteProjectItem = async (projectId, itemId) => {
  * @returns {Promise<Object>} The item.
  */
 export const refreshProjectItem = async (projectId, itemId) => {
-  const data = await call(() => apiClient.post(`${itemPath(projectId, itemId)}/refresh`));
+  const data = await call(() => apiClient.post(`${itemPath(projectId, itemId)}/_refresh`));
   return data?.item;
 };
 
@@ -414,7 +414,7 @@ export const checkPickerUrl = async url => {
  *   chars?: number, truncated?: boolean, error?: string}>}
  */
 export const previewPickerUrl = async url => {
-  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/preview`, { url }));
+  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/_preview`, { url }));
   return data || { ok: false };
 };
 

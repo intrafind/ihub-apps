@@ -228,7 +228,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/browser-extension/enable:
+   * /api/admin/browser-extension/_enable:
    *   post:
    *     summary: Enable browser extension integration and auto-create OAuth client
    *     tags:
@@ -237,7 +237,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *       - bearerAuth: []
    *       - sessionAuth: []
    */
-  app.post(buildServerPath('/api/admin/browser-extension/enable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/browser-extension/_enable'), adminAuth, async (req, res) => {
     const platform = configCache.getPlatform();
     const cfg = platform?.browserExtension || {};
 
@@ -335,29 +335,33 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/browser-extension/disable:
+   * /api/admin/browser-extension/_disable:
    *   post:
    *     summary: Disable browser extension integration
    *     tags:
    *       - Admin - Browser Extension
    */
-  app.post(buildServerPath('/api/admin/browser-extension/disable'), adminAuth, async (req, res) => {
-    const platform = configCache.getPlatform();
+  app.post(
+    buildServerPath('/api/admin/browser-extension/_disable'),
+    adminAuth,
+    async (req, res) => {
+      const platform = configCache.getPlatform();
 
-    await savePlatformConfig({
-      browserExtension: {
-        ...platform?.browserExtension,
-        enabled: false
-      }
-    });
+      await savePlatformConfig({
+        browserExtension: {
+          ...platform?.browserExtension,
+          enabled: false
+        }
+      });
 
-    logger.info('Browser extension integration disabled', {
-      component: 'AdminBrowserExtension'
-    });
+      logger.info('Browser extension integration disabled', {
+        component: 'AdminBrowserExtension'
+      });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Browser extension integration disabled successfully' });
-  });
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({ message: 'Browser extension integration disabled successfully' });
+    }
+  );
 
   /**
    * @swagger

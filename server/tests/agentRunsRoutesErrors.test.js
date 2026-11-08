@@ -130,14 +130,14 @@ describe('agent run routes: errors', () => {
     state.resumeError = Object.assign(new Error('Run is not in a resumable state'), {
       code: 'INVALID_STATE_FOR_RESUME'
     });
-    const refused = await request(app).post('/api/agents/runs/r1/resume').send({}).expect(400);
+    const refused = await request(app).post('/api/agents/runs/r1/_resume').send({}).expect(400);
     expect(refused.body).toMatchObject({
       code: 'BAD_REQUEST',
       detail: 'Run is not in a resumable state'
     });
 
     state.resumeError = new Error('socket hang up at /srv/engine.js');
-    const hidden = await request(app).post('/api/agents/runs/r1/resume').send({}).expect(500);
+    const hidden = await request(app).post('/api/agents/runs/r1/_resume').send({}).expect(500);
     expect(hidden.body.code).toBe('INTERNAL_ERROR');
     expect(hidden.body.detail).not.toMatch(/srv/);
   });

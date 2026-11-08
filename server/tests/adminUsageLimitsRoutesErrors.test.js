@@ -136,7 +136,7 @@ describe('usage limit administration routes: errors', () => {
     ['u1', { modelId: 5 }, 'Invalid modelId']
   ])('answers a bad reset (%s, %j) with BAD_REQUEST', async (key, body, reason) => {
     const res = await request(app)
-      .post(`/api/admin/usage/limits/users/${key}/reset`)
+      .post(`/api/admin/usage/limits/users/${key}/_reset`)
       .send(body)
       .expect(400);
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
@@ -147,7 +147,7 @@ describe('usage limit administration routes: errors', () => {
 
   it('resets a user for a valid request', async () => {
     await request(app)
-      .post('/api/admin/usage/limits/users/u1/reset')
+      .post('/api/admin/usage/limits/users/u1/_reset')
       .send({ modelId: 'gpt', window: 'day' })
       .expect(200);
     expect(state.reset[0]).toBe('u1');

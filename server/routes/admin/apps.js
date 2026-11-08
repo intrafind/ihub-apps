@@ -740,7 +740,7 @@ export default function registerAdminAppsRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/apps/{appId}/toggle:
+   * /api/admin/apps/{appId}/_toggle:
    *   post:
    *     summary: Toggle application enabled/disabled status
    *     description: |
@@ -789,41 +789,45 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/apps/:appId/toggle'), contentAdminAuth, async (req, res) => {
-    const { appId } = req.params;
+  app.post(
+    buildServerPath('/api/admin/apps/:appId/_toggle'),
+    contentAdminAuth,
+    async (req, res) => {
+      const { appId } = req.params;
 
-    // Validate appId for security
-    assertValidId(appId, 'app');
+      // Validate appId for security
+      assertValidId(appId, 'app');
 
-    const { data: apps } = configCache.getApps(true);
-    const app = apps.find(a => a.id === appId);
-    if (!app) {
-      throw new ServiceError('NOT_FOUND', 'App not found');
+      const { data: apps } = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+      if (!app) {
+        throw new ServiceError('NOT_FOUND', 'App not found');
+      }
+      const newEnabledState = !app.enabled;
+      app.enabled = newEnabledState;
+      // Find the actual file for this app ID (may not match ${appId}.json)
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
+        throw new ServiceError('NOT_FOUND', 'App file not found');
+      }
+      await configStore.writeJson(appFilePath, app);
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'toggle',
+        resource: 'app',
+        resourceId: appId,
+        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
+      });
+      res.json({
+        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        app: app,
+        enabled: newEnabledState
+      });
     }
-    const newEnabledState = !app.enabled;
-    app.enabled = newEnabledState;
-    // Find the actual file for this app ID (may not match ${appId}.json)
-    const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-      createIfMissing: false
-    });
-    if (!appFilePath) {
-      throw new ServiceError('NOT_FOUND', 'App file not found');
-    }
-    await configStore.writeJson(appFilePath, app);
-    await configCache.refreshAppsCache();
-    await logAudit({
-      req,
-      action: 'toggle',
-      resource: 'app',
-      resourceId: appId,
-      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
-    });
-    res.json({
-      message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-      app: app,
-      enabled: newEnabledState
-    });
-  });
+  );
 
   /**
    * @swagger

@@ -33,7 +33,7 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  *   [fetchIFinderProfiles] - The search profiles the caller may search in.
  * @property {(url: string) => Promise<{ok: boolean, error?: string}>} checkUrl
  * @property {(url: string) => Promise<Object>} [previewUrl] - The text a URL would
- *   give the model (`POST …/pickers/url/preview`).
+ *   give the model (`POST …/pickers/url/_preview`).
  * @property {(url: string, options: Object) => Promise<Object>} [crawlUrl] - The
  *   pages of a website below a URL (`POST …/pickers/url/crawl`).
  * @property {() => Promise<Array<Object>>} [fetchCloudProviders] - Cloud connections.

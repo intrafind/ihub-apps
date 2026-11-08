@@ -584,7 +584,7 @@ Notes:
 - **Isolation:** each connection's state and upstream socket are private to that connection. There is no cross-connection event bus; user A cannot subscribe to user B's transcription events.
 - **Resource protection:** connection caps (429), frame-size caps, pending-buffer caps, idle/grace timers, keepalive dead-peer detection, upstream backpressure, and a session duration cap bound CPU, memory, and GPU pinning per user and per instance.
 - **Secrets at rest:** model API keys are encrypted (AES-256-GCM) in the config files; `${ENV}` placeholders keep secrets out of files entirely.
-- **Admin test endpoint:** `POST /api/admin/models/:modelId/test` requires admin auth and never echoes the stored key back.
+- **Admin test endpoint:** `POST /api/admin/models/:modelId/_test` requires admin auth and never echoes the stored key back.
 - **Privacy:** audio is relayed, never stored; transcript content is never logged (only lengths and frame counts at debug level). Transcripts appear in chat history subject to the same handling as any other chat content.
 
 ## Browser requirements
