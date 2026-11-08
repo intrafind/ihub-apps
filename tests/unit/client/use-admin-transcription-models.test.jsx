@@ -20,14 +20,16 @@ beforeEach(() => {
 
 test('lists the enabled streaming transcription models of the admin model list', async () => {
   mockMakeAdminApiCall.mockResolvedValue({
-    data: [
-      { id: 'gemini-live', modelType: 'transcription', provider: 'google-live', enabled: true },
-      { id: 'voxtral', modelType: 'transcription', provider: 'vllm-realtime' },
-      { id: 'whisper', modelType: 'transcription', provider: 'openai', enabled: true },
-      { id: 'old', modelType: 'transcription', provider: 'mistral', enabled: false },
-      { id: 'gpt', modelType: 'chat', enabled: true },
-      { id: 'speech', modelType: 'tts', enabled: true }
-    ]
+    data: {
+      items: [
+        { id: 'gemini-live', modelType: 'transcription', provider: 'google-live', enabled: true },
+        { id: 'voxtral', modelType: 'transcription', provider: 'vllm-realtime' },
+        { id: 'whisper', modelType: 'transcription', provider: 'openai', enabled: true },
+        { id: 'old', modelType: 'transcription', provider: 'mistral', enabled: false },
+        { id: 'gpt', modelType: 'chat', enabled: true },
+        { id: 'speech', modelType: 'tts', enabled: true }
+      ]
+    }
   });
   const { result } = renderHook(() => useAdminTranscriptionModels());
 

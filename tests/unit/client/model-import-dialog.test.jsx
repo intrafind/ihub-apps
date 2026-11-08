@@ -44,7 +44,7 @@ const LLM_HUB = {
 
 function mockApi({ providers = [], models = [] } = {}) {
   mockMakeAdminApiCall.mockImplementation(async (path, options = {}) => {
-    if (path === '/admin/providers' && !options.method) return { data: providers };
+    if (path === '/admin/providers' && !options.method) return { data: { items: providers } };
     if (path === '/admin/models/_discover') {
       return {
         data: {
