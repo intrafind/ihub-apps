@@ -11,6 +11,9 @@
 #   snake_case query parameters, as inline annotations on the diff. A line with a reason to
 #   break a rule carries "// api-guidelines-ignore: <reason>".
 #
+# check also runs scripts/check-route-changes.js --strict: every route the PR removes or
+#   renames (compared with the base branch) must be named in docs/releases/next/*.md.
+#
 # There is deliberately no `paths:` filter: the job is a required status check, and a
 # required check that a PR never triggers would block that PR forever. A PR without
 # server changes passes in a few seconds ("No changed server files to check").
@@ -53,11 +56,20 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
+          cache: 'npm'
 
       - name: Check changed server lines against the API guidelines
         run: |
           set -euo pipefail
           git diff --unified=0 --diff-filter=ACMR --no-color --end-of-options \
             "origin/${BASE_REF}...HEAD" -- server | node scripts/check-api-guidelines.js
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Check removed routes are in the release notes
+        run: node scripts/check-route-changes.js --base "origin/${BASE_REF}" --strict
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
