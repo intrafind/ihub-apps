@@ -1,5 +1,13 @@
 # Fixes — Unreleased
 
+## Three Loose Ends of the Error Response Conversion
+
+- Downloading an agent artifact whose file cannot be read (it vanished after the check, a disk fault)
+  answers a 500 instead of an unhandled stream error that could take the process down.
+- Revoking an OAuth connection reads the client and user id from the path once; a literal `%` in an id
+  used to be decoded a second time.
+- The Teams sign-in recognises a deactivated account by an error code, not by the wording of its message.
+
 ## Google API Key No Longer Appears in Server Logs
 
 The Gemini adapter used to send the API key as a `?key=` query parameter on the request URL, so a
