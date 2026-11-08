@@ -74,7 +74,7 @@ test('sets an override, keeps other keys, and lists it as changed', async () => 
   const put = await request(app)
     .put('/api/admin/translations/en')
     .send({ path: ['common', 'save'], value: 'Store' });
-  expect(put.status).toBe(200);
+  expect(put.status).toBe(204);
   expect(stored).toEqual({ common: { save: 'Store' } });
   expect(refresh).toHaveBeenCalledWith('locales/en.json');
   const res = await request(app).get('/api/admin/translations/en');
@@ -89,7 +89,7 @@ test('handles keys containing dots via path segments', async () => {
   await request(app)
     .put('/api/admin/translations/en')
     .send({ path: ['chat', 'a.b'], value: 'X' })
-    .expect(200);
+    .expect(204);
   expect(stored).toEqual({ chat: { 'a.b': 'X' } });
 });
 
@@ -98,7 +98,7 @@ test('reset removes the key and prunes empty parents', async () => {
   await request(app)
     .put('/api/admin/translations/en')
     .send({ path: ['common', 'save'], value: null })
-    .expect(200);
+    .expect(204);
   expect(stored).toEqual({});
 });
 

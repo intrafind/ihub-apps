@@ -71,7 +71,6 @@ describe('logging administration routes: errors', () => {
       .put('/api/admin/logging/config')
       .send({ level: 'debug' })
       .expect(200);
-    expect(res.body.success).toBe(true);
     expect(res.body.config.level).toBe('debug');
     expect(state.written.logging.level).toBe('debug');
   });

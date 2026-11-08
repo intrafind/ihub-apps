@@ -179,7 +179,7 @@ describe('short link ownership', () => {
     expect(adminPut.body.ownerId).toBe('alice');
 
     expect((await as(request(app).delete(`/api/shortlinks/${link.code}`), 'admin')).status).toBe(
-      200
+      204
     );
   });
 

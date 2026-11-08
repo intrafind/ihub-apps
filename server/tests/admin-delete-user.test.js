@@ -100,8 +100,7 @@ describe('DELETE /api/admin/auth/users/:userId', () => {
   test('removes the record and answers without waiting for the cleanup', async () => {
     const res = await del('user_alice');
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ message: 'User deleted successfully' });
+    expect(res.status).toBe(204);
     expect(Object.keys(state.written.users)).toEqual(['user_bob']);
   });
 
