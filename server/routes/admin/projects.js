@@ -443,7 +443,6 @@ export default function registerAdminProjectsRoutes(app) {
     const body = parseBody(adminProjectCreateSchema, req);
     if (isUserProjectId(body.id) || !isAdminProjectId(body.id)) {
       throw new ServiceError('BAD_REQUEST', 'Admin project ids may not start with "prj_"');
-      return;
     }
     // The stored model knows the iFinder tier; nothing backs it yet, so a
     // project cannot be created in it (phase 2 of the epic).
@@ -452,7 +451,6 @@ export default function registerAdminProjectsRoutes(app) {
         'BAD_REQUEST',
         `The "${body.tier}" tier is not available yet; use "ihub"`
       );
-      return;
     }
     // `import` and `managedFile` point the startup importer at a file it
     // reads into the project and then deletes: only the sources migration
