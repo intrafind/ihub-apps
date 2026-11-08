@@ -346,7 +346,7 @@ async function callJson(handler, req) {
 const sourcesRes = await callJson(handlerFor('/sources'), {});
 check(
   'only enabled sources are listed',
-  JSON.stringify(sourcesRes.body.sources.map(source => source.id)) === '["personal"]'
+  JSON.stringify(sourcesRes.body.items.map(source => source.id)) === '["personal"]'
 );
 const teamsRes = await callJson(handlerFor('/drives/:source'), { params: { source: 'teams' } });
 check('drives of a disabled source are refused', teamsRes.status === 403);
@@ -362,8 +362,8 @@ const personalRes = await callJson(handlerFor('/drives/:source'), {
 });
 check(
   'OneDrive returns only the default drive',
-  personalRes.body.drives.length === 1 &&
-    personalRes.body.drives[0].id === 'b!default' &&
+  personalRes.body.items.length === 1 &&
+    personalRes.body.items[0].id === 'b!default' &&
     requested.join() === '/me/drive'
 );
 
