@@ -512,7 +512,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         'send',
         ...Object.keys(newVars).map(v => `var_${v}`)
       ].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+      // Only the query changes; the router keeps its own path. Never pass
+      // `window.location.pathname` here: it already holds the deployment's base
+      // path, which the router adds again (`/ihub/ihub/apps/…`).
+      navigate({ search: newSearch.toString() }, { replace: true });
     }
   }, [
     app,
@@ -1271,7 +1274,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     const newSearch = new URLSearchParams(searchParams);
     newSearch.delete('send');
     newSearch.delete('prefill');
-    navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    navigate({ search: newSearch.toString() }, { replace: true });
 
     // A start form has no composer to submit: it shows the prefilled text and
     // sends it, as the template's {{content}}, once the form is filled in.
@@ -1354,7 +1357,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // Clean source params from URL to prevent re-fetch
       const newSearch = new URLSearchParams(searchParams);
       ['documentId', 'searchProfile', 'source'].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+      navigate({ search: newSearch.toString() }, { replace: true });
     };
 
     void fetchAndAttach();
