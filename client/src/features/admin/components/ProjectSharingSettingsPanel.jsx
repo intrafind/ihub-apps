@@ -244,7 +244,7 @@ function ProjectSharingSettingsPanel() {
             {t('admin.projects.limits.legend', 'Limits of user projects')}
           </legend>
           <div className="grid gap-3 sm:grid-cols-2">
-            {LIMIT_FIELDS.map(({ key, min, decimals }) => {
+            {LIMIT_FIELDS.map(({ key, min, max, decimals }) => {
               const id = `project-settings-limit-${key}`;
               const invalid = limits.invalid.includes(key);
               return (
@@ -257,7 +257,7 @@ function ProjectSharingSettingsPanel() {
                     type="number"
                     inputMode={decimals ? 'decimal' : 'numeric'}
                     min={min}
-                    max={key === 'maxFiles' ? ceiling : undefined}
+                    max={key === 'maxFiles' ? ceiling : max}
                     step={decimals ? 'any' : 1}
                     value={limitInputs[key] ?? ''}
                     onChange={e => updateLimit(key, e.target.value)}

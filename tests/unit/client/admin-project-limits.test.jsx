@@ -67,5 +67,10 @@ describe('project limits', () => {
     expect(parseLimits({ ...limitInputsOf(STORED), maxFiles: '2.5' }, STORED, 200).invalid).toEqual(
       ['maxFiles']
     );
+    // The server's cap on projects per user.
+    const perUser = value =>
+      parseLimits({ ...limitInputsOf(STORED), maxProjectsPerUser: value }, STORED, 200).invalid;
+    expect(perUser('100000')).toEqual([]);
+    expect(perUser('100001')).toEqual(['maxProjectsPerUser']);
   });
 });

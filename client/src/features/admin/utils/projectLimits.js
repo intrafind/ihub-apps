@@ -28,13 +28,14 @@ export const LIMIT_LABELS = {
 
 /**
  * The limits the panel edits: the bytes are shown in MB, the counts as they
- * are. `min` is the smallest value the server accepts.
+ * are. `min` and `max` are what the server accepts (`max` in the shown unit;
+ * `maxFiles` takes the ceiling the server sends instead).
  */
 export const LIMIT_FIELDS = [
   { key: 'maxFiles', unit: 1, min: 1, decimals: false },
-  { key: 'maxFileBytes', unit: MB, min: 1, decimals: true },
-  { key: 'maxProjectBytes', unit: MB, min: 1, decimals: true },
-  { key: 'maxProjectsPerUser', unit: 1, min: 0, decimals: false }
+  { key: 'maxFileBytes', unit: MB, min: 1, max: Number.MAX_SAFE_INTEGER / MB, decimals: true },
+  { key: 'maxProjectBytes', unit: MB, min: 1, max: Number.MAX_SAFE_INTEGER / MB, decimals: true },
+  { key: 'maxProjectsPerUser', unit: 1, min: 0, max: 100_000, decimals: false }
 ];
 
 /** A stored limit as the input shows it: bytes as MB (two decimals at most). */
@@ -56,14 +57,14 @@ export function limitToInput(value, unit) {
 export function parseLimits(inputs, stored, ceiling) {
   const values = {};
   const invalid = [];
-  for (const { key, unit, min, decimals } of LIMIT_FIELDS) {
+  for (const { key, unit, min, max: fieldMax, decimals } of LIMIT_FIELDS) {
     const text = String(inputs[key] ?? '').trim();
     if (text === limitToInput(stored[key], unit)) {
       values[key] = stored[key];
       continue;
     }
     const number = Number(text);
-    const max = key === 'maxFiles' ? ceiling : Number.MAX_SAFE_INTEGER / unit;
+    const max = key === 'maxFiles' ? ceiling : fieldMax;
     if (
       text === '' ||
       !Number.isFinite(number) ||
