@@ -192,9 +192,20 @@ export function buildIntegrationGuidance(tools) {
  * @returns {boolean} true when guidance was added
  */
 export function appendIntegrationGuidance(llmMessages, tools) {
-  if (!Array.isArray(llmMessages)) return false;
-  const block = buildIntegrationGuidance(tools);
-  if (!block) return false;
+  return appendSystemBlock(llmMessages, buildIntegrationGuidance(tools));
+}
+
+/**
+ * Append a block of text to the system message (or add a system message when
+ * there is none). Idempotent: a system prompt that already holds the block is
+ * left alone.
+ *
+ * @param {Array<Object>} llmMessages - the prepared messages (mutated in place)
+ * @param {string} block - the text; nothing happens when it is empty
+ * @returns {boolean} true when the block was added
+ */
+export function appendSystemBlock(llmMessages, block) {
+  if (!Array.isArray(llmMessages) || !block) return false;
   const systemMessage = llmMessages.find(m => m.role === 'system');
   if (!systemMessage) {
     llmMessages.unshift({ role: 'system', content: block });

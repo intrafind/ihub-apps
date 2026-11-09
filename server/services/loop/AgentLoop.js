@@ -169,6 +169,8 @@ export class AgentLoop {
    * @param {Object} request.model - resolved model object
    * @param {Array} request.messages - starting transcript (not mutated)
    * @param {Array} [request.tools] - tool specs offered to the model
+   * @param {Object} [request.toolSearch] - `createToolSearch()`: the tools left out of `tools`.
+   *   What `search_tools` finds joins `tools` for the model's next step
    * @param {'server'|'caller'} [request.toolExecution='server']
    * @param {Object} [request.policies] - partial loop policies (see contracts/loop.js)
    * @param {Object} [request.options] - LLMClient options (maxTokens, responseSchema, thinking*, …)
@@ -193,6 +195,9 @@ export class AgentLoop {
     const policies = resolvePolicies(request.policies);
     // Copied: the native web search fallback may add a tool for this run only.
     const tools = Array.isArray(request.tools) ? [...request.tools] : [];
+    // Tools left out of `tools` that the model finds with `search_tools`: what
+    // it finds is added to `tools` (services/tools/toolSearch.js).
+    const toolSearch = request.toolSearch || null;
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
     const runId = request.runId || null;
@@ -241,6 +246,7 @@ export class AgentLoop {
       kind: request.kind || 'agent',
       model,
       tools,
+      toolSearch,
       policies,
       messages: [...request.messages],
       stream: null,
@@ -408,9 +414,17 @@ export class AgentLoop {
       if (request.resume?.toolCall && toolExecution === 'server') {
         const resumed = request.resume;
         const call = resumed.toolCall;
+        // The model found the tool with `search_tools` in the request that
+        // paused: this request starts with it left out again, so loading it is
+        // part of running the call a person approved.
+        let approvedTool = matchTool(call.function?.name, tools);
+        if (!approvedTool) {
+          approvedTool = toolSearch?.take(call.function?.name) || null;
+          if (approvedTool) tools.push(approvedTool);
+        }
         const item = {
           call,
-          toolDef: matchTool(call.function?.name, tools),
+          toolDef: approvedTool,
           args: resumed.args && typeof resumed.args === 'object' ? resumed.args : {},
           argsRepaired: false,
           position: 0
@@ -1016,30 +1030,41 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (typeof ctx.request.executeTool !== 'function') {
-          throw new LLMError(`No tool executor configured for '${toolId}'`, {
-            code: LLM_ERROR_CODES.INVALID_REQUEST,
-            providerCode: 'NO_TOOL_EXECUTOR'
-          });
+        if (toolDef.isToolSearch && ctx.toolSearch) {
+          // `search_tools` answers from the tools this request left out, and
+          // what it finds joins the tools the model is offered from its next
+          // step on (`availableTools` is read again on every round).
+          const { text, found } = ctx.toolSearch.search(args);
+          for (const tool of found) {
+            if (!ctx.tools.some(t => t.id === tool.id)) ctx.tools.push(tool);
+          }
+          rawResult = text;
+        } else {
+          if (typeof ctx.request.executeTool !== 'function') {
+            throw new LLMError(`No tool executor configured for '${toolId}'`, {
+              code: LLM_ERROR_CODES.INVALID_REQUEST,
+              providerCode: 'NO_TOOL_EXECUTOR'
+            });
+          }
+          rawResult = await raceAbort(
+            () =>
+              runToolCallScope(
+                reported,
+                () =>
+                  ctx.request.executeTool(call, {
+                    toolDef,
+                    toolId,
+                    args,
+                    ctx,
+                    info,
+                    signal: ctx.signal
+                  }),
+                ctx.toolTurn
+              ),
+            ctx.signal,
+            () => abortError('Agent loop aborted (cancelled or timed out)')
+          );
         }
-        rawResult = await raceAbort(
-          () =>
-            runToolCallScope(
-              reported,
-              () =>
-                ctx.request.executeTool(call, {
-                  toolDef,
-                  toolId,
-                  args,
-                  ctx,
-                  info,
-                  signal: ctx.signal
-                }),
-              ctx.toolTurn
-            ),
-          ctx.signal,
-          () => abortError('Agent loop aborted (cancelled or timed out)')
-        );
         if (
           rawResult &&
           typeof rawResult === 'object' &&
@@ -1165,7 +1190,7 @@ export class AgentLoop {
             reason,
             count,
             message: verdict.message,
-            isSearch: isCitationProducingTool(key)
+            isSearch: !toolDef?.isInternalTool && isCitationProducingTool(key)
           })
         )
       );

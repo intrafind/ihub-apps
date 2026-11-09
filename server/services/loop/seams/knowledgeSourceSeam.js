@@ -48,6 +48,9 @@ export function classifyKnowledgeSource(toolId) {
  * @returns {'websearch'|'ifinder'|'sources'|'integration'|null}
  */
 export function classifyToolKnowledgeSource(toolId, toolDef) {
+  // The loop's own tools (skills, tool search) inform nobody: `search_tools`
+  // finds tools, not pages.
+  if (toolDef?.isInternalTool) return null;
   const integration = toolDef?._integration;
   if (integration) {
     if (integration.definition === IHUB_DEFINITION) return null;

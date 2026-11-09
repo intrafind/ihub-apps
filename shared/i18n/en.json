@@ -2756,6 +2756,8 @@
           "requiredHelp": "Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.",
           "enabledByDefault": "On by default",
           "enabledByDefaultHelp": "New chats start with this integration switched on. Off: it is only available, and users switch it on in the chat's \"+\" menu when they need it.",
+          "alwaysLoaded": "Always loaded",
+          "alwaysLoadedHelp": "Always send this integration's tools to the model in full. Off: when the app's tools are too many for one request, the model finds them with a search instead.",
           "unbind": "Unbind",
           "defaultScope": "Default {{scope}}",
           "pinnedScope": "Pinned {{scope}}",
@@ -2981,7 +2983,13 @@
         "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers.",
         "toolApproval": "Approval before tool calls",
         "toolApprovalInherit": "As the admin settings (default)",
-        "toolApprovalHelp": "Makes the approval stricter for this app. It can never relax the platform, tool or integration settings: a looser value is ignored."
+        "toolApprovalHelp": "Makes the approval stricter for this app. It can never relax the platform, tool or integration settings: a looser value is ignored.",
+        "toolSearch": "Tool search",
+        "toolSearchAuto": "Automatic (default)",
+        "toolSearchOff": "Off: send every tool",
+        "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
+        "toolSearchBudget": "Token budget for tool definitions",
+        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",

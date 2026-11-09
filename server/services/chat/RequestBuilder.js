@@ -5,6 +5,7 @@ import { appendIntegrationGuidance } from '../integrations/actionGuidance.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { getToolsForApp } from '../tools/appTools.js';
+import { appendToolIndex, prepareToolSearch } from '../tools/toolSearch.js';
 import { resolveAppNativeWebSearch, READ_URL_TOOL_ID } from '../tools/webSearchResolver.js';
 import { prepareActiveSkills } from '../skillAccess.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
@@ -734,14 +735,35 @@ class RequestBuilder {
         activeSkills,
         chatContext
       };
-      const tools = applyIntegrationScopes(
+      const offeredTools = applyIntegrationScopes(
         llmMessages,
         await getToolsForApp(app, language, context),
         integrationScopes
       );
+      // An app with more integration tools than fit its budget sends the
+      // biggest integrations as a list and a search (`search_tools`, which
+      // loads what it finds) instead of in full; with tool search off, or under
+      // the budget, the request is the same as without it. Only for a model
+      // that calls tools: for any other it changes nothing and reads no tool
+      // search setting.
+      const {
+        tools,
+        toolSearch,
+        indexText: toolIndex
+      } = modelSupportsTools(model)
+        ? await prepareToolSearch({
+            tools: offeredTools,
+            app,
+            model,
+            features: configCache.getFeatures(),
+            language
+          })
+        : { tools: offeredTools, toolSearch: null, indexText: '' };
       // How to use the integrations this turn offers: their instructions and
-      // the guidance of each offered action (#2974).
+      // the guidance of each offered action (#2974). The tools left out to
+      // tool search bring theirs with `search_tools`.
       appendIntegrationGuidance(llmMessages, tools);
+      appendToolIndex(llmMessages, toolIndex);
       // Native search is the app's own: it needs no engine installation.
       const nativeWebSearch = resolveAppNativeWebSearch(
         app,
@@ -841,6 +863,7 @@ class RequestBuilder {
           model,
           llmMessages,
           tools,
+          toolSearch,
           apiKey: apiKeyResult.apiKey,
           maxTokens: finalTokens,
           responseFormat: outputFormat,
