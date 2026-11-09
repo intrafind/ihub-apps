@@ -3,13 +3,8 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendInternalError,
-  sendNotFound
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
@@ -76,18 +71,16 @@ async function templatesOf(resolved) {
   return out;
 }
 
-/** The installation, resolved, or null after answering 404 / 409. */
-async function resolveInstallation(req, res) {
+/** The installation, resolved; throws a 404 / 409 ServiceError otherwise. */
+async function resolveInstallation(req) {
   const id = req.params.id;
-  if (!validateIdForPath(id, 'integration', res)) return null;
+  assertValidId(id, 'integration');
   const resolved = await installedIntegrationService.resolve(id, languageOf(req));
   if (!resolved) {
-    sendNotFound(res, 'Integration');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'Integration not found');
   }
   if (!resolved.definition) {
-    sendErrorResponse(res, 409, 'The definition of this installation is not loaded');
-    return null;
+    throw new ServiceError('CONFLICT', 'The definition of this installation is not loaded');
   }
   return resolved;
 }
@@ -97,30 +90,26 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
     buildServerPath('/api/admin/integrations/installed/:id/example-apps'),
     adminAuth,
     async (req, res) => {
-      try {
-        const resolved = await resolveInstallation(req, res);
-        if (!resolved) return;
-        const language = languageOf(req);
-        const isTaken = appIdTaken();
-        const templates = (await templatesOf(resolved)).map(({ key, template }) =>
-          templateView(
-            key,
-            template,
-            language,
-            suggestAppId(template.id, resolved.instance.id, isTaken)
-          )
-        );
-        res.json({
-          success: true,
-          templates,
-          // Whether the calling admin's own groups grant the installation:
-          // without it the test chat runs without its actions.
-          grantedToYou: mayUseIntegration(resolved.instance, req.user),
-          enabled: resolved.instance.enabled !== false
-        });
-      } catch (error) {
-        sendInternalError(res, error, 'list example apps of an integration');
-      }
+      const resolved = await resolveInstallation(req);
+      const language = languageOf(req);
+      const isTaken = appIdTaken();
+      const templates = (await templatesOf(resolved)).map(({ key, template }) =>
+        templateView(
+          key,
+          template,
+          language,
+          suggestAppId(template.id, resolved.instance.id, isTaken)
+        )
+      );
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({
+        success: true,
+        templates,
+        // Whether the calling admin's own groups grant the installation:
+        // without it the test chat runs without its actions.
+        grantedToYou: mayUseIntegration(resolved.instance, req.user),
+        enabled: resolved.instance.enabled !== false
+      });
     }
   );
 
@@ -128,72 +117,67 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
     buildServerPath('/api/admin/integrations/installed/:id/example-apps'),
     adminAuth,
     async (req, res) => {
-      try {
-        const resolved = await resolveInstallation(req, res);
-        if (!resolved) return;
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
-        const templates = await templatesOf(resolved);
-        const chosen =
-          typeof body.template === 'string'
-            ? templates.find(entry => entry.key === body.template)
-            : templates[0];
-        if (!chosen) return sendBadRequest(res, 'Unknown example app');
+      const resolved = await resolveInstallation(req);
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const templates = await templatesOf(resolved);
+      const chosen =
+        typeof body.template === 'string'
+          ? templates.find(entry => entry.key === body.template)
+          : templates[0];
+      if (!chosen) throw new ServiceError('BAD_REQUEST', 'Unknown example app');
 
-        const isTaken = appIdTaken();
-        const suggested = suggestAppId(chosen.template.id, resolved.instance.id, isTaken);
-        const appId =
-          typeof body.appId === 'string' && body.appId.trim() ? body.appId.trim() : suggested;
-        if (!isValidAppId(appId)) {
-          return sendBadRequest(
-            res,
-            'Invalid app id: lowercase letters, digits, dots, underscores and hyphens, at most 50 characters'
-          );
-        }
-        if (isTaken(appId)) {
-          return sendErrorResponse(res, 409, 'App with this ID already exists');
-        }
-
-        const newApp = buildExampleApp({
-          template: chosen.template,
-          definition: resolved.definition,
-          instance: resolved.instance,
-          appId,
-          enabled: body.enabled !== false,
-          renamed: Boolean(chosen.template.id) && isTaken(chosen.template.id)
-        });
-        const validation = appConfigSchema.safeParse(newApp);
-        if (!validation.success) {
-          logger.warn('Example app does not pass the app schema', {
-            component: COMPONENT,
-            integration: resolved.instance.id,
-            template: chosen.key,
-            error: describeIssues(validation.error)
-          });
-          return sendBadRequest(
-            res,
-            `Invalid app configuration: ${describeIssues(validation.error)}`,
-            validation.error.issues
-          );
-        }
-
-        try {
-          await configStore.createJson(`apps/${appId}.json`, newApp);
-        } catch (error) {
-          if (error.code !== 'EEXIST') throw error;
-          return sendErrorResponse(res, 409, 'App with this ID already exists');
-        }
-        await configCache.refreshAppsCache();
-        await logAudit({
-          req,
-          action: 'create',
-          resource: 'app',
-          resourceId: appId,
-          summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
-        });
-        res.status(201).json({ success: true, app: newApp });
-      } catch (error) {
-        sendInternalError(res, error, 'create example app of an integration');
+      const isTaken = appIdTaken();
+      const suggested = suggestAppId(chosen.template.id, resolved.instance.id, isTaken);
+      const appId =
+        typeof body.appId === 'string' && body.appId.trim() ? body.appId.trim() : suggested;
+      if (!isValidAppId(appId)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid app id: lowercase letters, digits, dots, underscores and hyphens, at most 50 characters'
+        );
       }
+      if (isTaken(appId)) {
+        throw new ServiceError('CONFLICT', 'App with this ID already exists');
+      }
+
+      const newApp = buildExampleApp({
+        template: chosen.template,
+        definition: resolved.definition,
+        instance: resolved.instance,
+        appId,
+        enabled: body.enabled !== false,
+        renamed: Boolean(chosen.template.id) && isTaken(chosen.template.id)
+      });
+      const validation = appConfigSchema.safeParse(newApp);
+      if (!validation.success) {
+        logger.warn('Example app does not pass the app schema', {
+          component: COMPONENT,
+          integration: resolved.instance.id,
+          template: chosen.key,
+          error: describeIssues(validation.error)
+        });
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Invalid app configuration: ${describeIssues(validation.error)}`
+        );
+      }
+
+      try {
+        await configStore.createJson(`apps/${appId}.json`, newApp);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        throw new ServiceError('CONFLICT', 'App with this ID already exists');
+      }
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'create',
+        resource: 'app',
+        resourceId: appId,
+        summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
+      });
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.status(201).json({ success: true, app: newApp });
     }
   );
 }
