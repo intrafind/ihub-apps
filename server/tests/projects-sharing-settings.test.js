@@ -186,7 +186,7 @@ describe('project sharing settings', () => {
     assert.deepEqual(res.body.limits, {
       maxFiles: 10,
       maxFileBytes: 20 * 1024 * 1024,
-      maxProjectBytes: 200 * 1024 * 1024,
+      maxProjectBytes: 500 * 1024 * 1024,
       maxProjectsPerUser: 20
     });
     assert.equal(res.body.maxFilesCeiling, MAX_FILES_CEILING);

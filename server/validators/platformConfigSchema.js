@@ -727,9 +727,9 @@ export const platformConfigSchema = z
         defaultAppId: z.string().max(100).optional(),
         limits: z
           .object({
-            maxFiles: z.number().int().min(1).max(MAX_FILES_CEILING).prefault(25),
+            maxFiles: z.number().int().min(1).max(MAX_FILES_CEILING).prefault(100),
             maxFileBytes: z.number().int().positive().prefault(20971520),
-            maxProjectBytes: z.number().int().positive().prefault(209715200),
+            maxProjectBytes: z.number().int().positive().prefault(524288000),
             maxProjectsPerUser: z.number().int().prefault(20)
           })
           .passthrough()

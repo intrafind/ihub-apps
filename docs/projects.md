@@ -934,9 +934,9 @@ would go past it.
   "projects": {
     "tierPolicy": "ihub",
     "limits": {
-      "maxFiles": 25,
+      "maxFiles": 100,
       "maxFileBytes": 20971520,
-      "maxProjectBytes": 209715200,
+      "maxProjectBytes": 524288000,
       "maxProjectsPerUser": 20
     },
     "sharing": {
@@ -957,9 +957,9 @@ would go past it.
 
 | Key                         | Default             | Meaning                                                                                                  |
 | --------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `limits.maxFiles`           | `25`                | Items per project, every kind counted. At most 200 (the document cap of an iFinder smart collection).    |
+| `limits.maxFiles`           | `100`               | Items per project, every kind counted. At most 200 (the document cap of an iFinder smart collection).    |
 | `limits.maxFileBytes`       | `20971520` (20 MB)  | Size of one uploaded or picked file.                                                                     |
-| `limits.maxProjectBytes`    | `209715200` (200 MB) | Sum of the original file sizes in one project.                                                          |
+| `limits.maxProjectBytes`    | `524288000` (500 MB) | Sum of the original file sizes in one project.                                                          |
 | `limits.maxProjectsPerUser` | `20`                | User projects one person may own; 0 or less means no limit. Admin projects do not count.                 |
 | `sharing.allowUsers`        | `true`              | Users may share with individual users.                                                                   |
 | `sharing.allowGroups`       | `true`              | Users may share with groups.                                                                             |
