@@ -721,3 +721,20 @@ answer `{ items }`: `GET /api/apps`, `GET /api/models` (with `?type=` too), `GET
 **Scripts and integrations that call these with an OAuth token or API key must read `body.items`**,
 for example `curl … /api/models | jq '.items[].id'` instead of `jq '.[].id'`. The conditional-request
 behaviour (`ETag` / `If-None-Match`) is unchanged.
+
+## Lists Named After What They Hold Are `{ items }` Too
+
+A list answer is `{ "items": [...] }` whatever it holds. These answered a list under its own name and
+now answer `items` (siblings such as `persisted`, `pinned` or `categories` keep their names):
+
+- Admin: `GET /api/admin/{credentials, ui/assets, document-templates, docs/search, features}`,
+  `…/integrations/installed/{id}/connections`, `…/integrations/ifinder/assistants` and
+  `…/models/{id}/tts/voices`, plus the answer of `POST …/office-integration/office-js/_test`.
+- User: `GET /api/document-templates`, `GET /api/integrations`, `GET /api/integrations/scopes`,
+  `GET /api/interactions/pending`, `GET /api/runs`, the jobs an OCR upload starts, and the cloud storage lists
+  (`…/sources`, `…/drives/{source}` of Google Drive, Office 365 and Nextcloud).
+- Project pickers: `GET /api/projects/pickers/{pages, ifinder/search, cloud}`.
+
+The web app is updated. A script that reads one of these reads `body.items`. Maps such as
+`GET /api/admin/{models,providers}/_key-status` (`statuses`, keyed by id) are not lists and keep
+their shape.

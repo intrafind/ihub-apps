@@ -646,7 +646,7 @@ export const fetchAdminProjectItemText = async (projectId, itemId, { maxChars = 
  */
 export const fetchProjectPickerPages = async () => {
   const response = await makeAdminApiCall('/projects/pickers/pages');
-  return Array.isArray(response.data?.pages) ? response.data.pages : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
@@ -677,7 +677,7 @@ export const searchProjectPickerIFinder = async (query, { profile, limit } = {})
   if (profile) params.set('profile', profile);
   if (limit) params.set('limit', String(limit));
   const response = await makeAdminApiCall(`/projects/pickers/ifinder/search?${params}`);
-  return Array.isArray(response.data?.results) ? response.data.results : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
@@ -811,7 +811,7 @@ export const listCredentials = async () => {
   try {
     const response = await makeAdminApiCall('/admin/credentials');
     const data = response.data;
-    const credentials = data?.credentials ?? data;
+    const credentials = data?.items;
     return Array.isArray(credentials) ? credentials : [];
   } catch (error) {
     console.error('Error in listCredentials:', error);

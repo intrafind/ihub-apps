@@ -98,6 +98,6 @@ describe.each(PATHS)('GET %s: errors', path => {
 describe('GET assistants: success', () => {
   it('answers the list when iFinder answers', async () => {
     const res = await request(app).get(PATHS[0]).expect(200);
-    expect(res.body).toEqual({ assistants: [] });
+    expect(res.body).toEqual({ items: [] });
   });
 });

@@ -15,7 +15,7 @@ const enc = encodeURIComponent;
 /** @returns {Promise<Array<Object>>} Every template, enabled or not. */
 export async function fetchDocumentTemplates() {
   const response = await makeAdminApiCall(BASE);
-  return Array.isArray(response.data?.templates) ? response.data.templates : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 }
 
 /**

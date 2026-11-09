@@ -127,8 +127,8 @@ export function useCloudStorageBrowser(adapter, options = {}) {
       setLoading(true);
       setError(null);
       const response = await apiClient.get(`${basePath}/sources`, { params: baseQuery });
-      setSources(response.data.sources || []);
-      return response.data.sources || [];
+      setSources(response.data.items || []);
+      return response.data.items || [];
     } catch (err) {
       console.error(`Failed to load sources for ${basePath}:`, err);
       if (isAuthRequired(err)) {
@@ -151,7 +151,7 @@ export function useCloudStorageBrowser(adapter, options = {}) {
         const response = await apiClient.get(`${basePath}/drives/${sourceId}`, {
           params: baseQuery
         });
-        const result = response.data.drives || [];
+        const result = response.data.items || [];
         setDrives(result);
         return result;
       } catch (err) {

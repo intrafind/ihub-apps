@@ -24,7 +24,7 @@ function AdminFeaturesPage() {
     try {
       setLoading(true);
       const response = await makeAdminApiCall('/admin/features', { method: 'GET' });
-      setFeatures(response.data.features || []);
+      setFeatures(response.data.items || []);
       setCategories(response.data.categories || {});
       setDirtyFlags({});
     } catch (error) {

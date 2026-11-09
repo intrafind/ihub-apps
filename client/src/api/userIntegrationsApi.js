@@ -38,7 +38,7 @@ const path = id => `/integrations/${encodeURIComponent(id)}`;
  */
 export async function fetchUserIntegrations() {
   const { data } = await apiClient.get('/integrations', QUIET);
-  return Array.isArray(data?.integrations) ? data.integrations : [];
+  return Array.isArray(data?.items) ? data.items : [];
 }
 
 /**

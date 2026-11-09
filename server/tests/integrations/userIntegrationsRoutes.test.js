@@ -223,10 +223,10 @@ describe('GET /api/integrations', () => {
   it('lists only the installations the groups allow, with how each runs', async () => {
     const res = await request(app).get('/api/integrations').set('x-test-user', 'member');
     assert.equal(res.status, 200);
-    const ids = res.body.integrations.map(entry => entry.id);
+    const ids = res.body.items.map(entry => entry.id);
     assert.ok(ids.includes('jira') && ids.includes('nc-main') && ids.includes('brave'));
     assert.ok(!ids.includes('nc-legal'), 'an installation the groups do not grant is never listed');
-    const byId = Object.fromEntries(res.body.integrations.map(entry => [entry.id, entry]));
+    const byId = Object.fromEntries(res.body.items.map(entry => [entry.id, entry]));
     assert.deepEqual(
       {
         mode: byId.jira.connection.mode,
@@ -247,7 +247,7 @@ describe('GET /api/integrations', () => {
     assert.deepEqual(byId['nc-main'].capabilities, ['files']);
     assert.equal(byId.brave.connection.mode, 'shared_key');
     assert.equal(byId.brave.connection.status, 'shared_key');
-    for (const entry of res.body.integrations) {
+    for (const entry of res.body.items) {
       assert.ok(Array.isArray(entry.actions) && Array.isArray(entry.effects), entry.id);
       assert.ok(!JSON.stringify(entry).includes('secret-of-'), 'no secret in the listing');
     }
@@ -256,7 +256,7 @@ describe('GET /api/integrations', () => {
   it('lists nothing for a user whose groups grant nothing, and refuses anonymous callers', async () => {
     const outsider = await request(app).get('/api/integrations').set('x-test-user', 'outsider');
     assert.deepEqual(
-      outsider.body.integrations.filter(entry => entry.id !== 'ihub'),
+      outsider.body.items.filter(entry => entry.id !== 'ihub'),
       []
     );
     const anonymous = await request(app).get('/api/integrations');
@@ -695,12 +695,12 @@ describe('GET /api/integrations: apps and categories (#2922)', () => {
   it('lists the apps the user may open that use each integration', async () => {
     const res = await request(app).get('/api/integrations').set('x-test-user', 'member');
     assert.equal(res.status, 200);
-    const byId = Object.fromEntries(res.body.integrations.map(entry => [entry.id, entry]));
+    const byId = Object.fromEntries(res.body.items.map(entry => [entry.id, entry]));
     assert.deepEqual(byId.jira.apps, [{ id: 'tickets', name: 'Tickets' }]);
     // `websearch.provider: "auto"` uses the first engine the user may use.
     assert.deepEqual(byId.brave.apps, [{ id: 'research', name: 'Research' }]);
     assert.deepEqual(byId['nc-main'].apps, []);
-    for (const entry of res.body.integrations) {
+    for (const entry of res.body.items) {
       assert.ok(Array.isArray(entry.categories), entry.id);
       assert.ok(Array.isArray(entry.connection.sharedWith), entry.id);
     }

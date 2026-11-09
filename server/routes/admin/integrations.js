@@ -1411,7 +1411,7 @@ export default function registerAdminIntegrationsRoutes(app) {
       const connections = found.adapter?.listConnections
         ? await found.adapter.listConnections(found.resolved.instance)
         : [];
-      res.json({ connections });
+      res.json({ items: connections });
     }
   );
 

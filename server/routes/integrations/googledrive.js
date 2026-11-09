@@ -95,7 +95,7 @@ router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => 
     }
   }
 
-  res.json({ sources });
+  res.json({ items: sources });
 });
 
 /**
@@ -147,7 +147,7 @@ router.get('/drives/:source', authRequired, googleDriveApiLimiter, async (req, r
         );
     }
 
-    res.json({ drives });
+    res.json({ items: drives });
   } catch (error) {
     logger.error('Error listing Google Drive drives', {
       component: 'Google Drive',

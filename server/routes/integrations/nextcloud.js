@@ -77,7 +77,7 @@ router.get('/sources', authRequired, nextcloudApiLimiter, async (req, res) => {
     }
   ];
 
-  res.json({ sources });
+  res.json({ items: sources });
 });
 
 /**
@@ -116,7 +116,7 @@ router.get('/drives/:source', authRequired, nextcloudApiLimiter, async (req, res
     }
 
     res.json({
-      drives: [
+      items: [
         {
           id: 'root',
           name: displayName,

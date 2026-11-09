@@ -360,7 +360,7 @@ export const fetchProjectChats = async (projectId, { filter = 'all', limit, curs
  */
 export const fetchPickerPages = async () => {
   const data = await call(() => apiClient.get(`${PROJECTS_PATH}/pickers/pages`));
-  return Array.isArray(data?.pages) ? data.pages : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };
 
 /**
@@ -392,7 +392,7 @@ export const searchPickerIFinder = async (query, { profile, limit } = {}) => {
   const data = await call(() =>
     apiClient.get(`${PROJECTS_PATH}/pickers/ifinder/search`, { params })
   );
-  return Array.isArray(data?.results) ? data.results : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };
 
 /**
@@ -451,5 +451,5 @@ export const crawlPickerUrl = async (url, options = {}) => {
  */
 export const fetchPickerCloudProviders = async () => {
   const data = await call(() => apiClient.get(`${PROJECTS_PATH}/pickers/cloud`));
-  return Array.isArray(data?.providers) ? data.providers : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };

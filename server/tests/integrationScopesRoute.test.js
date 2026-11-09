@@ -79,8 +79,8 @@ describe('integration scope routes', () => {
   it('lists the scopes of every integration the app uses', async () => {
     const res = await request(appFor(USER)).get('/api/integrations/scopes?appId=ifinder-search');
     assert.equal(res.status, 200);
-    assert.equal(res.body.integrations.length, 1);
-    const [ifinder] = res.body.integrations;
+    assert.equal(res.body.items.length, 1);
+    const [ifinder] = res.body.items;
     assert.equal(ifinder.id, 'ifinder');
     assert.equal(ifinder.action, 'search');
     assert.equal(ifinder.scopePicker, 'hidden');
@@ -94,7 +94,7 @@ describe('integration scope routes', () => {
   it('lists nothing for an app without integrations that offer scopes', async () => {
     const res = await request(appFor(USER)).get('/api/integrations/scopes?appId=plain-chat');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.integrations, []);
+    assert.deepEqual(res.body.items, []);
   });
 
   it('answers one integration', async () => {
@@ -152,7 +152,7 @@ describe('integration scope routes', () => {
     };
     const res = await request(appFor(USER)).get('/api/integrations/scopes?appId=ifinder-search');
     assert.equal(res.status, 200);
-    const [ifinder] = res.body.integrations;
+    const [ifinder] = res.body.items;
     assert.equal(ifinder.hint, 'forbidden');
     assert.deepEqual(
       ifinder.scopes.map(scope => scope.id),

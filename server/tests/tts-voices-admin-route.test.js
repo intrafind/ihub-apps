@@ -104,7 +104,7 @@ describe('text-to-speech voices of a model', () => {
   test('lists the voices of a TTS model, even a disabled one', async () => {
     const res = await request(app).get(base);
     expect(res.status).toBe(200);
-    expect(res.body.voices[0]).toMatchObject({ slug: 'en_paul_neutral' });
+    expect(res.body.items[0]).toMatchObject({ slug: 'en_paul_neutral' });
   });
 
   test('a chat model has no voices', async () => {

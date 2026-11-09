@@ -59,7 +59,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
    *             schema:
    *               type: object
    *               properties:
-   *                 assistants:
+   *                 items:
    *                   type: array
    *                   items:
    *                     type: object
@@ -90,7 +90,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
           baseUrl: iAssistantService.getConfig().baseUrl,
           language: languageOf(req.query.lang)
         });
-        res.json({ assistants });
+        res.json({ items: assistants });
       } catch (error) {
         logger.warn('Could not list the iFinder iAssistants', {
           component: 'AdminIFinderAssistants',

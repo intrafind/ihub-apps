@@ -22,7 +22,7 @@ function AssetManager({ t }) {
       setError(null);
 
       const response = await makeAdminApiCall('/admin/ui/assets');
-      setAssets(response.data?.assets || []);
+      setAssets(response.data?.items || []);
     } catch (err) {
       console.error('Failed to load assets:', err);
       setError(err.message || 'Failed to load assets');

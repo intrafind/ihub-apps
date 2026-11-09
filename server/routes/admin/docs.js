@@ -63,9 +63,9 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
    */
   app.get(buildServerPath('/api/admin/docs/search'), adminAuth, async (req, res) => {
     const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
-    if (!query.trim()) return res.json({ query: '', results: [] });
+    if (!query.trim()) return res.json({ query: '', items: [] });
     const results = searchDocsIndex(await getIndex(), query);
-    res.json({ query, results });
+    res.json({ query, items: results });
   });
 
   /**

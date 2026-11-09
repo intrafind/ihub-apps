@@ -89,7 +89,7 @@ export default function registerExportRoutes(app) {
     const pinned = appOf(req.query.appId)?.documentTemplate;
     res.setHeader('Cache-Control', 'no-store');
     res.json({
-      templates,
+      items: templates,
       pinned: templates.some(template => template.id === pinned) ? pinned : null
     });
   });

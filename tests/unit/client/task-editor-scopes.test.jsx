@@ -144,7 +144,7 @@ describe('TaskEditorPage: where the task searches', () => {
     useScheduledTaskLimits.mockReturnValue(LIMITS);
     fetchModels.mockResolvedValue([]);
     fetchScheduledTaskAppTools.mockResolvedValue({ items: [] });
-    fetchIntegrationScopes.mockResolvedValue({ integrations: [IFINDER] });
+    fetchIntegrationScopes.mockResolvedValue({ items: [IFINDER] });
     createScheduledTask.mockResolvedValue({ id: 'st-new' });
     updateScheduledTask.mockResolvedValue({ id: 'st-1' });
     fetchScheduledTask.mockResolvedValue(TASK);
@@ -222,9 +222,7 @@ describe('TaskEditorPage: where the task searches', () => {
 
   it('shows a scope the app fixes without letting it change', async () => {
     fetchIntegrationScopes.mockResolvedValue({
-      integrations: [
-        { ...IFINDER, fixed: true, scopes: [IFINDER.scopes[1]], defaultScope: 'contracts' }
-      ]
+      items: [{ ...IFINDER, fixed: true, scopes: [IFINDER.scopes[1]], defaultScope: 'contracts' }]
     });
     await renderEditor('/tasks/st-1/edit');
     expect(scopeSelect()).toBeDisabled();

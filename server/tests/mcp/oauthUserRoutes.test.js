@@ -433,7 +433,7 @@ describe('POST /api/integrations/:id/_connect (MCP)', () => {
     expect(res.status).toBe(200);
     expect(res.location).toContain('https://okta-mcp.example.com/authorize?');
     const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
-    expect(listed.body.integrations.map(entry => entry.id)).toContain('okta');
+    expect(listed.body.items.map(entry => entry.id)).toContain('okta');
   });
 
   it('refuses a user whose groups do not grant the installation, whatever the apps grant', async () => {
@@ -449,7 +449,7 @@ describe('POST /api/integrations/:id/_connect (MCP)', () => {
     expect(hidden.status).toBe(404);
     // The listing never shows an integration the user's groups do not allow.
     const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
-    expect(listed.body.integrations.map(entry => entry.id)).not.toContain('okta');
+    expect(listed.body.items.map(entry => entry.id)).not.toContain('okta');
     // Admins configure and test the server: they always may connect.
     const admin = await connect({ user: 'root', admin: true });
     expect(admin.status).toBe(200);
@@ -598,7 +598,7 @@ describe('GET /api/integrations and POST /api/integrations/:id/_disconnect (MCP)
       { access_token: 'a', token_type: 'bearer', expires_in: 3600, scope: 'openid' },
       tokenBindingFor(SERVER)
     );
-    const okta = res => res.body.integrations.find(entry => entry.id === 'okta');
+    const okta = res => res.body.items.find(entry => entry.id === 'okta');
     const alice = await request(app).get('/api/integrations').set('x-test-user', 'alice');
     expect(alice.status).toBe(200);
     expect([okta(alice)]).toEqual([

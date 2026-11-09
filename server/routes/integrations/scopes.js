@@ -148,7 +148,7 @@ router.get('/scopes', authRequired, async (req, res) => {
       describe(provider, { req, ...context, signal })
     )
   );
-  res.json({ integrations });
+  res.json({ items: integrations });
 });
 
 /**

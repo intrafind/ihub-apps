@@ -78,7 +78,7 @@ router.get('/sources', authRequired, office365ApiLimiter, async (req, res) => {
   ];
   const sources = allSources.filter(source => enabled[SOURCE_SETTINGS[source.id]]);
 
-  res.json({ sources });
+  res.json({ items: sources });
 });
 
 /**
@@ -117,7 +117,7 @@ router.get('/drives/:source', authRequired, office365ApiLimiter, async (req, res
         throw new ServiceError('BAD_REQUEST', 'Source must be one of: personal, sharepoint, teams');
     }
 
-    res.json({ drives });
+    res.json({ items: drives });
   } catch (error) {
     logger.error('Error listing Office 365 drives', {
       component: 'Office 365',

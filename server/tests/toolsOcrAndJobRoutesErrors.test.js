@@ -138,8 +138,8 @@ describe('OCR upload route: errors', () => {
     const res = await postOcr()
       .attach('files', PDF, { filename: 'a.pdf', contentType: 'application/pdf' })
       .expect(200);
-    expect(res.body.jobs).toHaveLength(1);
-    expect(processed).toEqual([res.body.jobs[0].jobId]);
+    expect(res.body.items).toHaveLength(1);
+    expect(processed).toEqual([res.body.items[0].jobId]);
   });
 });
 

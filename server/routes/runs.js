@@ -110,7 +110,7 @@ export default function registerRunRoutes(app) {
       principalId: typeof req.query.principalId === 'string' ? req.query.principalId : undefined,
       limit
     });
-    res.json({ runs, persisted: runLog.isEnabled() });
+    res.json({ items: runs, persisted: runLog.isEnabled() });
   });
 
   app.get(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
@@ -465,7 +465,7 @@ export default function registerRunRoutes(app) {
     // A tool approval's arguments are the requester's: anyone else (an
     // admin, an approver group) sees secret-looking values redacted (#2945).
     res.json({
-      interactions: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
+      items: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
     });
   });
 }

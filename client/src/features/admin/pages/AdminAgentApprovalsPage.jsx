@@ -43,7 +43,7 @@ export default function AdminAgentApprovalsPage() {
     void (async () => {
       try {
         const body = await fetchPendingInteractions();
-        const items = Array.isArray(body?.interactions) ? body.interactions : [];
+        const items = Array.isArray(body?.items) ? body.items : [];
         setPending(items.filter(i => i && i.kind !== 'notify'));
       } catch (err) {
         setError(err?.response?.data?.detail || err?.message || String(err));

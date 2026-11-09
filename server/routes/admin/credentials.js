@@ -125,7 +125,7 @@ export default function registerAdminCredentialsRoutes(app) {
     const credentials = Object.entries(store.credentials || {}).map(([id, profile]) =>
       redactProfile({ ...profile, id })
     );
-    res.json({ credentials });
+    res.json({ items: credentials });
   });
 
   // Get a single credential profile (secrets redacted).

@@ -476,7 +476,7 @@ function AdminOfficeIntegrationPage() {
       .then(res => {
         setOfficeJsReach(prev => {
           const next = { ...prev };
-          for (const r of res.data?.results || []) {
+          for (const r of res.data?.items || []) {
             next[r.url] = {
               ...next[r.url],
               server: r.reachable ? 'ok' : 'blocked',
