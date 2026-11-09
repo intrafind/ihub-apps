@@ -83,7 +83,8 @@ test.describe('Scheduled tasks', () => {
     await openChat.click();
     await expect(page).toHaveURL(/\/apps\/chat\/c\/[0-9a-f-]{36}$/);
     await expect(page.getByText('Scheduled run of')).toBeVisible();
-    await expect(page.getByRole('link', { name })).toBeVisible();
+    // The task's own link (the chat is also listed under Recents with the same name).
+    await expect(page.locator('a[href^="/tasks/"]').filter({ hasText: name })).toBeVisible();
 
     // Opening the chat is what "seen" means: the task has no unread run left.
     await expect

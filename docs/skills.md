@@ -229,7 +229,16 @@ does — for example a regulated app that must only use reviewed skills — set:
 ## Admin
 
 **Admin → Skills** manages the global skills (import, export, delete, group access) and has a
-**User skills** tab:
+**User skills** tab.
+
+Open a global skill to **switch it off** or to change the **description** shown for it. A skill that
+is off is offered to no app, user, agent or MCP client; its files stay installed and you switch it
+on again at any time. A description you set replaces the one in the skill's `SKILL.md` wherever
+the skill is listed (the skill's files are not touched, so a marketplace update does not overwrite
+it); clear the field to go back to the original. Both are stored in `contents/config/skills.json`.
+System skills ship with iHub, are always on and cannot be changed here.
+
+The **User skills** tab:
 
 - It lists the user skills shared with a group or with everyone. Private skills and skills
   shared only with named users are not listed.
@@ -287,6 +296,8 @@ global skills keep working.
 | ------ | ---- | ------- |
 | GET | `/api/skills` | Skills for the `/` picker: global skills the user may see, plus their own and shared user skills (`scope`: `global`, `mine`, `shared`) |
 | POST | `/api/skills/:name/_duplicate` | Copy a global skill into My skills |
+| PUT | `/api/admin/skills/:name` | Admin: set the description shown for a global skill (`{ configOverrides: { description } }`, empty removes it); answers the skill |
+| POST | `/api/admin/skills/:name/_toggle` | Admin: switch a global skill on or off; answers the skill with its new `enabled` |
 | GET | `/api/user-skills?scope=all\|mine\|shared` | The caller's own and shared user skills |
 | POST | `/api/user-skills` | Create a user skill (`name`, `description`, `body`, `files`) |
 | GET / PUT / DELETE | `/api/user-skills/:id` | Read (with instructions and files), update (`expectedRevision` refuses a stale save with 409), delete |

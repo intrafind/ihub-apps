@@ -1131,3 +1131,11 @@ now answers the metadata of one of your personal API keys (never its secret), an
 `GET /api/integrations/requests/{requestId}` answers one of your own integration requests. Both
 answer `404` for an id that is not yours. `GET /api/workflows/{id}` now also answers a disabled
 workflow to an administrator, so the `Location` of a create that saved it as disabled resolves.
+
+## Switch Skills Off and Change Their Description
+
+**Admin → Skills → (a skill)** now switches an installed skill on or off and changes the description
+shown for it. A skill that is off is offered to no app, user, agent or MCP client, and its files stay
+installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
+marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
+`contents/config/skills.json`, a new file that a fresh install and an upgrade create.

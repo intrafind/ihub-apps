@@ -947,9 +947,12 @@ export const updateSkill = async (skillName, data) => {
  * @returns {Promise<Object>} The toggled skill object with updated enabled state
  */
 export const toggleSkill = async skillName => {
-  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}/toggle`, {
-    method: 'POST'
-  });
+  const response = await makeAdminApiCall(
+    `/admin/skills/${encodeURIComponent(skillName)}/_toggle`,
+    {
+      method: 'POST'
+    }
+  );
   return response.data;
 };
 
