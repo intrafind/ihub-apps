@@ -267,6 +267,17 @@ describe('a picture of a turn', () => {
     assert.equal(regenerated.promptMessage.fileData, undefined);
   });
 
+  it('is no document for the model when a request names it by id as inline file data', async () => {
+    const first = await turn({ imageData: imageOf(PNG) });
+    const named = await turn({
+      content: 'again',
+      fileData: { type: 'document', fileId: first.attachments[0].id, fileName: 'whiteboard.png' }
+    });
+    assert.equal(named.attachments.length, 1);
+    assert.equal(named.attachments[0].id, first.attachments[0].id);
+    assert.equal(named.promptMessage.fileData, undefined);
+  });
+
   it('is not repeated as a document in the history of later turns', async () => {
     const first = await turn({ imageData: imageOf(PNG) });
     const history = await hydrateHistoryForPrompt(

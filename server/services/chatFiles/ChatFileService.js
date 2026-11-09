@@ -526,6 +526,26 @@ async function storeTurnImage({ repo, scope, ownerId, image, appConfig }) {
 }
 
 /**
+ * The message as the prompt gets it: with the files the turn resolved to, or as it came when it
+ * resolved to none. A request that only named a stored picture as inline file data must not
+ * leave that entry on the message, where the prompt would read it as an empty document.
+ *
+ * @param {Object} message - The user message of the request
+ * @param {Object[]} resolvedFiles - The documents of the turn, as the prompt takes them
+ * @param {boolean} namedPicture - Whether an inline entry named a stored picture
+ * @returns {Object}
+ */
+function promptMessageOf(message, resolvedFiles, namedPicture) {
+  if (resolvedFiles.length > 0) {
+    return { ...message, fileData: resolvedFiles.length === 1 ? resolvedFiles[0] : resolvedFiles };
+  }
+  if (!namedPicture) return message;
+  const withoutFiles = { ...message };
+  delete withoutFiles.fileData;
+  return withoutFiles;
+}
+
+/**
  * Persist any inline `fileData` carried on a new user message into
  * `ChatFileRepository` (if not already stored) and resolve any pre-uploaded
  * `attachmentIds` from `ChatFileRepository`, returning:
@@ -581,6 +601,8 @@ export async function prepareTurnFiles({
   const resolvedPromptFiles = [];
   const descriptors = [];
   const seenIds = new Set();
+  // The request named a stored picture as inline file data: it is no document for the model
+  let namedPicture = false;
 
   // 1. Resolve pre-uploaded (or inherited) file IDs from ChatFileRepository.
   if (activeRepo?.isAvailable() && targetIds.length > 0) {
@@ -604,7 +626,9 @@ export async function prepareTurnFiles({
       const stored = await activeRepo.getText(scope, existingId);
       if (stored) {
         seenIds.add(existingId);
-        resolvedPromptFiles.push(toPromptFileData(stored));
+        // A stored picture keeps its card but is not a document for the model
+        if (stored.origin === 'image') namedPicture = true;
+        else resolvedPromptFiles.push(toPromptFileData(stored));
         descriptors.push(describeStored(stored));
         continue;
       }
@@ -745,13 +769,7 @@ export async function prepareTurnFiles({
     if (descriptor) descriptors.push(descriptor);
   }
 
-  const promptMessage =
-    resolvedPromptFiles.length > 0
-      ? {
-          ...message,
-          fileData: resolvedPromptFiles.length === 1 ? resolvedPromptFiles[0] : resolvedPromptFiles
-        }
-      : message;
+  const promptMessage = promptMessageOf(message, resolvedPromptFiles, namedPicture);
 
   return { promptMessage, message: promptMessage, attachments: descriptors };
 }
