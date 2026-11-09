@@ -5346,6 +5346,19 @@
         "ifinder": "iFinder smart collections preferred",
         "ifinderHelp": "Smart collections can be added like under \"both\". Local projects stay usable and can still be created.",
         "requirements": "Smart collections also need iFinder configured (Integrations → iFinder), a user with the fi_smartcollections role and iFinder 6.8 or later. Use the iFinder integration test to check them."
+      },
+      "limits": {
+        "legend": "Limits of user projects",
+        "maxFiles": "Items per project",
+        "maxFilesHelp": "Every kind of item counts. At most {{max}}.",
+        "maxFileBytes": "Size of one file (MB)",
+        "maxFileBytesHelp": "An uploaded or picked file larger than this is refused.",
+        "maxProjectBytes": "Size of one project (MB)",
+        "maxProjectBytesHelp": "The original sizes of the files in a project, added up.",
+        "maxProjectsPerUser": "Projects per user",
+        "maxProjectsPerUserHelp": "Projects one person may own; 0 means no limit. Admin projects do not count.",
+        "applyHint": "Changes apply at once. Lowering a limit removes nothing; it only refuses what would go past it.",
+        "invalid": "Enter a number in the allowed range."
       }
     },
     "updates": {

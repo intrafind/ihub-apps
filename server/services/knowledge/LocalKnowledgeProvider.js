@@ -11,8 +11,11 @@
  * The corpus index lives in a per-process LRU keyed by the project and a
  * fingerprint of its items (their text hashes, or for link items the
  * fetched text), so a change to any item rebuilds it and nothing is ever
- * indexed from anything but stored or freshly fetched text. At 50 items the
- * rebuild is milliseconds; there is no persistent index.
+ * indexed from anything but stored or freshly fetched text. A rebuild costs
+ * about a second per 10 MB of text, whatever the item count: 200 items of
+ * 40 000 characters (8 MB) take under a second, 200 items of 1 MB about
+ * twenty. There is no persistent index, so the first search after a change
+ * pays it once.
  *
  * @module services/knowledge/LocalKnowledgeProvider
  */

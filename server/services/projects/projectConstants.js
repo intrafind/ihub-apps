@@ -120,8 +120,13 @@ export function smartCollectionIdOf(project) {
   return collectionIdOf(project.id);
 }
 
-/** Most items one project may hold, whatever an admin configures. */
-export const MAX_FILES_CEILING = 50;
+/**
+ * Most items one project may hold, whatever an admin configures
+ * (`platform.projects.limits.maxFiles`). 200 is the document cap of an iFinder
+ * smart collection (`MAX_COLLECTION_DOCUMENTS`), so both tiers share one
+ * ceiling. The bulk endpoints accept at most this many items or ids at once.
+ */
+export const MAX_FILES_CEILING = 200;
 
 /** Most members one project may carry. */
 export const MAX_MEMBERS = 100;

@@ -128,8 +128,10 @@ its category and tags and when it was last updated, with counts of all, enabled 
 projects and of the user projects on the installation; filter by item kind and status. The page
 needs the `projects` feature flag and the admin page switch `admin.pages.projects`; content admins
 and full admins may use it. Full administrators also find **Project settings** there: the sharing
-audiences (see [Roles and sharing](#roles-and-sharing)) and the tier policy (see
-[The iFinder tier](#the-ifinder-tier-smart-collections)).
+audiences (see [Roles and sharing](#roles-and-sharing)), the tier policy (see
+[The iFinder tier](#the-ifinder-tier-smart-collections)) and the limits of user projects (items per
+project, size of one file and of one project, projects per user; see
+[Platform settings](#platform-settings)).
 
 1. **New project** opens one form: the name (the **Project ID** is filled in from it until you
    type one; it cannot be changed later), an optional description, **Who can use this project?**,
@@ -829,7 +831,7 @@ What the owner can do, and how:
 - **Delete:** `DELETE /api/projects/:projectId` deletes the project; its chats stay, outside it.
   `?deleteCollection=true` deletes the collection in iFinder first (its documents stay there).
 - **Add documents:** `POST /api/projects/:projectId/items` with `{ kind: "ifinder-document", ref: { documentId } }`,
-  or `{ items: [...] }` for up to 50 at once. Only that kind is accepted. iFinder does not check ids,
+  or `{ items: [...] }` for up to 200 at once. Only that kind is accepted. iFinder does not check ids,
   so iHub does, with the user's own token: a document the user cannot read (or that does not exist)
   is refused with `DOCUMENT_NOT_READABLE` and nothing from that call is added. A document that is a
   member already is skipped (`200`, `alreadyMember`). More than 200 documents in total is refused
@@ -922,17 +924,19 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ## Platform settings
 
-`platform.json` → `projects`. Platform changes take effect after a server restart, except the
-sharing audiences changed under **Admin → Projects → Sharing of user projects**.
+`platform.json` → `projects`. A change to the file takes effect after a server restart. What
+**Admin → Projects → Project settings** changes (the sharing audiences, the tier policy, the default
+app and the four `limits`) applies at once. Lowering a limit removes nothing; it only refuses what
+would go past it.
 
 ```json
 {
   "projects": {
     "tierPolicy": "ihub",
     "limits": {
-      "maxFiles": 25,
+      "maxFiles": 100,
       "maxFileBytes": 20971520,
-      "maxProjectBytes": 209715200,
+      "maxProjectBytes": 524288000,
       "maxProjectsPerUser": 20
     },
     "sharing": {
@@ -953,9 +957,9 @@ sharing audiences changed under **Admin → Projects → Sharing of user project
 
 | Key                         | Default             | Meaning                                                                                                  |
 | --------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `limits.maxFiles`           | `25`                | Items per project, every kind counted. At most 50.                                                       |
+| `limits.maxFiles`           | `100`               | Items per project, every kind counted. At most 200 (the document cap of an iFinder smart collection).    |
 | `limits.maxFileBytes`       | `20971520` (20 MB)  | Size of one uploaded or picked file.                                                                     |
-| `limits.maxProjectBytes`    | `209715200` (200 MB) | Sum of the original file sizes in one project.                                                          |
+| `limits.maxProjectBytes`    | `524288000` (500 MB) | Sum of the original file sizes in one project.                                                          |
 | `limits.maxProjectsPerUser` | `20`                | User projects one person may own; 0 or less means no limit. Admin projects do not count.                 |
 | `sharing.allowUsers`        | `true`              | Users may share with individual users.                                                                   |
 | `sharing.allowGroups`       | `true`              | Users may share with groups.                                                                             |

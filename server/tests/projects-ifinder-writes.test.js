@@ -389,6 +389,18 @@ describe('adding documents', () => {
     );
   });
 
+  it('adds up to 200 documents in one call', async () => {
+    const ids = Array.from({ length: 150 }, (_, index) => `bulk-${index}`);
+    for (const id of ids) doc(id);
+    h.collection(1, ADA.email);
+    const res = await add(ADA, 1, {
+      items: ids.map(documentId => ({ kind: 'ifinder-document', ref: { documentId } }))
+    });
+    assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+    assert.equal(res.body.added.length, 150);
+    assert.equal(documentsOf(1).length, 150);
+  });
+
   it('answers 200 and writes nothing for a document that is a member already', async () => {
     h.collection(1, ADA.email, { documents: ['doc-a'] });
     const res = await addOne(ADA, 1, 'doc-a');
