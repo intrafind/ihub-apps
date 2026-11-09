@@ -551,7 +551,10 @@ function AppChat({
         'send',
         ...Object.keys(newVars).map(v => `var_${v}`)
       ].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+      // Only the query changes; the router keeps its own path. Never pass
+      // `window.location.pathname` here: it already holds the deployment's base
+      // path, which the router adds again (`/ihub/ihub/apps/…`).
+      navigate({ search: newSearch.toString() }, { replace: true });
     }
   }, [
     app,
@@ -1380,7 +1383,7 @@ function AppChat({
     const newSearch = new URLSearchParams(searchParams);
     newSearch.delete('send');
     newSearch.delete('prefill');
-    navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    navigate({ search: newSearch.toString() }, { replace: true });
 
     // A start form has no composer to submit: it shows the prefilled text and
     // sends it, as the template's {{content}}, once the form is filled in.
@@ -1434,7 +1437,7 @@ function AppChat({
       [DOCUMENT_ID_PARAM, DOCUMENT_SCOPE_PARAM, DOCUMENT_INTEGRATION_PARAM].forEach(k =>
         newSearch.delete(k)
       );
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+      navigate({ search: newSearch.toString() }, { replace: true });
     }
   });
 

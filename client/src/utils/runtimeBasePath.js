@@ -9,6 +9,8 @@
  * build to work at any subpath.
  */
 
+import { isCompleteAssetUrl, resolveAssetUrl } from './assetUrl';
+
 /**
  * Known top-level React Router routes — these are app routes, not deployment subpaths.
  *
@@ -273,6 +275,9 @@ export const buildWsUrl = endpoint => {
  * @returns {string} Complete asset URL
  */
 export const buildAssetUrl = asset => {
+  // A complete URL (another origin, `data:image/…`, `blob:…`) is used as it is.
+  if (isCompleteAssetUrl(asset)) return asset;
+
   // When the host has set an absolute API base URL (e.g. the browser
   // extension's side panel running from chrome-extension://<id>), assets
   // such as `/icons/<app-icon>.svg` live on the iHub server, NOT on the
@@ -288,8 +293,7 @@ export const buildAssetUrl = asset => {
     return asset.startsWith('/') ? asset : '/' + asset;
   }
 
-  const cleanAsset = asset.startsWith('/') ? asset.substring(1) : asset;
-  return buildPath(cleanAsset);
+  return resolveAssetUrl(asset, getBasePath());
 };
 
 /**

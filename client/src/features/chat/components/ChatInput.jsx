@@ -15,6 +15,7 @@ import {
   typeSlashAt
 } from '../utils/slashCommand';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
+import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -189,6 +190,8 @@ function ChatInput({
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
+  // The embedded host (Outlook taskpane, browser extension) and its context toggles.
+  const embeddedHost = useEmbeddedHost();
   const featureFlags = useFeatureFlags();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
@@ -492,7 +495,14 @@ function ChatInput({
     visibleScopes.length > 0 ||
     hasCloudProviders ||
     model?.supportsImageGeneration === true;
-  const isSingleActionOptimization = !hasPicker && quickActionCount === 1;
+  // The host's "Include …" toggles (browser extension) give the menu a section
+  // of its own, so it is no longer a single action there either; counted here
+  // too, or neither side would show the one quick action on a desktop.
+  const hasHostContextToggles =
+    Boolean(onHostContextFlagChange) &&
+    Array.isArray(embeddedHost?.contextToggles) &&
+    embeddedHost.contextToggles.length > 0;
+  const isSingleActionOptimization = !hasPicker && !hasHostContextToggles && quickActionCount === 1;
 
   // Handler to trigger file upload dialog via ref
   const handleAttachFile = useCallback(() => {

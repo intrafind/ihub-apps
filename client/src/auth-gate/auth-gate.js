@@ -532,9 +532,13 @@
     }
 
     // Logo — use configured logo or fall back to app icon
-    // Prepend base path for root-relative logo URLs so they work behind a subpath proxy
-    if (logoUrl && logoUrl.charAt(0) === '/' && logoUrl.charAt(1) !== '/') {
-      logoUrl = (window.__BASE_PATH__ || '') + logoUrl;
+    // Prepend base path for root-relative logo URLs so they work behind a subpath proxy,
+    // unless the URL already starts with it (same rule as utils/assetUrl.js).
+    var gateBase = window.__BASE_PATH__ || '';
+    var hasBase =
+      gateBase !== '' && (logoUrl === gateBase || (logoUrl || '').indexOf(gateBase + '/') === 0);
+    if (logoUrl && logoUrl.charAt(0) === '/' && logoUrl.charAt(1) !== '/' && !hasBase) {
+      logoUrl = gateBase + logoUrl;
     }
     var logoDiv = createElement('div', 'ag-logo');
     var img = document.createElement('img');

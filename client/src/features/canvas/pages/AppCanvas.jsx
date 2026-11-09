@@ -116,7 +116,7 @@ export default function AppCanvas() {
       ['model', 'style', 'outfmt', 'history', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(
         k => newSearch.delete(k)
       );
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+      navigate({ search: newSearch.toString() }, { replace: true });
     }
   }, [
     app,
