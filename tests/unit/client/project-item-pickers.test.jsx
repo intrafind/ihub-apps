@@ -445,6 +445,40 @@ describe('IFinderDocumentPicker', () => {
     expect(draftOf()).toMatchObject({ documentId: 'd1', name: 'Our lease' });
   });
 
+  test('a title with several values names the item after its first one', async () => {
+    // #3532: iFinder keeps a multi-valued title as a list; the draft got the
+    // list and adding the document threw on `.trim()`.
+    render(
+      <WithDraft
+        picker={IFinderDocumentPicker}
+        initial={{ documentId: '', documentTitle: '', name: '' }}
+        searchIFinder={() =>
+          Promise.resolve([
+            {
+              documentId: 'd3',
+              title: ['Rental contract', 'Contract'],
+              mimeType: ['application/pdf'],
+              url: ['https://dms.example/d3', 'https://mirror.example/d3']
+            }
+          ])
+        }
+        errorMessage={errorMessage}
+      />
+    );
+    const field = screen.getByLabelText('Search iFinder');
+    fireEvent.change(field, { target: { value: 'rental' } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+    expect(screen.getByText('application/pdf · https://dms.example/d3')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Rental contract'));
+    expect(draftOf()).toMatchObject({
+      documentId: 'd3',
+      documentTitle: 'Rental contract',
+      name: 'Rental contract'
+    });
+  });
+
   test('searches in the search profile shown, and in the one the user picks', async () => {
     const searchIFinder = jest.fn(() => Promise.resolve(RESULTS));
     const fetchProfiles = () =>

@@ -291,7 +291,7 @@ export class ProjectService {
       // project is resolved to its original, with the creator's access.
       const prepared =
         typeof kind.prepare === 'function'
-          ? await kind.prepare(ref, { user: actor, projectId: project.id })
+          ? await kind.prepare(ref, { user: actor, projectId: project.id, name: input.name })
           : null;
       items.push(
         buildItem(kind, prepared?.ref || ref, input, {
@@ -516,7 +516,7 @@ export class ProjectService {
     const { kind } = checked;
     const prepared =
       typeof kind.prepare === 'function'
-        ? await kind.prepare(checked.ref, { user, projectId })
+        ? await kind.prepare(checked.ref, { user, projectId, name: input.name })
         : null;
     const ref = prepared?.ref || checked.ref;
     const isText = kind.storage.ihub === 'text';

@@ -1287,3 +1287,9 @@ about half the pane — so a long prompt can be read and edited without scrollin
 - Available in the chat and on the start page. The header and the send button stay visible, also
   in a narrow pane.
 - The web app and the canvas are unchanged.
+
+## Projects: A Web Page Is Named After Its Title
+
+A web page added to a project without a name now shows the page's title instead of its URL. A name
+you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
+page that cannot be read when it is added keeps its URL as the name.

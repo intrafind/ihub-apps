@@ -689,6 +689,26 @@ describe('extractText', () => {
     assert.match(html.text, /# Lease/);
     assert.match(html.text, /Rent is due\./);
     assert.doesNotMatch(html.text, /bad\(\)/);
+    // A wiki page: only the article is kept, not its menus, page tree and footer.
+    const wiki = await extractText({
+      bytes: Buffer.from(
+        `<html><body>
+          <div id="header"><a href="#main">Skip to content</a><ul><li>Pages</li><li>Blog</li></ul></div>
+          <div class="ia-secondary-sidebar"><h5>Page tree</h5><ul><li>Human Resources</li><li>Travel</li></ul></div>
+          <div id="main"><h1>Human Resources</h1><div id="main-content" class="wiki-content">
+            <p>Here you find everything about your working day with us, from onboarding to payroll and leave.</p>
+            <h2>Contacts</h2><p>Helene is reachable Monday to Thursday and looks after recruiting and onboarding.</p>
+            <ul><li>Recruiting</li><li>Onboarding</li><li>Payroll</li></ul>
+            <p>Sarah is reachable Monday to Friday and looks after payroll and the finance team.</p>
+          </div></div>
+          <div id="footer"><ul><li>Powered by Atlassian Confluence 7.13.0</li><li>Report a bug</li></ul></div>
+        </body></html>`
+      ),
+      contentType: 'text/html'
+    });
+    assert.match(wiki.text, /## Contacts/);
+    assert.match(wiki.text, /- Payroll/);
+    assert.doesNotMatch(wiki.text, /Skip to content|Page tree|Powered by Atlassian/);
     const eml = await extractText({
       bytes: Buffer.from(
         'From: ada@example.com\r\nTo: grace@example.com\r\nSubject: =?UTF-8?B?TWlldGU=?= due\r\nContent-Type: multipart/alternative; boundary="b1"\r\n\r\n--b1\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nThe rent is f=C3=A4llig.\r\n--b1\r\nContent-Type: text/html\r\n\r\n<p>The rent is <b>due</b>.</p>\r\n--b1--\r\n'

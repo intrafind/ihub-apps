@@ -49,7 +49,7 @@ export const PICKER_TYPES = Object.freeze(['upload', 'url', 'page', 'ifinder', '
  * @property {(ref: Object, lang?: string) => {name?: string, url?: string, site?: string}} [describe]
  * @property {(item: Object, ctx: Object) => Promise<Object>} [fetch]
  * @property {(ref: Object, ctx: Object) => Promise<Object>} [test]
- * @property {(ref: Object, ctx: {user: Object, projectId: string}) =>
+ * @property {(ref: Object, ctx: {user: Object, projectId: string, name?: string}) =>
  *   Promise<{ref?: Object, name?: string, source?: Object}>} [prepare] - Checks a
  *   new item against the caller before it is stored, and may settle its ref,
  *   name and provenance source (a linked item resolves to its original).

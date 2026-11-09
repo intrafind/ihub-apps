@@ -40,6 +40,7 @@ import {
 import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
+import { extractHtmlPage } from '../../tools/lib/pageContent.js';
 
 /** The most characters one item keeps (about 10 MB of text). */
 export const MAX_TEXT_CHARS = MAX_ITEM_TEXT_CHARS;
@@ -472,6 +473,18 @@ function htmlText(html) {
       { selector: 'table', format: 'dataTable' }
     ]
   });
+}
+
+/**
+ * An HTML file's main content as Markdown, the way the page reader reads a
+ * fetched page: menus, page trees, breadcrumbs and footers are left out, so
+ * they do not repeat in every chunk of the item. Falls back to the whole page
+ * when nothing is found, or when the main content is longer than the reader
+ * keeps (the reader's cap would silently drop the rest).
+ */
+function htmlFileText(html) {
+  const page = extractHtmlPage(html);
+  return page.markdown && !page.capped ? page.markdown : htmlText(html);
 }
 
 const latin1 = new TextDecoder('latin1');
@@ -921,7 +934,7 @@ export async function extractText(
     } else if (PACKAGES.has(type)) {
       raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows, speakerNotes });
     } else if (type === HTML_MIME) {
-      raw = htmlText(decodeText(bytes, name));
+      raw = htmlFileText(decodeText(bytes, name));
     } else if (type === EML_MIME) {
       raw = emailText(bytes);
     } else if (type === MSG_MIME) {

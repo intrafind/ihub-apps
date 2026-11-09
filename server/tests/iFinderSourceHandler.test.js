@@ -224,6 +224,35 @@ describe('IFinderHandler', () => {
     });
   });
 
+  describe('searchDocuments', () => {
+    it('returns one title for a document iFinder gives several', async () => {
+      // #3532: a multi-valued title reached the project picker as a list.
+      iFinder.search = async () => ({
+        results: [
+          {
+            id: 'doc-1',
+            title: ['', 'Rental contract', 'Contract'],
+            mimeType: ['application/pdf'],
+            url: ['https://dms.example/doc-1', 'https://mirror.example/doc-1'],
+            filename: 'contract.pdf'
+          },
+          { id: 'doc-2', title: 'Notice letter' },
+          { id: 'doc-3', title: [] }
+        ]
+      });
+
+      const hits = await handler.searchDocuments({ query: 'contract', user, chatId });
+
+      assert.strictEqual(hits[0].documentId, 'doc-1');
+      assert.strictEqual(hits[0].title, 'Rental contract');
+      assert.strictEqual(hits[0].mimeType, 'application/pdf');
+      assert.strictEqual(hits[0].url, 'https://dms.example/doc-1');
+      assert.strictEqual(hits[0].filename, 'contract.pdf');
+      assert.strictEqual(hits[1].title, 'Notice letter');
+      assert.strictEqual(hits[2].title, undefined);
+    });
+  });
+
   describe('getCacheKey', () => {
     it('differs per selection and per user', () => {
       const base = { query: 'manual', maxResults: 5, maxLength: 1000, user };

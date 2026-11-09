@@ -456,3 +456,18 @@ On phones, the backdrop behind the **Sources** panel was darker than intended, a
 found two identical **Sources** dialogs. The chat keeps a phone and a desktop layout of each answer
 on the page, and both opened their own panel on top of each other. The panel now opens once, from
 whichever layout is shown.
+
+## Projects: iFinder Documents With Several Titles Can Be Added
+
+Picking an iFinder document in a project's **Add item** dialog and clicking **Add** did nothing
+for a document whose index entry carries more than one title; the browser console showed
+`TypeError: (t.name || "").trim is not a function`. The dialog now shows and names the item after
+the document's first title, and the document is added.
+
+## Projects: HTML Files Keep Only the Page's Content, Not Its Menus
+
+An HTML file added to a project — uploaded, or picked from OneDrive / SharePoint or Google Drive —
+was read as the whole page: skip links, menus, page trees, breadcrumbs and footers (on a saved
+Confluence page, about half of the text) ended up in the project and in every answer drawn from it.
+HTML files are now read like a web page added by URL: only the main content is kept, with its
+headings, lists, tables and links.

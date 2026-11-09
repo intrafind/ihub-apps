@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
-import { localizedText, uploadAccept } from '../../utils/projectItems';
+import { localizedText, textOf, uploadAccept } from '../../utils/projectItems';
 import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS, SECONDARY_BUTTON } from './dialogStyles';
 import SiteCrawlPanel from './SiteCrawlPanel';
 import UrlPreviewPanel from './UrlPreviewPanel';
@@ -530,6 +530,7 @@ export function IFinderDocumentPicker({
           )}
           {results.map(result => {
             const selected = draft.documentId === result.documentId;
+            const title = textOf(result.title);
             return (
               <li key={result.documentId}>
                 <button
@@ -537,13 +538,10 @@ export function IFinderDocumentPicker({
                   onClick={() =>
                     update({
                       documentId: result.documentId,
-                      documentTitle: result.title || result.documentId,
+                      documentTitle: title || result.documentId,
                       // The name follows the picked document until the user
                       // types one of their own.
-                      name:
-                        !draft.name || draft.name === draft.documentTitle
-                          ? result.title || ''
-                          : draft.name
+                      name: !draft.name || draft.name === draft.documentTitle ? title : draft.name
                     })
                   }
                   aria-pressed={selected}
@@ -554,10 +552,10 @@ export function IFinderDocumentPicker({
                   }`}
                 >
                   <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {result.title || result.documentId}
+                    {title || result.documentId}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {[result.mimeType, result.url].filter(Boolean).join(' · ')}
+                    {[textOf(result.mimeType), textOf(result.url)].filter(Boolean).join(' · ')}
                   </div>
                 </button>
               </li>
