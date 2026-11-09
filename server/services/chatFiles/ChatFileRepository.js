@@ -627,7 +627,8 @@ export class ChatFileRepository {
    */
   async _enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces }) {
     const { quotas, evictOldestOriginalsOnQuota } = settings;
-    if (!ownerId || !(quotas.maxUserBytes > 0)) return;
+    const limited = Boolean(ownerId) && quotas.maxUserBytes > 0;
+    if (!limited) return;
     const ownerDocs = await this._listOwnerDocs(ownerId);
     let used =
       ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
@@ -658,7 +659,8 @@ export class ChatFileRepository {
    */
   async _enforceServerQuota({ scope, totalBytes, settings, replaces }) {
     const { quotas, evictOldestOriginalsOnQuota } = settings;
-    if (!(quotas.maxServerBytes > 0)) return;
+    const limited = quotas.maxServerBytes > 0;
+    if (!limited) return;
     const limit = quotas.maxServerBytes;
     let used = await this._serverUsedBytes();
     if (used + totalBytes > limit * SERVER_QUOTA_EXACT_FRACTION) {
