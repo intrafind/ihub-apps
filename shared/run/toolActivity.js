@@ -26,9 +26,23 @@
  *    the queries the provider reports on the grounding metadata
  *    (`webSearchQueries`). Its sources are listed in the sources panel.
  *  - `fetch.*` progress frames: the page a search is reading right now.
+ *  - `run.argStreams` (`tool/progress` phases `args` and `args.ended`): a call
+ *    whose arguments the model is still writing. It is merged with its
+ *    `run.tools` entry by call id, so one call is one row from `preparing`
+ *    through `running` to `completed` / `error`, and the row keeps the place
+ *    where it first appeared. What the call is (`activityKind`, `outputKind`,
+ *    the title) is the server's decision here as well.
+ *  - `run.waiting` (`tool/progress` phase `model.waiting`): the model call has
+ *    shown nothing for a while. It is `idle` on the result, so a turn with no
+ *    row at all can still say what it is doing.
  *
  * Each item also lists what the call asked for (`details`, see
  * `toolDetails`) and, when it failed, why (`error`).
+ *
+ * Row `status`: `preparing` (arguments being written, or finished and waiting
+ * for the call to start: `ready`), `awaiting` (an approval is pending for it),
+ * `running`, `completed`, `error` (failed: the tool failed, or the call was
+ * `dropped`, `invalid` or `truncated`, see `errorCode`) and `stopped`.
  *
  * @module shared/run/toolActivity
  */
@@ -241,50 +255,150 @@ function mergeSkillRows(toolRows, skills) {
   return rows;
 }
 
+/** Outcomes of `args.ended` that make the row a failed one, and the `errorCode` each carries. */
+const FAILED_OUTCOMES = new Set(['dropped', 'invalid', 'truncated']);
+
+/** Whether an interaction of the run waits for the user to decide about this call. */
+function hasPendingApproval(run, callId) {
+  return Object.values(run.interactions || {}).some(
+    interaction => interaction?.status === 'pending' && interaction.source?.toolCallId === callId
+  );
+}
+
+/**
+ * The status of a row. A call that started is what its tool record says; one
+ * that did not is what its argument stream says.
+ *
+ * A call the turn never saw finish (stopped, failed elsewhere) is not still
+ * running, and one that never got to run is not still being prepared, once the
+ * turn is over.
+ */
+function statusOf(run, tool, stream, finished) {
+  if (tool) return tool.status === 'running' && finished ? 'stopped' : tool.status;
+  const outcome = stream.ended?.outcome;
+  if (FAILED_OUTCOMES.has(outcome)) return 'error';
+  if (outcome === 'aborted') return 'stopped';
+  if (outcome === 'ready' && hasPendingApproval(run, stream.callId)) return 'awaiting';
+  return finished ? 'stopped' : 'preparing';
+}
+
+/** The fields a row takes from its argument stream (none for a call that never announced itself). */
+function streamFields(stream, status) {
+  const outcome = stream.ended?.outcome;
+  return {
+    // What the server called the thing the call makes (`utils/toolDisplay`), or null.
+    outputKind: stream.outputKind,
+    // 2 or more when the same tool was announced before in this turn.
+    occurrence: stream.occurrence,
+    argBytes: stream.argBytes,
+    // Server clock reading of the newest frame, the client clock when it came
+    // in, and the reading at which the size last grew: the stopwatch and the
+    // stall caption are derived from these (features/chat/activityTiming.js).
+    elapsedMs: stream.elapsedMs,
+    receivedAt: stream.receivedAt,
+    grewAtMs: stream.grewAtMs,
+    // The first moment a row for it could have been painted, and the moment
+    // the arguments ended; the client holds the first paint back briefly.
+    firstReceivedAt: stream.firstReceivedAt,
+    endedReceivedAt: stream.ended?.receivedAt ?? null,
+    // The arguments were complete when the stream ended; with the call not
+    // started yet, the row is `ready`. A call stopped after that was not run,
+    // one stopped before it was not finished.
+    argsComplete: outcome === 'ready',
+    ready: status === 'preparing' && outcome === 'ready',
+    errorCode: FAILED_OUTCOMES.has(outcome) ? outcome : null
+  };
+}
+
+/**
+ * One row per call, in the order the calls first appeared: a call that
+ * announced its arguments takes the place of its first `args` frame, one that
+ * did not takes the place of its `tool/started`. `tool/started` moves a call to
+ * the end of `run.tools`, so the place of an announced call comes from the
+ * number of calls that had started when it was announced.
+ *
+ * @returns {Array<{tool: Object|null, stream: Object|null}>}
+ */
+function callsInOrder(run) {
+  const streams = (run.argOrder || []).map(id => run.argStreams[id]).filter(Boolean);
+  const tools = run.tools || [];
+  const placed = new Set();
+  const calls = [];
+  const place = (stream, tool) => {
+    const callId = stream?.callId ?? tool.callId;
+    if (placed.has(callId)) return;
+    placed.add(callId);
+    calls.push({ stream, tool });
+  };
+  const toolOf = new Map(tools.map(tool => [tool.callId, tool]));
+  const placeStreamsUpTo = count => {
+    for (const stream of streams) {
+      if (stream.afterTools <= count) place(stream, toolOf.get(stream.callId) || null);
+    }
+  };
+  tools.forEach((tool, index) => {
+    placeStreamsUpTo(index);
+    place(run.argStreams?.[tool.callId] || null, tool);
+  });
+  placeStreamsUpTo(Infinity);
+  return calls;
+}
+
 /**
  * @param {Object|null} run - RunState from the run reducer
- * @returns {{items: Array<Object>, reading: string|null}|null} null when the turn used no tools
+ * @returns {{items: Array<Object>, reading: string|null, idle?: Object, answering?: boolean}|null}
+ *   null when the turn used no tools and has no idle line. `idle`
+ *   (`{kind: 'thinking'|'waiting', elapsedMs, receivedAt, step}`) and
+ *   `answering` are only on a turn that is still going: the model has been
+ *   silent for a while, and answer text has started.
  */
 export function buildToolActivity(run) {
   if (!run) return null;
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
   const toolRows = [];
 
-  for (const tool of run.tools || []) {
-    if ((tool.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(tool.toolId)) {
+  for (const { tool, stream } of callsInOrder(run)) {
+    const toolId = tool?.toolId ?? stream.toolId;
+    if ((tool?.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(toolId)) {
       continue;
     }
     // The server decides the row (`utils/toolDisplay`); a call it said nothing
     // about is a plain call.
-    const kind = ['search', 'fetch'].includes(tool.activityKind) ? tool.activityKind : 'tool';
-    // A call the turn never saw finish (stopped, failed elsewhere) is not
-    // still running once the turn is over.
-    const status = tool.status === 'running' && finished ? 'stopped' : tool.status;
-    const query = kind === 'search' ? queryOf(tool.args) : null;
-    const url = kind === 'fetch' ? urlOf(tool.args) : null;
-    const documentId = kind === 'fetch' ? documentIdOf(tool.args) : null;
+    const activityKind = tool?.activityKind || stream?.activityKind;
+    const kind = ['search', 'fetch'].includes(activityKind) ? activityKind : 'tool';
+    const status = statusOf(run, tool, stream, finished);
+    const args = tool?.args;
+    const query = kind === 'search' ? queryOf(args) : null;
+    const url = kind === 'fetch' ? urlOf(args) : null;
+    const documentId = kind === 'fetch' ? documentIdOf(args) : null;
+    const title = tool?.title || stream?.title || null;
+    const activityScope = tool?.activityScope;
     toolRows.push({
-      at: Date.parse(tool.startedAt),
+      // A call that announced itself appeared when its first frame did.
+      at: Date.parse(stream?.firstSeenAt ?? tool?.startedAt),
       item: {
-        id: tool.callId,
+        id: tool?.callId ?? stream.callId,
         kind,
-        toolId: tool.toolId,
+        toolId,
         // The action as the user reads it ("Search people"), else the id the model used.
-        name: tool.title || tool.name || tool.toolId,
-        titled: Boolean(tool.title),
+        name: title || tool?.name || stream?.name || toolId,
+        titled: Boolean(title),
         // The integration, MCP server or agent it ran against ("Munich AD").
-        integration: tool.integration || null,
+        integration: tool?.integration || stream?.integration || null,
         status,
-        scope: kind === 'tool' ? null : tool.activityScope === 'documents' ? 'documents' : 'web',
+        scope: kind === 'tool' ? null : activityScope === 'documents' ? 'documents' : 'web',
         query,
         url,
         documentId,
-        details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
-        sources: Array.isArray(tool.sources) ? tool.sources : [],
-        error: tool.error?.message || null,
+        details: toolDetails(args, shownArgs(args, { query, url, documentId })),
+        sources: Array.isArray(tool?.sources) ? tool.sources : [],
+        error: tool?.error?.message || null,
         // A page read the per-turn cap (`websearch.maxPageReads`) refused.
-        limitReached: kind === 'fetch' && tool.result?.limitReached === true,
-        durationMs: tool.durationMs ?? null
+        limitReached: kind === 'fetch' && tool?.result?.limitReached === true,
+        durationMs: tool?.durationMs ?? null,
+        // Whether the call itself started (the row has its arguments).
+        started: Boolean(tool),
+        ...(stream ? streamFields(stream, status) : {})
       }
     });
   }
@@ -310,7 +424,18 @@ export function buildToolActivity(run) {
     });
   }
 
-  if (!items.length) return null;
+  // Only a turn that is still going can be silent or answering.
+  const live = !finished && run.status === 'running';
+  const idle =
+    live && run.waiting
+      ? {
+          kind: run.waiting.reasoning ? 'thinking' : 'waiting',
+          elapsedMs: run.waiting.elapsedMs,
+          receivedAt: run.waiting.receivedAt,
+          step: run.waiting.step
+        }
+      : null;
+  if (!items.length) return idle ? { items, reading: null, idle } : null;
   resolveDocuments(items);
 
   // The page being fetched right now: the newest fetch frame, while a search
@@ -326,5 +451,10 @@ export function buildToolActivity(run) {
     }
   }
 
-  return { items, reading };
+  return {
+    items,
+    reading,
+    ...(idle ? { idle } : {}),
+    ...(!finished && run.text ? { answering: true } : {})
+  };
 }
