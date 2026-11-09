@@ -33,7 +33,8 @@ import {
   oneShotGrant,
   sameArgs
 } from '../loop/seams/approvalSeam.js';
-import { startedDisplayOf, toolDisplayOf } from '../../utils/toolDisplay.js';
+import { startedDisplayOf } from '../../utils/toolDisplay.js';
+import { PROGRESS_PHASES, createToolArgTracker, createWaitingLine } from './toolArgProgress.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -291,6 +292,14 @@ export function authRequiredOf(rawResult, toolDef) {
  * `INTEGRATION_AUTH_REQUIRED` before it runs; the Connect card for it rides on
  * `tool/completed` as `authRequired` and is collected on `authPrompts` (one
  * per integration) for the stored answer.
+ *
+ * Before any of that, while the model is still writing a call's arguments (a
+ * whole web artifact, a document) or says nothing at all, the seam reports
+ * live `tool/progress` frames: `args` / `args.ended` for the call being
+ * written and `model.waiting` for the silence (`onChunk`, `streamEnd`,
+ * `preStep`; the rules are in `toolArgProgress.js`, the frames in
+ * `docs/sse-v2.md`). They are not stored. `streamProgress: false` (a turn
+ * nobody watches live) leaves them out.
  */
 export function chatToolSeam({
   chatId,
@@ -301,7 +310,8 @@ export function chatToolSeam({
   scheduledTaskProposals = null,
   generatedFiles = null,
   generatedImages = null,
-  fileStore = null
+  fileStore = null,
+  streamProgress = true
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -316,8 +326,85 @@ export function chatToolSeam({
     }
     return prompt;
   };
+  // Live progress while the model produces a call's arguments, and while it
+  // is silent (see the module doc of `toolArgProgress.js`).
+  const argTracker = createToolArgTracker();
+  let waitingCtx = null;
+  const waiting = createWaitingLine({
+    isSuppressed: () => argTracker.hasOpenCalls(),
+    onWaiting: ({ elapsedMs, reasoning }) =>
+      emit(waitingCtx, SSE_V2_EVENTS.TOOL_PROGRESS, {
+        step: waitingCtx.iteration,
+        phase: PROGRESS_PHASES.MODEL_WAITING,
+        data: { elapsedMs, ...(reasoning ? { reasoning: true } : {}) }
+      })
+  });
+  /** Whether this model call's progress goes anywhere: a streamed chat turn whose tools the server runs. */
+  const progressLive = ctx =>
+    streamProgress && ctx?.request?.toolExecution !== 'caller' && !!ctx?.meta?.stream?.emit;
+  const emitFrames = (ctx, frames) => {
+    for (const frame of frames) {
+      emit(ctx, SSE_V2_EVENTS.TOOL_PROGRESS, {
+        step: ctx.iteration,
+        callId: frame.callId,
+        toolId: frame.toolId,
+        phase: frame.phase,
+        data: frame.data
+      });
+    }
+  };
+  /** A display-only hook must never take a turn down. */
+  const guarded = (what, fn) => {
+    try {
+      fn();
+    } catch (err) {
+      logger.warn(`Tool argument progress failed (${what})`, {
+        component: COMPONENT,
+        chatId,
+        error: err?.message
+      });
+    }
+  };
+
   return {
     name: 'chat-tools',
+    preStep(ctx) {
+      if (!progressLive(ctx)) return;
+      waitingCtx = ctx;
+      waiting.arm();
+    },
+    onChunk(ctx, chunk) {
+      if (!progressLive(ctx)) return;
+      guarded('chunk', () => {
+        const showsText = (chunk.content || []).some(Boolean);
+        if (showsText || (Array.isArray(chunk.images) && chunk.images.length > 0)) {
+          waiting.visible();
+        }
+        if (Array.isArray(chunk.thinking) && chunk.thinking.length > 0) waiting.thinking();
+        if (!Array.isArray(chunk.toolCallProgress) || chunk.toolCallProgress.length === 0) return;
+        const frames = argTracker.observe(chunk.toolCallProgress, name => ctx.resolveTool?.(name));
+        if (frames.length > 0) {
+          // A row on screen: the waiting line stands down.
+          waiting.visible();
+          emitFrames(ctx, frames);
+        }
+      });
+    },
+    streamEnd(ctx, { outcome, result }) {
+      waiting.stop();
+      guarded('end', () => {
+        const frames = argTracker.close({ outcome, result });
+        emitFrames(ctx, frames);
+        for (const frame of frames) {
+          logger.debug('Tool arguments streamed', {
+            component: COMPONENT,
+            chatId,
+            toolId: frame.toolId,
+            ...frame.data
+          });
+        }
+      });
+    },
     liftResult(ctx, info, holder) {
       return liftMcpResultEarly(
         { toolDef: info.toolDef, chatId, ownerId: ctx?.refs?.userId || null, store: fileStore },

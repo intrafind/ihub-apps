@@ -296,6 +296,96 @@ function frameClock(envelope) {
     : Date.now();
 }
 
+/** The `data` object of a frame, or an empty one. */
+function detailOf(frame) {
+  return frame.data && typeof frame.data === 'object' ? frame.data : {};
+}
+
+/** The run with one call's stream entry replaced, and the model no longer silent. */
+function withArgStream(run, entry, extra = {}) {
+  return {
+    ...run,
+    ...extra,
+    argStreams: { ...run.argStreams, [entry.callId]: entry },
+    // The row exists, so the model is no longer silent.
+    waiting: null
+  };
+}
+
+/**
+ * Fold `args.ended`: the model stopped writing a call's arguments. Only an
+ * announced call can end, and it ends once.
+ */
+function foldArgsEnded(run, known, detail, when) {
+  if (!known || known.ended) return run;
+  const outcome = ARG_OUTCOMES.has(detail.outcome) ? detail.outcome : 'ready';
+  const argBytes = Math.max(known.argBytes, finiteOr(detail.argBytes, known.argBytes));
+  const elapsedMs = Math.max(known.elapsedMs, finiteOr(detail.elapsedMs, known.elapsedMs));
+  return withArgStream(run, {
+    ...known,
+    argBytes,
+    elapsedMs,
+    receivedAt: when.receivedAt,
+    grewAtMs: argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
+    ended: { outcome, argBytes, elapsedMs, receivedAt: when.receivedAt }
+  });
+}
+
+/**
+ * What the server decided the call is (`utils/toolDisplay`): the first frame
+ * that names a field wins, later frames only fill gaps.
+ */
+function argDisplayFields(frame, detail, known) {
+  const occurrence = finiteOr(detail.occurrence, 0);
+  return {
+    toolId: textOrNull(frame.toolId) || known?.toolId || null,
+    name: textOrNull(detail.name) || known?.name || null,
+    title: textOrNull(detail.title) || known?.title || null,
+    integration: textOrNull(detail.integration) || known?.integration || null,
+    activityKind: textOrNull(detail.activityKind) || known?.activityKind || null,
+    outputKind: textOrNull(detail.outputKind) || known?.outputKind || null,
+    occurrence: occurrence > 1 ? occurrence : (known?.occurrence ?? null)
+  };
+}
+
+/** Where the call sits in the list: when it first appeared, and among how many started calls. */
+function argPlaceFields(run, known, when) {
+  if (known) {
+    const { firstSeen, afterTools, firstSeenAt, firstReceivedAt } = known;
+    return { firstSeen, afterTools, firstSeenAt, firstReceivedAt };
+  }
+  return {
+    firstSeen: run.argOrder.length,
+    afterTools: run.tools.length,
+    firstSeenAt: when.ts || null,
+    firstReceivedAt: when.receivedAt
+  };
+}
+
+/** Fold `args`: the model is writing a call's arguments, `argBytes` so far. */
+function foldArgsProgress(run, frame, known, detail, when) {
+  if (known?.ended) return run;
+  const argBytes = Math.max(known?.argBytes ?? 0, finiteOr(detail.argBytes, 0));
+  const elapsedMs = Math.max(known?.elapsedMs ?? 0, finiteOr(detail.elapsedMs, 0));
+  const entry = {
+    callId: frame.callId,
+    step: Number.isInteger(frame.step) ? frame.step : (known?.step ?? null),
+    ...argDisplayFields(frame, detail, known),
+    argBytes,
+    elapsedMs,
+    receivedAt: when.receivedAt,
+    // The server clock reading at which the size last grew: a call whose size
+    // sits still for long is stalled (the client measures it, see
+    // `isStalled` in features/chat/activityTiming.js).
+    grewAtMs: !known || argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
+    ...argPlaceFields(run, known, when),
+    ended: null
+  };
+  return withArgStream(run, entry, {
+    argOrder: known ? run.argOrder : [...run.argOrder, entry.callId]
+  });
+}
+
 /**
  * Fold a `tool/progress` frame of phase `args` or `args.ended`: the model is
  * writing the arguments of a call, or has stopped.
@@ -315,69 +405,11 @@ function frameClock(envelope) {
 function foldArgFrame(run, frame, when) {
   const callId = textOrNull(frame.callId);
   if (!callId) return run;
-  const detail = frame.data && typeof frame.data === 'object' ? frame.data : {};
   const known = run.argStreams[callId];
-
-  if (frame.phase === ARG_ENDED_PHASE) {
-    // Only an announced call can end, and it ends once.
-    if (!known || known.ended) return run;
-    const outcome = ARG_OUTCOMES.has(detail.outcome) ? detail.outcome : 'ready';
-    const argBytes = Math.max(known.argBytes, finiteOr(detail.argBytes, known.argBytes));
-    const elapsedMs = Math.max(known.elapsedMs, finiteOr(detail.elapsedMs, known.elapsedMs));
-    return {
-      ...run,
-      argStreams: {
-        ...run.argStreams,
-        [callId]: {
-          ...known,
-          argBytes,
-          elapsedMs,
-          receivedAt: when.receivedAt,
-          grewAtMs: argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
-          ended: { outcome, argBytes, elapsedMs, receivedAt: when.receivedAt }
-        }
-      },
-      // The row exists, so the model is no longer silent.
-      waiting: null
-    };
-  }
-
-  if (known?.ended) return run;
-  const argBytes = Math.max(known?.argBytes ?? 0, finiteOr(detail.argBytes, 0));
-  const elapsedMs = Math.max(known?.elapsedMs ?? 0, finiteOr(detail.elapsedMs, 0));
-  const occurrence = finiteOr(detail.occurrence, 0);
-  const entry = {
-    callId,
-    step: Number.isInteger(frame.step) ? frame.step : (known?.step ?? null),
-    toolId: textOrNull(frame.toolId) || known?.toolId || null,
-    // What the server decided the call is (`utils/toolDisplay`); the first
-    // frame that names a field wins, later frames only fill gaps.
-    name: textOrNull(detail.name) || known?.name || null,
-    title: textOrNull(detail.title) || known?.title || null,
-    integration: textOrNull(detail.integration) || known?.integration || null,
-    activityKind: textOrNull(detail.activityKind) || known?.activityKind || null,
-    outputKind: textOrNull(detail.outputKind) || known?.outputKind || null,
-    occurrence: occurrence > 1 ? occurrence : (known?.occurrence ?? null),
-    argBytes,
-    elapsedMs,
-    receivedAt: when.receivedAt,
-    // The server clock reading at which the size last grew: a call whose size
-    // sits still for long is stalled (the client measures it, see
-    // `isStalled` in features/chat/activityTiming.js).
-    grewAtMs: !known || argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
-    // Place in the list: when it first appeared, and among how many started calls.
-    firstSeen: known ? known.firstSeen : run.argOrder.length,
-    afterTools: known ? known.afterTools : run.tools.length,
-    firstSeenAt: known ? known.firstSeenAt : when.ts || null,
-    firstReceivedAt: known ? known.firstReceivedAt : when.receivedAt,
-    ended: null
-  };
-  return {
-    ...run,
-    argStreams: { ...run.argStreams, [callId]: entry },
-    argOrder: known ? run.argOrder : [...run.argOrder, callId],
-    waiting: null
-  };
+  const detail = detailOf(frame);
+  return frame.phase === ARG_ENDED_PHASE
+    ? foldArgsEnded(run, known, detail, when)
+    : foldArgsProgress(run, { ...frame, callId }, known, detail, when);
 }
 
 /**
@@ -403,7 +435,7 @@ function clearWaitingOnOutput(run, delta) {
  */
 function foldWaitingFrame(run, frame, when) {
   if (TERMINAL_STATUSES.has(run.status)) return run;
-  const detail = frame.data && typeof frame.data === 'object' ? frame.data : {};
+  const detail = detailOf(frame);
   return {
     ...run,
     waiting: {
@@ -413,6 +445,20 @@ function foldWaitingFrame(run, frame, when) {
       receivedAt: when.receivedAt
     }
   };
+}
+
+/**
+ * Fold a `tool/progress` frame of one of the live phases (`args`,
+ * `args.ended`, `model.waiting`) into the run's own state.
+ *
+ * @returns {Object|null} the new RunState, or null when the frame is another phase
+ */
+function foldLiveProgress(run, frame, envelope) {
+  const when = { ts: envelope.ts, receivedAt: frameClock(envelope) };
+  if (frame.phase === ARG_PHASE || frame.phase === ARG_ENDED_PHASE) {
+    return foldArgFrame(run, frame, when);
+  }
+  return frame.phase === WAITING_PHASE ? foldWaitingFrame(run, frame, when) : null;
 }
 
 /**
@@ -688,12 +734,8 @@ export function reduceRunEvent(state, envelope) {
     case SSE_V2_EVENTS.TOOL_PROGRESS: {
       // Arguments being written and the model's silence have their own state:
       // see `ARG_PHASE`. They never reach `run.progress`.
-      if (data.phase === ARG_PHASE || data.phase === ARG_ENDED_PHASE) {
-        return withRun(next, foldArgFrame(run, data, { ts, receivedAt: frameClock(envelope) }));
-      }
-      if (data.phase === WAITING_PHASE) {
-        return withRun(next, foldWaitingFrame(run, data, { receivedAt: frameClock(envelope) }));
-      }
+      const live = foldLiveProgress(run, data, envelope);
+      if (live) return withRun(next, live);
       const entry = { kind: 'tool/progress', at: ts, seq, runId, ...data };
       run = { ...run, progress: [...run.progress, entry] };
       switch (data.phase) {

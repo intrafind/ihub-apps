@@ -5,19 +5,52 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
+import { IDLE_LABEL_AFTER_MS } from '../activityConstants.js';
+import {
+  awaitingApprovalLabel,
+  createdLabel,
+  creatingLabel,
+  failedLabel,
+  failureReasonOf,
+  hasOutputKind,
+  headlineOf,
+  idleLabel,
+  isActiveItem,
+  occurrenceLabel,
+  outputGlyphOf,
+  outputNounOf,
+  stoppedLabel,
+  stoppedUnstartedLabel,
+  stripEllipsis,
+  summaryIconOf
+} from '../activityHeadline.js';
+import { isStalled } from '../activityTiming.js';
+import { ActivityHint, ArgumentProgress, BusyIcon, RowChip, useNow } from './ActivityProgress';
+
+/** Colour of the label of a call or status that is active right now. */
+const ACTIVE_LABEL = 'font-medium text-gray-800 dark:text-gray-200';
+const ATTENTION = 'text-amber-700 dark:text-amber-400';
 
 /**
- * What the turn did before it answered: the searches it ran (web or the
+ * What the turn is doing and did: the searches it ran (web or the
  * organisation's documents), the pages or documents they found and which of
- * those were read, and the other tools it called.
+ * those were read, the other tools it called, the files it is writing, and,
+ * when it has nothing else to show, that the model is still working.
  *
- * Open while the answer streams, so the user can follow the search as it
+ * Open while the answer streams, so the user can follow the turn as it
  * happens; collapsed to a one-line summary once the answer is complete, where
- * it stays as provenance.
+ * it stays as provenance. The one-line headline always carries the current
+ * status, so a list the user closed does not hide it.
+ *
+ * Silent for screen readers (`aria-live="off"`: the chat log around it is a
+ * live region, and a ticking clock inside would be read every second). What a
+ * screen reader needs is said once by the `RunAnnouncer`; the numbers here are
+ * `aria-hidden`.
  *
  * @param {Object} props
- * @param {{items: Array<Object>, reading: string|null}} props.activity - see features/chat/toolActivity
- * @param {boolean} [props.loading] - whether the answer is still streaming
+ * @param {{items: Array<Object>, reading: string|null, idle?: Object, answering?: boolean}} props.activity
+ *   - see shared/run/toolActivity; `idle` makes a headline-only line when there are no rows
+ * @param {boolean} [props.loading] - whether the turn is still going
  */
 function ToolActivity({ activity, loading = false }) {
   const { t } = useTranslation();
@@ -26,59 +59,80 @@ function ToolActivity({ activity, loading = false }) {
   const [expanded, setExpanded] = useState(null);
 
   const items = activity?.items || [];
-  if (items.length === 0) return null;
-  const open = expanded ?? loading;
+  const idle = activity?.idle || null;
+  const anyActive = items.some(isActiveItem) || Boolean(idle);
+  // The clock only runs while something is going on.
+  const now = useNow(anyActive);
 
-  const searches = items.filter(item => item.kind === 'search');
-  // Skill and plain tool rows do not say where the turn looked, so they do not
-  // decide the icon between the web and the organisation's documents.
-  const isPlain = item => item.kind === 'tool' || item.kind === 'skill';
-  const onlyDocuments = items.every(item => isPlain(item) || item.scope === 'documents');
-  const running = items.some(item => item.status === 'running');
-  const headline = running
-    ? runningHeadline(t, items, activity.reading)
-    : finishedHeadline(t, items, searches);
+  if (items.length === 0) return idle ? <IdleLine idle={idle} /> : null;
+  const open = expanded ?? loading;
+  const headline = headlineOf(t, activity, loading);
+  const owner = headline.owner;
 
   return (
-    <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+    <div aria-live="off" className="mb-2 text-xs text-gray-600 dark:text-gray-400">
       <button
         type="button"
         onClick={() => setExpanded(!open)}
         aria-expanded={open}
         aria-controls={listId}
-        className="inline-flex items-center gap-1.5 max-w-full text-start hover:text-gray-900 dark:hover:text-gray-200"
+        className="group inline-flex items-center gap-1.5 max-w-full py-1 -my-1 rounded-sm text-start hover:text-gray-900 dark:hover:text-gray-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
       >
-        {running ? (
-          <Icon name="spinner" size="sm" className="shrink-0 animate-spin" />
-        ) : (
-          <Icon
-            name={
-              items.every(item => item.kind === 'skill')
-                ? 'sparkles'
-                : items.every(isPlain)
-                  ? 'wrench'
-                  : onlyDocuments
-                    ? 'document-text'
-                    : 'globe-alt'
-            }
-            size="sm"
-            className="shrink-0 text-gray-500 dark:text-gray-400"
+        <HeadlineIcon headline={headline} items={items} idle={idle} />
+        <span
+          title={headline.label}
+          className={`min-w-0 truncate ${
+            headline.active
+              ? `${ACTIVE_LABEL} group-hover:text-gray-900 dark:group-hover:text-gray-100`
+              : ''
+          }`}
+        >
+          {headline.label}
+        </span>
+        {headline.mode === 'preparing' && (
+          <ArgumentProgress
+            lead
+            argBytes={owner.argBytes}
+            elapsedMs={owner.elapsedMs}
+            receivedAt={owner.receivedAt}
+            running={!owner.ready}
+            suffix={owner.ready ? 'readyToRun' : null}
+            className="shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400"
           />
         )}
-        <span className="truncate">{headline}</span>
+        {headline.mode === 'idle' && (
+          <ArgumentProgress
+            lead
+            elapsedMs={idle.elapsedMs}
+            receivedAt={idle.receivedAt}
+            showClockAfterMs={IDLE_LABEL_AFTER_MS}
+            className="shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400"
+          />
+        )}
+        {headline.more > 0 && (
+          // Below 640 px the other calls are on their own rows; the label keeps the room.
+          <span
+            aria-hidden="true"
+            className="shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400 max-sm:hidden"
+          >
+            {'· '}
+            {t('toolActivity.alsoActive', { count: headline.more })}
+          </span>
+        )}
         <Icon
           name="chevron-down"
           size="sm"
-          className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`shrink-0 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
         <ol
           id={listId}
+          aria-busy={anyActive}
           className="mt-1.5 ms-1.5 ps-3 border-s border-gray-200 dark:border-gray-700 space-y-2"
         >
           {items.map(item => (
-            <ActivityItem key={item.id} item={item} />
+            <ActivityItem key={item.id} item={item} stalled={isStalled(item, now)} />
           ))}
         </ol>
       )}
@@ -86,103 +140,81 @@ function ToolActivity({ activity, loading = false }) {
   );
 }
 
-/** Sources read, by scope — a document shows up on its search hit and on the read that fetched it. */
-function countRead(items, scope) {
-  const keys = items
-    .filter(item => (item.scope === 'documents') === (scope === 'documents'))
-    .flatMap(item => item.sources.filter(source => source.read?.ok).map(source => source.id));
-  return new Set(keys).size;
+/**
+ * The idle line of a turn with no rows yet ("Waiting for the model… 0:12",
+ * "Thinking… 0:07"): not a button, nothing to expand.
+ */
+function IdleLine({ idle }) {
+  const { t } = useTranslation();
+  const label = idleLabel(t, idle.kind);
+  return (
+    <div
+      aria-live="off"
+      className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400"
+    >
+      <BusyIcon staticIcon={idle.kind === 'thinking' ? 'light-bulb' : 'clock'} />
+      <span className={ACTIVE_LABEL}>{label}</span>
+      <ArgumentProgress
+        lead
+        elapsedMs={idle.elapsedMs}
+        receivedAt={idle.receivedAt}
+        showClockAfterMs={IDLE_LABEL_AFTER_MS}
+        className="whitespace-nowrap text-gray-500 dark:text-gray-400"
+      />
+    </div>
+  );
 }
 
-function countSources(items) {
-  return new Set(items.flatMap(item => item.sources.map(source => source.id))).size;
-}
-
-function runningHeadline(t, items, reading) {
-  if (reading) {
-    return t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(reading) });
-  }
-  const current = [...items].reverse().find(item => item.status === 'running');
-  if (current?.kind === 'search') {
-    const query = current.query || current.queries?.[current.queries.length - 1];
-    if (query) return t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query });
-    return current.scope === 'documents'
-      ? t('toolActivity.searchingDocuments', 'Searching documents…')
-      : t('toolActivity.searching', 'Searching the web…');
-  }
-  if (current?.kind === 'fetch' && current.scope === 'documents') {
-    return current.title
-      ? t('toolActivity.readingDocument', 'Reading “{{title}}”', { title: current.title })
-      : t('toolActivity.readingDocuments', 'Reading documents…');
-  }
-  if (current?.kind === 'fetch') {
-    return current.url
-      ? t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(current.url) })
-      : t('toolActivity.searching', 'Searching the web…');
-  }
-  if (current?.integration) {
-    return t('toolActivity.runningToolIn', '{{name}} · {{integration}}…', {
-      name: current.name,
-      integration: current.integration
-    });
-  }
-  return t('toolActivity.runningTool', 'Running {{name}}', { name: current?.name || '' });
-}
-
-function finishedHeadline(t, items, searches) {
-  const parts = [];
-  if (searches.length) {
-    if (searches.some(item => item.scope !== 'documents')) {
-      parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
-    }
-    if (searches.some(item => item.scope === 'documents')) {
-      parts.push(t('toolActivity.searchedDocuments', 'Searched documents'));
-    }
-    const queryCount = searches.reduce(
-      (sum, item) => sum + (item.native ? item.queries.length : 1),
-      0
+/** The icon in front of the headline: a spinner while it is busy, else what the line stands for. */
+function HeadlineIcon({ headline, items, idle }) {
+  if (headline.busy) {
+    return (
+      <BusyIcon
+        staticIcon={headline.mode === 'idle' && idle.kind === 'thinking' ? 'light-bulb' : 'clock'}
+      />
     );
-    parts.push(t('toolActivity.searches', { count: queryCount }));
-    // Results, not sources: only what the answer cites is a source of it.
-    const results = countSources(items);
-    if (results) parts.push(t('toolActivity.results', { count: results }));
-  } else {
-    const fetches = items.filter(item => item.kind === 'fetch');
-    if (fetches.some(item => item.scope !== 'documents')) {
-      parts.push(t('toolActivity.readWeb', 'Read the web'));
-    }
-    if (fetches.some(item => item.scope === 'documents')) {
-      parts.push(t('toolActivity.readDocuments', 'Read documents'));
-    }
   }
-  const pagesRead = countRead(items, 'web');
-  if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
-  const documentsRead = countRead(items, 'documents');
-  if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
-  // Distinct skills: one that was activated twice is still one skill.
-  const skills = new Set(
-    items.filter(item => item.kind === 'skill').map(item => item.skillId || item.name)
-  ).size;
-  if (skills) parts.push(t('toolActivity.skills', { count: skills }));
-  const others = items.filter(item => item.kind === 'tool');
-  if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
-  // The systems the turn asked, so the summary says where the answer came from.
-  const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
-  if (integrations.length) parts.push(integrations.join(', '));
-  return parts.join(' · ');
+  if (headline.mode === 'awaiting') {
+    return <Icon name="shield-check" size="sm" className={`shrink-0 ${ATTENTION}`} />;
+  }
+  if (headline.mode === 'preparing') {
+    // Arguments complete, a parallel call is still being written: nothing moves here.
+    return <Icon name="clock" size="sm" className="shrink-0 text-gray-500 dark:text-gray-400" />;
+  }
+  const icon = summaryIconOf(items);
+  return (
+    <Icon
+      name={icon.name}
+      size="sm"
+      className={`shrink-0 ${icon.failed ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}
+    />
+  );
 }
 
 function StatusIcon({ item, fallback }) {
-  if (item.status === 'running') {
-    return <Icon name="spinner" size="sm" className="shrink-0 animate-spin" />;
+  if (item.status === 'running' || (item.status === 'preparing' && !item.ready)) {
+    return <BusyIcon />;
+  }
+  if (item.status === 'preparing') {
+    // Arguments complete, waiting for its turn to run: nothing moves.
+    return <Icon name="clock" size="sm" className="shrink-0 text-gray-500 dark:text-gray-400" />;
+  }
+  if (item.status === 'awaiting') {
+    return <Icon name="shield-check" size="sm" className={`shrink-0 ${ATTENTION}`} />;
   }
   if (item.status === 'error') {
     return <Icon name="exclamation-circle" size="sm" className="shrink-0 text-red-500" />;
   }
-  return <Icon name={fallback} size="sm" className="shrink-0 text-gray-500 dark:text-gray-400" />;
+  return (
+    <Icon
+      name={outputGlyphOf(item, fallback)}
+      size="sm"
+      className="shrink-0 text-gray-500 dark:text-gray-400"
+    />
+  );
 }
 
-function ActivityItem({ item }) {
+function ActivityItem({ item, stalled = false }) {
   const { t } = useTranslation();
 
   if (item.kind === 'skill') {
@@ -209,7 +241,12 @@ function ActivityItem({ item }) {
     );
   }
 
-  if (item.kind === 'search') {
+  // A call whose arguments were never seen to start (still being written,
+  // waiting for approval, stopped or refused first) knows no query or page yet:
+  // it reads as a plain call, whatever the server said it is.
+  const unstarted = item.started === false;
+
+  if (item.kind === 'search' && !unstarted) {
     const queries = item.native ? item.queries : item.query ? [item.query] : [];
     return (
       <li>
@@ -249,7 +286,7 @@ function ActivityItem({ item }) {
     );
   }
 
-  if (item.kind === 'fetch') {
+  if (item.kind === 'fetch' && !unstarted) {
     const page = item.sources[0];
     const url = item.url || page?.url;
     const host = url ? hostnameOf(url) : null;
@@ -312,25 +349,105 @@ function ActivityItem({ item }) {
     <li>
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusIcon item={item} fallback="wrench" />
-        {item.titled ? (
-          // A titled action reads on its own ("Search people"); the id stays in the tooltip.
-          <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
-            {item.name}
-          </span>
-        ) : (
-          <span>
-            {item.status === 'running'
-              ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
-              : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
-          </span>
+        <ToolLabel item={item} />
+        {item.occurrence > 1 && (
+          <RowChip className="whitespace-nowrap">{occurrenceLabel(t, item.occurrence)}</RowChip>
         )}
         <IntegrationChip item={item} />
         <ItemStatus item={item} />
       </div>
+      <ProgressLine item={item} />
+      {stalled && <ActivityHint kind="stalled" />}
+      <ItemOutcome item={item} />
       <ItemDetails item={item} />
       <ItemError item={item} />
     </li>
   );
+}
+
+/**
+ * The name of a plain call: what it makes ("Creating web artifact", "Created
+ * web artifact") when the server said so, else its title or id as before.
+ */
+function ToolLabel({ item }) {
+  const { t } = useTranslation();
+  const noun = outputNounOf(t, item.outputKind);
+  if (noun) {
+    return (
+      <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
+        {item.status === 'completed'
+          ? createdLabel(t, noun)
+          : stripEllipsis(creatingLabel(t, noun))}
+      </span>
+    );
+  }
+  if (item.status === 'preparing' || item.status === 'awaiting') {
+    return (
+      <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
+        {stripEllipsis(t('toolActivity.preparingTool', 'Preparing {{name}}…', { name: item.name }))}
+      </span>
+    );
+  }
+  if (item.titled) {
+    // A titled action reads on its own ("Search people"); the id stays in the tooltip.
+    return (
+      <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
+        {item.name}
+      </span>
+    );
+  }
+  return (
+    <span>
+      {item.status === 'running'
+        ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
+        : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
+    </span>
+  );
+}
+
+/**
+ * How much the model has written of a call and for how long, under its row:
+ * ticking while the arguments are being written, still once they are done, the
+ * last reading for a call that stopped or failed first.
+ */
+function ProgressLine({ item }) {
+  const written = item.status === 'preparing';
+  const frozen = !item.started && (item.status === 'stopped' || item.status === 'error');
+  if (!written && !(frozen && item.elapsedMs > 0)) return null;
+  return (
+    <p className="mt-1 ms-5 tabular-nums text-gray-500 dark:text-gray-400" aria-hidden="true">
+      <ArgumentProgress
+        argBytes={item.argBytes}
+        elapsedMs={item.elapsedMs}
+        receivedAt={item.receivedAt}
+        running={written && !item.ready}
+        suffix={item.ready ? 'readyToRun' : null}
+      />
+    </p>
+  );
+}
+
+/**
+ * Why a call that never ran ended, as a sentence under its row: cut off,
+ * unreadable or refused (red, it failed), or stopped before it was finished or
+ * run (gray, the user chose it).
+ */
+function ItemOutcome({ item }) {
+  const { t } = useTranslation();
+  if (item.status === 'error') {
+    const reason = failureReasonOf(t, item);
+    return reason ? (
+      <p className="mt-1 ms-5 break-words text-red-600 dark:text-red-400">{reason}</p>
+    ) : null;
+  }
+  if (item.status === 'stopped' && !item.started && hasOutputKind(item)) {
+    return (
+      <p className="mt-1 ms-5 break-words text-gray-600 dark:text-gray-400">
+        {stoppedUnstartedLabel(t, item)}
+      </p>
+    );
+  }
+  return null;
 }
 
 /** The integration, MCP server or remote agent the call ran against. */
@@ -338,13 +455,12 @@ function IntegrationChip({ item }) {
   const { t } = useTranslation();
   if (!item.integration) return null;
   return (
-    <span
-      className="inline-flex items-center gap-1 px-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
+    <RowChip
       title={t('toolActivity.integrationTitle', 'Data from {{name}}', { name: item.integration })}
     >
       <Icon name="link" size="xs" className="shrink-0" />
       {item.integration}
-    </span>
+    </RowChip>
   );
 }
 
@@ -398,12 +514,16 @@ function ItemStatus({ item }) {
   if (item.status === 'error') {
     return (
       <span className="text-red-600 dark:text-red-400" title={item.error || undefined}>
-        {t('toolActivity.failed', 'Failed')}
+        {failedLabel(t)}
       </span>
     );
   }
-  if (item.status === 'stopped') {
-    return <span>{t('toolActivity.stopped', 'Stopped')}</span>;
+  if (item.status === 'awaiting') {
+    return <span>{awaitingApprovalLabel(t)}</span>;
+  }
+  // A file stopped before it was run says why in its own sentence, which starts with "Stopped".
+  if (item.status === 'stopped' && !(!item.started && hasOutputKind(item))) {
+    return <span>{stoppedLabel(t)}</span>;
   }
   return null;
 }
