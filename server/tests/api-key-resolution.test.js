@@ -377,12 +377,12 @@ describe('GET /api/admin/models/_key-status', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
-    expect(res.body.statuses).toEqual({
-      withkey: { state: 'ok', source: 'model', envVar: null, enabled: true },
-      unreadable: { state: 'undecryptable', source: 'model', envVar: null, enabled: true },
-      loc: { state: 'keyless', source: 'none', envVar: null, enabled: false },
-      nokey: { state: 'missing', source: 'none', envVar: null, enabled: true }
-    });
+    expect(res.body.items).toEqual([
+      { id: 'withkey', state: 'ok', source: 'model', envVar: null, enabled: true },
+      { id: 'unreadable', state: 'undecryptable', source: 'model', envVar: null, enabled: true },
+      { id: 'loc', state: 'keyless', source: 'none', envVar: null, enabled: false },
+      { id: 'nokey', state: 'missing', source: 'none', envVar: null, enabled: true }
+    ]);
     expect(JSON.stringify(res.body)).not.toContain('sk-secret-value');
   });
 
@@ -393,10 +393,7 @@ describe('GET /api/admin/models/_key-status', () => {
     const res = await request(app).get('/api/admin/models/_key-status');
 
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body.statuses)).toContain('__proto__');
-    expect(Object.getOwnPropertyDescriptor(res.body.statuses, '__proto__')?.value.state).toBe(
-      'keyless'
-    );
+    expect(res.body.items.find(item => item.id === '__proto__')?.state).toBe('keyless');
   });
 });
 
@@ -405,23 +402,24 @@ describe('GET /api/admin/providers/_key-status', () => {
     const res = await request(app).get('/api/admin/providers/_key-status');
 
     expect(res.status).toBe(200);
-    expect(res.body.statuses.broken).toEqual({
+    const byId = Object.fromEntries(res.body.items.map(({ id, ...status }) => [id, status]));
+    expect(byId.broken).toEqual({
       state: 'undecryptable',
       source: 'provider',
       envVar: null
     });
-    expect(res.body.statuses.gateway).toEqual({
+    expect(byId.gateway).toEqual({
       state: 'ok',
       source: 'env',
       envVar: 'GATEWAY_API_KEY'
     });
-    expect(res.body.statuses.sealed).toMatchObject({ state: 'missing', envVar: 'SEALED_API_KEY' });
-    expect(res.body.statuses.local.state).toBe('keyless');
+    expect(byId.sealed).toMatchObject({ state: 'missing', envVar: 'SEALED_API_KEY' });
+    expect(byId.local.state).toBe('keyless');
     // A custom provider speaking the local API type runs its models without a
     // key, so it must not read as "missing" next to them.
-    expect(res.body.statuses.localgw.state).toBe('keyless');
-    expect(res.body.statuses.anthropic).toMatchObject({ state: 'ok', source: 'env' });
-    expect(res.body.statuses.brave).toBeUndefined();
+    expect(byId.localgw.state).toBe('keyless');
+    expect(byId.anthropic).toMatchObject({ state: 'ok', source: 'env' });
+    expect(byId.brave).toBeUndefined();
   });
 });
 

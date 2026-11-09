@@ -160,8 +160,8 @@ export default function SetupWizard() {
     })
       .then(response => (response.ok ? response.json() : null))
       .then(data => {
-        if (!data?.statuses) return;
-        const enabled = Object.values(data.statuses).filter(status => status.enabled);
+        if (!Array.isArray(data?.items)) return;
+        const enabled = data.items.filter(status => status.enabled);
         const ready = enabled.filter(s => s.state === 'ok' || s.state === 'keyless').length;
         setKeyCheck({ ready, blocked: enabled.length - ready });
       })

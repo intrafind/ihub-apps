@@ -507,31 +507,28 @@ export default function registerAdminModelsRoutes(app) {
    *       - sessionAuth: []
    *     responses:
    *       200:
-   *         description: Key status by model id
+   *         description: "{ items: [{ id, state, source, envVar, enabled }] }, one per chat model"
    *       401:
    *         description: Admin authentication required
    */
   app.get(buildServerPath('/api/admin/models/_key-status'), adminAuth, async (req, res) => {
     const { data: models } = configCache.getModels(true);
-    // Entries rather than assignments: an id such as `__proto__` would set
-    // the prototype of a plain object instead of adding a property.
-    const entries = [];
+    const items = [];
     for (const model of models) {
       // Speech models resolve their credentials on their own path.
       if (!isChatModel(model)) continue;
       const enabled = model.enabled !== false;
       if (model.provider === 'iassistant-conversation') {
-        entries.push([model.id, { state: 'keyless', source: 'none', envVar: null, enabled }]);
+        items.push({ id: model.id, state: 'keyless', source: 'none', envVar: null, enabled });
         continue;
       }
       const { state, source, envVar } = inspectModelApiKey(model, { quiet: true });
-      entries.push([model.id, { state, source, envVar, enabled }]);
+      items.push({ id: model.id, state, source, envVar, enabled });
     }
-    const statuses = Object.fromEntries(entries);
     // Depends on providers and the environment as well as on the models, so
     // it must not ride on the models' ETag.
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ statuses });
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {

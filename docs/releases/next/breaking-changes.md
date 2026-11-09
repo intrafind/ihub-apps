@@ -735,9 +735,8 @@ now answer `items` (siblings such as `persisted`, `pinned` or `categories` keep 
   (`…/sources`, `…/drives/{source}` of Google Drive, Office 365 and Nextcloud).
 - Project pickers: `GET /api/projects/pickers/{pages, ifinder/search, cloud}`.
 
-The web app is updated. A script that reads one of these reads `body.items`. Maps such as
-`GET /api/admin/{models,providers}/_key-status` (`statuses`, keyed by id) are not lists and keep
-their shape.
+The web app is updated. A script that reads one of these reads `body.items`. The id-keyed key-status
+maps follow below.
 
 ## More Resources Are Answered As Themselves
 
@@ -794,3 +793,11 @@ Answers that carry more than the object keep their members (user prompt and skil
   `DELETE /api/admin/models/{modelId}/tts/voices/{voiceId}`,
   `DELETE /api/chats/{chatId}/files/{fileId}` (a file that does not exist now answers `404`) and
   `DELETE /api/integrations/ifinder/authorization`.
+
+## API Key Status Is a List
+
+`GET /api/admin/models/_key-status` and `GET /api/admin/providers/_key-status` answered
+`{ statuses: { "<id>": { state, source, envVar } } }`, a map that used the model or provider id as a
+member name. They now answer `{ items: [{ id, state, source, envVar }] }` (models also carry
+`enabled`), like every other collection. The ids are values, so an id such as `__proto__` is an
+ordinary entry. The web app, including the setup wizard, is updated.
