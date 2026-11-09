@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import rateLimit from 'express-rate-limit';
 import {
   findCloudStorageProvider,
   mayUseCloudStorage
@@ -12,7 +13,7 @@ import {
   isIntegrationAuthRequired
 } from '../../services/integrations/auth/integrationAuthRequired.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 /**
  * The OAuth callback (`/<installation id>/callback`) carries the installation
  * id in the path and is bound to the user by the server-side `state`; the
@@ -53,50 +54,48 @@ export function requestedProviderId(req) {
  * router.use(requireCloudStorageGrant('office365'));
  */
 export function requireCloudStorageGrant(type) {
-  return (req, res, next) => {
+  return (req, _res, next) => {
     if (CALLBACK_PATH.test(req.path)) return next();
     const providerId = requestedProviderId(req);
     if (!providerId) {
-      return sendErrorResponse(
-        res,
-        400,
-        'providerId (the id of the storage provider installation) is required',
-        { code: 'STORAGE_PROVIDER_REQUIRED' }
+      return next(
+        new ServiceError(
+          'STORAGE_PROVIDER_REQUIRED',
+          'providerId (the id of the storage provider installation) is required'
+        )
       );
     }
     const provider = findCloudStorageProvider(providerId, type);
     if (!provider) {
-      return sendErrorResponse(res, 404, 'No such storage provider installation', {
-        code: 'STORAGE_PROVIDER_NOT_FOUND'
-      });
+      return next(
+        new ServiceError('STORAGE_PROVIDER_NOT_FOUND', 'No such storage provider installation')
+      );
     }
     if (mayUseCloudStorage(req.user, provider)) return next();
-    return sendErrorResponse(res, 403, 'Your groups may not use this storage provider', {
-      code: 'INTEGRATION_NOT_GRANTED'
-    });
+    return next(
+      new ServiceError('INTEGRATION_NOT_GRANTED', 'Your groups may not use this storage provider')
+    );
   };
 }
 
 /**
- * Answer a browse or download request that failed because the user has no
- * usable connection to the provider with the one "connect first" body
+ * The error a browse or download request that failed because the user has no
+ * usable connection to the provider is answered with: the one "connect first" body
  * (`INTEGRATION_AUTH_REQUIRED`, `reason`, `connectUrl`), status 409 — not 401,
  * which would read as an expired iHub session. The file browser then shows
  * the Connect card.
  *
- * @param {import('express').Response} res
  * @param {Error} error - What the provider service threw
  * @param {string} installationId - The provider installation the request named
- * @returns {boolean} True when a response was sent
+ * @returns {ServiceError | null} The error to throw, or null when `error` is something else
  *
  * @example
  * } catch (error) {
- *   if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
- *   return sendInternalError(res, error, 'list items');
+ *   throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
  * }
  */
-export function respondIfAuthRequired(res, error, installationId) {
-  if (!isIntegrationAuthRequired(error)) return false;
+export function integrationAuthRequiredError(error, installationId) {
+  if (!isIntegrationAuthRequired(error)) return null;
   const integration = error.integration || installationId;
   // The structured "connect first" result is the body the model's tools see; over HTTP it is
   // an ordinary problem: the code, and what the Connect card needs in `details`.
@@ -111,8 +110,23 @@ export function respondIfAuthRequired(res, error, installationId) {
   const details = { ...result };
   delete details.error;
   delete details.message;
-  sendErrorResponse(res, 409, result.message, { code: INTEGRATION_AUTH_REQUIRED, details });
-  return true;
+  return new ServiceError(INTEGRATION_AUTH_REQUIRED, result.message, { status: 409, details });
+}
+
+/**
+ * A rate limiter for the browse and download routes of one storage provider
+ * (each router gets its own, so the providers do not share a bucket). These
+ * routes call out to the provider on every request.
+ *
+ * @returns {import('express').RequestHandler}
+ */
+export function createCloudStorageLimiter() {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
 }
 
 export default requireCloudStorageGrant;

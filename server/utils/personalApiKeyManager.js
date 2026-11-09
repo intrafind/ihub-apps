@@ -16,6 +16,7 @@ import { buildPublicBaseUrl } from './publicBaseUrl.js';
 import { MCP_SCOPES } from '../services/mcp/scopes.js';
 import logger from './logger.js';
 import { oauthClientsFile } from './contentsPath.js';
+import { ServiceError } from './ServiceError.js';
 
 /**
  * Personal API keys let a user mint credentials for themselves from the
@@ -354,11 +355,12 @@ export async function revokePersonalKey({ user, platform = {}, keyId }) {
 /**
  * Error carrying the HTTP status the route should answer with.
  */
-export class PersonalKeyError extends Error {
+const PERSONAL_KEY_ERROR_CODES = { 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT' };
+
+export class PersonalKeyError extends ServiceError {
   constructor(message, status = 400) {
-    super(message);
+    super(PERSONAL_KEY_ERROR_CODES[status] || 'BAD_REQUEST', message, { status });
     this.name = 'PersonalKeyError';
-    this.status = status;
   }
 }
 

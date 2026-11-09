@@ -6,12 +6,12 @@
 // from Settings > Integrations, within the policy an administrator configured.
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { logAudit } from '../../services/AuditLogService.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
-import logger from '../../utils/logger.js';
 import {
   buildPersonalKeyEndpoints,
   canUserManagePersonalKeys,
@@ -19,12 +19,10 @@ import {
   getPersonalKeyConfig,
   isPersonalKeysEnabled,
   listPersonalKeys,
-  PersonalKeyError,
   revokePersonalKey,
   rotatePersonalKey
 } from '../../utils/personalApiKeyManager.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Gate all personal key routes behind the integrations feature flag
@@ -39,41 +37,22 @@ router.use(requireFeature('integrations'));
  * key minted under a blank or shared identity would be usable by anyone, so
  * both cases are rejected here.
  */
-function requireKeyManager(req, res) {
+function requireKeyManager(req) {
   const platform = configCache.getPlatform() || {};
 
   if (!isPersonalKeysEnabled(platform)) {
-    sendErrorResponse(res, 404, 'Personal API keys are not enabled');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'Personal API keys are not enabled');
   }
 
   if (!req.user?.id || req.user.id === 'anonymous') {
-    sendErrorResponse(res, 401, 'Authentication required');
-    return null;
+    throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
 
   if (!canUserManagePersonalKeys(req.user, platform)) {
-    sendErrorResponse(res, 403, 'You are not allowed to create API keys');
-    return null;
+    throw new ServiceError('FORBIDDEN', 'You are not allowed to create API keys');
   }
 
   return { platform, user: req.user };
-}
-
-/**
- * Translate a PersonalKeyError into its HTTP response; anything else is a bug
- * and is reported as a 500 without leaking internals.
- */
-function handleError(res, error, action) {
-  if (error instanceof PersonalKeyError) {
-    return sendErrorResponse(res, error.status, error.message);
-  }
-
-  logger.error(`Personal API key ${action} failed`, {
-    component: 'PersonalApiKeys',
-    error
-  });
-  return sendErrorResponse(res, 500, `Failed to ${action} API key`);
 }
 
 /**
@@ -96,28 +75,23 @@ function handleError(res, error, action) {
  *         description: Personal API keys are not enabled
  */
 router.get('/', authRequired, (req, res) => {
-  const context = requireKeyManager(req, res);
-  if (!context) return;
+  const context = requireKeyManager(req);
 
   const { platform, user } = context;
   const config = getPersonalKeyConfig(platform);
 
-  try {
-    res.json({
-      enabled: true,
-      limits: {
-        maxKeysPerUser: config.maxKeysPerUser,
-        defaultExpirationDays: config.defaultExpirationDays,
-        maxExpirationDays: config.maxExpirationDays,
-        allowClientCredentials: config.allowClientCredentials
-      },
-      scopes: config.scopes,
-      endpoints: buildPersonalKeyEndpoints(req, platform),
-      keys: listPersonalKeys(user, platform)
-    });
-  } catch (error) {
-    handleError(res, error, 'list');
-  }
+  res.json({
+    enabled: true,
+    limits: {
+      maxKeysPerUser: config.maxKeysPerUser,
+      defaultExpirationDays: config.defaultExpirationDays,
+      maxExpirationDays: config.maxExpirationDays,
+      allowClientCredentials: config.allowClientCredentials
+    },
+    scopes: config.scopes,
+    endpoints: buildPersonalKeyEndpoints(req, platform),
+    keys: listPersonalKeys(user, platform)
+  });
 });
 
 /**
@@ -150,30 +124,25 @@ router.get('/', authRequired, (req, res) => {
  *         description: The user already has the maximum number of keys
  */
 router.post('/', authRequired, async (req, res) => {
-  const context = requireKeyManager(req, res);
-  if (!context) return;
+  const context = requireKeyManager(req);
 
   const { platform, user } = context;
 
-  try {
-    const { name, expirationDays } = req.body || {};
-    const result = await createPersonalKey({ user, platform, name, expirationDays });
+  const { name, expirationDays } = req.body || {};
+  const result = await createPersonalKey({ user, platform, name, expirationDays });
 
-    logAudit({
-      req,
-      action: 'create',
-      resource: 'personalApiKey',
-      resourceId: result.key.id,
-      summary: `Created personal API key "${result.key.name}"`
-    });
+  logAudit({
+    req,
+    action: 'create',
+    resource: 'personalApiKey',
+    resourceId: result.key.id,
+    summary: `Created personal API key "${result.key.name}"`
+  });
 
-    res.status(201).json({
-      ...result,
-      endpoints: buildPersonalKeyEndpoints(req, platform)
-    });
-  } catch (error) {
-    handleError(res, error, 'create');
-  }
+  res.status(201).json({
+    ...result,
+    endpoints: buildPersonalKeyEndpoints(req, platform)
+  });
 });
 
 /**
@@ -199,38 +168,33 @@ router.post('/', authRequired, async (req, res) => {
  *         description: No such key for this user
  */
 router.post('/:keyId/rotate', authRequired, async (req, res) => {
-  const context = requireKeyManager(req, res);
-  if (!context) return;
+  const context = requireKeyManager(req);
 
   // Checked after the feature gate so a disabled feature still answers 404 for
   // every request, but before the identifier reaches the client store.
-  if (!validateIdForPath(req.params.keyId, 'API key', res)) return;
+  assertValidId(req.params.keyId, 'API key');
 
   const { platform, user } = context;
 
-  try {
-    const result = await rotatePersonalKey({
-      user,
-      platform,
-      keyId: req.params.keyId,
-      expirationDays: req.body?.expirationDays
-    });
+  const result = await rotatePersonalKey({
+    user,
+    platform,
+    keyId: req.params.keyId,
+    expirationDays: req.body?.expirationDays
+  });
 
-    logAudit({
-      req,
-      action: 'update',
-      resource: 'personalApiKey',
-      resourceId: req.params.keyId,
-      summary: `Rotated personal API key "${result.key.name}"`
-    });
+  logAudit({
+    req,
+    action: 'update',
+    resource: 'personalApiKey',
+    resourceId: req.params.keyId,
+    summary: `Rotated personal API key "${result.key.name}"`
+  });
 
-    res.json({
-      ...result,
-      endpoints: buildPersonalKeyEndpoints(req, platform)
-    });
-  } catch (error) {
-    handleError(res, error, 'rotate');
-  }
+  res.json({
+    ...result,
+    endpoints: buildPersonalKeyEndpoints(req, platform)
+  });
 });
 
 /**
@@ -254,28 +218,24 @@ router.post('/:keyId/rotate', authRequired, async (req, res) => {
  *         description: No such key for this user
  */
 router.delete('/:keyId', authRequired, async (req, res) => {
-  const context = requireKeyManager(req, res);
-  if (!context) return;
+  const context = requireKeyManager(req);
 
-  if (!validateIdForPath(req.params.keyId, 'API key', res)) return;
+  assertValidId(req.params.keyId, 'API key');
 
   const { platform, user } = context;
 
-  try {
-    await revokePersonalKey({ user, platform, keyId: req.params.keyId });
+  await revokePersonalKey({ user, platform, keyId: req.params.keyId });
 
-    logAudit({
-      req,
-      action: 'delete',
-      resource: 'personalApiKey',
-      resourceId: req.params.keyId,
-      summary: `Revoked personal API key ${req.params.keyId}`
-    });
+  logAudit({
+    req,
+    action: 'delete',
+    resource: 'personalApiKey',
+    resourceId: req.params.keyId,
+    summary: `Revoked personal API key ${req.params.keyId}`
+  });
 
-    res.json({ success: true });
-  } catch (error) {
-    handleError(res, error, 'revoke');
-  }
+  // api-guidelines-ignore: existing success body, changed in its own API change
+  res.json({ success: true });
 });
 
 export default router;
