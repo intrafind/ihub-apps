@@ -114,7 +114,6 @@ describe('feedback feature gate', () => {
 
     assert.equal(passed, false);
     assert.equal(res.statusCode, 403);
-    assert.match(res.headers['content-type'], /^application\/problem\+json/);
     assert.equal(res.body.code, 'FEATURE_DISABLED');
   });
 

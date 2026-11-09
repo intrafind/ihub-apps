@@ -873,6 +873,9 @@ used to be an HTML or plain text page.
   `CHAT_OWNER_REQUIRED`, `APP_NOT_FOUND`, `INVALID_APP`, the tool approval and project refusals) as before, the model
   call's own code and status (`TIMEOUT`, rate limits, provider errors) and `INTERNAL_ERROR` with a fixed text for an
   unexpected failure; the cause is in the server log. A refusal is no longer logged as a chat error.
+- The iFinder authorization routes (`/api/integrations/ifinder/authorization`), the feature gate (`FEATURE_DISABLED`,
+  403), the workflow chat route (`CHAT_STORAGE_UNAVAILABLE`, 503) and the admin prompt completions answer in this
+  shape. The iFinder routes keep the status the token store reported and show its message only for a client error.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

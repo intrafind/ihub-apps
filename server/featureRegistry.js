@@ -1,4 +1,4 @@
-import { sendErrorResponse } from './utils/responseHelpers.js';
+import { ServiceError } from './utils/ServiceError.js';
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
@@ -322,9 +322,7 @@ export function requireFeature(featureId) {
       _configCache = (await import('./configCache.js')).default;
     }
     if (!isFeatureEnabled(featureId, _configCache.getFeatures())) {
-      return sendErrorResponse(res, 403, `Feature '${featureId}' is not enabled`, {
-        code: 'FEATURE_DISABLED'
-      });
+      return next(new ServiceError('FEATURE_DISABLED', `Feature '${featureId}' is not enabled`));
     }
     next();
   };

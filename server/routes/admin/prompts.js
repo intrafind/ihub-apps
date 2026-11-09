@@ -10,7 +10,6 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
@@ -1641,9 +1640,7 @@ export default function registerAdminPromptsRoutes(app) {
       });
     } catch (error) {
       if (error instanceof ServiceError) throw error;
-      if (isLLMError(error)) {
-        return sendLLMError(res, error, { context: 'completions' });
-      }
+      if (isLLMError(error)) throw error;
       logger.error('Error in completions endpoint', { component: 'AdminPrompts', error });
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
