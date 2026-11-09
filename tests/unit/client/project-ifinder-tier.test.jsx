@@ -455,7 +455,9 @@ describe('a smart collection its owner manages', () => {
     // instructions, members or catalog.
     expect(screen.queryByRole('button', { name: /refresh|retry/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rename item' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    // The only checkboxes select documents for a removal; none pins one.
+    expect(screen.queryByLabelText(/^Pin /)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Select Lease 2026')).toBeInTheDocument();
     expect(screen.queryByText('Pinned')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /instructions/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /members/i })).not.toBeInTheDocument();
@@ -487,6 +489,7 @@ describe('a smart collection its owner manages', () => {
     expect(screen.queryByTestId('rename-collection-button')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add documents/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('read-only');
     expect(screen.getByTestId('project-ifinder-banner')).toHaveTextContent(/add, remove or rename/);
   });
@@ -567,6 +570,26 @@ describe('a smart collection its owner manages', () => {
     await waitFor(() => expect(deleteProjectItem).toHaveBeenCalledWith(COLLECTION_ID, 'itm_a'));
     // The project is read again afterwards.
     await waitFor(() => expect(mockApi.fetchProject.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('removes the ticked documents from the collection, and says they stay in iFinder', async () => {
+    const { deleteProjectItem } = require('../../../client/src/api');
+    deleteProjectItem.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByLabelText('Select all items'));
+    const bar = screen.getByTestId('project-item-selection-bar');
+    expect(bar).toHaveTextContent('2 documents selected');
+    expect(within(bar).queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Remove' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent(
+      'Remove 2 documents from the collection? The documents stay in iFinder.'
+    );
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Remove documents' }));
+    await waitFor(() => expect(deleteProjectItem).toHaveBeenCalledTimes(2));
+    expect(deleteProjectItem).toHaveBeenCalledWith(COLLECTION_ID, 'itm_a');
+    expect(deleteProjectItem).toHaveBeenCalledWith(COLLECTION_ID, 'itm_b');
   });
 
   it('shows the error of a failed remove, with the document still listed', async () => {

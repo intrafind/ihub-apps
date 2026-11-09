@@ -447,6 +447,75 @@ describe('AdminProjectEditPage – items', () => {
     });
   });
 
+  test('deletes the ticked items after a confirmation', async () => {
+    const second = { ...READY, id: 'i2', name: 'draft.pdf' };
+    const third = { ...READY, id: 'i3', name: 'keep.pdf' };
+    mockApi.fetchAdminProject
+      .mockResolvedValueOnce(makeProject([READY, second, third]))
+      .mockResolvedValue(makeProject([third]));
+    mockApi.deleteAdminProjectItem.mockResolvedValue(undefined);
+    renderAt('/admin/projects/handbook/edit');
+
+    fireEvent.click(await screen.findByLabelText('Select policies.pdf'));
+    fireEvent.click(screen.getByLabelText('Select draft.pdf'));
+    const bar = screen.getByTestId('item-selection-bar');
+    expect(bar).toHaveTextContent('2 items selected');
+
+    // Nothing goes before the admin confirms; denying keeps everything.
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
+    let dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Delete 2 items from the project?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(mockApi.deleteAdminProjectItem).not.toHaveBeenCalled();
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete items' }));
+
+    await waitFor(() => expect(mockApi.deleteAdminProjectItem).toHaveBeenCalledTimes(2));
+    expect(mockApi.deleteAdminProjectItem).toHaveBeenNthCalledWith(1, 'handbook', 'i1');
+    expect(mockApi.deleteAdminProjectItem).toHaveBeenNthCalledWith(2, 'handbook', 'i2');
+    await waitFor(() => expect(screen.queryByText('policies.pdf')).toBeNull());
+    expect(screen.queryByText('draft.pdf')).toBeNull();
+    expect(screen.getByText('keep.pdf')).toBeInTheDocument();
+    expect(screen.queryByTestId('item-selection-bar')).toBeNull();
+  });
+
+  test('keeps an item that could not be deleted selected and says why', async () => {
+    const second = { ...READY, id: 'i2', name: 'draft.pdf' };
+    const third = { ...READY, id: 'i3', name: 'gone.pdf' };
+    mockApi.fetchAdminProject
+      .mockResolvedValueOnce(makeProject([READY, second, third]))
+      .mockResolvedValue(makeProject([second]));
+    mockApi.deleteAdminProjectItem.mockImplementation(async (_projectId, itemId) => {
+      if (itemId === 'i2') throw new Error('The project is locked');
+      // Someone else deleted it meanwhile: it is gone, which is what was asked.
+      if (itemId === 'i3')
+        throw Object.assign(new Error('Item not found'), {
+          response: { status: 404, data: { code: 'ITEM_NOT_FOUND' } }
+        });
+    });
+    renderAt('/admin/projects/handbook/edit');
+
+    fireEvent.click(await screen.findByLabelText('Select all items'));
+    fireEvent.click(
+      within(screen.getByTestId('item-selection-bar')).getByRole('button', { name: 'Delete' })
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Delete 3 items from the project?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete items' }));
+
+    expect(
+      await screen.findByText('1 items could not be deleted: The project is locked')
+    ).toBeInTheDocument();
+    expect(mockApi.deleteAdminProjectItem).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText('policies.pdf')).toBeNull();
+    expect(screen.queryByText('gone.pdf')).toBeNull();
+    expect(screen.getByTestId('item-selection-bar')).toHaveTextContent('1 items selected');
+    expect(screen.getByLabelText('Select draft.pdf')).toBeChecked();
+  });
+
   test('uploads a file through the multipart helper from the dialog', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.uploadAdminProjectItem.mockResolvedValue({ id: 'i9', status: 'pending' });
