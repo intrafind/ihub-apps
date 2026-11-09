@@ -78,7 +78,7 @@ function AdminProviderEditPage() {
         makeAdminApiCall('/admin/llm-timeouts').catch(() => ({ data: {} }))
       ]);
       const provider = response.data;
-      setModels(Array.isArray(modelsResponse.data) ? modelsResponse.data : []);
+      setModels(Array.isArray(modelsResponse.data?.items) ? modelsResponse.data.items : []);
       setInheritedTimeouts(timeoutsResponse.data?.effective || {});
 
       // Name and description are plain text. getLocalizedContent also reads an
@@ -112,7 +112,7 @@ function AdminProviderEditPage() {
   // After a sync: only the models changed, so the form and its unsaved edits stay.
   const reloadModels = useCallback(async () => {
     const response = await makeAdminApiCall('/admin/models').catch(() => null);
-    if (response) setModels(Array.isArray(response.data) ? response.data : []);
+    if (response) setModels(Array.isArray(response.data?.items) ? response.data.items : []);
   }, []);
 
   const handleChange = (field, value) => {
