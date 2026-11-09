@@ -7,18 +7,14 @@
  *   GET /api/agents/runs/:runId/artifacts/:name      — fetch one artifact
  */
 
+import rateLimit from 'express-rate-limit';
 import fs, { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
-import {
-  sendBadRequest,
-  sendNotFound,
-  sendFailedOperationError,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { isAdmin } from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { assertValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { getWorkflowEngine } from '../../services/workflow/index.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
@@ -60,69 +56,71 @@ function safeName(name) {
 /**
  * Per-run authorization check. The run was triggered by a specific human
  * (recorded in `state.data._agent.triggeredBy.userId`); only that user —
- * or an administrator — should be able to read its artifacts. Sends the
- * appropriate response (404 if run doesn't exist, 403 if not allowed) and
- * returns false; otherwise returns true.
+ * or an administrator — should be able to read its artifacts. Throws a
+ * ServiceError (404 if the run doesn't exist, 403 if not allowed).
  */
-async function authorizeArtifactAccess(req, res, runId) {
-  if (isAdmin(req.user)) return true;
+async function assertArtifactAccess(req, runId) {
+  if (isAdmin(req.user)) return;
+  let state;
   try {
-    const state = await getEngine().getState(runId);
-    if (!state) {
-      sendNotFound(res, `Run ${runId} not found`);
-      return false;
-    }
-    const triggered = state.data?._agent?.triggeredBy?.userId;
-    const requesting = req.user?.id;
-    if (triggered && requesting && requesting !== 'anonymous' && triggered === requesting) {
-      return true;
-    }
-    sendErrorResponse(res, 403, 'You are not allowed to access this run’s artifacts.');
-    return false;
+    state = await getEngine().getState(runId);
   } catch {
-    sendErrorResponse(res, 403, 'Authorization check failed.');
-    return false;
+    throw new ServiceError('FORBIDDEN', 'Authorization check failed.');
   }
+  if (!state) {
+    throw new ServiceError('NOT_FOUND', `Run ${runId} not found`);
+  }
+  const triggered = state.data?._agent?.triggeredBy?.userId;
+  const requesting = req.user?.id;
+  if (triggered && requesting && requesting !== 'anonymous' && triggered === requesting) {
+    return;
+  }
+  throw new ServiceError('FORBIDDEN', 'You are not allowed to access this run’s artifacts.');
 }
+
+/** Listing and reading artifact files: generous for a person, a wall for a script. */
+const artifactLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 export default function registerAgentArtifactRoutes(app) {
   app.get(
     buildServerPath('/api/agents/runs/:runId/artifacts'),
     authRequired,
     authenticatedOnly,
+    artifactLimiter,
     async (req, res) => {
+      const { runId } = req.params;
+      assertValidId(runId, 'run');
+      await assertArtifactAccess(req, runId);
+      const dir = await artifactsDirForRun(runId);
+      if (!dir) throw new ServiceError('BAD_REQUEST', 'invalid run id');
+      let entries = [];
       try {
-        const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeArtifactAccess(req, res, runId))) return;
-        const dir = await artifactsDirForRun(runId);
-        if (!dir) return sendBadRequest(res, 'invalid run id');
-        let entries = [];
-        try {
-          // lgtm[js/path-injection] -- runId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
-          entries = await fsp.readdir(dir);
-        } catch (err) {
-          if (err.code !== 'ENOENT') throw err;
-        }
-        const list = [];
-        for (const entry of entries) {
-          // entry comes from a directory listing of `dir` (already validated);
-          // any traversal would require the OS to return `..` which fsp.readdir
-          // does not. Still, validate the filename shape.
-          const safeEntry = safeName(entry);
-          if (!safeEntry) continue;
-          const entryPath = await resolveAndValidatePath(safeEntry, dir);
-          if (!entryPath) continue;
-          // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
-          const stat = await fsp.stat(entryPath).catch(() => null);
-          if (stat && stat.isFile()) {
-            list.push({ name: safeEntry, bytes: stat.size, mtime: stat.mtime });
-          }
-        }
-        res.json(list);
-      } catch (error) {
-        sendFailedOperationError(res, 'list artifacts', error);
+        // lgtm[js/path-injection] -- runId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+        entries = await fsp.readdir(dir);
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
       }
+      const list = [];
+      for (const entry of entries) {
+        // entry comes from a directory listing of `dir` (already validated);
+        // any traversal would require the OS to return `..` which fsp.readdir
+        // does not. Still, validate the filename shape.
+        const safeEntry = safeName(entry);
+        if (!safeEntry) continue;
+        const entryPath = await resolveAndValidatePath(safeEntry, dir);
+        if (!entryPath) continue;
+        // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
+        const stat = await fsp.stat(entryPath).catch(() => null);
+        if (stat && stat.isFile()) {
+          list.push({ name: safeEntry, bytes: stat.size, mtime: stat.mtime });
+        }
+      }
+      res.json(list);
     }
   );
 
@@ -130,37 +128,34 @@ export default function registerAgentArtifactRoutes(app) {
     buildServerPath('/api/agents/runs/:runId/artifacts/:name'),
     authRequired,
     authenticatedOnly,
+    artifactLimiter,
     async (req, res) => {
+      const { runId, name } = req.params;
+      assertValidId(runId, 'run');
+      await assertArtifactAccess(req, runId);
+      const safe = safeName(name);
+      if (!safe) throw new ServiceError('BAD_REQUEST', 'invalid artifact name');
+      const dir = await artifactsDirForRun(runId);
+      if (!dir) throw new ServiceError('BAD_REQUEST', 'invalid run id');
+      const file = await resolveAndValidatePath(safe, dir);
+      if (!file) throw new ServiceError('BAD_REQUEST', 'invalid artifact path');
       try {
-        const { runId, name } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeArtifactAccess(req, res, runId))) return;
-        const safe = safeName(name);
-        if (!safe) return sendBadRequest(res, 'invalid artifact name');
-        const dir = await artifactsDirForRun(runId);
-        if (!dir) return sendBadRequest(res, 'invalid run id');
-        const file = await resolveAndValidatePath(safe, dir);
-        if (!file) return sendBadRequest(res, 'invalid artifact path');
-        try {
-          // lgtm[js/path-injection] -- runId+name validated; path canonicalized.
-          const stat = await fsp.stat(file);
-          if (!stat.isFile()) return sendNotFound(res, 'artifact');
-        } catch {
-          return sendNotFound(res, 'artifact');
-        }
-        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-        // Honor ?download=1 to set Content-Disposition: attachment so the
-        // browser saves the file instead of rendering it inline. Use the
-        // shared helper that escapes RFC 2183 unsafe chars and emits the
-        // RFC 5987 UTF-8 form alongside the ASCII fallback.
-        if (req.query?.download === '1') {
-          res.setHeader('Content-Disposition', buildContentDisposition(safe));
-        }
-        // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
-        fs.createReadStream(file).pipe(res);
-      } catch (error) {
-        sendFailedOperationError(res, 'read artifact', error);
+        // lgtm[js/path-injection] -- runId+name validated; path canonicalized.
+        const stat = await fsp.stat(file);
+        if (!stat.isFile()) throw new ServiceError('NOT_FOUND', 'artifact not found');
+      } catch {
+        throw new ServiceError('NOT_FOUND', 'artifact not found');
       }
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      // Honor ?download=1 to set Content-Disposition: attachment so the
+      // browser saves the file instead of rendering it inline. Use the
+      // shared helper that escapes RFC 2183 unsafe chars and emits the
+      // RFC 5987 UTF-8 form alongside the ASCII fallback.
+      if (req.query?.download === '1') {
+        res.setHeader('Content-Disposition', buildContentDisposition(safe));
+      }
+      // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
+      fs.createReadStream(file).pipe(res);
     }
   );
 }

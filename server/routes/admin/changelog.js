@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { getInstalledVersionRecord, isWithinUpgrade } from '../../utils/installedVersionStore.js';
 import {
@@ -146,23 +146,19 @@ export default function registerAdminChangelogRoutes(
    * was upgraded from so the UI can show the jump.
    */
   app.get(buildServerPath('/api/admin/changelog'), adminAuth, async (req, res) => {
-    try {
-      // The running build is authoritative for the current version; the store only contributes
-      // what it replaced. They disagree for one boot on an installation whose `contents/data` is
-      // not writable, and the running build is the one to trust.
-      const installedVersion = {
-        ...(await getInstalledVersionRecord()),
-        version: currentVersion()
-      };
-      const versions = await loadChangelogIndex(releasesDir, installedVersion);
-      res.json({
-        currentVersion: installedVersion.version,
-        previousVersion: installedVersion.previousVersion || null,
-        versions
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch changelog');
-    }
+    // The running build is authoritative for the current version; the store only contributes
+    // what it replaced. They disagree for one boot on an installation whose `contents/data` is
+    // not writable, and the running build is the one to trust.
+    const installedVersion = {
+      ...(await getInstalledVersionRecord()),
+      version: currentVersion()
+    };
+    const versions = await loadChangelogIndex(releasesDir, installedVersion);
+    res.json({
+      currentVersion: installedVersion.version,
+      previousVersion: installedVersion.previousVersion || null,
+      versions
+    });
   });
 
   /**
@@ -172,12 +168,8 @@ export default function registerAdminChangelogRoutes(
    * body as Markdown.
    */
   app.get(buildServerPath('/api/admin/changelog/:version'), adminAuth, async (req, res) => {
-    try {
-      const release = await loadChangelogVersion(releasesDir, req.params.version);
-      if (!release) return sendNotFound(res, 'Release');
-      res.json(release);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch changelog version');
-    }
+    const release = await loadChangelogVersion(releasesDir, req.params.version);
+    if (!release) throw new ServiceError('NOT_FOUND', 'Release not found');
+    res.json(release);
   });
 }
