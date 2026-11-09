@@ -142,7 +142,8 @@ Two mechanisms run, and they cover different distances:
   announces it over the cluster IPC bus (`server/configSync.js`), which is what
   reaches this machine's *other workers*. With the default four workers, this
   is the only reason a save on one worker is visible on the next request that
-  lands on another.
+  lands on another. The call returns once the other workers have reloaded too (at
+  most one second), so a save is visible on every worker when its request returns.
 - **The provider's change stream.** `configCache` also subscribes to the
   provider's [change notifier](storage.md#change-notification) and reloads the
   entries a `document.put` or `document.delete` invalidates, coalesced over a

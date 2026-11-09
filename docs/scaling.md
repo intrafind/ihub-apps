@@ -109,6 +109,21 @@ themselves:
   bus messages and disk reads.
 - **Inbound announcements are coalesced** over a 25 ms window, because one save
   frequently touches several entries (platform + groups, a bulk app import).
+- **A save returns after the other workers have it.** `refreshCacheEntry()`, which
+  admin routes call after writing a file, asks each other worker to reload at
+  once (no coalescing window) and waits until they have answered, for at most one
+  second (`APPLY_TIMEOUT_MS`). The browser's next request goes to whichever worker
+  the round-robin picks, so acknowledging the save while the others were still
+  loading made most reads right after it show the old value (71 of 80 in a test
+  with four workers), and a request that rewrote a stale copy of a file undid the
+  save. A worker that is restarting or stuck delays that one save by up to the
+  timeout; the save itself still succeeds, and the TTL refresh remains the
+  backstop for a worker that missed it. Outside cluster mode there is nobody to
+  wait for.
+- **An older reload never overwrites a newer one.** The TTL timer, the provider's
+  change event, a save and a relayed announcement can reload one entry at the same
+  time, each reading the disk at its own moment. Reloads are numbered as they
+  start, and one that finishes after a later-started reload has stored is dropped.
 - **Wholesale reloads** — backup import, the admin cache flush — announce a
   single "reload everything" instead of enumerating keys, since each worker may
   hold a different key set.

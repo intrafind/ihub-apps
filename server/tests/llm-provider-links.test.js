@@ -96,6 +96,11 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
     writeJson: async (rel, data) => {
       store[rel] = clone(data);
     },
+    updateJson: async (rel, mutate) => {
+      const next = await mutate(rel in store ? clone(store[rel]) : null);
+      if (next !== undefined) store[rel] = clone(next);
+      return { data: rel in store ? clone(store[rel]) : null, written: next !== undefined };
+    },
     remove: async rel => {
       const existed = rel in store;
       delete store[rel];
