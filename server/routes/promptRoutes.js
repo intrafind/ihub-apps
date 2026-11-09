@@ -69,6 +69,7 @@ import {
   userPromptContentSchema,
   userPromptUpdateSchema
 } from '../validators/userPromptSchema.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/prompts?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'global', 'mine', 'shared', 'favorites']);
@@ -706,7 +707,9 @@ export default function registerPromptRoutes(app) {
       summary: `Created user prompt "${prompt.name}"`
     });
     const context = callerContext(req.user);
-    res.status(201).json(
+    sendCreated(
+      res,
+      `/api/prompts/${segment(prompt.id)}`,
       serializeUserPrompt(
         prompt,
         userPromptPermissions(prompt, req.user, {
@@ -936,7 +939,9 @@ export default function registerPromptRoutes(app) {
         summary: `Duplicated ${copiedFrom.scope} prompt ${promptId} as "${prompt.name}"`
       });
       const context = callerContext(req.user);
-      res.status(201).json(
+      sendCreated(
+        res,
+        `/api/prompts/${segment(prompt.id)}`,
         serializeUserPrompt(
           prompt,
           userPromptPermissions(prompt, req.user, {

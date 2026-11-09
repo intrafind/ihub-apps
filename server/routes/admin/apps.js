@@ -14,6 +14,7 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { describeIssues } from '../../validators/userPromptSchema.js';
 import { getIntegrationStatus } from '../../integrationRegistry.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -735,7 +736,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: newApp.id,
       summary: `Created app ${newApp.id}`
     });
-    res.status(201).json({ app: newApp });
+    sendCreated(res, `/api/admin/apps/${segment(newApp.id)}`, { app: newApp });
   });
 
   /**

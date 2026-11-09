@@ -15,6 +15,7 @@ import memoryFile from '../../agents/memory/memoryFile.js';
 import { runTool } from '../../services/tools/runTool.js';
 import { resolveModelId } from '../../utils.js';
 import llmClient from '../../services/loop/LLMClient.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** Namespace holding the agent profiles (`contents/agents/profiles`). */
 const PROFILES_NS = 'agents';
@@ -205,7 +206,7 @@ export default function registerAdminAgentsRoutes(app) {
       profileId: profile.id,
       actor: req.user?.id
     });
-    res.status(201).json({ profile });
+    sendCreated(res, `/api/admin/agents/profiles/${segment(profile.id)}`, { profile });
   });
 
   // ── Update ────────────────────────────────────────────────────────────────

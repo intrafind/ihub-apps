@@ -30,6 +30,7 @@ import {
   buildAppGeneratorBrief,
   describeInstalledIntegrations
 } from '../../services/appGenerator.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * The file a prompt id lives in.
@@ -1002,7 +1003,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: newPrompt.id,
       summary: `Created prompt ${newPrompt.id}`
     });
-    res.status(201).json({ prompt: newPrompt });
+    sendCreated(res, `/api/admin/prompts/${segment(newPrompt.id)}`, { prompt: newPrompt });
   });
 
   /**
@@ -1334,7 +1335,7 @@ export default function registerAdminPromptsRoutes(app) {
           userPrompt.ownerName || userPrompt.ownerId
         } to global prompt ${id}`
       });
-      res.status(201).json({ prompt: globalPrompt });
+      sendCreated(res, `/api/admin/prompts/${segment(globalPrompt.id)}`, { prompt: globalPrompt });
     }
   );
 

@@ -42,6 +42,7 @@ import {
   skillPromoteSchema,
   userSkillSettingsSchema
 } from '../../validators/userSkillSchema.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const MAX_SKILL_ZIP_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -574,7 +575,7 @@ export default function registerAdminSkillsRoutes(app) {
             skill.ownerName || skill.ownerId
           } to global skill ${name}`
         });
-        res.status(201).json({ name, promotedTo });
+        sendCreated(res, `/api/admin/skills/${segment(name)}`, { name, promotedTo });
       } catch (error) {
         if (created && targetPath) {
           await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});

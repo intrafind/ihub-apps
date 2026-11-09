@@ -58,6 +58,7 @@ import {
   userProjectUpdateSchema
 } from '../validators/projectSchema.js';
 import { isMultipart } from './projectItemRoutes.js';
+import { sendCreated, sendWithLocation, segment } from '../utils/created.js';
 
 /**
  * Run `handler` for a smart collection and hand everything else on: a middleware
@@ -124,7 +125,11 @@ export async function createIFinderProject(req, res, { body, serialize }) {
     usage: { items: collection.items.length, bytes: 0 },
     collection: { id: collectionId, state: 'ok', name: collection.name }
   };
-  res.status(201).json(serialize(project, req.user, callerContext(req.user)));
+  sendCreated(
+    res,
+    `/api/projects/${segment(project.id)}`,
+    serialize(project, req.user, callerContext(req.user))
+  );
 }
 
 /**
@@ -208,7 +213,11 @@ export async function importCollection(req, res, { serialize }) {
     usage: { items: collection.items.length, bytes: 0 },
     collection: { id: collectionId, state: 'ok', name: collection.name }
   };
-  res.status(201).json(serialize(project, req.user, callerContext(req.user)));
+  sendCreated(
+    res,
+    `/api/projects/${segment(project.id)}`,
+    serialize(project, req.user, callerContext(req.user))
+  );
 }
 
 /**
@@ -335,16 +344,24 @@ export async function addIFinderDocuments(req, res) {
   const itemOf = documentId =>
     project.items.find(entry => entry.id === itemIdOf(collectionId, documentId));
   if (batch) {
-    return res.status(added.length > 0 ? 201 : 200).json({
-      items: [...added, ...alreadyMember].map(id => serializeItem(itemOf(id))),
-      added,
-      alreadyMember
-    });
+    return sendWithLocation(
+      res,
+      added.length > 0 ? 201 : 200,
+      `/api/projects/${segment(project.id)}`,
+      {
+        items: [...added, ...alreadyMember].map(id => serializeItem(itemOf(id))),
+        added,
+        alreadyMember
+      }
+    );
   }
   const [documentId] = [...added, ...alreadyMember];
-  res
-    .status(added.length > 0 ? 201 : 200)
-    .json({ item: serializeItem(itemOf(documentId)), alreadyMember: added.length === 0 });
+  sendWithLocation(
+    res,
+    added.length > 0 ? 201 : 200,
+    `/api/projects/${segment(project.id)}/items/${segment(itemOf(documentId).id)}`,
+    { item: serializeItem(itemOf(documentId)), alreadyMember: added.length === 0 }
+  );
 }
 
 /** `DELETE /api/projects/:projectId/items/:itemId` for a collection: the membership only. */

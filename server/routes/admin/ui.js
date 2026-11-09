@@ -17,6 +17,7 @@ import logger from '../../utils/logger.js';
 import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
@@ -129,7 +130,7 @@ export default function registerAdminUIRoutes(app) {
         summary: `Uploaded UI asset ${assetInfo.filename}`
       });
 
-      res.status(201).json({ asset: assetInfo });
+      sendCreated(res, `/uploads/assets/${segment(req.file.filename)}`, { asset: assetInfo });
     }
   );
 

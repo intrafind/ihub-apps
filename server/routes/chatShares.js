@@ -71,6 +71,7 @@ import {
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { isAdmin } from '../utils/authorization.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -460,7 +461,7 @@ async function handleCreateShare(req, res, { artifactId = null } = {}) {
         : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
     }`
   });
-  res.status(201).json({ share: ownerView(share) });
+  sendCreated(res, `/api/shares/${segment(share.id)}`, { share: ownerView(share) });
 }
 
 /**

@@ -66,6 +66,7 @@ import { getItemText } from '../../services/knowledge/ItemTextService.js';
 import { estimateProject } from '../../services/projects/projectEstimate.js';
 import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
 import { RESULT_BUDGET_TOKENS } from '../../sources/documentRetrieval.js';
+import { sendCreated, sendWithLocation, segment } from '../../utils/created.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -465,7 +466,7 @@ export default function registerAdminProjectsRoutes(app) {
       summary: `Created admin project "${projectName(project)}"`
     });
     await snapshot(req, project.id, null, project);
-    res.status(201).json({ project: adminView(project) });
+    sendCreated(res, `/api/admin/projects/${segment(project.id)}`, { project: adminView(project) });
   });
 
   app.get(route('/:id'), ...gate, contentAdminAuth, async (req, res) => {
@@ -601,7 +602,12 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: project.id,
         summary: `Added ${item.kind} item "${item.name}" to admin project "${projectName(project)}"`
       });
-      res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
+      sendWithLocation(
+        res,
+        item.status === 'ready' ? 201 : 202,
+        `/api/admin/projects/${segment(project.id)}/items/${segment(item.id)}`,
+        { item: serializeItem(item) }
+      );
     }
   );
 

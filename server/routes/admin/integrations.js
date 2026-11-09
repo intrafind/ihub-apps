@@ -40,6 +40,7 @@ import {
   testAction
 } from '../../services/integrations/tester/ActionTester.js';
 import { closeRequestsFor } from './integrationRequests.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** An action name in a route: what MCP tools, OpenAPI operations and connectors use. */
 const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -580,7 +581,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     });
     // Users who asked for this definition and whose groups now allow it.
     await closeRequestsFor(req, instance.definition);
-    res.status(201).json({ instance });
+    sendCreated(res, `/api/admin/integrations/installed/${segment(instance.id)}`, { instance });
   });
 
   app.get(buildServerPath('/api/admin/integrations/installed/:id'), adminAuth, async (req, res) => {

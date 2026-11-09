@@ -110,6 +110,10 @@ describe('task file routes', () => {
       text: '# Brief\n\nAlways mention the roadmap.'
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    assert.equal(
+      created.headers.Location,
+      `/api/scheduled-tasks/${task.id}/files/${created.body.file.id}`
+    );
     assert.equal(created.body.file.name, 'brief.md');
 
     const listed = await call('get', '/:taskId/files', { params: { taskId: task.id }, user });

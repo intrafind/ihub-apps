@@ -676,3 +676,15 @@ or `revoked` must read the status instead.
 `POST /api/projects/pickers/url/check` is now `…/url/_check` and `…/url/crawl` is `…/url/_crawl`, like
 `…/url/_preview` already was. The bodies are unchanged. The API guidelines check now reads routes
 registered through a file-local `route('…')` helper and rejects `check` and `crawl` as bare verbs.
+
+## Every `201` Carries a `Location`
+
+A call that creates a resource answers `201` with the resource in the body and the URL of the new
+resource in the `Location` header (a path, including a configured base path), as
+`docs/api-guidelines.md` has always required. Until now none did. Bodies are unchanged, so a client
+that ignored the header keeps working; one that wants the URL reads it. The calls covered are the
+admin create calls (apps, models, prompts, providers, pages, credentials, OAuth clients, agents,
+projects, integrations, marketplace registries and installs, document templates, UI assets), the
+user create calls (prompts, skills, projects, scheduled tasks and their files, chat shares, chat
+files, integration requests, personal API keys, workflows). The API guidelines check now rejects a
+bare `status(201).json(…)`; use `sendCreated` from `server/utils/created.js`.

@@ -31,6 +31,7 @@ import {
 } from '../../services/llmProviders.js';
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -711,7 +712,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.status(201).json({ model: newModel });
+    sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, { model: newModel });
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {

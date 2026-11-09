@@ -16,6 +16,7 @@
  *                      (a body with `error_description` is RFC 6749/6750 and stays)
  *   success-envelope   `.json({ success: … })`, `.json({ ok: … })`, `.json({ deleted: true })`, a body that
  *                      is only `{ message }`, or `{ message: '… successfully' }`
+ *   created-location   `.status(201).json(…)` — answer with `sendCreated(res, path, body)` (or `sendWithLocation` when the status depends on the outcome), which sets `Location`
  *   status-422         `res.status(422)` — validation is 400 VALIDATION_FAILED
  *   route-verb         `router.post('/:id/run')` — a non-CRUD operation is an `_action` segment
  *   route-naming       a literal path segment that is not lower-case kebab-case
@@ -96,6 +97,12 @@ const RULES = [
     pattern: /\.json\(\s*\{\s*success\s*:/g,
     message:
       'No { success } envelope: the status code carries success. Return the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
+    id: 'created-location',
+    pattern: /\.status\(\s*[^()]*\b201\b[^()]*\)\s*\.json\(/g,
+    message:
+      'A 201 carries a Location header: answer with sendCreated(res, path, body) from server/utils/created.js (docs/api-guidelines.md#2-methods-and-status-codes).'
   },
   {
     id: 'success-envelope',

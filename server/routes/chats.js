@@ -83,6 +83,7 @@ import { isProjectTestChat } from '../services/knowledge/projectTestScope.js';
 import { getLocalizedError } from '../serverHelpers.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -511,7 +512,9 @@ export default function registerChatRoutes(app) {
       store: fileStore,
       user: req.user
     });
-    return res.status(201).json({ file: descriptor });
+    return sendCreated(res, `/api/chats/${segment(chatId)}/files/${segment(descriptor.id)}`, {
+      file: descriptor
+    });
   });
 
   app.get(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {

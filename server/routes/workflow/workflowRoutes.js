@@ -53,6 +53,7 @@ import {
   offsetFromCursor,
   pageOfList
 } from '../../utils/pagination.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const checkWorkflowsFeature = requireFeature('workflows');
 
@@ -579,7 +580,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: workflowData.id
       });
 
-      res.status(201).json({
+      sendCreated(res, `/api/workflows/${segment(workflowData.id)}`, {
         workflow: validation.data
       });
 
@@ -1106,7 +1107,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         chatId,
         appId: chatApp.id
       });
-      res.status(201).json({ chatId, appId: chatApp.id });
+      sendCreated(res, `/api/chats/${segment(chatId)}`, { chatId, appId: chatApp.id });
     }
   );
 

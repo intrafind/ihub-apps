@@ -19,6 +19,7 @@ import {
 } from '../../services/documents/templates/DocumentTemplateService.js';
 import { renderTemplateSample } from '../../services/documents/templates/templateSamples.js';
 import { toDocumentServiceError } from '../../services/documents/documentHttpErrors.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Admin API for document templates (`contents/document-templates/<id>/`).
@@ -161,7 +162,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     handle('created', async (req, res) => {
       const body = bodyOf(req);
       const template = await saveTemplate(String(body.id || ''), body, { create: true });
-      res.status(201).json({ template });
+      sendCreated(res, `/api/admin/document-templates/${segment(template.id)}`, { template });
     })
   );
 
