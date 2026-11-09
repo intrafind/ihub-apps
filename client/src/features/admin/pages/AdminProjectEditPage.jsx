@@ -126,6 +126,9 @@ function AdminProjectEditPageContent({ id }) {
   const [selectedItemIds, setSelectedItemIds] = useState(() => new Set());
   // The items a move or copy dialog is open for, and its starting mode.
   const [transfer, setTransfer] = useState(null);
+  // The selected items a delete waits to be confirmed for, and whether it runs.
+  const [bulkDelete, setBulkDelete] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
 
@@ -285,6 +288,49 @@ function AdminProjectEditPageContent({ id }) {
     });
   };
 
+  /**
+   * Delete the confirmed items one at a time, each through the item's own
+   * route (and its own audit entry). An item already gone counts as deleted;
+   * one that could not be stays in the list and selected, and the first reason
+   * is shown, so the admin can try it again.
+   */
+  const handleBulkDelete = async () => {
+    const items = bulkDelete || [];
+    setBulkDelete(null);
+    if (items.length === 0) return;
+    clearEstimate();
+    setError(null);
+    setBulkDeleting(true);
+    const deleted = new Set();
+    const failed = [];
+    for (const item of items) {
+      setBusyItemId(item.id);
+      try {
+        await deleteAdminProjectItem(id, item.id);
+        deleted.add(item.id);
+      } catch (err) {
+        if (err?.response?.status === 404) deleted.add(item.id);
+        else failed.push(getAdminApiErrorMessage(err));
+      }
+    }
+    setBusyItemId(null);
+    setBulkDeleting(false);
+    setProject(prev =>
+      prev ? { ...prev, items: (prev.items || []).filter(entry => !deleted.has(entry.id)) } : prev
+    );
+    setSelectedItemIds(prev => new Set([...prev].filter(itemId => !deleted.has(itemId))));
+    if (failed.length > 0) {
+      setError(
+        t(
+          'admin.projects.items.deleteSelectedFailed',
+          '{{count}} items could not be deleted: {{reason}}',
+          { count: failed.length, reason: failed[0] }
+        )
+      );
+    }
+    void reload();
+  };
+
   const handleTransferDone = () => {
     clearEstimate();
     setSelectedItemIds(new Set());
@@ -391,7 +437,8 @@ function AdminProjectEditPageContent({ id }) {
                     items: selectedItems
                   })
                 }
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                disabled={bulkDeleting}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
               >
                 {mode === 'move'
                   ? t('admin.projects.items.moveSelected', 'Move to…')
@@ -400,8 +447,22 @@ function AdminProjectEditPageContent({ id }) {
             ))}
             <button
               type="button"
+              onClick={() => setBulkDelete(selectedItems)}
+              disabled={bulkDeleting}
+              aria-busy={bulkDeleting || undefined}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium inline-flex items-center gap-1"
+            >
+              <Icon
+                name={bulkDeleting ? 'arrow-path' : 'trash'}
+                className={bulkDeleting ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
+              />
+              {t('admin.projects.items.deleteSelected', 'Delete')}
+            </button>
+            <button
+              type="button"
               onClick={() => setSelectedItemIds(new Set())}
-              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
+              disabled={bulkDeleting}
+              className="bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
             >
               {t('common.clearSelection', 'Clear')}
             </button>
@@ -590,6 +651,19 @@ function AdminProjectEditPageContent({ id }) {
         danger
         onConfirm={handleRemove}
         onDeny={() => setRemoveItem(null)}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(bulkDelete)}
+        title={t('admin.projects.items.deleteSelectedTitle', 'Delete selected items')}
+        message={t(
+          'admin.projects.items.deleteSelectedConfirm',
+          'Delete {{count}} items from the project? This cannot be undone.',
+          { count: bulkDelete?.length ?? 0 }
+        )}
+        confirmLabel={t('admin.projects.items.deleteSelectedAction', 'Delete items')}
+        danger
+        onConfirm={handleBulkDelete}
+        onDeny={() => setBulkDelete(null)}
       />
       <ConfirmDialog
         isOpen={blocker.state === 'blocked'}

@@ -5551,7 +5551,12 @@
         },
         "selectedCount": "{{count}} Elemente ausgewählt",
         "moveSelected": "Verschieben nach…",
-        "copySelected": "Kopieren nach…"
+        "copySelected": "Kopieren nach…",
+        "deleteSelected": "Löschen",
+        "deleteSelectedTitle": "Ausgewählte Elemente löschen",
+        "deleteSelectedConfirm": "{{count}} Elemente aus dem Projekt löschen? Das lässt sich nicht rückgängig machen.",
+        "deleteSelectedAction": "Elemente löschen",
+        "deleteSelectedFailed": "{{count}} Elemente konnten nicht gelöscht werden: {{reason}}"
       },
       "unsaved": {
         "title": "Ungespeicherte Änderungen",

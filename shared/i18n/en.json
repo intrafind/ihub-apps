@@ -5200,7 +5200,12 @@
         },
         "selectedCount": "{{count}} items selected",
         "moveSelected": "Move to…",
-        "copySelected": "Copy to…"
+        "copySelected": "Copy to…",
+        "deleteSelected": "Delete",
+        "deleteSelectedTitle": "Delete selected items",
+        "deleteSelectedConfirm": "Delete {{count}} items from the project? This cannot be undone.",
+        "deleteSelectedAction": "Delete items",
+        "deleteSelectedFailed": "{{count}} items could not be deleted: {{reason}}"
       },
       "unsaved": {
         "title": "Unsaved changes",

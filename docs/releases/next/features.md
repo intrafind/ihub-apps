@@ -1188,3 +1188,12 @@ shown for it. A skill that is off is offered to no app, user, agent or MCP clien
 installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
+
+## Projects: Delete Several Items at Once
+
+**Admin → Projects → (a project)** now offers **Delete** next to **Move to…** and **Copy to…** when
+items are selected. After one confirmation, every selected item is removed from the project.
+
+- Each removal is recorded in the audit log, as when an item is removed on its own.
+- An item that cannot be deleted stays in the list and stays selected, and the page says why, so
+  you can try it again.

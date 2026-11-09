@@ -180,6 +180,11 @@ together.
 - A copy of the shipped documentation is an independent document; a moved one keeps syncing with
   the shipped file.
 
+**Delete items.** Tick items in the same table and choose **Delete**. After one confirmation every
+selected item is removed, one at a time, each recorded in the audit log like a single removal. An
+item that is already gone counts as deleted; one that cannot be deleted stays in the list and stays
+selected, and the page shows why.
+
 **Merge projects.** Select two or more projects on the list and choose **Merge…**. Choose the
 project that stays; the dialog shows how many items move and how many apps, workflows and agents
 link the other projects.
