@@ -16,6 +16,8 @@ import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+// First, before anything imports `config.js`: it keeps the machine's own web search keys out.
+import './helpers/noWebSearchApiKeys.js';
 import credentialService from '../services/CredentialService.js';
 import webSearchService from '../services/WebSearchService.js';
 import {
