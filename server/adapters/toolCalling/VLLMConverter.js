@@ -22,6 +22,7 @@ import {
 } from './OpenAIConverter.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+import { noteArgumentFragment, pendingCallsProgress } from './toolCallProgress.js';
 
 /**
  * Sanitize a JSON Schema for vLLM's tool `parameters`. vLLM has more
@@ -229,6 +230,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
     return result;
   }
 
+  let earlyProgress = [];
   try {
     const parsed = await parseJsonAsync(data);
 
@@ -281,15 +283,18 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
       }
       if (delta.tool_calls) {
         // Process each tool call delta - accumulate in state
+        const touched = new Set();
         for (const toolCall of delta.tool_calls) {
           const index = toolCall.index || 0;
 
-          if (!state.pendingToolCalls.has(index)) {
+          const isNew = !state.pendingToolCalls.has(index);
+          if (isNew) {
             state.pendingToolCalls.set(index, {
               id: '',
               name: '',
               arguments: '',
-              index: index
+              index: index,
+              argBytes: 0
             });
           }
 
@@ -303,8 +308,14 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
           }
           if (toolCall.function?.arguments) {
             pending.arguments += toolCall.function.arguments;
+            noteArgumentFragment(pending, toolCall.function.arguments, isNew);
           }
+          touched.add(pending);
         }
+        // What the call looks like so far, for the chat's "preparing" row. It
+        // never changes `tool_calls`; a parser that buffers upstream sends the
+        // call whole and reports nothing here.
+        earlyProgress = pendingCallsProgress(touched);
       }
     }
 
@@ -347,6 +358,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
 
       streamingState.delete(streamId);
     }
+    if (earlyProgress.length > 0 && !result.complete) result.toolCallProgress = earlyProgress;
   } catch (error) {
     logger.error('Error parsing vLLM response chunk', {
       component: 'VLLMConverter',
