@@ -78,6 +78,7 @@ import { foldSkill } from '../../../../../shared/run/runReducer.js';
 import './ChatMessage.css';
 import { useChatFiles } from '../contexts/ChatFilesContext';
 import MessageAttachments from './MessageAttachments';
+import { submitShortcutLabel } from '../utils/submitShortcut';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
 import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 
@@ -628,10 +629,7 @@ function ChatMessage({
     if (isEditing) {
       const trimmed = editedContent.trim();
       const sendDisabled = trimmed === '';
-      const isMac =
-        typeof navigator !== 'undefined' &&
-        /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
-      const submitShortcut = isMac ? '⌘ + Enter' : 'Ctrl + Enter';
+      const submitShortcut = submitShortcutLabel();
       return (
         <div className="chat-widget-message-edit w-full">
           <textarea

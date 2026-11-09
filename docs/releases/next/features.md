@@ -1175,3 +1175,19 @@ shown for it. A skill that is off is offered to no app, user, agent or MCP clien
 installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
+
+## Chat: The Input Is One Line Once the Conversation Has Started
+
+A multi-line app now shows its configured rows (**Rows in a new chat** in the app editor, formerly
+**Textarea Rows**) only before the first message, where users often write a long request. Once the
+conversation has started, the input is a single line that grows as the user types, so the answers
+get the space back. **New chat** brings the configured rows back.
+
+- The input grows up to 12 lines or 40% of the window, then scrolls. While it grows, the
+  conversation stays scrolled to the end, so the answer being replied to stays in view.
+- A chat opened from the history starts with the one-line input; so does the canvas side panel.
+- **Outlook Add-in:** the input never grows beyond 3 lines, even for an app that asks for more rows.
+- Single-line apps now really show one line (they showed two), and a long placeholder no longer
+  makes the one-line input taller.
+- While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
+  shows next to the token count, and screen readers announce how to send.

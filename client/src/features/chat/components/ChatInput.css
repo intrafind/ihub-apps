@@ -1,0 +1,67 @@
+/*
+ * SPDX-FileCopyrightText: IntraFind Software AG
+ * SPDX-License-Identifier: LicenseRef-iHub-Apps
+ */
+
+/*
+ * The chat composer's text area (#3520).
+ *
+ * ChatInput sets the height from the content; the limits live here, in lines,
+ * from the `--composer-min-lines` and `--composer-max-lines` the component sets
+ * inline. A line is 1.5em (the line height below), plus 0.5rem of padding above
+ * and below. The cap is also held to 40% of the viewport, so the composer never
+ * covers the transcript on a phone with its keyboard open or at 200% zoom.
+ */
+.chat-input-textarea {
+  line-height: 1.5;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  min-height: calc(var(--composer-min-lines, 1) * 1.5em + 1rem);
+  max-height: min(calc(var(--composer-max-lines, 12) * 1.5em + 1rem), 40vh);
+  /* Thin, on a transparent track, and visible without hovering: the page's 8px
+     scrollbar on its grey track is too heavy inside the rounded box. */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+@supports (height: 1dvh) {
+  .chat-input-textarea {
+    max-height: min(calc(var(--composer-max-lines, 12) * 1.5em + 1rem), 40dvh);
+  }
+}
+
+[data-theme='dark'] .chat-input-textarea {
+  scrollbar-color: #4b5563 transparent;
+}
+
+/* Browsers that only style scrollbars this way (Safari). */
+.chat-input-textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-input-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-input-textarea::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+[data-theme='dark'] .chat-input-textarea::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+/* The one-line composer keeps its placeholder on one line: a long one (an app's
+   own, or "Please answer the question above…") would wrap and make the empty
+   box two or three lines tall in a narrow pane. Chrome draws the ellipsis only
+   when the text area itself asks for it too; typed text wraps as before. */
+.chat-input-textarea--compact {
+  text-overflow: ellipsis;
+}
+
+.chat-input-textarea--compact::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

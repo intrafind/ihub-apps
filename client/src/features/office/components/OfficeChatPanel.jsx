@@ -858,10 +858,13 @@ function OfficeChatPanel({
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
     selectedApp?.disallowModelSelection !== true && selectedApp?.settings?.model?.enabled !== false;
+  const chatStarted = adapter.messages.some(m => m.role === 'user' && !m.isGreeting);
   // Not while a stored chat is loading: it has been started already, its
   // messages just have not arrived.
-  const showStartForm =
-    startForm && !loadingStoredChat && !adapter.messages.some(m => m.role === 'user');
+  const showStartForm = startForm && !loadingStoredChat && !chatStarted;
+  // Once the chat has started, the composer is one line that grows as the user
+  // types (#3520); the app's `inputMode.rows` are for the empty chat only.
+  const composerCompact = chatStarted || loadingStoredChat;
   const startFormVariables = resolveVariableValues(selectedApp, appPromptVariables, officeLocale);
   const startFormMessage = showStartForm
     ? renderStartFormPrompt(selectedApp, startFormVariables, officeLocale, inputValue)
@@ -1271,8 +1274,10 @@ function OfficeChatPanel({
                   // indicator accounts for what will actually be sent to the LLM.
                   extraContextText={estimateContextText}
                   // Keep the input from dominating the small Outlook task pane;
-                  // long prompts scroll inside the 3-line box. Issue #1467.
+                  // long prompts scroll inside the 3-line box, whatever rows
+                  // the app asks for. Issue #1467.
                   maxRows={3}
+                  compact={composerCompact}
                 />
               </div>
             )}
