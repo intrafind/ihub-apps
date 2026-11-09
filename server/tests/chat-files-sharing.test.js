@@ -233,9 +233,9 @@ describe('uploaded files on a share', () => {
       query: { format: 'text' }
     });
     assert.equal(text.statusCode, 200);
-    assert.match(text.body.file.text, /launch in March/);
-    assert.equal(text.body.file.hasOriginal, false, 'no original is offered at this level');
-    assert.equal(text.body.file.ownerId, undefined);
+    assert.match(text.body.text, /launch in March/);
+    assert.equal(text.body.hasOriginal, false, 'no original is offered at this level');
+    assert.equal(text.body.ownerId, undefined);
 
     const original = await drive(fileHandlers, {
       params: { shareId: created.id, fileId: plan.id },

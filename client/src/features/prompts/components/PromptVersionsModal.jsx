@@ -33,7 +33,7 @@ function PromptVersionsModal({ prompt, canRestore, onClose, onRestored }) {
       .then(result => {
         if (!active) return;
         setData(result);
-        setSelected(result?.versions?.[0]?.revision ?? null);
+        setSelected(result?.items?.[0]?.revision ?? null);
       })
       .catch(err => active && setError(promptErrorMessage(err, t)));
     return () => {
@@ -41,7 +41,7 @@ function PromptVersionsModal({ prompt, canRestore, onClose, onRestored }) {
     };
   }, [prompt.id, t]);
 
-  const versions = data?.versions || [];
+  const versions = data?.items || [];
   const current = versions.find(version => version.revision === selected);
   const formatDate = value => (value ? new Date(value).toLocaleString(i18n.language) : '');
 

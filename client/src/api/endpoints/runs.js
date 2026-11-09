@@ -41,7 +41,7 @@ export const answerInteraction = async (runId, interactionId, answer, options = 
 /**
  * Pending interactions of one run.
  * @param {string} runId
- * @returns {Promise<{ runId: string, interactions: Object[] }>} the response body
+ * @returns {Promise<{ items: Object[] }>} the response body
  */
 export const fetchRunInteractions = async runId => {
   return handleApiResponse(

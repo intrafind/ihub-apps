@@ -195,7 +195,7 @@ export default function registerRunRoutes(app) {
         i.source.principalId === (await resolvePrincipal(req.user, { mode })).id;
       visible.push(mine ? i : redactInteractionForViewer(i));
     }
-    res.json({ runId, interactions: visible });
+    res.json({ items: visible });
   });
 
   /**
