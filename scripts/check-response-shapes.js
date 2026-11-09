@@ -254,12 +254,15 @@ export function diffSnapshots(expected, actual) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const { dumpRoutes } = await import('./dump-routes.js');
-  const routes = await dumpRoutes();
 
+  // The server reads CONTENTS_DIR when its config module is first loaded, so the
+  // directory is chosen before anything of the server is imported.
   const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shapes-'));
   process.chdir(root);
   process.env.CONTENTS_DIR = contentsDir;
+
+  const { dumpRoutes } = await import('./dump-routes.js');
+  const routes = await dumpRoutes();
   const { prepareE2eContents } = await import(
     pathToFileURL(path.join(root, 'tests/config/e2e-contents.mjs')).href
   );

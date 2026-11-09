@@ -25,6 +25,13 @@ export async function prepareE2eContents({ root, contentsDir, llmPort }) {
   // would make the migration runner treat the directory as an old installation).
   const { prepareContents } = await import('../../server/startup/bootstrap.js');
   await prepareContents();
+  if (!fs.existsSync(path.resolve(root, CONTENTS_DIR, 'config', 'platform.json'))) {
+    // The server config read CONTENTS_DIR before the caller set it, so the seed went
+    // to another directory (the developer's own contents/).
+    throw new Error(
+      `${CONTENTS_DIR} was not seeded: set process.env.CONTENTS_DIR before importing any server module`
+    );
+  }
 
   const platformPath = path.resolve(root, CONTENTS_DIR, 'config', 'platform.json');
   const platform = JSON.parse(fs.readFileSync(platformPath, 'utf8'));
