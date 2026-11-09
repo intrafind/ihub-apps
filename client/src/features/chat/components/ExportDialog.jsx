@@ -5,7 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat, getExportErrorMessage } from '../utils/chatExport';
+import {
+  exportChatToFormat,
+  generateJSON,
+  generateJSONL,
+  getExportErrorMessage
+} from '../utils/chatExport';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -139,32 +144,6 @@ function ExportDialog({
       .join('\n\n');
   };
 
-  const generateJSONContent = (messages, settings) => {
-    const buildMetadata = () => ({
-      model: settings?.model,
-      style: settings?.style,
-      outputFormat: settings?.outputFormat,
-      variables: settings?.variables
-    });
-    return JSON.stringify(
-      { ...buildMetadata(), messages: messages.filter(m => !m.isGreeting) },
-      null,
-      2
-    );
-  };
-
-  const generateJSONLContent = (messages, settings) => {
-    const buildMetadata = () => ({
-      model: settings?.model,
-      style: settings?.style,
-      outputFormat: settings?.outputFormat,
-      variables: settings?.variables
-    });
-    const lines = [JSON.stringify({ meta: buildMetadata() })];
-    messages.filter(m => !m.isGreeting).forEach(m => lines.push(JSON.stringify(m)));
-    return lines.join('\n');
-  };
-
   const handleCopy = async () => {
     setCopied(false);
     setExportError(null);
@@ -195,10 +174,10 @@ function ExportDialog({
           content = generateMarkdownContent(filteredMessages);
           break;
         case 'json':
-          content = generateJSONContent(filteredMessages, exportSettings);
+          content = generateJSON(filteredMessages, exportSettings);
           break;
         case 'jsonl':
-          content = generateJSONLContent(filteredMessages, exportSettings);
+          content = generateJSONL(filteredMessages, exportSettings);
           break;
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);

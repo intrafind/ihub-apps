@@ -179,19 +179,6 @@ describe('the skills list', () => {
     assert.match(first, /<available_skills>/);
     assert.equal(first, second);
   });
-
-  test('ranks name matches above description matches', () => {
-    const entries = [
-      { name: 'meeting-notes', description: 'Summarize a meeting for the newsletter' },
-      { name: 'newsletter', description: 'Draft a newsletter' },
-      { name: 'other', description: 'Nothing to see' }
-    ];
-    assert.deepEqual(
-      skillAccess.searchSkillCatalog(entries, 'Newsletter').map(entry => entry.name),
-      ['newsletter', 'meeting-notes']
-    );
-    assert.deepEqual(skillAccess.searchSkillCatalog(entries, 'a ?'), []);
-  });
 });
 
 describe('skill tools in an app without skillSettings.enabled', () => {

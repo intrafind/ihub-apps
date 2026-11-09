@@ -292,13 +292,12 @@ export default function UploadedFilesTab({
     // A card named a file and none is left: say that, not that nothing was ever uploaded
     if (requestedGone) {
       return (
-        <p
-          className="p-4 text-sm text-gray-700 dark:text-gray-200"
-          role="status"
+        <output
+          className="block p-4 text-sm text-gray-700 dark:text-gray-200"
           data-testid="uploaded-file-gone"
         >
           {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
-        </p>
+        </output>
       );
     }
     return (
@@ -389,13 +388,12 @@ export default function UploadedFilesTab({
         aria-label={t('chatArtifacts.previewLabel', 'Preview')}
       >
         {requestedGone && (
-          <p
-            className="text-sm text-gray-700 dark:text-gray-200"
-            role="status"
+          <output
+            className="block text-sm text-gray-700 dark:text-gray-200"
             data-testid="uploaded-file-gone"
           >
             {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
-          </p>
+          </output>
         )}
         {current && (
           <>
@@ -430,16 +428,18 @@ export default function UploadedFilesTab({
                   {t('chatFiles.downloadOriginal', 'Download original')}
                 </button>
               )}
-              <button
-                type="button"
-                className={SECONDARY}
-                disabled={busy !== null}
-                onClick={() => downloadText(current)}
-                data-testid="uploaded-download-text"
-              >
-                <Icon name="document-text" size="sm" />
-                {t('chatFiles.downloadText', 'Download text')}
-              </button>
+              {current.origin !== 'image' && (
+                <button
+                  type="button"
+                  className={SECONDARY}
+                  disabled={busy !== null}
+                  onClick={() => downloadText(current)}
+                  data-testid="uploaded-download-text"
+                >
+                  <Icon name="document-text" size="sm" />
+                  {t('chatFiles.downloadText', 'Download text')}
+                </button>
+              )}
               {source.remove &&
                 (confirmDelete ? (
                   <span className="inline-flex items-center gap-2">

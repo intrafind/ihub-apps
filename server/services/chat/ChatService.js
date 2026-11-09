@@ -494,6 +494,7 @@ class ChatService {
       model,
       llmMessages,
       tools = [],
+      toolSearch = null,
       maxTokens,
       responseFormat,
       responseSchema,
@@ -856,6 +857,7 @@ class ChatService {
         messages: loopMessages,
         ...(loopResume ? { resume: loopResume } : {}),
         tools: loopTools,
+        toolSearch,
         toolExecution: 'server',
         policies: {
           budgets: {
@@ -1578,6 +1580,7 @@ class ChatService {
         model,
         llmMessages,
         tools = [],
+        toolSearch = null,
         maxTokens,
         responseFormat,
         responseSchema,
@@ -1633,6 +1636,7 @@ class ChatService {
         model,
         messages: llmMessages,
         tools: markInteractiveTools(tools),
+        toolSearch,
         toolExecution: 'server',
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },

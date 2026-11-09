@@ -1108,13 +1108,26 @@ or the text was shortened.
   opens in the **Files** panel with a click or Enter, an image shows a thumbnail, and audio is a
   card of its own. Each card repeats what the assistant got from the file, and once only the text
   of a file is kept it says so instead of showing a size. The thumbnail and the "what the assistant
-  got" line are shown for a message sent in the current session; a reopened chat shows the name,
-  type and size. More than four files fold into **+N more files** (more than three on a phone or
+  got" line are shown the same way after a reload; for a document the server stored it keeps what
+  it read. A picture is kept by the server now, so its thumbnail is back after a reload, and its
+  card opens it in the **Files** panel, where it can be previewed, downloaded and deleted. It
+  follows the rules of an original: only in the `original_and_text` mode, kept for
+  `originalRetentionDays`, counted against the storage quotas but not against the number of files
+  of a chat, never read by the assistant as a document, and shared in a chat share only with the
+  originals. More than four files fold into **+N more files** (more than three on a phone or
   in the Outlook task pane). In a shared chat a file the owner did not share is marked as such.
+- **Outlook task pane and browser extension:** the cards of a message now open their file in the
+  Files panel, a full-pane sheet on the narrow pane, with **Attach to email** while a mail is being
+  written. They were plain cards there.
 - **Copy and link:** copying a message, or its link, gives the text you typed. It no longer
   carries the markup of a file badge.
 - **Images and a model without vision:** an image attached before switching to a model that cannot
-  see images now stops the message with a note instead of sending it; audio already did.
+  see images now stops the message with a note instead of sending it; audio already did. Dropping
+  an image or a sound file on a model that cannot take it now says so and suggests another model,
+  instead of the list of accepted formats.
+- **Export:** the JSON and JSONL export of a chat no longer contain the contents of the attached
+  files (their text and base64 data) for a message sent in the current session; each file is
+  listed with its name, type and size (see the breaking changes).
   
 ## LLM Timeouts Configurable for All Providers and Per Provider
 
@@ -1175,6 +1188,40 @@ shown for it. A skill that is off is offered to no app, user, agent or MCP clien
 installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
+
+## Tool Search: Apps With Many Integrations Stop Sending Every Tool on Every Request
+
+An app with many integrations used to hand the model every tool definition of every integration on
+every request, even for a turn that used no tool. That made requests larger and slower, blurred tool
+choice on smaller and local models, and changed the request start whenever the tool set changed.
+With **Tool Search** switched on, an app whose integration tools exceed a token budget sends only
+what fits. The biggest integrations are left out and listed in the system prompt, and the model
+finds a tool with `search_tools`: the tools it finds are added to the request, and the model calls
+them like any other tool.
+
+- **Off by default.** Switch it on under **Admin → Features → Tool Search** (preview). An app, a
+  chat or an integration that does not exceed the budget sends exactly the request it sent before.
+- **Whole integrations, biggest first.** The list names each left-out integration with its tools.
+  If the list itself grows too long it shortens to tool names, then to integrations with their
+  tool counts. It depends only on the tools, never on the message, so it stays the same from turn
+  to turn.
+- **Found tools are ordinary tools.** Approval, connection checks, scopes, progress, chat history,
+  MCP App views and usage logs show the tool by its own name. A write that needs approval still asks
+  first, and a tool the model has not found cannot be called. One search loads at most five tools,
+  and one run at most 15.
+- **A turn that searches changes the request.** The found tools join the tools list, so a provider's
+  prompt cache no longer applies to the steps after the search. A turn that does not search sends
+  the same request as before. A tool found in one turn is not carried into the next: the model
+  searches again when it needs it.
+- **Per app:** **Admin → Apps → (an app) → Tools → Tool search** switches it off for the app or
+  sets the token budget for its tool definitions (default 6000, never more than a tenth of the
+  model's context window, so a small local model gets a smaller budget).
+- **Per integration:** tick **Always loaded** on an integration's binding to always send its tools
+  in full. Web search engines, the question to the user (`ask_user`), skills, project knowledge,
+  workflows and apps used as tools are never left out.
+- **Only for models that call tools.** Agents and workflows keep sending the tools they list.
+
+No migration is needed: the new settings are optional and absent means automatic.
 
 ## Chat: The Input Is One Line Once the Conversation Has Started
 

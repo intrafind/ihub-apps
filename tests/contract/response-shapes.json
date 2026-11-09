@@ -2987,6 +2987,7 @@
           "thinking": "object",
           "toolApproval": "object",
           "toolChoice": "object",
+          "toolSearch": "object",
           "type": "object",
           "upload": "object",
           "uploads": "object",

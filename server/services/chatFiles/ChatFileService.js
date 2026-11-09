@@ -40,6 +40,7 @@ import { projectSettings } from '../projects/projectSettings.js';
 import { renderPagePreview } from '../documents/pdf/PdfService.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
+import { decodeRasterDataUrl } from './rasterImage.js';
 import {
   CHAT_FILE_ORIGINS,
   ChatFileQuotaError,
@@ -418,7 +419,15 @@ export function describeStored(stored) {
     bytes,
     ...(stored.origin && stored.origin !== 'upload' ? { origin: stored.origin } : {}),
     ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
+    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {}),
+    // What the server read from the file, so the transcript can still say what the
+    // assistant got after a reload: the size of the text, the page images of a scan, and
+    // whether the text was shortened. `textBytes` is only kept when it is known.
+    ...(Number.isFinite(stored.textBytes) && stored.origin !== 'image'
+      ? { textBytes: stored.textBytes }
+      : {}),
+    ...(stored.pageImageCount > 0 ? { pageImageCount: stored.pageImageCount } : {}),
+    ...(stored.truncated === true ? { truncated: true } : {})
   };
 }
 
@@ -447,6 +456,112 @@ async function findAttachmentDuplicate(repo, scope, { name, text, originalBuffer
       return Boolean(byteHash) && !item.hasOriginal && item.sha256 === textHash;
     }) || null
   );
+}
+
+/**
+ * The descriptor of a stored file a request only named by id. A picture named that way is not sent
+ * to the model again (a regenerated turn after a reload has no picture data to send), so its
+ * descriptor says so and the card does not claim otherwise.
+ *
+ * @param {Object} stored
+ * @returns {Object}
+ */
+function describeNamed(stored) {
+  const described = describeStored(stored);
+  return stored.origin === 'image' ? { ...described, sentToModel: false } : described;
+}
+
+/** The picture of this descriptor went to the model with the turn after all. */
+function markSentToModel(descriptors, id) {
+  const named = descriptors.find(descriptor => descriptor.id === id);
+  if (named) delete named.sentToModel;
+}
+
+/** A value as a list: a list as it is, one value as a list of one, nothing as an empty list. */
+function listOf(value) {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
+
+/**
+ * What a transcript says about a picture or sound that was not stored: its type, name and size
+ * as the client reported them. `null` when `media` is not an object.
+ */
+function mediaDescriptor(media) {
+  if (!media || typeof media !== 'object') return null;
+  const name = media.name || media.fileName;
+  const bytes = Number(media.bytes ?? media.size ?? media.fileSize);
+  return {
+    type: String(media.fileType || media.mimeType || media.type || 'file'),
+    ...(name ? { name: String(name) } : {}),
+    ...(Number.isFinite(bytes) ? { bytes } : {})
+  };
+}
+
+/**
+ * Keep a picture of the turn (as it is sent to the model) so that its thumbnail survives a
+ * reload. Best effort and never an error: a picture the policy does not keep (uploads off, text
+ * only), that is not a raster image, or that a quota refuses is still sent to the model, and its
+ * card simply stays a tile after a reload.
+ *
+ * The same picture sent again (a resend, a regenerated answer) is found by its content and name
+ * and not stored twice.
+ *
+ * @param {Object} params
+ * @param {Object} params.repo - The chat file repository
+ * @param {{type: string, id: string}} params.scope
+ * @param {string|null} params.ownerId
+ * @param {Object} params.image - `{ base64, fileName, … }` as the message carries it
+ * @param {Object|null} params.appConfig
+ * @returns {Promise<Object|null>} The stored descriptor, or `null` when the picture was not kept.
+ */
+async function storeTurnImage({ repo, scope, ownerId, image, appConfig }) {
+  if (!image || typeof image !== 'object' || !repo?.isAvailable()) return null;
+  const decoded = decodeRasterDataUrl(image.base64);
+  if (!decoded) return null;
+  const name = String(image.fileName || image.name || 'image').trim() || 'image';
+  try {
+    const hash = sha256Of(decoded.bytes);
+    const duplicate = (await repo.list(scope)).find(
+      item => item.origin === 'image' && item.sha256 === hash && item.name === name
+    );
+    if (duplicate) return duplicate;
+    return await repo.put(scope, {
+      ownerId,
+      name,
+      mimeType: decoded.mimeType,
+      originalBuffer: decoded.bytes,
+      origin: 'image',
+      appConfig
+    });
+  } catch (error) {
+    logger.info('A picture of the turn was not kept; it is still sent to the model', {
+      component: COMPONENT,
+      chatId: scope.id,
+      reason: error.code || error.message
+    });
+    return null;
+  }
+}
+
+/**
+ * The message as the prompt gets it: with the files the turn resolved to, or as it came when it
+ * resolved to none. A request that only named a stored picture as inline file data must not
+ * leave that entry on the message, where the prompt would read it as an empty document.
+ *
+ * @param {Object} message - The user message of the request
+ * @param {Object[]} resolvedFiles - The documents of the turn, as the prompt takes them
+ * @param {boolean} namedPicture - Whether an inline entry named a stored picture
+ * @returns {Object}
+ */
+function promptMessageOf(message, resolvedFiles, namedPicture) {
+  if (resolvedFiles.length > 0) {
+    return { ...message, fileData: resolvedFiles.length === 1 ? resolvedFiles[0] : resolvedFiles };
+  }
+  if (!namedPicture) return message;
+  const withoutFiles = { ...message };
+  delete withoutFiles.fileData;
+  return withoutFiles;
 }
 
 /**
@@ -505,6 +620,8 @@ export async function prepareTurnFiles({
   const resolvedPromptFiles = [];
   const descriptors = [];
   const seenIds = new Set();
+  // The request named a stored picture as inline file data: it is no document for the model
+  let namedPicture = false;
 
   // 1. Resolve pre-uploaded (or inherited) file IDs from ChatFileRepository.
   if (activeRepo?.isAvailable() && targetIds.length > 0) {
@@ -513,8 +630,9 @@ export async function prepareTurnFiles({
       const stored = await activeRepo.getText(scope, fileId);
       if (!stored) continue;
       seenIds.add(fileId);
-      resolvedPromptFiles.push(toPromptFileData(stored));
-      descriptors.push(describeStored(stored));
+      // A picture of an earlier turn keeps its card but is not a document for the model
+      if (stored.origin !== 'image') resolvedPromptFiles.push(toPromptFileData(stored));
+      descriptors.push(describeNamed(stored));
     }
   }
 
@@ -527,8 +645,10 @@ export async function prepareTurnFiles({
       const stored = await activeRepo.getText(scope, existingId);
       if (stored) {
         seenIds.add(existingId);
-        resolvedPromptFiles.push(toPromptFileData(stored));
-        descriptors.push(describeStored(stored));
+        // A stored picture keeps its card but is not a document for the model
+        if (stored.origin === 'image') namedPicture = true;
+        else resolvedPromptFiles.push(toPromptFileData(stored));
+        descriptors.push(describeNamed(stored));
         continue;
       }
     }
@@ -540,7 +660,12 @@ export async function prepareTurnFiles({
 
     if (activeRepo?.isAvailable() && (text || (pageImages && pageImages.length > 0))) {
       try {
-        const origin = CHAT_FILE_ORIGINS.includes(file.origin) ? file.origin : 'upload';
+        // `image` is the server's own for a picture it stores (see `storeTurnImage`): a document
+        // that asks for it is an ordinary upload
+        const origin =
+          CHAT_FILE_ORIGINS.includes(file.origin) && file.origin !== 'image'
+            ? file.origin
+            : 'upload';
         const meta = file.meta && typeof file.meta === 'object' ? file.meta : null;
         // An e-mail, meeting or page that is sent with every turn is stored once
         // per chat (by the item's id or URL); a changed one replaces the stored copy.
@@ -639,27 +764,35 @@ export async function prepareTurnFiles({
     });
   }
 
-  // Also include image/audio attachment descriptors from `message.imageData` / `message.audioData`
-  for (const media of [message?.imageData, message?.audioData].flatMap(v =>
-    Array.isArray(v) ? v : v ? [v] : []
-  )) {
-    if (!media || typeof media !== 'object') continue;
-    const name = media.name || media.fileName;
-    const bytes = Number(media.bytes ?? media.size ?? media.fileSize);
-    descriptors.push({
-      type: String(media.fileType || media.mimeType || media.type || 'file'),
-      ...(name ? { name: String(name) } : {}),
-      ...(Number.isFinite(bytes) ? { bytes } : {})
-    });
+  // The pictures and sounds of the turn are described next to its documents. A picture is also
+  // stored, so its thumbnail survives a reload. One at a time, on purpose: the same picture twice
+  // in a turn is found by the first store, and each store reads the quotas as the one before left
+  // them.
+  for (const image of listOf(message?.imageData)) {
+    const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
+    if (stored && seenIds.has(stored.id)) {
+      // Named by id and sent again with the turn: this time the model has it
+      markSentToModel(descriptors, stored.id);
+      continue;
+    }
+    if (stored) seenIds.add(stored.id);
+    const reported = mediaDescriptor(image);
+    // The size the user knows is that of the file they attached; the stored picture is the
+    // smaller one that went to the model. The card says the same before and after a reload.
+    const descriptor = stored
+      ? {
+          ...describeStored(stored),
+          ...(reported?.bytes !== undefined ? { bytes: reported.bytes } : {})
+        }
+      : reported;
+    if (descriptor) descriptors.push(descriptor);
+  }
+  for (const audio of listOf(message?.audioData)) {
+    const descriptor = mediaDescriptor(audio);
+    if (descriptor) descriptors.push(descriptor);
   }
 
-  const promptMessage =
-    resolvedPromptFiles.length > 0
-      ? {
-          ...message,
-          fileData: resolvedPromptFiles.length === 1 ? resolvedPromptFiles[0] : resolvedPromptFiles
-        }
-      : message;
+  const promptMessage = promptMessageOf(message, resolvedPromptFiles, namedPicture);
 
   return { promptMessage, message: promptMessage, attachments: descriptors };
 }
@@ -704,7 +837,8 @@ export async function hydrateHistoryForPrompt(
           stored = await activeRepo.getText(scope, fileId);
           if (stored) break;
         }
-        if (stored) {
+        // A picture is not a document: it has no text for the prompt
+        if (stored && stored.origin !== 'image') {
           hydratedFiles.push(toPromptFileData(stored));
         }
       }

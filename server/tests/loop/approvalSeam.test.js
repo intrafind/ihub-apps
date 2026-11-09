@@ -268,7 +268,6 @@ test('every runTool caller is listed with a reason (no unnoticed bypass of the a
  * the approval seam — and why that is not a bypass.
  */
 const KNOWN_REMOTE_TOOL_CALLERS = {
-  'services/tools/runTool.js': 'runTool dispatch, reached through the seams',
   'services/integrations/protocols/a2a/A2aAdapter.js': 'adapter.run, reached through runTool',
   'services/integrations/protocols/mcp/McpAdapter.js': 'adapter.run, reached through runTool',
   'services/mcp/McpClientManager.js': 'the client manager itself',

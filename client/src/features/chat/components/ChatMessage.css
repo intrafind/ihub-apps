@@ -96,19 +96,15 @@
 
 /* Print styles: Hide interactive UI elements */
 @media print {
-  /* Hide action buttons and toolbars */
-  .chat-widget-message button,
+  /* Hide action buttons and toolbars. A file card is a button too (it opens the Files drawer) but
+     it is content, not a control: the files of a message stay on paper. The fold button is not
+     inside a list item and stays hidden. */
+  .chat-widget-message button:not(.message-attachments li button),
   .chat-widget-message .code-block-toolbar,
   .chat-widget-message .mermaid-diagram-controls,
   .chat-widget-message .code-copy-btn,
   .chat-widget-message .code-download-btn {
     display: none !important;
-  }
-
-  /* A file card is a button (it opens the Files drawer) but it is content, not a control: the
-     files of a message stay on paper. The fold button is not inside a list item and stays hidden. */
-  .chat-widget-message .message-attachments li button {
-    display: flex !important;
   }
 }
 
