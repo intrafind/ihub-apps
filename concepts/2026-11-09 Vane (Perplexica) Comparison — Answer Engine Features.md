@@ -34,10 +34,11 @@ internals with iHub and recommends what to adopt, what to adapt, and what not to
    persistence, integrations) iHub is clearly ahead of Vane.
 3. **The real gap is the default experience, not capability.** Vane opens with one box that
    searches by default. iHub opens with an app: the `/start` input belongs to whichever app ranks
-   first, and the shipped `web-chat` app has web search **off by default**
-   (`server/defaults/apps/web-chat.json`, `enabledByDefault: false`). A user cannot tell iHub
-   "answer this from the web, quickly" or "research this deeply" without an admin preparing an
-   app for it.
+   first. The shipped `web-chat` app supports web search (`websearch.enabled: true`), but its
+   toggle **starts off** (`server/defaults/apps/web-chat.json`, `enabledByDefault: false`). Users
+   can switch it on themselves where a permitted engine or native search is available. What they
+   cannot do is choose *how much* to research: "answer this quickly" vs. "research this deeply"
+   is fixed by the app's admin settings.
 4. **Five features Vane has and iHub lacks are cheap and very visible:**
    - suggested follow-up questions after each answer;
    - a user-selectable research depth (speed / balanced / quality);
@@ -131,13 +132,16 @@ second LLM call.
 | Researcher iterations (`researcher/index.ts:14-19`) | 2 | 6 | 25 |
 | Plan step (`__reasoning_preamble`) shown to the user | no | yes, before every tool call | yes |
 | Queries per search call | max 3 | max 3 | max 3 |
-| What the writer gets | SearxNG **snippets**, re-ranked by embedding similarity | snippets, re-ranked | **extracted facts** from ≤3 pages per search |
-| Page reading | none | none | Playwright + Readability → 4k-token chunks → one LLM extraction per chunk |
+| What the writer gets from search | SearxNG **snippets**, re-ranked by embedding similarity | snippets, re-ranked | **extracted facts** from ≤3 pages per search |
+| Pages read from search results | none | none | Playwright + Readability → 4k-token chunks → one LLM extraction per chunk |
+| Pages read on request (`scrape_url`, URLs the user names, max 3) | yes | yes | yes |
 | Prompt guidance | "you only get to call this once" | "broad first, then narrow; aim for ≥2 searches" | "never stop before at least 5–6 iterations" |
 | Writer | blog-style, cite every sentence | same | same, plus "SHALL NOT BE LESS THAN 2000 WORDS" |
 
-In speed and balanced mode, Vane answers from search snippets alone (one or two sentences per
-result). That is why they are fast, and also why they are shallow.
+In speed and balanced mode, Vane answers *search* questions from snippets alone (one or two
+sentences per result). That is why they are fast, and also why they are shallow. A page is read
+in these modes only when the user names its URL: `scrape_url` is enabled in every mode, but its
+description tells the model never to call it on its own (`actions/scrapeURL.ts`).
 
 ### 2.4 Retrieval details
 
@@ -254,7 +258,7 @@ the user… do not CITE this as a source".
 |---|---|
 | No app-less, search-first front door | `/start` embeds the input of the top-ranked app (`client/src/utils/homePage.js:73`); `web-chat` has `enabledByDefault: false` |
 | No follow-up suggestions | No producer in `server/`, `shared/` or `client/`; apps only have static `starterPrompts` |
-| No user-facing research depth | Budgets are per-app admin settings (`websearch.maxSearches` default 5, `maxPageReads` 5, `contentMaxLength`); `CHAT_MAX_TOOL_ROUNDS = 25` (`server/services/chat/ChatService.js:91`); research is one guidance text (`RequestBuilder.js:142`) |
+| No user-facing research depth | Budgets are per-app admin settings: `maxPageReads` (default 5, counted per turn, `server/services/chat/pageReadLimit.js`), `contentMaxLength`, and `websearch.maxSearches` (default 5). `maxSearches` only becomes Anthropic's per-call `max_uses` (`webSearchResolver.js:258`); engine searches and other providers' native search have **no per-answer counter**, only `CHAT_MAX_TOOL_ROUNDS = 25` (`server/services/chat/ChatService.js:91`). Research is one guidance text (`RequestBuilder.js:142`) |
 | Long pages are truncated, not targeted | `read_url` default 10k characters, search extraction 3,000 characters per result |
 | No `?q=` / OpenSearch / omnibox | Auto-send needs `/apps/{id}?prefill=…&send=true` (`docs/auto-send-feature.md`); no `opensearch.xml`; the extension manifest has no `omnibox` |
 | No regenerate on a finished answer | Only Edit/Resend on user messages and Retry on failures (`ChatMessage.jsx:1199-1326`), although `resendMessage` accepts assistant ids (`useAppChat.js:763`) |
@@ -277,7 +281,7 @@ the user… do not CITE this as a source".
 | Focus sources | Web / Academic / Discussions | Web toggle + integrations (iFinder, Jira, …) + projects | Vane UX, iHub reach |
 | Research depth chosen by the user | Speed / Balanced / Quality | admin budget per app | **Vane** |
 | Query handling | classifier + standalone rewrite (+1 LLM call) | model decides through tool choice | iHub cheaper |
-| Page reading | quality mode only; headless browser; per-chunk fact extraction | fetch + Readability + PDF, SSRF guard, cache, paging | iHub safer; Vane's *targeting* better |
+| Page reading | search results: quality mode only, per-chunk fact extraction; user-named URLs: every mode; headless browser | fetch + Readability + PDF, SSRF guard, cache, paging | iHub safer; Vane's *targeting* better |
 | Snippet ranking | embedding filter + semantic dedup | engine order + URL dedup | Vane |
 | Citations | `[n]` = context index, not checked | validated, renumbered, cited vs considered, panel | **iHub** |
 | Research activity | plan text + queries + results + reading | server-labelled timeline | even (Vane shows plan text) |
@@ -333,8 +337,23 @@ chat so far. They are shown as clickable rows and stored with the message.
   - Configure with `platform.chats.followUps.{enabled, modelId}`; apps can opt out.
   - Input: question, answer, source titles. Output: 3–4 questions in the user's language that the
     answer does not already cover.
-- Send them as a server event field and store them on the message, so they survive reload and
-  sharing. This follows the rule "the server decides, the client renders".
+- **Delivery.** Store them on the message, so they survive a reload. The chat stream closes on
+  the turn's own `run/ended` (`client/src/shared/hooks/useEventSource.js`), and titles today are
+  written to storage only, never pushed, so a background result cannot ride that stream. Two
+  options, decided at design time:
+  - the client asks once for the message's follow-ups shortly after `run/ended` (a short wait,
+    then one fetch);
+  - or the turn holds the stream open for a bounded time (about 3 s) and sends them as a field
+    before `run/ended`, falling back to the fetch.
+
+  Either way the server decides what to show and the client renders it.
+- **Sharing.** A question may repeat a private document title that the answer itself never shows,
+  and the share snapshot drops private sources (`snapshotMessage` in
+  `server/services/chat/ChatShareRepository.js`). So share snapshots **leave follow-ups out**:
+  they are prompts for the chat's owner, not content.
+
+  The alternative is to generate a second, shareable set only from shareable inputs: the answer
+  text plus public sources. That doubles the calls for little gain.
 - Render chips under the answer; a click sends the question.
 - Skip apps with structured output, custom renderers or workflows.
 - Track click-through in telemetry.
@@ -347,8 +366,7 @@ strategy (snippets vs. read-and-extract) and the answer length.
 **iHub today:** all the knobs exist, but only admins can set them, and only once per app.
 
 **Proposal:** add depth presets per app, with a selector next to the web toggle in the input. The
-request gets a new field `researchDepth`, and the server maps it to budgets the loop already
-enforces:
+request gets a new field `researchDepth`, and the server maps it to per-answer budgets:
 
 | Preset | Searches | Snippets vs. pages | Page reads | Other |
 |---|---|---|---|---|
@@ -360,6 +378,22 @@ enforces:
   structured multi-phase reports.
 - The admin defines which presets an app offers and their limits. Users can never go above the
   admin's maximum.
+- **Enforcement is new work, not existing budgets.**
+  - Today only page reads are counted per answer (`pageReadLimit.js`).
+  - `websearch.maxSearches` is a per-model-call `max_uses` that only Anthropic applies. The loop
+    makes several model calls per answer, and the OpenAI Responses and Gemini adapters pass no
+    cap.
+
+  The preset therefore needs a **per-turn search counter in the loop**, built like the page-read
+  gate:
+  - engine searches are counted before they run, and past the cap the call returns a "budget
+    reached" result instead of searching;
+  - for native search, each model call gets `max_uses` = the searches remaining, where the
+    provider supports it. Where it does not, use the engine path for capped presets, or drop
+    native search from the call once the counter is spent.
+
+  Searches already reported by a provider (grounding metadata, `web_search_call` items) count
+  toward the same number.
 
 #### R4 — Browser entry: `?q=`, OpenSearch, omnibox (P1, S)
 
@@ -375,8 +409,12 @@ enforces:
 
 #### R5 — Regenerate (and "rewrite with model…") on answers (P1, XS)
 
-- Add a Regenerate button to finished assistant messages. `resendMessage` already accepts
+- Add a Regenerate button to the **latest** assistant answer. `resendMessage` already accepts
   assistant ids (`useAppChat.js:763`).
+- `resendMessage` deletes everything from the preceding user message on (`deleteFromMessage`),
+  and the next send forks the stored history there. So the button must not appear on older
+  answers. Regenerating an older answer without losing later exchanges would need branching
+  (keeping alternative answers side by side), which is a separate, larger feature.
 - Optional: a model menu on the button, like Perplexity's "Rewrite".
 
 ### P2 — Answer quality
@@ -443,9 +481,19 @@ default production engine.
 
 **Proposal:**
 
-- Fill the standard `url_citation` annotations (start/end index, url, title) from the message's
-  resolved sources, in both Responses and Chat Completions. `resolveCitations` already computes
-  the mapping.
+- Fill the standard `url_citation` annotations (start/end index, url, title) in both Responses
+  and Chat Completions. This takes two steps:
+  1. **Find the spans.** `resolveCitations` maps sources to numbers, but it returns no offsets and
+     lists each cited source once. A span pass therefore walks the final output text and records
+     every citation occurrence with its own start and end, so a source cited three times gets
+     three annotations. `citationRefs` in `shared/sources/citations.js` already finds each
+     match's offset, but drops it from its result. Its code masking keeps the text length, so
+     the offsets are valid positions in the original text; a variant that returns them with the
+     match length is enough.
+  2. **Map each span to its source** with `numberOfUrl` / `numberOfMarker`. A span with no
+     matching source gets no annotation, just as the UI leaves such links plain.
+
+  Offsets refer to the text exactly as sent to the client, after any marker rewriting.
 - This is an additive change under the API guidelines. **Do not** build a separate `/api/search`.
 
 ### P3 — Opportunistic
