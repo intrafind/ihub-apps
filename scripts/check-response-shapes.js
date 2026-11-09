@@ -28,6 +28,7 @@
  *   node scripts/check-response-shapes.js            compare with the snapshot
  *   node scripts/check-response-shapes.js --update   rewrite the snapshot
  *   node scripts/check-response-shapes.js --list     print the shapes found, no comparison
+ *   node scripts/check-response-shapes.js --serve    start the seeded server and wait (to explore it)
  */
 
 import fs from 'node:fs';
@@ -113,8 +114,6 @@ export function notRequestedReason(routePath) {
   return null;
 }
 
-const paramNames = routePath => [...routePath.matchAll(/:(\w+)/g)].map(m => m[1]);
-
 /** The first id a list answer offers: `items[0].id`, a keyed map's first key, or an array element's id. */
 export function firstId(body) {
   const items = Array.isArray(body) ? body : body?.items;
@@ -193,19 +192,162 @@ async function request(base, cookie, routePath) {
   }
 }
 
-/** Fill the one path parameter of `routePath` from the list at its parent path. */
+/**
+ * Fill every path parameter of `routePath`, left to right: each takes the first id the
+ * list at the path before it offers (`/api/projects/:projectId/items/:itemId` asks
+ * `/api/projects`, then `/api/projects/<id>/items`).
+ */
 async function resolvePath(base, cookie, routePath, getPaths) {
-  const names = paramNames(routePath);
-  if (names.length === 0) return { path: routePath };
-  if (names.length > 1) return { skipped: 'more than one path parameter' };
-  const parent = routePath.slice(0, routePath.indexOf('/:'));
-  if (!parent || !getPaths.has(parent))
-    return { skipped: 'its parent path is not a readable list' };
-  const listing = await request(base, cookie, parent);
-  const id = listing.body ? firstId(listing.body) : null;
-  if (id === null || id === undefined)
-    return { skipped: 'its parent list has no entry in the seed' };
-  return { path: routePath.replace(/:\w+/, encodeURIComponent(String(id))) };
+  const template = routePath.split('/');
+  const filled = [...template];
+  for (let i = 0; i < template.length; i++) {
+    if (!template[i].startsWith(':')) continue;
+    const parentTemplate = template.slice(0, i).join('/');
+    if (!parentTemplate || !getPaths.has(parentTemplate)) {
+      return { skipped: 'its parent path is not a readable list' };
+    }
+    // Sequential on purpose: each id comes from the list the previous one opened.
+    const listing = await request(base, cookie, filled.slice(0, i).join('/'));
+    const id = listing.body ? firstId(listing.body) : null;
+    if (id === null || id === undefined) {
+      return { skipped: 'its parent list has no entry in the seed' };
+    }
+    filled[i] = encodeURIComponent(String(id));
+  }
+  return { path: filled.join('/') };
+}
+
+/**
+ * Switch the preview features on and create one record of each kind a client lists, so
+ * the answers have elements to describe. Every step must succeed: a seed that quietly
+ * did less would change the snapshot.
+ */
+export async function seedData(base, cookie) {
+  const send = async (method, routePath, body, expected) => {
+    const response = await fetch(base + routePath, {
+      method,
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!expected.includes(response.status)) {
+      throw new Error(
+        `seed step ${method} ${routePath} answered ${response.status}: ${(await response.text()).slice(0, 300)}`
+      );
+    }
+  };
+  const feature = {
+    skills: true,
+    workflows: true,
+    userProjects: true,
+    chatSharing: true,
+    compareMode: true,
+    appAsTool: true,
+    agentFactory: true,
+    toolsService: true,
+    voiceMode: true
+  };
+  await send('PUT', '/api/admin/features', feature, [200]);
+  await send(
+    'POST',
+    '/api/admin/configs/platform',
+    { oauth: { enabled: { clients: true } } },
+    [200]
+  );
+  await send(
+    'POST',
+    '/api/prompts',
+    { name: 'Contract prompt', prompt: 'Summarise [text]' },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/projects',
+    { name: 'Contract project', instructions: 'Be brief.' },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/scheduled-tasks',
+    {
+      name: 'Contract task',
+      appId: 'chat',
+      instructions: 'Say hello.',
+      schedule: { type: 'manual' }
+    },
+    [201]
+  );
+  await send('POST', '/api/shortlinks', { url: '/apps/chat', appId: 'chat' }, [200, 201]);
+  await send(
+    'POST',
+    '/api/user-skills',
+    { name: 'contract-skill', description: 'A skill.', body: 'Do it.' },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/admin/credentials',
+    { id: 'contract-credential', name: 'Contract credential', type: 'bearer', token: 'abc' },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/admin/document-templates',
+    { id: 'contract-template', name: { en: 'Contract template' }, description: { en: 'x' } },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/admin/agents/inboxes/contract-inbox',
+    { name: { en: 'Contract inbox' } },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/admin/agents/profiles',
+    { id: 'contract-agent', name: { en: 'Contract agent' }, description: { en: 'x' } },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/workflows',
+    {
+      id: 'contract-workflow',
+      version: '1.0.0',
+      name: { en: 'Contract workflow' },
+      description: { en: 'x' },
+      nodes: [
+        { id: 'start', type: 'start', name: { en: 'Start' }, position: { x: 0, y: 0 }, config: {} },
+        {
+          id: 'end',
+          type: 'end',
+          name: { en: 'End' },
+          position: { x: 200, y: 0 },
+          config: { output: 'result' }
+        }
+      ],
+      edges: [{ id: 'e1', source: 'start', target: 'end' }]
+    },
+    [201]
+  );
+  await send(
+    'POST',
+    '/api/admin/oauth/clients',
+    { name: 'Contract client', redirectUris: ['http://localhost:9999/cb'], scopes: ['openid'] },
+    [201]
+  );
+  // A stored chat (one non-streaming turn on the stub model) and a share of it.
+  await send(
+    'POST',
+    '/api/apps/chat/chat/contract-chat',
+    {
+      messages: [{ role: 'user', content: 'Hello contract', messageId: 'm1' }],
+      modelId: 'e2e-stub',
+      language: 'en',
+      streaming: false
+    },
+    [200]
+  );
+  await send('POST', '/api/chats/contract-chat/shares', { mode: 'authenticated' }, [200, 201]);
 }
 
 /** `{ "GET /api/x": { status, shape } | { status, type } | { skipped } }` for the running server. */
@@ -252,6 +394,17 @@ export function diffSnapshots(expected, actual) {
   return lines;
 }
 
+/** Sign in as the default admin; the cookie header for later requests. */
+async function signIn(base) {
+  const login = await fetch(`${base}/api/auth/local/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'password123' })
+  });
+  if (!login.ok) throw new Error(`the default admin could not sign in (${login.status})`);
+  return (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
+}
+
 async function main() {
   const argv = process.argv.slice(2);
 
@@ -269,15 +422,16 @@ async function main() {
   await prepareE2eContents({ root, contentsDir, llmPort: await freePort() });
 
   const { child, base } = await startServer(contentsDir);
+  if (argv.includes('--serve')) {
+    const login = await signIn(base);
+    await seedData(base, login);
+    console.log(`seeded server: ${base}  (admin / password123); Ctrl-C to stop`);
+    await new Promise(() => {});
+  }
   let snapshot;
   try {
-    const login = await fetch(`${base}/api/auth/local/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'password123' })
-    });
-    if (!login.ok) throw new Error(`the default admin could not sign in (${login.status})`);
-    const cookie = (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
+    const cookie = await signIn(base);
+    await seedData(base, cookie);
     snapshot = await collectShapes({ base, cookie, routes });
   } finally {
     child.kill('SIGTERM');
@@ -286,13 +440,17 @@ async function main() {
 
   const requested = Object.values(snapshot).filter(v => !v.skipped);
   const withShape = requested.filter(v => v.shape !== undefined);
-  const emptyLists = Object.entries(snapshot).filter(
-    ([, v]) => Array.isArray(v.shape) && v.shape.length === 0
+  // A list with no element has no element shape: the snapshot cannot tell a renamed
+  // key inside it. Naming such routes keeps that gap visible.
+  const emptyLists = Object.entries(snapshot).filter(([, v]) =>
+    Array.isArray(v.shape) ? v.shape.length === 0 : v.shape?.items?.length === 0
   );
+  const errorAnswers = requested.filter(v => (v.status ?? 200) >= 400);
+  const total = Object.keys(snapshot).length;
   console.log(
-    `${Object.keys(snapshot).length} GET routes: ${withShape.length} with a JSON shape, ` +
-      `${requested.length - withShape.length} answering something else, ` +
-      `${Object.keys(snapshot).length - requested.length} not requested`
+    `${total} GET routes: ${withShape.length} with a JSON shape (${errorAnswers.length} of them an ` +
+      `error body), ${requested.length - withShape.length} answering something else, ` +
+      `${total - requested.length} not requested`
   );
   if (emptyLists.length) {
     console.log(`${emptyLists.length} answer an empty list (no element shape yet):`);
