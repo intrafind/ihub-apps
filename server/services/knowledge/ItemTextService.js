@@ -27,6 +27,8 @@ import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
 import { PROJECT_ITEM_KIND, loadLinkedItem } from '../projects/projectItemLinks.js';
+import { projectSettings } from '../projects/projectSettings.js';
+import { linkCacheSeconds } from '../projects/refreshTtl.js';
 
 const COMPONENT = 'ItemTextService';
 
@@ -152,7 +154,7 @@ export function offerItemInfo(project, item, metadata) {
 }
 
 /** The handler type and config a link item's fetch runs with. */
-function handlerCallOf(item, ctx) {
+function handlerCallOf(item, ctx, project = null) {
   const ref = item.ref || {};
   switch (item.kind) {
     case 'url':
@@ -161,6 +163,13 @@ function handlerCallOf(item, ctx) {
         config: {
           url: ref.url,
           ...(ref.maxContentLength ? { options: { maxContentLength: ref.maxContentLength } } : {}),
+          // How long the read is kept: the item's, the project's or the
+          // platform's refresh TTL (#3536).
+          cacheTtlSeconds: linkCacheSeconds(
+            item,
+            project,
+            projectSettings(configCache.getPlatform?.() || {})
+          ),
           chatId: ctx.chatId
         }
       };
@@ -294,7 +303,7 @@ export async function getItemText(project, item, ctx = {}) {
     const linked = await loadLinkedItem(project, item, ctx.user);
     return getItemText(linked.project, linked.item, ctx);
   }
-  const call = handlerCallOf(item, ctx);
+  const call = handlerCallOf(item, ctx, project);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
   if (call.type === 'page') assertPageReadable(call.config.pageId, ctx.user, where);
   if (call.type === 'ifinder' && !ctx.user) {

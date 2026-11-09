@@ -82,7 +82,7 @@ export const DEFAULT_READER_USER_AGENT =
  */
 async function fetchPage(
   validUrl,
-  { shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url' }
+  { shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url', headers = null }
 ) {
   let hopUrl = validUrl;
   let response;
@@ -109,7 +109,10 @@ async function fetchPage(
         // The user's language, so a multilingual site serves the page they read.
         'Accept-Language': acceptLanguage,
         'Accept-Encoding': 'gzip, deflate',
-        'Upgrade-Insecure-Requests': '1'
+        'Upgrade-Insecure-Requests': '1',
+        // A caller's own (a download's Accept, a conditional request's
+        // If-None-Match / If-Modified-Since); never the ones above it needs.
+        ...(headers || {})
       },
       signal: controller.signal,
       // Follow redirects manually so each hop is re-validated above instead
@@ -170,9 +173,11 @@ async function fetchPage(
  * @param {string} [options.throttleId='read_url'] - Request throttle queue; a
  *   caller that fetches many pages takes its own, so it never queues the
  *   chat's page reads behind it
+ * @param {Object<string, string>} [options.headers] - Extra request headers
+ *   (`Accept`, `If-None-Match`, `If-Modified-Since`), sent on every hop
  * @returns {Promise<{response: Object, finalUrl: URL}>}
  */
-export async function fetchWebPage(url, { language, signal, throttleId } = {}) {
+export async function fetchWebPage(url, { language, signal, throttleId, headers } = {}) {
   const validUrl = new URL(url);
   if (!['http:', 'https:'].includes(validUrl.protocol)) {
     throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
@@ -182,8 +187,26 @@ export async function fetchWebPage(url, { language, signal, throttleId } = {}) {
     shouldIgnoreSSL: null,
     acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language)),
     signal,
-    throttleId
+    throttleId,
+    headers: sanitizeHeaders(headers)
   });
+}
+
+/** Request headers a caller of {@link fetchWebPage} may set. */
+const CALLER_HEADERS = new Set(['accept', 'if-none-match', 'if-modified-since']);
+
+/** The caller's headers this reader sends: known names, short string values. */
+function sanitizeHeaders(headers) {
+  if (!headers || typeof headers !== 'object') return null;
+  const kept = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (!CALLER_HEADERS.has(String(name).toLowerCase())) continue;
+    if (typeof value !== 'string' || !value || value.length > 1024 || /[\r\n]/.test(value)) {
+      continue;
+    }
+    kept[name] = value;
+  }
+  return Object.keys(kept).length ? kept : null;
 }
 
 /**

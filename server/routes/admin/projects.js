@@ -252,14 +252,23 @@ export default function registerAdminProjectsRoutes(app) {
       },
       scan: { provider: settings.scan.provider },
       limits: settings.limits,
-      loadAllMaxTokens: settings.loadAllMaxTokens
+      loadAllMaxTokens: settings.loadAllMaxTokens,
+      refreshTtl: settings.refreshTtl
     });
   });
 
   /** The part of the effective `platform.projects` block the settings panel edits. */
   const editableSettings = platformConfig => {
-    const { sharing, tierPolicy, defaultAppId, limits } = projectSettings(platformConfig);
-    return { sharing, tierPolicy, defaultAppId, limits, maxFilesCeiling: MAX_FILES_CEILING };
+    const { sharing, tierPolicy, defaultAppId, limits, refreshTtl } =
+      projectSettings(platformConfig);
+    return {
+      sharing,
+      tierPolicy,
+      defaultAppId,
+      limits,
+      refreshTtl,
+      maxFilesCeiling: MAX_FILES_CEILING
+    };
   };
 
   /**
@@ -275,7 +284,9 @@ export default function registerAdminProjectsRoutes(app) {
    *       and `defaultAppId` (the app a project chat starts in when the project
    *       names none) and `limits` (items per project, at most
    *       `MAX_FILES_CEILING`; bytes per file and per project; projects per
-   *       user, 0 for no cap). Full admins only.
+   *       user, 0 for no cap) and `refreshTtl` (seconds or `never`: how long
+   *       files downloaded from websites and web pages are current, unless a
+   *       project or an item sets its own). Full admins only.
    *     tags: [Admin Projects]
    *   put:
    *     summary: Change the sharing audiences, the tier policy, the default app and the limits
@@ -308,7 +319,8 @@ export default function registerAdminProjectsRoutes(app) {
             ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
             ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
             ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
-            ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {})
+            ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
+            ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
           }
         };
       }
@@ -323,6 +335,7 @@ export default function registerAdminProjectsRoutes(app) {
         ...body.sharing,
         ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
         ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId || '(none)' } : {}),
+        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
         ...body.limits
       })
         .map(([key, value]) => `${key}=${value}`)
@@ -523,7 +536,10 @@ export default function registerAdminProjectsRoutes(app) {
         category: body.category,
         tags: body.tags,
         // A PUT carries the whole project: an absent default app clears it.
-        defaultAppId: body.defaultAppId ?? null
+        defaultAppId: body.defaultAppId ?? null,
+        // The refresh TTL is set on its own (PATCH): a document without it,
+        // as the settings form sends it, keeps the stored one.
+        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
       },
       { actor: req.user }
     );
@@ -608,7 +624,9 @@ export default function registerAdminProjectsRoutes(app) {
       }
       const project = await loadAdminProject(req);
       const body = parseBody(addItemSchema, req);
-      const { item } = await getProjectService().addItem(project.id, body, { user: req.user });
+      const { item, project: stored } = await getProjectService().addItem(project.id, body, {
+        user: req.user
+      });
       logAudit({
         req,
         action: 'create',
@@ -620,7 +638,7 @@ export default function registerAdminProjectsRoutes(app) {
         res,
         item.status === 'ready' ? 201 : 202,
         `/api/admin/projects/${segment(project.id)}/items/${segment(item.id)}`,
-        serializeItem(item)
+        serializeItem(item, stored)
       );
     }
   );
@@ -691,7 +709,7 @@ export default function registerAdminProjectsRoutes(app) {
       resourceId: project.id,
       summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in admin project "${projectName(project)}"`
     });
-    res.json(serializeItem(result.item));
+    res.json(serializeItem(result.item, result.project));
   });
 
   app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {

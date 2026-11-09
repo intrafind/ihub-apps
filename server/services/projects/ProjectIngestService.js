@@ -42,6 +42,7 @@ import {
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
+import { isRefreshDue } from './refreshTtl.js';
 
 const COMPONENT = 'ProjectIngestService';
 
@@ -60,6 +61,12 @@ const FETCH_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** User projects read per page of the reconciler's inventory. */
 const INVENTORY_PAGE_SIZE = 10000;
+
+/**
+ * Most expired files one reconciler tick queues for a refresh; the rest wait
+ * for the next tick. The queue's `ingest.concurrency` bounds how many run.
+ */
+export const MAX_SCHEDULED_REFRESHES = 50;
 
 /** The error code of an item whose job never finished. */
 export const INTERRUPTED = 'INTERRUPTED';
@@ -285,6 +292,13 @@ export class ProjectIngestService {
     // its attempt writes nothing, so an older snapshot can never overwrite a
     // newer one, nor a late failure a newer state.
     const fenced = typeof input.attempt === 'string';
+    // A scheduled refresh is nobody using the project: it must not count as
+    // activity, or retention would never find the project abandoned.
+    const patch = (update, options = {}) =>
+      this.service.patchItem(projectId, itemId, update, {
+        ...options,
+        ...(input.scheduled ? { touchActivity: false, touchUpdated: false } : {})
+      });
     let lost = false;
     const owns = item => {
       if (!fenced || item.ingestAttempt === input.attempt) return true;
@@ -300,7 +314,7 @@ export class ProjectIngestService {
       }
     };
     try {
-      const extracting = await this.service.patchItem(projectId, itemId, item => {
+      const extracting = await patch(item => {
         if (!owns(item)) return false;
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
@@ -321,28 +335,51 @@ export class ProjectIngestService {
         contentType = contentType || 'text/markdown';
       } else if (typeof input.fetch === 'function') {
         const fetched = await this._fetchWithDeadline(input.fetch);
-        bytes = Buffer.isBuffer(fetched.bytes) ? fetched.bytes : Buffer.from(fetched.bytes || '');
-        name = fetched.name || name;
-        contentType = fetched.contentType || contentType;
         job.lastModified = fetched.lastModified || null;
         job.source = fetched.source || null;
         const previousVersion = input.previousLastModified || input.previousSnapshotAt;
-        if (
-          previousVersion &&
-          job.lastModified &&
-          Date.parse(job.lastModified) <= Date.parse(previousVersion)
-        ) {
-          // Nothing changed at the source: keep the text, clear `stale`.
-          const unchanged = await this.service.patchItem(projectId, itemId, item => {
+        // Nothing changed at the source: it said so to a conditional request
+        // (304), it names the version the text was taken from (ETag), or it
+        // was last modified before that.
+        // An ETag on both sides decides alone: a server evaluates
+        // If-None-Match first, and a changed ETag with an unchanged
+        // Last-Modified (an edit within the second, a kept mtime) is a change.
+        const bothTagged = Boolean(input.previousEtag) && Boolean(fetched.etag);
+        const sameVersion =
+          refresh &&
+          (fetched.notModified === true ||
+            (bothTagged
+              ? fetched.etag === input.previousEtag
+              : Boolean(previousVersion) &&
+                Boolean(job.lastModified) &&
+                Date.parse(job.lastModified) <= Date.parse(previousVersion)));
+        if (sameVersion) {
+          // Keep the text, clear `stale`, note the check.
+          const checkedAt = new Date().toISOString();
+          const unchanged = await patch(item => {
             if (!owns(item)) return false;
             item.status = item.text ? 'ready' : 'failed';
             item.error = null;
+            item.checkedAt = checkedAt;
+            if (job.source) {
+              item.provenance = {
+                ...(item.provenance || {}),
+                source: { ...(item.provenance?.source || {}), ...job.source }
+              };
+            }
             delete item.refreshingAt;
             delete item.ingestAttempt;
           });
           assertOwned();
           return unchanged ? { item: unchanged, unchanged: true } : null;
         }
+        if (fetched.notModified === true) {
+          // A 304 to an unconditional request, or with no text to keep.
+          throw new ProjectError('SOURCE_GONE', 'The source sent no document');
+        }
+        bytes = Buffer.isBuffer(fetched.bytes) ? fetched.bytes : Buffer.from(fetched.bytes || '');
+        name = fetched.name || name;
+        contentType = fetched.contentType || contentType;
       } else if (Buffer.isBuffer(input.bytes)) {
         bytes = input.bytes;
       } else if (input.path) {
@@ -418,9 +455,7 @@ export class ProjectIngestService {
       // two uploads cannot both pass on the same free room.
       const quota = current =>
         this.service._checkItemQuota(withoutItem(current, itemId), { bytes: size });
-      const stored = await this.service.patchItem(
-        projectId,
-        itemId,
+      const stored = await patch(
         item => {
           if (!owns(item)) return false;
           item.status = 'ready';
@@ -433,6 +468,7 @@ export class ProjectIngestService {
           applyItemInfo(item, { title: extracted.title, description: extracted.description });
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
+            item.checkedAt = block.extractedAt;
           }
           if (job.source) {
             item.provenance = {
@@ -482,21 +518,22 @@ export class ProjectIngestService {
           .delete(PROJECT_FILES_NAMESPACE, storedBlobKey)
           .catch(() => false);
       }
-      await this.service
-        .patchItem(projectId, itemId, item => {
-          if (!owns(item)) return false;
-          // A refresh that fails keeps the old text readable (spec 3 §4).
-          item.status = input.previousBlobKey && item.text ? 'stale' : 'failed';
-          item.error = { code: failure.code, message: failure.message.slice(0, 2000) };
-          delete item.refreshingAt;
-          delete item.ingestAttempt;
+      await patch(item => {
+        if (!owns(item)) return false;
+        // A refresh that fails keeps the old text readable (spec 3 §4).
+        item.status = input.previousBlobKey && item.text ? 'stale' : 'failed';
+        item.error = { code: failure.code, message: failure.message.slice(0, 2000) };
+        // A fetched document was checked, if in vain: a scheduled refresh
+        // tries again after its TTL, not on the next tick.
+        if (typeof input.fetch === 'function') item.checkedAt = new Date().toISOString();
+        delete item.refreshingAt;
+        delete item.ingestAttempt;
+      }).catch(patchError =>
+        logger.error('Could not record an ingest failure', {
+          ...where,
+          error: patchError.message
         })
-        .catch(patchError =>
-          logger.error('Could not record an ingest failure', {
-            ...where,
-            error: patchError.message
-          })
-        );
+      );
       return { item: null, error: failure };
     } finally {
       this.active.delete(job);
@@ -679,15 +716,56 @@ export class ProjectIngestService {
       }
     }
     orphans += await this._sweepOrphans(projects, now, { complete });
-    if (interrupted || orphans) {
+    const refreshed = await this.refreshExpired(projects, { now });
+    if (interrupted || orphans || refreshed) {
       logger.info('Project ingest reconciled', {
         component: COMPONENT,
         scanned: projects.length,
         interrupted,
-        orphans
+        orphans,
+        refreshed
       });
     }
-    return { scanned: projects.length, interrupted, orphans };
+    return { scanned: projects.length, interrupted, orphans, refreshed };
+  }
+
+  /**
+   * Queue a refresh of every file from a website whose snapshot is older
+   * than its refresh TTL (#3536), through `ProjectService.refreshItem`: the
+   * same reservation, the same conditional download, the same queue (so
+   * `ingest.concurrency` bounds it). At most {@link MAX_SCHEDULED_REFRESHES}
+   * per call. Items of a disabled admin project, a project being deleted, or
+   * an item set to `never` are left alone; an item another worker reserved
+   * meanwhile is skipped (`PROJECT_MISMATCH`).
+   *
+   * @param {Object[]} projects
+   * @param {{now?: number, max?: number}} [options]
+   * @returns {Promise<number>} Refreshes queued.
+   */
+  async refreshExpired(projects, { now = Date.now(), max = MAX_SCHEDULED_REFRESHES } = {}) {
+    const settings = this.settings();
+    let queued = 0;
+    for (const project of projects || []) {
+      if (queued >= max) break;
+      if (project.deleting || project.enabled === false) continue;
+      for (const item of project.items || []) {
+        if (queued >= max) break;
+        if (this.isActive(item.id) || !isRefreshDue(item, project, settings, now)) continue;
+        try {
+          await this.service.refreshItem(project.id, item.id, { scheduled: true, wait: false });
+          queued += 1;
+        } catch (error) {
+          if (error?.code === 'PROJECT_MISMATCH' || error?.code === 'ITEM_NOT_FOUND') continue;
+          logger.warn('Could not schedule the refresh of a project item', {
+            component: COMPONENT,
+            projectId: project.id,
+            itemId: item.id,
+            error: error?.message
+          });
+        }
+      }
+    }
+    return queued;
   }
 
   /**

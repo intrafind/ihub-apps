@@ -1332,3 +1332,26 @@ soon as the model starts writing it, not only when it runs. A long call, like a 
 to leave the chat with nothing but a spinner for a minute or more; now the row appears straight
 away and counts up how many characters the model has written so far ("31K characters written").
 A call the user stops before it is written disappears from the list.
+
+## Projects: Files Linked From Websites Are Stored Like Uploads, With a Refresh Schedule
+
+A web address that serves a document — PDF, Word, PowerPoint, Excel, OpenDocument or any other
+type an upload accepts — is now downloaded when it is added to a project and stored like an
+uploaded file, instead of being read live. Its whole text is available, no longer cut at 50,000
+characters, and the item keeps its source address for citations and refreshes. HTML pages stay
+live links.
+
+- The download follows the upload rules: the file size and project size limits, the accepted
+  types and the malware scan. An address that serves an image, an archive or a legacy Office file
+  is refused like the same upload would be.
+- **Find more pages of this website** now also lists Word, PowerPoint, Excel and OpenDocument
+  files, not only PDFs.
+- How long a file from a website or a web page counts as current is set per installation
+  (**Admin → Projects → Project settings**, one day by default), per project (**Refresh** in the
+  project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
+- Files are downloaded again on their own once that time has passed. An unchanged file is
+  neither downloaded nor read again and keeps its text. The item shows when its text was taken
+  and when it is refreshed next; **Refresh** still works at any time. Web pages are read again
+  after the same time.
+- Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
+  hand, because that needs the account of the user who picked them.

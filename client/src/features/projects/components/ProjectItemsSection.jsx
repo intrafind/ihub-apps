@@ -38,6 +38,7 @@ import ProjectItemsTable from './ProjectItemsTable';
 import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
 import ProjectItemTextDialog from './ProjectItemTextDialog';
 import ProjectUsageBar from './ProjectUsageBar';
+import RefreshTtlDialog from './RefreshTtlDialog';
 import RenameItemDialog from './RenameItemDialog';
 
 /**
@@ -142,6 +143,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const [adding, setAdding] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [renaming, setRenaming] = useState(null);
+  const [scheduling, setScheduling] = useState(null);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -309,6 +311,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
                 }
           }
           onRename={isIFinder ? undefined : setRenaming}
+          onSchedule={isIFinder ? undefined : setScheduling}
           onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
           selectedIds={new Set(selectedItems.map(item => item.id))}
@@ -361,6 +364,20 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
             clearEstimate();
             return actions.update(editing, changes);
           }}
+        />
+      )}
+      {scheduling && (
+        <RefreshTtlDialog
+          scope="item"
+          item={scheduling}
+          value={scheduling.refreshTtl ?? null}
+          inherited={
+            project.refreshTtl ??
+            config?.refreshTtl ??
+            (scheduling.refresh?.from !== 'item' ? scheduling.refresh?.ttl : null)
+          }
+          onClose={() => setScheduling(null)}
+          onSave={ttl => actions.setRefreshTtl(scheduling, ttl)}
         />
       )}
       {renaming && (

@@ -10,6 +10,30 @@
  */
 import { getLocalizedContent } from '../../../shared/localize.js';
 import { isCollectionStub, isIFinderProjectId } from './projectConstants.js';
+import { refreshScheduleOf } from './refreshTtl.js';
+
+/**
+ * Where the view reads the effective `platform.projects` settings (for the
+ * refresh TTL an item inherits). Set by the project service, so this module
+ * stays free of the config cache and its storage dependencies; without it the
+ * built-in default applies.
+ */
+let settingsSource = () => ({});
+
+/**
+ * @param {() => Object} source - Returns `projectSettings(platform)`.
+ */
+export function setProjectViewSettings(source) {
+  settingsSource = typeof source === 'function' ? source : () => ({});
+}
+
+function currentSettings() {
+  try {
+    return settingsSource() || {};
+  } catch {
+    return {};
+  }
+}
 
 function memberView(member) {
   return {
@@ -23,15 +47,25 @@ function memberView(member) {
 /**
  * One item as the client sees it.
  *
+ * `refresh` is the item's refresh schedule (#3536) for a file from a website
+ * or a web page: the TTL that applies, where it comes from (`item`,
+ * `project`, `platform`), and for a file when its source was last checked
+ * and when it is checked next. Absent for every other kind.
+ *
  * @param {Object} item - Stored item.
+ * @param {Object|null} [project] - The item's project, for its TTL; without
+ *   it the platform's applies.
+ * @param {Object} [settings] - `projectSettings(platform)`; read when absent.
  * @returns {Object}
  */
-export function serializeItem(item) {
+export function serializeItem(item, project = null, settings = null) {
   // `ingestAttempt` is the server's fencing token of a running ingest job.
   const { text, ingestAttempt: _attempt, ...rest } = item;
+  const refresh = refreshScheduleOf(item, project, settings || currentSettings());
   return {
     ...rest,
     ref: item.ref || {},
+    ...(refresh ? { refresh } : {}),
     text: text
       ? {
           chars: text.chars,
@@ -160,6 +194,8 @@ export function serializeProject(
         }
       : {}),
     defaultAppId: project.defaultAppId || null,
+    // The project's own refresh TTL (#3536); null takes the platform's.
+    refreshTtl: project.refreshTtl ?? null,
     owner: project.owner
       ? {
           name: project.owner.name || '',
@@ -169,7 +205,14 @@ export function serializeProject(
       : null,
     ...(showMembers ? { members: members.map(memberView) } : { memberCount: members.length }),
     usage: project.usage || { items: items.length, bytes: 0 },
-    ...(includeItems ? { items: items.map(serializeItem) } : {}),
+    ...(includeItems
+      ? {
+          items: (() => {
+            const settings = currentSettings();
+            return items.map(item => serializeItem(item, project, settings));
+          })()
+        }
+      : {}),
     createdAt: project.createdAt,
     createdBy: project.createdBy?.name || project.owner?.name || '',
     updatedAt: project.updatedAt,

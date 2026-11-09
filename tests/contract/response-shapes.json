@@ -981,6 +981,7 @@
           "maxProjectsPerUser": "number"
         },
         "loadAllMaxTokens": "number",
+        "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
           "allowCatalog": "boolean",
@@ -2376,6 +2377,7 @@
           "ownership": "string",
           "permissions": "object",
           "published": "boolean",
+          "refreshTtl": "null",
           "role": "string",
           "tags": "[]|array",
           "tier": "string",
@@ -2439,6 +2441,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshTtl": "null",
       "role": "string",
       "tags": [],
       "tier": "string",
@@ -2463,6 +2466,7 @@
         "maxProjectsPerUser": "number"
       },
       "loadAllMaxTokens": "number",
+      "refreshTtl": "number",
       "scan": {
         "provider": "string"
       },
@@ -2509,6 +2513,7 @@
         "maxProjectsPerUser": "number"
       },
       "maxFilesCeiling": "number",
+      "refreshTtl": "number",
       "sharing": {
         "allowCatalog": "boolean",
         "allowEveryone": "boolean",
@@ -4709,6 +4714,7 @@
           "maxProjectBytes": "number",
           "maxProjectsPerUser": "number"
         },
+        "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
           "allowCatalog": "boolean",
@@ -5553,6 +5559,7 @@
           "ownership": "string",
           "permissions": "object",
           "published?": "boolean",
+          "refreshTtl": "null",
           "role": "string",
           "subscribed?": "boolean",
           "tags?": "[]|array",
@@ -5619,6 +5626,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshTtl": "null",
       "role": "string",
       "tags": ["string"],
       "tier": "string",
@@ -5751,6 +5759,7 @@
         "maxProjectBytes": "number",
         "maxProjectsPerUser": "number"
       },
+      "refreshTtl": "number",
       "retentionDays": "number",
       "sharing": {
         "allowCatalog": "boolean",

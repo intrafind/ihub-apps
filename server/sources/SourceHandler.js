@@ -34,18 +34,28 @@ class SourceHandler {
     const cacheKey = this.getCacheKey(sourceConfig);
     const cached = this.cache.get(cacheKey);
 
-    if (cached && this.isCacheValid(cached)) {
+    // A caller that names its own lifetime (a project item's refresh TTL)
+    // judges the entry by it, not by whoever cached the URL first.
+    const callerTtlSeconds = Number(sourceConfig?.cacheTtlSeconds);
+    const entry =
+      cached && Number.isFinite(callerTtlSeconds) && callerTtlSeconds > 0
+        ? { ...cached, ttl: Math.min(cached.ttl, callerTtlSeconds * 1000) }
+        : cached;
+    if (entry && this.isCacheValid(entry)) {
       return cached.data;
     }
 
     // Load fresh content
     const data = await this.loadContent(sourceConfig);
 
-    // Cache the result
+    // Cache the result, for the caller's lifetime when it names one (a
+    // project item's refresh TTL, #3536), else the handler's.
+    const ttlSeconds = Number(sourceConfig?.cacheTtlSeconds);
     this.cache.set(cacheKey, {
       data,
       timestamp: Date.now(),
-      ttl: this.cacheConfig.ttl * 1000
+      ttl:
+        (Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : this.cacheConfig.ttl) * 1000
     });
 
     return data;

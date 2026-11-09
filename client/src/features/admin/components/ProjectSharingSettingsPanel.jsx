@@ -11,6 +11,11 @@ import {
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
+import {
+  parseRefreshTtl,
+  refreshTtlChoices,
+  refreshTtlLabel
+} from '../../projects/utils/refreshTtl';
 
 const TIER_POLICIES = [
   {
@@ -112,16 +117,23 @@ function ProjectSharingSettingsPanel() {
     setDraft(previous => ({ ...previous, defaultAppId }));
     setSaved(false);
   };
+  const updateRefreshTtl = value => {
+    const refreshTtl = parseRefreshTtl(value);
+    if (refreshTtl === null) return;
+    setDraft(previous => ({ ...previous, refreshTtl }));
+    setSaved(false);
+  };
 
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
-      const { sharing, tierPolicy, defaultAppId } = draft;
+      const { sharing, tierPolicy, defaultAppId, refreshTtl } = draft;
       const settings = await saveProjectSettings({
         sharing,
         tierPolicy,
         defaultAppId,
+        ...(refreshTtl !== undefined && refreshTtl !== stored.refreshTtl ? { refreshTtl } : {}),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
@@ -210,6 +222,34 @@ function ProjectSharingSettingsPanel() {
             )}
           </p>
         </div>
+        {draft.refreshTtl !== undefined && (
+          <div className="space-y-1">
+            <label
+              htmlFor="project-settings-refresh-ttl"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.projects.refreshTtl.label', 'Refresh files and web pages after')}
+            </label>
+            <select
+              id="project-settings-refresh-ttl"
+              value={String(draft.refreshTtl)}
+              onChange={e => updateRefreshTtl(e.target.value)}
+              className="block w-full max-w-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+            >
+              {refreshTtlChoices(draft.refreshTtl).map(ttl => (
+                <option key={ttl} value={String(ttl)}>
+                  {refreshTtlLabel(ttl, t)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.projects.refreshTtl.help',
+                'Files linked from websites are downloaded again after this time (an unchanged file keeps its text); web pages are read again. Projects and items can set their own.'
+              )}
+            </p>
+          </div>
+        )}
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.projects.sharing.legend', 'Users may share their projects with')}

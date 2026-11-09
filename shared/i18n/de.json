@@ -5710,6 +5710,10 @@
         "maxProjectsPerUserHelp": "Projekte, die eine Person besitzen darf; 0 bedeutet keine Grenze. Admin-Projekte zählen nicht.",
         "applyHint": "Änderungen gelten sofort. Eine niedrigere Grenze entfernt nichts; sie lehnt nur ab, was darüber hinausginge.",
         "invalid": "Geben Sie eine Zahl im erlaubten Bereich ein."
+      },
+      "refreshTtl": {
+        "label": "Dateien und Webseiten aktualisieren nach",
+        "help": "Von Websites verlinkte Dateien werden nach dieser Zeit erneut heruntergeladen (eine unveränderte Datei behält ihren Text); Webseiten werden neu gelesen. Projekte und Elemente können eine eigene Zeit festlegen."
       }
     },
     "updates": {
@@ -8475,7 +8479,7 @@
       "crawlRobots_one": "{{count}} Link wurde ausgelassen, weil die Website ihn in ihrer robots.txt ausschließt.",
       "crawlRobots_other": "{{count}} Links wurden ausgelassen, weil die Website sie in ihrer robots.txt ausschließt.",
       "crawlFull": "Das Projekt nimmt keine weiteren Seiten auf. Wählen Sie Seiten ab oder entfernen Sie zuerst Elemente aus dem Projekt.",
-      "crawlDocument": "PDF",
+      "crawlDocument": "Datei",
       "crawlBlocked": "{{host}} blockiert den automatisierten Zugriff, deshalb wurde die Suche dort beendet. Fügen Sie die benötigten Seiten stattdessen über ihre Adresse hinzu.",
       "crawlTruncated": "Die Suche hat an ihrer Grenze aufgehört; erhöhen Sie sie oder beginnen Sie bei einer tieferen Adresse, um mehr zu finden.",
       "crawlNoPages": "Keine Seiten gefunden.",
@@ -8580,7 +8584,8 @@
         "retry": "Erneut versuchen",
         "transfer": "Verschieben oder kopieren nach…",
         "openInIFinder": "In iFinder öffnen",
-        "edit": "Bearbeiten"
+        "edit": "Bearbeiten",
+        "schedule": "Aktualisierung"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -8900,6 +8905,38 @@
     "editItem": {
       "title": "Element bearbeiten",
       "unsupported": "Dieses Element kann nicht bearbeitet werden."
+    },
+    "refresh": {
+      "never": "Nie (nur von Hand)",
+      "days_one": "{{count}} Tag",
+      "days_other": "{{count}} Tage",
+      "hours_one": "{{count}} Stunde",
+      "hours_other": "{{count}} Stunden",
+      "minutes_one": "{{count}} Minute",
+      "minutes_other": "{{count}} Minuten",
+      "cachedFor": "Live gelesen, {{ttl}} zwischengespeichert",
+      "manualOnly": "Nur von Hand aktualisiert",
+      "nextAt": "Nächste Aktualisierung {{date}}",
+      "every": "Alle {{ttl}} aktualisiert",
+      "itemTitle": "Aktualisierung",
+      "projectTitle": "Aktualisierung von Dateien und Webseiten",
+      "itemLiveHint": "Diese Webseite wird live gelesen. Das Gelesene wird so lange behalten, bevor die Seite erneut gelesen wird.",
+      "itemFileHint": "Diese Datei wurde von einer Website heruntergeladen. Nach dieser Zeit wird sie erneut heruntergeladen; eine unveränderte Datei behält ihren Text.",
+      "projectHint": "Wie lange von Websites heruntergeladene Dateien und Webseiten in diesem Projekt als aktuell gelten. Jedes Element kann eine eigene Zeit haben.",
+      "label": "Aktualisieren nach",
+      "inheritProject": "Projekteinstellung ({{ttl}})",
+      "inheritPlatform": "Standard dieser Installation ({{ttl}})",
+      "default": "Standard",
+      "snapshotAt": "Text übernommen",
+      "checkedAt": "Zuletzt geprüft",
+      "nextAtLabel": "Nächste Aktualisierung",
+      "nowHint": "„Aktualisieren“ im Elementmenü liest es sofort neu.",
+      "rowTitle": "Aktualisierung",
+      "change": "Aktualisierung von Dateien und Webseiten ändern",
+      "projectValue": "Dateien und Webseiten: {{ttl}}",
+      "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
+      "projectDefaultUnknown": "Standard dieser Installation",
+      "cachedManual": "Live gelesen, bis zur Aktualisierung von Hand zwischengespeichert"
     }
   },
   "integrationScopes": {

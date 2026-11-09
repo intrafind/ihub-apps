@@ -71,6 +71,7 @@ const KIND_ICONS = Object.freeze({
   upload: 'upload',
   text: 'pencil',
   url: 'link',
+  'web-file': 'document-text',
   page: 'document-text',
   'ifinder-document': 'magnifying-glass',
   'ifinder-query': 'magnifying-glass',

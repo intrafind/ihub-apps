@@ -31,6 +31,7 @@ export const PROJECTS_FEATURE = 'projects';
 /** Feature flag gating projects users create themselves. */
 export const USER_PROJECTS_FEATURE = 'userProjects';
 
+import { DEFAULT_REFRESH_TTL_SECONDS, normalizeRefreshTtl } from './refreshTtl.js';
 import {
   MAX_FILES_CEILING,
   MAX_MEMBERS,
@@ -58,6 +59,9 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   }),
   retentionDays: 0,
   loadAllMaxTokens: 50000,
+  // How long a downloaded file or a web page is taken as current (#3536):
+  // seconds, or 'never'. A project and an item may set their own.
+  refreshTtl: DEFAULT_REFRESH_TTL_SECONDS,
   kinds: Object.freeze({}),
   encryption: Object.freeze({ keyProvider: 'local-file' }),
   scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
@@ -93,7 +97,7 @@ function readPositive(value, fallback) {
  * @returns {{tierPolicy: string, defaultAppId: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
  *   allowGroups: boolean, allowEveryone: boolean, allowCatalog: boolean}, retentionDays: number,
- *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string},
+ *   loadAllMaxTokens: number, refreshTtl: number|'never', kinds: Object<string, boolean>, encryption: {keyProvider: string},
  *   scan: {provider: string, command: string, timeoutMs: number, onError: string},
  *   ingest: {concurrency: number, staleAfterMinutes: number}}}
  */
@@ -131,6 +135,7 @@ export function projectSettings(platformConfig) {
     },
     retentionDays: Math.max(0, Math.floor(readNumber(block.retentionDays, defaults.retentionDays))),
     loadAllMaxTokens: readPositive(block.loadAllMaxTokens, defaults.loadAllMaxTokens),
+    refreshTtl: normalizeRefreshTtl(block.refreshTtl) ?? defaults.refreshTtl,
     kinds:
       block.kinds && typeof block.kinds === 'object' && !Array.isArray(block.kinds)
         ? { ...block.kinds }
@@ -254,6 +259,7 @@ export function projectsClientConfig(
     defaultAppId: settings.defaultAppId,
     limits: settings.limits,
     sharing: settings.sharing,
-    retentionDays: settings.retentionDays
+    retentionDays: settings.retentionDays,
+    refreshTtl: settings.refreshTtl
   };
 }

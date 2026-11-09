@@ -96,6 +96,29 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [projectId, run, setProject]
   );
 
+  // The refresh TTL of a file from a website or a web page (#3536); null
+  // goes back to the project's.
+  // Throws like `editText`: the dialog shows the failure next to its form.
+  const setRefreshTtl = useCallback(
+    async (item, refreshTtl) => {
+      setBusyItemId(item.id);
+      try {
+        const updated = await updateProjectItem(projectId, item.id, { refreshTtl });
+        // An item back on the project's setting comes without the key: the
+        // merge in replaceItem must not keep the old value.
+        if (updated) {
+          setProject(prev =>
+            replaceItem(prev, { ...updated, refreshTtl: updated.refreshTtl ?? undefined })
+          );
+        }
+        return true;
+      } finally {
+        setBusyItemId(null);
+      }
+    },
+    [projectId, setProject]
+  );
+
   // Throws like `editText`: the edit dialog shows the failure next to the form.
   // Changing what an item points at changes what the project holds, so the
   // usage counters are read again.
@@ -189,6 +212,7 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     togglePinned,
     refresh,
     rename,
+    setRefreshTtl,
     update,
     editText,
     remove,
