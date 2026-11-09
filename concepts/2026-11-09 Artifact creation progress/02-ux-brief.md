@@ -192,7 +192,7 @@ shows the other possibilities. Sizes are illustrative (about 33 KB of arguments 
 | 6.4 | The stream shows the name `create_web_artifact`. The server sends the first `args` frame (system-skill tool, so immediately). `outputKind: webArtifact`, `occurrence` 1. | Still nothing new (grace). | Nothing. |
 | 6.9 | 500 ms grace ends. | A new row at the end of the list. Headline "Creating web artifact…" with a spinner. | "Creating web artifact" (once). |
 | 7.5 | Optional: the model has written `filename` (product brief P8). | A chip with the file name next to the row label: [roi-calculator.html]. | Nothing. |
-| 8.5 | `argChars` passes 1000. | "1 KB written · 0:02" appears in the row and as the suffix of the headline. | Nothing (the numbers are `aria-hidden`). |
+| 8.5 | `argBytes` passes 1000. | "1 KB written · 0:02" appears in the row and as the suffix of the headline. | Nothing (the numbers are `aria-hidden`). |
 | 9 to 68 | `args` frames about once a second. | The size and the clock grow: about 7 KB at t=20, 16 KB at t=36, 28 KB at t=60. No caption appears, because the size is growing. | Nothing. |
 | 69.0 | Arguments complete. `args.ended` outcome `ready`. `tool/started` (running), 17 ms later `tool/completed` with `files: [f1]`. | The row jumps to `completed` in place: "Created web artifact · 33 KB". Spinner off. **The download card for f1 appears in the message**, openable in the viewer, showing the faulty version. The headline shows the summary with a spinner until the next row appears. | "Created web artifact" (completion of a deliverable row). |
 | 69.5 | Model call 3 starts. The server sends an `args` frame for a second `create_web_artifact`: `occurrence` 2, `reason: warnings`, `issueCount: 3`, `previousCallId` = call 2. | Still grace. | Nothing. |
@@ -266,7 +266,7 @@ Rules:
 | Rule | Value |
 |---|---|
 | Format | `{{size}} written · {{time}}`, joined with " · ". The word "written" says it is a running total of what the model produced, not the file size. |
-| Size source | `argChars` from the `args` frame; one character counts as one byte; reuse `formatBytes` from `client/src/features/chat/utils/artifactFiles.js`. Format with `Intl.NumberFormat(i18n.language)` so German shows a decimal comma at 1 MB and above. |
+| Size source | `argBytes` from the `args` frame; one character counts as one byte; reuse `formatBytes` from `client/src/features/chat/utils/artifactFiles.js`. Format with `Intl.NumberFormat(i18n.language)` so German shows a decimal comma at 1 MB and above. |
 | Rounding | Under 1 KB: show no size (the row has only the label and the clock). 1 KB to 999 KB: whole KB. From 1 MB: one decimal. Never "~". Never shown smaller than a value already shown (clamp to the maximum seen). |
 | Update rate | The server sends at most one frame per second. The client re-renders the visible numbers at most once per second. Both numbers are `tabular-nums` so the line does not jitter. |
 | Clock | `m:ss` below one hour (0:07, 1:05). Measured from the call's first `args` frame (server timestamp), with the client/server clock offset taken from the first frame and negative values clamped to 0. |
@@ -400,7 +400,7 @@ row, never toasts or dialogs.**
 
 | Hint | When | Where | Announced? | Release |
 |---|---|---|---|---|
-| **Stalled**: "No new output for a while. The model may be busy — you can wait or stop." | `argChars` unchanged for 20 s while frames keep arriving, on a `preparing` row | Caption under the row. Removed the moment growth resumes. | Yes, once per row, polite | Should (release 1) |
+| **Stalled**: "No new output for a while. The model may be busy — you can wait or stop." | `argBytes` unchanged for 20 s while frames keep arriving, on a `preparing` row | Caption under the row. Removed the moment growth resumes. | Yes, once per row, polite | Should (release 1) |
 | **Long wait**: "Complex requests can take a minute or two." | Idle line ("Still working…" or "Thinking…") visible for 60 s | Caption under the headline's row | No | Could (release 2, with the product brief's P11) |
 
 Why not a duration hint on a healthy, growing row: the growing number is the proof of life; a caption
@@ -620,7 +620,7 @@ Existing components are changed, not replaced. Props are the new or changed ones
   - `outputKind` (`'webArtifact'|'document'|'presentation'|'workbook'|'pdf'|'file'|'archive'|null`):
     chosen by the server. An unknown value renders the generic label.
   - `subject` (string|null): file name, at most 80 characters, optional.
-  - `argChars` (number|null), `elapsedMs` (number), `receivedAt` (number): for the progress line.
+  - `argBytes` (number|null), `elapsedMs` (number), `receivedAt` (number): for the progress line.
   - `ready` (boolean), `stalled` (boolean)
   - `occurrence` (number), `reason` (`'warnings'|'error'|null`), `issueCount` (number|null),
     `previousCallId` (string|null), `fixedByCallId` (string|null, derived by `buildToolActivity`)
@@ -635,7 +635,7 @@ Existing components are changed, not replaced. Props are the new or changed ones
 
 - **Purpose**: renders "12 KB written · 0:41" with the stopwatch.
 - **States**: no size yet (clock only), size and clock, `ready` (size, no clock tick), stopped (static).
-- **Props**: `argChars` (number|null), `elapsedMs` (number), `receivedAt` (number), `running`
+- **Props**: `argBytes` (number|null), `elapsedMs` (number), `receivedAt` (number), `running`
   (boolean), `showClockAfterMs` (number, default 0 for rows and 3000 for idle lines).
 - **Accessibility**: the whole output is `aria-hidden="true"`; `tabular-nums`; no `title`.
 - **Implementation**: one shared `useNow(1000)` hook that ticks only while some row is active, so a
@@ -707,7 +707,7 @@ sequenceDiagram
     C-->>U: row "Creating web artifact…" and headline
     C->>A: "Creating web artifact"
     loop about once per second
-        S->>C: args frame (argChars, elapsedMs)
+        S->>C: args frame (argBytes, elapsedMs)
         C-->>U: "12 KB written · 0:41" (aria-hidden)
     end
     S->>C: args.ended ready, then tool/started, tool/completed
@@ -794,7 +794,7 @@ architect confirms.
 
 | Frame | Fields the UI uses |
 |---|---|
-| `tool/progress` phase `args` | `callId` (equal to the later `tool/started` call id), `name`, `title`, `integration`, `activityKind`, `argChars`, `elapsedMs`, `occurrence`. **(new)** `outputKind` (`webArtifact`, `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; mapped on the server in `utils/toolDisplay.js`, because the client must not infer it from a tool id). **(new)** `reason`, `issueCount`, `previousCallId` on a repeat. **(new, optional)** `subject` (file name, up to 80 characters). |
+| `tool/progress` phase `args` | `callId` (equal to the later `tool/started` call id), `name`, `title`, `integration`, `activityKind`, `argBytes`, `elapsedMs`, `occurrence`. **(new)** `outputKind` (`webArtifact`, `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; mapped on the server in `utils/toolDisplay.js`, because the client must not infer it from a tool id). **(new)** `reason`, `issueCount`, `previousCallId` on a repeat. **(new, optional)** `subject` (file name, up to 80 characters). |
 | `tool/progress` phase `args.ended` | `outcome`: `ready`, `dropped` (product brief) plus **(new)** `approval`, `truncated`, `invalid`. |
 | `tool/progress` phase `model.waiting` | `elapsedMs` since the last visible output. |
 | `tool/completed` | **(new, optional)** `issueCount`, so the first row can show "3 problems found" before the model reacts. |
@@ -838,7 +838,7 @@ Client: `shared/run/runReducer.js`, `shared/run/toolActivity.js`,
 |---|---|---|
 | `PREPARING_GRACE_MS` | 500 | Before the first paint of a preparing row |
 | `IDLE_LABEL_AFTER_MS` | 3000 | Before "Thinking…" or "Still working…" (matches product brief P4) |
-| `STALL_AFTER_MS` | 20000 | `argChars` unchanged, frames still arriving |
+| `STALL_AFTER_MS` | 20000 | `argBytes` unchanged, frames still arriving |
 | `LONG_WAIT_AFTER_MS` | 60000 | Long-wait caption (release 2) |
 | `IDLE_ANNOUNCE_AFTER_MS` | 5000 | Before an idle label is announced |
 | `ANNOUNCE_MIN_GAP_MS` | 1500 | Between two announcements |
