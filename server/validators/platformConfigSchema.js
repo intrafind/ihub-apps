@@ -407,8 +407,6 @@ export const platformConfigSchema = z
         domain: z.string().optional(),
         domainController: z.string().optional(),
         debug: z.boolean().prefault(false),
-        getUserInfo: z.boolean().prefault(true),
-        getGroups: z.boolean().prefault(true),
         ldapGroupLookupProvider: z.string().optional(),
         defaultGroups: z.array(z.string()).prefault([]),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),

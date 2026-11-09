@@ -445,7 +445,6 @@ actually encrypted at rest:
 |----------------|-------|
 | `oidcAuth.providers[]` | `clientSecretRef` |
 | `ldapAuth.providers[]` | `adminPasswordRef` |
-| `ntlmAuth` | `domainControllerPasswordRef` |
 
 Jira (V196), iFinder (V192) and the cloud storage providers (Office 365, Google Drive, Nextcloud; V200) are installed integrations. Their secrets (`clientSecretRef`, `privateKeyRef`, and so on) are credential references in the installation's `values` in `contents/config/integrations.json`, like every installed integration's secret. See [Integrations](integrations.md).
 

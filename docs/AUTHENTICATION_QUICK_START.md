@@ -60,16 +60,18 @@ The authentication system processes requests in this order:
     "enabled": true,
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
-    "getGroups": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "generateJwtToken": true
   }
 }
 ```
 
+NTLM sign-in returns no groups. `ldapGroupLookupProvider` names an entry in `ldapAuth.providers`
+(with admin bind credentials and group search) that supplies them; without it, NTLM users get only
+`defaultGroups`. See [LDAP/NTLM Authentication](ldap-ntlm-authentication.md#ldap-group-lookup-for-ntlm-users).
+
 **Environment Variables**:
 ```bash
-NTLM_LDAP_USER="CN=Service,OU=Users,DC=example,DC=com"
-NTLM_LDAP_PASSWORD="password123"
 # JWT_SECRET is optional - auto-generated if not provided
 # JWT_SECRET="your-secret-key"
 ```
@@ -430,10 +432,6 @@ Documentation:
 ### Authentication
 
 ```bash
-# NTLM/LDAP Group Retrieval
-NTLM_LDAP_USER="CN=Service,OU=Users,DC=example,DC=com"
-NTLM_LDAP_PASSWORD="password123"
-
 # JWT (optional - auto-generated if not provided)
 # JWT_SECRET="secret-key-minimum-32-characters"
 

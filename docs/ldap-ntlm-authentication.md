@@ -284,8 +284,7 @@ Add NTLM configuration to your `contents/config/platform.json`:
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
     "debug": false,
-    "getUserInfo": true,
-    "getGroups": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users"],
     "sessionTimeoutMinutes": 480,
     "generateJwtToken": true
@@ -300,15 +299,13 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | `enabled`               | Enable NTLM authentication                                     | Yes      | `false` |
 | `domain`                | Windows domain name                                            | No       | -       |
 | `domainController`          | URL of the domain controller that checks the sign-in (e.g., `ldaps://dc.example.com:636`). **Without it, every NTLM sign-in is accepted without checking the password.** | Yes      | -       |
-| `domainControllerUser`      | LDAP service account username for group lookup (optional)       | No       | -       |
-| `domainControllerPassword`  | LDAP service account password for group lookup (optional)       | No       | -       |
 | `debug`                 | Enable debug logging                                           | No       | `false` |
-| `getUserInfo`           | Retrieve user information                                      | No       | `true`  |
-| `getGroups`             | Retrieve user groups                                           | No       | `true`  |
 | `defaultGroups`         | Default groups for authenticated users                         | No       | `[]`    |
 | `sessionTimeoutMinutes` | JWT token timeout                                              | No       | `480`   |
 | `generateJwtToken`      | Generate JWT for API access                                    | No       | `true`  |
 | `ldapGroupLookupProvider` | Name of an LDAP provider to use for group lookup (see below) | No       | -       |
+
+NTLM sign-in returns only the user name and domain. Groups come from `ldapGroupLookupProvider`; without it, NTLM users get only `defaultGroups`. The display name is the login name and the email is empty.
 
 ### How the Sign-In Is Checked
 
@@ -329,7 +326,7 @@ iHub's Windows sign-in is NTLM only; it does not accept Kerberos (`Negotiate`). 
 
 ### LDAP Group Lookup for NTLM Users
 
-NTLM authentication may not always return group memberships from the domain controller. As an alternative, you can configure NTLM to use an LDAP provider for group lookup. This allows NTLM to handle identity verification while LDAP provides group memberships.
+NTLM sign-in returns no group memberships: the domain controller only checks the password. To give NTLM users their directory groups, configure an LDAP provider for group lookup. NTLM handles identity verification while LDAP provides group memberships.
 
 #### How It Works
 
@@ -670,10 +667,9 @@ async function makeAuthenticatedRequest(url) {
    - Check Windows authentication settings
 
 5. **Groups Not Retrieved**
-   - Enable `getGroups` option
-   - Check domain permissions
+   - Set `ldapGroupLookupProvider` to an LDAP provider; NTLM sign-in itself returns no groups
+   - Check that provider's admin bind credentials and group search settings
    - Review user account settings
-   - Consider using `ldapGroupLookupProvider` to retrieve groups from an LDAP provider instead of the domain controller
 
 ### Common Issues
 
@@ -771,10 +767,11 @@ The new implementation uses `ldap-authentication` instead of the deprecated `pas
 The new NTLM implementation provides similar functionality with better maintenance:
 
 ```javascript
-// Configuration remains similar
+// Domain plus the domain controller that checks the sign-in;
+// groups come from an LDAP provider named in ldapGroupLookupProvider
 {
   domain: 'EXAMPLE',
-  getUserInfo: true,
-  getGroups: true
+  domainController: 'ldaps://dc.example.com:636',
+  ldapGroupLookupProvider: 'corporate-ldap'
 }
 ```

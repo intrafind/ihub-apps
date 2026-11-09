@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 
 /**
@@ -55,36 +54,9 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             placeholder="ldaps://dc.example.com:636"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            LDAP URL of domain controller (e.g., ldaps://dc.example.com:636, or
-            ldap://dc.example.com:389 for an unencrypted connection)
+            LDAP URL of the domain controller that checks the sign-in (e.g.,
+            ldaps://dc.example.com:636, or ldap://dc.example.com:389 for an unencrypted connection)
           </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Domain Controller User
-          </label>
-          <input
-            type="text"
-            value={config.ntlmAuth?.domainControllerUser || ''}
-            onChange={e => updateNtlmAuth('domainControllerUser', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            placeholder="admin@EXAMPLE.COM"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Domain controller admin username (optional, for retrieving user info/groups)
-          </p>
-        </div>
-        <div>
-          <CredentialRefSelect
-            value={config.ntlmAuth?.domainControllerPasswordRef || ''}
-            onChange={id => updateNtlmAuth('domainControllerPasswordRef', id)}
-            types={['secret', 'basic']}
-            label={t('admin.auth.ntlm.domainControllerPassword', 'Domain Controller Password')}
-            help={t(
-              'admin.auth.ntlm.domainControllerPasswordHelp',
-              'Select a stored credential profile holding the domain controller password.'
-            )}
-          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -128,34 +100,6 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Log detailed NTLM authentication information
-          </p>
-        </div>
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.ntlmAuth?.getUserInfo !== false}
-              onChange={e => updateNtlmAuth('getUserInfo', e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm font-medium text-gray-700">Get User Info</span>
-          </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Retrieve additional user information from domain
-          </p>
-        </div>
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.ntlmAuth?.getGroups !== false}
-              onChange={e => updateNtlmAuth('getGroups', e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm font-medium text-gray-700">Get Groups</span>
-          </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Retrieve user group memberships from domain
           </p>
         </div>
         <div>
@@ -206,7 +150,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
           onChange={e => updateNtlmAuth('ldapGroupLookupProvider', e.target.value || undefined)}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
         >
-          <option value="">None (use NTLM built-in groups)</option>
+          <option value="">None (default groups only)</option>
           {(config.ldapAuth?.providers || []).map(p => (
             <option key={p.name} value={p.name}>
               {p.displayName || p.name}
@@ -214,8 +158,9 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
           ))}
         </select>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Use an LDAP provider to look up user groups during login instead of relying on the domain
-          controller. The LDAP provider must have admin credentials and group search configured.
+          NTLM sign-in returns no groups. To give NTLM users their directory groups, pick an LDAP
+          provider with admin credentials and group search configured; without one, NTLM users get
+          only the default groups.
         </p>
       </div>
     </div>

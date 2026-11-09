@@ -823,3 +823,21 @@ with `id` (a stored file), `kind` (`document`, `image` or `audio`), `name`, `mim
 exported. Nothing else about the export changes, and there is no compatibility option: a script that
 read the contents out of an export now reads them from the chat's files (`GET
 /api/chats/{chatId}/files/{fileId}?format=text`).
+
+## NTLM: Settings That Never Applied Are Removed
+
+The NTLM settings **Domain Controller User**, **Domain Controller Password**, **Get User Info** and
+**Get Groups** never did anything: the NTLM sign-in only checks the password with the domain
+controller and returns no groups, display name or email. NTLM users got only their **Default
+Groups** unless an **LDAP Group Lookup Provider** was set. The settings are gone from the admin NTLM
+page, and migration V235 removes `getUserInfo`, `getGroups`, `domainControllerUser` and
+`domainControllerPasswordRef` from `ntlmAuth` in `platform.json`. The environment variables
+`NTLM_LDAP_USER` and `NTLM_LDAP_PASSWORD` are no longer read. Nobody's groups change.
+
+- To give NTLM users their directory groups, configure an LDAP provider (with admin credentials and
+  group search) and pick it as **LDAP Group Lookup Provider** in the NTLM settings.
+- The credential profile the password pointed to stays in **Admin → Credentials**; reuse it for the
+  LDAP provider or delete it. The upgrade log names it.
+
+**Before upgrading:** If you set `NTLM_LDAP_USER` / `NTLM_LDAP_PASSWORD` or the domain controller
+credentials expecting NTLM users to receive groups, configure an LDAP Group Lookup Provider instead.

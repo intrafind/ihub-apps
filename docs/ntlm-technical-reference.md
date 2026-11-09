@@ -95,8 +95,9 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 }
 ```
 
-**Result**: Works, but:
-- No group retrieval (requires domain controller)
+**Result**: Not for production:
+- No `domainController`: express-ntlm accepts every NTLM sign-in without checking the password
+- No groups (they come only from `ldapGroupLookupProvider`)
 - No domain specified
 
 ### Complete Production Configuration
@@ -108,13 +109,10 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
     "domain": "EXAMPLE.COM",
     "domainController": "ldaps://dc.example.com:636",
     "debug": false,
-    "getUserInfo": true,
-    "getGroups": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users", "authenticated"],
     "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true,
-    "domainControllerUser": "${NTLM_LDAP_USER}",
-    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}"
+    "generateJwtToken": true
   }
 }
 ```
@@ -125,15 +123,12 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 |-------|------|----------|---------|---------|
 | `enabled` | boolean | Yes | false | Enable/disable NTLM auth |
 | `domain` | string | No | - | Windows domain name (e.g., "EXAMPLE") |
-| `domainController` | string | No | - | LDAP server URL for group queries (`ldaps://...` recommended) |
+| `domainController` | string | No | - | LDAP URL of the domain controller that checks the sign-in (`ldaps://...` recommended) |
 | `debug` | boolean | No | false | Enable debug logging |
-| `getUserInfo` | boolean | No | true | Extract user info from token |
-| `getGroups` | boolean | No | true | Query LDAP for groups |
+| `ldapGroupLookupProvider` | string | No | - | Entry in `ldapAuth.providers` that supplies the user's groups |
 | `defaultGroups` | array | No | [] | Groups to assign all NTLM users |
 | `sessionTimeoutMinutes` | number | No | 480 | JWT token expiration (8 hours) |
 | `generateJwtToken` | boolean | No | true | Generate JWT for API access |
-| `domainControllerUser` | string | No | - | LDAP bind DN (for group queries) |
-| `domainControllerPassword` | string | No | - | LDAP bind password |
 | `name` | string | No | "ntlm" | Internal provider name |
 | `options` | object | No | {} | Additional options for express-ntlm |
 
@@ -308,77 +303,42 @@ Set-Cookie: authToken=<jwt>; HttpOnly; Secure; SameSite=Lax
 
 ### Group Retrieval Flow
 
+express-ntlm checks the sign-in and nothing else: it relays the NTLM messages to
+`domainController` as an LDAP bind and sets `req.ntlm` to
+`{ UserName, DomainName, Workstation, Authenticated }`. It returns no groups, display name or email.
+
 ```
 1. NTLM Middleware Initialized
    └─ createNtlmMiddleware(ntlmConfig)
-   
-2. Pass LDAP Credentials to express-ntlm
-   const options = {
-     domaincontroller: "ldaps://dc.example.com:636",
-     domaincontrolleruser: "CN=Service,OU=Users,DC=example,DC=com",
-     domaincontrollerpassword: "password",
-     getGroups: true
-   }
-   
-3. After User Authentication
+      options = { domain, domaincontroller, tlsOptions, debug, response handlers }
+
+2. After User Authentication
    └─ req.ntlm.Authenticated = true
-   
-4. Extract Groups from NTLM Object
-   if (req.ntlm.groups) {
-     groups = req.ntlm.groups;  // Array of group names
-   }
-   
-5. Map Groups Using groups.json Configuration
-   const mappedGroups = mapExternalGroups(groups);
-   // Example mapping:
-   // "Domain Users" --> "domain-users"
-   // "IT-Admin" --> "admin"
-   
-6. Add Default Groups
-   mappedGroups.push(...defaultGroups);
-   
-7. Create User Object
-   user.groups = mappedGroups;
-   
-8. Enhance with Inheritance
+
+3. processNtlmUser(req, ntlmConfig)
+   └─ groups = [] (express-ntlm returns none)
+   └─ mapExternalGroups(groups), then add defaultGroups
+
+4. LDAP Group Lookup (only when ntlmAuth.ldapGroupLookupProvider is set)
+   └─ getLdapProviderByName(ntlmConfig.ldapGroupLookupProvider)
+   └─ lookupLdapGroupsForUser(user.username, ldapProvider)
+      binds with that provider's admin credentials and searches its groups
+   └─ groups merged and mapped through groups.json
+
+5. Enhance with Inheritance
    user = enhanceUserGroups(user, authConfig, ntlmAuth);
-   // Resolves group hierarchy
    // Example: admin -> users -> authenticated -> anonymous
-   
-9. Generate JWT (if enabled)
+
+6. Generate JWT (if enabled)
    const token = generateJwt(user, {
      authMode: 'ntlm',
      additionalClaims: { domain: user.domain }
    });
 ```
 
-### LDAP Query Details (Behind Scenes)
-
-```javascript
-// What express-ntlm does with LDAP credentials:
-
-// 1. Bind as service account
-const ldapBind = new LDAP({
-  url: "ldaps://dc.example.com:636",
-  adminDn: "CN=Service,OU=Users,DC=example,DC=com",
-  adminPassword: "password"
-});
-
-// 2. Search for user's groups
-const userDN = `CN=${username},OU=Users,DC=example,DC=com`;
-const groupSearchFilter = `(member=${userDN})`;
-const groupsResult = ldapBind.search({
-  base: "dc=example,dc=com",
-  filter: groupSearchFilter
-});
-
-// 3. Extract group names
-const groups = groupsResult.map(entry => entry.cn);
-// Result: ["Domain Users", "Engineers", "IT-Admin"]
-
-// 4. Return in req.ntlm.Groups or req.ntlm.groups
-req.ntlm.Groups = groups;
-```
+The LDAP lookup runs at sign-in (session start), not on every request. Configure the provider in
+`ldapAuth.providers` with admin bind credentials and group search settings; `ldapAuth.enabled` can
+stay `false`.
 
 ---
 
@@ -541,24 +501,20 @@ Check List:
 
 ```
 Check List:
-1. ✓ Is domainController configured?
-   {"domainController": "ldaps://dc.example.com:636"}
+1. ✓ Is ldapGroupLookupProvider set? NTLM sign-in itself returns no groups.
+   {"ldapGroupLookupProvider": "corporate-ldap"}
 
-2. ✓ Are LDAP credentials set?
-   NTLM_LDAP_USER=CN=Service,OU=Users,DC=example,DC=com
-   NTLM_LDAP_PASSWORD=password
+2. ✓ Does that provider exist in ldapAuth.providers, with admin bind
+   credentials and group search configured?
 
-3. ✓ Is getGroups enabled?
-   {"getGroups": true}
+3. ✓ Can the server reach that LDAP server?
+   telnet ldap.example.com 636
 
-4. ✓ Can the server reach the domain controller?
-   telnet dc.example.com 389
+4. ✓ Check server logs for LDAP errors:
+   NTLM Auth: ldapGroupLookupProvider references non-existent LDAP provider
+   NTLM Auth: LDAP group lookup failed ...
 
-5. ✓ Check server logs for LDAP errors:
-   [NTLM Auth] LDAP bind failed: ...
-   [NTLM Auth] Group retrieval failed: ...
-
-6. ✓ Verify group mappings in groups.json
+5. ✓ Verify group mappings in groups.json
    Check if external group names match "mappings" field
 ```
 
@@ -613,10 +569,6 @@ Documentation:
 ### Key Configuration Environment Variables
 
 ```bash
-# NTLM Group Retrieval
-NTLM_LDAP_USER="CN=Service,OU=Users,DC=example,DC=com"
-NTLM_LDAP_PASSWORD="password123"
-
 # JWT Token Generation
 JWT_SECRET="secret-key-min-32-chars"
 
