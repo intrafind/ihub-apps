@@ -867,6 +867,12 @@ used to be an HTML or plain text page.
   `USER_VALIDATION_FAILED` (403, with the validation's own message) when a reverse proxy user is refused. A
   Teams request without a token or with Teams sign-in turned off is no longer answered as an invalid token.
   Every sign-in path still fails closed.
+- The chat endpoints (`/api/apps/{appId}/chat/{chatId}` to send a message and to connect the live stream, and
+  `/api/models/{modelId}/chat/test`) answer in this shape: `NOT_FOUND` for an unknown chat, app or model, the existing
+  chat codes (`GUEST_COOKIE_MISSING`, `CHAT_STORAGE_UNAVAILABLE`, `CLIENT_HISTORY_NOT_ALLOWED`, `UNKNOWN_MESSAGE`,
+  `CHAT_OWNER_REQUIRED`, `APP_NOT_FOUND`, `INVALID_APP`, the tool approval and project refusals) as before, the model
+  call's own code and status (`TIMEOUT`, rate limits, provider errors) and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log. A refusal is no longer logged as a chat error.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

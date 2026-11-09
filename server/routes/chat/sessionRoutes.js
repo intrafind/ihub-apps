@@ -9,7 +9,6 @@ import {
   resolveProjectTestScope
 } from '../../services/knowledge/projectTestScope.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
 import llmClient, {
   usageToOpenAI,
@@ -61,19 +60,27 @@ import logger from '../../utils/logger.js';
 import { describeCause, userAbortCause } from '../../services/chat/abortCause.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
-import {
-  sendNotFound,
-  sendFailedOperationError,
-  sendInternalError,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { codeOfStatus } from '../../utils/errorResponse.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 import {
   hydrateHistoryForPrompt,
   prepareTurnFiles
 } from '../../services/chatFiles/ChatFileService.js';
+
+/**
+ * The error a refusal answers with: its own code, else the one of its status. A route throws it
+ * (`throw refusal(404, 'Not here', { code: 'SOMETHING' })`) and the error middleware answers.
+ *
+ * @param {number} status - HTTP status
+ * @param {string} message
+ * @param {{ code?: string, details?: Object }} [options]
+ * @returns {ServiceError}
+ */
+function refusal(status, message, { code, details } = {}) {
+  return new ServiceError(code ?? codeOfStatus(status), message, { status, details });
+}
 
 /**
  * Chat-shaped view of a persisted transcript: role, content, and any hydrated
@@ -406,15 +413,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         let { data: models = [] } = configCache.getModels();
 
         if (!models) {
-          return sendFailedOperationError(
-            res,
-            'load models configuration',
-            new Error('models is null')
-          );
+          throw new ServiceError('INTERNAL_ERROR', 'Failed to load models configuration');
         }
         const model = findByIdCaseInsensitive(models, modelId);
         if (!model) {
-          return sendNotFound(res, 'Model');
+          throw new ServiceError('NOT_FOUND', 'Model not found');
         }
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
@@ -441,17 +444,19 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             throw llmError;
           }
           if (llmError.code === LLM_ERROR_CODES.TIMEOUT) {
-            return sendErrorResponse(
-              res,
+            throw refusal(
               504,
-              `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
+              `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`,
+              { code: 'TIMEOUT' }
             );
           }
-          return sendLLMError(res, llmError, { context: 'test chat completion' });
+          // A failing model call is answered by the error middleware with its mapped status.
+          throw llmError;
         }
       } catch (error) {
+        if (error instanceof ServiceError || isLLMError(error)) throw error;
         logger.error('Error in test chat completion', { component: 'sessionRoutes', error });
-        sendInternalError(res, error, 'test chat completion');
+        throw error;
       }
     }
   );
@@ -523,7 +528,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // A project member reads the transcript, never the stream: one
         // registration per chat id, so a second subscriber would divert the
         // owner's output.
-        if (!access.ok || access.viaProject) return sendNotFound(res, 'Chat session');
+        if (!access.ok || access.viaProject)
+          throw new ServiceError('NOT_FOUND', 'Chat session not found');
 
         const channel = createSseChannel({
           req,
@@ -621,9 +627,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           });
         }
       } catch (error) {
+        // A refusal (an unknown chat, say) is the answer, not an SSE failure.
+        if (error instanceof ServiceError && !res.headersSent) throw error;
         logger.error('Error establishing SSE connection', { component: 'sessionRoutes', error });
         if (!res.headersSent) {
-          return sendInternalError(res, error, 'establish SSE connection');
+          throw error;
         }
         emitFailedRun(chatId, { code: 'INTERNAL_ERROR', message: 'Internal server error' });
         res.end();
@@ -722,11 +730,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     if (streaming) return outcome;
 
     if (outcome.refusal) {
-      return sendErrorResponse(res, 409, outcome.refusal.message, { code: outcome.refusal.code });
+      throw refusal(409, outcome.refusal.message, { code: outcome.refusal.code });
     }
     if (outcome.status === 'error') {
-      if (outcome.error) return sendLLMError(res, outcome.error, { context: 'chat' });
-      return sendErrorResponse(res, 502, outcome.errorInfo?.message, {
+      // A failing model call is answered by the error middleware with its mapped status.
+      if (outcome.error) throw outcome.error;
+      throw refusal(502, outcome.errorInfo?.message, {
         code: outcome.errorInfo?.code || 'ERROR'
       });
     }
@@ -897,14 +906,13 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           if (isNewGuest(req.user)) {
             // The chat exists but this request came without the guest cookie
             // that owns it, so its browser does not keep cookies for this site.
-            return sendErrorResponse(
-              res,
+            throw refusal(
               404,
               'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
               { code: 'GUEST_COOKIE_MISSING' }
             );
           }
-          return sendNotFound(res, 'Chat session');
+          throw new ServiceError('NOT_FOUND', 'Chat session not found');
         }
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
@@ -928,8 +936,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             ? checkProjectTestChat(access.chat, projectTest.projectId)
             : projectTest;
           if (refused) {
-            return sendErrorResponse(
-              res,
+            throw refusal(
               refused.status,
               await getLocalizedError(refused.messageKey, {}, clientLanguage),
               { code: refused.code }
@@ -946,7 +953,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           projects: projectTest ? undefined : requestedProjects
         });
         if (!chatProjects.ok) {
-          return sendErrorResponse(res, chatProjects.status, chatProjects.message, {
+          throw refusal(chatProjects.status, chatProjects.message, {
             code: chatProjects.code
           });
         }
@@ -989,7 +996,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         logger.info('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          return sendBadRequest(res, errorMessage);
+          throw new ServiceError('BAD_REQUEST', errorMessage);
         }
 
         // --- the server owns the history ---
@@ -1008,11 +1015,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           ephemeral: projectTest ? true : ephemeral
         });
         // An id the store cannot key cannot be a chat any more.
-        if (!isPersistableChatId(chatId)) return sendBadRequest(res, 'Invalid chat id');
+        if (!isPersistableChatId(chatId)) throw new ServiceError('BAD_REQUEST', 'Invalid chat id');
         if (!storage.stored || !repository.isAvailable()) {
           // No browser-held fallback: a conversation nobody can continue is
           // not an answer. The provider failure itself was logged at boot.
-          return sendErrorResponse(res, 503, 'Chat storage is unavailable', {
+          throw refusal(503, 'Chat storage is unavailable', {
             code: 'CHAT_STORAGE_UNAVAILABLE'
           });
         }
@@ -1020,25 +1027,20 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // The code alone tells an integrator nothing about what to do
           // instead, and this is the one refusal they can hit by doing exactly
           // what the documentation told them to do before chats were stored.
-          return sendErrorResponse(
-            res,
-            400,
-            'The chat history is kept by the server: send only the new message',
-            {
-              code: 'CLIENT_HISTORY_NOT_ALLOWED',
-              details: {
-                hint:
-                  'Chats are stored server-side: post only the new message as a single-element ' +
-                  'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
-                  'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
-                  'chat completions endpoint instead.'
-              }
+          throw refusal(400, 'The chat history is kept by the server: send only the new message', {
+            code: 'CLIENT_HISTORY_NOT_ALLOWED',
+            details: {
+              hint:
+                'Chats are stored server-side: post only the new message as a single-element ' +
+                'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
+                'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
+                'chat completions endpoint instead.'
             }
-          );
+          });
         }
         if (messages.length === 0) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          return sendBadRequest(res, errorMessage);
+          throw new ServiceError('BAD_REQUEST', errorMessage);
         }
         // Resolved once here and carried on the turn: `resolvePrincipal` is
         // async and hits the filesystem, and the run finishes with no request
@@ -1050,7 +1052,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           mode: access.chat?.identityMode || runLog.identityMode()
         });
         if (!owner) {
-          return sendErrorResponse(res, 403, 'This chat has no owner to be stored under', {
+          throw refusal(403, 'This chat has no owner to be stored under', {
             code: 'CHAT_OWNER_REQUIRED'
           });
         }
@@ -1072,7 +1074,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           repository
         });
         if (approvals.refusal) {
-          return sendErrorResponse(res, approvals.refusal.status, approvals.refusal.message, {
+          throw refusal(approvals.refusal.status, approvals.refusal.message, {
             code: approvals.refusal.code
           });
         }
@@ -1114,7 +1116,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // Appending onto the untouched history instead would silently
           // duplicate everything the edit meant to replace, so refuse.
           if (forkAt === -1) {
-            return sendErrorResponse(res, 400, 'The message to continue from is not in this chat', {
+            throw refusal(400, 'The message to continue from is not in this chat', {
               code: 'UNKNOWN_MESSAGE'
             });
           }
@@ -1175,7 +1177,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             })
           : { ok: true, scopes: {} };
         if (!scopeResolution.ok) {
-          return sendErrorResponse(res, 403, scopeResolution.message, {
+          throw refusal(403, scopeResolution.message, {
             code: scopeResolution.code,
             details: { integrationId: scopeResolution.integrationId }
           });
@@ -1313,14 +1315,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             });
         if (mention.handled) {
           // A refusal carries its status; its body is `{ error, code }` or `{ message }`.
-          return mention.statusCode >= 400
-            ? sendErrorResponse(
-                res,
-                mention.statusCode,
-                mention.response.error ?? mention.response.message,
-                { code: mention.response.code }
-              )
-            : res.json(mention.response);
+          if (mention.statusCode >= 400) {
+            throw refusal(mention.statusCode, mention.response.error ?? mention.response.message, {
+              code: mention.response.code
+            });
+          }
+          return res.json(mention.response);
         }
 
         // Both branches below prepare the very same request; they differ in what
@@ -1383,8 +1383,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               {},
               clientLanguage
             );
-            return sendErrorResponse(
-              res,
+            throw refusal(
               prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
                 ? 404
                 : prep.error.code === 'modelAccessDeniedForUser'
@@ -1401,7 +1400,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           }
           const approvalRefusal = await commitApproval();
           if (approvalRefusal) {
-            return sendErrorResponse(res, approvalRefusal.status, approvalRefusal.message, {
+            throw refusal(approvalRefusal.status, approvalRefusal.message, {
               code: approvalRefusal.code
             });
           }
@@ -1453,7 +1452,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               code: approvalRefusal.code,
               message: approvalRefusal.message
             });
-            return sendErrorResponse(res, approvalRefusal.status, approvalRefusal.message, {
+            throw refusal(approvalRefusal.status, approvalRefusal.message, {
               code: approvalRefusal.code
             });
           }
@@ -1489,7 +1488,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // Refused at persistence: the chat's container changed under the
           // turn (`settleUserTurn`), and nothing of it was stored.
           if (outcome?.refusal) {
-            return sendErrorResponse(res, 409, outcome.refusal.message, {
+            throw refusal(409, outcome.refusal.message, {
               code: outcome.refusal.code
             });
           }
@@ -1497,8 +1496,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           return res.json({ status: 'streaming', chatId });
         }
       } catch (error) {
+        // A refusal and a failing model call are answered as they are; only an unexpected
+        // failure is logged here.
+        if (error instanceof ServiceError || isLLMError(error)) throw error;
         logger.error('Error in app chat', { component: 'sessionRoutes', error });
-        return sendInternalError(res, error, 'app chat');
+        throw error;
       } finally {
         // The turn is over however it ended, so a disconnect from here on has
         // nothing to protect and should abort again.
@@ -1574,14 +1576,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // `chatAuthRequired` authorizes the app, never the chat id: stopping
       // someone else's turn must not be one guessed id away.
       const access = await authorizeChat(chatId, req.user, { intent: 'write' });
-      if (!access.ok) return sendNotFound(res, 'Chat session');
+      if (!access.ok) throw new ServiceError('NOT_FOUND', 'Chat session not found');
 
       // A live SSE client used to be the proof that there was something to
       // stop. It no longer is: a persisted turn keeps running after its client
       // is gone, and that is exactly the turn a user needs to be able to stop.
       // Anything in flight for this chat, anywhere in the cluster, qualifies.
       if (!hasChatClient(chatId) && !isChatDurable(chatId) && !hasActiveChatRequest(chatId)) {
-        return sendNotFound(res, 'Chat session');
+        throw new ServiceError('NOT_FOUND', 'Chat session not found');
       }
 
       // The stop is a human event on the run bound to this chat stream. That
@@ -1659,7 +1661,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // turn was stopped when nothing was found to stop.
       if (!aborted && !workflowCancelled && !closed) {
         logger.info('Chat stop found nothing in flight', { component: 'sessionRoutes', chatId });
-        return sendNotFound(res, 'Chat session');
+        throw new ServiceError('NOT_FOUND', 'Chat session not found');
       }
       logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
       return res.status(200).json({ success: true, message: 'Chat stream stopped' });
@@ -1737,7 +1739,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // another user's id can poll this route as an activity oracle.
       const access = await authorizeChat(chatId, req.user, { intent: 'read' });
       // A project member reads the transcript, not the live session state.
-      if (!access.ok || access.viaProject) return sendNotFound(res, 'Chat session');
+      if (!access.ok || access.viaProject)
+        throw new ServiceError('NOT_FOUND', 'Chat session not found');
       if (hasChatClient(chatId)) {
         // lastActivity lives with the response object, so it is only readable
         // on the worker holding the stream. Rather than a bus round trip for a
