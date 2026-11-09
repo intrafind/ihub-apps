@@ -88,7 +88,7 @@ export function setTextReader(reader) {
 
 let infoRecorder = null;
 
-/** Items whose first read already offered what they are about, in this process. */
+/** Items (by reference) whose first read already offered what they are about, in this process. */
 const infoOffered = new Set();
 
 /**
@@ -126,11 +126,13 @@ function firstText(value) {
  * Hand what a link item's source said about it to the recorder, once per item
  * and process, when the item has no title or description yet.
  */
-function offerItemInfo(project, item, metadata) {
+export function offerItemInfo(project, item, metadata) {
   if (!infoRecorder || item.title || item.description) return;
   const { title, description } = linkInfoOf(item, metadata);
   if (!title && !description) return;
-  const key = `${project.id}/${item.id}`;
+  // The reference is part of the key: an item pointed elsewhere has lost its
+  // title (applyItemRef) and records the new one on its next read.
+  const key = `${project.id}/${item.id}/${JSON.stringify(item.ref || {})}`;
   if (infoOffered.has(key)) return;
   // Bounded: forgetting only means a later read offers again, which records nothing twice.
   if (infoOffered.size >= 10000) infoOffered.clear();

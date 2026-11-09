@@ -404,7 +404,9 @@ tokens, whether it is pinned, its URL (web pages and other linked documents) and
 document's title and a short description. Pinned documents come first; documents already in the
 prompt (pinned ones, in `auto` and `tools` mode) are not listed again.
 
-- **Bounded.** At most 50 documents and about 2,000 tokens per project. When the list is cut, its
+- **Bounded.** At most 50 documents and about 2,000 tokens per project, and all lists of a
+  request together at most 10 % of the model's context window (never more than the 75 % limit
+  leaves beside the documents in the prompt), spent in scope order. When the list is cut, its
   last line says how many documents are left out and to call `knowledge_list` for the complete
   list. The `<document-list>` element says how many documents there are (`documents`) and how many
   it lists (`listed`).

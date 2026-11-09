@@ -11,6 +11,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  LIST_CONTEXT_SHARE,
   MAX_LISTED_DOCUMENTS,
   MAX_LIST_TOKENS,
   planKnowledgeScope,
@@ -23,7 +24,11 @@ import { estimateTokens } from '../../shared/tokenEstimator.js';
 import { cleanItemInfo, infoFromText, applyItemInfo } from '../services/projects/itemInfo.js';
 import { projectItemSchema } from '../validators/projectSchema.js';
 import configCache from '../configCache.js';
-import { linkInfoOf } from '../services/knowledge/ItemTextService.js';
+import {
+  linkInfoOf,
+  offerItemInfo,
+  setItemInfoRecorder
+} from '../services/knowledge/ItemTextService.js';
 
 function item(n, extra = {}) {
   return {
@@ -233,6 +238,66 @@ describe('the planner hands a searched project its documents', () => {
       'a failed item is not listed'
     );
   });
+
+  test('the lists of a scope share one budget scaled to the context window', async () => {
+    const scope = [1, 2, 3, 4].map(n => ({
+      project: {
+        id: `prj_${n}`,
+        tier: 'list-test',
+        name: `P${n}`,
+        items: Array.from({ length: 60 }, (_, i) => item(`${n}_${i}`))
+      },
+      mode: 'auto',
+      origin: 'app'
+    }));
+    const plan = await planKnowledgeScope(scope, {
+      model: { contextWindow: 8192 },
+      settings: {},
+      ctx: { language: 'en' }
+    });
+    assert.equal(plan.listBudgetTokens, Math.floor(8192 * LIST_CONTEXT_SHARE));
+    const block = renderProjectsBlock(plan);
+    const listTokens = (block.match(/<document-list[\s\S]*?<\/document-list>/g) || []).reduce(
+      (sum, list) => sum + estimateTokens(list),
+      0
+    );
+    // Each list keeps its frame (a count and the pointer to knowledge_list),
+    // which a project that gets no room still carries.
+    assert.ok(listTokens <= plan.listBudgetTokens + 4 * 60, `${listTokens} tokens`);
+    assert.equal(
+      block.match(/<document-list/g).length,
+      4,
+      'every searched project says what it holds'
+    );
+    const lists = block.match(/<document-list[\s\S]*?<\/document-list>/g);
+    const last = lists[3];
+    assert.match(last, /listed="0"/, 'a project past the budget lists none');
+    assert.ok(
+      last.includes('60 documents are not listed here: call knowledge_list with project="prj_4"'),
+      last
+    );
+  });
+
+  test('a large window keeps the per-project cap', async () => {
+    const scope = [
+      {
+        project: {
+          id: 'prj_big',
+          tier: 'list-test',
+          name: 'Big',
+          items: Array.from({ length: 60 }, (_, i) => item(i))
+        },
+        mode: 'auto',
+        origin: 'app'
+      }
+    ];
+    const plan = await planKnowledgeScope(scope, {
+      model: { contextWindow: 200000 },
+      settings: {},
+      ctx: { language: 'en' }
+    });
+    assert.match(renderProjectsBlock(plan), /listed="50"/);
+  });
 });
 
 describe('what an item is about', () => {
@@ -328,5 +393,26 @@ describe('iHub pages and iFinder documents', () => {
       title: 'lease.pdf'
     });
     assert.deepEqual(linkInfoOf({ kind: 'ifinder-query' }, { title: 'x' }), {});
+  });
+
+  test('an item pointed at another document records its title again', async () => {
+    const offered = [];
+    setItemInfoRecorder(async (_project, entry, info) =>
+      offered.push([entry.ref.documentId, info.title])
+    );
+    try {
+      const project = { id: 'prj_r' };
+      const doc = ref => ({ id: 'itm_r', kind: 'ifinder-document', ref });
+      offerItemInfo(project, doc({ documentId: 'a' }), { title: 'A' });
+      offerItemInfo(project, doc({ documentId: 'a' }), { title: 'A' });
+      offerItemInfo(project, doc({ documentId: 'b' }), { title: 'B' });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(offered, [
+        ['a', 'A'],
+        ['b', 'B']
+      ]);
+    } finally {
+      setItemInfoRecorder(null);
+    }
   });
 });
