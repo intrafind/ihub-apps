@@ -336,7 +336,9 @@ export function reduceRunEvent(state, envelope) {
         cause: data.cause || run.cause,
         endedAt: ts,
         lastLifecycleAt: ts,
-        pendingInteractionId: null
+        pendingInteractionId: null,
+        // A call whose arguments never finished (the user stopped the run) never ran.
+        tools: run.tools.filter(t => !t.preparing)
       };
       return withRun(next, run);
 
@@ -447,7 +449,18 @@ export function reduceRunEvent(state, envelope) {
         // MCP App view the tool renders (server + `ui://` resource).
         mcpApp: data.mcpApp || null
       };
-      run = { ...run, tools: [...run.tools.filter(t => t.callId !== data.callId), tool] };
+      // Replaces the row its `tool.preparing` drew — matched by id, or, when the
+      // loop gave the call another id, the first such row of the same tool and step.
+      const preparing =
+        run.tools.find(t => t.preparing && t.callId === data.callId) ||
+        run.tools.find(t => t.preparing && t.step === data.step && t.toolId === data.toolId);
+      if (preparing) tool.startedAt = preparing.startedAt;
+      const tools = preparing
+        ? run.tools
+            .filter(t => t.callId !== data.callId || t === preparing)
+            .map(t => (t === preparing ? tool : t))
+        : [...run.tools.filter(t => t.callId !== data.callId), tool];
+      run = { ...run, tools };
       return withRun(next, run);
     }
 
@@ -510,6 +523,43 @@ export function reduceRunEvent(state, envelope) {
     }
 
     case SSE_V2_EVENTS.TOOL_PROGRESS: {
+      // The model is still writing the call's arguments: a running row now,
+      // replaced by the call's own `tool/started` (server `chatChannel`).
+      if (data.phase === 'tool.preparing') {
+        if (!data.callId) return next;
+        const d = data.data || {};
+        const chars = Number.isFinite(d.chars) && d.chars > 0 ? d.chars : 0;
+        const existing = run.tools.find(t => t.callId === data.callId);
+        if (existing) {
+          if (!existing.preparing) return next;
+          const tools = run.tools.map(t => (t === existing ? { ...t, writtenChars: chars } : t));
+          return withRun(next, { ...run, tools });
+        }
+        const tool = {
+          callId: data.callId,
+          step: data.step,
+          toolId: d.toolId,
+          name: d.name || d.toolId,
+          title: d.title || null,
+          integration: d.integration || null,
+          activityKind: d.activityKind || null,
+          activityScope: d.activityScope || null,
+          args: undefined,
+          execution: 'server',
+          status: 'running',
+          preparing: true,
+          writtenChars: chars,
+          startedAt: ts,
+          completedAt: null,
+          result: undefined,
+          error: null,
+          durationMs: null,
+          knowledgeSource: null,
+          sources: [],
+          mcpApp: null
+        };
+        return withRun(next, { ...run, tools: [...run.tools, tool] });
+      }
       const entry = { kind: 'tool/progress', at: ts, seq, runId, ...data };
       run = { ...run, progress: [...run.progress, entry] };
       switch (data.phase) {

@@ -769,3 +769,46 @@ describe('skill rows — each activation once in the chain, each skill once in t
     expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'sparkles');
   });
 });
+
+describe('ToolActivity — a call the model is still writing', () => {
+  const preparing = (seq, chars) =>
+    env(seq, 'tool/progress', {
+      step: 1,
+      callId: 'w1',
+      phase: 'tool.preparing',
+      data: {
+        toolId: 'create_web_artifact',
+        name: 'create_web_artifact',
+        title: 'Create interactive web artifact',
+        activityKind: 'tool',
+        chars
+      }
+    });
+
+  test('shows the call with how much is written so far', () => {
+    const activity = buildToolActivity(runFrom([started, preparing(2, 0), preparing(3, 31000)]));
+    expect(activity.items).toHaveLength(1);
+    expect(activity.items[0]).toMatchObject({ status: 'running', writtenChars: 31000 });
+    render(<ToolActivity activity={activity} loading />);
+    expect(screen.getAllByText('Create interactive web artifact').length).toBeGreaterThan(0);
+    expect(screen.getByText('31K characters written')).toBeInTheDocument();
+  });
+
+  test('drops the count once the call runs', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        preparing(2, 31000),
+        env(3, 'tool/started', {
+          step: 1,
+          callId: 'w1',
+          toolId: 'create_web_artifact',
+          name: 'create_web_artifact',
+          title: 'Create interactive web artifact',
+          args: { filename: 'a.html' }
+        })
+      ])
+    );
+    expect(activity.items[0].writtenChars).toBe(0);
+  });
+});

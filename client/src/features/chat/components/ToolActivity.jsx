@@ -394,7 +394,17 @@ function ItemError({ item }) {
 }
 
 function ItemStatus({ item }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  if (item.writtenChars > 0) {
+    const chars = new Intl.NumberFormat(i18n?.language, { notation: 'compact' }).format(
+      item.writtenChars
+    );
+    return (
+      <span className="text-gray-500 dark:text-gray-400 tabular-nums">
+        {t('toolActivity.writtenChars', '{{chars}} characters written', { chars })}
+      </span>
+    );
+  }
   if (item.status === 'error') {
     return (
       <span className="text-red-600 dark:text-red-400" title={item.error || undefined}>

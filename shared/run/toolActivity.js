@@ -275,6 +275,8 @@ export function buildToolActivity(run) {
         // The integration, MCP server or agent it ran against ("Munich AD").
         integration: tool.integration || null,
         status,
+        // The model is still writing the call: how much of it so far.
+        writtenChars: tool.preparing && status === 'running' ? tool.writtenChars || 0 : 0,
         scope: kind === 'tool' ? null : tool.activityScope === 'documents' ? 'documents' : 'web',
         query,
         url,

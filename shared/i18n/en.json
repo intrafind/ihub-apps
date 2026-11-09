@@ -7490,6 +7490,7 @@
     "searchingFor": "Searching for “{{query}}”",
     "reading": "Reading {{host}}",
     "runningTool": "Running {{name}}",
+    "writtenChars": "{{chars}} characters written",
     "ranTool": "Ran {{name}}",
     "runningToolIn": "{{name}} · {{integration}}…",
     "integrationTitle": "Data from {{name}}",

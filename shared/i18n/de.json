@@ -7464,6 +7464,7 @@
     "searchingFor": "Sucht nach „{{query}}“",
     "reading": "Liest {{host}}",
     "runningTool": "Führt {{name}} aus",
+    "writtenChars": "{{chars}} Zeichen geschrieben",
     "ranTool": "{{name}} ausgeführt",
     "runningToolIn": "{{name}} · {{integration}}…",
     "integrationTitle": "Daten aus {{name}}",

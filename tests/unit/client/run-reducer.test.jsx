@@ -386,3 +386,49 @@ describe('runReducer — streamed reasoning', () => {
     ]);
   });
 });
+
+describe('runReducer — a tool call still being written', () => {
+  const started = env(1, 'run-p', 'run/started', { kind: 'chat', refs: { chatId: 'c' } });
+  const preparing = (seq, callId) =>
+    env(seq, 'run-p', 'tool/progress', {
+      step: 2,
+      callId,
+      phase: 'tool.preparing',
+      data: { toolId: 'create_web_artifact', name: 'create_web_artifact', title: 'Create artifact' }
+    });
+  const toolStarted = (seq, callId) =>
+    env(seq, 'run-p', 'tool/started', {
+      step: 2,
+      callId,
+      toolId: 'create_web_artifact',
+      name: 'create_web_artifact',
+      args: { filename: 'a.html' }
+    });
+
+  it('shows a running row at once, replaced in place by the call', () => {
+    let run = getRun(fold([started, preparing(2, 'c1')]), 'run-p');
+    expect(run.tools).toHaveLength(1);
+    expect(run.tools[0]).toMatchObject({
+      status: 'running',
+      preparing: true,
+      title: 'Create artifact'
+    });
+    expect(run.progress).toHaveLength(0);
+
+    run = getRun(fold([started, preparing(2, 'c1'), toolStarted(3, 'c1')]), 'run-p');
+    expect(run.tools).toHaveLength(1);
+    expect(run.tools[0].preparing).toBeUndefined();
+    expect(run.tools[0].args).toEqual({ filename: 'a.html' });
+    expect(run.tools[0].startedAt).toBe(ts(2));
+  });
+
+  it('replaces the row even when the call runs under another id', () => {
+    const run = getRun(fold([started, preparing(2, '0'), toolStarted(3, 'gen-1')]), 'run-p');
+    expect(run.tools.map(t => t.callId)).toEqual(['gen-1']);
+  });
+
+  it('drops a call that never finished when the run ends', () => {
+    const ended = env(3, 'run-p', 'run/ended', { status: 'aborted' });
+    expect(getRun(fold([started, preparing(2, 'c1'), ended]), 'run-p').tools).toEqual([]);
+  });
+});
