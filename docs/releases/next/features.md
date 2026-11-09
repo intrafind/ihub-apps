@@ -1274,6 +1274,20 @@ get the space back. **New chat** brings the configured rows back.
 - While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
   shows next to the token count, and screen readers announce how to send.
 
+## Outlook Add-in: Expand the Chat Input for a Long Prompt
+
+The chat input in the Outlook task pane stays small (up to 3 lines) so the conversation keeps the
+space. An **Expand input** button at the top right of the input now opens a taller editing area —
+about half the pane — so a long prompt can be read and edited without scrolling inside 3 lines.
+
+- The text, the cursor position and the focus stay as they are when the input expands or
+  collapses.
+- The input collapses again when the message is sent, on **Esc**, on a second click and when a new
+  chat starts.
+- Available in the chat and on the start page. The header and the send button stay visible, also
+  in a narrow pane.
+- The web app and the canvas are unchanged.
+
 ## Projects: A Web Page Is Named After Its Title
 
 A web page added to a project without a name now shows the page's title instead of its URL. A name

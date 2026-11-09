@@ -444,6 +444,52 @@ async function signIn(base) {
   return (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
 }
 
+/** Item states the server is still working on. */
+const UNSETTLED_ITEM_STATES = new Set(['pending', 'extracting']);
+
+/**
+ * Wait until the admin projects' items have settled.
+ *
+ * The server imports the seeded projects' file-backed items in the background, a
+ * moment after it starts (`importPendingProjects` in services/projects/bootstrap.js).
+ * `/api/health` answers before that, so on a slow machine the crawl could catch an
+ * item half-way (an `import` pointer, `text: null`) and the snapshot would differ
+ * from run to run. Gives up after `timeoutMs` and crawls anyway: the comparison then
+ * shows what did not settle.
+ */
+export async function waitForProjectImports(base, cookie, { timeoutMs = 120_000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  const poll = async () => {
+    const unsettled = await unsettledProjectItems(base, cookie);
+    if (unsettled.length === 0) return;
+    if (Date.now() >= deadline) {
+      console.warn(
+        `project items still importing after ${timeoutMs / 1000}s: ${unsettled.join(', ')}`
+      );
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await poll();
+  };
+  await poll();
+}
+
+/** `projectId/itemId` of every admin project item the server is still working on. */
+async function unsettledProjectItems(base, cookie, cursor = null) {
+  const query = new URLSearchParams({ limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  const answer = await request(base, cookie, `/api/admin/projects?${query}`);
+  // An answer that is not the list (an error) is nothing to wait for.
+  if (answer.type !== 'json' || answer.status !== 200) return [];
+  const unsettled = (answer.body.items ?? []).flatMap(project =>
+    (project.items ?? [])
+      .filter(item => UNSETTLED_ITEM_STATES.has(item.status))
+      .map(item => `${project.id}/${item.id}`)
+  );
+  const next = answer.body.nextCursor;
+  return next ? [...unsettled, ...(await unsettledProjectItems(base, cookie, next))] : unsettled;
+}
+
 async function main() {
   const flags = new Set(process.argv.slice(2));
 
@@ -471,6 +517,7 @@ async function main() {
   try {
     const cookie = await signIn(base);
     await seedData(base, cookie);
+    await waitForProjectImports(base, cookie);
     snapshot = await collectShapes({ base, cookie, routes });
   } finally {
     child.kill('SIGTERM');

@@ -297,7 +297,10 @@ function OfficeStartPage({
                     currentLanguage={officeLocale}
                     showModelSelector={false}
                     enabledTools={null}
+                    // Three lines in the small pane; the expand button opens
+                    // about half of it for a long prompt (#3524).
                     maxRows={3}
+                    expandable
                   />
                 </div>
 

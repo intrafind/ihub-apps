@@ -193,7 +193,12 @@ function ChatInput({
   // user types, instead of the app's `inputMode.rows`, which are for the empty
   // chat (#3520). The page decides; the composer would lose its own notion of
   // "sent" on every remount.
-  compact = false
+  compact = false,
+  // Offer a button that expands the composer to about half the pane, for a
+  // long prompt in a host that caps it at a few lines (#3524). Only the Outlook
+  // task pane turns it on. The expanded box collapses on send, on Escape, on a
+  // second click and when the conversation starts or a new one does.
+  expandable = false
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -361,11 +366,21 @@ function ChatInput({
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
+  const [expandedByUser, setExpandedByUser] = useState(false);
+  // A chat that starts, or a new chat, starts collapsed. Adjusted while
+  // rendering, so the box never paints expanded for a frame.
+  const [expandedForCompact, setExpandedForCompact] = useState(compact);
+  if (expandedForCompact !== compact) {
+    setExpandedForCompact(compact);
+    setExpandedByUser(false);
+  }
+  const expanded = expandable && expandedByUser;
   const { minLines, maxLines } = composerLineLimits({
     multiline: multilineMode,
     rows: inputMode?.rows,
     compact,
-    maxRows
+    maxRows,
+    expanded
   });
 
   // How to send, for screen readers always and on screen while a multi-line
@@ -612,17 +627,25 @@ function ChatInput({
     return () => {
       textarea.removeEventListener('input', autoResize);
     };
-  }, [value, minLines, maxLines, actualInputRef]);
+  }, [value, minLines, maxLines, expanded, actualInputRef]);
 
   const handleSubmit = e => {
     e.preventDefault();
     if ((value.trim() || allowEmptySubmit) && !isProcessing && !sendBlockedByAttachment) {
       onSubmit(e);
+      setExpandedByUser(false);
       // Keep focus on the input so the user can continue typing
       setTimeout(() => {
         focusInputAtEnd();
       }, 0);
     }
+  };
+
+  // Same text area, other limits: the text, the caret and the selection stay.
+  // A mouse click leaves the focus in the text area (see the button's
+  // `onMouseDown`); from the keyboard it stays on the button.
+  const handleToggleExpanded = () => {
+    setExpandedByUser(prev => !prev);
   };
 
   const handleClearInput = () => {
@@ -663,27 +686,33 @@ function ChatInput({
     onFileSelect(null);
   }, [onFileSelect]);
 
+  // A `/` that opens the prompt picker: in an empty input, or at the start of
+  // a word. Returns whether it did.
+  const openSlashPicker = e => {
+    if (!slashCommandEnabled || showPromptSearch || e.key !== '/') return false;
+    const el = actualInputRef.current;
+    if (value === '') {
+      e.preventDefault();
+      slashPickRef.current = { anchor: null };
+      setShowPromptSearch(true);
+      return true;
+    }
+    if (!opensSlashPickerMidText(value, el?.selectionStart, el?.selectionEnd)) return false;
+    // Typed by hand rather than by the browser: the picker takes focus while
+    // the key is still being handled, and the `/` would land in its search
+    // field instead. Closing the picker keeps the slash.
+    e.preventDefault();
+    const anchor = el.selectionStart;
+    slashPickRef.current = { anchor };
+    onChange({ target: { value: typeSlashAt(value, anchor) } });
+    setShowPromptSearch(true);
+    return true;
+  };
+
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    if (slashCommandEnabled && !showPromptSearch && e.key === '/') {
-      const el = actualInputRef.current;
-      if (value === '') {
-        e.preventDefault();
-        slashPickRef.current = { anchor: null };
-        setShowPromptSearch(true);
-        return;
-      }
-      if (opensSlashPickerMidText(value, el?.selectionStart, el?.selectionEnd)) {
-        // Typed by hand rather than by the browser: the picker takes focus
-        // while the key is still being handled, and the `/` would land in its
-        // search field instead. Closing the picker keeps the slash.
-        e.preventDefault();
-        const anchor = el.selectionStart;
-        slashPickRef.current = { anchor };
-        onChange({ target: { value: typeSlashAt(value, anchor) } });
-        setShowPromptSearch(true);
-        return;
-      }
+    if (openSlashPicker(e)) {
+      return;
     }
 
     if (showPromptSearch) {
@@ -695,6 +724,13 @@ function ChatInput({
 
     // Forward keyboard events to the workflow mention dropdown when open
     if (showWorkflowSearch && workflowSearchRef.current?.handleKeyDown(e)) {
+      return;
+    }
+
+    // Escape collapses an expanded composer; the pickers above had their turn.
+    if (expanded && e.key === 'Escape') {
+      e.preventDefault();
+      setExpandedByUser(false);
       return;
     }
 
@@ -855,7 +891,9 @@ function ChatInput({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing || audioOnly}
-              className={`chat-input-textarea${compact ? ' chat-input-textarea--compact' : ''} w-full px-3 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
+              className={`chat-input-textarea${compact ? ' chat-input-textarea--compact' : ''}${
+                expanded ? ' chat-input-textarea--expanded' : ''
+              } w-full px-3 ${expandable ? 'pr-16' : 'pr-10'} bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
@@ -868,10 +906,38 @@ function ChatInput({
             <span id={sendHintId} className="sr-only">
               {sendHint}
             </span>
-            {value && (
+            {expandable && (
               <button
                 type="button"
                 className="absolute right-3 top-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                // Keep the focus, and with it the caret, in the text area.
+                onMouseDown={e => e.preventDefault()}
+                onClick={handleToggleExpanded}
+                onKeyDown={e => {
+                  if (expanded && e.key === 'Escape') {
+                    e.preventDefault();
+                    setExpandedByUser(false);
+                  }
+                }}
+                aria-expanded={expanded}
+                aria-label={
+                  expanded
+                    ? t('chat.collapseInput', 'Collapse input')
+                    : t('chat.expandInput', 'Expand input')
+                }
+                title={
+                  expanded
+                    ? t('chat.collapseInput', 'Collapse input')
+                    : t('chat.expandInput', 'Expand input')
+                }
+              >
+                <Icon name={expanded ? 'arrows-pointing-in' : 'arrows-pointing-out'} size="sm" />
+              </button>
+            )}
+            {value && (
+              <button
+                type="button"
+                className={`absolute ${expandable ? 'right-9' : 'right-3'} top-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300`}
                 onClick={handleClearInput}
                 aria-label={t('chat.clearInput', 'Clear input')}
                 title={t('common.clear', 'Clear')}

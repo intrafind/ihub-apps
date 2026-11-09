@@ -165,6 +165,8 @@
     "contextUsage": "~{{used}} / {{total}} Kontext-Tokens",
     "inputLabel": "Nachricht eingeben",
     "clearInput": "Eingabe löschen",
+    "expandInput": "Eingabe vergrößern",
+    "collapseInput": "Eingabe verkleinern",
     "sendShortcutHint": "{{submit}} zum Senden",
     "sendEnterHint": "Enter zum Senden",
     "ephemeral": {
