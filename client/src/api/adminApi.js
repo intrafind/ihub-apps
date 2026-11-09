@@ -533,7 +533,7 @@ export const addAdminProjectItem = async (projectId, item) => {
     method: 'POST',
     body: item
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -552,7 +552,7 @@ export const uploadAdminProjectItem = async (projectId, { file, name, pinned = f
     method: 'POST',
     body: formData
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -569,7 +569,7 @@ export const updateAdminProjectItem = async (projectId, itemId, changes) => {
     method: 'PATCH',
     body: changes
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -585,7 +585,7 @@ export const updateAdminProjectItemText = async (projectId, itemId, text) => {
     method: 'PUT',
     body: { text }
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -610,7 +610,7 @@ export const refreshAdminProjectItem = async (projectId, itemId) => {
   const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/_refresh`, {
     method: 'POST'
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**

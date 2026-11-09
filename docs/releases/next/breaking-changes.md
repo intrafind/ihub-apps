@@ -753,5 +753,17 @@ answer the resource itself:
 
 Answers that carry more than the resource keep their members (`_decline` still answers
 `{ request, alsoDeclined }`; an action override answers `{ override, detail }`). Singleton settings
-answers (`{ settings }`, `{ config }`) and the project item answers (`{ item }`) follow in a later
-change.
+answers (`{ settings }`, `{ config }`) follow in a later change.
+
+## Project Item Answers Are the Item Itself
+
+Adding, changing, refreshing or rewriting a project item answers the item, not `{ item }`:
+
+- `POST /api/projects/{projectId}/items` (`201` or `202`, with `Location`), including the upload
+  variant
+- `PATCH /api/projects/{projectId}/items/{itemId}`, `PUT …/items/{itemId}/text`,
+  `POST …/items/{itemId}/_refresh`
+- The same four routes under `/api/admin/projects/{projectId}/items`
+
+Adding a single iFinder document to a smart collection still answers
+`{ item, alreadyMember }`, because it carries a second member.

@@ -10,7 +10,7 @@
  * The upload goes to disk first (multer `diskStorage` into a private
  * directory per request under `contents/data/tmp/project-uploads/`), never
  * into memory; `fileFilter` runs the type and quota checks before the first
- * byte is accepted; the route answers `202 { item }` as soon as the file is
+ * byte is accepted; the route answers `202` with the item as soon as the file is
  * on disk and the item document written, and extraction continues on the
  * ingest queue.
  *
@@ -230,7 +230,7 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
       resourceId: project.id,
       summary: `Uploaded "${item.name}" (${file.size} bytes) to ${admin ? 'admin ' : ''}project "${projectName(project)}"`
     });
-    res.status(202).json({ item: serializeItem(item) });
+    res.status(202).json(serializeItem(item));
   } catch (error) {
     // The upload directory goes whatever failed; the refusal is answered by the error middleware.
     await removeUploadDir(req);
@@ -260,9 +260,9 @@ export async function refreshItem(req, res, { project, authorize }) {
     resourceId: project.id,
     summary: `Refreshed ${item.kind} item "${item.name}" in project "${projectName(project)}"`
   });
-  res.status(item.status === 'pending' || item.status === 'extracting' ? 202 : 200).json({
-    item: serializeItem(item)
-  });
+  res
+    .status(item.status === 'pending' || item.status === 'extracting' ? 202 : 200)
+    .json(serializeItem(item));
 }
 
 /**
@@ -292,7 +292,7 @@ export async function replaceItemText(req, res, { project, authorize }) {
     resourceId: project.id,
     summary: `Edited the text of ${item.kind} item "${item.name}" in project "${projectName(project)}"`
   });
-  res.json({ item: serializeItem(item) });
+  res.json(serializeItem(item));
 }
 
 /**

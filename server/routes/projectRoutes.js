@@ -753,7 +753,7 @@ export default function registerProjectRoutes(app) {
         res,
         item.status === 'ready' ? 201 : 202,
         `/api/projects/${segment(req.project.id)}/items/${segment(item.id)}`,
-        { item: serializeItem(item) }
+        serializeItem(item)
       );
     }
   );

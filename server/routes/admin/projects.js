@@ -606,7 +606,7 @@ export default function registerAdminProjectsRoutes(app) {
         res,
         item.status === 'ready' ? 201 : 202,
         `/api/admin/projects/${segment(project.id)}/items/${segment(item.id)}`,
-        { item: serializeItem(item) }
+        serializeItem(item)
       );
     }
   );
@@ -677,7 +677,7 @@ export default function registerAdminProjectsRoutes(app) {
       resourceId: project.id,
       summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in admin project "${projectName(project)}"`
     });
-    res.json({ item: serializeItem(result.item) });
+    res.json(serializeItem(result.item));
   });
 
   app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
