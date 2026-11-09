@@ -28,6 +28,7 @@ import {
   highlightCitation,
   openSources,
   releaseCitation,
+  sourcesOpener,
   useSourcesState
 } from '../sources/sourcesStore';
 import {
@@ -36,8 +37,7 @@ import {
   matchesScope,
   scopeLabelOf,
   siteOf,
-  sourceScopesOf,
-  sourcesLabel
+  sourceScopesOf
 } from '../sources/sourcesView';
 import ItemProvenance from '../../projects/components/ItemProvenance';
 
@@ -55,11 +55,14 @@ const CITED_LIST_LIMIT = 5;
 
 /**
  * Everything an answer found — web pages, documents, records, whichever
- * integration found them (`shared/sources`) — behind one entry above the
- * answer: "Searched for “…”" or "N sources", with the sources' icons. It opens
- * the sources panel, a side panel on desktop and a bottom sheet on phones.
+ * integration found them (`shared/sources`) — behind one entry at the
+ * answer's end, next to the badge that says what the answer is based on:
+ * "N results" with the sources' icons. It opens the sources panel, a side
+ * panel on desktop and a bottom sheet on phones. "Results", not "sources":
+ * it counts everything found, and only what the answer cites is a source of
+ * it (#3521).
  *
- * At the answer's end, `CitedSources` lists what it cites like footnotes.
+ * Above it, `CitedSources` lists what the answer cites like footnotes.
  *
  * The panel lists what the answer cites, numbered like its inline badges, and
  * what was found without being cited. Every card offers the actions its
@@ -72,6 +75,11 @@ const CITED_LIST_LIMIT = 5;
  * scope its source was found in, and sources found in more than one scope can
  * be narrowed to one (#3056).
  *
+ * While the answer streams the entry is hidden (`entryHidden`), so it does not
+ * ride the growing text, but the component stays mounted: the inline badges
+ * open the panel from the text, and a panel open when the answer completes
+ * stays open.
+ *
  * @param {Object} props
  * @param {string} props.messageKey - The answer's id
  * @param {{items: Object[], queries: string[]}} props.sources - The answer's source set
@@ -79,8 +87,15 @@ const CITED_LIST_LIMIT = 5;
  * @param {Function} [props.onOpenInApp] - `(source, appId)`: open the source in a
  *   new chat of another app. Only surfaces with a router pass it (the Outlook
  *   task pane and the extension side panel have none, issue #2453).
+ * @param {boolean} [props.entryHidden] - Render only the panel, not the entry
  */
-function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
+function AnswerSources({
+  messageKey,
+  sources,
+  citations,
+  onOpenInApp = null,
+  entryHidden = false
+}) {
   const { t } = useTranslation();
   const triggerRef = useRef(null);
   const { open, highlight } = useSourcesState();
@@ -89,48 +104,48 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
   const cited = citations?.cited || [];
   const considered = citations?.considered || [];
   const total = cited.length + considered.length;
-  if (!sources || (total === 0 && !sources.queries?.length)) return null;
+  if (!sources || total === 0) return null;
 
   const stack = [...cited, ...considered].slice(0, 4);
-  const more = total - stack.length;
-
   const highlighted = highlight?.messageKey === messageKey ? highlight.n : null;
 
   return (
-    <div className="mb-2">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => (isOpen ? closeSources() : openSources(messageKey))}
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        className="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-      >
-        <Icon
-          name={sources.queries?.length ? 'search' : 'book-open'}
-          size="sm"
-          className="shrink-0 text-gray-500 dark:text-gray-400"
-        />
-        <span className="truncate">{sourcesLabel(t, sources)}</span>
-        {stack.length > 0 && (
-          <span className="flex shrink-0 items-center -space-x-1.5" aria-hidden="true">
-            {stack.map(source => (
-              <SourceIcon
-                key={source.id}
-                source={source}
-                className="h-4 w-4 ring-2 ring-white dark:ring-gray-800"
-              />
-            ))}
-          </span>
-        )}
-        {more > 0 && (
-          <span className="shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true">
-            +{more}
-          </span>
-        )}
-        <span className="sr-only">{t('sources.sourcesCount', { count: total })}</span>
-        <Icon name="chevron-right" size="sm" className="shrink-0 text-gray-500" />
-      </button>
+    <>
+      {!entryHidden && (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() =>
+            isOpen ? closeSources() : openSources(messageKey, null, { opener: triggerRef.current })
+          }
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          className="group inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 text-xs text-gray-700 shadow-xs hover:border-gray-400 hover:bg-gray-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900"
+        >
+          <Icon
+            name={sources.queries?.length ? 'search' : 'book-open'}
+            size="sm"
+            className="shrink-0 text-gray-500 dark:text-gray-400"
+          />
+          <span className="truncate">{t('sources.resultsCount', { count: total })}</span>
+          {stack.length > 0 && (
+            <span className="flex shrink-0 items-center -space-x-1.5" aria-hidden="true">
+              {stack.map(source => (
+                <SourceIcon
+                  key={source.id}
+                  source={source}
+                  className="h-4 w-4 ring-2 ring-white group-hover:ring-gray-50 dark:ring-gray-800 dark:group-hover:ring-gray-700"
+                />
+              ))}
+            </span>
+          )}
+          <Icon
+            name="chevron-right"
+            size="sm"
+            className="shrink-0 text-gray-500 dark:text-gray-400"
+          />
+        </button>
+      )}
       {isOpen && (
         <SourcesPanel
           messageKey={messageKey}
@@ -139,12 +154,23 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
           considered={considered}
           focus={open.focus}
           highlight={highlighted}
-          returnFocusRef={triggerRef}
+          entryRef={triggerRef}
           onOpenInApp={onOpenInApp}
         />
       )}
-    </div>
+    </>
   );
+}
+
+/**
+ * Whether an answer has anything for the entry to open: one source or more,
+ * cited or only considered.
+ *
+ * @param {{cited: Object[], considered: Object[]}|null} citations - from `resolveCitations`
+ * @returns {boolean}
+ */
+export function hasAnswerResults(citations) {
+  return Boolean(citations && citations.cited.length + citations.considered.length > 0);
 }
 
 /**
@@ -169,7 +195,7 @@ export function CitedSources({ messageKey, sources }) {
   const folded = sources.length - CITED_LIST_LIMIT;
 
   return (
-    <div className="mt-3 border-t border-gray-200 pt-2 dark:border-gray-700">
+    <div>
       <h4
         id={headingId}
         className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
@@ -213,7 +239,9 @@ function CitedSourceRow({ source, messageKey, active }) {
   const site = siteOf(source);
   const title = source.title || site || source.url || t('sources.untitled', 'Untitled');
   const where = site || source.fileName || '';
-  const showInPanel = () => openSources(messageKey, source.n);
+  // Focus returns to the number when the panel closes, however it was opened.
+  const numberRef = useRef(null);
+  const showInPanel = () => openSources(messageKey, source.n, { opener: numberRef.current });
   const titleClass =
     'min-w-0 truncate text-left text-gray-800 hover:text-indigo-600 hover:underline dark:text-gray-200 dark:hover:text-indigo-300';
 
@@ -238,6 +266,7 @@ function CitedSourceRow({ source, messageKey, active }) {
       }}
     >
       <button
+        ref={numberRef}
         type="button"
         onClick={showInPanel}
         className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[0.625rem] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white dark:bg-indigo-900/60 dark:text-indigo-200 dark:hover:bg-indigo-500"
@@ -319,6 +348,33 @@ function describeFailure(t, action, reason) {
   return t('sources.actionFailed', 'That action could not be completed.');
 }
 
+/** A CSS attribute selector value in double quotes. */
+const attributeValue = value => String(value).replace(/["\\]/g, '\\$&');
+
+/**
+ * Where focus goes when the sources panel closes: back to what opened it (an
+ * inline badge, a number in the cited list, the entry). An inline badge the
+ * answer's markup replaced since (it is rebuilt while the answer streams) is
+ * found again by its number; else the entry, if it is shown. Nothing when none
+ * of them is on the page — focus is not moved somewhere unrelated.
+ *
+ * @param {string} messageKey
+ * @param {{current: HTMLElement|null}} entryRef
+ */
+function returnFocus(messageKey, entryRef) {
+  const opener = sourcesOpener();
+  const badge =
+    opener?.n != null
+      ? document.querySelector(
+          `[data-citations-of="${attributeValue(messageKey)}"] [data-source-citation="${opener.n}"]`
+        )
+      : null;
+  const target = [opener?.element, badge, entryRef.current].find(
+    element => element && element.isConnected
+  );
+  target?.focus({ preventScroll: true });
+}
+
 /**
  * The sources panel. Rendered into `document.body`: fixed to the right edge
  * from `md` up, a bottom sheet with a scrim below it.
@@ -335,7 +391,7 @@ function SourcesPanel({
   considered,
   focus,
   highlight,
-  returnFocusRef,
+  entryRef,
   onOpenInApp
 }) {
   const { t, i18n } = useTranslation();
@@ -354,7 +410,7 @@ function SourcesPanel({
   const [notice, setNotice] = useState(null);
   // `md`, where the sheet becomes the side panel (as in AppSidebar).
   const isSidePanel = useMediaQuery('(min-width: 768px)');
-  // Focus goes back to the entry below (not to where it was), so the trap
+  // Focus goes back to what opened the panel (see `returnFocus`), so the trap
   // does not restore it.
   useFocusTrap(panelRef, {
     isActive: !isSidePanel && !dialog,
@@ -377,10 +433,9 @@ function SourcesPanel({
     [attachSupported, onOpenInApp]
   );
 
-  // Focus moves into the panel on open and back to the entry on close;
+  // Focus moves into the panel on open and back to what opened it on close;
   // Escape closes it (a dialog on top closes first).
   useEffect(() => {
-    const trigger = returnFocusRef.current;
     closeRef.current?.focus({ preventScroll: true });
     const onKey = event => {
       if (event.key === 'Escape' && !dialogRef.current) closeSources();
@@ -388,9 +443,9 @@ function SourcesPanel({
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      if (trigger && document.contains(trigger)) trigger.focus({ preventScroll: true });
+      returnFocus(messageKey, entryRef);
     };
-  }, [returnFocusRef]);
+  }, [messageKey, entryRef]);
 
   // Scroll to the card a clicked badge points at.
   useEffect(() => {

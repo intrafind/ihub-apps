@@ -107,7 +107,7 @@ function StreamingMarkdown({ content, citations = null, streaming = false }) {
       event.preventDefault();
       const n = numberOf(badge);
       highlightCitation(messageKey, n, { pinned: true });
-      openSources(messageKey, n);
+      openSources(messageKey, n, { opener: badge });
     };
     // A badge without a link is a button: Enter and Space press it.
     const onKey = event => {
@@ -157,6 +157,9 @@ function StreamingMarkdown({ content, citations = null, streaming = false }) {
       className={`markdown-content wrap-break-word whitespace-normal streaming-markdown${
         streaming ? ' is-streaming' : ''
       }`}
+      // Which answer's citations these are: the sources panel returns focus to
+      // a badge here, found again after the markup was rebuilt.
+      data-citations-of={messageKey || undefined}
       dangerouslySetInnerHTML={innerHtml} // sanitized with DOMPurify before setState
     />
   );

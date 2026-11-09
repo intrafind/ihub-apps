@@ -150,7 +150,8 @@ export const DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE =
   '- When the search excerpts are not enough, open the most relevant pages and read them ' +
   'in full.\n' +
   '- Check key claims against more than one source.\n' +
-  '- Combine the findings into one answer and cite the sources with their URLs.\n' +
+  '- Combine the findings into one answer, and cite the source of each statement right ' +
+  'after it.\n' +
   '- Stop searching once the question is answered, and do not search for things you ' +
   'already know reliably.';
 
@@ -225,8 +226,7 @@ export const WEB_SEARCH_CITATION_GUIDANCE =
   "Markdown link to that source's URL whose text is its number, for example " +
   '[1](https://example.com/page). Number sources in the order you first cite them and reuse ' +
   'the number when you cite the same source again. Cite only URLs your searches or page ' +
-  'reads returned, never URLs from memory, and do not add a separate list of sources at the ' +
-  'end — the chat shows them next to the answer.';
+  'reads returned, never URLs from memory.';
 
 /**
  * How to cite pages read with the page reader next to native search. The
@@ -238,8 +238,19 @@ export const WEB_SEARCH_READER_CITATION_GUIDANCE =
   'Citing pages you read: your web search cites its own results for you. When a statement ' +
   'relies on a page you opened with the read_url page reader, cite it right after ' +
   "the statement as a Markdown link to that page's URL whose text is a number, for example " +
-  '[1](https://example.com/page). Cite only pages the page reader returned, and do not add a ' +
-  'separate list of sources at the end — the chat shows them next to the answer.';
+  '[1](https://example.com/page). Cite only pages the page reader returned.';
+
+/**
+ * No list of sources at the end of the answer — the chat lists the cited
+ * sources under it ("Cited in this answer"), so a list the model writes shows
+ * them twice. Named explicitly, in the words models use for it, because
+ * smaller and local models read "cite your sources" as "add a sources
+ * section" and ignore a passing "no separate list" (issue #3522). Applies to
+ * every search setup, native search included, and comes last.
+ */
+export const WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE =
+  'Do not end the answer with a list of sources, references or links (such as "Sources:", ' +
+  '"Quellen:" or "References"): the chat lists the cited sources under the answer.';
 
 /** When the user names a site, search that site. */
 export const WEB_SEARCH_NAMED_SITE_GUIDANCE =
@@ -267,6 +278,7 @@ export function buildWebSearchSourceGuidance({ native, pageReader }) {
   if (!native) parts.unshift(WEB_SEARCH_CITATION_GUIDANCE);
   else if (pageReader) parts.unshift(WEB_SEARCH_READER_CITATION_GUIDANCE);
   if (pageReader) parts.push(WEB_SEARCH_PASTED_URL_GUIDANCE);
+  parts.push(WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE);
   return parts.join('\n');
 }
 

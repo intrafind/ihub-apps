@@ -143,8 +143,9 @@ function finishedHeadline(t, items, searches) {
       0
     );
     parts.push(t('toolActivity.searches', { count: queryCount }));
-    const sources = countSources(items);
-    if (sources) parts.push(t('toolActivity.sources', { count: sources }));
+    // Results, not sources: only what the answer cites is a source of it.
+    const results = countSources(items);
+    if (results) parts.push(t('toolActivity.results', { count: results }));
   } else {
     const fetches = items.filter(item => item.kind === 'fetch');
     if (fetches.some(item => item.scope !== 'documents')) {
@@ -229,7 +230,7 @@ function ActivityItem({ item }) {
           ))}
           {item.sources.length > 0 && (
             <span className="text-gray-500 dark:text-gray-400">
-              {t('toolActivity.sources', { count: item.sources.length })}
+              {t('toolActivity.results', { count: item.sources.length })}
             </span>
           )}
           <IntegrationChip item={item} />

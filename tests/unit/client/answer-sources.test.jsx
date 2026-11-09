@@ -26,14 +26,14 @@ import AnswerSources, {
 import ModelSelector from '../../../client/src/features/chat/components/ModelSelector';
 import {
   _resetSourcesStore,
+  closeSources,
   currentCitationHighlight,
   useSourcesState
 } from '../../../client/src/features/chat/sources/sourcesStore';
 import {
   answerScopeLabel,
   scopeLabelOf,
-  sourceScopesOf,
-  sourcesLabel
+  sourceScopesOf
 } from '../../../client/src/features/chat/sources/sourcesView';
 import { modelSupportsWebSearch } from '../../../client/src/features/chat/webSearch';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
@@ -273,6 +273,32 @@ describe('inline citations in a rendered answer', () => {
   });
 });
 
+describe('focus when the sources panel closes (#3521)', () => {
+  test('returns to the inline badge that opened it, also after the markup was rebuilt', () => {
+    const { view, citations } = citationsFor();
+    const ui = content => (
+      <>
+        <StreamingMarkdown content={content} citations={citations} />
+        <AnswerSources messageKey="msg-1" sources={sources} citations={view} entryHidden />
+      </>
+    );
+    const { container, rerender } = render(ui(answer));
+    // While the answer streams there is no entry; the badges open the panel.
+    expect(screen.queryByRole('button', { name: /sources.resultsCount/ })).toBeNull();
+    fireEvent.click(container.querySelector('[data-source-citation="2"]'));
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
+
+    // The answer streams on: its markup is rebuilt and the badge replaced.
+    const before = container.querySelector('[data-source-citation="2"]');
+    rerender(ui(`${answer} More text.`));
+    const after = container.querySelector('[data-source-citation="2"]');
+    expect(after).not.toBe(before);
+
+    act(() => closeSources());
+    expect(after).toHaveFocus();
+  });
+});
+
 describe('AnswerSources', () => {
   const renderSources = (props = {}) => {
     const { view } = citationsFor();
@@ -281,9 +307,10 @@ describe('AnswerSources', () => {
     );
   };
 
-  test('shows a "Searched for" entry that opens the sources panel', () => {
+  test('shows an "N results" entry that opens the sources panel', () => {
     renderSources();
-    const entry = screen.getByRole('button', { name: /Searched for “what is langdock”/ });
+    // Results, not sources: it counts everything found, cited or not (#3521).
+    const entry = screen.getByRole('button', { name: 'sources.resultsCount:5' });
     expect(entry).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(entry);
     expect(entry).toHaveAttribute('aria-expanded', 'true');
@@ -312,7 +339,7 @@ describe('AnswerSources', () => {
 
   test('a document card shows where it lives, its passages and its menu', () => {
     renderSources();
-    fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
     const card = cardOf('Supplier contract ACME');
     expect(within(card).getByText('SharePoint')).toBeInTheDocument();
     expect(within(card).getByText('acme.pdf')).toBeInTheDocument();
@@ -331,7 +358,7 @@ describe('AnswerSources', () => {
 
   test('hovering a card highlights the passages that cite it', () => {
     renderSources();
-    fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
     const card = cardOf('Docs');
     fireEvent.mouseEnter(card);
     expect(currentCitationHighlight()).toEqual({ messageKey: 'msg-1', n: 2 });
@@ -341,7 +368,7 @@ describe('AnswerSources', () => {
 
   test('closes with Escape, but a menu takes the first Escape', () => {
     renderSources();
-    fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
     const card = cardOf('Supplier contract ACME');
     fireEvent.click(within(card).getByTitle('Actions'));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -354,7 +381,7 @@ describe('AnswerSources', () => {
   test('the phone sheet is modal and keeps Tab inside it', () => {
     // No matchMedia in jsdom: the panel renders as the phone sheet.
     renderSources();
-    fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
     const dialog = screen.getByRole('dialog', { name: 'Sources' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     const close = within(dialog).getByRole('button', { name: 'Close' });
@@ -372,7 +399,7 @@ describe('AnswerSources', () => {
     }));
     try {
       renderSources();
-      fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+      fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
       const dialog = screen.getByRole('dialog', { name: 'Sources' });
       expect(dialog).not.toHaveAttribute('aria-modal');
       const close = within(dialog).getByRole('button', { name: 'Close' });
@@ -480,7 +507,7 @@ describe('AnswerSources', () => {
     }));
     const content = many.map((source, i) => `Claim ${i} [${i + 1}](${source.url}).`).join(' ');
     renderWithCited({ queries: [], items: many }, content);
-    expect(screen.getByRole('button', { name: /sources.sourcesCount:7/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'sources.resultsCount:7' })).toBeInTheDocument();
     const list = screen.getByRole('list', { name: 'Cited in this answer' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
     fireEvent.click(screen.getByRole('button', { name: 'sources.showMoreCited:2' }));
@@ -494,22 +521,20 @@ describe('AnswerSources', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  test('a search that found nothing shows no entry either', () => {
+    const searched = { items: [], queries: ['what is langdock'] };
+    const { container } = render(
+      <AnswerSources messageKey="m" sources={searched} citations={resolveCitations('', searched)} />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
   test('an answer that found nothing shows no entry', () => {
     const empty = { items: [], queries: [] };
     const { container } = render(
       <AnswerSources messageKey="m" sources={empty} citations={resolveCitations('', empty)} />
     );
     expect(container).toBeEmptyDOMElement();
-  });
-
-  test('labels the entry by what was searched, else by the number of sources', () => {
-    const t = (key, fallback, options) =>
-      typeof fallback === 'object' ? `${key}:${fallback.count}` : `${key}:${options?.query}`;
-    expect(sourcesLabel(t, { queries: ['a'] })).toBe('sources.searchedFor:a');
-    expect(sourcesLabel(t, { queries: ['a', 'b', 'c'] })).toBe('sources.searches:3');
-    expect(sourcesLabel(t, { queries: [], items: [contract, minutes] })).toBe(
-      'sources.sourcesCount:2'
-    );
   });
 });
 
@@ -550,7 +575,7 @@ describe('where each source was found (#3056)', () => {
         citations={resolveCitations(scopedAnswer, set)}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /sources.sourcesCount/ }));
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
     return screen.getByRole('dialog', { name: 'Sources' });
   };
 

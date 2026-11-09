@@ -427,3 +427,25 @@ with the base path (`/ihub/uploads/assets/logo.png`, the address the browser sho
 not load behind a reverse proxy that forwards the prefix. Such URLs are now used as they are, as
 are `data:image/…` logos, which were not shown on any installation. `/uploads/assets/logo.png`
 keeps working as before.
+
+## Web Search: Answers No Longer End With a Second List of Sources
+
+Some models, especially smaller and local ones, ended web search answers with their own
+**Quellen:** or **Sources:** list, right above **Cited in this answer**, so the same sources showed
+twice. The **Web Chat** prompt asked them to *"Always cite your sources with URLs"*, which they
+read as "add a list of sources".
+
+- The prompt and the built-in research guidance now ask for the source right after each
+  statement. The source instruction the server adds names the list (*Sources*, *Quellen*,
+  *References*) and asks the model not to write one, for every search path.
+- If a model writes such a list anyway, the finished answer leaves it out. This applies only when
+  the list is clearly a list of sources: at the very end of the answer, after a short heading or a
+  horizontal rule, with every line linking one of the answer's sources. Every source in it is
+  listed under **Cited in this answer**. **Copy** and exports keep the text as the model wrote it.
+
+**Migration:** on the first start with this version, `contents/apps/web-chat.json` gets the new
+prompt in the languages where it is still the shipped default. A prompt you changed stays as it
+is. If you wrote your own, avoid asking for "sources with URLs" or a list of sources: the chat
+lists them.
+
+See [Web Tools → Sources and Citations](../../web-tools.md#sources-and-citations).

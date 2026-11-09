@@ -111,9 +111,11 @@ in the form again. The values stay with the chat, so they are still there when y
 ### Answers
 
 Answers stream in as they are written. Under each answer a badge says what it is based on — *AI
-knowledge*, *web search*, *iFinder*, *audio recording* and so on. When an answer used sources,
-**N sources** opens a panel with every web page and document, and numbered badges in the text mark
-which source supports which statement. Hovering a badge highlights the passage and its source.
+knowledge*, *web search*, *iFinder*, *audio recording* and so on. When an answer used sources, it
+ends with the sources it cites (**Cited in this answer**), and **N results**, next to the badge,
+opens a panel with every web page and document it found, cited or not. Numbered badges in the text
+mark which source supports which statement. Hovering a badge highlights the passage and its
+source.
 
 ### Message actions
 

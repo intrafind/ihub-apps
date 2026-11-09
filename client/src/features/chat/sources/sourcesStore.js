@@ -20,11 +20,17 @@ import { useSyncExternalStore } from 'react';
  *   hover:  { messageKey, n } | null — set while a badge or card is hovered or
  *           focused; shown over the pinned one, which returns when it ends
  *
+ * Besides the state, the store remembers what opened the panel (an inline
+ * badge, a number in the cited list, the entry under the answer), so focus
+ * returns there when the panel closes. It is not state: nothing renders it.
+ *
  * @module features/chat/sources/sourcesStore
  */
 
 let state = { open: null, pinned: null, hover: null };
 const listeners = new Set();
+/** @type {{element: HTMLElement|null, n: number|null}|null} */
+let opener = null;
 
 /** Update the state and notify the subscribers. */
 function set(next) {
@@ -44,9 +50,25 @@ const getSnapshot = () => state;
 /** Whether `a` refers to citation `n` of the answer `messageKey`. */
 const same = (a, messageKey, n) => a?.messageKey === messageKey && a?.n === n;
 
-/** Open the sources panel of an answer, optionally scrolled to citation `n`. */
-export function openSources(messageKey, focus = null) {
+/**
+ * Open the sources panel of an answer, optionally scrolled to citation `n`.
+ *
+ * @param {string} messageKey
+ * @param {number|null} [focus] - the citation number to scroll to
+ * @param {{opener?: HTMLElement|null}} [options] - what opened the panel; focus
+ *   returns there when it closes
+ */
+export function openSources(messageKey, focus = null, { opener: element = null } = {}) {
+  opener = { element, n: focus };
   set({ open: { messageKey, focus } });
+}
+
+/**
+ * What opened the sources panel last, and the citation it opened on.
+ * @returns {{element: HTMLElement|null, n: number|null}|null}
+ */
+export function sourcesOpener() {
+  return opener;
 }
 
 /** Close the sources panel, and drop the pinned highlight with it. */
@@ -100,5 +122,6 @@ export function currentCitationHighlight() {
 
 /** Test helper — back to the initial state. */
 export function _resetSourcesStore() {
+  opener = null;
   set({ open: null, pinned: null, hover: null });
 }
