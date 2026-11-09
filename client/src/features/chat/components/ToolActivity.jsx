@@ -215,136 +215,142 @@ function StatusIcon({ item, fallback }) {
 }
 
 function ActivityItem({ item, stalled = false }) {
-  const { t } = useTranslation();
-
-  if (item.kind === 'skill') {
-    return (
-      <li>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusIcon item={item} fallback="sparkles" />
-          <span>{t('toolActivity.usedSkill', 'Used skill')}</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
-            {item.name}
-          </span>
-          {item.activatedBy === 'user' && (
-            <span className="text-gray-500 dark:text-gray-400">
-              {t('toolActivity.skillByUser', 'started by you')}
-            </span>
-          )}
-          {item.activatedBy === 'model' && (
-            <span className="text-gray-500 dark:text-gray-400">
-              {t('toolActivity.skillByModel', 'loaded by the model')}
-            </span>
-          )}
-        </div>
-      </li>
-    );
-  }
-
+  if (item.kind === 'skill') return <SkillRow item={item} />;
   // A call whose arguments were never seen to start (still being written,
   // waiting for approval, stopped or refused first) knows no query or page yet:
   // it reads as a plain call, whatever the server said it is.
   const unstarted = item.started === false;
+  if (item.kind === 'search' && !unstarted) return <SearchRow item={item} />;
+  if (item.kind === 'fetch' && !unstarted) return <FetchRow item={item} />;
+  return <ToolRow item={item} stalled={stalled} />;
+}
 
-  if (item.kind === 'search' && !unstarted) {
-    const queries = item.native ? item.queries : item.query ? [item.query] : [];
-    return (
-      <li>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusIcon item={item} fallback="search" />
-          <span>
-            {queries.length
-              ? t('toolActivity.searchedFor', 'Searched for')
-              : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
+function SkillRow({ item }) {
+  const { t } = useTranslation();
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusIcon item={item} fallback="sparkles" />
+        <span>{t('toolActivity.usedSkill', 'Used skill')}</span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
+          {item.name}
+        </span>
+        {item.activatedBy === 'user' && (
+          <span className="text-gray-500 dark:text-gray-400">
+            {t('toolActivity.skillByUser', 'started by you')}
           </span>
-          {queries.map(query => (
-            <span
-              key={query}
-              className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50 break-all"
-            >
-              {query}
-            </span>
-          ))}
-          {item.sources.length > 0 && (
-            <span className="text-gray-500 dark:text-gray-400">
-              {t('toolActivity.results', { count: item.sources.length })}
-            </span>
-          )}
-          <IntegrationChip item={item} />
-          <ItemStatus item={item} />
-        </div>
-        <ItemDetails item={item} />
-        <ItemError item={item} />
+        )}
+        {item.activatedBy === 'model' && (
+          <span className="text-gray-500 dark:text-gray-400">
+            {t('toolActivity.skillByModel', 'loaded by the model')}
+          </span>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function SearchRow({ item }) {
+  const { t } = useTranslation();
+  const queries = item.native ? item.queries : item.query ? [item.query] : [];
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusIcon item={item} fallback="search" />
+        <span>
+          {queries.length
+            ? t('toolActivity.searchedFor', 'Searched for')
+            : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
+        </span>
+        {queries.map(query => (
+          <span
+            key={query}
+            className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50 break-all"
+          >
+            {query}
+          </span>
+        ))}
         {item.sources.length > 0 && (
-          <ul className="mt-1 ms-5 space-y-0.5">
-            {item.sources.map(source => (
-              <SourceRow key={source.id} source={source} />
-            ))}
-          </ul>
-        )}
-      </li>
-    );
-  }
-
-  if (item.kind === 'fetch' && !unstarted) {
-    const page = item.sources[0];
-    const url = item.url || page?.url;
-    const host = url ? hostnameOf(url) : null;
-    const label = page?.title || item.title || host || item.documentId;
-    return (
-      <li>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusIcon item={item} fallback="document-text" />
-          <span>
-            {item.limitReached
-              ? t('toolActivity.notRead', 'Not read')
-              : t('toolActivity.readPage', 'Read')}
+          <span className="text-gray-500 dark:text-gray-400">
+            {t('toolActivity.results', { count: item.sources.length })}
           </span>
-          {url ? (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
-              title={url}
-            >
-              {label}
-            </a>
-          ) : (
-            label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
-          )}
-          {label !== host && host && (
-            <span className="text-gray-500 dark:text-gray-400">{host}</span>
-          )}
-          {page?.read?.words > 0 && (
-            <span className="text-gray-500 dark:text-gray-400">
-              {t('toolActivity.wordsRead', { count: page.read.words })}
-            </span>
-          )}
-          {page?.read?.truncated && (
-            <span
-              className="text-amber-700 dark:text-amber-400"
-              title={t('toolActivity.truncatedTitle', 'The page is longer than what was read')}
-            >
-              {t('toolActivity.truncated', 'truncated')}
-            </span>
-          )}
-          <ItemStatus item={item} />
-        </div>
-        {item.limitReached && (
-          <p className="mt-1 ms-5 text-amber-700 dark:text-amber-400">
-            {t(
-              'toolActivity.pageReadLimit',
-              'Page read limit reached for this answer — ask to continue in the next message to read more.'
-            )}
-          </p>
         )}
-        <ItemDetails item={item} />
-        <ItemError item={item} />
-      </li>
-    );
-  }
+        <IntegrationChip item={item} />
+        <ItemStatus item={item} />
+      </div>
+      <ItemDetails item={item} />
+      <ItemError item={item} />
+      {item.sources.length > 0 && (
+        <ul className="mt-1 ms-5 space-y-0.5">
+          {item.sources.map(source => (
+            <SourceRow key={source.id} source={source} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
+function FetchRow({ item }) {
+  const { t } = useTranslation();
+  const page = item.sources[0];
+  const url = item.url || page?.url;
+  const host = url ? hostnameOf(url) : null;
+  const label = page?.title || item.title || host || item.documentId;
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusIcon item={item} fallback="document-text" />
+        <span>
+          {item.limitReached
+            ? t('toolActivity.notRead', 'Not read')
+            : t('toolActivity.readPage', 'Read')}
+        </span>
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+            title={url}
+          >
+            {label}
+          </a>
+        ) : (
+          label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
+        )}
+        {label !== host && host && <span className="text-gray-500 dark:text-gray-400">{host}</span>}
+        {page?.read?.words > 0 && (
+          <span className="text-gray-500 dark:text-gray-400">
+            {t('toolActivity.wordsRead', { count: page.read.words })}
+          </span>
+        )}
+        {page?.read?.truncated && (
+          <span
+            className="text-amber-700 dark:text-amber-400"
+            title={t('toolActivity.truncatedTitle', 'The page is longer than what was read')}
+          >
+            {t('toolActivity.truncated', 'truncated')}
+          </span>
+        )}
+        <ItemStatus item={item} />
+      </div>
+      {item.limitReached && (
+        <p className="mt-1 ms-5 text-amber-700 dark:text-amber-400">
+          {t(
+            'toolActivity.pageReadLimit',
+            'Page read limit reached for this answer — ask to continue in the next message to read more.'
+          )}
+        </p>
+      )}
+      <ItemDetails item={item} />
+      <ItemError item={item} />
+    </li>
+  );
+}
+
+function ToolRow({ item, stalled }) {
+  const { t } = useTranslation();
   return (
     <li>
       <div className="flex flex-wrap items-center gap-1.5">

@@ -123,7 +123,10 @@ export function buildRunActivity(run, childRuns = []) {
   const toolActivity = buildToolActivity(run);
   // `reading` is the page a search is fetching right now: never true of a
   // finished run, and meaningless once stored.
-  if (toolActivity) activity.toolActivity = { items: toolActivity.items, reading: null };
+  // A run with no rows has nothing to keep (its idle line is live-only).
+  if (toolActivity?.items.length) {
+    activity.toolActivity = { items: toolActivity.items, reading: null };
+  }
   if (run.searchSummary) activity.searchSummary = { ...run.searchSummary, searching: false };
   if (run.skills?.length) activity.activeSkills = run.skills;
   const answerSource = answerSourceOf(run);

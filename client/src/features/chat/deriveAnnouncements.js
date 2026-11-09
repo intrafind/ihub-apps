@@ -36,6 +36,7 @@ import {
   failureReasonOf,
   hasOutputKind,
   idleLabel,
+  isActiveItem,
   outputNounOf,
   stalledLabel,
   stoppedUnstartedLabel,
@@ -72,6 +73,74 @@ function lastAssistant(messages) {
 }
 
 /**
+ * Collects what to say and when to look again during one derivation. An event
+ * is said once: its key is recorded in `done`, which carries over to the next
+ * derivation through the state.
+ */
+function createCollector(done) {
+  const collector = {
+    done: { ...done },
+    announcements: [],
+    wakeInMs: null,
+    say(key, text, priority) {
+      if (collector.done[key]) return;
+      collector.done[key] = true;
+      collector.announcements.push({ key, text, priority });
+    },
+    // Derive again in `ms` although nothing changed by then (a grace ends, a caption is due).
+    wakeIn(ms) {
+      if (ms === null || ms === undefined || !Number.isFinite(ms)) return;
+      const wait = Math.max(1, ms);
+      collector.wakeInMs = collector.wakeInMs === null ? wait : Math.min(collector.wakeInMs, wait);
+    }
+  };
+  return collector;
+}
+
+/** The events of a call that is being written, waits for approval or runs. */
+function announceActiveCall(collector, item, { t, now }) {
+  const label = spoken(activeLabel(t, item, null));
+  if (item.status === 'awaiting') {
+    collector.say(`${item.id}:start`, label, 'normal');
+    collector.say(`${item.id}:awaiting`, awaitingApprovalLabel(t), 'high');
+    return;
+  }
+  collector.say(`${item.id}:start`, label, 'normal');
+  if (item.status !== 'preparing' || item.ready) return;
+  if (isStalled(item, now)) {
+    collector.say(`${item.id}:stalled`, stalledLabel(t), 'normal');
+  } else if (Number.isFinite(item.grewAtMs)) {
+    collector.wakeIn(STALL_AFTER_MS - (elapsedAt(item, now) - item.grewAtMs));
+  }
+}
+
+/** The events of a call that ended: a file is done, the call failed, a file was stopped. */
+function announceEndedCall(collector, item, { t }) {
+  const noun = outputNounOf(t, item.outputKind);
+  if (item.status === 'completed' && noun) {
+    collector.say(`${item.id}:done`, createdLabel(t, noun), 'high');
+  } else if (item.status === 'error') {
+    const reason = failureReasonOf(t, item) || item.error || '';
+    const what = noun ? spoken(noun) : item.name;
+    const detail = reason ? ` ${reason.slice(0, MAX_REASON_CHARS)}` : '';
+    collector.say(`${item.id}:failed`, `${what}: ${failedLabel(t)}.${detail}`, 'highest');
+  } else if (item.status === 'stopped' && !item.started && hasOutputKind(item)) {
+    collector.say(`${item.id}:stopped`, stoppedUnstartedLabel(t, item), 'highest');
+  }
+}
+
+/** The idle line, once per model step, after it has been up for a while. */
+function announceIdle(collector, idle, idleSince, { t, now }) {
+  const key = `idle:${idle.kind}:${idle.step ?? 0}`;
+  idleSince[key] = idleSince[key] ?? now;
+  if (now - idleSince[key] >= IDLE_ANNOUNCE_AFTER_MS) {
+    collector.say(key, spoken(idleLabel(t, idle.kind)), 'low');
+  } else {
+    collector.wakeIn(IDLE_ANNOUNCE_AFTER_MS - (now - idleSince[key]));
+  }
+}
+
+/**
  * Work out what to announce now.
  *
  * Looks at the newest assistant message only. The state is per message (each
@@ -86,91 +155,35 @@ function lastAssistant(messages) {
  *   `wakeInMs` is when to derive again although nothing changed (a row's grace
  *   ends, the stall caption is due, the idle line has been up long enough)
  */
-export function deriveAnnouncements(state, messages, { t, now }) {
+export function deriveAnnouncements(state, messages, context) {
   const message = lastAssistant(messages);
-  const fresh = (message?.id ?? null) !== state.messageId;
-  const previous = fresh
-    ? {
-        ...createAnnouncerState(),
-        messageId: message?.id ?? null,
-        quiet: Boolean(message) && !message.loading
-      }
-    : state;
+  const messageId = message?.id ?? null;
+  const previous =
+    messageId === state.messageId
+      ? state
+      : { ...createAnnouncerState(), messageId, quiet: Boolean(message) && !message.loading };
   if (!message) return { state: previous, announcements: [], wakeInMs: null };
 
-  const activity = message.toolActivity || null;
-  const done = { ...previous.done };
+  const collector = createCollector(previous.done);
   const idleSince = { ...previous.idleSince };
-  const announcements = [];
-  let wakeInMs = null;
-
-  const say = (key, text, priority) => {
-    if (done[key]) return;
-    done[key] = true;
-    announcements.push({ key, text, priority });
-  };
-  const wakeIn = ms => {
-    if (ms !== null && ms !== undefined && Number.isFinite(ms)) {
-      const wait = Math.max(1, ms);
-      wakeInMs = wakeInMs === null ? wait : Math.min(wakeInMs, wait);
-    }
-  };
-
+  const activity = message.toolActivity;
   for (const item of activity?.items || []) {
     // A skill is not a call the user waits for.
     if (item.kind === 'skill') continue;
-    if (!isPainted(item, now)) {
-      wakeIn(paintsIn(item, now));
-      continue;
-    }
-    const noun = outputNounOf(t, item.outputKind);
-    const label = spoken(activeLabel(t, item, null));
-
-    if (item.status === 'preparing' || item.status === 'running') {
-      say(`${item.id}:start`, label, 'normal');
-    }
-    if (item.status === 'preparing' && !item.ready) {
-      if (isStalled(item, now)) {
-        say(`${item.id}:stalled`, stalledLabel(t), 'normal');
-      } else if (Number.isFinite(item.grewAtMs)) {
-        wakeIn(STALL_AFTER_MS - (elapsedAt(item, now) - item.grewAtMs));
-      }
-    }
-    if (item.status === 'awaiting') {
-      say(`${item.id}:start`, label, 'normal');
-      say(`${item.id}:awaiting`, awaitingApprovalLabel(t), 'high');
-    }
-    if (item.status === 'completed' && noun) {
-      say(`${item.id}:done`, createdLabel(t, noun), 'high');
-    }
-    if (item.status === 'error') {
-      const reason = failureReasonOf(t, item) || item.error || '';
-      const what = noun ? spoken(noun) : item.name;
-      say(
-        `${item.id}:failed`,
-        `${what}: ${failedLabel(t)}.${reason ? ` ${reason.slice(0, MAX_REASON_CHARS)}` : ''}`,
-        'highest'
-      );
-    }
-    if (item.status === 'stopped' && !item.started && hasOutputKind(item)) {
-      say(`${item.id}:stopped`, stoppedUnstartedLabel(t, item), 'highest');
+    if (!isPainted(item, context.now)) {
+      collector.wakeIn(paintsIn(item, context.now));
+    } else if (isActiveItem(item)) {
+      announceActiveCall(collector, item, context);
+    } else {
+      announceEndedCall(collector, item, context);
     }
   }
-
-  // The idle line, once per model step, after it has been up for a while.
-  if (activity?.idle) {
-    const idle = activity.idle;
-    const key = `idle:${idle.kind}:${idle.step ?? 0}`;
-    idleSince[key] = idleSince[key] ?? now;
-    const text = spoken(idleLabel(t, idle.kind));
-    if (now - idleSince[key] >= IDLE_ANNOUNCE_AFTER_MS) say(key, text, 'low');
-    else wakeIn(IDLE_ANNOUNCE_AFTER_MS - (now - idleSince[key]));
-  }
+  if (activity?.idle) announceIdle(collector, activity.idle, idleSince, context);
 
   return {
-    state: { ...previous, done, idleSince },
-    announcements: previous.quiet ? [] : announcements,
-    wakeInMs: previous.quiet ? null : wakeInMs
+    state: { ...previous, done: collector.done, idleSince },
+    announcements: previous.quiet ? [] : collector.announcements,
+    wakeInMs: previous.quiet ? null : collector.wakeInMs
   };
 }
 
