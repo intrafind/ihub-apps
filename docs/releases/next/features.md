@@ -1233,3 +1233,27 @@ Tick documents in a project and choose **Delete** to delete them all after one c
 - Each document is removed on its own and recorded like a single removal.
 - A document that cannot be deleted stays in the list and stays ticked, and the page says why, so
   you can try it again.
+
+## Chat: Sources Sit at the End of the Answer, Next to "Based on Web Search"
+
+An answer used to show two near-identical lines above its text: **Searched the web · 1 search · 10
+sources** and, right under it, **Searched for “…”** with the sites' icons. The entry to the
+sources has moved to the end of the answer. The top of an answer now says how it searched, and
+the end says what it rests on.
+
+- Under the answer: **Cited in this answer**, then one row with the entry at the start and the
+  **Based on web search** badge at the end. In narrow panes (Outlook, the browser extension,
+  phones) the badge moves to its own line.
+- The entry reads **10 results** instead of **Searched for “…”**, and the activity line above the
+  answer counts **results** too. Not "sources": the count includes everything the search found,
+  and only what the answer cites is a source of it. The searches are listed in the panel's header.
+- The entry appears once the answer is complete. While the answer is still being written, the
+  numbered badges in the text open the panel, and a panel that is open stays open when the answer
+  completes.
+- Closing the panel returns the keyboard focus to whatever opened it: a badge in the text, a
+  number in the cited list or the entry. Focus you have moved elsewhere, for example to the
+  message box, stays there.
+- The entry and the badge are the same height. The entry has an outline because it can be
+  clicked, and the badge has a soft fill without an outline because it is only a label.
+
+See [Answer Sources](../../answer-sources.md#what-users-see).

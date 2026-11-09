@@ -22,8 +22,8 @@ import CustomResponseRenderer from '../../../shared/components/CustomResponseRen
 import ClarificationCard from './ClarificationCard';
 import ApprovalCard from './ApprovalCard';
 import GeneratedImage from './GeneratedImage';
-import AnswerSources, { CitedSources } from './AnswerSources';
-import { resolveCitations } from '../../../../../shared/sources/index.js';
+import AnswerSources, { CitedSources, hasAnswerResults } from './AnswerSources';
+import { findTrailingSourceList, resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
@@ -177,6 +177,34 @@ function ChatMessage({
     () => (!isUser && message.sources ? resolveCitations(answerText, message.sources) : null),
     [isUser, answerText, message.sources]
   );
+  // A list of sources the model wrote at the end of a finished answer repeats
+  // "Cited in this answer" right under it, so it is not shown (#3522). Every
+  // entry of it is among the cited sources, since citations are resolved on
+  // the whole text. Not while the answer streams (the cited list is not there
+  // yet); the stored text, copy and export keep it.
+  const trailingSourceList = useMemo(
+    () =>
+      !isUser && !message.loading && citationView?.cited.length
+        ? findTrailingSourceList(answerText, citationView)
+        : null,
+    [isUser, message.loading, citationView, answerText]
+  );
+  // The footer at the answer's end (#3521): the cited list, then one row with
+  // the entry to everything found and the badge saying what the answer is
+  // based on. Only once the answer is complete.
+  const finished = !message.loading;
+  const hasCited = Boolean(citationView?.cited.length);
+  const hasResults = hasAnswerResults(citationView);
+  const showAnswerSourceBadge =
+    !isUser &&
+    !isError &&
+    finished &&
+    Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
+  const showSourcesBlock = !isUser && finished && (hasCited || hasResults);
+  const showFooterRow = !isUser && finished && (hasResults || showAnswerSourceBadge);
+  const footerRowClass = hasCited
+    ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
+    : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
   const citations = useMemo(
     () =>
       citationView?.cited.length
@@ -590,8 +618,10 @@ function ChatMessage({
   // Render the message content based on the output format
   const renderContent = () => {
     // Ensure content is always a string for rendering
-    const storedContent =
+    let storedContent =
       typeof message.content === 'string' ? message.content : message.content || '';
+    // Without a list of sources the model wrote at its end (see trailingSourceList).
+    if (trailingSourceList) storedContent = answerText.slice(0, trailingSourceList.start).trimEnd();
 
     // A turn that was stopped or that failed is reconstructed here when the
     // chat is reopened from the store. The live paths write their notice into
@@ -1001,18 +1031,6 @@ function ChatMessage({
         {!isUser && message.integrationAuthRequired?.length > 0 && (
           <ConnectCards prompts={message.integrationAuthRequired} readOnly={readOnly} />
         )}
-        {/* Everything the answer found — web pages, documents, records —
-            behind "Searched for …" / "N sources" above it, opening the
-            sources panel with what it cites and what it only considered.
-            Shown while the answer streams too: its badges open the panel. */}
-        {!isUser && citationView && (
-          <AnswerSources
-            messageKey={messageKey}
-            sources={message.sources}
-            citations={citationView}
-            onOpenInApp={onOpenSourceInApp}
-          />
-        )}
         {renderContent()}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
@@ -1066,28 +1084,49 @@ function ChatMessage({
             with the other provenance. */}
         {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
 
-        {/* The sources the finished answer cites, listed at its end. Not
-            while it streams, so the list does not grow under the text. */}
-        {!isUser && citationView && !message.loading && (
-          <CitedSources messageKey={messageKey} sources={citationView.cited} />
-        )}
-
-        {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
-
-        {/* Answer source indicator - completed assistant messages whose source
-            the server reported (or a workflow produced), inside the bubble */}
-        {!isUser &&
-          !isError &&
-          !message.loading &&
-          (message.answerSource || message.workflowResult || message.knowledgeScope) && (
-            <div className="flex justify-end">
-              <AnswerSourceBadge
-                answerSource={message.answerSource}
-                workflowResult={message.workflowResult}
-                knowledgeScope={message.knowledgeScope}
-              />
+        {/* Where the answer came from, at its end (#3521): the sources it
+            cites, listed like footnotes; under them one row with the entry
+            to everything it found ("N results", opening the sources panel)
+            at the start and what the answer is based on ("Based on web
+            search") at the end. How it searched stays above the answer
+            (ToolActivity). Not while the answer streams, so nothing grows
+            or jumps under the text — but the sources component stays
+            mounted, because the inline badges open its panel from the text,
+            and a panel open when the answer completes stays open. Workflow
+            result attribution is handled by WorkflowStepIndicator above. */}
+        {!isUser && (
+          <div
+            className={
+              showSourcesBlock
+                ? 'mt-3 border-t border-gray-200 pt-2 dark:border-gray-700'
+                : undefined
+            }
+          >
+            {showSourcesBlock && hasCited && (
+              <CitedSources messageKey={messageKey} sources={citationView.cited} />
+            )}
+            <div className={showFooterRow ? footerRowClass : undefined}>
+              {citationView && (
+                <AnswerSources
+                  messageKey={messageKey}
+                  sources={message.sources}
+                  citations={citationView}
+                  onOpenInApp={onOpenSourceInApp}
+                  entryHidden={!finished}
+                />
+              )}
+              {showAnswerSourceBadge && (
+                <div className="ms-auto flex max-w-full justify-end">
+                  <AnswerSourceBadge
+                    answerSource={message.answerSource}
+                    workflowResult={message.workflowResult}
+                    knowledgeScope={message.knowledgeScope}
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
       </div>
 
       {/*
@@ -1208,8 +1247,10 @@ function ChatMessage({
         </div>
       )}
 
-      {/* Combined action icons and feedback buttons in a single row. */}
-      <div className="mt-1 px-1">
+      {/* Combined action icons and feedback buttons in a single row. A little
+          further down under the answer's footer row, which starts at the same
+          edge, so the two do not read as one toolbar. */}
+      <div className={`${showFooterRow ? 'mt-2' : 'mt-1'} px-1`}>
         <div
           className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
             showActions || readAloudPlayback.state !== 'idle' ? 'opacity-100' : 'opacity-0'

@@ -20,6 +20,13 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 const renderBadge = sources => render(<AnswerSourceBadge answerSource={{ sources }} />);
 
 describe('AnswerSourceBadge', () => {
+  it('grows with a label that wraps instead of spilling out of a fixed height', () => {
+    renderBadge(['websearch']);
+    const badge = screen.getByText('chatMessage.answerSource.websearch').parentElement;
+    expect(badge).toHaveClass('min-h-6');
+    expect(badge).not.toHaveClass('h-6');
+  });
+
   it('labels email-only context as email content', () => {
     renderBadge(['email']);
     expect(screen.getByText('chatMessage.answerSource.email')).toBeInTheDocument();

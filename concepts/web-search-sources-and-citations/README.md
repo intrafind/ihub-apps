@@ -24,6 +24,37 @@ separates **Cited in this answer** (numbered like the inline badges) from **Also
 citations are numbered superscript badges rather than site-name links, so several can sit after
 one sentence; badges and cards highlight each other; cards show whether a page was read.
 
+## Later Change: The Entry Moved to the Answer's End
+
+Issue [intrafind/ihub-apps#3521](https://github.com/intrafind/ihub-apps/issues/3521). The
+reference put the "searched the web" step and the entry to the sources above the answer. Above
+the text that said "searched" twice (the activity line and the entry), and under it the
+"Based on web search" badge sat alone in its row. Reviewed from a product, UX and UI angle, the
+layout now separates the process from the evidence:
+
+- **Above the answer**: only how it searched (the activity line, live while the answer streams,
+  one line afterwards). It stays put while the text streams, which is why it does not move.
+- **At the answer's end**: **Cited in this answer**, then one row with the entry at the start and
+  the answer-source badge at the end; on narrow panes the badge wraps to its own line.
+- **"N results", not the query**: at the bottom the query would repeat the activity line (the
+  queries stay in the panel header), and not "sources": the count includes everything found, and
+  only the cited part are sources of the answer. The activity line counts results too.
+- **Not while streaming**: the entry appears with the cited list once the answer is complete. Its
+  component stays mounted, so the inline badges open the panel meanwhile and an open panel stays
+  open when the answer completes.
+- **Focus** returns to what opened the panel (an inline badge, found again after the markup was
+  rebuilt; a cited number; the entry), not always to the entry.
+- **Action vs. status**: the entry is an outlined chip (clickable), the badge a tinted chip
+  without outline (a label); both 24 px high.
+
+A list of sources the model writes at the end of its answer repeats **Cited in this answer** right
+above the row. Issue [intrafind/ihub-apps#3522](https://github.com/intrafind/ihub-apps/issues/3522)
+removes the prompt wording that invited it ("cite your sources with URLs"), names the list in the
+source guidance, and leaves a list that is clearly one out of the finished answer
+(`shared/sources/trailingSourceList.js`).
+
+The screenshots below show the original layout.
+
 ## Result
 
 Desktop — the panel opened from badge 3; its paragraph and card are highlighted:

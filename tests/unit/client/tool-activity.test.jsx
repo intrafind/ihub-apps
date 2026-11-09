@@ -349,7 +349,7 @@ describe('ToolActivity', () => {
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveTextContent(
-      'Searched the web · toolActivity.searches:1 · toolActivity.sources:3 · toolActivity.pagesRead:1'
+      'Searched the web · toolActivity.searches:1 · toolActivity.results:3 · toolActivity.pagesRead:1'
     );
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
 
@@ -410,7 +410,7 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveTextContent(
-      'Searched documents · toolActivity.searches:1 · toolActivity.sources:1'
+      'Searched documents · toolActivity.searches:1 · toolActivity.results:1'
     );
     expect(toggle).not.toHaveTextContent('Searched the web');
     expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'document-text');
@@ -463,7 +463,7 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveTextContent(
-      'Searched documents · toolActivity.searches:1 · toolActivity.sources:2 · toolActivity.documentsRead:1'
+      'Searched documents · toolActivity.searches:1 · toolActivity.results:2 · toolActivity.documentsRead:1'
     );
     fireEvent.click(toggle);
     // The read links to the document via the search hit's deep link.
