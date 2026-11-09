@@ -116,6 +116,7 @@ class IFinderHandler extends SourceHandler {
         documentId,
         link: metadataResult.url || `ifinder://document/${documentId}`, // Use document URL if available
         title: metadataResult.title,
+        filename: firstValue(metadataResult.filename),
         author: metadataResult.author,
         documentType: metadataResult.documentType,
         mimeType: metadataResult.mimeType,

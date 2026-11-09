@@ -259,9 +259,19 @@ system prompt.
   <project id="faq" name="FAQ" mode="loaded">
     <document id="itm_…" name="faq.md" origin="uploaded">…text…</document>
   </project>
-  <project id="ihub-documentation" name="iHub Documentation" mode="searched" documents="1" tool="knowledge_search"/>
+  <project id="ihub-documentation" name="iHub Documentation" mode="searched" documents="2" tool="knowledge_search">
+    <document-list documents="2" listed="2">
+Read a listed document directly with knowledge_read (its id), or search them all with knowledge_search.
+- itm_… "release-notes-5.2.pdf" (12000 tokens) — Release notes 5.2: What changed in iHub 5.2.
+- itm_… "Install guide" https://docs.example.com/install — Installing iHub: Requirements and first steps.
+    </document-list>
+  </project>
 </projects>
 ```
+
+A **searched** project lists the documents that are not in the prompt already, so the model can
+pick the one to read instead of searching blindly. See
+[What the model knows about a searched project](#what-the-model-knows-about-a-searched-project).
 
 ### Switching projects off for an app
 
@@ -381,12 +391,50 @@ integration and cannot be switched off. The definition ships with iHub
 | Tool               | What it does                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `knowledge_search` | Searches the projects (all, or one with `project`) for passages that answer a query; ranked, numbered hits. |
-| `knowledge_read`   | Reads one document in full, or one section of it. A long document comes back as an outline first.           |
-| `knowledge_list`   | Lists the documents of the projects with id, name, kind, size, status and provenance.                     |
+| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first. |
+| `knowledge_list`   | Lists the documents of the projects with id, name, title and description (when known), kind, size, status and provenance. |
 
 Each tool's description names the projects in scope and whether each one is loaded in full, so
 the model knows which ids it may pass. A tool call can never reach a project the request did not
 bring. Search is keyword search (BM25) over the stored text; there are no embeddings.
+
+#### What the model knows about a searched project
+
+A project that is searched rather than loaded in full carries a `<document-list>` inside its
+`<project>` element of the `<projects>` block. One line per document: its id, its name, its size in
+tokens, whether it is pinned, its URL (web pages and other linked documents) and, when known, the
+document's title and a short description. Pinned documents come first; documents already in the
+prompt (pinned ones, in `auto` and `tools` mode) are not listed again.
+
+- **Bounded.** At most 50 documents and about 2,000 tokens per project, and all lists of a
+  request together at most 10 % of the model's context window (never more than the 75 % limit
+  leaves beside the documents in the prompt), spent in scope order. When the list is cut, its
+  last line says how many documents are left out and to call `knowledge_list` for the complete
+  list. The `<document-list>` element says how many documents there are (`documents`) and how many
+  it lists (`listed`).
+- **In the prompt, not the tool descriptions.** Document names, titles and descriptions of a user
+  project are text its editors control, so they go into the `<projects>` block, with any tag that
+  could close it escaped, and never into the tool descriptions, which carry only what an admin wrote.
+- **Read directly.** `knowledge_read` takes a listed document's id; the model need not search first.
+
+The **title and description** are captured, not typed:
+
+| Document                    | Title                                                         | Description                                          |
+| --------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| Upload, picked or written   | The document's metadata title (PDF, HTML), else its first heading or short first line | The HTML meta description, else its first paragraph |
+| Web page (URL item)         | The page's title                                              | The page's meta description                          |
+| iHub page | The page's configured title, in the item's language (else English, else the page id) | none |
+| iFinder document | The document's `title` field, else its file name | none |
+
+An upload records them when it is extracted, and again on every new version or refresh. A web
+page records them when it is added or its URL changes; a web page added before this existed, or
+one that could not be read when it was added, records them the first time it is read. An iFinder
+document records its title the first time it is read. An iHub page's title is not stored: it is
+read from the page configuration each time, so a renamed page is listed by its new title. In a
+smart collection (the iFinder tier) a document is named by its title, else its file name, as the
+reader may see it. A title the
+same as the document's name is not repeated in the list. `knowledge_list` returns both, as `title`
+and `description`, beside the other fields.
 
 #### How much of a linked document is searchable
 

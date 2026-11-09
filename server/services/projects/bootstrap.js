@@ -14,7 +14,7 @@
  */
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import { evictItemText, setTextReader } from '../knowledge/ItemTextService.js';
+import { evictItemText, setItemInfoRecorder, setTextReader } from '../knowledge/ItemTextService.js';
 import { evictProjectIndex } from '../knowledge/LocalKnowledgeProvider.js';
 import { evictItemKeys, readText } from './ItemTextStore.js';
 import {
@@ -43,6 +43,10 @@ let ingestService = null;
 export async function bootstrapProjects({ reconcile = true } = {}) {
   const service = getProjectService();
   setTextReader((project, item) => readText(project, item, { platform: platformOf() }));
+  // A web page added before titles were captured records its own on first read.
+  setItemInfoRecorder((project, item, info) =>
+    getProjectService().recordItemInfo(project.id, item.id, info)
+  );
   if (!ingestService) {
     ingestService = new ProjectIngestService({
       service: () => getProjectService(),

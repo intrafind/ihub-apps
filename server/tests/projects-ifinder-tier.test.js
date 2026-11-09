@@ -568,6 +568,14 @@ describe('opening a collection', () => {
     assert.equal(search.query.query_logging, undefined, 'the lookup stays out of the query log');
   });
 
+  it('names a document without a title by its file name', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-f'] });
+    ifinder.addDocument('doc-f', { filename: 'lease-2026.pdf', content: 'lease text' });
+    const res = await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.items[0].name, 'lease-2026.pdf');
+  });
+
   it('answers 404 for a collection that is someone elses, missing, or opened without a subject', async () => {
     collection(2, GRACE.email);
     for (const [user, id] of [
