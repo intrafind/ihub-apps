@@ -15,6 +15,7 @@ import {
   typeSlashAt
 } from '../utils/slashCommand';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
+import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -180,6 +181,8 @@ function ChatInput({
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
+  // The embedded host (Outlook taskpane, browser extension) and its context toggles.
+  const embeddedHost = useEmbeddedHost();
   const featureFlags = useFeatureFlags();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
@@ -446,7 +449,22 @@ function ChatInput({
           integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
         )
       : [];
-  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (visibleScopes.length > 0 ? 1 : 0);
+  // Web search and the host's "Include …" toggles (browser extension) are
+  // entries of the menu too, counted exactly as ChatInputActionsMenu counts
+  // them: when the two disagree, the menu keeps upload in its phone-only
+  // section and this bar hides its own button, so on a desktop the paper clip
+  // was nowhere (an app with web search showed it only with magic prompt on).
+  const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const hasHostContextToggles =
+    Boolean(onHostContextFlagChange) &&
+    Array.isArray(embeddedHost?.contextToggles) &&
+    embeddedHost.contextToggles.length > 0;
+  const totalActions =
+    quickActionCount +
+    (hasTools ? 1 : 0) +
+    (visibleScopes.length > 0 ? 1 : 0) +
+    (hasWebsearch ? 1 : 0) +
+    (hasHostContextToggles ? 1 : 0);
   const isSingleActionOptimization =
     totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
