@@ -84,8 +84,49 @@ export function EnabledByDefaultCheckbox({ binding, onBindingChange }) {
 }
 
 /**
+ * The "Always loaded" checkbox of a binding (tool search): `alwaysLoaded: true`
+ * sends the integration's tools to the model in full on every request, never
+ * left to `search_tools`. Absent means tool search may leave them out when the
+ * app's tools exceed the budget. Only shown while the platform's tool search
+ * feature is on.
+ *
+ * @param {Object} props
+ * @param {Object|undefined} props.binding - the binding (`app.integrations[key]`)
+ * @param {(binding: Object) => void} props.onBindingChange - receives the changed binding
+ */
+export function AlwaysLoadedCheckbox({ binding, onBindingChange }) {
+  const { t } = useTranslation();
+  const current = binding || {};
+  const setAlwaysLoaded = alwaysLoaded => {
+    const rest = { ...current };
+    delete rest.alwaysLoaded;
+    onBindingChange(alwaysLoaded ? { ...rest, alwaysLoaded: true } : rest);
+  };
+  return (
+    <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+      <input
+        type="checkbox"
+        className={`${CHECKBOX_CLASS} mt-0.5`}
+        checked={current.alwaysLoaded === true}
+        onChange={e => setAlwaysLoaded(e.target.checked)}
+      />
+      <span>
+        {t('admin.apps.edit.integrations.alwaysLoaded', 'Always loaded')}
+        <span className={`${HELP_CLASS} block`}>
+          {t(
+            'admin.apps.edit.integrations.alwaysLoadedHelp',
+            "Always send this integration's tools to the model in full. Off: when the app's tools are too many for one request, the model finds them with a search instead."
+          )}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
  * The settings of one bound integration in the app editor: the Required
- * and On-by-default switches and, when the integration has scopes, the default scope, the pinned
+ * and On-by-default switches, the tool search switch while that feature is
+ * on and, when the integration has scopes, the default scope, the pinned
  * scope and the scope picker. Used by every generic binding row and by the
  * panels that bind an integration with a switch of their own (people
  * directories). The iAssistant and iFinder panels have purpose-built scope
@@ -97,8 +138,16 @@ export function EnabledByDefaultCheckbox({ binding, onBindingChange }) {
  * @param {(binding: Object) => void} props.onBindingChange - receives the changed binding
  * @param {{ label: string }|null|undefined} [props.scopes] - the definition's scopes
  * @param {string} [props.requiredHelp] - replaces the help text of the Required switch
+ * @param {boolean} [props.toolSearchEnabled] - the platform's tool search feature is on: show "Always loaded"
  */
-function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes, requiredHelp }) {
+function IntegrationBindingOptions({
+  idPrefix,
+  binding,
+  onBindingChange,
+  scopes,
+  requiredHelp,
+  toolSearchEnabled = false
+}) {
   const { t } = useTranslation();
   const current = binding || {};
 
@@ -118,6 +167,9 @@ function IntegrationBindingOptions({ idPrefix, binding, onBindingChange, scopes,
         requiredHelp={requiredHelp}
       />
       <EnabledByDefaultCheckbox binding={current} onBindingChange={onBindingChange} />
+      {toolSearchEnabled && (
+        <AlwaysLoadedCheckbox binding={current} onBindingChange={onBindingChange} />
+      )}
       {scopes && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>

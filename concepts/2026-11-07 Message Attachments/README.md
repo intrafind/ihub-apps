@@ -33,10 +33,11 @@ The product owner's direction was that the badge must not be in the message at a
 | 1 | **Variant A**: the files are a block above the bubble, outside its coloured background | Product owner | [UX concept](03-ux-concept.md) §3 |
 | 2 | More cards than fit fold into **+N more files** (5+ wide, 4+ narrow); the summary-chip variant the UI engineer proposed was not built | Chosen to match A; UX and UI differed | [UX concept](03-ux-concept.md) §6, [UI spec](04-ui-spec.md) §0 |
 | 3 | **Clean break, no compatibility shim**: nothing stored or in flight ever contained the badge HTML | Default taken; the architect found no data to tolerate | [Architecture](05-architecture.md) §D |
-| 4 | **Images and audio are cards.** An image has a thumbnail only for a message sent in the current session; after a reload it is a named tile, because the server stores neither images nor audio. Audio has no inline player (the old player was never reachable) | Default taken; storing user images is a separate product decision | [Architecture](05-architecture.md) §B |
-| 5 | What the assistant got from a file (the composer's line) shows on the card for a message sent now; a reopened message shows name, type and size | Default taken; persisting it is a follow-up | [UX concept](03-ux-concept.md) §4 |
-| 6 | The Outlook task pane shows static cards (no Files drawer is mounted there) | Default taken | [UX concept](03-ux-concept.md) §5 |
+| 4 | **Images and audio are cards.** First release: an image had a thumbnail only for a message sent in the current session, because the server stored neither images nor audio. **Since the follow-up the server keeps the picture** (as sent to the model, origin `image`; see decision 8), so the thumbnail survives a reload. Audio is still not stored and has no inline player (the old player was never reachable) | Default taken; storing user images was decided in the follow-up | [Architecture](05-architecture.md) §B |
+| 5 | What the assistant got from a file (the composer's line) shows on the card for a message sent now. First release: a reopened message showed name, type and size only; the follow-up persists the numbers, so the line is back after a reload | Default taken; persisted in the follow-up | [UX concept](03-ux-concept.md) §4 |
+| 6 | The Outlook task pane showed static cards (no Files drawer mounted there). **Since the follow-up the pane mounts the same Files drawer** (`OfficeFilesView`), a full-pane sheet on the narrow surface, with Attach to email while composing | Default taken; built in the follow-up | [UX concept](03-ux-concept.md) §5 |
 | 7 | An image attached before the model was switched to one without vision **stops the message** with a note, as audio already did | Requested: images and audio only where the model supports them | [Architecture](05-architecture.md) §G |
+| 8 | **User pictures are stored under the policy of an original**: `original_and_text` only, bytes count against every quota but no file slot, kept `originalRetentionDays` and then removed whole, owner-only, in a share only with `original` access, never a document for the model, only raster types by their bytes (never SVG), best effort (a refusal never stops the message) | Delegated to the engineers by the product owner ("do them too") | [Chat files](../../docs/chat-files.md#pictures) |
 
 `concepts/chat-files/README.md` §3.4 said the bubble should show "compact clickable file chips"; it is
 amended to say the cards sit above the bubble.
@@ -88,24 +89,65 @@ Unit tests passed throughout; running the app with Playwright found what they co
 | Question | UX engineer | UI engineer | Architect | Settled |
 | --- | --- | --- | --- | --- |
 | Many files | Fold: "+N more files" | Summary chip beyond three | Left to UX | The fold (variant A as chosen) |
-| Images after a reload | Assumed stored, lazy thumbnails | Thumbnail "when stored" | Not stored: no id, bytes never kept | Verified in the code and the real app: named tile after a reload |
+| Images after a reload | Assumed stored, lazy thumbnails | Thumbnail "when stored" | Not stored: no id, bytes never kept | First release: named tile after a reload (verified in the real app). Follow-up: stored, lazy thumbnail, as the UX and UI engineers assumed |
 | "What the assistant got" after a reload | Fetch the file list or persist numbers | Facts line | No server change | Not shown after a reload yet; persisting three numbers is the follow-up |
 | Thumbnail `alt` | `alt=""` | `alt=""` | `alt` = file name | `alt=""`: the name is in the card's own text |
 | Audio | Plain card | Optional player, off | Chip only | Plain card |
 
 ## What is still open
 
-1. **Persist what the assistant read** (`textBytes`, `pageImageCount`, `truncated`) on the stored
-   descriptor, an additive server change, so the card keeps that line after a reload.
-2. **JSON and JSONL export** still dump the whole message object, including the attached files'
-   contents for a message sent in the session. Dropping them for the stored descriptors is a small
-   breaking change to an accidental contract; it needs a decision.
-3. **Images that survive a reload** need user images stored on the server (quota, retention and
-   privacy decision).
-4. **Office task pane**: the cards are static there; mounting a Files view needs its own design.
-5. **Edit-and-resend** of a turn that is only files: Send stays disabled on empty text.
-6. **The refusal message for an image or sound on a model that cannot take it** is the generic
-   "Unsupported file format. Please use: …". The model-specific text already exists
-   (`errors.imageUploadDisabled`, `errors.audioUploadDisabled`) but is unreachable: the gate checks
-   a format list that is empty exactly when the upload is disabled.
-7. **Close PR #1933** as superseded and re-scope #1786; a comment on each is not posted from here.
+Done since the first release:
+
+- **What the assistant read survives a reload.** `describeStored` writes `textBytes`,
+  `pageImageCount` and `truncated` on the descriptor (additive; `normalizeAttachments` keeps them),
+  and `attachmentViews.readOfStored` rebuilds the same line the composer chip shows. A message stored
+  before that shows no line and claims nothing, not even that the original was discarded.
+- **JSON and JSONL export** no longer dump file contents. `exportableMessage` replaces
+  `fileData`/`imageData`/`audioData` by a short `attachments` list (a deliberate clean break, listed
+  in the breaking changes; one generator now serves the export dialog and `chatExport.js`).
+- **The refusal says why.** An image, sound or video the app allows and the selected model cannot
+  take is refused with the model-specific text. The cause was two layers: the format list is empty
+  exactly when the upload is switched off, and `Uploader` checked it before the processor ran.
+  `createUploadConfig` now marks `blockedByModel`, `uploadGate.capabilityRefusal` decides, and
+  `Uploader` asks its `refuseFile` prop before the format check. An app that does not offer the type
+  still gets the generic list of accepted formats.
+- **Sonar:** `AttachmentCard` (complexity 28) is split into `TileContent`, `GridBody`, `RowBody`,
+  `RowMeta` and `RowLine` with the DOM unchanged (checked against the old render for rows, grid,
+  openable and plain, wide and compact). The other seven findings in the product code are fixed:
+  nested ternaries, the two `role="status"` paragraphs that are `<output>` now, and the print
+  `!important` that a more specific selector replaces. The 65 findings in the static prototype
+  `mockups/attachments.html` are fixed too, except one (see below): nested ternaries and template
+  literals, repeated `push` calls, the `!important` declarations (specificity instead), the
+  complexity of `rowCard` and `block`, and more. The prototype renders the same: 3,466 states
+  (four widths, both themes, all placements and file sets, keyboard tours, print, forced colors,
+  reduced motion) match the original screenshot for screenshot.
+
+- **User pictures survive a reload.** `prepareTurnFiles` stores each picture of a turn
+  (`storeTurnImage`: raster types only, sniffed from the bytes, deduplicated by content and name,
+  never an error) as a chat file of origin `image`; its descriptor now has an `id`, so the card
+  fetches the thumbnail lazily (`useStoredThumbnail`, through the files context so a shared chat
+  uses the share's route) and opens in the Files drawer. The repository gives the origin its two
+  rules: no file slot, and removal of the whole file when its original expires. Model-facing code
+  (history hydration, regenerate, `chat_files_list`) skips it; the share viewer may open it only
+  with `original` access. Audio is still not stored. A picture sent in this session is shown from
+  memory and is not openable until the next reload (the client does not learn the id).
+- **The Outlook task pane has a Files view.** `OfficeFilesView` wraps the message list, provides
+  the files context and mounts the same `ArtifactsPanel`, a full-pane sheet on a 380 px pane,
+  with Attach to email while a mail is being written.
+
+Still open:
+
+1. **Audio** is not stored, so it has no card that opens and no player. Storing it would follow
+   the picture's rules.
+2. A picture **sent in this session** opens only after a reload; showing its id live needs the
+   server to answer the turn with the stored descriptors.
+3. **Regenerating a turn after a reload** sends no picture to the model: the browser has none, and
+   the vision check exists only in the client. The server holds the bytes, so it could send the
+   stored picture again once it knows that the selected model takes images. Until then the card
+   keeps the thumbnail and does not say "sent to the model".
+4. **Edit-and-resend** of a turn that is only files: an empty or unchanged edit is a deliberate
+   no-op and the Resend button covers it, so this is not treated as a defect.
+5. **One Sonar finding in the mockup**: `role="group"` on `#frame` wants a `<fieldset>`, which
+   repaints the four anti-aliased corners of the dashed frame (a couple of dozen pixels per
+   screenshot). The prototype is not shipped, so it is left as it is.
+6. PR #1933 is closed as superseded and #1786 is closed by the first release.

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../upload/components';
@@ -44,6 +44,9 @@ import {
 } from '../../../shared/hooks/useEstimatedTokenCount.js';
 import { modelSupportsWebSearch } from '../webSearch';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { composerLineLimits } from '../utils/composerLines';
+import { submitShortcutLabel } from '../utils/submitShortcut';
+import './ChatInput.css';
 
 /**
  * Stable empty default for the `messages` prop: a fresh `[]` per render would
@@ -181,11 +184,16 @@ function ChatInput({
   // own uploader. Optional: without them the composer waits for its own uploader only.
   isAttachmentProcessing = false,
   onAttachmentProcessingChange = undefined,
-  // Optional override for the auto-grow textarea cap. Defaults to 5 lines
-  // (~150 px) in single-line mode and 12 lines in multiline mode. The
-  // Outlook taskpane passes 3 so the input doesn't dominate the small
-  // task pane when the user pastes a long prompt — issue #1467.
-  maxRows = null
+  // Optional cap for the auto-grow textarea, in lines. Defaults to 5 lines in
+  // single-line mode and 12 in multiline mode. The Outlook taskpane passes 3
+  // so the input doesn't dominate the small task pane when the user pastes a
+  // long prompt — issue #1467. It wins over the app's `inputMode.rows`.
+  maxRows = null,
+  // The conversation has started: the composer is one line that grows as the
+  // user types, instead of the app's `inputMode.rows`, which are for the empty
+  // chat (#3520). The page decides; the composer would lose its own notion of
+  // "sent" on every remount.
+  compact = false
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -353,7 +361,21 @@ function ChatInput({
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
-  const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
+  const { minLines, maxLines } = composerLineLimits({
+    multiline: multilineMode,
+    rows: inputMode?.rows,
+    compact,
+    maxRows
+  });
+
+  // How to send, for screen readers always and on screen while a multi-line
+  // draft is being written: there Enter starts a new line, which a one-line
+  // box does not suggest.
+  const sendHintId = useId();
+  const sendHint = multilineMode
+    ? t('chat.sendShortcutHint', '{{submit}} to send', { submit: submitShortcutLabel() })
+    : t('chat.sendEnterHint', 'Enter to send');
+  const showSendHint = multilineMode && Boolean(value?.trim()) && !isProcessing;
 
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
   const customPlaceholder = app?.messagePlaceholder
@@ -564,48 +586,33 @@ function ChatInput({
     }
   }, [isProcessing, focusInputAtEnd]);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (actualInputRef.current) {
-      const textarea = actualInputRef.current;
+  // Fit the textarea to its content. The lower and upper limits are CSS
+  // (ChatInput.css, from `--composer-min-lines` / `--composer-max-lines`), so
+  // the first paint already has the right size and there is one cap, not two.
+  // A layout effect: a draft that is sent, or a chat that starts, shrinks the
+  // box before the next paint rather than one frame after it.
+  useLayoutEffect(() => {
+    const textarea = actualInputRef.current;
+    if (!textarea) return undefined;
 
-      const autoResize = () => {
-        // Reset height to auto to get the correct scrollHeight
-        textarea.style.height = 'auto';
+    const autoResize = () => {
+      // `auto` first, so the box can shrink to the content's height.
+      textarea.style.height = 'auto';
+      const borders = textarea.offsetHeight - textarea.clientHeight;
+      const contentHeight = textarea.scrollHeight + borders;
+      textarea.style.height = `${contentHeight}px`;
+      // A scrollbar only once the content outgrows the cap: below it, a
+      // rounding pixel must not show one.
+      const maxHeight = Number.parseFloat(getComputedStyle(textarea).maxHeight);
+      textarea.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden';
+    };
 
-        // Calculate the new height based on content. Use the live root font-size
-        // rather than a hardcoded 16px so the min/max line heights follow the
-        // Office task pane's responsive scaling on small / high-DPI panes.
-        const scrollHeight = textarea.scrollHeight;
-        const rootFontSize =
-          Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        const minHeight = inputRows * 1.5 * rootFontSize; // line-height (1.5) × rows × base font
-        // Default cap: 5 lines (single-line mode) / 12 lines (multiline mode).
-        // `maxRows` lets the embedding host (Outlook taskpane) clamp lower.
-        const defaultMaxLines = multilineMode ? 12 : 5;
-        const effectiveMaxLines =
-          typeof maxRows === 'number' && maxRows > 0
-            ? Math.max(maxRows, inputRows)
-            : defaultMaxLines;
-        const maxHeight =
-          effectiveMaxLines * 1.5 * rootFontSize + (multilineMode ? 1.5 * rootFontSize : 0);
-
-        // Set the height to fit content, but respect min/max limits
-        const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
-        textarea.style.height = `${newHeight}px`;
-      };
-
-      // Initial resize
-      autoResize();
-
-      // Add event listener for input changes
-      textarea.addEventListener('input', autoResize);
-
-      return () => {
-        textarea.removeEventListener('input', autoResize);
-      };
-    }
-  }, [value, multilineMode, inputRows, maxRows, actualInputRef]);
+    autoResize();
+    textarea.addEventListener('input', autoResize);
+    return () => {
+      textarea.removeEventListener('input', autoResize);
+    };
+  }, [value, minLines, maxLines, actualInputRef]);
 
   const handleSubmit = e => {
     e.preventDefault();
@@ -753,14 +760,21 @@ function ChatInput({
 
       <ModelUsageNotice modelId={selectedModel} />
 
-      {/* Status line above the input: ephemeral "not saved" notice centered,
-          token count right. Rendered as one row to keep vertical space tight. */}
-      {(ephemeral || (contextUsage && !fileTokenWarning)) && (
+      {/* Status line above the input: send hint left, ephemeral "not saved"
+          notice centered, token count right. Rendered as one row to keep
+          vertical space tight. */}
+      {(ephemeral || (contextUsage && !fileTokenWarning) || showSendHint) && (
         /* Flex on mobile so the token count gets the width it needs: in the
            three-column grid it was squeezed into a 1fr column and wrapped
-           ("~290 / 32,768 context" + "tokens" on a second line). */
+           ("~290 / 32,768 context" + "tokens" on a second line). The send
+           hint is left out there: a phone's keyboard has no Ctrl. */
         <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 text-xs sm:grid sm:grid-cols-[1fr_auto_1fr]">
-          <span className="hidden sm:block" />
+          <span
+            className="hidden sm:block min-w-0 truncate text-gray-500 dark:text-gray-400"
+            aria-hidden="true"
+          >
+            {showSendHint && sendHint}
+          </span>
           <span className="min-w-0 truncate text-center text-violet-600 dark:text-violet-400">
             {ephemeral &&
               t(
@@ -841,33 +855,23 @@ function ChatInput({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing || audioOnly}
-              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl"
+              className={`chat-input-textarea${compact ? ' chat-input-textarea--compact' : ''} w-full px-3 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
-              style={{
-                minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-                maxHeight: multilineMode
-                  ? `calc(11 * 1.5em + 1.5rem)`
-                  : typeof maxRows === 'number' && maxRows > 0
-                    ? `calc(${Math.max(maxRows, inputRows)} * 1.5em)`
-                    : undefined,
-                // Show a scrollbar once the textarea hits the cap — `maxRows`
-                // would otherwise hide overflowing text in single-line mode.
-                overflowY:
-                  multilineMode || (typeof maxRows === 'number' && maxRows > 0) ? 'auto' : 'hidden',
-                height: multilineMode ? 'auto' : undefined
-              }}
-              title={
-                multilineMode
-                  ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
-                  : t('input.singlelineTooltip', 'Press Enter to send')
-              }
+              aria-describedby={sendHintId}
+              // One row, so the content and `--composer-min-lines` decide the
+              // height: the browser's default of two would set a floor of its own.
+              rows={1}
+              style={{ '--composer-min-lines': minLines, '--composer-max-lines': maxLines }}
             />
+            <span id={sendHintId} className="sr-only">
+              {sendHint}
+            </span>
             {value && (
               <button
                 type="button"
-                className="absolute right-3 top-2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                className="absolute right-3 top-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 onClick={handleClearInput}
                 aria-label={t('chat.clearInput', 'Clear input')}
                 title={t('common.clear', 'Clear')}

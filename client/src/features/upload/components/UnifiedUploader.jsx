@@ -26,6 +26,7 @@ import {
 import { extractionOptionsOf } from '../utils/extractionOptions';
 import { isAbortError } from '../../../utils/abortable';
 import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
+import { capabilityRefusal } from '../utils/uploadGate';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -101,37 +102,34 @@ const UnifiedUploader = ({
     10;
 
   // Image-specific configuration
-  const IMAGE_FORMATS = isImageUploadEnabled
-    ? imageConfig.supportedFormats ||
-      config.supportedImageFormats || [
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/gif',
-        'image/webp'
-      ]
-    : [];
+  const IMAGE_FORMATS_OFFERED = imageConfig.supportedFormats ||
+    config.supportedImageFormats || [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp'
+    ];
+  const IMAGE_FORMATS = isImageUploadEnabled ? IMAGE_FORMATS_OFFERED : [];
   const RESIZE_IMAGES = imageConfig.resizeImages !== false && config.resizeImages !== false;
   const MAX_DIMENSION = imageConfig.maxResizeDimension || config.maxResizeDimension || 1024;
 
   // Audio-specific configuration
-  const AUDIO_FORMATS = isAudioUploadEnabled
-    ? audioConfig.supportedFormats ||
-      config.supportedAudioFormats || [
-        'audio/mpeg',
-        'audio/mp3',
-        'audio/wav',
-        'audio/flac',
-        'audio/ogg',
-        'audio/mp4'
-      ]
-    : [];
+  const AUDIO_FORMATS_OFFERED = audioConfig.supportedFormats ||
+    config.supportedAudioFormats || [
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/flac',
+      'audio/ogg',
+      'audio/mp4'
+    ];
+  const AUDIO_FORMATS = isAudioUploadEnabled ? AUDIO_FORMATS_OFFERED : [];
 
   // Video-specific configuration
-  const VIDEO_FORMATS = isVideoUploadEnabled
-    ? videoConfig.supportedFormats ||
-      config.supportedVideoFormats || ['video/mp4', 'video/webm', 'video/quicktime']
-    : [];
+  const VIDEO_FORMATS_OFFERED = videoConfig.supportedFormats ||
+    config.supportedVideoFormats || ['video/mp4', 'video/webm', 'video/quicktime'];
+  const VIDEO_FORMATS = isVideoUploadEnabled ? VIDEO_FORMATS_OFFERED : [];
 
   // File-specific configuration
   const TEXT_FORMATS = isFileUploadEnabled
@@ -304,27 +302,38 @@ const UnifiedUploader = ({
     };
   };
 
+  // A kind the app allows and the selected model cannot take is refused as that: the user is told
+  // to pick another model. A kind the app does not offer gets the generic answer that lists what
+  // it does accept. The Uploader asks before it checks the format list, which would otherwise
+  // give that generic answer for both.
+  const refuseFile = file => {
+    const mimeType = canonicalMimeType(file.type, file.name);
+    const isListed = formats => formats.includes(file.type) || formats.includes(mimeType);
+    return capabilityRefusal(isListed, {
+      image: {
+        enabled: isImageUploadEnabled,
+        blockedByModel: imageConfig.blockedByModel,
+        offered: IMAGE_FORMATS_OFFERED
+      },
+      audio: {
+        enabled: isAudioUploadEnabled,
+        blockedByModel: audioConfig.blockedByModel,
+        offered: AUDIO_FORMATS_OFFERED
+      },
+      video: {
+        enabled: isVideoUploadEnabled,
+        blockedByModel: videoConfig.blockedByModel,
+        offered: VIDEO_FORMATS_OFFERED
+      }
+    });
+  };
+
   // `options`: { signal, onProgress } from the Uploader
   const processFile = async (file, options = {}) => {
     // Route by the canonical type (`audio/x-m4a` → `audio/mp4`); a type the app lists
     // verbatim keeps matching too
     const mimeType = canonicalMimeType(file.type, file.name);
     const isListed = formats => formats.includes(file.type) || formats.includes(mimeType);
-
-    // Check if image files are disabled
-    if (!isImageUploadEnabled && isListed(IMAGE_FORMATS)) {
-      throw new Error('image-upload-disabled');
-    }
-
-    // Check if audio files are disabled
-    if (!isAudioUploadEnabled && isListed(AUDIO_FORMATS)) {
-      throw new Error('audio-upload-disabled');
-    }
-
-    // Check if video files are disabled
-    if (!isVideoUploadEnabled && isListed(VIDEO_FORMATS)) {
-      throw new Error('video-upload-disabled');
-    }
 
     // Check if file upload is disabled
     if (!isFileUploadEnabled && isListed(TEXT_FORMATS)) {
@@ -494,6 +503,7 @@ const UnifiedUploader = ({
       disabled={disabled}
       onSelect={onFileSelect}
       onProcessFile={processFile}
+      refuseFile={refuseFile}
       data={fileData}
       allowMultiple={allowMultiple}
       acceptAnyFile={ALLOW_GENERIC_TEXT}

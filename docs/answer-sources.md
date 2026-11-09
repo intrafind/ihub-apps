@@ -15,9 +15,16 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
 
 ## What users see
 
-- Under every answer that searched or found something: **Searched for “…”**, **N searches** or
-  **N sources**, with the sources' icons. It opens the **Sources** panel, a side panel on desktop
-  and a bottom sheet on phones.
+- At the end of every answer that found something, after its **Cited in this answer** list: an
+  **N results** entry with the sources' icons, in one row with the badge saying what the answer is
+  based on (**Based on web search**). *Results*, not *sources*: it counts everything found, cited
+  or not. It opens the **Sources** panel, a side panel on desktop and a bottom sheet on phones.
+  How the answer searched stays above it (**Searched the web · 1 search · 10 results**). The
+  entry appears once the answer is complete; while it streams, the badges in the text open the
+  panel, and closing the panel returns focus to whatever opened it.
+- A list of sources the model wrote at the end of its answer (**Quellen:**, **Sources:**) is left
+  out of the finished answer, because **Cited in this answer** lists the same sources. See
+  [Web Tools → Sources and Citations](web-tools.md#sources-and-citations).
 - The panel lists what the answer cites under **Cited in this answer**, numbered like its inline
   badges, and everything else it found under **Also considered**. Web pages, documents and records
   share one card design: the site or system they come from, the title, an excerpt or cited passage,
@@ -132,7 +139,7 @@ a mapping to the integration definition's `sources` map, keyed by the action nam
 | `list` | path to the hits in the result; without it, the result itself (an array of hits, or one hit) |
 | `fields` | path per source field inside a hit: `id`, `title`, `url`, `site`, `snippet`, `publishedDate`, `fileName`, `type`, `favicon` |
 | `ref` | `{ "id": "<path>", "scope": "<path>" }`: only for a provider registered on the server (see [Actions](#actions-source-providers)) |
-| `query` | the argument that holds what was searched for; shown as **Searched for “…”** |
+| `query` | the argument that holds what was searched for; shown as **Searching for “…”** while the answer runs, and in the Sources panel header |
 | `public` | whether a share may show the hits (default `false`) |
 
 Paths are dot-separated (`fields.summary`, `items.0.url`). A key that contains dots itself

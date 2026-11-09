@@ -76,7 +76,7 @@ function formatDate(value, language) {
  */
 function CenteredState({ icon, title, description, children }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-6">
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-6">
       <div className="max-w-md w-full text-center">
         <Icon name={icon} size="xl" className="text-gray-300 dark:text-gray-600 mx-auto mb-4" />
         <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{title}</h1>
@@ -308,7 +308,8 @@ export default function SharedChatPage() {
             openFile: fileId => {
               setFilesDrawerFileId(fileId);
               setShowArtifacts(true);
-            }
+            },
+            fetchBlob: uploadedSource.fetchBlob
           }
         : null,
     [uploadedSource]
@@ -340,7 +341,7 @@ export default function SharedChatPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
         <LoadingSpinner size="lg" />
         <span className="sr-only">{t('common.loading', 'Loading…')}</span>
       </div>
@@ -427,7 +428,7 @@ export default function SharedChatPage() {
         `/share/${encodeURIComponent(shareId)}?artifact=${encodeURIComponent(artifact.id)}`
       }
     >
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col">
         {share.mode === 'public' && (
           <div
             role="note"

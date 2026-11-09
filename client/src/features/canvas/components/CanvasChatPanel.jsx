@@ -90,6 +90,9 @@ const CanvasChatPanel = ({
           showImageUploader={false}
           showFileUploader={false}
           inputRef={inputRef}
+          // A side conversation about the document: one line that grows as
+          // the user types, never the app's empty-chat rows (#3520).
+          compact
           placeholder={
             selectedText
               ? t('canvas.promptWithSelection', 'What would you like to do with the selected text?')

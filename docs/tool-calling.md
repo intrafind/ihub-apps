@@ -520,6 +520,63 @@ request.
 The setting is per app (and workflow node) rather than per tool because
 "required" is about what the model must do in a turn, not about one tool.
 
+### Tool search: many integrations, few tool definitions
+
+Every tool an app offers is sent to the model with its full parameter schema on every request. An
+app with several integrations (an MCP server alone can bring dozens of tools) can spend thousands of
+tokens that way even on a turn that uses no tool, and a smaller or local model chooses worse among
+many tools. **Tool search** keeps the request small, the way the skills list does for instructions.
+
+It is a platform feature (**Admin → Features → Tool Search**, preview, off by default). With it on,
+an app whose integration tools exceed a token budget sends only what fits:
+
+- **The biggest integrations are left out**, whole integrations at a time, until the rest fits the
+  budget. The request carries the remaining tools plus one more, `search_tools`.
+- **The system prompt lists what was left out** as `<available_tools>`, by integration, with each
+  tool's name and a short description. If that list is too long it shrinks to tool names, then to
+  integrations with their tool counts. It depends only on the tools, never on the message, so it
+  stays the same from turn to turn and caches.
+- **`search_tools(query)`** finds the best matches (the same keyword ranking as `find_skill`) and
+  **loads them**: they are added to the request's tools from the model's next step on, and the
+  model calls them like any other tool, with their own parameters. The answer names what was
+  loaded, with each tool's description and the integration's guidance for the model.
+
+A tool the model has not found is not in the request, so the model cannot call it: a call to its name
+is answered like a call to any unknown tool. A found tool is an ordinary tool, so everything works
+as for any call: the approval gate decides on it, a write that needs approval still asks first, and
+the connection check, scopes, progress, chat history, MCP App views, usage logs and the activity
+list show it by its own name. A call that was paused for approval continues as that tool, with the
+arguments that were approved, even though the continuing request starts with it left out again.
+
+One search loads at most five tools and one run at most 15 in all, so a model that keeps searching
+cannot grow the request without limit. The chat history sent to the model holds the prose of earlier
+turns, not their tool calls, so a tool found in one turn is not carried into the next: the model
+searches again when it needs it. A tool that fails repeatedly is withheld for the rest of the run
+like any tool.
+
+The request changes in a turn whose model searched: the tools list gains the found tools, so the
+prompt cache of a provider that has it on (Anthropic and Bedrock when enabled for the model, OpenAI)
+no longer applies to the steps after the search. Every request of a turn that did not search is the
+same as the one before.
+
+What is never left out: the search of web search engines and the page reader, `ask_user`, passthrough
+tools, skills, project knowledge, workflows and apps used as tools. Only integration actions are
+left out. Agents and workflows keep sending the tools they list, and a model that cannot call tools
+is not affected.
+
+Settings, all optional:
+
+| Where                                                            | Setting                      | Meaning                                                                                                                                 |
+| ---------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin → Features**                                             | `toolSearch`                 | Switches tool search on for the platform. Off: every request is exactly what it was without the feature                                  |
+| App `toolSearch.mode`                                            | `auto` (default) or `off`    | `off` always sends every tool of the app                                                                                                |
+| App `toolSearch.maxToolTokens`                                   | 500–100000, default 6000     | Tokens the tool definitions of one request may take. Never more than a tenth of the model's context window, so small models get less     |
+| Binding `app.integrations[<id>].alwaysLoaded`                    | Boolean                      | `true`: this integration's tools are always sent in full (an installation id, a definition id or a `type:` key, like any binding)        |
+
+If the always-loaded integrations alone exceed the budget, they stay and everything else is left to
+the search. Tool search only takes effect when it saves tokens: if the list and the search tool
+would cost as much as the tools they replace, nothing is left out.
+
 ### Performance Optimization
 
 #### Caching Strategy

@@ -10,7 +10,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -376,5 +376,241 @@ describe('MessageAttachments: the look of a card', () => {
     expect(tileOf(pdf).className).toContain('bg-red-50');
     expect(tileOf(other).className).not.toContain('bg-red-50');
     expect(tileOf(other).className).toContain('bg-gray-100');
+  });
+});
+
+describe('MessageAttachments: after a reload, what the server recorded', () => {
+  test('says what the assistant got from a stored document', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([stored('f1', 'Contract.pdf', { textBytes: 12400 })])}
+      />
+    );
+    expect(screen.getByText('Text extracted on the server: 12.1 KB')).toBeInTheDocument();
+  });
+
+  test('says a scan went as page images, and that a text was shortened', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          stored('f1', 'scan.pdf', { textBytes: 900, pageImageCount: 3 }),
+          stored('f2', 'long.pdf', { textBytes: 48000, truncated: true })
+        ])}
+      />
+    );
+    expect(screen.getByText('scan without text: 3 page image(s) sent instead')).toBeInTheDocument();
+    expect(screen.getByText(/shortened to fit/)).toBeInTheDocument();
+  });
+
+  test('says an image and a sound file were sent to the model', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          { type: 'image/png', name: 'a.png', bytes: 5 },
+          { type: 'audio/mpeg', name: 'a.mp3', bytes: 5 }
+        ])}
+      />
+    );
+    expect(screen.getByText('Image sent to the model')).toBeInTheDocument();
+    expect(screen.getByText('Audio sent to the model')).toBeInTheDocument();
+  });
+
+  test('a text-only file shows no file size: the number would be that of the text, not the file', () => {
+    // `bytes` is 2.3 MB in the descriptor; the text is 40 KB
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          stored('f1', 'Old.pdf', { hasOriginal: undefined, textBytes: 41000 })
+        ])}
+      />
+    );
+    const card = screen.getByTestId('message-attachment');
+    expect(card).not.toHaveTextContent('2.3 MB');
+    expect(card).toHaveTextContent('only the text is kept in this chat');
+  });
+});
+
+describe('MessageAttachments: the picture of a stored image', () => {
+  const picture = (id, name, extra = {}) => ({
+    id,
+    type: 'image/png',
+    name,
+    bytes: 5000,
+    hasOriginal: true,
+    origin: 'image',
+    ...extra
+  });
+  const blob = new Blob(['x'], { type: 'image/png' });
+  let observers;
+
+  beforeEach(() => {
+    observers = [];
+    URL.createObjectURL = jest.fn(() => 'blob:picture-1');
+    URL.revokeObjectURL = jest.fn();
+  });
+
+  afterEach(() => {
+    delete global.IntersectionObserver;
+  });
+
+  /** An IntersectionObserver that reports a card as visible only when the test says so. */
+  const lazyObserver = () => {
+    global.IntersectionObserver = class {
+      constructor(callback) {
+        this.callback = callback;
+        this.observed = [];
+        observers.push(this);
+      }
+      observe(node) {
+        this.observed.push(node);
+      }
+      disconnect() {}
+    };
+  };
+  const scrollIntoView = () =>
+    act(() => {
+      for (const observer of observers) observer.callback([{ isIntersecting: true }]);
+    });
+
+  test('a picture read back from the store shows its thumbnail, fetched by its id', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([picture('file_img', 'whiteboard.png')])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    const card = screen.getByTestId('message-attachment');
+    await waitFor(() => expect(card.querySelector('img')).not.toBeNull());
+    expect(fetchFileBlob).toHaveBeenCalledTimes(1);
+    expect(fetchFileBlob).toHaveBeenCalledWith('file_img');
+    expect(card.querySelector('img')).toHaveAttribute('src', 'blob:picture-1');
+    expect(card.querySelector('img')).toHaveAttribute('alt', '');
+  });
+
+  test('a picture a regenerated turn did not send again does not say it was sent', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          picture('file_img', 'sent.png'),
+          picture('file_img2', 'again.png', { sentToModel: false })
+        ])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    const cards = screen.getAllByTestId('message-attachment');
+    expect(cards[0]).toHaveTextContent('Image sent to the model');
+    expect(cards[1]).toHaveTextContent('again.png');
+    expect(cards[1]).not.toHaveTextContent('sent to the model');
+    // Its thumbnail still comes from the store: the picture is there, it just was not sent
+    await waitFor(() => expect(fetchFileBlob).toHaveBeenCalledWith('file_img2'));
+  });
+
+  test('a picture still in memory is not fetched', () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    const [view] = viewsOf([picture('file_img', 'a.png')]);
+    render(
+      <MessageAttachments
+        attachments={[{ ...view, previewSrc: PNG }]}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    expect(screen.getByTestId('message-attachment').querySelector('img')).toHaveAttribute(
+      'src',
+      PNG
+    );
+    expect(fetchFileBlob).not.toHaveBeenCalled();
+  });
+
+  test('nothing is fetched without a way to fetch, for a picture without an id, or a file not shared', () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    const { rerender } = render(
+      <MessageAttachments attachments={viewsOf([picture('file_img', 'a.png')])} />
+    );
+    rerender(
+      <MessageAttachments
+        attachments={viewsOf([{ type: 'image/png', name: 'b.png' }])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    rerender(
+      <MessageAttachments
+        attachments={viewsOf([picture('file_img', 'c.png', { shared: false })])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    expect(fetchFileBlob).not.toHaveBeenCalled();
+  });
+
+  test('a document is never fetched for a thumbnail', () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([stored('f1', 'a.pdf')])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    expect(fetchFileBlob).not.toHaveBeenCalled();
+  });
+
+  test('a picture that cannot be loaded keeps its tile and stays a card of the message', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.reject(new Error('gone')));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([picture('file_img', 'whiteboard.png')])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    await waitFor(() => expect(fetchFileBlob).toHaveBeenCalled());
+    const card = screen.getByTestId('message-attachment');
+    expect(card.querySelector('img')).toBeNull();
+    expect(card).toHaveTextContent('whiteboard.png');
+  });
+
+  test('a card waits until it is near the viewport', async () => {
+    lazyObserver();
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([picture('file_img', 'whiteboard.png')])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    expect(fetchFileBlob).not.toHaveBeenCalled();
+    expect(observers).toHaveLength(1);
+    scrollIntoView();
+    await waitFor(() => expect(fetchFileBlob).toHaveBeenCalledWith('file_img'));
+  });
+
+  test('the object URL is released when the card goes away', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    const { unmount } = render(
+      <MessageAttachments
+        attachments={viewsOf([picture('file_img', 'whiteboard.png')])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('message-attachment').querySelector('img')).not.toBeNull()
+    );
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:picture-1');
+  });
+
+  test('a tile of an image grid fetches its own picture', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([1, 2, 3].map(n => picture(`file_${n}`, `p${n}.png`)))}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    await waitFor(() => expect(fetchFileBlob).toHaveBeenCalledTimes(3));
+    expect(fetchFileBlob.mock.calls.map(call => call[0]).sort()).toEqual([
+      'file_1',
+      'file_2',
+      'file_3'
+    ]);
   });
 });

@@ -508,6 +508,87 @@ describe('ProjectPage – owner', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/projects'));
   });
 
+  test('deletes the ticked documents after confirmation', async () => {
+    let items = [
+      ...ITEMS,
+      { id: 'itm_keep', kind: 'upload', name: 'keep.pdf', status: 'ready', pinned: false }
+    ];
+    mockApi.fetchProject.mockImplementation(async () => makeProject({ items }));
+    mockApi.deleteProjectItem.mockImplementation(async (_projectId, itemId) => {
+      items = items.filter(item => item.id !== itemId);
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByLabelText('Select Lease.pdf'));
+    fireEvent.click(screen.getByLabelText('Select scan.pdf'));
+    const bar = screen.getByTestId('project-item-selection-bar');
+    expect(bar).toHaveTextContent('2 documents selected');
+
+    // Nothing goes before the owner confirms; cancelling keeps everything.
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
+    let dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Delete 2 documents from the project? This cannot be undone.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(mockApi.deleteProjectItem).not.toHaveBeenCalled();
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
+    dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete documents' }));
+
+    await waitFor(() => expect(mockApi.deleteProjectItem).toHaveBeenCalledTimes(2));
+    expect(mockApi.deleteProjectItem).toHaveBeenNthCalledWith(1, 'prj_a', 'itm_ready');
+    expect(mockApi.deleteProjectItem).toHaveBeenNthCalledWith(2, 'prj_a', 'itm_failed');
+    await waitFor(() => expect(screen.queryByText('Lease.pdf')).toBeNull());
+    expect(screen.queryByText('scan.pdf')).toBeNull();
+    expect(screen.getByText('keep.pdf')).toBeInTheDocument();
+    expect(screen.queryByTestId('project-item-selection-bar')).toBeNull();
+  });
+
+  test('keeps a document that could not be deleted ticked and says why', async () => {
+    const gone = { id: 'itm_gone', kind: 'upload', name: 'gone.pdf', status: 'ready' };
+    let items = [...ITEMS, gone];
+    mockApi.fetchProject.mockImplementation(async () => makeProject({ items }));
+    const problem = (status, code, detail) =>
+      Object.assign(new Error(detail), {
+        status,
+        code,
+        originalError: { response: { status, data: { code, detail } } }
+      });
+    mockApi.deleteProjectItem.mockImplementation(async (_projectId, itemId) => {
+      if (itemId === 'itm_failed') throw problem(403, 'PERMISSION_DENIED', 'Forbidden');
+      // Someone else deleted it meanwhile: it is gone, which is what was asked.
+      if (itemId === 'itm_gone') {
+        items = items.filter(item => item.id !== itemId);
+        throw problem(404, 'ITEM_NOT_FOUND', 'Item not found');
+      }
+      items = items.filter(item => item.id !== itemId);
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByLabelText('Select all items'));
+    fireEvent.click(
+      within(screen.getByTestId('project-item-selection-bar')).getByRole('button', {
+        name: 'Delete'
+      })
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Delete 3 documents from the project?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete documents' }));
+
+    expect(
+      await screen.findByText('1 documents could not be removed: You are not allowed to do this.')
+    ).toBeInTheDocument();
+    expect(mockApi.deleteProjectItem).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(screen.queryByText('Lease.pdf')).toBeNull());
+    expect(screen.queryByText('gone.pdf')).toBeNull();
+    expect(screen.getByText('scan.pdf')).toBeInTheDocument();
+    expect(screen.getByTestId('project-item-selection-bar')).toHaveTextContent(
+      '1 documents selected'
+    );
+    expect(screen.getByLabelText('Select scan.pdf')).toBeChecked();
+  });
+
   test('uploads several files one by one and shows a quota refusal', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     mockApi.uploadProjectItem
@@ -870,6 +951,7 @@ describe('ProjectPage – members and read-only', () => {
     expect(await screen.findByText('Lease.pdf')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add documents' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove item' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Select Lease.pdf')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete project' })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Instructions' })).not.toBeInTheDocument();
     expect(screen.getByText('Answer briefly.')).toBeInTheDocument();

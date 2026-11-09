@@ -12,6 +12,7 @@ import ChatInput from '../../chat/components/ChatInput';
 import ChatStartForm from '../../chat/components/ChatStartForm';
 import ChatHeader from './chat/ChatHeader';
 import OfficeContextStrip from './chat/OfficeContextStrip';
+import OfficeFilesView from './chat/OfficeFilesView';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -858,10 +859,13 @@ function OfficeChatPanel({
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
     selectedApp?.disallowModelSelection !== true && selectedApp?.settings?.model?.enabled !== false;
+  const chatStarted = adapter.messages.some(m => m.role === 'user' && !m.isGreeting);
   // Not while a stored chat is loading: it has been started already, its
   // messages just have not arrived.
-  const showStartForm =
-    startForm && !loadingStoredChat && !adapter.messages.some(m => m.role === 'user');
+  const showStartForm = startForm && !loadingStoredChat && !chatStarted;
+  // Once the chat has started, the composer is one line that grows as the user
+  // types (#3520); the app's `inputMode.rows` are for the empty chat only.
+  const composerCompact = chatStarted || loadingStoredChat;
   const startFormVariables = resolveVariableValues(selectedApp, appPromptVariables, officeLocale);
   const startFormMessage = showStartForm
     ? renderStartFormPrompt(selectedApp, startFormVariables, officeLocale, inputValue)
@@ -1107,26 +1111,32 @@ function OfficeChatPanel({
             {/* Messages */}
             {!showStartForm && (
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <ChatMessageList
-                  messages={adapter.messages}
-                  outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
-                  onDelete={adapter.deleteMessage}
-                  onEdit={adapter.editMessage}
-                  onResend={handleResend}
-                  editable={true}
-                  compact={true}
-                  onInsert={handleInsert}
-                  insertAction={embeddedHost?.insertAction}
-                  insertActions={mailActions.actions}
-                  defaultInsertActionId={defaultMailActionId}
-                  onInsertAction={runAnswerAction}
-                  appId={selectedApp?.id}
+                <OfficeFilesView
                   chatId={chatIdRef.current}
-                  app={selectedApp}
-                  showAvatars={false}
-                  // A stored chat keeps its generated images; don't warn that
-                  // they are lost on leaving.
-                />
+                  messages={adapter.messages}
+                  zipName={appName || undefined}
+                >
+                  <ChatMessageList
+                    messages={adapter.messages}
+                    outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
+                    onDelete={adapter.deleteMessage}
+                    onEdit={adapter.editMessage}
+                    onResend={handleResend}
+                    editable={true}
+                    compact={true}
+                    onInsert={handleInsert}
+                    insertAction={embeddedHost?.insertAction}
+                    insertActions={mailActions.actions}
+                    defaultInsertActionId={defaultMailActionId}
+                    onInsertAction={runAnswerAction}
+                    appId={selectedApp?.id}
+                    chatId={chatIdRef.current}
+                    app={selectedApp}
+                    showAvatars={false}
+                    // A stored chat keeps its generated images; don't warn that
+                    // they are lost on leaving.
+                  />
+                </OfficeFilesView>
               </div>
             )}
 
@@ -1271,8 +1281,10 @@ function OfficeChatPanel({
                   // indicator accounts for what will actually be sent to the LLM.
                   extraContextText={estimateContextText}
                   // Keep the input from dominating the small Outlook task pane;
-                  // long prompts scroll inside the 3-line box. Issue #1467.
+                  // long prompts scroll inside the 3-line box, whatever rows
+                  // the app asks for. Issue #1467.
                   maxRows={3}
+                  compact={composerCompact}
                 />
               </div>
             )}

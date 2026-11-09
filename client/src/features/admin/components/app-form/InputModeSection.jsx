@@ -241,15 +241,24 @@ function SpeechServiceField({
   );
 }
 
-/** Rows of the input box, for a multi-line input. */
+/**
+ * Rows of the input box in a new chat, for a multi-line input. Once the chat
+ * has started, the input is one line that grows as the user types (#3520).
+ */
 function TextareaRowsField({ app, onInputChange: handleInputChange, t }) {
+  const fieldId = useId();
   if (app.inputMode?.type !== 'multiline') return null;
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-        {t('admin.apps.edit.textareaRows', 'Textarea Rows')}
+      <label
+        htmlFor={fieldId}
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
+        {t('admin.apps.edit.initialRows', 'Rows in a new chat')}
       </label>
       <input
+        id={fieldId}
+        aria-describedby={`${fieldId}-hint`}
         type="number"
         min="1"
         max="20"
@@ -262,6 +271,12 @@ function TextareaRowsField({ app, onInputChange: handleInputChange, t }) {
         }
         className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
       />
+      <p id={`${fieldId}-hint`} className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {t(
+          'admin.apps.edit.initialRowsHint',
+          'How tall the input is before the first message. Once the chat has started, the input is one line that grows as the user types.'
+        )}
+      </p>
     </div>
   );
 }

@@ -90,7 +90,8 @@ const COMPONENT = 'chatMaterializer';
  * mime type wins when one is present.
  *
  * @param {Array<Object>} [attachments] - upload metadata as the route saw it
- * @returns {Array<{type: string, name?: string, bytes?: number}>}
+ * @returns {Array<{type: string, name?: string, bytes?: number, textBytes?: number,
+ *   pageImageCount?: number, truncated?: boolean, sentToModel?: false}>}
  */
 export function normalizeAttachments(attachments) {
   if (!Array.isArray(attachments)) return [];
@@ -108,7 +109,13 @@ export function normalizeAttachments(attachments) {
         ...(typeof entry.hasOriginal === 'boolean' ? { hasOriginal: entry.hasOriginal } : {}),
         ...(typeof entry.canUseAsTemplate === 'boolean'
           ? { canUseAsTemplate: entry.canUseAsTemplate }
-          : {})
+          : {}),
+        // What the server read from the file (see `describeStored`)
+        ...(Number.isFinite(entry.textBytes) ? { textBytes: entry.textBytes } : {}),
+        ...(entry.pageImageCount > 0 ? { pageImageCount: entry.pageImageCount } : {}),
+        ...(entry.truncated === true ? { truncated: true } : {}),
+        // A stored picture a regenerated turn did not send to the model again
+        ...(entry.sentToModel === false ? { sentToModel: false } : {})
       };
     });
 }

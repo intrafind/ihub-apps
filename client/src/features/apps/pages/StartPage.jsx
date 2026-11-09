@@ -128,7 +128,7 @@ export default function StartPage() {
   }
 
   return (
-    <div className="min-h-full flex flex-col items-center justify-center px-6 py-12 bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-full flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-2xl">
         {/* Logo + greeting */}
         <div className="flex flex-col items-center text-center mb-8">

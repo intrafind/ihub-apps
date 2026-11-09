@@ -191,7 +191,7 @@ adds a short research instruction to the end of the system prompt:
   (with an engine, and next to Anthropic and OpenAI native search, through the page reader,
   `read_url`);
 - check key claims against more than one source;
-- combine the findings into one answer with the source URLs;
+- combine the findings into one answer, citing the source of each statement right after it;
 - stop once the question is answered, without searching for things the model already knows.
 
 It is only added when web search is actually on for the turn (the user toggle, or
@@ -225,14 +225,27 @@ The default **Web Chat** app's prompt was reworded to match. Migration V124 upda
 `contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
 default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
 
+The prompt used to say *"Always cite your sources with URLs"*. Smaller and local models read that
+as "add a sources section" and ended their answers with a **Sources:** / **Quellen:** list, which
+repeats **Cited in this answer** under the answer. It now asks for the source right after each
+statement; migration V233 updates `web-chat.json` the same way, again only in languages whose
+prompt is still the shipped default. If you wrote your own prompt, avoid asking for "sources with
+URLs" or a list of sources: the chat lists them.
+
 ### Sources and Citations
 
-Every answer that used web search gets a **Searched for “…”** entry under it
-(**N searches** when there were several), with the icons of the sites it found.
-It opens the **Sources** panel, a side panel on desktop and a bottom sheet on
+How the answer searched stays above it: **Searched the web · 2 searches · 10 results · 3 pages
+read**, which unfolds into each search and the pages it read. Everything about the sources is at
+the answer's end: the list of the sources it cites, then one row with an **N results** entry, with
+the icons of the sites it found, and the **Based on web search** badge. *Results*, not *sources*:
+the count includes everything the searches found, and only what the answer cites is a source of
+it. The entry appears once the answer is complete; while it streams, the numbered badges in the
+text open the panel.
+
+The entry opens the **Sources** panel, a side panel on desktop and a bottom sheet on
 phones — the same panel that lists the documents iFinder, iAssistant or any
 other integration found for the answer (see [Answer Sources](answer-sources.md)),
-with two sections:
+with the searches in its header and two sections:
 
 - **Cited in this answer**: the sources the answer cites, numbered in the order
   it first cites them;
@@ -276,15 +289,27 @@ the system prompt, next to the research guidance. It is not an admin setting —
 the display depends on it — and it covers:
 
 - **Citation format** (search through an engine): cite each claim with a
-  Markdown link to the source URL, numbered, only URLs the turn returned, no
-  separate source list at the end. With native search the provider cites its
-  own results, so only pages read with the page reader are to be cited this way
-  (when the reader is offered).
+  Markdown link to the source URL, numbered, only URLs the turn returned. With
+  native search the provider cites its own results, so only pages read with the
+  page reader are to be cited this way (when the reader is offered).
 - **Named sites**: when the user names a site or domain, limit the search to it
   (`includeDomains`, or `site:` in the query).
 - **Pasted URLs** (when the page reader is offered): open them with the page
   reader instead of searching for them, and read on with `offset` when a page is
   truncated.
+- **No list of sources at the end** (every search path, last in the prompt): no
+  closing list of sources, references or links, named as models write it
+  (*Sources:*, *Quellen:*, *References*), because the chat lists the cited
+  sources under the answer.
+
+When a model writes such a list anyway, the chat leaves it out of the finished
+answer, as long as it is clearly one: at the very end, introduced by a short
+heading, bold line or "…:" line and/or a horizontal rule, every line linking one
+of the answer's sources and naming nothing but its title or site, after text
+that already cites the sources inline. Every source in it is listed under
+**Cited in this answer**. A summary with citations, links to pages the turn did
+not find, a table or a list in the middle of the answer stay. The stored answer,
+**Copy** and exports keep the list.
 
 ### Page Read Limit
 
@@ -771,8 +796,8 @@ Here is a complete app configuration with web search enabled:
   "color": "#4F46E5",
   "icon": "chat-bubbles",
   "system": {
-    "en": "You are a helpful AI assistant with access to web search. When the user asks a question that requires current information, use the web search tool to find relevant content. Always cite your sources with URLs.",
-    "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf Websuche. Wenn der Benutzer eine Frage stellt, die aktuelle Informationen erfordert, nutze das Websuch-Tool. Zitiere immer deine Quellen mit URLs."
+    "en": "You are a helpful AI assistant with access to web search. When the user asks a question that requires current information, use the web search tool to find relevant content. Cite the source of each statement right after it.",
+    "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf Websuche. Wenn der Benutzer eine Frage stellt, die aktuelle Informationen erfordert, nutze das Websuch-Tool. Belege jede Aussage direkt dahinter mit ihrer Quelle."
   },
   "preferredModel": "gemini-2.5-flash-preview-05-20",
   "preferredOutputFormat": "markdown",

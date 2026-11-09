@@ -10,6 +10,7 @@ import {
   updateProjectItemText
 } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
+import { removeItemsInTurn, withoutItems } from '../utils/removeItems';
 
 /**
  * Replace one item of a project in place, keeping the others.
@@ -30,8 +31,8 @@ export function replaceItem(project, item) {
 
 /**
  * The item actions of the user project page: pin, refresh (or retry),
- * rename, edit (change a link item's reference) and remove. Each answers in the shown project right away and
- * reconciles with the server; a failure is reported in `error`.
+ * rename, edit (change a link item's reference), remove one and remove several. Each answers in
+ * the shown project right away and reconciles with the server; a failure is reported in `error`.
  *
  * @param {Object} options
  * @param {string} options.projectId
@@ -42,7 +43,8 @@ export function replaceItem(project, item) {
  *   rename: (item: Object, name: string) => Promise<boolean>,
  *   update: (item: Object, changes: {name?: string, ref?: Object}) => Promise<Object|undefined>,
  *   editText: (item: Object, text: string) => Promise<Object|undefined>,
- *   remove: (item: Object) => Promise<void>}}
+ *   remove: (item: Object) => Promise<void>,
+ *   removeMany: (items: Object[]) => Promise<Set<string>>}}
  */
 export function useProjectItemActions({ projectId, setProject, reload }) {
   const { t } = useTranslation();
@@ -143,6 +145,43 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [projectId, run, setProject, reload]
   );
 
+  /**
+   * Remove several items, one request each and one after the other, so each
+   * is checked and recorded like a single removal. An item that is already
+   * gone counts as removed; one that could not be removed stays, and `error`
+   * says how many and why the first did not go.
+   *
+   * @param {Object[]} items
+   * @returns {Promise<Set<string>>} The ids of the items that are gone.
+   */
+  const removeMany = useCallback(
+    async items => {
+      setError(null);
+      const { removed, failed } = await removeItemsInTurn(
+        items,
+        item => deleteProjectItem(projectId, item.id),
+        {
+          messageOf: err => projectErrorMessage(err, t),
+          onItem: item => setBusyItemId(item?.id ?? null)
+        }
+      );
+      setProject(prev => withoutItems(prev, removed));
+      if (failed.length > 0) {
+        setError(
+          t(
+            'projects.items.removeSelectedFailed',
+            '{{count}} documents could not be removed: {{reason}}',
+            { count: failed.length, reason: failed[0] }
+          )
+        );
+      }
+      // The usage counters change with the items.
+      await reload();
+      return removed;
+    },
+    [projectId, setProject, reload, t]
+  );
+
   return {
     busyItemId,
     error,
@@ -152,7 +191,8 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     rename,
     update,
     editText,
-    remove
+    remove,
+    removeMany
   };
 }
 

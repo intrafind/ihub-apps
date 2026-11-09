@@ -189,3 +189,23 @@ export function transformWhere(array, predicate, transform) {
   }
   return count;
 }
+
+/**
+ * Replace localized texts that are still exactly a shipped default, keeping
+ * every text an admin changed. For rewording a shipped prompt or label, e.g.
+ * an app's `system` object (`{ en: '…', de: '…' }`).
+ * @param {object} texts - Locale → text (mutated in place); anything else is left alone
+ * @param {Object<string, {from: string, to: string}>} updates - Per locale, the shipped text and its replacement
+ * @returns {string[]} The locales that were replaced
+ */
+export function replaceShippedTexts(texts, updates) {
+  if (!texts || typeof texts !== 'object' || Array.isArray(texts)) return [];
+  const replaced = [];
+  for (const [locale, { from, to }] of Object.entries(updates)) {
+    if (texts[locale] === from) {
+      texts[locale] = to;
+      replaced.push(locale);
+    }
+  }
+  return replaced;
+}

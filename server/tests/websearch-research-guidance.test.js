@@ -22,6 +22,7 @@ import {
   DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE,
   WEB_SEARCH_CITATION_GUIDANCE,
   WEB_SEARCH_NAMED_SITE_GUIDANCE,
+  WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE,
   WEB_SEARCH_PASTED_URL_GUIDANCE,
   WEB_SEARCH_READER_CITATION_GUIDANCE
 } from '../services/chat/RequestBuilder.js';
@@ -44,7 +45,7 @@ test('guidance is appended when web search is on by default', () => {
   assert.equal(appended, true);
   assert.equal(msgs[0].content, `${PROMPT}\n\n${DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE}`);
   assert.match(msgs[0].content, /several searches/);
-  assert.match(msgs[0].content, /URLs/);
+  assert.match(msgs[0].content, /cite the source of each statement/);
   assert.equal(msgs[1].content, 'Compare X and Y on price, features and recent news.');
 });
 
@@ -191,4 +192,31 @@ test('source guidance follows the web search toggle and is not repeated', () => 
     appendWebSearchSourceGuidance(noResearch, appWith({ researchGuidance: false }), true, setup),
     true
   );
+});
+
+// Issue #3522: smaller and local models ended their answers with a "Quellen:"
+// list, because the prompt said "cite your sources with URLs" twice and "no
+// separate list" once, in passing.
+test('every search setup ends with the explicit "no list of sources" rule', () => {
+  for (const native of [false, true]) {
+    for (const pageReader of [false, true]) {
+      const guidance = buildWebSearchSourceGuidance({ native, pageReader });
+      assert.ok(
+        guidance.endsWith(WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE),
+        `native=${native}, pageReader=${pageReader}`
+      );
+    }
+  }
+  for (const word of ['Sources', 'Quellen', 'References']) {
+    assert.ok(WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE.includes(word));
+  }
+});
+
+test('nothing in the guidance asks for sources "with their URLs" any more', () => {
+  assert.ok(!DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE.includes('with their URLs'));
+  assert.ok(DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE.includes('right after it'));
+  // The rule is said once, at the end, not repeated inside the citation format.
+  for (const guidance of [WEB_SEARCH_CITATION_GUIDANCE, WEB_SEARCH_READER_CITATION_GUIDANCE]) {
+    assert.ok(!guidance.includes('list of sources'));
+  }
 });

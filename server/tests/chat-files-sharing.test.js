@@ -176,6 +176,67 @@ after(async () => {
 });
 
 describe('uploaded files on a share', () => {
+  it('a picture of a message opens for a viewer only when the originals are shared', async () => {
+    const PNG = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(30, 5)
+    ]);
+    chatCounter += 1;
+    const chatId = `chat-picture-${chatCounter}`;
+    const repository = getChatRepository();
+    await repository.ensureChat({ chatId, ownerId: ADA.id, appId: 'chat', title: 'Picture' });
+    const picture = await repository.fileStore().put(repository.fileScope(chatId), {
+      ownerId: ADA.id,
+      name: 'whiteboard.png',
+      mimeType: 'image/png',
+      originalBuffer: PNG,
+      origin: 'image',
+      storageMode: 'original_and_text'
+    });
+    await repository.appendMessage(chatId, {
+      role: 'user',
+      content: 'what is this',
+      clientMessageId: 'p1',
+      attachments: [
+        { id: picture.id, type: 'image/png', name: 'whiteboard.png', bytes: picture.bytes }
+      ]
+    });
+    await repository.appendMessage(chatId, { role: 'assistant', content: 'A whiteboard' });
+    const flagFor = async access => {
+      const created = await share(chatId, {
+        uploadedFilesAccess: access,
+        sharedFileIds: [picture.id]
+      });
+      const open = await drive(openHandlers, { params: { shareId: created.id } });
+      return { created, flag: open.body.messages[0].attachments[0].shared };
+    };
+
+    // Text only: a picture has no text, so there is nothing to open, and nothing to list
+    const textOnly = await flagFor('extracted_text');
+    assert.equal(textOnly.flag, false);
+    const textOnlyList = await drive(listFilesHandlers, {
+      params: { shareId: textOnly.created.id }
+    });
+    assert.deepEqual(textOnlyList.body.items, []);
+
+    const original = await flagFor('original');
+    assert.equal(original.flag, true);
+    const originalList = await drive(listFilesHandlers, {
+      params: { shareId: original.created.id }
+    });
+    assert.deepEqual(
+      originalList.body.items.map(item => item.name),
+      ['whiteboard.png']
+    );
+    const served = await drive(fileHandlers, {
+      params: { shareId: original.created.id, fileId: picture.id }
+    });
+    assert.equal(served.statusCode, 200);
+    assert.equal(served.headers['content-type'], 'image/png');
+    assert.equal(served.headers['x-content-type-options'], 'nosniff');
+    assert.deepEqual(served.body, PNG);
+  });
+
   it('shares no uploaded file by default: chips stay, the files answer 403', async () => {
     const { chatId, plan } = await seedChatWithFiles();
     const created = await share(chatId);

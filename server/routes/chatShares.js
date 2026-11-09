@@ -252,6 +252,20 @@ function viewerView(share) {
 }
 
 /**
+ * Whether a viewer may open the file behind an attachment chip. A picture has no text to share,
+ * so it opens only when the owner shared the originals.
+ *
+ * @param {{id: string, type?: string}} attachment
+ * @param {Set<string>} sharedFiles - The files the owner left ticked
+ * @param {boolean} originalsShared
+ * @returns {boolean}
+ */
+function openableByViewer(attachment, sharedFiles, originalsShared) {
+  if (!sharedFiles.has(attachment.id)) return false;
+  return originalsShared || !/^image\//i.test(String(attachment.type || ''));
+}
+
+/**
  * The snapshot messages a viewer gets: the transcript minus the accounting.
  *
  * @param {Object[]} messages - Snapshot messages.
@@ -261,6 +275,7 @@ function viewerMessages(messages, share = null) {
   const sharedFiles = new Set(
     share?.uploadedFilesAccess && share.uploadedFilesAccess !== 'none' ? share.fileIds || [] : []
   );
+  const originalsShared = share?.uploadedFilesAccess === 'original';
   return (messages || []).map(message => {
     // A viewer renders none of these: `usage` is billing, `clientMessageId`
     // the owner's browser bookkeeping, `runId` a handle onto endpoints the
@@ -271,7 +286,9 @@ function viewerMessages(messages, share = null) {
     // be opened is the owner's choice per file (`shared`).
     if (Array.isArray(rest.attachments)) {
       rest.attachments = rest.attachments.map(attachment =>
-        attachment?.id ? { ...attachment, shared: sharedFiles.has(attachment.id) } : attachment
+        attachment?.id
+          ? { ...attachment, shared: openableByViewer(attachment, sharedFiles, originalsShared) }
+          : attachment
       );
     }
     // Snapshots taken before causes were cut down to the public part carry
@@ -563,6 +580,8 @@ export default function registerChatShareRoutes(app) {
       allowed.size > 0
         ? (await getChatRepository().fileStore().list(scope))
             .filter(item => allowed.has(item.id))
+            // A picture has no text to share: with text-only access there is nothing to list
+            .filter(item => item.origin !== 'image' || access === 'original')
             .map(({ meta: _meta, source: _source, ...visible }) => ({
               ...visible,
               hasOriginal: visible.hasOriginal && access === 'original'

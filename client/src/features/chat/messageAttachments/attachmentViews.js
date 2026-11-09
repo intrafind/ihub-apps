@@ -29,8 +29,8 @@ import { describeAttachment } from '../../upload/utils/attachmentDescription';
  *   its text is kept: see `originalKept`.
  * @property {boolean|null} originalKept - `false`: only the extracted text is kept (so `bytes`
  *   is no file size); `null`: not known or not applicable (a local file the server never held).
- * @property {Object|null} read - What the assistant got (`describeAttachment`): numbers, only
- *   for a turn sent in this session.
+ * @property {Object|null} read - What the assistant got (`describeAttachment`): numbers, for a turn
+ *   sent in this session and, from what the server recorded, for a stored one that has them.
  * @property {string|null} previewSrc - A thumbnail: only an image sent in this session.
  * @property {boolean} unsaved - The file was sent with the message but could not be saved to
  *   the chat (quota, unsupported type); it has no id.
@@ -41,8 +41,11 @@ import { describeAttachment } from '../../upload/utils/attachmentDescription';
 /** Image data URLs a thumbnail may use. Never SVG, never a remote URL. */
 const SAFE_PREVIEW = /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=]+$/;
 
-/** @param {unknown} value */
-const asList = value => (Array.isArray(value) ? value : value ? [value] : []);
+/** A list as it is, one value as a list of one, nothing as an empty list. @param {unknown} value */
+function asList(value) {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
 
 /** @param {unknown} value */
 const finiteOrNull = value => {
@@ -103,8 +106,53 @@ function fromLive(entry, index) {
 }
 
 /**
+ * What the assistant got from a stored file, in the numbers `contentLineFromInfo` says in words,
+ * from what the server recorded on the descriptor. `null` when the descriptor does not say: a
+ * message stored before the server kept these numbers must not claim "no text could be read".
+ *
+ * A document's numbers are those of a file the server read (`describeAttachment` calls it a
+ * stub); an image or an audio file was sent to the model, which is all that is known of it.
+ *
+ * @param {Object} descriptor
+ * @param {'image'|'audio'|'document'} kind
+ * @returns {Object|null}
+ */
+function readOfStored(descriptor, kind) {
+  // A picture the server did not send to the model again (a regenerated turn) must not say so
+  if (kind === 'image' && descriptor.sentToModel === false) return null;
+  if (kind === 'image' || kind === 'audio') return { kind };
+  if (!Number.isFinite(descriptor.textBytes)) return null;
+  const pageImages = Math.max(0, Number(descriptor.pageImageCount) || 0);
+  return {
+    kind: 'document',
+    stub: true,
+    // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
+    textBytes: pageImages > 0 ? 0 : descriptor.textBytes,
+    pageImages,
+    truncated: descriptor.truncated === true,
+    originalKept: descriptor.hasOriginal === true
+  };
+}
+
+/**
+ * Whether the original of a stored file is kept, as far as the descriptor says. The server writes
+ * `hasOriginal` only when it is true, so for a descriptor that carries the numbers of a document
+ * its absence means that only the text is kept; without the numbers it proves nothing.
+ *
+ * @param {Object} descriptor
+ * @param {'image'|'audio'|'document'} kind
+ * @param {Object|null} read - What `readOfStored` made of the descriptor
+ * @returns {boolean|null}
+ */
+function storedOriginalKept(descriptor, kind, read) {
+  if (typeof descriptor.hasOriginal === 'boolean') return descriptor.hasOriginal;
+  return kind === 'document' && read ? false : null;
+}
+
+/**
  * One descriptor as the store keeps it on a user message
- * (`{ id?, type: mime, name, bytes, hasOriginal?, canUseAsTemplate?, shared? }`).
+ * (`{ id?, type: mime, name, bytes, hasOriginal?, canUseAsTemplate?, textBytes?,
+ * pageImageCount?, truncated?, shared? }`).
  * The field spellings are the ones the server reads (`chatMaterializer.normalizeAttachments`).
  *
  * @param {Object} descriptor
@@ -118,6 +166,8 @@ function fromStored(descriptor, index) {
   const rawType = descriptor.fileType || descriptor.mimeType || descriptor.type;
   const mimeType = typeof rawType === 'string' && rawType.includes('/') ? rawType : null;
   const kind = storedKindOf(rawType);
+  const read = readOfStored(descriptor, kind);
+  const originalKept = storedOriginalKept(descriptor, kind, read);
   return {
     key: `${index}:${fileId || name}`,
     id: fileId,
@@ -125,8 +175,8 @@ function fromStored(descriptor, index) {
     name,
     mimeType,
     bytes: finiteOrNull(descriptor.bytes ?? descriptor.size ?? descriptor.fileSize),
-    originalKept: typeof descriptor.hasOriginal === 'boolean' ? descriptor.hasOriginal : null,
-    read: null,
+    originalKept,
+    read,
     previewSrc: null,
     unsaved: false,
     shared: typeof descriptor.shared === 'boolean' ? descriptor.shared : null,
