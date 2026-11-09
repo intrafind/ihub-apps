@@ -57,6 +57,7 @@ import {
   sharedWithOf,
   unavailableReasonOf
 } from '../../services/integrations/userIntegrations.js';
+import errorHandler from '../../middleware/errorHandler.js';
 import { fakeTokenEndpoint } from '../helpers/integrationConnect.js';
 import { scratchDocuments } from '../helpers/testStorage.js';
 
@@ -167,6 +168,7 @@ app.use((req, _res, next) => {
 app.use('/api/integrations', userIntegrationRoutes);
 // Another router under the same prefix: unknown ids fall through to it.
 app.get('/api/integrations/connections', (_req, res) => res.json({ fallthrough: true }));
+app.use(errorHandler);
 
 let connections;
 let tokenEndpoint;

@@ -334,7 +334,8 @@ export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
   STORAGE_PROVIDER_NOT_FOUND: 404,
   STORAGE_PROVIDER_REQUIRED: 400,
   INVALID_RETURN_URL: 400,
-  NOT_CONNECTABLE: 400
+  NOT_CONNECTABLE: 400,
+  INTEGRATION_CONNECT_FAILED: 400
 });
 
 /** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */

@@ -146,10 +146,16 @@ async function run(handler, req) {
     status: code => ((out.status = code), res),
     json: body => ((out.body = body), res)
   };
-  await handler(
-    { query: {}, params: {}, body: {}, is: type => type === 'application/json', ...req },
-    res
-  );
+  try {
+    await handler(
+      { query: {}, params: {}, body: {}, is: type => type === 'application/json', ...req },
+      res
+    );
+  } catch (error) {
+    // A handler answers errors by throwing a ServiceError; the error middleware would send it.
+    out.status = error.status ?? 500;
+    out.body = { code: error.code, details: error.details };
+  }
   return out;
 }
 

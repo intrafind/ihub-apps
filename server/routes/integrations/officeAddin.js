@@ -5,6 +5,7 @@
 // Serves runtime configuration and generates the Office manifest XML
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,6 @@ import { sanitizeOfficeMailAction } from '../../utils/officeMailActions.js';
 import logger from '../../utils/logger.js';
 import { officeManifestVersion, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -78,7 +78,7 @@ router.get('/config', (req, res) => {
   const officeConfig = platform?.officeIntegration;
 
   if (!officeConfig?.enabled) {
-    return sendErrorResponse(res, 404, 'Office integration is not enabled');
+    throw new ServiceError('NOT_FOUND', 'Office integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);
@@ -123,7 +123,7 @@ router.get('/manifest.xml', (req, res) => {
   const officeConfig = platform?.officeIntegration;
 
   if (!officeConfig?.enabled) {
-    return sendErrorResponse(res, 404, 'Office integration is not enabled');
+    throw new ServiceError('NOT_FOUND', 'Office integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);

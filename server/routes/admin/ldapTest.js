@@ -6,6 +6,7 @@ import tls from 'node:tls';
 import { authenticateResult, AUTH_RESULT_SUCCESS } from 'ldap-authentication';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import credentialService from '../../services/CredentialService.js';
 import {
@@ -24,7 +25,6 @@ import {
 } from '../../utils/ldapProviderConfig.js';
 import { DiagnosticsReport, STATUS } from '../../services/integrations/integrationDiagnostics.js';
 import logger from '../../utils/logger.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 
 /**
  * Admin route that dry-runs an LDAP login.
@@ -316,14 +316,17 @@ export default function registerAdminLdapTestRoutes(app) {
     const password = typeof body.password === 'string' ? body.password : '';
 
     if (!username) {
-      return sendBadRequest(res, 'A username is required to test the LDAP configuration');
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'A username is required to test the LDAP configuration'
+      );
     }
 
     let provider;
     try {
       provider = selectProvider(body);
     } catch (error) {
-      return sendBadRequest(res, error.message);
+      throw new ServiceError('BAD_REQUEST', error.message);
     }
 
     const report = new DiagnosticsReport();
@@ -690,16 +693,13 @@ export default function registerAdminLdapTestRoutes(app) {
         message: described.message,
         hints: described.hints
       });
-      try {
-        return res.json({
-          success: false,
-          message: described.message,
-          summary: report.summary(),
-          steps: report.steps
-        });
-      } catch (responseError) {
-        return sendInternalError(res, responseError, 'test LDAP configuration');
-      }
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      return res.json({
+        success: false,
+        message: described.message,
+        summary: report.summary(),
+        steps: report.steps
+      });
     }
   });
 }

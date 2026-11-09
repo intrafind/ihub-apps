@@ -48,14 +48,10 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
 import { SAFE_ID_PATTERN, isValidId, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
-import {
-  sendAuthRequired,
-  sendInternalError,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
@@ -162,32 +158,29 @@ export function parseRequestedScopes(value) {
 }
 
 /**
- * Common checks of the POST routes. Answers and returns null when the request
+ * Common checks of the POST routes; throws a ServiceError when the request
  * cannot go on.
  *
- * @returns {{installationId: string}|null}
+ * @returns {{installationId: string}}
  */
-function checkPost(req, res) {
+function checkPost(req) {
   if (isAnonymous(req.user)) {
-    sendAuthRequired(res);
-    return null;
+    throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
   if (isDelegated(req.user)) {
-    sendErrorResponse(res, 403, 'Only an interactive session can manage integration connections', {
-      code: 'INTERACTIVE_SESSION_REQUIRED'
-    });
-    return null;
+    throw new ServiceError(
+      'INTERACTIVE_SESSION_REQUIRED',
+      'Only an interactive session can manage integration connections'
+    );
   }
   // A JSON body (even `{}`) is required: a cross-site HTML form cannot send
   // one without a CORS preflight.
   if (!req.is('application/json')) {
-    sendErrorResponse(res, 415, 'Send a JSON body', { code: 'JSON_REQUIRED' });
-    return null;
+    throw new ServiceError('JSON_REQUIRED', 'Send a JSON body');
   }
   const installationId = req.params.id;
   if (!isInstallationId(installationId)) {
-    sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
-    return null;
+    throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
   }
   return { installationId };
 }
@@ -200,15 +193,14 @@ function checkPost(req, res) {
  * @param {{reconnect: boolean}} options
  */
 async function startConnect(req, res, { reconnect }) {
-  const checked = checkPost(req, res);
-  if (!checked) return;
-  const { installationId } = checked;
+  const { installationId } = checkPost(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
 
   if (body.returnUrl !== undefined && !isValidReturnUrl(body.returnUrl, req)) {
-    return sendErrorResponse(res, 400, 'returnUrl must be a path or an http(s) URL on this site', {
-      code: 'INVALID_RETURN_URL'
-    });
+    throw new ServiceError(
+      'INVALID_RETURN_URL',
+      'returnUrl must be a path or an http(s) URL on this site'
+    );
   }
 
   const instance = installedIntegrationService.get(installationId);
@@ -217,13 +209,14 @@ async function startConnect(req, res, { reconnect }) {
   // bindings, a storage provider's grant) is checked again when the flow starts.
   const allowed = Boolean(instance) && (mayUseIntegration(instance, req.user) || isAdmin(req.user));
   if (!instance || instance.enabled === false || !allowed) {
-    return sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
+    throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
   }
   const descriptor = await describeInstallation(installationId).catch(() => null);
   if (!descriptor || descriptor.kind !== 'oauth-user') {
-    return sendErrorResponse(res, 400, 'This integration does not take a personal connection', {
-      code: 'NOT_CONNECTABLE'
-    });
+    throw new ServiceError(
+      'NOT_CONNECTABLE',
+      'This integration does not take a personal connection'
+    );
   }
 
   const scopes = reconnect ? parseRequestedScopes(body.scopes) : [];
@@ -251,18 +244,15 @@ async function startConnect(req, res, { reconnect }) {
         error: error.message
       });
       if (error.code === OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND) {
-        return sendErrorResponse(res, 404, 'Integration not found', {
-          code: 'INTEGRATION_NOT_FOUND'
-        });
+        throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
       }
-      return sendErrorResponse(
-        res,
-        FLOW_ERROR_STATUS[error.code] || 400,
-        'The sign-in could not be started',
-        { code: error.code }
-      );
+      // `details.reason` carries the flow's own code (`discovery_failed`, ...).
+      throw new ServiceError('INTEGRATION_CONNECT_FAILED', 'The sign-in could not be started', {
+        status: FLOW_ERROR_STATUS[error.code] || 400,
+        details: { reason: error.code }
+      });
     }
-    return sendInternalError(res, error, 'start the integration sign-in');
+    throw error;
   }
 }
 
@@ -290,14 +280,10 @@ async function startConnect(req, res, { reconnect }) {
  *         description: Not signed in
  */
 router.get('/', requireFeature('integrations'), authRequired, async (req, res) => {
-  if (isAnonymous(req.user)) return sendAuthRequired(res);
-  try {
-    const integrations = await listUserIntegrations({ user: req.user, language: languageOf(req) });
-    res.setHeader('Cache-Control', 'no-store');
-    return res.json({ integrations });
-  } catch (error) {
-    return sendInternalError(res, error, 'list the integrations');
-  }
+  if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
+  const integrations = await listUserIntegrations({ user: req.user, language: languageOf(req) });
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({ integrations });
 });
 
 /**
@@ -305,18 +291,16 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
  * the response sent. An app the user may not open answers like one that does
  * not exist, so app ids cannot be probed.
  *
- * @returns {Object|null}
+ * @returns {Object} The app; throws a ServiceError otherwise
  */
-function appOfRequest(req, res) {
+function appOfRequest(req) {
   const appId = req.query.app;
   if (typeof appId !== 'string' || !isValidId(appId)) {
-    sendErrorResponse(res, 400, 'A valid app is required', { code: 'INVALID_APP' });
-    return null;
+    throw new ServiceError('INVALID_APP', 'A valid app is required');
   }
   const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
   if (!app || app.enabled === false || !canUserAccessResource(req.user, 'apps', app.id)) {
-    sendErrorResponse(res, 404, 'App not found', { code: 'APP_NOT_FOUND' });
-    return null;
+    throw new ServiceError('APP_NOT_FOUND', 'App not found');
   }
   return app;
 }
@@ -344,15 +328,10 @@ function appOfRequest(req, res) {
  *         description: Not an app the user may open
  */
 router.get('/picker', authRequired, async (req, res) => {
-  const app = appOfRequest(req, res);
-  if (!app) return;
-  try {
-    const rows = await pickerRowsForApp({ app, user: req.user, language: languageOf(req) });
-    res.setHeader('Cache-Control', 'private, no-store');
-    return res.json({ app: app.id, rows });
-  } catch (error) {
-    return sendInternalError(res, error, 'list the integrations of the app');
-  }
+  const app = appOfRequest(req);
+  const rows = await pickerRowsForApp({ app, user: req.user, language: languageOf(req) });
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.json({ app: app.id, rows });
 });
 
 /**
@@ -402,8 +381,7 @@ router.get('/picker', authRequired, async (req, res) => {
  *         description: No storage to keep it in
  */
 router.get('/preferences', authRequired, async (req, res) => {
-  const app = appOfRequest(req, res);
-  if (!app) return;
+  const app = appOfRequest(req);
   const defaults = appIntegrationDefaults(app);
   res.setHeader('Cache-Control', 'private, no-store');
   // A guest has no default of their own: new chats start with the app's.
@@ -415,56 +393,46 @@ router.get('/preferences', authRequired, async (req, res) => {
       preferences: effectivePreferences(null, defaults)
     });
   }
-  try {
-    const repository = getIntegrationPreferencesRepository();
-    const available = repository.isAvailable();
-    const stored = available ? await repository.get(String(req.user.id), app.id) : null;
-    return res.json({
-      app: app.id,
-      stored: Boolean(stored),
-      available,
-      preferences: effectivePreferences(stored, defaults)
-    });
-  } catch (error) {
-    return sendInternalError(res, error, 'load the integration preferences');
-  }
+  const repository = getIntegrationPreferencesRepository();
+  const available = repository.isAvailable();
+  const stored = available ? await repository.get(String(req.user.id), app.id) : null;
+  return res.json({
+    app: app.id,
+    stored: Boolean(stored),
+    available,
+    preferences: effectivePreferences(stored, defaults)
+  });
 });
 
 router.put('/preferences', authRequired, async (req, res) => {
-  if (isAnonymous(req.user)) return sendAuthRequired(res);
+  if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   if (isDelegated(req.user)) {
-    return sendErrorResponse(res, 403, 'Only an interactive session can change these preferences', {
-      code: 'INTERACTIVE_SESSION_REQUIRED'
-    });
+    throw new ServiceError(
+      'INTERACTIVE_SESSION_REQUIRED',
+      'Only an interactive session can change these preferences'
+    );
   }
   if (!req.is('application/json')) {
-    return sendErrorResponse(res, 415, 'Send a JSON body', { code: 'JSON_REQUIRED' });
+    throw new ServiceError('JSON_REQUIRED', 'Send a JSON body');
   }
-  const app = appOfRequest(req, res);
-  if (!app) return;
+  const app = appOfRequest(req);
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
   const repository = getIntegrationPreferencesRepository();
   if (!repository.isAvailable()) {
-    return sendErrorResponse(res, 503, 'Preferences cannot be stored here', {
-      code: 'PREFERENCES_UNAVAILABLE'
-    });
+    throw new ServiceError('PREFERENCES_UNAVAILABLE', 'Preferences cannot be stored here');
   }
-  try {
-    // Preferences are bookkeeping, not content: keep them out of the audit log.
-    req._auditLogged = true;
-    const { stored } = await repository.set(String(req.user.id), app.id, body, {
-      knownRefs: appCandidateRefs(app),
-      onlyIfAbsent: body.import === true
-    });
-    return res.json({
-      app: app.id,
-      stored: Boolean(stored),
-      available: true,
-      preferences: effectivePreferences(stored, appIntegrationDefaults(app))
-    });
-  } catch (error) {
-    return sendInternalError(res, error, 'save the integration preferences');
-  }
+  // Preferences are bookkeeping, not content: keep them out of the audit log.
+  req._auditLogged = true;
+  const { stored } = await repository.set(String(req.user.id), app.id, body, {
+    knownRefs: appCandidateRefs(app),
+    onlyIfAbsent: body.import === true
+  });
+  return res.json({
+    app: app.id,
+    stored: Boolean(stored),
+    available: true,
+    preferences: effectivePreferences(stored, appIntegrationDefaults(app))
+  });
 });
 
 /**
@@ -499,22 +467,23 @@ router.get('/:id', async (req, res, next) => {
   }
   return requireFeature('integrations')(req, res, () =>
     authRequired(req, res, async () => {
-      if (isAnonymous(req.user)) return sendAuthRequired(res);
+      // A callback cannot throw into Express: hand any error to `next`.
       try {
+        if (isAnonymous(req.user)) {
+          throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
+        }
         const integration = await getUserIntegration({
           user: req.user,
           installationId: req.params.id,
           language: languageOf(req)
         });
         if (!integration) {
-          return sendErrorResponse(res, 404, 'Integration not found', {
-            code: 'INTEGRATION_NOT_FOUND'
-          });
+          throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
         }
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ integration });
       } catch (error) {
-        return sendInternalError(res, error, 'describe the integration');
+        return next(error);
       }
     })
   );
@@ -618,29 +587,18 @@ router.post(
  *         description: No such installation
  */
 router.post('/:id/disconnect', requireFeature('integrations'), authRequired, async (req, res) => {
-  const checked = checkPost(req, res);
-  if (!checked) return;
-  const { installationId } = checked;
+  const { installationId } = checkPost(req);
   const descriptor = await describeInstallation(installationId).catch(() => null);
   if (!descriptor || descriptor.kind !== 'oauth-user') {
-    return sendErrorResponse(res, 404, 'Integration not found', { code: 'INTEGRATION_NOT_FOUND' });
+    throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
   }
-  try {
-    const result = await getIntegrationConnectionService().disconnect({
-      installationId,
-      userId: String(req.user.id),
-      req
-    });
-    return res.json({ success: true, ...result });
-  } catch (error) {
-    logger.error('Integration disconnect failed', {
-      component: COMPONENT,
-      integration: installationId,
-      userId: req.user.id,
-      error: error.message
-    });
-    return sendInternalError(res, error, 'disconnect the integration');
-  }
+  const result = await getIntegrationConnectionService().disconnect({
+    installationId,
+    userId: String(req.user.id),
+    req
+  });
+  // api-guidelines-ignore: existing success body, changed in its own API change
+  return res.json({ success: true, ...result });
 });
 
 export default router;
