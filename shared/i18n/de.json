@@ -5559,7 +5559,12 @@
         },
         "selectedCount": "{{count}} Elemente ausgewählt",
         "moveSelected": "Verschieben nach…",
-        "copySelected": "Kopieren nach…"
+        "copySelected": "Kopieren nach…",
+        "deleteSelected": "Löschen",
+        "deleteSelectedTitle": "Ausgewählte Elemente löschen",
+        "deleteSelectedConfirm": "{{count}} Elemente aus dem Projekt löschen? Das lässt sich nicht rückgängig machen.",
+        "deleteSelectedAction": "Elemente löschen",
+        "deleteSelectedFailed": "{{count}} Elemente konnten nicht gelöscht werden: {{reason}}"
       },
       "unsaved": {
         "title": "Ungespeicherte Änderungen",
@@ -8600,7 +8605,17 @@
       "selectItem": "{{name}} auswählen",
       "collectionFull": "Eine Smart Collection enthält so viele Dokumente, wie iFinder erlaubt.",
       "removeFromCollectionConfirm": "„{{name}}“ aus der Collection entfernen? Das Dokument bleibt in iFinder.",
-      "openUnavailable": "Für dieses Dokument gibt es keinen Link zum Öffnen."
+      "openUnavailable": "Für dieses Dokument gibt es keinen Link zum Öffnen.",
+      "selectedCount": "{{count}} Dokumente ausgewählt",
+      "deleteSelected": "Löschen",
+      "deleteSelectedTitle": "Ausgewählte Dokumente löschen",
+      "deleteSelectedConfirm": "{{count}} Dokumente aus dem Projekt löschen? Das lässt sich nicht rückgängig machen.",
+      "deleteSelectedAction": "Dokumente löschen",
+      "removeSelected": "Entfernen",
+      "removeSelectedTitle": "Ausgewählte Dokumente entfernen",
+      "removeSelectedFromCollectionConfirm": "{{count}} Dokumente aus der Sammlung entfernen? Die Dokumente bleiben in iFinder.",
+      "removeSelectedAction": "Dokumente entfernen",
+      "removeSelectedFailed": "{{count}} Dokumente konnten nicht entfernt werden: {{reason}}"
     },
     "list": {
       "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",

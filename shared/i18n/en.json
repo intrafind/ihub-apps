@@ -5208,7 +5208,12 @@
         },
         "selectedCount": "{{count}} items selected",
         "moveSelected": "Move to…",
-        "copySelected": "Copy to…"
+        "copySelected": "Copy to…",
+        "deleteSelected": "Delete",
+        "deleteSelectedTitle": "Delete selected items",
+        "deleteSelectedConfirm": "Delete {{count}} items from the project? This cannot be undone.",
+        "deleteSelectedAction": "Delete items",
+        "deleteSelectedFailed": "{{count}} items could not be deleted: {{reason}}"
       },
       "unsaved": {
         "title": "Unsaved changes",
@@ -8626,7 +8631,17 @@
       "selectItem": "Select {{name}}",
       "collectionFull": "A smart collection holds as many documents as iFinder allows.",
       "removeFromCollectionConfirm": "Remove \"{{name}}\" from the collection? The document stays in iFinder.",
-      "openUnavailable": "This document has no link to open it with."
+      "openUnavailable": "This document has no link to open it with.",
+      "selectedCount": "{{count}} documents selected",
+      "deleteSelected": "Delete",
+      "deleteSelectedTitle": "Delete selected documents",
+      "deleteSelectedConfirm": "Delete {{count}} documents from the project? This cannot be undone.",
+      "deleteSelectedAction": "Delete documents",
+      "removeSelected": "Remove",
+      "removeSelectedTitle": "Remove selected documents",
+      "removeSelectedFromCollectionConfirm": "Remove {{count}} documents from the collection? The documents stay in iFinder.",
+      "removeSelectedAction": "Remove documents",
+      "removeSelectedFailed": "{{count}} documents could not be removed: {{reason}}"
     },
     "list": {
       "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",

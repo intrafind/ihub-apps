@@ -1223,6 +1223,17 @@ them like any other tool.
 
 No migration is needed: the new settings are optional and absent means automatic.
 
+## Projects: Delete Several Documents at Once
+
+Tick documents in a project and choose **Delete** to delete them all after one confirmation.
+
+- **Admin → Projects → (a project):** **Delete** sits next to **Move to…** and **Copy to…**.
+- **A user's project page:** owners and editors tick documents and choose **Delete**. In an iFinder
+  smart collection the button is **Remove**: the documents leave the collection and stay in iFinder.
+- Each document is removed on its own and recorded like a single removal.
+- A document that cannot be deleted stays in the list and stays ticked, and the page says why, so
+  you can try it again.
+
 ## Chat: Sources Sit at the End of the Answer, Next to "Based on Web Search"
 
 An answer used to show two near-identical lines above its text: **Searched the web · 1 search · 10
