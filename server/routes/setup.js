@@ -99,8 +99,7 @@ export default function registerSetupRoutes(app) {
     await configStore.writeJson(PLATFORM_FILE, platform);
     await configCache.refreshCacheEntry(PLATFORM_FILE);
     logger.info('Setup: onboarding disabled', { component: 'Setup' });
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ success: true });
+    res.status(204).end();
   });
 
   /**
@@ -154,8 +153,7 @@ export default function registerSetupRoutes(app) {
     if (providerId === 'local') {
       await markSetupConfigured();
       logger.info('Setup: configured with local provider', { component: 'Setup' });
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      return res.json({ success: true });
+      return res.status(204).end();
     }
 
     // Cloud provider: validate and save API key
@@ -195,7 +193,6 @@ export default function registerSetupRoutes(app) {
       providerId
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ success: true });
+    res.status(204).end();
   });
 }

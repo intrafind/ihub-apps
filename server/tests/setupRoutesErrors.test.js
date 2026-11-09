@@ -184,7 +184,7 @@ describe('POST /api/setup/_disable: errors', () => {
   });
 
   it('records the choice for an admin', async () => {
-    await request(app).post('/api/setup/_disable').send({}).expect(200);
+    await request(app).post('/api/setup/_disable').send({}).expect(204);
     expect(state.written[0][1].setup.disabled).toBe(true);
   });
 });

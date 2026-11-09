@@ -190,7 +190,6 @@ describe('Teams Auth', () => {
       expect(res.cookie).toHaveBeenCalledWith('authToken', 'signed-jwt', expect.any(Object));
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          success: true,
           user: expect.objectContaining({ id: 'persisted-teams-user' })
         })
       );

@@ -859,7 +859,6 @@ export default function registerAdminModelsRoutes(app) {
     }
     const seconds = bytes / 2 / provider.sampleRate;
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,
@@ -888,7 +887,6 @@ export default function registerAdminModelsRoutes(app) {
       });
     }
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: result.message,
@@ -1030,7 +1028,6 @@ export default function registerAdminModelsRoutes(app) {
         const safeModel = { ...model };
         delete safeModel.apiKey;
         res.json({
-          success: true,
           message: 'Model test successful',
           messageKey: 'testSuccessful',
           response: result.content,

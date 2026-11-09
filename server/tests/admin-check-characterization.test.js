@@ -255,7 +255,7 @@ describe('short links: an admin may manage another user’s link', () => {
     const created = await as(request(app).post('/api/shortlinks'), 'user').send({ appId: 'chat' });
     expect(created.status).toBe(200);
     const res = await as(request(app).delete(`/api/shortlinks/${created.body.code}`), name);
-    expect(res.status === 200).toBe(EXPECTED[name][0]);
+    expect(res.status === 204).toBe(EXPECTED[name][0]);
   });
   test('anonymous cannot use short links at all (401), whatever its groups', async () => {
     expect((await request(app).get('/api/shortlinks')).status).toBe(401);

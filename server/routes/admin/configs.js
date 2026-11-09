@@ -478,9 +478,7 @@ export default function registerAdminConfigRoutes(app) {
       resourceId: 'platform',
       summary: 'Updated platform configuration'
     });
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Platform configuration updated successfully',
       config: responseConfig,
       reconfiguration: {
         reconfigured: reconfigResults.reconfigured,

@@ -129,12 +129,7 @@ export default function registerAdminUIRoutes(app) {
         summary: `Uploaded UI asset ${assetInfo.filename}`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({
-        success: true,
-        message: 'Asset uploaded successfully',
-        asset: assetInfo
-      });
+      res.status(201).json({ asset: assetInfo });
     }
   );
 
@@ -147,8 +142,7 @@ export default function registerAdminUIRoutes(app) {
     // Create directory if it doesn't exist
     if (!fs.existsSync(assetsDir)) {
       fs.mkdirSync(assetsDir, { recursive: true });
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      return res.json({ success: true, assets: [] });
+      return res.json({ assets: [] });
     }
 
     const files = fs.readdirSync(assetsDir);
@@ -190,8 +184,7 @@ export default function registerAdminUIRoutes(app) {
       .filter(asset => asset !== null)
       .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ success: true, assets });
+    res.json({ assets });
   });
 
   /**
@@ -225,11 +218,7 @@ export default function registerAdminUIRoutes(app) {
         summary: `Deleted UI asset ${id}`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({
-        success: true,
-        message: 'Asset deleted successfully'
-      });
+      res.status(204).end();
     }
   );
 
@@ -239,11 +228,7 @@ export default function registerAdminUIRoutes(app) {
   app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
     const uiConfig = configCache.getUI();
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      config: uiConfig?.data || {}
-    });
+    res.json({ config: uiConfig?.data || {} });
   });
 
   /**
@@ -272,11 +257,7 @@ export default function registerAdminUIRoutes(app) {
       summary: 'Updated UI configuration'
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      message: 'UI configuration updated successfully'
-    });
+    res.status(204).end();
   });
 
   /**
@@ -299,12 +280,7 @@ export default function registerAdminUIRoutes(app) {
       summary: 'Backed up UI configuration'
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      success: true,
-      message: 'Configuration backed up successfully',
-      backupPath: `backups/ui-config-backup-${timestamp}.json`
-    });
+    res.json({ backupPath: `backups/ui-config-backup-${timestamp}.json` });
   });
 
   // Helper functions (defined within the scope of registerAdminUIRoutes)

@@ -95,7 +95,7 @@ describe('UI administration routes: errors', () => {
     const dir = path.join(tmpRoot, 'uploads', 'assets');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'logo.png'), 'x');
-    await request(app).delete('/api/admin/ui/assets/logo.png').expect(200);
+    await request(app).delete('/api/admin/ui/assets/logo.png').expect(204);
     expect(fs.existsSync(path.join(dir, 'logo.png'))).toBe(false);
   });
 
@@ -129,7 +129,7 @@ describe('UI administration routes: errors', () => {
   });
 
   it('saves a valid configuration', async () => {
-    await request(app).post('/api/admin/ui/config').send({ config: VALID_CONFIG }).expect(200);
+    await request(app).post('/api/admin/ui/config').send({ config: VALID_CONFIG }).expect(204);
     expect(state.written).toEqual(VALID_CONFIG);
   });
 

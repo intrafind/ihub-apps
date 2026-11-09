@@ -695,7 +695,6 @@ export default function registerAdminAuthRoutes(app) {
         })
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'User deleted successfully' });
+    res.status(204).end();
   });
 }

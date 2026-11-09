@@ -15,6 +15,6 @@ import configCache from '../../configCache.js';
 export default function registerAdminMcpGatewayRoutes(app) {
   app.get(buildServerPath('/api/admin/mcp/gateway'), adminAuth, (req, res) => {
     const platform = configCache.getPlatform() || {};
-    res.json({ success: true, gateway: platform.mcpServer || { enabled: false } });
+    res.json({ gateway: platform.mcpServer || { enabled: false } });
   });
 }

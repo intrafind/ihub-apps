@@ -117,8 +117,7 @@ export default function registerShortLinkRoutes(app) {
       }
       const ok = await deleteLink(req.params.code);
       if (!ok) throw new ServiceError('NOT_FOUND', 'Short link not found');
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 

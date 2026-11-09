@@ -310,8 +310,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
         rating,
         ifinderFeedbackSent
       });
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      return res.status(200).json({ success: true });
+      return res.status(204).end();
     }
   );
 }

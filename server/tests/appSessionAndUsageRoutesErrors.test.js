@@ -102,7 +102,7 @@ describe('session start route: errors', () => {
   });
 
   it('logs a valid session', async () => {
-    await request(app).post('/api/session/start').send({ sessionId: 's1' }).expect(200);
+    await request(app).post('/api/session/start').send({ sessionId: 's1' }).expect(204);
     expect(state.logged[0]).toBe('s1');
     expect(state.logged[1]).toBe('app_loaded');
   });

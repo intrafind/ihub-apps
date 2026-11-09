@@ -700,9 +700,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configCache.refreshProvidersCache();
     const updatedModels = await syncLinkedModelsApiType(updatedProvider);
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Provider updated successfully',
       provider: updatedProvider,
       updatedModels
     });
@@ -794,7 +792,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    res.status(201).json({ message: 'Provider created successfully', provider: newProvider }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(201).json({ provider: newProvider });
   });
 
   /**
@@ -869,6 +867,6 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    res.json({ message: 'Provider deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(204).end();
   });
 }

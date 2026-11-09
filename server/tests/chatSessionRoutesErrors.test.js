@@ -92,7 +92,7 @@ describe('GET /api/models/:modelId/chat/test', () => {
     });
     const res = await request(app).get('/api/models/GPT/chat/test');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: true, model: 'gpt', content: 'Hello' });
+    expect(res.body).toMatchObject({ model: 'gpt', content: 'Hello' });
   });
 
   test('maps an LLMError to its canonical status and code', async () => {

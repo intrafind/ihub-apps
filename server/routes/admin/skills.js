@@ -234,7 +234,7 @@ export default function registerAdminSkillsRoutes(app) {
 
       await removeMarketplaceInstallation('skill', req.params.name);
 
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -363,7 +363,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         await configCache.refreshSkillsCache();
 
-        res.json({ success: true, skillName, metadata: validation.metadata });
+        res.json({ skillName, metadata: validation.metadata });
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }

@@ -325,9 +325,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       oauthClientId
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Browser extension integration enabled successfully',
       oauthClientId,
       configUrl: `${baseUrl}/api/integrations/browser-extension/config`
     });
@@ -358,8 +356,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         component: 'AdminBrowserExtension'
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ message: 'Browser extension integration disabled successfully' });
+      res.status(204).end();
     }
   );
 

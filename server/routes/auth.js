@@ -220,11 +220,7 @@ export default function registerAuthRoutes(app) {
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
-      res.json({
-        success: true,
-        user: result.user,
-        expiresIn: result.expiresIn
-      });
+      res.json({ user: result.user, expiresIn: result.expiresIn });
     } catch (error) {
       throw loginFailure(error, 'Local login error', 'Authentication failed');
     }
@@ -405,11 +401,7 @@ export default function registerAuthRoutes(app) {
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
-      res.json({
-        success: true,
-        user: result.user,
-        expiresIn: result.expiresIn
-      });
+      res.json({ user: result.user, expiresIn: result.expiresIn });
     } catch (error) {
       throw loginFailure(error, 'LDAP login error', 'Authentication failed');
     }
@@ -556,11 +548,7 @@ export default function registerAuthRoutes(app) {
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
-      res.json({
-        success: true,
-        user: result.user,
-        expiresIn: result.expiresIn
-      });
+      res.json({ user: result.user, expiresIn: result.expiresIn });
     } catch (error) {
       throw loginFailure(error, 'NTLM login error', 'NTLM authentication failed');
     }
@@ -575,7 +563,6 @@ export default function registerAuthRoutes(app) {
     }
 
     res.json({
-      success: true,
       user: {
         id: req.user.id,
         username: req.user.username,
@@ -641,11 +628,7 @@ export default function registerAuthRoutes(app) {
       logger.info('User logged out', { component: 'Auth', userId: req.user.id });
     }
 
-    res.json({
-      success: true,
-      message: 'Logged out successfully',
-      oidcLogoutRequired
-    });
+    res.json({ oidcLogoutRequired });
   });
 
   /**

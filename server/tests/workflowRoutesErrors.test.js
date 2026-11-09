@@ -134,7 +134,7 @@ describe('workflow execution routes', () => {
   it('deletes a finished execution', async () => {
     executions.set('run1', { executionId: 'run1', userId: 'ada', status: 'completed' });
     engine.deleteExecution.mockResolvedValue();
-    await request(app).delete('/api/workflows/executions/run1').expect(200);
+    await request(app).delete('/api/workflows/executions/run1').expect(204);
     expect(executions.has('run1')).toBe(false);
   });
 

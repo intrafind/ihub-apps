@@ -616,7 +616,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Updated app ${appId}`
     });
-    res.json({ message: 'App updated successfully', app: updatedApp }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ app: updatedApp });
   });
 
   /**
@@ -735,7 +735,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: newApp.id,
       summary: `Created app ${newApp.id}`
     });
-    res.json({ message: 'App created successfully', app: newApp }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(201).json({ app: newApp });
   });
 
   /**
@@ -949,7 +949,7 @@ export default function registerAdminAppsRoutes(app) {
       summary: `Reordered ${ids.length} apps (${updated.length} changed)`
     });
 
-    res.json({ message: 'App order updated successfully', ids, updated }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ ids, updated });
   });
 
   /**
@@ -1154,6 +1154,6 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Deleted app ${appId}`
     });
-    res.json({ message: 'App deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(204).end();
   });
 }

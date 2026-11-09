@@ -315,7 +315,7 @@ describe('LLM provider CRUD', () => {
 
     delete store['models/llmhub-a.json'];
     const deleted = await request(app).delete('/api/admin/providers/llmhub');
-    expect(deleted.status).toBe(200);
+    expect(deleted.status).toBe(204);
   });
 
   it('refuses an API-type name as the ID of a new provider', async () => {

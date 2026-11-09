@@ -497,8 +497,7 @@ export default function registerAdminProxyRoutes(app) {
       provenance: response.provenance
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Proxy configuration updated successfully', ...response });
+    res.json({ ...response });
   });
 
   /**

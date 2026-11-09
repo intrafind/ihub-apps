@@ -263,9 +263,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         oauthClientId
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
       res.json({
-        message: 'Office integration enabled successfully',
         oauthClientId,
         manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`
       });
@@ -301,8 +299,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
       logger.info('Office integration disabled', { component: 'AdminOfficeIntegration' });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ message: 'Office integration disabled successfully' });
+      res.status(204).end();
     }
   );
 

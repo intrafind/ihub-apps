@@ -433,7 +433,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             telemetry: { kind: 'diagnostic', purpose: 'model-chat-test', user: req.user }
           });
           return res.json({
-            success: true,
             model: model.id,
             content: result.content,
             finishReason: result.finishReason,
@@ -1664,7 +1663,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         throw new ServiceError('NOT_FOUND', 'Chat session not found');
       }
       logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
-      return res.status(200).json({ success: true, message: 'Chat stream stopped' });
+      return res.status(200).json({ message: 'Chat stream stopped' });
     }
   );
 

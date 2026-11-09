@@ -917,7 +917,6 @@ export function createOidcCallbackHandler(providerName) {
         );
 
         res.json({
-          success: true,
           user: {
             id: user.id,
             name: user.name,

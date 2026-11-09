@@ -156,7 +156,7 @@ export default function registerAdminUpdateRoutes(app) {
         // Always fetch update info server-side to prevent SSRF via client-supplied URLs
         const updateInfo = await checkForUpdate();
         if (!updateInfo.updateAvailable) {
-          return res.json({ success: false, message: 'No update available' });
+          throw new ServiceError('CONFLICT', 'No update available');
         }
 
         const summary = await downloadUpdate(updateInfo);
@@ -270,7 +270,7 @@ export default function registerAdminUpdateRoutes(app) {
         resourceId: 'staged',
         summary: 'Discarded the staged update'
       });
-      res.json({ success: true }); // api-guidelines-ignore: existing success body, changed in its own API change
+      res.status(204).end();
     }
   );
 

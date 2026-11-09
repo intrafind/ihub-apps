@@ -505,7 +505,7 @@ describe('ownership, copies and history', () => {
     assert.ok((await list(GRACE, 'mine')).some(item => item.id === skill.id));
 
     const removed = await drive(route.remove, { user: GRACE, params: { skillId: skill.id } });
-    assert.equal(removed.statusCode, 200);
+    assert.equal(removed.statusCode, 204);
     const documents = readFacet(getStorage(), 'documents');
     const marker = await documents.get(
       USER_SKILL_SHARES_NAMESPACE,

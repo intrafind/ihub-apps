@@ -114,7 +114,7 @@ function TeamsTab() {
         ssoToken: token
       });
 
-      if (response.data.success && response.data.token) {
+      if (response.data.token) {
         // Login with the received token
         await loginWithToken(response.data.token);
 

@@ -223,8 +223,7 @@ export default function registerAdminTranslationsRoutes(app) {
           : `Overrode translation ${path.join('.')} (${language})`
       });
 
-      // api-guidelines-ignore: existing success body, changed in its own API change
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 }

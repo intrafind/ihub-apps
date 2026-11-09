@@ -121,9 +121,7 @@ export default function registerAdminSsrfRoutes(app) {
       allowedHosts: cleaned
     });
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'SSRF configuration updated successfully',
       config: { allowedHosts: cleaned }
     });
   });

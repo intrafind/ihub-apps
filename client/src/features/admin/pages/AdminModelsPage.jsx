@@ -194,7 +194,11 @@ function AdminModelsPage() {
       const response = await makeAdminApiCall(`/admin/models/${modelId}/_test`, {
         method: 'POST'
       });
-      setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
+      // A failed test is an HTTP error (the catch below); an answer is a passed test.
+      setTestResults(prev => ({
+        ...prev,
+        [modelId]: { ...(response?.data || {}), success: true }
+      }));
     } catch (err) {
       // Server body: { error: headline, code, details: { remediation, messageKey } }
       const body = err?.response?.data || {};

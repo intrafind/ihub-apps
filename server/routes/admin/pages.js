@@ -128,8 +128,7 @@ export default function registerAdminPagesRoutes(app) {
     // content is missing.
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Page created successfully', page: { id, title } });
+    res.status(201).json({ page: { id, title } });
   });
 
   app.put(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
@@ -176,8 +175,7 @@ export default function registerAdminPagesRoutes(app) {
     }
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Page updated successfully', page: { id, title } });
+    res.json({ page: { id, title } });
   });
 
   app.delete(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
@@ -215,7 +213,6 @@ export default function registerAdminPagesRoutes(app) {
     delete uiConfig.pages[pageId];
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({ message: 'Page deleted successfully' });
+    res.status(204).end();
   });
 }
