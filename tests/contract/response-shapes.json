@@ -2413,7 +2413,7 @@
           "snapshotAt": "null",
           "status": "string",
           "storage": "string",
-          "text": "object",
+          "text": "null|object",
           "updatedAt": "string"
         }
       ],

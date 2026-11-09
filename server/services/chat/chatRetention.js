@@ -83,6 +83,9 @@ let sweepTimer = null;
 /** Guards against a tick starting while the previous one is still running. */
 let sweeping = false;
 
+/** The sweep currently running, so stopping can wait for it to finish. */
+let inFlight = null;
+
 /**
  * The document facet behind a repository, or null when storage is unavailable.
  *
@@ -443,7 +446,8 @@ export async function sweepChats({
  * @param {number} [options.historyIntervalMs=86400000] - Least time between two
  *   runs of the history rules.
  * @param {() => number} [options.now] - Clock, for tests.
- * @returns {() => void} Stops the sweep.
+ * @returns {() => Promise<void>} Stops the sweep; resolves once a sweep in
+ *   flight has finished.
  */
 export function startChatRetentionSweep({
   repository = null,
@@ -457,9 +461,14 @@ export function startChatRetentionSweep({
   if (sweepTimer) return stopChatRetentionSweep;
   let lastHistorySweepAt = null;
 
-  const tick = async () => {
-    if (sweeping) return;
+  const tick = () => {
+    if (sweeping) return inFlight;
     sweeping = true;
+    inFlight = runSweep();
+    return inFlight;
+  };
+
+  const runSweep = async () => {
     try {
       if (storageReady() !== true) return;
       const platform = getPlatformConfig() || {};
@@ -509,11 +518,15 @@ export function startChatRetentionSweep({
 }
 
 /**
- * Stop the sweep. A sweep already in flight runs to completion.
+ * Stop the sweep. A sweep already in flight runs to completion; the returned
+ * promise resolves once it has (it never rejects: a failed sweep is logged).
+ * Awaiting it guarantees that a sweep started next is not skipped by the
+ * re-entrancy guard of one still running.
  *
- * @returns {void}
+ * @returns {Promise<void>}
  */
 export function stopChatRetentionSweep() {
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
+  return inFlight ?? Promise.resolve();
 }
