@@ -471,7 +471,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     prepared.tools = (prepared.tools || []).filter(
       tool => !WITHHELD_IN_SCHEDULED_RUNS.has(tool?.id)
     );
-    // The tools tool search left out of the request too: `call_tool` runs them.
+    // The tools tool search left out of the request too: `search_tools` would load them.
     if (prepared.toolSearch) {
       prepared.toolSearch = prepared.toolSearch.without(tool =>
         WITHHELD_IN_SCHEDULED_RUNS.has(tool?.id)

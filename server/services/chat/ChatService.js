@@ -823,10 +823,7 @@ class ChatService {
             type: 'function',
             function: { name: resume.call.name, arguments: JSON.stringify(resume.args || {}) }
           },
-          args: resume.args || {},
-          // The tool that was approved: a call the model made through
-          // `call_tool` is stored under that name, and runs as this tool.
-          toolId: resume.call.toolId
+          args: resume.args || {}
         };
       } else {
         const payload = approvalRefusalPayload(resume.outcome, toolName);

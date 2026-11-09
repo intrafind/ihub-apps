@@ -3338,7 +3338,7 @@
         "toolSearch": "Tool-Suche",
         "toolSearchAuto": "Automatisch (Standard)",
         "toolSearchOff": "Aus: alle Tools senden",
-        "toolSearchHelp": "Sind die Tools dieser App für eine Anfrage zu viele, werden die größten Integrationen weggelassen und im Prompt aufgelistet; das Modell findet ein Tool mit search_tools und führt es mit call_tool aus. Hält Anfragen klein und die Tool-Wahl treffsicher. Setzen Sie bei einer Integration „Immer geladen“, um sie aus der Suche herauszuhalten.",
+        "toolSearchHelp": "Sind die Tools dieser App für eine Anfrage zu viele, werden die größten Integrationen weggelassen und im Prompt aufgelistet; das Modell findet ein Tool mit search_tools, und die gefundenen Tools werden der Anfrage hinzugefügt. Hält Anfragen klein und die Tool-Wahl treffsicher. Setzen Sie bei einer Integration „Immer geladen“, um sie aus der Suche herauszuhalten.",
         "toolSearchBudget": "Token-Budget für Tool-Definitionen",
         "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells."
       },

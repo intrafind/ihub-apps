@@ -115,7 +115,7 @@ function ToolSearchSettings({ toolSearch, onChange }) {
       <p id="app-tool-search-help" className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         {t(
           'admin.apps.edit.toolSearchHelp',
-          'When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and runs it with call_tool. Keeps requests small and tool choice sharp. Set "Always loaded" on an integration to keep it out of the search.'
+          'When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set "Always loaded" on an integration to keep it out of the search.'
         )}
       </p>
       {!off && (

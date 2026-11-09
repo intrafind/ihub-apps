@@ -5,12 +5,12 @@
 
 /**
  * Tool search (#2889): the tools of an app's integrations that do not fit the
- * request's budget are left out and found with `search_tools`, run with
- * `call_tool`.
+ * request's budget are left out and found with `search_tools`, which loads
+ * what it finds into the request.
  *
  * Covers the decision (which integrations are left out, what never is), the
- * list in the system prompt, the search, and how a `call_tool` call resolves
- * to the tool it names — including every refusal.
+ * list in the system prompt, and the search: what it finds, what it loads,
+ * that a tool is found once, and the caps.
  *
  * Run: node --test server/tests/tool-search.test.js
  */
@@ -18,9 +18,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  CALL_TOOL_TOOL_ID,
   DEFAULT_MAX_TOOL_TOKENS,
   MAX_FOUND_TOOLS,
+  MAX_LOADED_BY_SEARCH,
   MIN_TOOL_BUDGET_TOKENS,
   SEARCH_TOOLS_TOOL_ID,
   appendToolIndex,
@@ -33,9 +33,8 @@ import {
   splitTools,
   toolDefinitionTokens,
   toolSearchEnabledFor,
-  toolSearchToolDefinitions
+  toolSearchToolDefinition
 } from '../services/tools/toolSearch.js';
-import { resolveToolCall } from '../services/loop/toolArgs.js';
 import { searchCatalog } from '../utils/catalogSearch.js';
 import { classifyToolKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
 import { toolDisplayOf } from '../utils/toolDisplay.js';
@@ -214,7 +213,7 @@ describe('buildToolIndex', () => {
     assert.match(text, /<integration name="Jira" id="jira">/);
     assert.match(text, /<tool name="jira__op_0">Operation 0 of jira\./);
     assert.match(text, /search_tools/);
-    assert.match(text, /call_tool/);
+    assert.doesNotMatch(text, /call_tool/);
   });
 
   it('gets shorter step by step: names, then the integrations with their tool counts', () => {
@@ -261,41 +260,53 @@ describe('searchDeferredTools', () => {
     action('wiki', 'get_page', { description: 'Read a wiki page. Mentions jira links.' })
   ];
 
-  it('ranks the name above the description and returns the parameters', () => {
-    const text = searchDeferredTools(deferred, 'jira create');
-    assert.match(text, /^Tools matching "jira create":/);
+  it('finds the best matches, the name above the description, and says they are loaded', () => {
+    const { text, found } = searchDeferredTools(deferred, 'jira create');
+    assert.deepEqual(ids(found), ['jira__create_issue', 'jira__search_issues', 'wiki__get_page']);
+    assert.match(text, /^These tools match "jira create" and are now loaded\./);
+    assert.match(text, /Call them directly in your next step/);
     assert.ok(text.indexOf('jira__create_issue') < text.indexOf('jira__search_issues'));
-    assert.match(text, /Parameters \(JSON Schema\): \{"type":"object"/);
-    assert.match(text, /call_tool/);
+    assert.match(
+      text,
+      /- jira__create_issue \(Jira: create issue\)\n {2}Create a ticket in a project\./
+    );
+  });
+
+  it('does not repeat the parameter schemas: the model gets them in its tools', () => {
+    const { text } = searchDeferredTools(deferred, 'jira');
+    assert.doesNotMatch(text, /Parameters|"type":"object"|call_tool/);
   });
 
   it('finds the tools of an integration by its name', () => {
-    const text = searchDeferredTools(deferred, 'wiki');
-    assert.match(text, /wiki__get_page/);
+    assert.deepEqual(ids(searchDeferredTools(deferred, 'wiki').found), ['wiki__get_page']);
   });
 
-  it('returns at most a handful of matches', () => {
+  it('loads at most a handful of tools, or the limit it is given', () => {
     const many = integration('big', 20, 6);
-    const text = searchDeferredTools(many, 'big');
-    assert.equal((text.match(/^- big__/gm) || []).length, MAX_FOUND_TOOLS);
+    assert.equal(searchDeferredTools(many, 'big').found.length, MAX_FOUND_TOOLS);
+    assert.equal(searchDeferredTools(many, 'big', 2).found.length, 2);
   });
 
-  it('says what to do when nothing matches or the query is empty', () => {
-    assert.match(searchDeferredTools(deferred, 'zebra'), /No tool matches "zebra"/);
-    assert.match(searchDeferredTools(deferred, '  '), /Give a few keywords/);
-    assert.match(searchDeferredTools(deferred, undefined), /Give a few keywords/);
+  it('says what to do when nothing matches or the query is empty, and loads nothing', () => {
+    for (const [query, pattern] of [
+      ['zebra', /No tool matches "zebra"/],
+      ['  ', /Give a few keywords/],
+      [undefined, /Give a few keywords/]
+    ]) {
+      const { text, found } = searchDeferredTools(deferred, query);
+      assert.match(text, pattern);
+      assert.deepEqual(found, []);
+    }
   });
 
   it('stays fast for a description that is mostly white space (a remote server writes it)', () => {
-    const hostile = action('evil', 'run', {
-      description: `Runs it.${' '.repeat(200_000)}end`
-    });
+    const hostile = action('evil', 'run', { description: `Runs it.${' '.repeat(200_000)}end` });
     const started = Date.now();
-    const answer = searchDeferredTools([hostile], 'evil');
+    const { text } = searchDeferredTools([hostile], 'evil');
     const index = buildToolIndex([hostile]).text;
     // A quadratic white space pattern takes tens of seconds here; this takes milliseconds.
     assert.ok(Date.now() - started < 1000, 'search and list stay linear in the description');
-    assert.match(answer, /Runs it\. end/);
+    assert.match(text, /Runs it\. end/);
     assert.match(index, /Runs it\./);
   });
 
@@ -304,193 +315,65 @@ describe('searchDeferredTools', () => {
       extra: { instructions: 'Always quote the issue key.' }
     });
     guided._integration.guidance = 'Ask which issue first.';
-    const text = searchDeferredTools([guided], 'comment');
+    const { text } = searchDeferredTools([guided], 'comment');
     assert.match(text, /<integration-guidance integration="Jira"/);
     assert.match(text, /Always quote the issue key\./);
     assert.match(text, /Ask which issue first\./);
   });
 });
 
-describe('createToolSearch().resolveCall', () => {
-  const create = action('jira', 'create_issue', {
-    props: { priority: { type: 'string', default: 'medium' }, count: { type: 'integer' } }
-  });
-  const loadedTool = action('wiki', 'get_page');
-  const [searchTool, callTool] = toolSearchToolDefinitions('en');
-  const toolSearch = createToolSearch({
-    deferred: [create],
-    tools: [loadedTool, searchTool, callTool]
+describe('createToolSearch', () => {
+  const create = () => [
+    action('jira', 'create_issue', { description: 'Create a ticket.' }),
+    action('jira', 'search_issues', { description: 'Find tickets.' }),
+    action('wiki', 'get_page', { description: 'Read a wiki page.' })
+  ];
+
+  it('loads what it finds: the tools leave the left-out set, and are found once', () => {
+    const toolSearch = createToolSearch({ deferred: create() });
+    const first = toolSearch.search({ query: 'jira' });
+    assert.deepEqual(ids(first.found), ['jira__create_issue', 'jira__search_issues']);
+    assert.deepEqual(ids(toolSearch.deferred), ['wiki__get_page']);
+
+    const again = toolSearch.search({ query: 'jira' });
+    assert.deepEqual(again.found, [], 'a loaded tool is not found again');
+    assert.match(again.text, /No tool matches "jira"/);
   });
 
-  it('turns the call into a call of the tool it names, with its own arguments', () => {
-    const target = toolSearch.resolveCall({
-      name: 'jira__create_issue',
-      arguments: '{"query":"login bug","count":2}'
-    });
-    assert.equal(target.toolDef, create);
-    assert.deepEqual(target.args, { query: 'login bug', count: 2, priority: 'medium' });
+  it('does not change the list it was given', () => {
+    const list = create();
+    createToolSearch({ deferred: list }).search({ query: 'jira' });
+    assert.equal(list.length, 3);
   });
 
-  it('accepts the arguments as an object too, and none for a tool without parameters', () => {
-    assert.deepEqual(
-      toolSearch.resolveCall({ name: 'jira__create_issue', arguments: { query: 'x' } }).args,
-      { query: 'x', priority: 'medium' }
-    );
-    const bare = action('jira', 'ping');
-    bare.parameters = { type: 'object', properties: {} };
-    const search = createToolSearch({ deferred: [bare], tools: [] });
-    assert.deepEqual(search.resolveCall({ name: 'jira__ping' }).args, {});
-  });
-
-  it('finds the tool by its provider-safe name as well', () => {
-    assert.equal(
-      toolSearch.resolveCall({ name: 'jira__create_issue', arguments: '{"query":"x"}' }).toolDef,
-      create
-    );
-  });
-
-  it('answers a name that is not left out like an unknown tool', () => {
-    assert.deepEqual(toolSearch.resolveCall({ name: 'jira__delete_project', arguments: '{}' }), {
-      unknown: 'jira__delete_project'
-    });
-    assert.deepEqual(toolSearch.resolveCall({ name: 'call_tool', arguments: '{}' }), {
-      unknown: 'call_tool'
-    });
-    assert.deepEqual(toolSearch.resolveCall({ name: 'search_tools', arguments: '{}' }), {
-      unknown: 'search_tools'
-    });
-  });
-
-  it('refuses a tool the model has loaded: it is called directly', () => {
-    const target = toolSearch.resolveCall({ name: 'wiki__get_page', arguments: '{"query":"x"}' });
-    assert.match(target.refused, /wiki__get_page is loaded: call it directly/);
-  });
-
-  it('refuses a missing name and arguments that are not a JSON object', () => {
-    assert.match(toolSearch.resolveCall({ arguments: '{}' }).refused, /name is required/);
-    assert.match(toolSearch.resolveCall({ name: '  ' }).refused, /name is required/);
-    for (const broken of ['not json at all', '[1,2]']) {
-      assert.match(
-        toolSearch.resolveCall({ name: 'jira__create_issue', arguments: broken }).refused,
-        /arguments must be a JSON object/
-      );
+  it('loads at most MAX_LOADED_BY_SEARCH tools in a run, however often the model searches', () => {
+    const toolSearch = createToolSearch({ deferred: integration('big', 40, 6) });
+    let loaded = 0;
+    for (let round = 0; round < 10; round += 1) {
+      loaded += toolSearch.search({ query: 'big' }).found.length;
     }
+    assert.equal(loaded, MAX_LOADED_BY_SEARCH);
+    const refused = toolSearch.search({ query: 'big' });
+    assert.deepEqual(refused.found, []);
+    assert.match(refused.text, /Enough tools are loaded/);
+    assert.equal(toolSearch.deferred.length, 40 - MAX_LOADED_BY_SEARCH);
   });
 
-  it('refuses arguments that do not fit the schema, and says why', () => {
-    const missing = toolSearch.resolveCall({ name: 'jira__create_issue', arguments: '{}' });
-    assert.match(missing.refused, /do not match the parameters of jira__create_issue/);
-    assert.match(missing.refused, /query/);
-    assert.match(missing.refused, /Parameters \(JSON Schema\)/);
-
-    const wrongType = toolSearch.resolveCall({
-      name: 'jira__create_issue',
-      arguments: '{"query":"x","count":"two"}'
-    });
-    assert.match(wrongType.refused, /\/count must be integer/);
-  });
-
-  it('does not refuse a call because its schema cannot be checked', () => {
-    const odd = action('odd', 'run');
-    odd.parameters = { type: 'object', properties: { x: { $ref: '#/definitions/missing' } } };
-    const search = createToolSearch({ deferred: [odd], tools: [] });
-    assert.ok(search.resolveCall({ name: 'odd__run', arguments: '{"x":1}' }).toolDef);
+  it('loads one tool by name for the call a person approved, once', () => {
+    const toolSearch = createToolSearch({ deferred: create() });
+    assert.equal(toolSearch.take('jira__create_issue').id, 'jira__create_issue');
+    assert.equal(toolSearch.take('jira__create_issue'), null, 'not left out any more');
+    assert.equal(toolSearch.take('nope'), null);
+    assert.deepEqual(ids(toolSearch.deferred), ['jira__search_issues', 'wiki__get_page']);
   });
 
   it("can leave tools out of the search afterwards (a caller's own gate)", () => {
-    const narrowed = toolSearch.without(tool => tool.id === 'jira__create_issue');
-    assert.deepEqual(narrowed.deferred, []);
-    assert.deepEqual(narrowed.resolveCall({ name: 'jira__create_issue', arguments: '{}' }), {
-      unknown: 'jira__create_issue'
-    });
-  });
-});
-
-describe('resolveToolCall', () => {
-  const create = action('jira', 'create_issue');
-  const loadedTool = action('wiki', 'get_page');
-  const [searchTool, callTool] = toolSearchToolDefinitions('en');
-  const tools = [loadedTool, searchTool, callTool];
-  const toolSearch = createToolSearch({ deferred: [create], tools });
-  const modelCall = (name, args) => ({
-    id: 'call_1',
-    function: { name, arguments: JSON.stringify(args) }
-  });
-  const repair = args => ({ args, repaired: false });
-
-  it('unwraps a call_tool call before anything else sees it', () => {
-    const args = { name: 'jira__create_issue', arguments: '{"query":"bug"}' };
-    const item = resolveToolCall({
-      call: modelCall(CALL_TOOL_TOOL_ID, args),
-      repair: repair(args),
-      tools,
-      toolSearch
-    });
-    assert.equal(item.toolDef, create);
-    assert.deepEqual(item.args, { query: 'bug' });
-    assert.equal(item.viaCallTool, true);
-    assert.equal(
-      item.call.function.name,
-      CALL_TOOL_TOOL_ID,
-      'the transcript keeps what the model wrote'
+    const narrowed = createToolSearch({ deferred: create() }).without(
+      tool => tool.id === 'jira__create_issue'
     );
-  });
-
-  it('leaves a direct call alone', () => {
-    const args = { query: 'x' };
-    const item = resolveToolCall({
-      call: modelCall('wiki__get_page', args),
-      repair: repair(args),
-      tools,
-      toolSearch
-    });
-    assert.equal(item.toolDef, loadedTool);
-    assert.equal(item.viaCallTool, undefined);
-  });
-
-  it('does not run a deferred tool by its own name: it is not in the request', () => {
-    const args = { query: 'x' };
-    const item = resolveToolCall({
-      call: modelCall('jira__create_issue', args),
-      repair: repair(args),
-      tools,
-      toolSearch
-    });
-    assert.equal(item.toolDef, null);
-  });
-
-  it('turns a refusal into a rejection and an unknown name into an unknown tool', () => {
-    const bad = { name: 'jira__create_issue', arguments: '{}' };
-    const rejected = resolveToolCall({
-      call: modelCall(CALL_TOOL_TOOL_ID, bad),
-      repair: repair(bad),
-      tools,
-      toolSearch
-    });
-    assert.match(rejected.rejection, /do not match/);
-    assert.equal(rejected.toolDef.id, CALL_TOOL_TOOL_ID);
-
-    const unknown = { name: 'nope', arguments: '{}' };
-    const item = resolveToolCall({
-      call: modelCall(CALL_TOOL_TOOL_ID, unknown),
-      repair: repair(unknown),
-      tools,
-      toolSearch
-    });
-    assert.equal(item.toolDef, null);
-    assert.equal(item.requestedName, 'nope');
-  });
-
-  it('refuses a tool the circuit breaker withheld', () => {
-    const args = { name: 'jira__create_issue', arguments: '{"query":"x"}' };
-    const item = resolveToolCall({
-      call: modelCall(CALL_TOOL_TOOL_ID, args),
-      repair: repair(args),
-      tools,
-      toolSearch,
-      disabledTools: new Set(['jira__create_issue'])
-    });
-    assert.match(item.rejection, /withheld for this run/);
+    assert.deepEqual(ids(narrowed.deferred), ['jira__search_issues', 'wiki__get_page']);
+    assert.deepEqual(narrowed.search({ query: 'create' }).found, []);
+    assert.equal(narrowed.take('jira__create_issue'), null);
   });
 });
 
@@ -529,7 +412,7 @@ describe('prepareToolSearch', () => {
     assert.equal(roomy.tools, big);
   });
 
-  it('sends the loaded tools and the two search tools; the rest is in the list', async () => {
+  it('sends the loaded tools and the search tool; the rest is in the list', async () => {
     const result = await prepareToolSearch({
       tools: big,
       app: tight,
@@ -539,8 +422,7 @@ describe('prepareToolSearch', () => {
     });
     assert.deepEqual(ids(result.tools), [
       ...ids(big.filter(tool => tool._integration.instanceId === 'wiki')),
-      SEARCH_TOOLS_TOOL_ID,
-      CALL_TOOL_TOOL_ID
+      SEARCH_TOOLS_TOOL_ID
     ]);
     assert.equal(result.toolSearch.deferred.length, 12);
     assert.match(result.indexText, /<integration name="Jira" id="jira">/);
@@ -568,8 +450,8 @@ describe('prepareToolSearch', () => {
   });
 });
 
-describe('what the loop and the chat show for the two tools', () => {
-  const [searchTool, callTool] = toolSearchToolDefinitions('en');
+describe('what the loop and the chat show for the search tool', () => {
+  const searchTool = toolSearchToolDefinition('en');
 
   it('shows search_tools as a plain tool call, not as a web search', () => {
     assert.equal(classifyToolKnowledgeSource(searchTool.id, searchTool), null);
@@ -579,13 +461,12 @@ describe('what the loop and the chat show for the two tools', () => {
     assert.equal(display.title, 'Search tools');
   });
 
-  it('describes both tools for the model, and takes the arguments as text', () => {
-    assert.equal(searchTool.toolSearchRole, 'search');
-    assert.equal(callTool.toolSearchRole, 'call');
-    assert.equal(callTool.parameters.properties.arguments.type, 'string');
-    assert.deepEqual(callTool.parameters.required, ['name', 'arguments']);
+  it('is marked for the loop, and says that what it finds is added to the tools', () => {
+    assert.equal(searchTool.isToolSearch, true);
     assert.equal(searchTool.isInternalTool, true);
-    const german = toolSearchToolDefinitions('de');
-    assert.match(german[0].description, /Durchsuche/);
+    assert.equal(searchTool.readOnly, true);
+    assert.deepEqual(searchTool.parameters.required, ['query']);
+    assert.match(searchTool.description, /added to your tools/);
+    assert.match(toolSearchToolDefinition('de').description, /Durchsuche/);
   });
 });

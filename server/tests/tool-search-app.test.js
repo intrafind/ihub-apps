@@ -105,9 +105,9 @@ describe('tool search on the tools of a real app', () => {
     assert.doesNotMatch(indexText, /gamma/, 'what is loaded is not listed');
   });
 
-  it('sends the request the loaded tools and the two search tools, nothing of the rest', async () => {
+  it('sends the request the loaded tools and the search tool, nothing of the rest', async () => {
     const { tools } = await prepare({ id: 'many', integrations: three, toolSearch: tight });
-    assert.deepEqual(ids(tools), ['call_tool', 'gamma', 'search_tools']);
+    assert.deepEqual(ids(tools), ['gamma', 'search_tools']);
   });
 
   it('keeps an integration loaded when the app binds it with alwaysLoaded', async () => {
@@ -181,7 +181,7 @@ describe('tool search on the tools of a real app', () => {
   it('counts the model’s context window: a big app does not fit a small model', async () => {
     const app = { id: 'many', integrations: three };
     assert.equal((await prepare(app)).toolSearch, null);
-    const small = await prepare(app, { model: { id: 'local', contextWindow: 8000 } });
+    const small = await prepare(app, { model: { id: 'local', contextWindow: 4000 } });
     assert.deepEqual(ids(small.toolSearch.deferred), ['alpha', 'beta']);
   });
 });

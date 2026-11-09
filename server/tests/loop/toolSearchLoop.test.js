@@ -5,18 +5,19 @@
  * Tool search (#2889) end to end: `ChatService.runTurn` on the real
  * `AgentLoop` with a scripted provider.
  *
- * The model finds a tool that was left out of the request with `search_tools`
- * and runs it with `call_tool`. What must hold:
+ * The model finds a tool that was left out of the request with `search_tools`;
+ * what it finds joins the request's tools from its next step on, and the model
+ * calls it like any other tool. What must hold:
  *
- * - the provider is sent the loaded tools and the two search tools, never the
- *   tools that were left out;
- * - a `call_tool` call runs the tool it names through the same `runTool` with
- *   the same context, and shows (activity frames, approval card, run log) as
- *   that tool; the transcript the model sees keeps `call_tool`;
- * - the approval gate decides on the real tool, and a paused call continues
- *   as the real tool with the approved arguments;
- * - a name that is not left out, a tool that is loaded, and arguments that do
- *   not fit are refused without running anything.
+ * - the provider is sent the loaded tools and `search_tools`, never the tools
+ *   that were left out, until the model finds them;
+ * - a found tool is an ordinary tool call: it runs through the same `runTool`
+ *   with the same context and shows (activity frames, approval card, run log)
+ *   as itself;
+ * - the approval gate decides on a found tool as on any tool, and a paused call
+ *   continues as that tool with the approved arguments, though the new request
+ *   starts with it left out again;
+ * - a tool that was not found cannot be called: it is not in the request.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +36,7 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
-import { createToolSearch, toolSearchToolDefinitions } from '../../services/tools/toolSearch.js';
+import { createToolSearch, toolSearchToolDefinition } from '../../services/tools/toolSearch.js';
 
 const { INTERACTION_RAISED, TOOL_STARTED, TOOL_COMPLETED } = SSE_V2_EVENTS;
 
@@ -89,10 +90,6 @@ function toolTurn(name, args, { id = 'call_1' } = {}) {
   ];
 }
 
-/** The model runs a left-out tool through `call_tool`: its arguments are JSON text. */
-const callTool = (name, args, options) =>
-  toolTurn('call_tool', { name, arguments: JSON.stringify(args) }, options);
-
 const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
 
 function spy(impl) {
@@ -137,14 +134,12 @@ const LOADED = action('wiki', 'Wiki', 'get_page', 'Get page');
 
 /** What `prepareChatRequest` hands the turn when Jira was left out of the request. */
 function prep(overrides = {}) {
-  const searchTools = toolSearchToolDefinitions('en');
-  const tools = [LOADED, ...searchTools];
   return {
     app: { id: 'app1' },
     model: MODELS.openai,
     llmMessages: [{ role: 'user', content: 'Comment on ACME-12' }],
-    tools,
-    toolSearch: createToolSearch({ deferred: [SEARCH, COMMENT], tools }),
+    tools: [LOADED, toolSearchToolDefinition('en')],
+    toolSearch: createToolSearch({ deferred: [SEARCH, COMMENT] }),
     maxTokens: 256,
     llmOptions: {},
     ...overrides
@@ -198,69 +193,35 @@ const sentToolNames = request =>
 const toolMessageOf = (request, id = 'call_1') =>
   request.body.messages.find(m => m.role === 'tool' && m.tool_call_id === id);
 
-test('the provider is sent the loaded tools and the two search tools, not the tools left out', async t => {
+/** The model's search step, then its next step. */
+const search = (query, options) => toolTurn('search_tools', { query }, options);
+
+test('the provider is sent the loaded tools and search_tools, not the tools left out', async t => {
   const chatId = newChatId('request');
   captureFrames(t, chatId);
   const { service, requests } = makeService([textTurn('Hello.')]);
   await turn(service, { chatId, prepData: prep() });
-  assert.deepEqual(sentToolNames(requests[0]), ['wiki__get_page', 'search_tools', 'call_tool']);
-  const sent = JSON.stringify(requests[0].body.tools);
-  assert.doesNotMatch(sent, /jira__/, 'the left-out tools are not in the request');
+  assert.deepEqual(sentToolNames(requests[0]), ['wiki__get_page', 'search_tools']);
+  assert.doesNotMatch(JSON.stringify(requests[0].body.tools), /jira__/);
 });
 
-test('call_tool runs the tool it names, as that tool, with the context of a direct call', async t => {
-  const chatId = newChatId('run');
+test('search_tools loads what it finds into the very next request, and runs nothing', async t => {
+  const chatId = newChatId('load');
   const frames = captureFrames(t, chatId);
-  const { service, runTool, requests } = makeService([
-    callTool('jira__search_issues', { issue: 'ACME-12' }),
-    textTurn('Found it.')
-  ]);
-  const summary = await turn(service, { chatId, prepData: prep() });
-
-  assert.equal(summary.status, 'completed');
-  assert.equal(runTool.calls.length, 1);
-  const [toolId, params, options] = runTool.calls[0];
-  assert.equal(toolId, 'jira__search_issues', 'runTool gets the real tool, never call_tool');
-  assert.equal(params.issue, 'ACME-12');
-  assert.equal(params.chatId, chatId);
-  assert.equal(params.user.id, 'u1');
-  assert.deepEqual(params.appConfig, { id: 'app1' });
-  assert.ok(options.signal, 'the turn’s abort signal comes along');
-  assert.equal(params.name, undefined, 'the wrapper’s own arguments do not leak into the call');
-  assert.equal(params.arguments, undefined);
-
-  // The activity list shows the real tool.
-  const [started] = ofType(frames, TOOL_STARTED);
-  assert.equal(started.data.toolId, 'jira__search_issues');
-  assert.equal(started.data.name, 'jira__search_issues');
-  assert.equal(started.data.title, 'Search issues');
-  assert.equal(started.data.integration, 'Jira');
-  assert.deepEqual(started.data.args, { issue: 'ACME-12' });
-  const [done] = ofType(frames, TOOL_COMPLETED);
-  assert.equal(done.data.toolId, 'jira__search_issues');
-
-  // The model's transcript is what it wrote: a call of call_tool and its result.
-  const next = requests[1].body.messages;
-  const assistant = next.find(m => m.role === 'assistant' && m.tool_calls);
-  assert.equal(assistant.tool_calls[0].function.name, 'call_tool');
-  assert.equal(toolMessageOf(requests[1]).name, 'call_tool');
-  assert.equal(JSON.parse(toolMessageOf(requests[1]).content).ok, true);
-});
-
-test('search_tools answers from the tools left out and runs nothing', async t => {
-  const chatId = newChatId('search');
-  const frames = captureFrames(t, chatId);
-  const { service, runTool, requests } = makeService([
-    toolTurn('search_tools', { query: 'comment' }),
-    textTurn('Done.')
-  ]);
+  const { service, runTool, requests } = makeService([search('comment'), textTurn('Done.')]);
   await turn(service, { chatId, prepData: prep() });
 
   assert.equal(runTool.calls.length, 0, 'answered by the loop');
+  assert.deepEqual(sentToolNames(requests[1]), [
+    'wiki__get_page',
+    'search_tools',
+    'jira__add_comment'
+  ]);
   const answer = toolMessageOf(requests[1]).content;
   assert.match(answer, /jira__add_comment/);
-  assert.match(answer, /Parameters \(JSON Schema\)/);
-  assert.doesNotMatch(answer, /wiki__get_page/, 'only what was left out');
+  assert.match(answer, /now loaded/);
+  assert.doesNotMatch(answer, /jira__search_issues/, 'only what matched');
+
   const [started] = ofType(frames, TOOL_STARTED);
   assert.equal(started.data.toolId, 'search_tools');
   assert.equal(started.data.activityKind, 'tool', 'not drawn as a web search');
@@ -268,36 +229,42 @@ test('search_tools answers from the tools left out and runs nothing', async t =>
   assert.equal(ofType(frames, TOOL_COMPLETED).length, 1);
 });
 
-test('a name that was not left out is refused like an unknown tool, and nothing runs', async t => {
-  const chatId = newChatId('unknown');
-  captureFrames(t, chatId);
+test('a found tool is called directly, as that tool, with the context of any call', async t => {
+  const chatId = newChatId('run');
+  const frames = captureFrames(t, chatId);
   const { service, runTool, requests } = makeService([
-    callTool('jira__delete_project', { issue: 'x' }),
-    textTurn('Sorry.')
+    search('issues'),
+    toolTurn('jira__search_issues', { issue: 'ACME-12' }, { id: 'call_2' }),
+    textTurn('Found it.')
   ]);
-  await turn(service, { chatId, prepData: prep() });
-  assert.equal(runTool.calls.length, 0);
-  const result = JSON.parse(toolMessageOf(requests[1]).content);
-  assert.equal(result.reason, 'tool_not_registered');
-  assert.match(result.message, /Tool 'jira__delete_project' is not registered/);
+  const summary = await turn(service, { chatId, prepData: prep() });
+
+  assert.equal(summary.status, 'completed');
+  assert.equal(runTool.calls.length, 1);
+  const [toolId, params, options] = runTool.calls[0];
+  assert.equal(toolId, 'jira__search_issues');
+  assert.equal(params.issue, 'ACME-12');
+  assert.equal(params.chatId, chatId);
+  assert.equal(params.user.id, 'u1');
+  assert.deepEqual(params.appConfig, { id: 'app1' });
+  assert.ok(options.signal, 'the turn’s abort signal comes along');
+
+  // The activity list shows the tool the model called.
+  const started = ofType(frames, TOOL_STARTED).find(f => f.data.toolId === 'jira__search_issues');
+  assert.equal(started.data.name, 'jira__search_issues');
+  assert.equal(started.data.title, 'Search issues');
+  assert.equal(started.data.integration, 'Jira');
+  assert.deepEqual(started.data.args, { issue: 'ACME-12' });
+
+  // Its tool message carries its own name, and the tool stays offered.
+  const message = toolMessageOf(requests[2], 'call_2');
+  assert.equal(message.name, 'jira__search_issues');
+  assert.equal(JSON.parse(message.content).ok, true);
+  assert.ok(sentToolNames(requests[2]).includes('jira__search_issues'));
 });
 
-test('a tool the model has loaded is refused: it is called directly', async t => {
-  const chatId = newChatId('loaded');
-  captureFrames(t, chatId);
-  const { service, runTool, requests } = makeService([
-    callTool('wiki__get_page', { issue: 'x' }),
-    textTurn('Ok.')
-  ]);
-  await turn(service, { chatId, prepData: prep() });
-  assert.equal(runTool.calls.length, 0);
-  const result = JSON.parse(toolMessageOf(requests[1]).content);
-  assert.equal(result.error, true);
-  assert.match(result.message, /wiki__get_page is loaded: call it directly/);
-});
-
-test('a tool left out cannot be called by its own name: it is not in the request', async t => {
-  const chatId = newChatId('direct');
+test('a tool that was not found cannot be called: it is not in the request', async t => {
+  const chatId = newChatId('unfound');
   captureFrames(t, chatId);
   const { service, runTool, requests } = makeService([
     toolTurn('jira__search_issues', { issue: 'ACME-12' }),
@@ -305,42 +272,34 @@ test('a tool left out cannot be called by its own name: it is not in the request
   ]);
   await turn(service, { chatId, prepData: prep() });
   assert.equal(runTool.calls.length, 0);
-  assert.equal(JSON.parse(toolMessageOf(requests[1]).content).reason, 'tool_not_registered');
+  const result = JSON.parse(toolMessageOf(requests[1]).content);
+  assert.equal(result.reason, 'tool_not_registered');
+  assert.match(result.message, /Tool 'jira__search_issues' is not registered/);
 });
 
-test('arguments that do not fit the tool are refused with the reason, and the model can correct them', async t => {
-  const chatId = newChatId('invalid');
+test('a search that finds nothing loads nothing', async t => {
+  const chatId = newChatId('none');
   captureFrames(t, chatId);
-  const { service, runTool, requests } = makeService([
-    callTool('jira__search_issues', { text: 'no issue key' }),
-    callTool('jira__search_issues', { issue: 'ACME-12' }, { id: 'call_2' }),
-    textTurn('Found it.')
-  ]);
+  const { service, requests } = makeService([search('zebra'), textTurn('Ok.')]);
   await turn(service, { chatId, prepData: prep() });
-
-  const refusal = JSON.parse(toolMessageOf(requests[1]).content);
-  assert.equal(refusal.error, true);
-  assert.match(refusal.message, /do not match the parameters of jira__search_issues/);
-  assert.match(refusal.message, /issue/);
-  assert.equal(runTool.calls.length, 1, 'only the corrected call ran');
-  assert.equal(runTool.calls[0][1].issue, 'ACME-12');
+  assert.match(toolMessageOf(requests[1]).content, /No tool matches "zebra"/);
+  assert.deepEqual(sentToolNames(requests[1]), ['wiki__get_page', 'search_tools']);
 });
 
-test('a tool the circuit breaker withheld is refused through call_tool too', async t => {
+test('a found tool that keeps failing is withheld like any other tool', async t => {
   const chatId = newChatId('breaker');
   captureFrames(t, chatId);
-  const failing = async () => ({ error: true, message: 'Backend unavailable' });
-  const calls = [1, 2, 3, 4, 5].map(i =>
-    callTool('jira__search_issues', { issue: `ACME-${i}` }, { id: `call_${i}` })
+  const calls = [1, 2, 3].map(i =>
+    toolTurn('jira__search_issues', { issue: `ACME-${i}` }, { id: `call_${i + 1}` })
   );
-  const { service, runTool, requests } = makeService([...calls, textTurn('Giving up.')], {
-    runTool: failing
-  });
+  const { service, runTool, requests } = makeService(
+    [search('issues'), ...calls, textTurn('Giving up.')],
+    { runTool: async () => ({ error: true, message: 'Backend unavailable' }) }
+  );
   await turn(service, { chatId, prepData: prep() });
-  const answers = requests.slice(1).map((request, i) => toolMessageOf(request, `call_${i + 1}`));
-  const withheld = answers.filter(m => /withheld for this run/.test(m.content));
-  assert.ok(withheld.length >= 1, 'a repeatedly failing tool is withheld, not retried forever');
-  assert.ok(runTool.calls.length < 5);
+  assert.equal(runTool.calls.length, 3);
+  const last = requests.at(-1);
+  assert.ok(!sentToolNames(last).includes('jira__search_issues'), 'withheld after three failures');
 });
 
 // ── approval ────────────────────────────────────────────────────────────────
@@ -372,13 +331,15 @@ async function chatStore(t) {
   return repository;
 }
 
-test('the approval gate decides on the real tool: a write left out still asks, and never runs unapproved', async t => {
+const COMMENT_ARGS = { issue: 'ACME-12', text: 'Looks good' };
+
+test('a found write still asks first, and never runs unapproved', async t => {
   const chatId = newChatId('approval');
   const frames = captureFrames(t, chatId);
   const repository = await chatStore(t);
   const interactionService = await interactionsFor(t);
   const { service, runTool } = makeService(
-    [callTool('jira__add_comment', { issue: 'ACME-12', text: 'Looks good' })],
+    [search('comment'), toolTurn('jira__add_comment', COMMENT_ARGS, { id: 'call_2' })],
     { interactionService }
   );
   const summary = await turn(service, {
@@ -390,47 +351,49 @@ test('the approval gate decides on the real tool: a write left out still asks, a
   assert.equal(summary.status, 'paused');
   assert.equal(summary.finishReason, 'approval');
   assert.equal(runTool.calls.length, 0, 'nothing ran');
-  assert.equal(ofType(frames, TOOL_STARTED).length, 0, 'a gated call never shows as started');
+  assert.ok(
+    !ofType(frames, TOOL_STARTED).some(f => f.data.toolId === 'jira__add_comment'),
+    'a gated call never shows as started'
+  );
 
   const [raised] = ofType(frames, INTERACTION_RAISED);
   const { displayData } = raised.data.interaction.prompt;
-  assert.equal(displayData.toolId, 'jira__add_comment', 'the card is about the real tool');
+  assert.equal(displayData.toolId, 'jira__add_comment');
   assert.equal(displayData.toolName, 'Add comment');
   assert.equal(displayData.integration.name, 'Jira');
   assert.equal(displayData.sideEffect, 'write');
-  assert.deepEqual(displayData.args, { issue: 'ACME-12', text: 'Looks good' });
+  assert.deepEqual(displayData.args, COMMENT_ARGS);
 
-  // What is stored to continue the turn: the call as the model wrote it, and
-  // the tool it was approved as.
+  // What is stored to continue the turn is the call as the model wrote it.
   const stored = (await repository.getChat(chatId)).toolApproval.pending;
-  assert.equal(stored.call.name, 'call_tool');
+  assert.equal(stored.call.name, 'jira__add_comment');
   assert.equal(stored.call.toolId, 'jira__add_comment');
-  assert.deepEqual(stored.call.args, { issue: 'ACME-12', text: 'Looks good' });
-  const placeholder = stored.transcript.find(m => m.role === 'tool');
-  assert.equal(placeholder.name, 'call_tool', 'the transcript keeps the name the model called');
+  assert.deepEqual(stored.call.args, COMMENT_ARGS);
 });
 
-test('headless: the refusal names the real tool, and the message keeps call_tool', async t => {
+test('headless: a found write is refused by name, and the model carries on', async t => {
   const chatId = newChatId('headless');
   captureFrames(t, chatId);
   const { service, runTool, requests } = makeService([
-    callTool('jira__add_comment', { issue: 'ACME-12' }),
+    search('comment'),
+    toolTurn('jira__add_comment', COMMENT_ARGS, { id: 'call_2' }),
     textTurn('I could not comment.')
   ]);
   await turn(service, { chatId, prepData: prep(), headless: true });
   assert.equal(runTool.calls.length, 0);
-  const message = toolMessageOf(requests[1]);
-  assert.equal(message.name, 'call_tool');
+  const message = toolMessageOf(requests[2], 'call_2');
+  assert.equal(message.name, 'jira__add_comment');
   const payload = JSON.parse(message.content);
   assert.equal(payload.code, 'APPROVAL_REQUIRED_NO_USER');
   assert.match(payload.message, /"jira__add_comment"/);
 });
 
-test('a per-chat grant of the real tool lets the call run without asking', async t => {
+test('a per-chat grant of the tool lets a found write run without asking', async t => {
   const chatId = newChatId('grant');
   captureFrames(t, chatId);
   const { service, runTool } = makeService([
-    callTool('jira__add_comment', { issue: 'ACME-12' }),
+    search('comment'),
+    toolTurn('jira__add_comment', COMMENT_ARGS, { id: 'call_2' }),
     textTurn('Done.')
   ]);
   const summary = await turn(service, {
@@ -442,11 +405,43 @@ test('a per-chat grant of the real tool lets the call run without asking', async
   assert.equal(runTool.calls[0][0], 'jira__add_comment');
 });
 
-test('approve: the server runs the stored call as the real tool, with exactly the approved arguments', async t => {
+/** The stored part of a turn that paused on a call to a found tool. */
+const pausedTranscript = () => [
+  {
+    role: 'assistant',
+    content: null,
+    tool_calls: [
+      {
+        id: 'call_2',
+        type: 'function',
+        function: {
+          name: 'jira__add_comment',
+          arguments: JSON.stringify({ issue: 'SOMETHING-ELSE' })
+        }
+      }
+    ]
+  },
+  {
+    role: 'tool',
+    tool_call_id: 'call_2',
+    name: 'jira__add_comment',
+    content: JSON.stringify({ status: 'awaiting_approval' })
+  }
+];
+
+const resumeOf = (extra = {}) => ({
+  interactionId: 'approve-1',
+  outcome: 'approved',
+  call: { id: 'call_2', name: 'jira__add_comment', toolId: 'jira__add_comment' },
+  args: { issue: 'ACME-12', text: 'from the card' },
+  transcript: pausedTranscript(),
+  ...extra
+});
+
+test('approve: the call runs as the tool that was found, though this request left it out again', async t => {
   const chatId = newChatId('approve');
   const frames = captureFrames(t, chatId);
   const { service, runTool, requests } = makeService([textTurn('The comment was added.')]);
-  const approvedArgs = { issue: 'ACME-12', text: 'from the card' };
   const summary = await turn(service, {
     chatId,
     prepData: prep({
@@ -455,96 +450,36 @@ test('approve: the server runs the stored call as the real tool, with exactly th
         { role: 'user', content: 'Approved: jira__add_comment' }
       ]
     }),
-    toolApproval: {
-      grants: [],
-      resume: {
-        interactionId: 'approve-1',
-        outcome: 'approved',
-        call: { id: 'call_1', name: 'call_tool', toolId: 'jira__add_comment' },
-        args: approvedArgs,
-        // What the model wrote differs: the approved arguments win.
-        transcript: [
-          {
-            role: 'assistant',
-            content: null,
-            tool_calls: [
-              {
-                id: 'call_1',
-                type: 'function',
-                function: {
-                  name: 'call_tool',
-                  arguments: JSON.stringify({
-                    name: 'jira__add_comment',
-                    arguments: JSON.stringify({ issue: 'SOMETHING-ELSE' })
-                  })
-                }
-              }
-            ]
-          },
-          {
-            role: 'tool',
-            tool_call_id: 'call_1',
-            name: 'call_tool',
-            content: JSON.stringify({ status: 'awaiting_approval' })
-          }
-        ]
-      }
-    }
+    toolApproval: { grants: [], resume: resumeOf() }
   });
 
   assert.equal(summary.status, 'completed');
   assert.equal(runTool.calls.length, 1, 'run once, by the server');
   const [toolId, params] = runTool.calls[0];
   assert.equal(toolId, 'jira__add_comment');
-  assert.equal(params.issue, 'ACME-12');
+  assert.equal(params.issue, 'ACME-12', 'the approved arguments win over what the model wrote');
   assert.equal(params.text, 'from the card');
   assert.equal(requests.length, 1, 'the model was not asked to issue the call again');
-  const message = toolMessageOf(requests[0]);
-  assert.equal(message.name, 'call_tool');
-  assert.doesNotMatch(message.content, /awaiting_approval/, 'the placeholder was replaced');
-  const [started] = ofType(frames, TOOL_STARTED);
-  assert.equal(started.data.toolId, 'jira__add_comment');
+  assert.doesNotMatch(toolMessageOf(requests[0], 'call_2').content, /awaiting_approval/);
+  assert.ok(sentToolNames(requests[0]).includes('jira__add_comment'), 'the tool is loaded now');
+  assert.equal(ofType(frames, TOOL_STARTED)[0].data.toolId, 'jira__add_comment');
 });
 
 test('approve: a tool that is no longer offered is not run', async t => {
   const chatId = newChatId('gone');
   captureFrames(t, chatId);
   const { service, runTool, requests } = makeService([textTurn('Ok.')]);
-  const tools = [LOADED, ...toolSearchToolDefinitions('en')];
   await turn(service, {
     chatId,
     prepData: prep({
-      toolSearch: createToolSearch({ deferred: [], tools }),
+      toolSearch: createToolSearch({ deferred: [] }),
       llmMessages: [{ role: 'user', content: 'Approved' }]
     }),
-    toolApproval: {
-      resume: {
-        interactionId: 'approve-2',
-        outcome: 'approved',
-        call: { id: 'call_1', name: 'call_tool', toolId: 'jira__add_comment' },
-        args: { issue: 'ACME-12' },
-        transcript: [
-          {
-            role: 'assistant',
-            content: null,
-            tool_calls: [
-              {
-                id: 'call_1',
-                type: 'function',
-                function: { name: 'call_tool', arguments: '{}' }
-              }
-            ]
-          },
-          {
-            role: 'tool',
-            tool_call_id: 'call_1',
-            name: 'call_tool',
-            content: JSON.stringify({ status: 'awaiting_approval' })
-          }
-        ]
-      }
-    }
+    toolApproval: { resume: resumeOf() }
   });
   assert.equal(runTool.calls.length, 0);
-  assert.equal(JSON.parse(toolMessageOf(requests[0]).content).reason, 'tool_not_registered');
+  assert.equal(
+    JSON.parse(toolMessageOf(requests[0], 'call_2').content).reason,
+    'tool_not_registered'
+  );
 });

@@ -6,10 +6,9 @@
 /**
  * Tool search (#2889) in the prepared chat request (`prepareChatRequest`): with
  * the platform feature on and an app over its budget, the request carries
- * only the loaded tools plus `search_tools` and `call_tool`, the left-out
- * tools are in the system prompt as a list (name and description, no
- * schemas), and their guidance stays out of the prompt until the model
- * searches. With the feature off, under the budget, or for a model that does
+ * only the loaded tools plus `search_tools`, the left-out tools are in the
+ * system prompt as a list (name and description, no schemas), and their
+ * guidance stays out of the prompt until the model searches. With the feature off, under the budget, or for a model that does
  * not call tools, the request is what it was without the feature.
  *
  * Run: node --test server/tests/tool-search-request.test.js
@@ -113,9 +112,9 @@ describe('prepareChatRequest with tool search', () => {
 
   beforeEach(() => configCache.setCacheEntry('config/features.json', {}));
 
-  it('sends the loaded tools and the two search tools, and lists what was left out', async () => {
+  it('sends the loaded tools and the search tool, and lists what was left out', async () => {
     const data = await prepare();
-    assert.deepEqual(ids(data.tools), ['call_tool', 'gamma', 'search_tools']);
+    assert.deepEqual(ids(data.tools), ['gamma', 'search_tools']);
     assert.deepEqual(ids(data.toolSearch.deferred), ['alpha', 'beta']);
 
     const prompt = systemPrompt(data);

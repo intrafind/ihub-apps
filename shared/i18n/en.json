@@ -2987,7 +2987,7 @@
         "toolSearch": "Tool search",
         "toolSearchAuto": "Automatic (default)",
         "toolSearchOff": "Off: send every tool",
-        "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and runs it with call_tool. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
+        "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
         "toolSearchBudget": "Token budget for tool definitions",
         "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window."
       },

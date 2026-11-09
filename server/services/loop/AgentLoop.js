@@ -30,7 +30,7 @@ import { loopPoliciesSchema } from './contracts/loop.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError, isAbortError } from './contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage } from './llmUsage.js';
-import { repairToolArguments, matchTool, resolveToolCall } from './toolArgs.js';
+import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
@@ -169,8 +169,8 @@ export class AgentLoop {
    * @param {Object} request.model - resolved model object
    * @param {Array} request.messages - starting transcript (not mutated)
    * @param {Array} [request.tools] - tool specs offered to the model
-   * @param {Object} [request.toolSearch] - `createToolSearch()`: tools left out of `tools`,
-   *   what `search_tools` answers and how `call_tool` resolves to the tool it names
+   * @param {Object} [request.toolSearch] - `createToolSearch()`: the tools left out of `tools`.
+   *   What `search_tools` finds joins `tools` for the model's next step
    * @param {'server'|'caller'} [request.toolExecution='server']
    * @param {Object} [request.policies] - partial loop policies (see contracts/loop.js)
    * @param {Object} [request.options] - LLMClient options (maxTokens, responseSchema, thinking*, …)
@@ -195,8 +195,8 @@ export class AgentLoop {
     const policies = resolvePolicies(request.policies);
     // Copied: the native web search fallback may add a tool for this run only.
     const tools = Array.isArray(request.tools) ? [...request.tools] : [];
-    // Tools left out of `tools` that the model finds with `search_tools` and
-    // runs with `call_tool` (services/tools/toolSearch.js).
+    // Tools left out of `tools` that the model finds with `search_tools`: what
+    // it finds is added to `tools` (services/tools/toolSearch.js).
     const toolSearch = request.toolSearch || null;
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
@@ -414,24 +414,20 @@ export class AgentLoop {
       if (request.resume?.toolCall && toolExecution === 'server') {
         const resumed = request.resume;
         const call = resumed.toolCall;
-        const named = matchTool(call.function?.name, tools);
-        // A call the model made through `call_tool` was approved as the tool
-        // it names: run that one, with the arguments that were approved.
-        const viaCallTool = named?.toolSearchRole === 'call';
-        const approvedTool = viaCallTool
-          ? toolSearch?.findDeferred(resumed.toolId) ||
-            matchTool(
-              resumed.toolId,
-              tools.filter(tool => !tool.toolSearchRole)
-            )
-          : named;
+        // The model found the tool with `search_tools` in the request that
+        // paused: this request starts with it left out again, so loading it is
+        // part of running the call a person approved.
+        let approvedTool = matchTool(call.function?.name, tools);
+        if (!approvedTool) {
+          approvedTool = toolSearch?.take(call.function?.name) || null;
+          if (approvedTool) tools.push(approvedTool);
+        }
         const item = {
           call,
           toolDef: approvedTool,
           args: resumed.args && typeof resumed.args === 'object' ? resumed.args : {},
           argsRepaired: false,
-          position: 0,
-          ...(viaCallTool ? { viaCallTool: true, requestedName: resumed.toolId } : {})
+          position: 0
         };
         ctx.iteration = 0;
         const outcome = await this._executeOne(ctx, item, {
@@ -743,15 +739,12 @@ export class AgentLoop {
         ctx.messages.push(assistantMessage);
 
         // ── execute the tool calls (segment planner → batches) ──────────
-        const resolved = toolCalls.map((call, i) =>
-          resolveToolCall({
-            call,
-            repair: repairs[i],
-            tools,
-            toolSearch,
-            disabledTools: ctx.disabledTools
-          })
-        );
+        const resolved = toolCalls.map((call, i) => {
+          const toolDef = matchTool(call.function.name, tools);
+          const repair = repairs[i];
+          const args = applyParameterDefaults(repair.args, toolDef);
+          return { call, toolDef, args, argsRepaired: repair.repaired };
+        });
         const batches = planToolBatches(resolved, policies.tools);
         const outcomes = new Array(resolved.length);
         let aborted = false;
@@ -966,30 +959,14 @@ export class AgentLoop {
    * @returns {Promise<{position:number, messages:Array, terminate?:Object}>}
    */
   async _executeOne(ctx, item, { seams, iteration, groupIndex, toolExecution }) {
-    const { call, toolDef, args, argsRepaired, position, viaCallTool, requestedName, rejection } =
-      item;
-    const toolId = toolDef?.id || requestedName || call.function.name;
-    // What the model called: the tool messages carry it, so the provider can
-    // match them to the call (Gemini matches a response by name).
-    const wireName = call.function.name;
-    // What frames, logs and approvals call the tool: for a call through
-    // `call_tool`, the tool it names.
-    const name = viaCallTool || requestedName ? toolId : wireName;
+    const { call, toolDef, args, argsRepaired, position } = item;
+    const toolId = toolDef?.id || call.function.name;
+    const name = call.function.name;
     const ledgerId = ctx.ledgerId;
     const runId = ctx.runId;
     const started = Date.now();
     const messages = [];
-    const info = {
-      call,
-      toolDef,
-      toolId,
-      name,
-      wireName,
-      args,
-      argsRepaired,
-      iteration,
-      groupIndex
-    };
+    const info = { call, toolDef, toolId, name, args, argsRepaired, iteration, groupIndex };
     const display = toolDisplayOf(toolDef);
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
@@ -1043,7 +1020,7 @@ export class AgentLoop {
       message = {
         role: 'tool',
         tool_call_id: call.id,
-        name: wireName,
+        name,
         content: JSON.stringify(rawResult)
       };
       await runHooks(seams, 'onHallucinated', ctx, {
@@ -1053,14 +1030,15 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (rejection) {
-          // A `call_tool` call that must not run (arguments that do not fit,
-          // a tool the circuit breaker withheld): the model is told why and
-          // nothing runs. It counts as a failed call of `call_tool`.
-          rawResult = { error: true, reason: 'invalid_tool_call', message: rejection };
-        } else if (toolDef.toolSearchRole === 'search' && ctx.toolSearch) {
-          // `search_tools` answers from the tools this request left out.
-          rawResult = ctx.toolSearch.search(args);
+        if (toolDef.isToolSearch && ctx.toolSearch) {
+          // `search_tools` answers from the tools this request left out, and
+          // what it finds joins the tools the model is offered from its next
+          // step on (`availableTools` is read again on every round).
+          const { text, found } = ctx.toolSearch.search(args);
+          for (const tool of found) {
+            if (!ctx.tools.some(t => t.id === tool.id)) ctx.tools.push(tool);
+          }
+          rawResult = text;
         } else {
           if (typeof ctx.request.executeTool !== 'function') {
             throw new LLMError(`No tool executor configured for '${toolId}'`, {
@@ -1106,7 +1084,7 @@ export class AgentLoop {
           message = {
             role: 'tool',
             tool_call_id: call.id,
-            name: wireName,
+            name,
             content: serializeToolContent(rawResult)
           };
         }
@@ -1117,12 +1095,7 @@ export class AgentLoop {
           error: true,
           message: `Tool execution failed: ${err.message || 'Unknown error'}`
         };
-        message = {
-          role: 'tool',
-          tool_call_id: call.id,
-          name: wireName,
-          content: JSON.stringify(rawResult)
-        };
+        message = { role: 'tool', tool_call_id: call.id, name, content: JSON.stringify(rawResult) };
       }
     }
 

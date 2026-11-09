@@ -4,27 +4,29 @@
 /**
  * Tool search: when the tools of an app's integrations are too many to hand to
  * the model in full on every request, the largest integrations are left out of
- * the request's `tools`. The model gets two tools instead, and finds and runs
- * what it needs through them:
+ * the request's `tools` and the model gets one tool instead:
  *
- *  - `search_tools(query)` answers with the full description and parameters of
- *    the best matching tools (the same keyword ranking as `find_skill`);
- *  - `call_tool(name, arguments)` runs one of the left-out tools.
+ *  - `search_tools(query)` finds the best matching tools (the same keyword
+ *    ranking as `find_skill`) and **loads them**: they join the request's
+ *    `tools` from the model's next step on, and the model calls them like any
+ *    other tool, with their own schema.
  *
  * The left-out tools are listed in the system prompt as `<available_tools>`,
  * by integration. The list depends only on the tools, never on the message, so
- * the prompt stays the same from turn to turn and caches.
+ * the prompt stays the same from turn to turn and caches; the request changes
+ * only in a turn whose model searched.
  *
- * A model cannot call a tool that is not in the request's `tools`: strict
- * providers (OpenAI Responses, vLLM) refuse the call outright. That is why a
- * left-out tool runs through `call_tool`. The agent loop unwraps the call
- * before anything else looks at it (`createToolSearch().resolveCall`), so the
- * approval gate, the activity list, the run log and the usage logs all see the
- * real tool, never `call_tool`. `arguments` is JSON written as text because a
- * free-form object cannot be expressed on every provider (the OpenAI
- * Responses converter forces `additionalProperties: false` on every object,
- * the Google converter strips it), so an object parameter could only ever be
- * empty or unchecked; an object is accepted too.
+ * The agent loop owns the loading (`createToolSearch()` is its view of the
+ * request): a found tool is pushed onto the loop's tool list, so the approval
+ * gate, the activity list, the run log and the usage logs treat it as the
+ * ordinary tool call it is. Only a tool left out of this request for this user
+ * can be found. A tool is found by name or task, never called by name before:
+ * until it is loaded it is not in `tools`, and the loop answers a call to it
+ * like a call to any unknown tool.
+ *
+ * The chat history that goes to the model holds the prose of earlier turns,
+ * never their tool calls, so a tool found in one turn is not carried into the
+ * next: the model searches again when it needs it.
  *
  * Only the tools of integrations are left out (see {@link isDeferrable}). What
  * the chat loop or a seam handles specially, and every other tool an app is
@@ -42,14 +44,9 @@ import { escapeXml } from '../skillAccess.js';
 import { isWebSearchEngineTool } from '../search/webSearchEngines.js';
 import { localized } from '../integrations/definitions/installedValues.js';
 import { appendSystemBlock, buildIntegrationGuidance } from '../integrations/actionGuidance.js';
-import { applyParameterDefaults, matchTool, repairToolArguments } from '../loop/toolArgs.js';
-import { createOutputValidator, normalizeSchema } from '../inference/structuredOutput.js';
+import { matchTool } from '../loop/toolArgs.js';
 
 export const SEARCH_TOOLS_TOOL_ID = 'search_tools';
-
-export const CALL_TOOL_TOOL_ID = 'call_tool';
-
-export const TOOL_SEARCH_TOOL_IDS = Object.freeze([SEARCH_TOOLS_TOOL_ID, CALL_TOOL_TOOL_ID]);
 
 /** Platform feature (Admin → Features) that switches tool search on. */
 export const TOOL_SEARCH_FEATURE_ID = 'toolSearch';
@@ -69,20 +66,20 @@ export const MAX_INDEX_TOKENS = 1500;
 /** Length a description is shortened to in the list. */
 export const SHORT_DESCRIPTION_CHARS = 100;
 
-/** Most tools one `search_tools` call returns. */
+/** Most tools one `search_tools` call loads. */
 export const MAX_FOUND_TOOLS = 5;
 
-/** Longest schema, in characters, an argument error quotes back to the model. */
-const MAX_QUOTED_SCHEMA_CHARS = 4000;
+/** Most tools one run loads through `search_tools`, however often the model searches. */
+export const MAX_LOADED_BY_SEARCH = 15;
 
 /**
- * Whether a tool is one of the two tools tool search adds.
+ * Whether a tool is the search tool tool search adds.
  *
  * @param {Object|null|undefined} tool
  * @returns {boolean}
  */
 export function isToolSearchTool(tool) {
-  return Boolean(tool) && TOOL_SEARCH_TOOL_IDS.includes(tool.id) && Boolean(tool.toolSearchRole);
+  return tool?.isToolSearch === true;
 }
 
 /**
@@ -164,7 +161,7 @@ export function isDeferrable(tool) {
  * @param {Object} options
  * @param {number} options.maxTokens - {@link maxToolTokensFor}
  * @param {Set<string>} [options.alwaysLoaded] - Installation ids that stay loaded
- * @param {number} [options.reservedTokens] - Tokens the two search tools will need
+ * @param {number} [options.reservedTokens] - Tokens the search tool will need
  * @returns {{loaded: Array<Object>, deferred: Array<Object>}} Both in the original order
  */
 export function splitTools(tools, { maxTokens, alwaysLoaded = new Set(), reservedTokens = 0 }) {
@@ -227,7 +224,7 @@ function shorten(text, max = SHORT_DESCRIPTION_CHARS) {
 }
 
 const INDEX_INTRO =
-  'Some tools are not loaded, to keep the request small. They are listed here by integration. To use one, call search_tools with a few keywords to get its description and parameters, then run it with call_tool (name and arguments).';
+  'Some tools are not loaded, to keep the request small. They are listed here by integration. To use one, call search_tools with a few keywords: the tools it finds are added to your tools, and you can call them in your next step.';
 const INDEX_SHORTENED_NOTE = 'The descriptions are shortened.';
 const INDEX_NAMES_NOTE = 'Only the tool names are listed.';
 const INDEX_COUNTS_NOTE =
@@ -297,96 +294,72 @@ export function buildToolIndex(deferred, { maxTokens = MAX_INDEX_TOKENS } = {}) 
 }
 
 /**
- * The two tools the model gets when tools are left out.
+ * The tool the model gets when tools are left out.
  *
  * @param {string} [language]
- * @returns {Array<Object>} `[search_tools, call_tool]`
+ * @returns {Object} `search_tools`
  */
-export function toolSearchToolDefinitions(language = 'en') {
+export function toolSearchToolDefinition(language = 'en') {
   const lang = language || 'en';
-  return [
-    {
-      id: SEARCH_TOOLS_TOOL_ID,
-      name: getLocalizedString({ en: 'Search tools', de: 'Tools suchen' }, lang),
-      description: getLocalizedString(
-        {
-          en: 'Search the tools that are not loaded. Give a few keywords (a tool name, a system such as "jira", or the task) and get the full description and parameters of the best matches. Then run a tool with call_tool.',
-          de: 'Durchsuche die nicht geladenen Tools nach Stichworten (Tool-Name, System oder Aufgabe) und erhalte Beschreibung und Parameter der besten Treffer. Führe ein Tool danach mit call_tool aus.'
-        },
-        lang
-      ),
-      isInternalTool: true,
-      readOnly: true,
-      toolSearchRole: 'search',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'A few keywords for the tool or the task, e.g. "create jira ticket"'
-          }
-        },
-        required: ['query']
-      }
-    },
-    {
-      id: CALL_TOOL_TOOL_ID,
-      name: getLocalizedString({ en: 'Call tool', de: 'Tool aufrufen' }, lang),
-      description: getLocalizedString(
-        {
-          en: 'Run a tool that is not loaded. Find it first with search_tools (or take its name from <available_tools>). Pass its name and its arguments as a JSON object written as text.',
-          de: 'Führe ein nicht geladenes Tool aus. Finde es zuerst mit search_tools (oder nimm den Namen aus <available_tools>). Übergib Name und Argumente als JSON-Objekt in Textform.'
-        },
-        lang
-      ),
-      isInternalTool: true,
-      toolSearchRole: 'call',
-      parameters: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description:
-              'The name of the tool, exactly as search_tools or <available_tools> gives it'
-          },
-          arguments: {
-            type: 'string',
-            description:
-              'The tool arguments as a JSON object written as text, e.g. {"query":"open bugs"}. {} for a tool without parameters.'
-          }
-        },
-        required: ['name', 'arguments']
-      }
+  return {
+    id: SEARCH_TOOLS_TOOL_ID,
+    name: getLocalizedString({ en: 'Search tools', de: 'Tools suchen' }, lang),
+    description: getLocalizedString(
+      {
+        en: 'Search the tools that are not loaded. Give a few keywords (a tool name, a system such as "jira", or the task). The best matches are added to your tools, and you can call them in your next step.',
+        de: 'Durchsuche die nicht geladenen Tools nach Stichworten (Tool-Name, System oder Aufgabe). Die besten Treffer werden deinen Tools hinzugefügt, und du kannst sie im nächsten Schritt aufrufen.'
+      },
+      lang
+    ),
+    isInternalTool: true,
+    readOnly: true,
+    isToolSearch: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'A few keywords for the tool or the task, e.g. "create jira ticket"'
+        }
+      },
+      required: ['query']
     }
-  ];
+  };
 }
 
-/** One tool as `search_tools` shows it: name, where it belongs, description, parameters. */
+/** One loaded tool as `search_tools` reports it: name, where it belongs, description. */
 function describeFound(tool) {
   const integration = tool._integration || {};
   const title = integration.actionTitle ? `${labelOf(tool)}: ${integration.actionTitle}` : null;
   const lines = [title ? `- ${tool.id} (${title})` : `- ${tool.id}`];
   // One line. `\s+` runs in linear time; `\s*\n\s*` is quadratic on a long run of
   // white space, and a remote MCP server writes these descriptions.
-  if (tool.description) lines.push(`  ${String(tool.description).replace(/\s+/g, ' ').trim()}`);
-  lines.push(
-    `  Parameters (JSON Schema): ${JSON.stringify(tool.parameters || { type: 'object' })}`
-  );
+  if (tool.description) lines.push(`  ${shorten(tool.description, 300)}`);
   return lines.join('\n');
 }
 
 /**
- * What `search_tools` answers: the best matches with their parameters, the
- * guidance of their integrations, and how to run them.
+ * What `search_tools` answers, and which tools it loads: the best matches
+ * among the tools left out, with the guidance of their integrations.
  *
- * @param {Array<Object>} deferred
+ * @param {Array<Object>} deferred - The tools still left out
  * @param {string} query
- * @returns {string}
+ * @param {number} [limit] - Most tools to load
+ * @returns {{text: string, found: Array<Object>}} `found` is what the loop adds to its tools
  */
-export function searchDeferredTools(deferred, query) {
+export function searchDeferredTools(deferred, query, limit = MAX_FOUND_TOOLS) {
   const words = typeof query === 'string' ? query.trim() : '';
   if (!words) {
-    return 'Give a few keywords that describe the tool or the task, e.g. "create jira ticket".';
+    return {
+      text: 'Give a few keywords that describe the tool or the task, e.g. "create jira ticket".',
+      found: []
+    };
+  }
+  if (limit <= 0) {
+    return {
+      text: `Enough tools are loaded (${MAX_LOADED_BY_SEARCH}). Use the tools you have.`,
+      found: []
+    };
   }
   const entries = deferred.map(tool => ({
     name: tool.id,
@@ -394,104 +367,69 @@ export function searchDeferredTools(deferred, query) {
     description: tool.description || '',
     tool
   }));
-  const matches = searchCatalog(entries, words, MAX_FOUND_TOOLS).map(entry => entry.tool);
-  if (matches.length === 0) {
-    return `No tool matches "${words}". Try other keywords: a tool name from <available_tools>, the system (e.g. "jira") or the task.`;
+  const found = searchCatalog(entries, words, limit).map(entry => entry.tool);
+  if (found.length === 0) {
+    return {
+      text: `No tool matches "${words}". Try other keywords: a tool name from <available_tools>, the system (e.g. "jira") or the task.`,
+      found: []
+    };
   }
-  const guidance = buildIntegrationGuidance(matches);
-  return [
-    `Tools matching "${words}":`,
-    matches.map(describeFound).join('\n'),
-    'Run one with call_tool: name is the tool name above, arguments is a JSON object written as text that matches its parameters.',
-    ...(guidance ? [guidance] : [])
-  ].join('\n\n');
-}
-
-/** Why the arguments do not fit the tool's schema, for the model to correct. */
-function argumentProblem(toolDef, args) {
-  const schema = normalizeSchema(toolDef.parameters);
-  if (!schema) return null;
-  let verdict;
-  try {
-    verdict = createOutputValidator({ kind: 'json_schema', schema })(JSON.stringify(args));
-  } catch {
-    // A schema that does not compile (or cannot be checked in time): the
-    // tool itself reports what it cannot use.
-    return null;
-  }
-  if (verdict.valid) return null;
-  const problems = (verdict.errors || [])
-    .slice(0, 8)
-    .map(error => (error.path && error.path !== '/' ? error.path + ' ' : '') + error.message)
-    .join('; ');
-  const quoted = JSON.stringify(toolDef.parameters || {});
-  return (
-    `The arguments do not match the parameters of ${toolDef.id}: ${problems}. ` +
-    `Correct them and call call_tool again. Parameters (JSON Schema): ${
-      quoted.length > MAX_QUOTED_SCHEMA_CHARS
-        ? `${quoted.slice(0, MAX_QUOTED_SCHEMA_CHARS)}…`
-        : quoted
-    }`
-  );
+  const guidance = buildIntegrationGuidance(found);
+  return {
+    text: [
+      `These tools match "${words}" and are now loaded. Call them directly in your next step:`,
+      found.map(describeFound).join('\n'),
+      ...(guidance ? [guidance] : [])
+    ].join('\n\n'),
+    found
+  };
 }
 
 /**
- * The loop's view of tool search for one request: the tools left out, what
- * `search_tools` answers and how a `call_tool` call turns into the call of the
- * tool it names.
+ * The loop's view of tool search for one request: the tools still left out,
+ * what `search_tools` answers and which tools it loads. The object keeps what
+ * is left out, so a tool found once is not found again.
  *
  * @param {Object} options
  * @param {Array<Object>} options.deferred - The tools left out of the request
- * @param {Array<Object>} options.tools - The tools the request sends (loaded tools and the two search tools)
  * @returns {{
  *   deferred: Array<Object>,
- *   search: (args: Object) => string,
- *   resolveCall: (args: Object) => ({toolDef: Object, args: Object}|{unknown: string}|{refused: string}),
- *   findDeferred: (toolId: string) => (Object|null),
+ *   search: (args: Object) => {text: string, found: Array<Object>},
+ *   take: (toolId: string) => (Object|null),
  *   without: (isWithheld: (tool: Object) => boolean) => Object
- * }}
+ * }} `search` loads the tools it finds (at most {@link MAX_LOADED_BY_SEARCH} per
+ *   run): they leave `deferred`, and the caller adds them to its tool list.
+ *   `take` loads one tool by name (the call a person approved, resumed in a
+ *   later request), or null when it is not left out.
  */
-export function createToolSearch({ deferred, tools }) {
+export function createToolSearch({ deferred }) {
+  const remaining = [...deferred];
+  let loaded = 0;
+  const load = found => {
+    for (const tool of found) remaining.splice(remaining.indexOf(tool), 1);
+  };
   return {
-    deferred,
-    search: args => searchDeferredTools(deferred, args?.query),
-    findDeferred: toolId => matchTool(toolId, deferred),
+    get deferred() {
+      return remaining;
+    },
+    search(args) {
+      const answer = searchDeferredTools(
+        remaining,
+        args?.query,
+        Math.min(MAX_FOUND_TOOLS, MAX_LOADED_BY_SEARCH - loaded)
+      );
+      load(answer.found);
+      loaded += answer.found.length;
+      return answer;
+    },
+    take(toolId) {
+      const tool = matchTool(toolId, remaining);
+      if (tool) load([tool]);
+      return tool;
+    },
     /** The same search over the tools `isWithheld` does not name (a caller's own gate). */
     without: isWithheld =>
-      createToolSearch({ deferred: deferred.filter(tool => !isWithheld(tool)), tools }),
-    /**
-     * `call_tool`'s arguments → the call to run. Only a tool left out of this
-     * request can be run: any other name is answered like an unknown tool
-     * (`unknown`), a tool the model has loaded is refused with a pointer to
-     * calling it directly, and arguments that do not fit the tool's schema
-     * are refused with the reason.
-     */
-    resolveCall(args) {
-      const requested = typeof args?.name === 'string' ? args.name.trim() : '';
-      if (!requested)
-        return { refused: 'name is required: the tool to run, as search_tools gives it.' };
-      const toolDef = matchTool(requested, deferred);
-      if (!toolDef) {
-        if (
-          matchTool(
-            requested,
-            tools.filter(tool => !isToolSearchTool(tool))
-          )
-        ) {
-          return { refused: `${requested} is loaded: call it directly, not through call_tool.` };
-        }
-        return { unknown: requested };
-      }
-      const parsed = repairToolArguments(args.arguments);
-      if (parsed.failed || Array.isArray(parsed.args)) {
-        return {
-          refused: `arguments must be a JSON object written as text, e.g. {"query":"open bugs"}; {} for a tool without parameters.`
-        };
-      }
-      const callArgs = applyParameterDefaults({ ...parsed.args }, toolDef);
-      const problem = argumentProblem(toolDef, callArgs);
-      return problem ? { refused: problem } : { toolDef, args: callArgs };
-    }
+      createToolSearch({ deferred: remaining.filter(tool => !isWithheld(tool)) })
   };
 }
 
@@ -518,8 +456,8 @@ export async function prepareToolSearch({ tools, app, model, features, language,
   const keepLoaded =
     alwaysLoaded ??
     (await import('../integrations/integrationTools.js')).alwaysLoadedInstanceIds(app);
-  const searchTools = toolSearchToolDefinitions(language);
-  const searchToolTokens = searchTools.reduce((sum, tool) => sum + toolDefinitionTokens(tool), 0);
+  const searchTool = toolSearchToolDefinition(language);
+  const searchToolTokens = toolDefinitionTokens(searchTool);
   const { loaded, deferred } = splitTools(tools, {
     maxTokens: maxToolTokensFor(app, model),
     alwaysLoaded: keepLoaded,
@@ -532,10 +470,9 @@ export async function prepareToolSearch({ tools, app, model, features, language,
   const saved = deferred.reduce((sum, tool) => sum + toolDefinitionTokens(tool), 0);
   if (saved <= estimateTokens(index.text) + searchToolTokens) return unchanged;
 
-  const sent = [...loaded, ...searchTools];
   return {
-    tools: sent,
-    toolSearch: createToolSearch({ deferred, tools: sent }),
+    tools: [...loaded, searchTool],
+    toolSearch: createToolSearch({ deferred }),
     indexText: index.text
   };
 }

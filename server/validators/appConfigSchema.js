@@ -606,7 +606,7 @@ const baseAppConfigSchema = z.object({
   workflows: z.array(z.string()).optional(),
   // Tool search (the `toolSearch` platform feature): an app with more
   // integration tools than fit its budget sends the biggest integrations as a
-  // list and a search (`search_tools`, `call_tool`) instead of in full.
+  // list and a search (`search_tools`, which loads what it finds) instead of in full.
   toolSearch: z
     .object({
       // `auto` (absent): leave integrations out when the tools exceed the

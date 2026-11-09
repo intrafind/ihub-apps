@@ -729,11 +729,11 @@ class RequestBuilder {
         integrationScopes
       );
       // An app with more integration tools than fit its budget sends the
-      // biggest integrations as a list and a search (`search_tools`,
-      // `call_tool`) instead of in full; with tool search off, or under the
-      // budget, the request is the same as without it.
-      // Only for a model that calls tools: for any other it changes nothing
-      // and reads no tool search setting.
+      // biggest integrations as a list and a search (`search_tools`, which
+      // loads what it finds) instead of in full; with tool search off, or under
+      // the budget, the request is the same as without it. Only for a model
+      // that calls tools: for any other it changes nothing and reads no tool
+      // search setting.
       const {
         tools,
         toolSearch,
