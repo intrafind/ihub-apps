@@ -9317,6 +9317,7 @@
     "TEAMS_INVALID_OR_EXPIRED_TOKEN": "The Microsoft Teams sign-in token is invalid or has expired.",
     "APP_ACCESS_DENIED": "You do not have access to this app.",
     "MODEL_ACCESS_DENIED": "You do not have access to this model.",
+    "USER_VALIDATION_FAILED": "Your account could not be validated.",
     "CONCURRENCY_LIMIT": "The limit of runs at the same time is reached.",
     "PROVIDER_IN_USE": "The provider is still used by models.",
     "PROJECTS_NOT_ALLOWED": "Your groups may not use projects.",

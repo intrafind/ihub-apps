@@ -6,14 +6,9 @@ import configCache from '../configCache.js';
 import configStore from '../services/config/ConfigStore.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import logger from '../utils/logger.js';
 import { adminAuth } from '../middleware/adminAuth.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../utils/responseHelpers.js';
 
 // Cloud LLM providers that require API keys
 const LLM_PROVIDER_IDS = new Set(['openai', 'anthropic', 'google', 'mistral']);
@@ -98,17 +93,14 @@ export default function registerSetupRoutes(app) {
    * redirect to /setup stops for every user. Admin only.
    */
   app.post(buildServerPath('/api/setup/disable'), adminAuth, async (req, res) => {
-    try {
-      const platform = await configStore.readJson(PLATFORM_FILE);
-      if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
-      platform.setup = { ...platform.setup, disabled: true };
-      await configStore.writeJson(PLATFORM_FILE, platform);
-      await configCache.refreshCacheEntry(PLATFORM_FILE);
-      logger.info('Setup: onboarding disabled', { component: 'Setup' });
-      res.json({ success: true });
-    } catch (error) {
-      return sendInternalError(res, error, 'disable onboarding');
-    }
+    const platform = await configStore.readJson(PLATFORM_FILE);
+    if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
+    platform.setup = { ...platform.setup, disabled: true };
+    await configStore.writeJson(PLATFORM_FILE, platform);
+    await configCache.refreshCacheEntry(PLATFORM_FILE);
+    logger.info('Setup: onboarding disabled', { component: 'Setup' });
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ success: true });
   });
 
   /**
@@ -121,10 +113,10 @@ export default function registerSetupRoutes(app) {
     const { providerId, apiKey } = req.body;
 
     if (!providerId || !LLM_PROVIDER_IDS.has(providerId)) {
-      return sendBadRequest(res, 'Invalid provider ID');
+      throw new ServiceError('BAD_REQUEST', 'Invalid provider ID');
     }
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      return sendBadRequest(res, 'API key is required');
+      throw new ServiceError('BAD_REQUEST', 'API key is required');
     }
 
     const result = await testApiKey(providerId, apiKey.trim());
@@ -143,70 +135,67 @@ export default function registerSetupRoutes(app) {
    * Always requires admin authentication — never allowed anonymously.
    */
   app.post(buildServerPath('/api/setup/configure'), adminAuth, async (req, res) => {
-    try {
-      // Only allow when not yet configured
-      const platform = configCache.getPlatform() || {};
-      if (platform.setup?.configured) {
-        return sendErrorResponse(
-          res,
-          403,
-          'System is already configured. Use Admin › Providers to manage API keys.'
-        );
-      }
-
-      const { providerId, apiKey } = req.body;
-
-      if (!providerId) {
-        return sendBadRequest(res, 'providerId is required');
-      }
-
-      // Local provider: no API key needed — just mark setup as complete
-      if (providerId === 'local') {
-        await markSetupConfigured();
-        logger.info('Setup: configured with local provider', { component: 'Setup' });
-        return res.json({ success: true });
-      }
-
-      // Cloud provider: validate and save API key
-      if (!LLM_PROVIDER_IDS.has(providerId)) {
-        return sendBadRequest(res, 'Invalid provider ID');
-      }
-      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-        return sendBadRequest(res, 'API key must be a non-empty string');
-      }
-
-      const trimmedKey = apiKey.trim();
-      const encryptedKey = tokenStorageService.encryptString(trimmedKey);
-
-      // Deep-copy providers from cache to avoid mutating cached data
-      const { data: cachedProviders } = configCache.getProviders(true);
-      const providers = cachedProviders.map(p => ({ ...p }));
-
-      const providerIndex = providers.findIndex(p => p.id === providerId);
-      if (providerIndex === -1) {
-        return sendNotFound(res, 'Provider');
-      }
-
-      providers[providerIndex] = {
-        ...providers[providerIndex],
-        apiKey: encryptedKey,
-        enabled: true
-      };
-
-      await configStore.writeJson(PROVIDERS_FILE, { providers });
-      await configCache.refreshProvidersCache();
-
-      // Mark setup as complete in platform.json
-      await markSetupConfigured();
-
-      logger.info('Setup: API key configured for provider', {
-        component: 'Setup',
-        providerId
-      });
-
-      res.json({ success: true });
-    } catch (error) {
-      return sendInternalError(res, error, 'save setup configuration');
+    // Only allow when not yet configured
+    const platform = configCache.getPlatform() || {};
+    if (platform.setup?.configured) {
+      throw new ServiceError(
+        'FORBIDDEN',
+        'System is already configured. Use Admin › Providers to manage API keys.'
+      );
     }
+
+    const { providerId, apiKey } = req.body;
+
+    if (!providerId) {
+      throw new ServiceError('BAD_REQUEST', 'providerId is required');
+    }
+
+    // Local provider: no API key needed — just mark setup as complete
+    if (providerId === 'local') {
+      await markSetupConfigured();
+      logger.info('Setup: configured with local provider', { component: 'Setup' });
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      return res.json({ success: true });
+    }
+
+    // Cloud provider: validate and save API key
+    if (!LLM_PROVIDER_IDS.has(providerId)) {
+      throw new ServiceError('BAD_REQUEST', 'Invalid provider ID');
+    }
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+      throw new ServiceError('BAD_REQUEST', 'API key must be a non-empty string');
+    }
+
+    const trimmedKey = apiKey.trim();
+    const encryptedKey = tokenStorageService.encryptString(trimmedKey);
+
+    // Deep-copy providers from cache to avoid mutating cached data
+    const { data: cachedProviders } = configCache.getProviders(true);
+    const providers = cachedProviders.map(p => ({ ...p }));
+
+    const providerIndex = providers.findIndex(p => p.id === providerId);
+    if (providerIndex === -1) {
+      throw new ServiceError('NOT_FOUND', 'Provider not found');
+    }
+
+    providers[providerIndex] = {
+      ...providers[providerIndex],
+      apiKey: encryptedKey,
+      enabled: true
+    };
+
+    await configStore.writeJson(PROVIDERS_FILE, { providers });
+    await configCache.refreshProvidersCache();
+
+    // Mark setup as complete in platform.json
+    await markSetupConfigured();
+
+    logger.info('Setup: API key configured for provider', {
+      component: 'Setup',
+      providerId
+    });
+
+    // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ success: true });
   });
 }
