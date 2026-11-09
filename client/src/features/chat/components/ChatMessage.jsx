@@ -27,7 +27,7 @@ import { findTrailingSourceList, resolveCitations } from '../../../../../shared/
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
-import { headlineModeOf } from '../activityHeadline.js';
+import { isActivityLineBusy } from '../activityHeadline.js';
 import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
@@ -168,12 +168,10 @@ function ChatMessage({
   const isError = message.error === true;
   // What the turn is doing (searches, files being written, "Waiting for the
   // model…"), without the rows still in their grace period (#3534).
-  const toolActivity = useGracedActivity(isUser ? null : message.toolActivity);
+  const toolActivity = useGracedActivity(message.toolActivity);
   // Its headline shows a spinner or a label, so the three-dot loader below
   // stands down: two loaders on one message are one too many.
-  const activityLineBusy = Boolean(
-    toolActivity && message.loading && headlineModeOf(toolActivity, true).busy
-  );
+  const activityLineBusy = isActivityLineBusy(toolActivity, message.loading);
 
   // Everything the answer found and which of it the answer cites — shared by
   // the inline citation badges and the sources panel under the answer.

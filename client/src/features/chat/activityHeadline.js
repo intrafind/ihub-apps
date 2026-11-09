@@ -160,6 +160,27 @@ function countSources(items) {
   return new Set(items.flatMap(item => item.sources.map(source => source.id))).size;
 }
 
+/** "Searching for “query”", or what kind of search it is when its query is not known. */
+function searchLabel(t, item) {
+  const query = item.query || item.queries?.[item.queries.length - 1];
+  if (query) return t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query });
+  return item.scope === 'documents'
+    ? t('toolActivity.searchingDocuments', 'Searching documents…')
+    : t('toolActivity.searching', 'Searching the web…');
+}
+
+/** "Reading “title”" for a document, "Reading host" for a page. */
+function fetchLabel(t, item) {
+  if (item.scope === 'documents') {
+    return item.title
+      ? t('toolActivity.readingDocument', 'Reading “{{title}}”', { title: item.title })
+      : t('toolActivity.readingDocuments', 'Reading documents…');
+  }
+  return item.url
+    ? t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(item.url) })
+    : t('toolActivity.searching', 'Searching the web…');
+}
+
 /**
  * What a call that is being prepared or runs is doing, as the headline says it
  * ("Creating web artifact…", "Searching for “…”", "Preparing Search people…").
@@ -176,23 +197,8 @@ export function activeLabel(t, item, reading = null) {
     return t('toolActivity.preparingTool', 'Preparing {{name}}…', { name: item.name });
   }
   if (reading) return t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(reading) });
-  if (item?.kind === 'search') {
-    const query = item.query || item.queries?.[item.queries.length - 1];
-    if (query) return t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query });
-    return item.scope === 'documents'
-      ? t('toolActivity.searchingDocuments', 'Searching documents…')
-      : t('toolActivity.searching', 'Searching the web…');
-  }
-  if (item?.kind === 'fetch' && item.scope === 'documents') {
-    return item.title
-      ? t('toolActivity.readingDocument', 'Reading “{{title}}”', { title: item.title })
-      : t('toolActivity.readingDocuments', 'Reading documents…');
-  }
-  if (item?.kind === 'fetch') {
-    return item.url
-      ? t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(item.url) })
-      : t('toolActivity.searching', 'Searching the web…');
-  }
+  if (item?.kind === 'search') return searchLabel(t, item);
+  if (item?.kind === 'fetch') return fetchLabel(t, item);
   if (item?.integration) {
     return t('toolActivity.runningToolIn', '{{name}} · {{integration}}…', {
       name: item.name,
@@ -209,6 +215,60 @@ export function runningHeadline(t, items, reading) {
   return activeLabel(t, current, reading);
 }
 
+/** "Searched the web · 1 search · 5 results", or what was read when the turn only read. */
+function searchedParts(t, items, searches) {
+  const parts = [];
+  if (!searches.length) {
+    const fetches = items.filter(item => item.kind === 'fetch');
+    if (fetches.some(item => item.scope !== 'documents')) {
+      parts.push(t('toolActivity.readWeb', 'Read the web'));
+    }
+    if (fetches.some(item => item.scope === 'documents')) {
+      parts.push(t('toolActivity.readDocuments', 'Read documents'));
+    }
+    return parts;
+  }
+  if (searches.some(item => item.scope !== 'documents')) {
+    parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
+  }
+  if (searches.some(item => item.scope === 'documents')) {
+    parts.push(t('toolActivity.searchedDocuments', 'Searched documents'));
+  }
+  const queryCount = searches.reduce(
+    (sum, item) => sum + (item.native ? item.queries.length : 1),
+    0
+  );
+  parts.push(t('toolActivity.searches', { count: queryCount }));
+  // Results, not sources: only what the answer cites is a source of it.
+  const results = countSources(items);
+  if (results) parts.push(t('toolActivity.results', { count: results }));
+  return parts;
+}
+
+/** "1 page read", "2 documents read". */
+function readParts(t, items) {
+  const parts = [];
+  const pagesRead = countRead(items, 'web');
+  if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
+  const documentsRead = countRead(items, 'documents');
+  if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
+  return parts;
+}
+
+/** What the calls that made something made, and how they ended: "Created web artifact · Stopped". */
+function madeParts(t, items) {
+  const made = items.filter(hasOutputKind);
+  const parts = [];
+  for (const kind of new Set(made.map(item => item.outputKind))) {
+    if (made.some(item => item.outputKind === kind && item.status === 'completed')) {
+      parts.push(createdLabel(t, outputNounOf(t, kind)));
+    }
+  }
+  if (made.some(item => item.status === 'error')) parts.push(failedLabel(t));
+  if (made.some(item => item.status === 'stopped')) parts.push(stoppedLabel(t));
+  return parts;
+}
+
 /**
  * The summary of what the turn did: "Searched the web · 1 search · 5 results ·
  * Created web artifact". A call that made something is named by what it made
@@ -217,51 +277,15 @@ export function runningHeadline(t, items, reading) {
  * read like success.
  */
 export function finishedHeadline(t, items, searches) {
-  const parts = [];
-  if (searches.length) {
-    if (searches.some(item => item.scope !== 'documents')) {
-      parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
-    }
-    if (searches.some(item => item.scope === 'documents')) {
-      parts.push(t('toolActivity.searchedDocuments', 'Searched documents'));
-    }
-    const queryCount = searches.reduce(
-      (sum, item) => sum + (item.native ? item.queries.length : 1),
-      0
-    );
-    parts.push(t('toolActivity.searches', { count: queryCount }));
-    // Results, not sources: only what the answer cites is a source of it.
-    const results = countSources(items);
-    if (results) parts.push(t('toolActivity.results', { count: results }));
-  } else {
-    const fetches = items.filter(item => item.kind === 'fetch');
-    if (fetches.some(item => item.scope !== 'documents')) {
-      parts.push(t('toolActivity.readWeb', 'Read the web'));
-    }
-    if (fetches.some(item => item.scope === 'documents')) {
-      parts.push(t('toolActivity.readDocuments', 'Read documents'));
-    }
-  }
-  const pagesRead = countRead(items, 'web');
-  if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
-  const documentsRead = countRead(items, 'documents');
-  if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
+  const parts = [...searchedParts(t, items, searches), ...readParts(t, items)];
   // Distinct skills: one that was activated twice is still one skill.
   const skills = new Set(
     items.filter(item => item.kind === 'skill').map(item => item.skillId || item.name)
   ).size;
   if (skills) parts.push(t('toolActivity.skills', { count: skills }));
-  const made = items.filter(hasOutputKind);
   const others = items.filter(item => item.kind === 'tool' && !hasOutputKind(item));
   if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
-  for (const kind of new Set(made.map(item => item.outputKind))) {
-    if (made.some(item => item.outputKind === kind && item.status === 'completed')) {
-      parts.push(createdLabel(t, outputNounOf(t, kind)));
-    }
-  }
-  if (made.some(item => item.status === 'error')) parts.push(failedLabel(t));
-  if (made.some(item => item.status === 'stopped'))
-    parts.push(t('toolActivity.stopped', 'Stopped'));
+  parts.push(...madeParts(t, items));
   // The systems the turn asked, so the summary says where the answer came from.
   const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
   if (integrations.length) parts.push(integrations.join(', '));
@@ -342,6 +366,19 @@ export function headlineModeOf(activity, loading) {
   if (activity?.answering)
     return { mode: 'summary', owner: null, more: 0, busy: false, active: false };
   return { mode: 'between', owner: null, more: 0, busy: true, active: false };
+}
+
+/**
+ * Whether the headline shows a spinner or a label of its own, so the three-dot
+ * loader of the message stands down (two loaders on one message are one too
+ * many). False once the turn is over, and while the answer itself streams.
+ *
+ * @param {Object|null} activity - see `headlineModeOf`
+ * @param {boolean} loading - the turn is still going
+ * @returns {boolean}
+ */
+export function isActivityLineBusy(activity, loading) {
+  return Boolean(activity && loading && headlineModeOf(activity, true).busy);
 }
 
 /**
