@@ -332,19 +332,27 @@ chat so far. They are shown as clickable rows and stored with the message.
 
 **Proposal:**
 
-- Generate them **on the server** after `run/ended`, in the background, following the pattern of
-  `server/services/chat/chatTitles.js`.
+- Generate them **on the server**, following the pattern of
+  `server/services/chat/chatTitles.js` (a small background call with a timeout, never failing
+  the turn).
   - Configure with `platform.chats.followUps.{enabled, modelId}`; apps can opt out.
   - Input: question, answer, source titles. Output: 3–4 questions in the user's language that the
     answer does not already cover.
-- **Delivery.** Store them on the message, so they survive a reload. The chat stream closes on
-  the turn's own `run/ended` (`client/src/shared/hooks/useEventSource.js`), and titles today are
-  written to storage only, never pushed, so a background result cannot ride that stream. Two
-  options, decided at design time:
-  - the client asks once for the message's follow-ups shortly after `run/ended` (a short wait,
-    then one fetch);
-  - or the turn holds the stream open for a bounded time (about 3 s) and sends them as a field
-    before `run/ended`, falling back to the fetch.
+  - Start generation as soon as the **answer text is final** (the last model round has finished
+    streaming), not after `run/ended`. This gives the stream option below a chance to deliver
+    in time.
+- **Delivery.** Store them on the message, so they survive a reload. The message carries an
+  explicit state, so a client can tell "not ready yet" from "there are none": `pending`, `ready`
+  with the questions, or `none` (disabled, failed or timed out). The chat stream closes on the
+  turn's own `run/ended` (`client/src/shared/hooks/useEventSource.js`), and titles today are
+  written to storage only, never pushed. Two options, decided at design time:
+  - **Bounded polling** after `run/ended`: the client fetches the message's follow-ups while the
+    state is `pending`, with backoff (for example 1 s, 2 s, 4 s), and gives up after the
+    generation timeout (10 s, as for titles, `TITLE_TIMEOUT_MS`). The server marks a generation
+    that is still unfinished at the timeout as `none`, so polling always ends.
+  - **Hold the stream briefly:** if generation finishes within a bounded time after the answer
+    (about 3 s), the turn sends the questions as a field before `run/ended`. Otherwise it ends
+    the turn with the state `pending`, and the client falls back to the bounded polling above.
 
   Either way the server decides what to show and the client renders it.
 - **Sharing.** A question may repeat a private document title that the answer itself never shows,
