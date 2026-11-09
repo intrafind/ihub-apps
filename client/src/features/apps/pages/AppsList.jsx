@@ -469,7 +469,7 @@ function AppsList() {
   }
 
   return (
-    <div ref={containerRef} className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
+    <div ref={containerRef} className="min-h-full px-6 py-10">
       <NextcloudSelectionBanner />
       <div className="max-w-6xl mx-auto">
         {pendingDocument && (

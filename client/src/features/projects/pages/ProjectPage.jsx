@@ -255,7 +255,7 @@ function ProjectPageContent({ projectId }) {
   const description = localizedText(project.description, language);
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-8">
+    <div className="min-h-full px-4 sm:px-6 py-8">
       <div className="max-w-5xl mx-auto">
         <nav aria-label={t('projects.page.breadcrumb', 'Breadcrumb')} className="text-sm">
           <Link to="/projects" className="text-indigo-600 dark:text-indigo-400 hover:underline">

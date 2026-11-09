@@ -85,7 +85,7 @@ export default function TasksPage() {
   const mayCreate = canCreate && data.canCreate !== false;
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-8">
+    <div className="min-h-full px-4 sm:px-6 py-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
