@@ -7,6 +7,33 @@ import Icon from '../../../shared/components/Icon';
 import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
 
 /**
+ * A status badge: tinted, without an outline, 24px high like the sources
+ * entry next to it, which is outlined because it can be clicked (#3521).
+ */
+const BADGE_CLASS =
+  'inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent';
+
+/** A badge's icon and label, in a link or a plain badge. */
+function BadgeContent({ icon, label, trailingIcon = null }) {
+  return (
+    <>
+      <Icon name={icon} className="w-3 h-3" />
+      <span>{label}</span>
+      {trailingIcon && <Icon name={trailingIcon} className="w-3 h-3" />}
+    </>
+  );
+}
+
+/** A badge that only says something: an icon and a label, the details in its tooltip. */
+function StatusBadge({ icon, label, tone, title, ...rest }) {
+  return (
+    <div className={`${BADGE_CLASS} ${tone}`} title={title} {...rest}>
+      <BadgeContent icon={icon} label={label} />
+    </div>
+  );
+}
+
+/**
  * Component to display the source of an AI answer (LLM, websearch, sources, workflow, ...).
  * Shows a non-intrusive badge indicating where the information came from.
  *
@@ -41,25 +68,15 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
       return (
         <Link
           to={`/workflows/executions/${workflowResult.executionId}`}
-          className={`inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent hover:underline ${colorClasses}`}
+          className={`${BADGE_CLASS} hover:underline ${colorClasses}`}
           title={t('chatMessage.answerSource.workflowTooltip', 'Open workflow execution details')}
         >
-          <Icon name="cog" className="w-3 h-3" />
-          <span>{label}</span>
-          <Icon name="external-link" className="w-3 h-3" />
+          <BadgeContent icon="cog" label={label} trailingIcon="external-link" />
         </Link>
       );
     }
 
-    return (
-      <div
-        className={`inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent ${colorClasses}`}
-        title={label}
-      >
-        <Icon name="cog" className="w-3 h-3" />
-        <span>{label}</span>
-      </div>
-    );
+    return <StatusBadge icon="cog" label={label} tone={colorClasses} title={label} />;
   }
 
   const sources = Array.isArray(answerSource?.sources) ? answerSource.sources : [];
@@ -147,13 +164,7 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
   return (
     <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
       {scopeBadge}
-      <div
-        className={`inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent ${colorClasses}`}
-        title={tooltipText}
-      >
-        <Icon name={iconName} className="w-3 h-3" />
-        <span>{displayText}</span>
-      </div>
+      <StatusBadge icon={iconName} label={displayText} tone={colorClasses} title={tooltipText} />
     </div>
   );
 }
@@ -223,30 +234,19 @@ function ReachedScopeBadge({ projects, t }) {
         }`
     )
     .join('\n');
-  const className =
-    'inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
-  const content = (
-    <>
-      <Icon name="folder" className="w-3 h-3" />
-      <span>{label}</span>
-    </>
-  );
+  const tone = 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
   if (single && isUserProject(single)) {
     return (
       <Link
         to={`/projects/${encodeURIComponent(single.id)}`}
-        className={`${className} hover:underline`}
+        className={`${BADGE_CLASS} hover:underline ${tone}`}
         title={`${tooltip}\n${t('chatMessage.knowledgeScope.openProject', 'Open the project')}`}
       >
-        {content}
+        <BadgeContent icon="folder" label={label} />
       </Link>
     );
   }
-  return (
-    <div className={className} title={tooltip}>
-      {content}
-    </div>
-  );
+  return <StatusBadge icon="folder" label={label} tone={tone} title={tooltip} />;
 }
 
 /**
@@ -267,15 +267,14 @@ function MissingScopeNotice({ projects, t }) {
       )
     : t('chatMessage.knowledgeScope.missingOther', 'This answer did not use it.');
   return (
-    <div
+    <StatusBadge
       role="status"
-      className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+      icon="exclamation-triangle"
+      label={label}
+      tone="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
       title={`${names.join(', ')}: ${why}`}
       data-testid="knowledge-scope-missing"
-    >
-      <Icon name="exclamation-triangle" className="w-3 h-3" />
-      <span>{label}</span>
-    </div>
+    />
   );
 }
 

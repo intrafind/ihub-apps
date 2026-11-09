@@ -16,6 +16,8 @@
  * is rewritten; a prompt an admin edited is left alone.
  */
 
+import { replaceShippedTexts } from './utils.js';
+
 export const version = '233';
 export const description = 'web_chat_inline_citations_prompt';
 
@@ -39,25 +41,11 @@ export async function precondition(ctx) {
 
 export async function up(ctx) {
   const app = await ctx.readJson(APP_FILE);
-  const system = app?.system;
-  if (!system || typeof system !== 'object' || Array.isArray(system)) {
-    ctx.log('web-chat has no localized system prompt — nothing to update');
+  const replaced = replaceShippedTexts(app?.system, PROMPT_UPDATES);
+  if (replaced.length === 0) {
+    ctx.log('web-chat system prompt is customized, already updated or not localized — left as is');
     return;
   }
-
-  const updated = [];
-  for (const [locale, { from, to }] of Object.entries(PROMPT_UPDATES)) {
-    if (system[locale] === from) {
-      system[locale] = to;
-      updated.push(locale);
-    }
-  }
-
-  if (updated.length === 0) {
-    ctx.log('web-chat system prompt was customized or already updated — left as is');
-    return;
-  }
-
   await ctx.writeJson(APP_FILE, app);
-  ctx.log(`Updated web-chat default system prompt to cite inline (${updated.join(', ')})`);
+  ctx.log(`Updated web-chat default system prompt to cite inline (${replaced.join(', ')})`);
 }

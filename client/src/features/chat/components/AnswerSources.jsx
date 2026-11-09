@@ -354,7 +354,7 @@ function describeFailure(t, action, reason) {
 }
 
 /** A CSS attribute selector value in double quotes. */
-const attributeValue = value => String(value).replace(/["\\]/g, '\\$&');
+const attributeValue = value => String(value).replaceAll(/["\\]/g, String.raw`\$&`);
 
 /**
  * Where focus goes when the sources panel closes: back to what opened it (an

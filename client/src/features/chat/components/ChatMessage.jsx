@@ -202,6 +202,9 @@ function ChatMessage({
     Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
   const showSourcesBlock = !isUser && finished && (hasCited || hasResults);
   const showFooterRow = !isUser && finished && (hasResults || showAnswerSourceBadge);
+  const footerRowClass = hasCited
+    ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
+    : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
   const citations = useMemo(
     () =>
       citationView?.cited.length
@@ -615,11 +618,10 @@ function ChatMessage({
   // Render the message content based on the output format
   const renderContent = () => {
     // Ensure content is always a string for rendering
-    const storedContent = trailingSourceList
-      ? answerText.slice(0, trailingSourceList.start).trimEnd()
-      : typeof message.content === 'string'
-        ? message.content
-        : message.content || '';
+    let storedContent =
+      typeof message.content === 'string' ? message.content : message.content || '';
+    // Without a list of sources the model wrote at its end (see trailingSourceList).
+    if (trailingSourceList) storedContent = answerText.slice(0, trailingSourceList.start).trimEnd();
 
     // A turn that was stopped or that failed is reconstructed here when the
     // chat is reopened from the store. The live paths write their notice into
@@ -1103,13 +1105,7 @@ function ChatMessage({
             {showSourcesBlock && hasCited && (
               <CitedSources messageKey={messageKey} sources={citationView.cited} />
             )}
-            <div
-              className={
-                showFooterRow
-                  ? `flex flex-wrap items-center gap-x-2 gap-y-1.5${hasCited ? ' mt-2' : ''}`
-                  : undefined
-              }
-            >
+            <div className={showFooterRow ? footerRowClass : undefined}>
               {citationView && (
                 <AnswerSources
                   messageKey={messageKey}

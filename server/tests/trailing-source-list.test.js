@@ -188,6 +188,18 @@ describe('leaves everything else in the answer', () => {
     assert.equal(find(answer), null);
   });
 
+  it('brackets and parentheses that never close take linear time, not forever', () => {
+    // The kind of input a backtracking link pattern blows up on (ReDoS).
+    const answer = tail => `${body}\n\nQuellen:\n${tail}\n`;
+    const started = Date.now();
+    assert.equal(find(answer(`[${'[a]('.repeat(400)}`)), null);
+    assert.equal(find(answer('x'.repeat(50000))), null);
+    // A source link and nothing but punctuation is still an entry.
+    const stray = `[1](https://medium.com/@manzke) ${'['.repeat(1500)}${'('.repeat(400)}`;
+    assert.equal(find(answer(stray))?.entries, 1);
+    assert.ok(Date.now() - started < 1000);
+  });
+
   it('an answer without cited sources', () => {
     assert.equal(findTrailingSourceList('Quellen:\n- Medium', resolveCitations('', set)), null);
     assert.equal(findTrailingSourceList('', null), null);
