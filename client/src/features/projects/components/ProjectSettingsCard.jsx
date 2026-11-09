@@ -16,6 +16,8 @@ import {
 import { useProjectChatApps } from './ProjectAppSelect';
 import ProjectFormFields from './ProjectFormFields';
 import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
+import RefreshTtlDialog from './RefreshTtlDialog';
+import { refreshTtlLabel } from '../utils/refreshTtl';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
 const PREVIEW = 'text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words line-clamp-3';
@@ -41,9 +43,20 @@ const SAVED_NOTICE_MS = 4000;
  * @param {boolean} [props.nameLocked=false] - The name and the description cannot be
  *   changed here (a smart collection where this installation cannot change
  *   collections in iFinder); the instructions and the default app still can.
+ * @param {boolean} [props.showRefresh=false] - Show the refresh TTL of the
+ *   project's files from websites and web pages (#3536).
+ * @param {number|'never'|null} [props.platformRefreshTtl] - The installation's
+ *   default, shown while the project sets none.
  * @returns {JSX.Element}
  */
-function ProjectSettingsCard({ project, editable, onSaved, nameLocked = false }) {
+function ProjectSettingsCard({
+  project,
+  editable,
+  onSaved,
+  nameLocked = false,
+  showRefresh = false,
+  platformRefreshTtl = null
+}) {
   const { t, i18n } = useTranslation();
   const { choices, loading: appsLoading } = useProjectChatApps();
   const [form, setForm] = useState(() => projectFormFrom(project));
@@ -79,6 +92,7 @@ function ProjectSettingsCard({ project, editable, onSaved, nameLocked = false })
     [focusField]
   );
   const [viewing, setViewing] = useState(false);
+  const [schedulingRefresh, setSchedulingRefresh] = useState(false);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -225,6 +239,57 @@ function ProjectSettingsCard({ project, editable, onSaved, nameLocked = false })
                 : t('projects.settings.noDefaultApp', 'None — the first app is used')}
           </p>
         </ProjectPanelRow>
+      )}
+      {showRefresh && (
+        <ProjectPanelRow
+          icon="clock"
+          title={t('projects.refresh.rowTitle', 'Refresh')}
+          titleId="project-refresh-title"
+          action={
+            editable ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage(null);
+                  setSchedulingRefresh(true);
+                }}
+                className={ROW_ACTION}
+                aria-label={t(
+                  'projects.refresh.change',
+                  'Change the refresh of files and web pages'
+                )}
+              >
+                {t('projects.panel.change', 'Change')}
+              </button>
+            ) : null
+          }
+        >
+          <p className="text-gray-600 dark:text-gray-400">
+            {project.refreshTtl
+              ? t('projects.refresh.projectValue', 'Files and web pages: {{ttl}}', {
+                  ttl: refreshTtlLabel(project.refreshTtl, t)
+                })
+              : platformRefreshTtl
+                ? t('projects.refresh.projectDefault', 'Files and web pages: {{ttl}} (default)', {
+                    ttl: refreshTtlLabel(platformRefreshTtl, t)
+                  })
+                : t('projects.refresh.projectDefaultUnknown', 'Default of this installation')}
+          </p>
+        </ProjectPanelRow>
+      )}
+      {schedulingRefresh && (
+        <RefreshTtlDialog
+          scope="project"
+          value={project.refreshTtl ?? null}
+          inherited={platformRefreshTtl}
+          onClose={() => setSchedulingRefresh(false)}
+          onSave={async refreshTtl => {
+            const saved = await updateProject(project.id, { refreshTtl });
+            onSaved(saved);
+            setMessage({ ok: true, text: t('projects.settings.saved', 'Saved.') });
+            return true;
+          }}
+        />
       )}
       {/* Always in the page, so a screen reader announces the text when it
           arrives; "Saved." goes away again after a moment. */}

@@ -433,6 +433,21 @@ export const updateAdminProject = async (projectId, project) => {
 };
 
 /**
+ * Change some fields of an admin project (`PATCH`), such as its refresh TTL.
+ *
+ * @param {string} projectId
+ * @param {{refreshTtl?: number|'never'|null}} changes
+ * @returns {Promise<Object>} The updated project.
+ */
+export const patchAdminProject = async (projectId, changes) => {
+  const response = await makeAdminApiCall(adminProjectPath(projectId), {
+    method: 'PATCH',
+    body: changes
+  });
+  return response.data;
+};
+
+/**
  * Delete a project. A linked admin project answers `400 PROJECT_IN_USE` with
  * `details.dependencies`.
  *
@@ -567,7 +582,7 @@ export const uploadAdminProjectItem = async (projectId, { file, name, pinned = f
  *
  * @param {string} projectId
  * @param {string} itemId
- * @param {{name?: string, pinned?: boolean, ref?: Object}} changes
+ * @param {{name?: string, pinned?: boolean, ref?: Object, refreshTtl?: number|'never'|null}} changes
  * @returns {Promise<Object>} The updated item.
  */
 export const updateAdminProjectItem = async (projectId, itemId, changes) => {

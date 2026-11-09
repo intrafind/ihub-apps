@@ -349,7 +349,7 @@ function SiteCrawlPanel({
                     <>
                       {page.type === 'document' && (
                         <span className="text-xs text-gray-600 dark:text-gray-400">
-                          {t('projects.addItem.crawlDocument', 'PDF')}
+                          {t('projects.addItem.crawlDocument', 'File')}
                         </span>
                       )}
                       {existing && (

@@ -93,7 +93,8 @@ export const fetchProject = projectId => call(() => apiClient.get(projectPath(pr
  * Change a project's name, description or instructions (owner and editors).
  *
  * @param {string} projectId
- * @param {{name?: string, description?: string, instructions?: string}} changes
+ * @param {{name?: string, description?: string, instructions?: string,
+ *   refreshTtl?: number|'never'|null}} changes
  * @returns {Promise<Object>} The updated project.
  */
 export const updateProject = (projectId, changes) =>
@@ -155,7 +156,7 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
  *
  * @param {string} projectId
  * @param {string} itemId
- * @param {{name?: string, pinned?: boolean, ref?: Object}} changes
+ * @param {{name?: string, pinned?: boolean, ref?: Object, refreshTtl?: number|'never'|null}} changes
  * @returns {Promise<Object>} The updated item.
  */
 export const updateProjectItem = (projectId, itemId, changes) =>
@@ -187,8 +188,8 @@ export const deleteProjectItem = async (projectId, itemId) => {
 };
 
 /**
- * Read a picked document again with the caller's credentials, or retry a
- * failed extraction.
+ * Read a picked document or a file from a website again, drop a web page's
+ * cached read, or retry a failed extraction.
  *
  * @param {string} projectId
  * @param {string} itemId

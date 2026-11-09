@@ -3,7 +3,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getAdminApiErrorMessage, updateAdminProject } from '../../../api/adminApi';
+import {
+  getAdminApiErrorMessage,
+  patchAdminProject,
+  updateAdminProject
+} from '../../../api/adminApi';
+import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
+import { refreshTtlLabel } from '../../projects/utils/refreshTtl';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Modal from '../../../shared/components/Modal';
 import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
@@ -203,7 +209,7 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
  * @param {(project: Object) => void} props.onSaved - The project as saved.
  * @returns {JSX.Element}
  */
-function AdminProjectSettingsPanel({ project, onSaved }) {
+function AdminProjectSettingsPanel({ project, onSaved, platformRefreshTtl = null }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const [editing, setEditing] = useState(null);
@@ -275,6 +281,45 @@ function AdminProjectSettingsPanel({ project, onSaved }) {
         </p>
       </ProjectPanelRow>
       <ProjectPanelRow
+        icon="clock"
+        title={t('projects.refresh.rowTitle', 'Refresh')}
+        titleId="admin-project-refresh-title"
+        action={
+          <button
+            type="button"
+            onClick={() => setEditing('refresh')}
+            className={ROW_ACTION}
+            aria-label={t('projects.refresh.change', 'Change the refresh of files and web pages')}
+          >
+            {t('projects.panel.change', 'Change')}
+          </button>
+        }
+      >
+        <p className="text-gray-600 dark:text-gray-400">
+          {project.refreshTtl
+            ? t('projects.refresh.projectValue', 'Files and web pages: {{ttl}}', {
+                ttl: refreshTtlLabel(project.refreshTtl, t)
+              })
+            : platformRefreshTtl
+              ? t('projects.refresh.projectDefault', 'Files and web pages: {{ttl}} (default)', {
+                  ttl: refreshTtlLabel(platformRefreshTtl, t)
+                })
+              : t('projects.refresh.projectDefaultUnknown', 'Default of this installation')}
+        </p>
+      </ProjectPanelRow>
+      {editing === 'refresh' && (
+        <RefreshTtlDialog
+          scope="project"
+          value={project.refreshTtl ?? null}
+          inherited={platformRefreshTtl}
+          onClose={() => setEditing(null)}
+          onSave={async refreshTtl => {
+            handleSaved(await patchAdminProject(project.id, { refreshTtl }));
+            return true;
+          }}
+        />
+      )}
+      <ProjectPanelRow
         icon="document-text"
         title={t('admin.projects.fields.instructions', 'Instructions')}
         titleId="admin-project-instructions-title"
@@ -335,7 +380,7 @@ function AdminProjectSettingsPanel({ project, onSaved }) {
         {saved ? t('admin.projects.panel.saved', 'Saved.') : ''}
       </p>
 
-      {editing && (
+      {editing && editing !== 'refresh' && (
         <AdminProjectSettingsDialog
           project={project}
           section={editing}

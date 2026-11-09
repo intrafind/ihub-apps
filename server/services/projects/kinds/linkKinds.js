@@ -51,12 +51,36 @@ export const urlKind = registerItemKind({
     })
     .strict(),
   describe: ref => ({ name: ref.url, url: ref.url, site: hostOf(ref.url) }),
-  // The page's title as the item's name, unless the caller named it, and its
-  // title and description as what the item is about (`info`, #3539). The read
-  // lands in the page reader's cache, so the item's first use does not fetch
-  // again. A page that cannot be read now is still added, named by its URL,
-  // and records what it is about on its first read.
-  async prepare(ref, { name } = {}) {
+  // What the address serves decides the item (#3536): a document the upload
+  // extractors read (PDF, Office, OpenDocument, text, …) is handed to the
+  // `web-file` kind and downloaded like an upload; a type nothing reads is
+  // refused like an unsupported upload; a web page stays a live link.
+  // `kindChange: false` (an admin project created with its items, a changed
+  // reference) keeps the link without asking.
+  //
+  // For a page, its title becomes the item's name, unless the caller named
+  // it, and its title and description what the item is about (`info`,
+  // #3539). The read lands in the page reader's cache, so the item's first
+  // use does not fetch again. A page that cannot be read now is still added,
+  // named by its URL, and records what it is about on its first read.
+  async prepare(ref, { name, kindChange = true, user } = {}) {
+    if (kindChange) {
+      const { probeWebUrl, unsupportedUrlError } = await import('../webFileDownload.js');
+      const probe = await probeWebUrl(ref.url, { language: user?.language });
+      if (probe?.type === 'unsupported') throw unsupportedUrlError(probe);
+      if (probe?.type === 'file') {
+        return {
+          kind: 'web-file',
+          ref: {
+            url: ref.url,
+            ...(probe.contentType ? { contentType: probe.contentType } : {}),
+            ...(probe.name ? { fileName: probe.name } : {}),
+            ...(Number.isFinite(probe.size) ? { size: probe.size } : {})
+          },
+          ...(!name && probe.name ? { name: probe.name } : {})
+        };
+      }
+    }
     try {
       const { default: readPage } = await import('../../../tools/webContentExtractor.js');
       const page = await readPage({ url: ref.url, maxLength: 1 });

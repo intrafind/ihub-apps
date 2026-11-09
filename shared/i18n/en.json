@@ -5359,6 +5359,10 @@
         "maxProjectsPerUserHelp": "Projects one person may own; 0 means no limit. Admin projects do not count.",
         "applyHint": "Changes apply at once. Lowering a limit removes nothing; it only refuses what would go past it.",
         "invalid": "Enter a number in the allowed range."
+      },
+      "refreshTtl": {
+        "label": "Refresh files and web pages after",
+        "help": "Files linked from websites are downloaded again after this time (an unchanged file keeps its text); web pages are read again. Projects and items can set their own."
       }
     },
     "updates": {
@@ -8501,7 +8505,7 @@
       "crawlRobots_one": "{{count}} link was left out because the website excludes it in its robots.txt.",
       "crawlRobots_other": "{{count}} links were left out because the website excludes them in its robots.txt.",
       "crawlFull": "The project takes no more pages. Untick some, or remove items from the project first.",
-      "crawlDocument": "PDF",
+      "crawlDocument": "File",
       "crawlBlocked": "{{host}} blocks automated access, so the search stopped there. Add the pages you need by their address instead.",
       "crawlTruncated": "The search stopped at its limit; raise it or start from a deeper address to find more.",
       "crawlNoPages": "No pages found.",
@@ -8606,7 +8610,8 @@
         "retry": "Retry",
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
-        "edit": "Edit"
+        "edit": "Edit",
+        "schedule": "Refresh schedule"
       },
       "add": "Add documents",
       "columns": {
@@ -8926,6 +8931,37 @@
     "editItem": {
       "title": "Edit item",
       "unsupported": "This kind of item cannot be edited."
+    },
+    "refresh": {
+      "never": "Never (only by hand)",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "cachedFor": "Read live, kept for {{ttl}}",
+      "manualOnly": "Refreshed only by hand",
+      "nextAt": "Next refresh {{date}}",
+      "every": "Refreshed every {{ttl}}",
+      "itemTitle": "Refresh schedule",
+      "projectTitle": "Refresh of files and web pages",
+      "itemLiveHint": "This web page is read live. Its read is kept this long before the page is read again.",
+      "itemFileHint": "This file was downloaded from a website. It is downloaded again when this time has passed; an unchanged file keeps its text.",
+      "projectHint": "How long files downloaded from websites and web pages are taken as current in this project. Each item can set its own.",
+      "label": "Refresh after",
+      "inheritProject": "Project setting ({{ttl}})",
+      "inheritPlatform": "Default of this installation ({{ttl}})",
+      "default": "default",
+      "snapshotAt": "Text taken",
+      "checkedAt": "Last checked",
+      "nextAtLabel": "Next refresh",
+      "nowHint": "\"Refresh\" in the item menu reads it again right away.",
+      "rowTitle": "Refresh",
+      "change": "Change the refresh of files and web pages",
+      "projectValue": "Files and web pages: {{ttl}}",
+      "projectDefault": "Files and web pages: {{ttl}} (default)",
+      "projectDefaultUnknown": "Default of this installation"
     }
   },
   "integrationScopes": {

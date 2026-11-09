@@ -230,7 +230,7 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
       resourceId: project.id,
       summary: `Uploaded "${item.name}" (${file.size} bytes) to ${admin ? 'admin ' : ''}project "${projectName(project)}"`
     });
-    res.status(202).json(serializeItem(item));
+    res.status(202).json(serializeItem(item, project));
   } catch (error) {
     // The upload directory goes whatever failed; the refusal is answered by the error middleware.
     await removeUploadDir(req);
@@ -248,7 +248,7 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
 export async function refreshItem(req, res, { project, authorize }) {
   const { itemId } = req.params;
   assertValidId(itemId, 'item');
-  const { item } = await getProjectService().refreshItem(project.id, itemId, {
+  const { item, project: stored } = await getProjectService().refreshItem(project.id, itemId, {
     user: req.user,
     authorize,
     wait: req.query?.wait === '1' || req.query?.wait === 'true'
@@ -262,7 +262,7 @@ export async function refreshItem(req, res, { project, authorize }) {
   });
   res
     .status(item.status === 'pending' || item.status === 'extracting' ? 202 : 200)
-    .json(serializeItem(item));
+    .json(serializeItem(item, stored));
 }
 
 /**

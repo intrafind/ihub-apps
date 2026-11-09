@@ -268,6 +268,27 @@ class URLHandler extends SourceHandler {
   }
 
   /**
+   * Forget every cached read of one URL, whatever its options.
+   * @param {string} url
+   * @returns {number} Entries dropped.
+   */
+  forget(url) {
+    const key = this.getCacheKey({ url });
+    const target = JSON.parse(key).url;
+    let dropped = 0;
+    for (const cacheKey of [...this.cache.keys()]) {
+      try {
+        if (JSON.parse(cacheKey).url !== target) continue;
+      } catch {
+        continue;
+      }
+      this.cache.delete(cacheKey);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
+  /**
    * Batch load multiple URLs
    * @param {Array} urls - Array of URL configs
    * @param {Object} options - Batch options
@@ -306,6 +327,22 @@ class URLHandler extends SourceHandler {
 
     return results;
   }
+}
+
+/**
+ * Forget a web page's cached reads in this process — the URL handler's and
+ * the page reader's — so its next read fetches it again ("Refresh now" of a
+ * project's web page item, #3536).
+ *
+ * @param {string} url
+ * @returns {Promise<void>}
+ */
+export async function forgetCachedUrl(url) {
+  if (typeof url !== 'string' || !url) return;
+  const { createSourceManager } = await import('./index.js');
+  createSourceManager().getHandler('url')?.forget?.(url);
+  const { forgetCachedPage } = await import('../services/pageCache.js');
+  forgetCachedPage(url);
 }
 
 export default URLHandler;

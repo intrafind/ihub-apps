@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
 import { MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
+import { DEFAULT_REFRESH_TTL_SECONDS, zRefreshTtl } from '../services/projects/refreshTtl.js';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
@@ -744,6 +745,10 @@ export const platformConfigSchema = z
           .prefault({}),
         retentionDays: z.number().prefault(0),
         loadAllMaxTokens: z.number().int().positive().prefault(50000),
+        // How long a file downloaded from a website is kept before it is
+        // downloaded again, and how long a web page's read is cached (#3536):
+        // seconds, or 'never'. Projects and items may set their own.
+        refreshTtl: zRefreshTtl.prefault(DEFAULT_REFRESH_TTL_SECONDS),
         kinds: z.record(z.string(), z.boolean()).prefault({}),
         encryption: z
           .object({ keyProvider: z.string().prefault('local-file') })

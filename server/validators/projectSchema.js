@@ -16,6 +16,7 @@ import {
   IFINDER_PROJECT_ID_PREFIX,
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
+import { zRefreshTtl } from '../services/projects/refreshTtl.js';
 
 /**
  * Schemas of the project model (#1036, spec 1 §2 and §3): the stored
@@ -183,6 +184,10 @@ export const projectItemSchema = z
       .optional(),
     text: itemTextSchema.nullable().optional(),
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
+    /** The item's own refresh TTL (#3536); absent takes the project's. */
+    refreshTtl: zRefreshTtl.optional(),
+    /** When the source of a fetched or live item was last checked. */
+    checkedAt: z.string().nullable().optional(),
     provenance: itemProvenanceSchema,
     snapshotAt: z.string().nullable().optional(),
     /** Set while a refresh runs; the status keeps the readable snapshot. */
@@ -229,6 +234,8 @@ export const adminProjectSchema = z
     tags: z.array(z.string().max(100)).prefault([]),
     // The app new chats start in; users who open the project get it preselected.
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // How long its files from websites and web pages are current (#3536).
+    refreshTtl: zRefreshTtl.optional(),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -334,7 +341,9 @@ export const userProjectUpdateSchema = z
     name: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
-    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // Seconds or 'never'; null goes back to the platform's (#3536).
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -349,7 +358,8 @@ export const adminProjectUpdateSchema = z
     published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).optional(),
-    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict();
 
@@ -385,7 +395,9 @@ export const itemUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
-    ref: z.record(z.string(), z.unknown()).optional()
+    ref: z.record(z.string(), z.unknown()).optional(),
+    // A file from a website or a web page: its own refresh TTL, null for the project's.
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -533,7 +545,9 @@ export const projectSharingSettingsSchema = z
       })
       .partial()
       .strict()
-      .optional()
+      .optional(),
+    // How long files from websites and web pages are current (#3536).
+    refreshTtl: zRefreshTtl.optional()
   })
   .strict()
   .refine(
@@ -541,6 +555,7 @@ export const projectSharingSettingsSchema = z
       body.sharing !== undefined ||
       body.tierPolicy !== undefined ||
       body.defaultAppId !== undefined ||
-      body.limits !== undefined,
-    { message: 'Send sharing, tierPolicy, defaultAppId or limits' }
+      body.limits !== undefined ||
+      body.refreshTtl !== undefined,
+    { message: 'Send sharing, tierPolicy, defaultAppId, limits or refreshTtl' }
   );

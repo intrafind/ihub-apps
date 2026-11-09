@@ -27,6 +27,7 @@ import { useProjectItemDocumentActions } from '../../projects/components/Project
 import EditItemDialog from '../../projects/components/EditItemDialog';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import RenameItemDialog from '../../projects/components/RenameItemDialog';
+import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import {
@@ -118,6 +119,7 @@ function AdminProjectEditPageContent({ id }) {
   const [idEdited, setIdEdited] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [renameTarget, setRenameTarget] = useState(null);
+  const [scheduleTarget, setScheduleTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const documentActions = useProjectItemDocumentActions(id);
   const [busyItemId, setBusyItemId] = useState(null);
@@ -466,6 +468,7 @@ function AdminProjectEditPageContent({ id }) {
         onPreview={setPreviewItem}
         onRefresh={handleRefresh}
         onRename={setRenameTarget}
+        onSchedule={setScheduleTarget}
         onEdit={setEditTarget}
         onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
         onRemove={setRemoveItem}
@@ -557,7 +560,13 @@ function AdminProjectEditPageContent({ id }) {
                 {itemsSection}
               </>
             }
-            side={<AdminProjectSettingsPanel project={project} onSaved={setProject} />}
+            side={
+              <AdminProjectSettingsPanel
+                project={project}
+                onSaved={setProject}
+                platformRefreshTtl={config?.refreshTtl ?? null}
+              />
+            }
           />
         )}
       </div>
@@ -586,6 +595,23 @@ function AdminProjectEditPageContent({ id }) {
               api={ADMIN_ITEM_API}
               onClose={() => setEditTarget(null)}
               onSave={changes => handleEditItem(editTarget, changes)}
+            />
+          )}
+          {scheduleTarget && (
+            <RefreshTtlDialog
+              scope="item"
+              item={scheduleTarget}
+              value={scheduleTarget.refreshTtl ?? null}
+              inherited={
+                project?.refreshTtl ??
+                config?.refreshTtl ??
+                (scheduleTarget.refresh?.from !== 'item' ? scheduleTarget.refresh?.ttl : null)
+              }
+              onClose={() => setScheduleTarget(null)}
+              onSave={async refreshTtl => {
+                replaceItem(await updateAdminProjectItem(id, scheduleTarget.id, { refreshTtl }));
+                return true;
+              }}
             />
           )}
           {renameTarget && (

@@ -35,6 +35,9 @@ import './kinds/linkKinds.js';
 import './kinds/uploadKind.js';
 import './kinds/cloudKinds.js';
 import './kinds/projectItemKind.js';
+import './kinds/webFileKind.js';
+import { normalizeRefreshTtl, takesRefreshTtl } from './refreshTtl.js';
+import { setProjectViewSettings } from './projectView.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 import { relinkProjects } from './projectRelink.js';
@@ -45,6 +48,9 @@ import {
 } from './projectConstants.js';
 
 const COMPONENT = 'ProjectService';
+
+// The client view of an item names the refresh TTL it inherits from the platform.
+setProjectViewSettings(() => projectSettings(configCache.getPlatform?.() || {}));
 /** How often one project's activity is refreshed by chat turns at most. */
 export const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 
@@ -295,7 +301,14 @@ export class ProjectService {
       // project is resolved to its original, with the creator's access.
       const prepared =
         typeof kind.prepare === 'function'
-          ? await kind.prepare(ref, { user: actor, projectId: project.id, name: input.name })
+          ? await kind.prepare(ref, {
+              user: actor,
+              projectId: project.id,
+              name: input.name,
+              // Items created with the project are links; a file from a
+              // website is added through the item endpoints afterwards.
+              kindChange: false
+            })
           : null;
       items.push(
         buildItem(kind, prepared?.ref || ref, input, {
@@ -331,9 +344,10 @@ export class ProjectService {
           'published',
           'category',
           'tags',
-          'defaultAppId'
+          'defaultAppId',
+          'refreshTtl'
         ]
-      : ['name', 'description', 'instructions', 'defaultAppId'];
+      : ['name', 'description', 'instructions', 'defaultAppId', 'refreshTtl'];
     try {
       return await this.repository.mutate(
         projectId,
@@ -517,12 +531,18 @@ export class ProjectService {
    */
   async addItem(projectId, input, { user, authorize, origin, run = null, wait }) {
     const checked = this._checkKindRef(input.kind, input.ref);
-    const { kind } = checked;
+    let { kind } = checked;
     const prepared =
       typeof kind.prepare === 'function'
         ? await kind.prepare(checked.ref, { user, projectId, name: input.name })
         : null;
-    const ref = prepared?.ref || checked.ref;
+    let ref = prepared?.ref || checked.ref;
+    if (prepared?.kind && prepared.kind !== kind.id) {
+      // What the reference turned out to be (#3536): a URL that serves a
+      // document becomes a downloaded file. Checked like a new item of that
+      // kind, so a kind the admin switched off stays off.
+      ({ kind, ref } = this._checkKindRef(prepared.kind, ref));
+    }
     const isText = kind.storage.ihub === 'text';
     const file = isText && input.file && typeof input.file === 'object' ? input.file : null;
     const text = isText && typeof input.text === 'string' ? input.text : null;
@@ -640,15 +660,23 @@ export class ProjectService {
    * stored, and a source that did not change since `snapshotAt` leaves the
    * item as it was.
    *
+   * A web page (`url`) is read live: its refresh drops the cached read, so
+   * the next use reads the page again, and records when (`checkedAt`).
+   *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{user: Object, authorize?: Function, wait?: boolean}} options
+   * @param {{user?: Object, authorize?: Function, wait?: boolean, scheduled?: boolean}} options
+   *   `scheduled`: the reconciler refreshes an expired file (#3536); there is
+   *   no user, and the project's change stamps stay as they are.
    * @returns {Promise<{project: Object, item: Object}>} Without `wait`, the
    *   item as reserved — carrying `refreshingAt` — while the job runs
    * @throws {ProjectError} `PROJECT_MISMATCH` while the item is being
    *   processed, a refresh included
    */
-  async refreshItem(projectId, itemId, { user, authorize, wait = false }) {
+  async refreshItem(projectId, itemId, { user, authorize, wait = false, scheduled = false }) {
+    const current = await this.repository.get(projectId);
+    const existing = (current?.items || []).find(entry => entry.id === itemId);
+    if (existing?.kind === 'url') return this._refreshLink(projectId, itemId, { user, authorize });
     if (!this.ingest) {
       throw new ProjectError(
         'INGEST_UNAVAILABLE',
@@ -665,7 +693,10 @@ export class ProjectService {
           if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
           const kind = getItemKind(item.kind);
           if (!kind || kind.storage.ihub !== 'text' || typeof kind.fetch !== 'function') {
-            throw new ProjectError('INVALID_REF', 'Only picked documents can be refreshed');
+            throw new ProjectError(
+              'INVALID_REF',
+              'Only picked documents, files from websites and web pages can be refreshed'
+            );
           }
           if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
@@ -687,7 +718,9 @@ export class ProjectService {
           target = { item, kind };
           return project;
         },
-        { actor: actorOf(user), authorize }
+        scheduled
+          ? { touchActivity: false, touchUpdated: false }
+          : { actor: actorOf(user), authorize }
       );
     } catch (error) {
       throw translateError(error);
@@ -707,13 +740,54 @@ export class ProjectService {
         // The version the last fetch saw, so a change between that fetch
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
+        previousEtag: storedItem.provenance?.source?.etag || null,
         attempt: storedItem.ingestAttempt,
-        purpose: 'refresh'
+        purpose: 'refresh',
+        scheduled
       },
       { user, wait }
     );
     if (result?.error) throw new ProjectError(result.error.code, result.error.message);
     return { project: stored, item: result?.item || storedItem };
+  }
+
+  /**
+   * "Refresh now" of a web page: its cached read is dropped (in this process;
+   * another worker's cache runs out with its TTL) and the time recorded.
+   */
+  async _refreshLink(projectId, itemId, { user, authorize }) {
+    let target = null;
+    let stored = null;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        project => {
+          const item = (project.items || []).find(entry => entry.id === itemId);
+          if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+          if (item.kind !== 'url') throw new ProjectError('PROJECT_MISMATCH', 'The item changed');
+          const now = nowIso();
+          item.checkedAt = now;
+          item.error = null;
+          item.status = 'ready';
+          item.updatedAt = now;
+          target = item;
+          return project;
+        },
+        { actor: actorOf(user), authorize }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
+    if (!stored) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    await attempt(
+      async () => {
+        const { forgetCachedUrl } = await import('../../sources/URLHandler.js');
+        await forgetCachedUrl(target.ref?.url);
+      },
+      'the page cache',
+      { component: COMPONENT, projectId, itemId }
+    );
+    return { project: stored, item: target };
   }
 
   /**
@@ -838,6 +912,23 @@ export class ProjectService {
             item.pinned = patch.pinned;
             changed = true;
           }
+          if (patch.refreshTtl !== undefined) {
+            if (!takesRefreshTtl(item)) {
+              throw new ProjectError(
+                'INVALID_REF',
+                `Items of kind "${item.kind}" have no refresh schedule`
+              );
+            }
+            // null goes back to the project's setting.
+            const next = patch.refreshTtl === null ? null : normalizeRefreshTtl(patch.refreshTtl);
+            if (next === null && item.refreshTtl !== undefined) {
+              delete item.refreshTtl;
+              changed = true;
+            } else if (next !== null && next !== item.refreshTtl) {
+              item.refreshTtl = next;
+              changed = true;
+            }
+          }
           if (patch.ref !== undefined) {
             // The item changed kind or was replaced between the check and the lock.
             if (!checkedRef || checkedRef.kind.id !== item.kind) {
@@ -897,6 +988,13 @@ export class ProjectService {
       typeof checked.kind.prepare === 'function'
         ? await checked.kind.prepare(checked.ref, { user, projectId })
         : null;
+    if (prepared?.kind && prepared.kind !== checked.kind.id) {
+      // A web page pointed at a document: the kind of an item never changes.
+      throw new ProjectError(
+        'INVALID_REF',
+        'This address is a file, not a web page: add it as a new item to download it'
+      );
+    }
     return { kind: checked.kind, ref: prepared?.ref || checked.ref, prepared };
   }
 
@@ -960,7 +1058,7 @@ export class ProjectService {
    *   caller expected any more).
    * @returns {Promise<Object|null>} The item as stored, or null when gone.
    */
-  async patchItem(projectId, itemId, update, { check } = {}) {
+  async patchItem(projectId, itemId, update, { check, touchActivity = true } = {}) {
     const stored = await this.repository.mutate(
       projectId,
       project => {
@@ -973,7 +1071,7 @@ export class ProjectService {
         item.updatedAt = nowIso();
         return project;
       },
-      { touchActivity: true }
+      { touchActivity }
     );
     return stored?.items?.find(entry => entry.id === itemId) || null;
   }

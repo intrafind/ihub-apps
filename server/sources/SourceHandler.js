@@ -41,11 +41,14 @@ class SourceHandler {
     // Load fresh content
     const data = await this.loadContent(sourceConfig);
 
-    // Cache the result
+    // Cache the result, for the caller's lifetime when it names one (a
+    // project item's refresh TTL, #3536), else the handler's.
+    const ttlSeconds = Number(sourceConfig?.cacheTtlSeconds);
     this.cache.set(cacheKey, {
       data,
       timestamp: Date.now(),
-      ttl: this.cacheConfig.ttl * 1000
+      ttl:
+        (Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : this.cacheConfig.ttl) * 1000
     });
 
     return data;

@@ -526,6 +526,7 @@
     },
     "retentionDays": 0,
     "loadAllMaxTokens": 50000,
+    "refreshTtl": 86400,
     "kinds": {},
     "encryption": {
       "keyProvider": "local-file"
