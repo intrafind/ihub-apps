@@ -107,6 +107,14 @@ describe('text-to-speech voices of a model', () => {
     expect(res.body.items[0]).toMatchObject({ slug: 'en_paul_neutral' });
   });
 
+  test('reads one voice by id, the Location of a create', async () => {
+    const res = await request(app).get(`${base}/v1`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: 'v1', name: 'Paul' });
+    expect((await request(app).get(`${base}/unknown-voice`)).status).toBe(404);
+    expect((await request(app).get(`${base}/a%2Fb`)).status).toBe(400);
+  });
+
   test('a chat model has no voices', async () => {
     const res = await request(app).get('/api/admin/models/mistral-small/tts/voices');
     expect(res.status).toBe(400);
@@ -128,8 +136,11 @@ describe('text-to-speech voices of a model', () => {
         languages: ['de', 'xx', 'de'],
         gender: 'robot'
       });
-    expect(res.status).toBe(200);
-    expect(res.body.voice).toMatchObject({ id: 'new-id', name: 'Anna' });
+    expect(res.status).toBe(201);
+    expect(res.headers.location).toMatch(
+      /\/api\/admin\/models\/voxtral-mini-tts\/tts\/voices\/new-id$/
+    );
+    expect(res.body).toMatchObject({ id: 'new-id', name: 'Anna' });
     const [call] = state.calls;
     expect(call.name).toBe('Anna');
     expect(call.audio.equals(Buffer.from(sample, 'base64'))).toBe(true);
@@ -177,7 +188,7 @@ describe('text-to-speech voices of a model', () => {
 
   test('deletes a voice by id, and refuses a malformed id', async () => {
     const ok = await request(app).delete(`${base}/01a0f7a6-649d-732a`);
-    expect(ok.status).toBe(200);
+    expect(ok.status).toBe(204);
     expect(state.calls).toEqual([{ deleted: '01a0f7a6-649d-732a' }]);
     const bad = await request(app).delete(`${base}/a%2Fb`);
     expect(bad.status).toBe(400);

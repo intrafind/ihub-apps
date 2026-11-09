@@ -28,7 +28,7 @@ export const testIntegrationDraft = async (definitionId, draft) =>
       method: 'POST',
       ...json(draft)
     })
-  ).data.result;
+  ).data;
 
 /**
  * A Markdown companion file of a definition (a release's notes, its README),
@@ -124,7 +124,7 @@ export const testIntegrationAction = async (id, action, { args, connection, conf
       method: 'POST',
       ...json({ args, connection, confirm: confirm === true })
     })
-  ).data.result;
+  ).data;
 
 /** Set (or with null remove) the installation's own model instructions. */
 export const saveIntegrationInstructions = async (id, instructions) =>
@@ -171,8 +171,7 @@ export const createExampleApp = async (id, body) =>
 
 /** Test a saved instance (optionally with an edited, unsaved body). */
 export const testInstalledIntegration = async (id, draft = {}) =>
-  (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data
-    .result;
+  (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data;
 
 /**
  * Run (or re-run) the definition migration of an installation

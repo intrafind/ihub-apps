@@ -204,7 +204,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           ...(gender ? { gender } : {})
         }
       });
-      const voice = response.data?.voice;
+      const voice = response.data;
       setCreated(voice || null);
       if (voice && voices) setVoices(prev => [voice, ...(prev || [])]);
       setName('');

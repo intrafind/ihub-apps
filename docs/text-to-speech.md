@@ -297,9 +297,10 @@ plays with Web Audio as it arrives      next piece once one is finished …
   interrupts.
 - **Voices (admin).** `GET`/`POST /api/admin/models/:id/tts/voices` lists the
   provider's voices and creates a custom one
-  (`{ name, audio: <base64>, filename, languages, gender }`).
-  `DELETE /api/admin/models/:id/tts/voices/:voiceId` deletes a custom voice.
-  All three use the model's stored key, and creating and deleting are
+  (`{ name, audio: <base64>, filename, languages, gender }`; answers `201` with
+  the voice and its `Location`). `GET /api/admin/models/:id/tts/voices/:voiceId`
+  reads one voice, and `DELETE …/:voiceId` deletes a custom voice (`204`).
+  All of them use the model's stored key, and creating and deleting are
   recorded in the audit log.
 - **Errors** before the first audio byte are JSON with a status: `400` (no
   text, or an invalid `languageFixed`, `language` or `voice`), `403` (model not permitted), `404` (not a TTS model), `413` (input

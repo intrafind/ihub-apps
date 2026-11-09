@@ -89,11 +89,11 @@ describe('iFinder authorization routes', () => {
     expectProblem(res, 500, 'INTERNAL_ERROR');
   });
 
-  test('DELETE answers the revoke result when it works', async () => {
+  test('DELETE answers 204 whether or not a sign-in was stored', async () => {
     deleteLoginTokens.mockResolvedValue(false);
     const res = await request(app).delete('/api/integrations/ifinder/authorization');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ revoked: false });
+    expect(res.status).toBe(204);
+    expect(res.text).toBe('');
   });
 });
 

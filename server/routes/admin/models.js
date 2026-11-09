@@ -912,7 +912,7 @@ export default function registerAdminModelsRoutes(app) {
   /**
    * POST /api/admin/models/:modelId/tts/voices — create a custom voice from
    * one recording of the speaker: `{ name, audio (base64), filename?,
-   * languages?, gender? }`. Answers with the new voice; its `id` goes into the
+   * languages?, gender? }`. Answers `201` with the new voice; its `id` goes into the
    * model's voice settings.
    */
   app.post(
@@ -962,10 +962,39 @@ export default function registerAdminModelsRoutes(app) {
           resourceId: voice.id,
           summary: `Created text-to-speech voice "${voiceName}" for model ${resolved.model.id}`
         });
-        return res.json({ voice });
+        return sendCreated(
+          res,
+          `/api/admin/models/${segment(resolved.model.id)}/tts/voices/${segment(voice.id)}`,
+          voice
+        );
       } catch (error) {
         throw voicesError(error, 'create the voice');
       }
+    }
+  );
+
+  /**
+   * GET /api/admin/models/:modelId/tts/voices/:voiceId — one voice of the model
+   * (the `Location` a create answers with).
+   */
+  app.get(
+    buildServerPath('/api/admin/models/:modelId/tts/voices/:voiceId'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req);
+      const { voiceId } = req.params;
+      if (!/^[\w-]{1,100}$/.test(voiceId)) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid voice id');
+      }
+      let voices;
+      try {
+        voices = await resolved.provider.listVoices(resolved.cfg);
+      } catch (error) {
+        throw voicesError(error, 'read voice');
+      }
+      const voice = voices.find(candidate => candidate.id === voiceId);
+      if (!voice) throw new ServiceError('NOT_FOUND', 'Voice not found');
+      return res.json(voice);
     }
   );
 
@@ -988,7 +1017,7 @@ export default function registerAdminModelsRoutes(app) {
           resourceId: voiceId,
           summary: `Deleted text-to-speech voice ${voiceId} of model ${resolved.model.id}`
         });
-        return res.json({ deleted: voiceId });
+        return res.status(204).end();
       } catch (error) {
         throw voicesError(error, 'delete the voice');
       }

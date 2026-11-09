@@ -536,7 +536,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         summary: `Tested integration draft of ${id} (${result.success ? 'ok' : 'failed'})`,
         result: result.success ? 'success' : 'failure'
       });
-      res.json({ result });
+      res.json(result);
     }
   );
 
@@ -987,7 +987,7 @@ export default function registerAdminIntegrationsRoutes(app) {
           summary: `action.test: "${actionName}" of integration "${id}" as ${result.connection}${result.confirmed ? ' (confirmed ' + result.sideEffect + ')' : ''}: ${result.status} in ${result.durationMs} ms; args ${auditArgs(args)}`,
           result: result.status === 'ok' ? 'success' : 'failure'
         });
-        res.json({ result });
+        res.json(result);
       } catch (error) {
         if (error instanceof ActionTestError) {
           // A refused test is audited too: an admin tried to run the action.
@@ -1495,7 +1495,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         summary: `Tested integration "${id}" (${result.success ? 'ok' : 'failed'})`,
         result: result.success ? 'success' : 'failure'
       });
-      res.json({ result });
+      res.json(result);
     }
   );
 }

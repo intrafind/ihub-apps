@@ -394,7 +394,7 @@ describe('action test', () => {
         .post(`${base}/actions/search/_test`)
         .send({ args: { q: 'monday', note: 'apiKey-free' } })
     ).expect(200);
-    const { result } = res.body;
+    const result = res.body;
     expect(result).toMatchObject({
       status: 'ok',
       httpStatus: 201,
@@ -434,8 +434,8 @@ describe('action test', () => {
         .post(`${base}/actions/search/_test`)
         .send({ args: { q: 'x', password: 'arg-secret-value-1' } })
     ).expect(200);
-    expect(res.body.result.request.args.password).toBe('[redacted]');
-    expect(JSON.stringify(res.body.result)).not.toContain('arg-secret-value-1');
+    expect(res.body.request.args.password).toBe('[redacted]');
+    expect(JSON.stringify(res.body)).not.toContain('arg-secret-value-1');
     expect(audits.at(-1).summary).not.toContain('arg-secret-value-1');
     expect(audits.at(-1).summary).toContain('[redacted]');
   });
@@ -467,7 +467,7 @@ describe('action test', () => {
         .post(`${base}/actions/create_note/_test`)
         .send({ args: { note: 'hello' }, confirm: true })
     ).expect(200);
-    expect(ran.body.result).toMatchObject({ status: 'ok', confirmed: true, sideEffect: 'write' });
+    expect(ran.body).toMatchObject({ status: 'ok', confirmed: true, sideEffect: 'write' });
     expect(runCalls).toHaveLength(1);
   });
 
