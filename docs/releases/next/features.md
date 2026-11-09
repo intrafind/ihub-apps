@@ -1240,7 +1240,8 @@ the end says what it rests on.
   numbered badges in the text open the panel, and a panel that is open stays open when the answer
   completes.
 - Closing the panel returns the keyboard focus to whatever opened it: a badge in the text, a
-  number in the cited list or the entry.
+  number in the cited list or the entry. Focus you have moved elsewhere, for example to the
+  message box, stays there.
 - The entry and the badge are the same height. The entry has an outline because it can be
   clicked, and the badge has a soft fill without an outline because it is only a label.
 

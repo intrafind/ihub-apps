@@ -363,6 +363,11 @@ const attributeValue = value => String(value).replaceAll(/["\\]/g, String.raw`\$
  * found again by its number; else the answer's entry, if it is shown. Nothing
  * when none of them is on the page — focus is not moved somewhere unrelated.
  *
+ * Only when focus was in the panel, which is gone now, so it fell to the
+ * body. Focus the user moved on stays where it is: the entry they pressed to
+ * close the side panel, the message box they were typing in when they pressed
+ * Escape, the entry of another answer whose panel replaces this one.
+ *
  * Candidates are tried in turn until one takes focus: a page can render the
  * same answer twice (AppChat keeps a phone and a desktop layout, one of them
  * `display: none`), and an element in the hidden copy does not take it.
@@ -370,6 +375,8 @@ const attributeValue = value => String(value).replaceAll(/["\\]/g, String.raw`\$
  * @param {string} messageKey
  */
 function returnFocus(messageKey) {
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
   const opener = sourcesOpener();
   const key = attributeValue(messageKey);
   const badges =

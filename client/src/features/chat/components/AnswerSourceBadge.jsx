@@ -8,18 +8,20 @@ import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
 
 /**
  * A status badge: tinted, without an outline, 24px high like the sources
- * entry next to it, which is outlined because it can be clicked (#3521).
+ * entry next to it, which is outlined because it can be clicked (#3521). At
+ * least 24px: a long label (a workflow or project name, in a narrow pane)
+ * wraps and the badge grows with it instead of spilling out of it.
  */
 const BADGE_CLASS =
-  'inline-flex items-center gap-1.5 h-6 px-2 rounded-full text-xs border border-transparent';
+  'inline-flex items-center gap-1.5 min-h-6 py-0.5 px-2 rounded-full text-xs border border-transparent';
 
 /** A badge's icon and label, in a link or a plain badge. */
 function BadgeContent({ icon, label, trailingIcon = null }) {
   return (
     <>
-      <Icon name={icon} className="w-3 h-3" />
+      <Icon name={icon} className="w-3 h-3 shrink-0" />
       <span>{label}</span>
-      {trailingIcon && <Icon name={trailingIcon} className="w-3 h-3" />}
+      {trailingIcon && <Icon name={trailingIcon} className="w-3 h-3 shrink-0" />}
     </>
   );
 }

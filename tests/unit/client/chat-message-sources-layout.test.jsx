@@ -177,6 +177,31 @@ test('closing the panel returns focus to what opened it', () => {
   expect(entryOf()).toHaveFocus();
 });
 
+test('focus the user moved elsewhere stays there when the panel closes', () => {
+  renderMessage();
+  const number = within(screen.getByRole('list', { name: 'Cited in this answer' })).getByRole(
+    'button',
+    { name: /source 1/ }
+  );
+  // Opened from a number, closed with the entry: focus stays on the entry.
+  fireEvent.click(number);
+  const entry = entryOf();
+  entry.focus();
+  fireEvent.click(entry);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(entry).toHaveFocus();
+
+  // Escape while typing elsewhere (the side panel is not modal): focus stays there.
+  const box = document.createElement('textarea');
+  document.body.appendChild(box);
+  fireEvent.click(number);
+  box.focus();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(box).toHaveFocus();
+  box.remove();
+});
+
 test('an answer rendered twice (phone and desktop layout) opens one panel', () => {
   render(
     <>
