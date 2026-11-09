@@ -132,13 +132,13 @@ function AdminCopilotAgentPage() {
 
   const handleToggle = async () => {
     if (!status) return;
-    const action = status.enabled ? 'disable' : 'enable';
+    const action = status.enabled ? '_disable' : '_enable';
     try {
       setToggling(true);
       setMessage(null);
       const res = await makeAdminApiCall(`/admin/copilot-agent/${action}`, { method: 'POST' });
       if (res.data?.clientSecret) setSecret(res.data.clientSecret);
-      if (action === 'disable') setSecret(null);
+      if (action === '_disable') setSecret(null);
       await loadStatus();
       setMessage({
         type: 'success',

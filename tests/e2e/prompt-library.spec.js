@@ -53,7 +53,7 @@ test.describe('Prompt library: create → share → use with variables', () => {
       }
     });
     expect(created.ok()).toBeTruthy();
-    const colleagueId = (await created.json()).user.id;
+    const colleagueId = (await created.json()).id;
     let promptId = null;
     let colleagueContext = null;
 

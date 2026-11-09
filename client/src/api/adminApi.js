@@ -1250,7 +1250,7 @@ export const fetchAdminUsageLimitUser = async userKey => {
  */
 export const resetAdminUsageLimitUser = async (userKey, body = {}) => {
   const response = await makeAdminApiCall(
-    `/admin/usage/limits/users/${encodeURIComponent(userKey)}/reset`,
+    `/admin/usage/limits/users/${encodeURIComponent(userKey)}/_reset`,
     {
       method: 'POST',
       body

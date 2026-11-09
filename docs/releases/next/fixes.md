@@ -1,5 +1,12 @@
 # Fixes — Unreleased
 
+## Cookie Settings Can Be Saved Again
+
+**Admin → System → Cookie settings** sent its save with a request method the server does not accept, so
+the change was refused, and the server would not have stored the setting even then. Both are fixed: the
+page now sends only the cookie settings, as the Tool approval page does, and they are kept like every
+other platform setting.
+
 ## Three Loose Ends of the Error Response Conversion
 
 - Downloading an agent artifact whose file cannot be read (it vanished after the check, a disk fault)

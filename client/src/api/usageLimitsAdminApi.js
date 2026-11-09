@@ -37,7 +37,7 @@ export const fetchUsageLimitGroups = async () =>
 /** Reset a user's current-window counts (optionally one model / one window). */
 export const resetUsageLimitUser = async (userKey, body = {}) =>
   (
-    await makeAdminApiCall(`/admin/usage/limits/users/${encodeURIComponent(userKey)}/reset`, {
+    await makeAdminApiCall(`/admin/usage/limits/users/${encodeURIComponent(userKey)}/_reset`, {
       method: 'POST',
       body
     })

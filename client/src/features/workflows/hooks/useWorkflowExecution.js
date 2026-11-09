@@ -30,7 +30,7 @@ const REFETCH_AFTER_COMPLETE_MS = 500;
  * @param {string|string[]} [options.requireFeature='workflows'] - Feature flag id(s); any one enabled suffices
  * @param {string} [options.stateEndpoint='workflows/executions'] - REST base path (relative to the API root)
  * @param {string} [options.streamEndpoint='workflows/executions'] - Stream base path (buildApiUrl prepends /api)
- * @param {string} [options.cancelEndpoint='cancel'] - Suffix for the cancel endpoint
+ * @param {string} [options.cancelEndpoint='_cancel'] - Suffix for the cancel endpoint
  * @returns {Object} Execution state and methods
  * @property {Object|null} state - Current execution state (REST state + live projection)
  * @property {boolean} loading - Whether initial state is loading
@@ -46,7 +46,7 @@ function useWorkflowExecution(executionId, options = {}) {
     requireFeature = 'workflows',
     stateEndpoint = 'workflows/executions',
     streamEndpoint = 'workflows/executions',
-    cancelEndpoint = 'cancel'
+    cancelEndpoint = '_cancel'
   } = options;
 
   const [baseState, setBaseState] = useState(null);
