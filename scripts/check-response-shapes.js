@@ -444,6 +444,43 @@ async function signIn(base) {
   return (login.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).join('; ');
 }
 
+/** Item states the server is still working on. */
+const UNSETTLED_ITEM_STATES = new Set(['pending', 'extracting']);
+
+/**
+ * Wait until the admin projects' items have settled.
+ *
+ * The server imports the seeded projects' file-backed items in the background, a
+ * moment after it starts (`importPendingProjects` in services/projects/bootstrap.js).
+ * `/api/health` answers before that, so on a slow machine the crawl could catch an
+ * item half-way (an `import` pointer, `text: null`) and the snapshot would differ
+ * from run to run. Gives up after `timeoutMs` and crawls anyway: the comparison then
+ * shows what did not settle.
+ */
+export async function waitForProjectImports(base, cookie, { timeoutMs = 120_000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let unsettled = [];
+  while (Date.now() < deadline) {
+    unsettled = [];
+    let cursor = null;
+    do {
+      const query = new URLSearchParams({ limit: '100' });
+      if (cursor) query.set('cursor', cursor);
+      const answer = await request(base, cookie, `/api/admin/projects?${query}`);
+      if (answer.type !== 'json' || answer.status !== 200) return;
+      for (const project of answer.body.items ?? []) {
+        for (const item of project.items ?? []) {
+          if (UNSETTLED_ITEM_STATES.has(item.status)) unsettled.push(`${project.id}/${item.id}`);
+        }
+      }
+      cursor = answer.body.nextCursor ?? null;
+    } while (cursor);
+    if (unsettled.length === 0) return;
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  console.warn(`project items still importing after ${timeoutMs / 1000}s: ${unsettled.join(', ')}`);
+}
+
 async function main() {
   const flags = new Set(process.argv.slice(2));
 
@@ -471,6 +508,7 @@ async function main() {
   try {
     const cookie = await signIn(base);
     await seedData(base, cookie);
+    await waitForProjectImports(base, cookie);
     snapshot = await collectShapes({ base, cookie, routes });
   } finally {
     child.kill('SIGTERM');
