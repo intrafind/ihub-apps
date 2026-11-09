@@ -457,6 +457,13 @@ found two identical **Sources** dialogs. The chat keeps a phone and a desktop la
 on the page, and both opened their own panel on top of each other. The panel now opens once, from
 whichever layout is shown.
 
+## Projects: iFinder Documents With Several Titles Can Be Added
+
+Picking an iFinder document in a project's **Add item** dialog and clicking **Add** did nothing
+for a document whose index entry carries more than one title; the browser console showed
+`TypeError: (t.name || "").trim is not a function`. The dialog now shows and names the item after
+the document's first title, and the document is added.
+
 ## Projects: HTML Files Keep Only the Page's Content, Not Its Menus
 
 An HTML file added to a project — uploaded, or picked from OneDrive / SharePoint or Google Drive —

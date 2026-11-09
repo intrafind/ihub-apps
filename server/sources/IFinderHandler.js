@@ -5,6 +5,18 @@ import SourceHandler from './SourceHandler.js';
 import iFinder from '../tools/iFinder.js';
 
 /**
+ * The first non-empty value of a field iFinder returned with several values
+ * (a document with two titles), or the value itself when it is not a list.
+ *
+ * @param {*} value
+ * @returns {*} `undefined` for a list without a non-empty value.
+ */
+function firstValue(value) {
+  if (!Array.isArray(value)) return value;
+  return value.find(entry => entry !== null && entry !== undefined && String(entry).trim() !== '');
+}
+
+/**
  * iFinder Source Handler
  *
  * Loads content from iFinder document management system using the existing
@@ -293,18 +305,20 @@ class IFinderHandler extends SourceHandler {
         returnFields
       });
 
+      // The fields the project item picker shows and names an item after are
+      // one value each: iFinder keeps a field with several values as a list.
       return searchResults.results.map(result => ({
         documentId: result.id,
-        title: result.title,
+        title: firstValue(result.title),
         author: result.author,
-        documentType: result.documentType,
-        mimeType: result.mimeType,
+        documentType: firstValue(result.documentType),
+        mimeType: firstValue(result.mimeType),
         createdDate: result.createdDate,
         lastModified: result.lastModified,
         score: result.score,
         teasers: result.teasers,
-        filename: result.filename,
-        url: result.url,
+        filename: firstValue(result.filename),
+        url: firstValue(result.url),
         size: result.size
       }));
     } catch (error) {
