@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import { isAccountDisabledError } from '../utils/accountDisabledError.js';
 import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
 import logger from '../utils/logger.js';
@@ -30,14 +31,6 @@ async function createJwksClient(tenantId) {
 
 // Cache for JWKS clients per tenant
 const jwksClients = new Map();
-
-/**
- * Detect the disabled-account error thrown by validateAndPersistExternalUser
- * so it can be rejected explicitly instead of falling into generic error handling.
- */
-function isAccountDisabledError(error) {
-  return typeof error?.message === 'string' && error.message.includes('account is disabled');
-}
 
 /**
  * Get or create JWKS client for a tenant

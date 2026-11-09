@@ -16,6 +16,7 @@ import express from 'express';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import * as realAuthRequired from '../middleware/authRequired.js';
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-artifacts-'));
@@ -158,6 +159,27 @@ describe('agent artifact routes: errors', () => {
     const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md').expect(200);
     expect(res.text).toBe('# Report');
   });
+  it('answers a read error before the first byte as an ordinary 500, not an unhandled stream error', async () => {
+    const spy = jest.spyOn(fs, 'createReadStream').mockImplementation(
+      () =>
+        new Readable({
+          read() {
+            this.destroy(new Error('EIO: disk fault at /secret/path'));
+          }
+        })
+    );
+    try {
+      const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md?download=1');
+      expect(res.status).toBe(500);
+      expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+      expect(res.body.code).toBe('INTERNAL_ERROR');
+      expect(res.headers['content-disposition']).toBeUndefined();
+      expect(JSON.stringify(res.body)).not.toContain('/secret/path');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   // Keep this the last test of the file: it spends the rest of the route's rate-limit window.
   it('rate-limits listing and reading artifacts', async () => {
     let status = null;

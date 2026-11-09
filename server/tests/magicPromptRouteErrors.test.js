@@ -11,6 +11,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
 
 const state = { models: [], apps: [], allowed: () => true };
 
@@ -80,6 +81,26 @@ describe('POST /api/magic-prompt errors', () => {
     const res = await request(app).post('/api/magic-prompt').send({ input: 'x' });
     expect(res.status).toBe(500);
     expect(res.body.code).toBe('INTERNAL_ERROR');
+  });
+
+  it('keeps the mapped status and code of a provider failure with a known code', async () => {
+    llm = async () => {
+      throw new LLMError('slow', { code: LLM_ERROR_CODES.TIMEOUT });
+    };
+    const res = await request(app).post('/api/magic-prompt').send({ input: 'x' });
+    expect(res.status).toBe(504);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body.code).toBe('TIMEOUT');
+  });
+
+  it('answers a provider failure with an unknown code as a 502 PROVIDER_ERROR', async () => {
+    llm = async () => {
+      throw new LLMError('boom sk-secret', { code: 'SOMETHING_NEW', status: 500 });
+    };
+    const res = await request(app).post('/api/magic-prompt').send({ input: 'x' });
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('PROVIDER_ERROR');
+    expect(JSON.stringify(res.body)).not.toContain('sk-secret');
   });
 
   it('answers a model the caller may not use with FORBIDDEN', async () => {

@@ -154,8 +154,30 @@ export default function registerAgentArtifactRoutes(app) {
       if (req.query?.download === '1') {
         res.setHeader('Content-Disposition', buildContentDisposition(safe));
       }
+      // A read error (the file vanished after the stat, a disk fault) used to be an unhandled
+      // 'error' event on the stream. Before the first byte it is an ordinary failure answered by
+      // the error middleware; after it, or when the client hung up, the connection is cut.
+      // `pipeline` is not used: it would destroy the response before it can be answered.
       // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
-      fs.createReadStream(file).pipe(res);
+      const stream = fs.createReadStream(file);
+      const failure = await new Promise(resolve => {
+        stream.once('error', resolve);
+        res.once('close', () => {
+          stream.destroy();
+          resolve(null);
+        });
+        res.once('finish', () => resolve(null));
+        stream.pipe(res);
+      });
+      if (failure) {
+        stream.unpipe(res);
+        if (res.headersSent) {
+          res.destroy(failure);
+          return;
+        }
+        res.removeHeader('Content-Disposition');
+        throw failure;
+      }
     }
   );
 }

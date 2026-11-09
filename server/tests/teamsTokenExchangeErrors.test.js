@@ -122,7 +122,9 @@ describe('teamsTokenExchange: errors', () => {
 
   it('answers a disabled account with 403 TEAMS_ACCOUNT_DISABLED', async () => {
     verify.mockReturnValue({ oid: 'u1', tid: 'tid', name: 'U', email: 'u@x.example' });
-    validateAndPersistExternalUser.mockRejectedValue(new Error('Your account is disabled'));
+    validateAndPersistExternalUser.mockRejectedValue(
+      Object.assign(new Error('Your account is disabled'), { code: 'ACCOUNT_DISABLED' })
+    );
     const res = await request(app).post('/api/auth/teams/exchange').send({ ssoToken: decodable });
     expectFailedClosed(res, 403, 'TEAMS_ACCOUNT_DISABLED');
     expect(res.body.detail).toBe('Account disabled (localized)');

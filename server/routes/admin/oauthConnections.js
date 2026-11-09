@@ -121,9 +121,11 @@ export default function registerAdminOAuthConnectionRoutes(app) {
 
       // Both come from the URL path, but neither is used to build one: they
       // are store keys, not file names. A CIMD client id is a URL, so the
-      // usual path-segment validator would reject every one of them.
-      const clientId = decodeURIComponent(req.params.clientId || '');
-      const userId = decodeURIComponent(req.params.userId || '');
+      // usual path-segment validator would reject every one of them. Express has
+      // already percent-decoded them once; decoding again would turn a literal
+      // `%` of a key into something else, or throw on a stray one.
+      const clientId = req.params.clientId || '';
+      const userId = req.params.userId || '';
 
       if (!clientId || !userId) {
         throw new ServiceError('BAD_REQUEST', 'clientId and userId are required');
