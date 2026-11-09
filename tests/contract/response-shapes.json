@@ -4210,8 +4210,7 @@
           "showDemoAccounts": "boolean"
         },
         "ntlm": {
-          "enabled": "boolean",
-          "type": "string"
+          "enabled": "boolean"
         },
         "oidc": {
           "enabled": "boolean",

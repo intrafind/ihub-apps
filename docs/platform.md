@@ -771,7 +771,7 @@ LDAP directory authentication configuration. Allows users to log in using their 
 For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
 
 ### **ntlmAuth**
-Windows NTLM/Kerberos authentication for domain-joined environments.
+Windows NTLM authentication for domain-joined environments. iHub checks the NTLM sign-in by relaying it to the domain controller; Kerberos (`Negotiate`) is not supported — see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md#kerberos).
 
 ```json
 {
@@ -779,7 +779,6 @@ Windows NTLM/Kerberos authentication for domain-joined environments.
     "enabled": true,
     "domain": "COMPANY",
     "domainController": "dc.company.com",
-    "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
     "getGroups": true,
@@ -795,7 +794,6 @@ Windows NTLM/Kerberos authentication for domain-joined environments.
 | `enabled`                   | Boolean | `false`  | Enable NTLM authentication                                                                           |
 | `domain`                    | String  | -        | Windows domain name (NetBIOS format, e.g., `COMPANY`)                                               |
 | `domainController`          | String  | -        | Domain controller hostname or IP address                                                             |
-| `type`                      | String  | `"ntlm"` | Authentication protocol: `"ntlm"` or `"negotiate"` (Kerberos with NTLM fallback)                   |
 | `debug`                     | Boolean | `false`  | Enable verbose NTLM debugging output                                                                 |
 | `getUserInfo`               | Boolean | `true`   | Fetch user display name and email from Active Directory after authentication                         |
 | `getGroups`                 | Boolean | `true`   | Fetch group memberships from Active Directory                                                        |

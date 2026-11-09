@@ -471,3 +471,17 @@ was read as the whole page: skip links, menus, page trees, breadcrumbs and foote
 Confluence page, about half of the text) ended up in the project and in every answer drawn from it.
 HTML files are now read like a web page added by URL: only the main content is kept, with its
 headings, lists, tables and links.
+
+## Windows Sign-In Works With the Former "Negotiate" Setting
+
+With **Authentication Type** set to **Negotiate** in the NTLM settings, no Windows user could sign
+in: every attempt failed with 400 Bad Request. iHub asked the browser for Negotiate (Kerberos), but
+its Windows sign-in only understands NTLM. The setting is removed and iHub always asks for NTLM;
+migration V234 deletes `ntlmAuth.type` from `platform.json`, so affected installations sign in with
+NTLM again without any change.
+
+- Kerberos is not supported by iHub's Windows sign-in. For Kerberos single sign-on, put a reverse
+  proxy that handles Kerberos in front of iHub and use proxy authentication, or sign in through an
+  identity provider with Windows single sign-on (ADFS, Keycloak, Entra ID) via OIDC.
+- The NTLM documentation now explains how the sign-in is checked by the domain controller and which
+  domain controller settings (LDAP signing, channel binding, NTLM restrictions) affect it.

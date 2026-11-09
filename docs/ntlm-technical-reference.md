@@ -98,7 +98,6 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 **Result**: Works, but:
 - No group retrieval (requires domain controller)
 - No domain specified
-- Default auth type: "ntlm"
 
 ### Complete Production Configuration
 
@@ -108,7 +107,6 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
     "enabled": true,
     "domain": "EXAMPLE.COM",
     "domainController": "ldaps://dc.example.com:636",
-    "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
     "getGroups": true,
@@ -128,7 +126,6 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 | `enabled` | boolean | Yes | false | Enable/disable NTLM auth |
 | `domain` | string | No | - | Windows domain name (e.g., "EXAMPLE") |
 | `domainController` | string | No | - | LDAP server URL for group queries (`ldaps://...` recommended) |
-| `type` | string | No | "ntlm" | "ntlm" or "negotiate" |
 | `debug` | boolean | No | false | Enable debug logging |
 | `getUserInfo` | boolean | No | true | Extract user info from token |
 | `getGroups` | boolean | No | true | Query LDAP for groups |

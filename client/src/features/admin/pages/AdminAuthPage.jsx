@@ -69,7 +69,6 @@ function AdminAuthPage() {
       enabled: false,
       domain: '',
       domainController: '',
-      type: 'ntlm',
       debug: false,
       getUserInfo: true,
       getGroups: true,
