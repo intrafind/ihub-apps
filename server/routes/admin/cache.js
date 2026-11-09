@@ -72,7 +72,7 @@ export default function registerAdminCacheRoutes(app) {
    * }
    */
   app.post(buildServerPath('/api/admin/encrypt-value'), adminAuth, async (req, res) => {
-    const { value } = req.body;
+    const { value } = req.body ?? {};
 
     // Validate input
     if (!value || typeof value !== 'string' || value.trim() === '') {
