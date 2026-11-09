@@ -77,8 +77,7 @@ router.get('/sources', authRequired, nextcloudApiLimiter, async (req, res) => {
     }
   ];
 
-  // api-guidelines-ignore: existing success body, changed in its own API change
-  res.json({ success: true, sources });
+  res.json({ sources });
 });
 
 /**
@@ -117,7 +116,6 @@ router.get('/drives/:source', authRequired, nextcloudApiLimiter, async (req, res
     }
 
     res.json({
-      success: true,
       drives: [
         {
           id: 'root',
@@ -167,7 +165,7 @@ router.get('/items', authRequired, nextcloudApiLimiter, async (req, res) => {
       items = await NextcloudService.listItems(req.user.id, folderPath, providerId);
     }
 
-    res.json({ success: true, items });
+    res.json({ items });
   } catch (error) {
     logger.error('Error listing Nextcloud items', {
       component: 'Nextcloud',

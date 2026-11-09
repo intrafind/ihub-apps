@@ -88,11 +88,11 @@ export default function registerSetupRoutes(app) {
   });
 
   /**
-   * POST /api/setup/disable
+   * POST /api/setup/_disable
    * Persists "don't show the onboarding again" (setup.disabled = true) so the
    * redirect to /setup stops for every user. Admin only.
    */
-  app.post(buildServerPath('/api/setup/disable'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/setup/_disable'), adminAuth, async (req, res) => {
     const platform = await configStore.readJson(PLATFORM_FILE);
     if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
     platform.setup = { ...platform.setup, disabled: true };
@@ -104,12 +104,12 @@ export default function registerSetupRoutes(app) {
   });
 
   /**
-   * POST /api/setup/test
+   * POST /api/setup/_test
    * Tests whether the provided API key is valid for the given provider.
    * Returns { valid: boolean, error?: string }.
    * Always requires admin authentication.
    */
-  app.post(buildServerPath('/api/setup/test'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/setup/_test'), adminAuth, async (req, res) => {
     const { providerId, apiKey } = req.body;
 
     if (!providerId || !LLM_PROVIDER_IDS.has(providerId)) {

@@ -233,7 +233,7 @@ export default function registerAdminAgentsRoutes(app) {
 
   // ── Toggle enabled ────────────────────────────────────────────────────────
   app.post(
-    buildServerPath('/api/admin/agents/profiles/:profileId/toggle'),
+    buildServerPath('/api/admin/agents/profiles/:profileId/_toggle'),
     adminAuth,
     async (req, res) => {
       const { profileId } = req.params;

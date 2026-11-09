@@ -728,7 +728,7 @@ describe('the write allow-list', () => {
       ['PATCH', '/items'],
       ['PATCH', '/items/itm_abc'],
       ['POST', '/items/itm_abc'],
-      ['POST', '/items/itm_abc/refresh'],
+      ['POST', '/items/itm_abc/_refresh'],
       ['PUT', '/items/itm_abc/text'],
       ['DELETE', '/items'],
       ['DELETE', '/items/itm_abc/text'],
@@ -751,7 +751,7 @@ describe('the write allow-list', () => {
     for (const [method, template] of [
       ['DELETE', '/api/projects/:projectId'],
       ['PUT', '/api/projects/:projectId/items/:itemId/text'],
-      ['POST', '/api/projects/:projectId/items/:itemId/refresh'],
+      ['POST', '/api/projects/:projectId/items/:itemId/_refresh'],
       ['PATCH', '/api/projects/:projectId/items/:itemId'],
       ['POST', '/api/projects/:projectId/estimate'],
       ['POST', undefined]
@@ -763,7 +763,7 @@ describe('the write allow-list', () => {
   it('gives the same refusal for a closed route whether or not the collection exists', async () => {
     const entry = projects.routes.find(
       route =>
-        route.method === 'post' && route.routePath.endsWith(':projectId/items/:itemId/refresh')
+        route.method === 'post' && route.routePath.endsWith(':projectId/items/:itemId/_refresh')
     );
     const res = await drive(entry.handlers, {
       user: GRACE,

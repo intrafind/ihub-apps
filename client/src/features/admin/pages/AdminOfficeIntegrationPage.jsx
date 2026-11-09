@@ -469,7 +469,7 @@ function AdminOfficeIntegrationPage() {
     );
 
     // The two halves answer different questions, so neither waits on the other.
-    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/test', {
+    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/_test', {
       method: 'POST',
       body: { urls }
     })

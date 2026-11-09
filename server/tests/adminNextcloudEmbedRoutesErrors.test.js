@@ -141,7 +141,7 @@ describe('Nextcloud embed administration routes: errors', () => {
     state.createClient = async () => {
       throw new Error('secret-clients-file-path.json exploded');
     };
-    const res = await request(app).post('/api/admin/nextcloud-embed/enable').expect(500);
+    const res = await request(app).post('/api/admin/nextcloud-embed/_enable').expect(500);
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
     expect(res.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(res.body)).not.toContain('secret-clients-file-path');
@@ -150,7 +150,7 @@ describe('Nextcloud embed administration routes: errors', () => {
 
   it('answers a failing write when disabling with a 500', async () => {
     state.writeError = new Error('disk full at platform.json');
-    const res = await request(app).post('/api/admin/nextcloud-embed/disable').expect(500);
+    const res = await request(app).post('/api/admin/nextcloud-embed/_disable').expect(500);
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
     expect(res.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(res.body)).not.toContain('disk full');

@@ -234,8 +234,7 @@ router.delete('/:keyId', authRequired, async (req, res) => {
     summary: `Revoked personal API key ${req.params.keyId}`
   });
 
-  // api-guidelines-ignore: existing success body, changed in its own API change
-  res.json({ success: true });
+  res.status(204).end();
 });
 
 export default router;

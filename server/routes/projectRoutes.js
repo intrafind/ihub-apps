@@ -829,7 +829,7 @@ export default function registerProjectRoutes(app) {
   );
 
   app.post(
-    route('/:projectId/items/:itemId/refresh'),
+    route('/:projectId/items/:itemId/_refresh'),
     ...gate,
     authenticatedOnly,
     projectAccessRequired('edit'),

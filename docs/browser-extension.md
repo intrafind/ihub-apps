@@ -22,8 +22,8 @@ your deployment:
 | --------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `GET  /api/integrations/browser-extension/config`   | Public runtime config (base URL, OAuth client ID, display name, starter prompts) the extension fetches before sign-in |
 | `GET  /api/admin/browser-extension/status`          | Admin: read current configuration including signing-key extension ID            |
-| `POST /api/admin/browser-extension/enable`          | Admin: enable the integration, auto-create the OAuth client, generate signing key |
-| `POST /api/admin/browser-extension/disable`         | Admin: disable                                                                 |
+| `POST /api/admin/browser-extension/_enable`          | Admin: enable the integration, auto-create the OAuth client, generate signing key |
+| `POST /api/admin/browser-extension/_disable`         | Admin: disable                                                                 |
 | `PUT  /api/admin/browser-extension/config`          | Admin: update display name, description, starter prompts, extension IDs, allowed groups |
 | `POST /api/admin/browser-extension/rotate-key`      | Admin: rotate the RSA signing key (changes the extension ID)                    |
 | `GET  /api/admin/browser-extension/download.zip`    | Admin: download the customised extension as an unsigned ZIP                     |

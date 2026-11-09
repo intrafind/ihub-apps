@@ -132,10 +132,10 @@ export default function registerAdminAuditLogRoutes(app) {
   });
 
   /**
-   * POST /api/admin/audit-log/retention/run
+   * POST /api/admin/audit-log/retention/_run
    * Manually trigger an audit log cleanup pass using the current retention.
    */
-  app.post(buildServerPath('/api/admin/audit-log/retention/run'), adminAuth, async (_req, res) => {
+  app.post(buildServerPath('/api/admin/audit-log/retention/_run'), adminAuth, async (_req, res) => {
     const { retentionDays } = getAuditSettings();
     const result = await cleanupAuditLog(retentionDays);
     res.json({ ok: true, ...result });

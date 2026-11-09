@@ -156,7 +156,7 @@ const route = {
   remove: handlersFor(promptRoutes, 'delete', '/api/prompts/:promptId'),
   shares: handlersFor(promptRoutes, 'put', '/api/prompts/:promptId/shares'),
   owner: handlersFor(promptRoutes, 'put', '/api/prompts/:promptId/owner'),
-  duplicate: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/duplicate'),
+  duplicate: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/_duplicate'),
   versions: handlersFor(promptRoutes, 'get', '/api/prompts/:promptId/versions'),
   restore: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/versions/:revision/restore'),
   usage: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/usage'),

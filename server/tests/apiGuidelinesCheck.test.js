@@ -65,6 +65,15 @@ describe('check-api-guidelines', () => {
 
   it('flags a bare verb on a route but accepts an _action segment', () => {
     assert.deepEqual(rules("router.post('/:taskId/run', handler);"), ['route-verb']);
+    // Admin routes are registered through buildServerPath(…), on one line or across lines.
+    assert.deepEqual(
+      rules("app.post(buildServerPath('/api/admin/apps/:appId/toggle'), adminAuth, h);"),
+      ['route-verb']
+    );
+    assert.deepEqual(
+      rules("app.post(\n  buildServerPath('/api/admin/proxy/_test'),\n  adminAuth,\n  h\n);"),
+      []
+    );
     assert.deepEqual(rules('app.post(`${base}/:id/duplicate`, handler);'), ['route-verb']);
     assert.deepEqual(rules("router.post('/:keyId/_rotate', handler);"), []);
     assert.deepEqual(rules('app.post(`${base}/_preview`, handler);'), []);

@@ -2300,10 +2300,10 @@ describe('routes', () => {
     addItem: handlersFor(routes, 'post', '/api/projects/:projectId/items'),
     text: handlersFor(routes, 'get', '/api/projects/:projectId/items/:itemId/text'),
     editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
-    refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/refresh'),
+    refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/_refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
     urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check'),
-    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/preview'),
+    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/_preview'),
     urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/crawl')
   };
 

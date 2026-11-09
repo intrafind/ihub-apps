@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Translation for `POST /admin/models/:id/test` result headlines.
+ * Translation for `POST /admin/models/:id/_test` result headlines.
  *
  * The backend (`describeModelTestFailure` in server/routes/admin/models.js)
  * sends a stable `messageKey` alongside its English `message`/`error` text.

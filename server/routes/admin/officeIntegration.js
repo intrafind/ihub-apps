@@ -183,7 +183,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/office-integration/enable:
+   * /api/admin/office-integration/_enable:
    *   post:
    *     summary: Enable Office integration and auto-create OAuth client
    *     tags:
@@ -195,82 +195,86 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *       200:
    *         description: Office integration enabled
    */
-  app.post(buildServerPath('/api/admin/office-integration/enable'), adminAuth, async (req, res) => {
-    const platform = configCache.getPlatform();
-    const officeConfig = platform?.officeIntegration || {};
-    const baseUrl = buildPublicBaseUrl(req);
+  app.post(
+    buildServerPath('/api/admin/office-integration/_enable'),
+    adminAuth,
+    async (req, res) => {
+      const platform = configCache.getPlatform();
+      const officeConfig = platform?.officeIntegration || {};
+      const baseUrl = buildPublicBaseUrl(req);
 
-    let oauthClientId = officeConfig.oauthClientId;
+      let oauthClientId = officeConfig.oauthClientId;
 
-    // Auto-create OAuth client if one doesn't exist yet
-    if (!oauthClientId) {
-      const oauthConfig = platform?.oauth || {};
-      const clientsFile = oauthClientsFile(oauthConfig);
+      // Auto-create OAuth client if one doesn't exist yet
+      if (!oauthClientId) {
+        const oauthConfig = platform?.oauth || {};
+        const clientsFile = oauthClientsFile(oauthConfig);
 
-      const newClient = await createOAuthClient(
-        {
-          name: 'Office Add-in',
-          description: 'Auto-generated client for the Outlook add-in (PKCE public client)',
-          clientType: 'public',
-          grantTypes: ['authorization_code', 'refresh_token'],
-          redirectUris: [`${baseUrl}/office/callback.html`],
-          trusted: true,
-          consentRequired: false,
-          scopes: ['openid', 'profile', 'email']
-        },
-        clientsFile,
-        req.user?.id || 'admin'
-      );
+        const newClient = await createOAuthClient(
+          {
+            name: 'Office Add-in',
+            description: 'Auto-generated client for the Outlook add-in (PKCE public client)',
+            clientType: 'public',
+            grantTypes: ['authorization_code', 'refresh_token'],
+            redirectUris: [`${baseUrl}/office/callback.html`],
+            trusted: true,
+            consentRequired: false,
+            scopes: ['openid', 'profile', 'email']
+          },
+          clientsFile,
+          req.user?.id || 'admin'
+        );
 
-      oauthClientId = newClient.clientId;
+        oauthClientId = newClient.clientId;
 
-      logger.info('Created OAuth client for Office add-in', {
+        logger.info('Created OAuth client for Office add-in', {
+          component: 'AdminOfficeIntegration',
+          clientId: oauthClientId
+        });
+      }
+
+      // Ensure OAuth authorization code flow is enabled
+      const oauthUpdates = {
+        oauth: {
+          ...platform?.oauth,
+          enabled: {
+            ...platform?.oauth?.enabled,
+            authz: true,
+            clients: true
+          },
+          authorizationCodeEnabled: true,
+          refreshTokenEnabled: true
+        }
+      };
+
+      const updates = {
+        ...oauthUpdates,
+        officeIntegration: {
+          ...platform?.officeIntegration,
+          enabled: true,
+          oauthClientId
+        }
+      };
+
+      await savePlatformConfig(updates);
+
+      logger.info('Office integration enabled', {
         component: 'AdminOfficeIntegration',
-        clientId: oauthClientId
+        oauthClientId
+      });
+
+      // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json({
+        message: 'Office integration enabled successfully',
+        oauthClientId,
+        manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`
       });
     }
-
-    // Ensure OAuth authorization code flow is enabled
-    const oauthUpdates = {
-      oauth: {
-        ...platform?.oauth,
-        enabled: {
-          ...platform?.oauth?.enabled,
-          authz: true,
-          clients: true
-        },
-        authorizationCodeEnabled: true,
-        refreshTokenEnabled: true
-      }
-    };
-
-    const updates = {
-      ...oauthUpdates,
-      officeIntegration: {
-        ...platform?.officeIntegration,
-        enabled: true,
-        oauthClientId
-      }
-    };
-
-    await savePlatformConfig(updates);
-
-    logger.info('Office integration enabled', {
-      component: 'AdminOfficeIntegration',
-      oauthClientId
-    });
-
-    // api-guidelines-ignore: existing success body, changed in its own API change
-    res.json({
-      message: 'Office integration enabled successfully',
-      oauthClientId,
-      manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`
-    });
-  });
+  );
 
   /**
    * @swagger
-   * /api/admin/office-integration/disable:
+   * /api/admin/office-integration/_disable:
    *   post:
    *     summary: Disable Office integration
    *     tags:
@@ -283,7 +287,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *         description: Office integration disabled
    */
   app.post(
-    buildServerPath('/api/admin/office-integration/disable'),
+    buildServerPath('/api/admin/office-integration/_disable'),
     adminAuth,
     async (req, res) => {
       const platform = configCache.getPlatform();
@@ -565,7 +569,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/office-integration/office-js/test:
+   * /api/admin/office-integration/office-js/_test:
    *   post:
    *     summary: Check whether Office.js URLs are reachable from this server
    *     description: |
@@ -601,7 +605,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *         description: A URL failed validation
    */
   app.post(
-    buildServerPath('/api/admin/office-integration/office-js/test'),
+    buildServerPath('/api/admin/office-integration/office-js/_test'),
     adminAuth,
     async (req, res) => {
       const { urls } = req.body || {};

@@ -459,7 +459,7 @@ export function registerProjectPickerRoutes(app) {
   // through the same handler a URL item is read with. Not through the
   // handler's own cache, which keeps every entry: the page reader's bounded
   // page cache below it still answers a repeated preview.
-  app.post(route('/url/preview'), ...gate, async (req, res) => {
+  app.post(route('/url/_preview'), ...gate, async (req, res) => {
     const parsed = urlPreviewSchema.safeParse(req.body || {});
     if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     try {

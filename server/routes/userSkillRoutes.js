@@ -790,13 +790,13 @@ export default function registerUserSkillRoutes(app) {
 
   /**
    * @swagger
-   * /api/user-skills/{skillId}/duplicate:
+   * /api/user-skills/{skillId}/_duplicate:
    *   post:
    *     summary: Copy a user skill into the caller's skills
    *     tags:
    *       - Skills
    */
-  app.post(buildServerPath('/api/user-skills/:skillId/duplicate'), ...gate, async (req, res) => {
+  app.post(buildServerPath('/api/user-skills/:skillId/_duplicate'), ...gate, async (req, res) => {
     const { skillId } = req.params;
     assertValidId(skillId, 'skill');
     if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
@@ -821,13 +821,13 @@ export default function registerUserSkillRoutes(app) {
 
   /**
    * @swagger
-   * /api/skills/{name}/duplicate:
+   * /api/skills/{name}/_duplicate:
    *   post:
    *     summary: Copy a global skill into the caller's skills
    *     tags:
    *       - Skills
    */
-  app.post(buildServerPath('/api/skills/:name/duplicate'), ...gate, async (req, res) => {
+  app.post(buildServerPath('/api/skills/:name/_duplicate'), ...gate, async (req, res) => {
     const { name } = req.params;
     if (!SKILL_NAME_PATTERN.test(name || ''))
       throw new ServiceError('NOT_FOUND', 'Skill not found');

@@ -132,7 +132,6 @@ export default function registerAdminIntegrationRequestRoutes(app) {
     const [requests, hidden] = await Promise.all([service.list(), service.listHidden()]);
     res.setHeader('Cache-Control', 'no-store');
     res.json({
-      success: true,
       requests: requests.map(request => adminRequestView(request, language, installations)),
       hidden: hidden.map(entry => ({
         ...entry,
@@ -190,7 +189,6 @@ export default function registerAdminIntegrationRequestRoutes(app) {
         summary: `Approved the request of ${request.requester.id} for "${request.definition}"`
       });
       res.json({
-        success: true,
         request: adminRequestView(request, languageOf(req), installedIntegrationService.list())
       });
     }
@@ -235,7 +233,6 @@ export default function registerAdminIntegrationRequestRoutes(app) {
         }`
       });
       res.json({
-        success: true,
         request: adminRequestView(request, languageOf(req), installedIntegrationService.list()),
         alsoDeclined: alsoDeclined.length
       });
@@ -274,7 +271,7 @@ export default function registerAdminIntegrationRequestRoutes(app) {
         resourceId: definition,
         summary: `Showed "${definition}" in the users' catalog again`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 }

@@ -142,7 +142,7 @@ function AuditLogRetentionBadge({ t }) {
     setRunning(true);
     setMessage(null);
     try {
-      const res = await makeAdminApiCall('/admin/audit-log/retention/run', { method: 'POST' });
+      const res = await makeAdminApiCall('/admin/audit-log/retention/_run', { method: 'POST' });
       const removed = res.data?.deleted?.length ?? 0;
       setMessage(
         removed > 0

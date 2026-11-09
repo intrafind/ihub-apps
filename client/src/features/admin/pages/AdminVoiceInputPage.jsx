@@ -185,7 +185,7 @@ function AdminVoiceInputPage() {
     try {
       setAzureTesting(true);
       setAzureTestResult(null);
-      const response = await makeAdminApiCall('/admin/voice/azure/test', {
+      const response = await makeAdminApiCall('/admin/voice/azure/_test', {
         method: 'POST',
         body: {
           region: config.azure.region,

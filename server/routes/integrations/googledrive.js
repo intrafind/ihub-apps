@@ -95,11 +95,7 @@ router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => 
     }
   }
 
-  // api-guidelines-ignore: existing success body, changed in its own API change
-  res.json({
-    success: true,
-    sources
-  });
+  res.json({ sources });
 });
 
 /**
@@ -151,10 +147,7 @@ router.get('/drives/:source', authRequired, googleDriveApiLimiter, async (req, r
         );
     }
 
-    res.json({
-      success: true,
-      drives
-    });
+    res.json({ drives });
   } catch (error) {
     logger.error('Error listing Google Drive drives', {
       component: 'Google Drive',
@@ -202,10 +195,7 @@ router.get('/items', authRequired, googleDriveApiLimiter, async (req, res) => {
       );
     }
 
-    res.json({
-      success: true,
-      items
-    });
+    res.json({ items });
   } catch (error) {
     logger.error('Error listing Google Drive items:', {
       component: 'Google Drive',

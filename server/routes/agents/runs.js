@@ -6,7 +6,7 @@
  *   POST /api/agents/profiles/:id/runs        — manual trigger
  *   GET  /api/agents/runs                     — list agent runs
  *   GET  /api/agents/runs/:runId              — single run state
- *   POST /api/agents/runs/:runId/cancel       — cancel a running run
+ *   POST /api/agents/runs/:runId/_cancel       — cancel a running run
  *
  * HITL: a paused run's checkpoint is an interaction — answer it through
  * `POST /api/runs/:runId/interactions/:id/answer`; the queue is
@@ -625,7 +625,7 @@ export default function registerAgentRunRoutes(app) {
 
   // ── Cancel ────────────────────────────────────────────────────────────────
   app.post(
-    buildServerPath('/api/agents/runs/:runId/cancel'),
+    buildServerPath('/api/agents/runs/:runId/_cancel'),
     authRequired,
     authenticatedOnly,
     async (req, res) => {
@@ -653,7 +653,7 @@ export default function registerAgentRunRoutes(app) {
   // so we rebuild it here from the agent profile and pass it via options.
   // Same logic used at run-start above (lines ~138-161).
   app.post(
-    buildServerPath('/api/agents/runs/:runId/resume'),
+    buildServerPath('/api/agents/runs/:runId/_resume'),
     authRequired,
     authenticatedOnly,
     async (req, res) => {

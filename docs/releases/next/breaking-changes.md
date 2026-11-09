@@ -610,3 +610,29 @@ tables now step with **Previous** and **Next** instead of jumping to a page numb
 The run ledger cursor stands for the last raw sequence a page read. A page that read nothing has no
 `nextCursor`, and a client keeps following the cursor, not the number of items, because a page of
 raw events can project to none.
+
+## More Operations Are `_action` Segments, and Integration Calls Drop `{ success }`
+
+The operations below move to an `_action` segment, like the ones in "Operations Are `_action`
+Segments". The web app ships with the server and needs no change; scripts must use the new path.
+
+| Was | Is now |
+| --- | --- |
+| `POST …/toggle` on `/api/admin/workflows/:id` and `/agents/profiles/:id` | `POST …/_toggle` |
+| `POST /api/admin/{apps,models,prompts}/:id/toggle` (flips the state) | gone: `POST /api/admin/{apps,models,prompts}/:ids/_toggle` with `{ "enabled": true\|false }` sets it, for one id, a comma-separated list or `*` |
+| `POST /api/admin/{browser-extension,copilot-agent,nextcloud-embed,office-integration}/enable` and `/disable` | `…/_enable` and `…/_disable` |
+| `POST /api/admin/models/:id/test`, `/proxy/test`, `/voice/azure/test`, `/office-integration/office-js/test`, `/projects/:id/test`, `/api/setup/test` | `…/_test` |
+| `POST /api/setup/disable` | `POST /api/setup/_disable` |
+| `POST /api/admin/backup/import`, `/api/admin/skills/import` | `…/_import` |
+| `POST /api/admin/{audit-log,chat-history}/retention/run` | `…/retention/_run` |
+| `POST /api/admin/usage/limits/users/:userKey/reset` | `…/_reset` |
+| `POST /api/agents/runs/:runId/cancel` and `/resume`, `POST /api/workflows/executions/:id/cancel` and `/restart` | `…/_cancel`, `…/_resume`, `…/_restart` |
+| `POST /api/prompts/:id/duplicate`, `/api/skills/:name/duplicate`, `/api/user-skills/:id/duplicate` | `…/_duplicate` |
+| `POST /api/projects/:id/items/:itemId/refresh`, `/api/admin/projects/:id/items/:itemId/refresh`, `POST /api/projects/pickers/url/preview` | `…/_refresh`, `…/_preview` |
+
+The calls under `/api/admin/integrations` and `/api/admin/marketplace` that answered `{ "success":
+true, … }` answer the resource without the `success` member; the ones that had nothing to say
+answer `204`. That covers the catalog, installed integrations, migrations, example apps, the
+builder and integration requests, the registry edits and the personal API key revocation. A
+connection test keeps its outcome in the body (`success: false` with a `message`), because the
+outcome is its result.

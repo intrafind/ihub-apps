@@ -214,7 +214,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: registryId,
         summary: `Deleted marketplace registry ${registryId}`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -239,7 +239,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: registryId,
         summary: `Refreshed catalog for marketplace registry ${registryId}`
       });
-      res.json({ success: true, itemCount: (catalog.items || []).length });
+      res.json({ itemCount: (catalog.items || []).length });
     }
   );
 
@@ -478,7 +478,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Uninstalled marketplace item ${type}/${name}`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -501,7 +501,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Detached marketplace item ${type}/${name} from tracking`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 

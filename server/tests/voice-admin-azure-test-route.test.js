@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Route tests for `POST /api/admin/voice/azure/test` (Admin → Voice Input →
+ * Route tests for `POST /api/admin/voice/azure/_test` (Admin → Voice Input →
  * Azure Speech → Test connection).
  *
  * The route exchanges the subscription key for a token, the same exchange a
@@ -48,7 +48,7 @@ const app = express();
 app.use(express.json());
 registerAdminConfigRoutes(app);
 
-const post = body => request(app).post('/api/admin/voice/azure/test').send(body);
+const post = body => request(app).post('/api/admin/voice/azure/_test').send(body);
 
 beforeEach(() => {
   state.azure = {};
@@ -56,7 +56,7 @@ beforeEach(() => {
   state.tokenResult = { ok: true, token: 't', region: 'westeurope' };
 });
 
-describe('POST /api/admin/voice/azure/test', () => {
+describe('POST /api/admin/voice/azure/_test', () => {
   test('tests unsaved form values', async () => {
     const res = await post({ region: 'westeurope', subscriptionKey: 'new-key' });
     expect(res.status).toBe(200);

@@ -684,14 +684,14 @@ export default function registerAdminProjectsRoutes(app) {
     return replaceItemText(req, res, { project });
   });
 
-  app.post(route('/:id/items/:itemId/refresh'), ...gate, contentAdminAuth, async (req, res) => {
+  app.post(route('/:id/items/:itemId/_refresh'), ...gate, contentAdminAuth, async (req, res) => {
     const project = await loadAdminProject(req);
     return refreshItem(req, res, { project });
   });
 
   // Read every item the way a chat would, with the admin's own credentials
   // for link kinds: the successor of the sources test button.
-  app.post(route('/:id/test'), ...gate, contentAdminAuth, async (req, res) => {
+  app.post(route('/:id/_test'), ...gate, contentAdminAuth, async (req, res) => {
     const project = await loadAdminProject(req);
     const started = Date.now();
     const items = [];

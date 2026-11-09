@@ -8,7 +8,7 @@
  *   PUT  /api/admin/usage/limits/settings
  *   GET  /api/admin/usage/limits/users             — users with their buckets (paged)
  *   GET  /api/admin/usage/limits/users/:userKey    — one user in detail
- *   POST /api/admin/usage/limits/users/:userKey/reset
+ *   POST /api/admin/usage/limits/users/:userKey/_reset
  *   GET  /api/admin/usage/limits/models            — per model
  *   GET  /api/admin/usage/limits/groups            — per group
  *   GET  /api/admin/usage/limits/near              — users above 80 % of a limit, soonest reset first
@@ -204,7 +204,7 @@ export default function registerAdminUsageLimitRoutes(app) {
 
   /**
    * @swagger
-   * /admin/usage/limits/users/{userKey}/reset:
+   * /admin/usage/limits/users/{userKey}/_reset:
    *   post:
    *     summary: Reset a user's token counts for the current window(s)
    *     tags: [Admin - Usage]
@@ -222,7 +222,7 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       200: { description: The user's usage after the reset }
    */
   app.post(
-    buildServerPath('/api/admin/usage/limits/users/:userKey/reset'),
+    buildServerPath('/api/admin/usage/limits/users/:userKey/_reset'),
     adminAuth,
     async (req, res) => {
       const { userKey } = req.params;

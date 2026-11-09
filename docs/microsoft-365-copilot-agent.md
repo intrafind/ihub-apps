@@ -125,7 +125,7 @@ The first time a user uses the agent, Copilot asks them to sign in: iHub's sign-
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/admin/copilot-agent/status` | settings, prerequisites, Teams Developer Portal values |
-| `POST /api/admin/copilot-agent/enable` / `disable` | turn the agent on (creating the OAuth client) or off (deactivating it) |
+| `POST /api/admin/copilot-agent/_enable` / `_disable` | turn the agent on (creating the OAuth client) or off (deactivating it) |
 | `PUT /api/admin/copilot-agent/config` | `oauthReferenceId`, `name`, `description`, `instructions`, `conversationStarters` |
 | `POST /api/admin/copilot-agent/rotate-secret` | new client secret, shown once |
 | `GET /api/admin/copilot-agent/package.zip` | the package |

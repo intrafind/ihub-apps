@@ -88,7 +88,7 @@ describe('makeAdminApiCall FormData handling (issue #2334)', () => {
     const formData = new FormData();
     formData.append('backup', new Blob(['PK'], { type: 'application/zip' }), 'b.zip');
 
-    await makeAdminApiCall('/admin/backup/import', { method: 'POST', body: formData });
+    await makeAdminApiCall('/admin/backup/_import', { method: 'POST', body: formData });
 
     // The payload must still be the FormData instance. Before the fix this was
     // the string '{"backup":{}}' and the uploaded file was silently dropped.
@@ -122,7 +122,7 @@ describe('makeAdminApiCall FormData handling (issue #2334)', () => {
     const formData = new FormData();
     formData.append('skill', new Blob(['PK'], { type: 'application/zip' }), 's.zip');
 
-    await makeAdminApiCall('/admin/skills/import', {
+    await makeAdminApiCall('/admin/skills/_import', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: formData

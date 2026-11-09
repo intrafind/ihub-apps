@@ -7,7 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { formatTokenCount } from '../utils/tokenStats';
 
 /**
- * Result of `POST /api/admin/projects/:id/test`: whether every item could be
+ * Result of `POST /api/admin/projects/:id/_test`: whether every item could be
  * read the way a chat reads it, with size and time per item and the error of
  * each item that failed.
  *

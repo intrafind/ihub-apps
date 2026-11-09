@@ -98,7 +98,7 @@ describe('workflow execution routes', () => {
   });
 
   it('answers an unknown execution with NOT_FOUND', async () => {
-    const res = await request(app).post('/api/workflows/executions/nope/cancel').expect(404);
+    const res = await request(app).post('/api/workflows/executions/nope/_cancel').expect(404);
     expect(res.body).toEqual({
       type: 'urn:ihub:problem:NOT_FOUND',
       title: 'The requested resource was not found.',
@@ -143,11 +143,11 @@ describe('workflow execution routes', () => {
     engine.cancelAnywhere.mockRejectedValueOnce(
       Object.assign(new Error('gone'), { code: 'EXECUTION_NOT_FOUND' })
     );
-    const missing = await request(app).post('/api/workflows/executions/run1/cancel').expect(404);
+    const missing = await request(app).post('/api/workflows/executions/run1/_cancel').expect(404);
     expect(missing.body.code).toBe('NOT_FOUND');
 
     engine.cancelAnywhere.mockRejectedValueOnce(new Error('/srv/secret/path exploded'));
-    const failed = await request(app).post('/api/workflows/executions/run1/cancel').expect(500);
+    const failed = await request(app).post('/api/workflows/executions/run1/_cancel').expect(500);
     expect(failed.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(failed.body)).not.toContain('/srv/secret');
   });

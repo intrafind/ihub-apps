@@ -241,10 +241,10 @@ describe('PUT /api/admin/proxy/config', () => {
   });
 });
 
-describe('POST /api/admin/proxy/test', () => {
+describe('POST /api/admin/proxy/_test', () => {
   test('refuses a target the SSRF guard blocks, pointing at the allowlist', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({ url: 'http://blocked.internal/health' });
 
     expect(response.status).toBe(403);
@@ -253,7 +253,7 @@ describe('POST /api/admin/proxy/test', () => {
 
   test('rejects a non-http(s) scheme', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({ url: 'file:///etc/passwd' });
 
     expect(response.status).toBe(400);
@@ -262,7 +262,7 @@ describe('POST /api/admin/proxy/test', () => {
 
   test('rejects a draft config that would not be accepted on save', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({ url: 'https://example.com/', config: { urlPatterns: ['(unclosed'] } });
 
     expect(response.status).toBe(400);
@@ -271,7 +271,7 @@ describe('POST /api/admin/proxy/test', () => {
 
   test('reports the routing decision for a draft config without saving it', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({
         url: 'https://api.internal.test/health',
         timeoutMs: 1000,
@@ -291,7 +291,7 @@ describe('POST /api/admin/proxy/test', () => {
     process.env.HTTPS_PROXY = 'http://resolved-proxy.invalid:8080';
     try {
       const response = await request(createTestApp())
-        .post('/api/admin/proxy/test')
+        .post('/api/admin/proxy/_test')
         .send({
           url: 'https://example.invalid/',
           timeoutMs: 1000,
@@ -313,7 +313,7 @@ describe('POST /api/admin/proxy/test', () => {
     state.platform.ssl = { ignoreInvalidCertificates: true, domainWhitelist: ['example.invalid'] };
 
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({ url: 'https://example.invalid/', timeoutMs: 1000, config: { enabled: false } });
 
     expect(response.status).toBe(200);
@@ -322,7 +322,7 @@ describe('POST /api/admin/proxy/test', () => {
 
   test('never echoes the proxy password in the result', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/proxy/test')
+      .post('/api/admin/proxy/_test')
       .send({
         url: 'https://example.invalid/',
         timeoutMs: 1000,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `describeModelTestFailure` (POST /admin/models/:id/test) must always emit a
+ * `describeModelTestFailure` (POST /admin/models/:id/_test) must always emit a
  * `messageKey` alongside its English `userMessage` — that key is what the
  * admin UI translates (shared/i18n/*.json `admin.models.testResults.messages`)
  * instead of matching on the English headline text (github.com/intrafind/ihub-apps

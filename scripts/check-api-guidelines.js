@@ -108,7 +108,9 @@ const RULES = [
   }
 ];
 
-const ROUTE = /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]*)\2/g;
+/** A route path, bare or wrapped in `buildServerPath(…)`, as the first argument of a registration. */
+const ROUTE =
+  /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(?:buildServerPath\(\s*)?(['"`])([^'"`]*)\2/g;
 const QUERY_PARAM = /\breq\.query\.([A-Za-z_]\w*)/g;
 const QUERY_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*req\.query\b/g;
 /** `const query = req.query || {}`: the name the rest of the handler reads the parameters by. */
@@ -220,7 +222,7 @@ function checkQueryName(name, index, endIndex, add) {
 
 function checkQueryParams(source, add) {
   for (const [, alias] of source.matchAll(QUERY_ALIAS)) {
-    const aliased = new RegExp(`\\b${alias}\\.([A-Za-z_]\\w*)`, 'g');
+    const aliased = new RegExp(String.raw`\b${alias}\.([A-Za-z_]\w*)`, 'g');
     for (const match of source.matchAll(aliased)) {
       checkQueryName(match[1], match.index, match.index + match[0].length, add);
     }
